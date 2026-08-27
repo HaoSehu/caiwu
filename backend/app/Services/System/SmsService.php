@@ -11,13 +11,15 @@ use App\Services\Sms\Contracts\SmsDriver;
 use App\Services\Sms\Data\SmsMessageRequest;
 use App\Services\Sms\Data\SmsSendRequest;
 use App\Services\Sms\SmsDriverManager;
+use App\Services\System\Concerns\InteractsWithMessageLogs;
 use App\Support\SensitiveDataSanitizer;
 use App\Support\SmsTemplateCatalog;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 
 class SmsService
 {
+    use InteractsWithMessageLogs;
+
     private SmsDriverManager $driverManager;
 
     public function __construct(
@@ -74,14 +76,18 @@ class SmsService
 
         // 短信日志含验证码明文，管理端需完整真实审计信息，不做脱敏（项目红线）
 
-        // 文案模板优先由短信驱动（插件）提供，系统层仅保留默认回退，避免硬编码特定服务商语法。
+        // 文案模板是短信驱动的协议能力：所有插件驱动都经 PluginSmsDriver 实现
+        // ProvidesVerifyCodeTemplate，阿里云插件的 verifyCodeTemplate 匹配含 default
+        // 分支必然非空。模板文案以插件侧为唯一权威来源，系统层不保留回退副本。
         $templateText = $driver instanceof ProvidesVerifyCodeTemplate
             ? trim((string) $driver->verifyCodeTemplate($purpose))
             : '';
-        // 插件模板缺失/为空时回退系统文案，避免日志正文留空。
+
+        // 防御性校验：驱动返回空模板时拒绝发送（避免记录空正文或发送空短信）
         if ($templateText === '') {
-            $templateText = $this->aliyunVerifyTemplateText($purpose);
+            throw new \RuntimeException('短信模板文本为空，无法发送验证码');
         }
+
         $content = str_replace(['${code}', '${min}'], [$code, $expireMinutes], $templateText);
         $logContext = $this->createSmsLog(
             $phone,
@@ -93,7 +99,7 @@ class SmsService
         );
 
         try {
-            if (! $this->isEnabled()) {
+            if (! $this->channelSwitchEnabled('sms_enabled')) {
                 throw new \RuntimeException('短信通知未启用');
             }
 
@@ -104,7 +110,7 @@ class SmsService
                 ? array_merge($logParams, ['provider_template_id' => $providerTemplateCode])
                 : $logParams;
 
-            $this->updateSmsLog($logContext, [
+            $this->updateMessageLog($logContext, [
                 'status' => 'success',
                 'request_id' => $result->bizId ?? $result->requestId,
                 'sent_at' => now(),
@@ -112,7 +118,7 @@ class SmsService
                 'params_json' => $updatedParams,
             ]);
         } catch (\Exception $e) {
-            $this->updateSmsLog($logContext, [
+            $this->updateMessageLog($logContext, [
                 'status' => 'failed',
                 'error_msg' => $e->getMessage(),
             ]);
@@ -161,7 +167,7 @@ class SmsService
         );
 
         try {
-            if (! $this->isEnabled()) {
+            if (! $this->channelSwitchEnabled('sms_enabled')) {
                 throw new \RuntimeException('短信通知未启用');
             }
 
@@ -171,13 +177,13 @@ class SmsService
                 'provider_template_id' => $providerTemplateId,
             ]));
 
-            $this->updateSmsLog($logContext, [
+            $this->updateMessageLog($logContext, [
                 'status' => 'success',
                 'request_id' => $result->requestId,
                 'sent_at' => now(),
             ]);
         } catch (\Exception $e) {
-            $this->updateSmsLog($logContext, [
+            $this->updateMessageLog($logContext, [
                 'status' => 'failed',
                 'error_msg' => $e->getMessage(),
             ]);
@@ -190,11 +196,12 @@ class SmsService
         return $this->driverManager;
     }
 
-    private function isEnabled(): bool
+    /**
+     * message_logs 告警文案中的渠道名。
+     */
+    protected function messageChannelLabel(): string
     {
-        $value = Setting::getValue('notification', 'sms_enabled', '0');
-
-        return in_array((string) $value, ['1', 'true', 'on'], true);
+        return '短信';
     }
 
     /**
@@ -326,13 +333,6 @@ class SmsService
         return SmsTemplateCatalog::TEMPLATE_VERIFY_CODE;
     }
 
-    private function notificationTraceId(string $channel, string $templateCode): string
-    {
-        $template = trim($templateCode) !== '' ? trim($templateCode) : 'none';
-
-        return substr($channel.':'.$template.':'.str_replace('-', '', (string) Str::uuid()), 0, 64);
-    }
-
     private function resolveDriverForLog(): ?SmsDriver
     {
         try {
@@ -360,42 +360,6 @@ class SmsService
             'verify_bound_phone', 'verify_phone' => $purpose,
             default => 'generic',
         };
-    }
-
-    /**
-     * @param  array<string, mixed>  $params
-     * @return array<string, string>
-     */
-    private function stringifyParams(array $params): array
-    {
-        $normalized = [];
-
-        foreach ($params as $key => $value) {
-            if (! is_string($key) || trim($key) === '') {
-                continue;
-            }
-
-            $normalized[trim($key)] = match (true) {
-                is_string($value) => $value,
-                is_int($value), is_float($value) => (string) $value,
-                is_bool($value) => $value ? '1' : '',
-                $value === null => '',
-                default => (string) $value,
-            };
-        }
-
-        return $normalized;
-    }
-
-    private function resolveSiteName(): string
-    {
-        $siteName = trim((string) Setting::getValue(
-            'basic',
-            'site_name',
-            config('idc.site_name', config('app.name', '创欧云'))
-        ));
-
-        return $siteName !== '' ? $siteName : (string) config('app.name', '创欧云');
     }
 
     /**
@@ -430,44 +394,5 @@ class SmsService
         $rendered = preg_replace("/\n{3,}/u", "\n\n", (string) $rendered) ?? (string) $rendered;
 
         return trim($rendered);
-    }
-
-    private function hasTemplateValue(mixed $value): bool
-    {
-        return ! in_array($value, [null, '', false], true);
-    }
-
-    /**
-     * @param  array{id: int|null}  $logContext
-     */
-    private function updateSmsLog(array $logContext, array $attributes): void
-    {
-        $id = isset($logContext['id']) ? (int) $logContext['id'] : 0;
-
-        if ($id <= 0) {
-            return;
-        }
-
-        try {
-            MessageLog::query()->whereKey($id)->update($attributes);
-        } catch (\Throwable $exception) {
-            Log::warning('短信日志状态更新失败，已忽略以避免阻断发送流程', [
-                'table' => 'message_logs',
-                'id' => $id,
-                'message' => $exception->getMessage(),
-            ]);
-        }
-    }
-
-    private function aliyunVerifyTemplateText(string $purpose): string
-    {
-        return match ($purpose) {
-            'change_phone', 'phone_change', 'update_phone' => '尊敬的客户，您正在进行修改手机号操作，您的验证码为${code}。以上验证码${min}分钟内有效，请注意保密，切勿告知他人。',
-            'reset', 'reset_password', 'password_reset' => '尊敬的客户，您正在进行重置密码操作，您的验证码为${code}。以上验证码${min}分钟内有效，请注意保密，切勿告知他人。',
-            'bind_phone', 'new_phone' => '尊敬的客户，您正在进行绑定手机号操作，您的验证码为${code}。以上验证码${min}分钟内有效，请注意保密，切勿告知他人。',
-            'verify_bound_phone', 'verify_phone' => '尊敬的客户，您正在验证绑定手机号操作，您的验证码为${code}。以上验证码${min}分钟内有效，请注意保密，切勿告知他人。',
-            default // login, register, generic
-            => '您的验证码为${code}。尊敬的客户，以上验证码${min}分钟内有效，请注意保密，切勿告知他人。',
-        };
     }
 }

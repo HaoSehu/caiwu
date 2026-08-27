@@ -4,81 +4,49 @@ declare(strict_types=1);
 
 namespace App\Services\Mail;
 
-use App\Exceptions\BusinessException;
 use App\Services\Integrations\Plugins\IntegrationDriverBindingResolver;
 use App\Services\Mail\Contracts\MailDriver;
-use InvalidArgumentException;
+use App\Support\PluginDriverManager;
 
-final class MailDriverManager
+/**
+ * 邮件驱动注册表，公共注册/解析逻辑见 PluginDriverManager。
+ *
+ * @extends PluginDriverManager<MailDriver>
+ */
+final class MailDriverManager extends PluginDriverManager
 {
-    /** @var array<string, MailDriver> */
-    private array $drivers = [];
-
     /**
      * @param  iterable<int, MailDriver>  $drivers
      */
     public function __construct(
         iterable $drivers = [],
-        private ?IntegrationDriverBindingResolver $bindingResolver = null,
+        ?IntegrationDriverBindingResolver $bindingResolver = null,
     ) {
-        foreach ($drivers as $driver) {
-            $this->register($driver);
-        }
+        parent::__construct($drivers, $bindingResolver);
     }
 
     public function register(MailDriver $driver): void
     {
-        $key = trim($driver->key());
-
-        if ($key === '') {
-            throw new InvalidArgumentException('邮件驱动 key 不能为空');
-        }
-
-        if (isset($this->drivers[$key])) {
-            throw new InvalidArgumentException("邮件驱动 [{$key}] 重复注册");
-        }
-
-        $this->drivers[$key] = $driver;
+        $this->registerDriver($driver);
     }
 
     public function resolve(?string $key = null): MailDriver
     {
-        $resolvedKey = trim((string) ($key ?? ''));
-        if ($resolvedKey === '') {
-            foreach ($this->bindingResolver()->mailDriverCandidates() as $candidate) {
-                if (isset($this->drivers[$candidate])) {
-                    return $this->drivers[$candidate];
-                }
-            }
-
-            $resolvedKey = $this->getConfiguredKey();
-        }
-
-        if (isset($this->drivers[$resolvedKey])) {
-            return $this->drivers[$resolvedKey];
-        }
-
-        throw new BusinessException("邮件驱动 [{$resolvedKey}] 未注册", 42200);
+        return $this->resolveDriver($key);
     }
 
-    /** @return array<int, array{value: string, label: string}> */
-    public function options(): array
+    protected function channelLabel(): string
     {
-        $result = [];
-        foreach ($this->drivers as $driver) {
-            $result[] = ['value' => $driver->key(), 'label' => $driver->label()];
-        }
-
-        return $result;
+        return '邮件';
     }
 
-    private function getConfiguredKey(): string
+    protected function bindingCandidates(): array
+    {
+        return $this->bindingResolver()->mailDriverCandidates();
+    }
+
+    protected function bindingConfiguredKey(): string
     {
         return $this->bindingResolver()->mailDriverKey();
-    }
-
-    private function bindingResolver(): IntegrationDriverBindingResolver
-    {
-        return $this->bindingResolver ??= app(IntegrationDriverBindingResolver::class);
     }
 }

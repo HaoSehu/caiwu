@@ -9,6 +9,18 @@ final class EmailNotificationTemplateDefaults
     private const THEME_BLUE = '#1f5eff';
 
     /**
+     * 邮箱验证码统一有效时长（分钟）：模板 100001 的 expire_minutes 变量、
+     * 验证码缓存 TTL 与插件测试邮件兜底正文共用此唯一来源。
+     */
+    public const EMAIL_CODE_EXPIRE_MINUTES = 10;
+
+    /**
+     * 邮箱验证码兜底正文的措辞来源：{:code} 为验证码占位、{:minutes} 为有效分钟数占位。
+     * 插件测试邮件在未携带自定义正文时引用本句式，避免出现第三份文案分叉。
+     */
+    public const EMAIL_CODE_FALLBACK_BODY = '您的邮箱验证码为：{:code}，{:minutes}分钟内有效。如非本人操作，请忽略此邮件。';
+
+    /**
      * @return array<int, array<string, mixed>>
      */
     public static function templates(): array

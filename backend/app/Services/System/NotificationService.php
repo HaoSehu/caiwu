@@ -7,15 +7,18 @@ use App\Models\Setting;
 use App\Models\User;
 use App\Services\Integrations\Plugins\IntegrationDriverBindingResolver;
 use App\Services\Mail\MailDriverManager;
+use App\Services\System\Concerns\InteractsWithMessageLogs;
+use App\Support\EmailNotificationTemplateDefaults;
 use App\Support\PublicUrl;
 use App\Support\SiteConfigPayload;
 use App\Support\UploadUrl;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 use TijsVerkoyen\CssToInlineStyles\CssToInlineStyles;
 
 class NotificationService
 {
+    use InteractsWithMessageLogs;
+
     public const TEMPLATE_EMAIL_CODE = '100001';
 
     public const TEMPLATE_REGISTRATION_SUCCESS = '100002';
@@ -107,7 +110,7 @@ class NotificationService
         $logContext = $this->createEmailLog($to, $subject, $content, $templateCode);
 
         try {
-            if (! $this->isEmailEnabled()) {
+            if (! $this->channelSwitchEnabled('email_enabled')) {
                 throw new \RuntimeException('邮件通知未启用');
             }
 
@@ -115,13 +118,13 @@ class NotificationService
                 'template_code' => $templateCode,
             ]);
 
-            $this->updateEmailLog($logContext, [
+            $this->updateMessageLog($logContext, [
                 'status' => 'success',
                 'error_msg' => null,
                 'sent_at' => now(),
             ]);
         } catch (\Throwable $exception) {
-            $this->updateEmailLog($logContext, [
+            $this->updateMessageLog($logContext, [
                 'status' => 'failed',
                 'error_msg' => $exception->getMessage(),
             ]);
@@ -185,9 +188,10 @@ class NotificationService
 
     public function sendEmailCode(string $to, string $code): void
     {
+        // 有效分钟数与验证码缓存 TTL、插件兜底正文共用单一来源。
         $this->sendTemplateEmail($to, self::TEMPLATE_EMAIL_CODE, [
             'code' => $code,
-            'expire_minutes' => 10,
+            'expire_minutes' => EmailNotificationTemplateDefaults::EMAIL_CODE_EXPIRE_MINUTES,
         ]);
     }
 
@@ -372,11 +376,20 @@ class NotificationService
         }
     }
 
-    private function isEmailEnabled(): bool
+    /**
+     * message_logs 告警文案中的渠道名。
+     */
+    protected function messageChannelLabel(): string
     {
-        $value = Setting::getValue('notification', 'email_enabled', '0');
+        return '邮件';
+    }
 
-        return in_array((string) $value, ['1', 'true', 'on'], true);
+    /**
+     * 邮件模板布尔参数的 false 字面量为 '0'（短信侧为 ''，历史行为差异，保持各自输出）。
+     */
+    protected function stringifyBoolFalse(): string
+    {
+        return '0';
     }
 
     /**
@@ -432,36 +445,6 @@ class NotificationService
     private function driverBindingResolver(): IntegrationDriverBindingResolver
     {
         return $this->driverBindingResolver ??= app(IntegrationDriverBindingResolver::class);
-    }
-
-    private function notificationTraceId(string $channel, ?string $templateCode): string
-    {
-        $template = trim((string) $templateCode) !== '' ? trim((string) $templateCode) : 'none';
-
-        return substr($channel.':'.$template.':'.str_replace('-', '', (string) Str::uuid()), 0, 64);
-    }
-
-    /**
-     * @param  array{id: int|null}  $logContext
-     * @param  array{status?: string, error_msg?: ?string, sent_at?: mixed}  $attributes
-     */
-    private function updateEmailLog(array $logContext, array $attributes): void
-    {
-        $id = isset($logContext['id']) ? (int) $logContext['id'] : 0;
-
-        if ($id <= 0) {
-            return;
-        }
-
-        try {
-            MessageLog::query()->whereKey($id)->update($attributes);
-        } catch (\Throwable $exception) {
-            Log::warning('邮件日志状态更新失败，已忽略以避免阻断发送流程', [
-                'table' => 'message_logs',
-                'id' => $id,
-                'message' => $exception->getMessage(),
-            ]);
-        }
     }
 
     private function resolveUserAgentSummary(?string $userAgent): string
@@ -522,38 +505,6 @@ class NotificationService
         }
 
         return mb_substr($name, 0, 2).str_repeat('*', max($nameLength - 2, 1)).'@'.$domain;
-    }
-
-    private function stringifyParams(array $params): array
-    {
-        $normalized = [];
-
-        foreach ($params as $key => $value) {
-            if (! is_string($key) || trim($key) === '') {
-                continue;
-            }
-
-            $normalized[trim($key)] = match (true) {
-                is_string($value) => $value,
-                is_int($value), is_float($value) => (string) $value,
-                is_bool($value) => $value ? '1' : '0',
-                $value === null => '',
-                default => (string) $value,
-            };
-        }
-
-        return $normalized;
-    }
-
-    private function resolveSiteName(): string
-    {
-        $siteName = trim((string) Setting::getValue(
-            'basic',
-            'site_name',
-            config('idc.site_name', config('app.name', '创欧云'))
-        ));
-
-        return $siteName !== '' ? $siteName : (string) config('app.name', '创欧云');
     }
 
     private function resolveSiteLogo(): string
@@ -699,11 +650,6 @@ class NotificationService
 </body>
 </html>
 HTML;
-    }
-
-    private function hasTemplateValue(mixed $value): bool
-    {
-        return ! in_array($value, [null, '', false], true);
     }
 
     /**

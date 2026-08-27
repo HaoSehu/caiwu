@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Caiwu\Plugins\Sms\Stay33\Lib;
 
+use App\Support\NumericCodeNormalizer;
+
 class Stay33SmsService
 {
     private ?Stay33SmsClient $client = null;
@@ -29,7 +31,12 @@ class Stay33SmsService
         $config = is_array($request['config'] ?? null) ? $request['config'] : [];
 
         if ($action === 'sms.test') {
-            return $this->send($action, $payload, $config, $this->verificationCode($payload));
+            return $this->send(
+                $action,
+                $payload,
+                $config,
+                NumericCodeNormalizer::normalizeSixDigit((string) ($payload['code'] ?? ''))
+            );
         }
 
         if ($action === 'sms.send_message') {
@@ -126,16 +133,6 @@ class Stay33SmsService
                 'message' => $message,
             ],
         ];
-    }
-
-    /**
-     * @param  array<string, mixed>  $payload
-     */
-    private function verificationCode(array $payload): string
-    {
-        $code = trim((string) ($payload['code'] ?? ''));
-
-        return preg_match('/^\d{6}$/', $code) === 1 ? $code : (string) random_int(100000, 999999);
     }
 
     /**

@@ -7,6 +7,7 @@ namespace Caiwu\Plugins\Sms\DemoSms\Lib;
 use App\Services\Sms\Data\SmsMessageRequest;
 use App\Services\Sms\Data\SmsSendRequest;
 use App\Services\Sms\Data\SmsSendResult;
+use App\Support\NumericCodeNormalizer;
 use App\Support\SmsTemplateCatalog;
 
 class DemoSmsService
@@ -67,7 +68,7 @@ class DemoSmsService
             ))->toArray()),
             'sms.test' => $this->success($action, $this->sendVerifyCode(new SmsSendRequest(
                 phone: (string) ($payload['phone'] ?? ''),
-                code: $this->verificationCode($payload),
+                code: NumericCodeNormalizer::normalizeSixDigit((string) ($payload['code'] ?? '')),
                 options: $this->resolveOptions($payload, $config),
             ))->toArray()),
             default => ['success' => false, 'action' => $action, 'message' => 'Unsupported plugin action', 'data' => []],
@@ -81,16 +82,6 @@ class DemoSmsService
             'action' => $action,
             'data' => $data,
         ];
-    }
-
-    /**
-     * @param  array<string, mixed>  $payload
-     */
-    private function verificationCode(array $payload): string
-    {
-        $code = trim((string) ($payload['code'] ?? ''));
-
-        return preg_match('/^\d{6}$/', $code) === 1 ? $code : (string) random_int(100000, 999999);
     }
 
     /**

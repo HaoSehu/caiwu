@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Caiwu\Plugins\Sms\Aliyun\Lib;
 
+use App\Support\PhoneMasker;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -162,7 +163,7 @@ class AliyunSmsClient
             'action' => $params['Action'] ?? null,
         ];
         if ($phone !== '') {
-            $logContext['phone'] = $this->maskPhone($phone);
+            $logContext['phone'] = PhoneMasker::mask($phone);
         }
 
         Log::info('[短信] 请求阿里云短信接口', $logContext);
@@ -342,15 +343,6 @@ class AliyunSmsClient
         }
 
         return array_values(array_unique($names));
-    }
-
-    private function maskPhone(string $phone): string
-    {
-        if (mb_strlen($phone) <= 7) {
-            return $phone;
-        }
-
-        return mb_substr($phone, 0, 3).'****'.mb_substr($phone, -4);
     }
 
     private function resolveFailureMessage(mixed $message): string

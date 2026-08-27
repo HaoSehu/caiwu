@@ -4,83 +4,49 @@ declare(strict_types=1);
 
 namespace App\Services\Sms;
 
-use App\Exceptions\BusinessException;
 use App\Services\Integrations\Plugins\IntegrationDriverBindingResolver;
 use App\Services\Sms\Contracts\SmsDriver;
-use InvalidArgumentException;
+use App\Support\PluginDriverManager;
 
-final class SmsDriverManager
+/**
+ * 短信驱动注册表，公共注册/解析逻辑见 PluginDriverManager。
+ *
+ * @extends PluginDriverManager<SmsDriver>
+ */
+final class SmsDriverManager extends PluginDriverManager
 {
-    /** @var array<string, SmsDriver> */
-    private array $drivers = [];
-
     /**
-     * 注册由容器 tag 提供的短信驱动。
-     *
      * @param  iterable<int, SmsDriver>  $drivers
      */
     public function __construct(
         iterable $drivers = [],
-        private ?IntegrationDriverBindingResolver $bindingResolver = null,
+        ?IntegrationDriverBindingResolver $bindingResolver = null,
     ) {
-        foreach ($drivers as $driver) {
-            $this->register($driver);
-        }
+        parent::__construct($drivers, $bindingResolver);
     }
 
     public function register(SmsDriver $driver): void
     {
-        $key = trim($driver->key());
-
-        if ($key === '') {
-            throw new InvalidArgumentException('短信驱动 key 不能为空');
-        }
-
-        if (isset($this->drivers[$key])) {
-            throw new InvalidArgumentException("短信驱动 [{$key}] 重复注册");
-        }
-
-        $this->drivers[$key] = $driver;
+        $this->registerDriver($driver);
     }
 
     public function resolve(?string $key = null): SmsDriver
     {
-        $resolvedKey = trim((string) ($key ?? ''));
-        if ($resolvedKey === '') {
-            foreach ($this->bindingResolver()->smsDriverCandidates() as $candidate) {
-                if (isset($this->drivers[$candidate])) {
-                    return $this->drivers[$candidate];
-                }
-            }
-
-            $resolvedKey = $this->getConfiguredKey();
-        }
-
-        if (isset($this->drivers[$resolvedKey])) {
-            return $this->drivers[$resolvedKey];
-        }
-
-        throw new BusinessException("短信驱动 [{$resolvedKey}] 未注册");
+        return $this->resolveDriver($key);
     }
 
-    /** @return array<int, array{value: string, label: string}> */
-    public function options(): array
+    protected function channelLabel(): string
     {
-        $result = [];
-        foreach ($this->drivers as $driver) {
-            $result[] = ['value' => $driver->key(), 'label' => $driver->label()];
-        }
-
-        return $result;
+        return '短信';
     }
 
-    private function getConfiguredKey(): string
+    protected function bindingCandidates(): array
+    {
+        return $this->bindingResolver()->smsDriverCandidates();
+    }
+
+    protected function bindingConfiguredKey(): string
     {
         return $this->bindingResolver()->smsDriverKey();
-    }
-
-    private function bindingResolver(): IntegrationDriverBindingResolver
-    {
-        return $this->bindingResolver ??= app(IntegrationDriverBindingResolver::class);
     }
 }

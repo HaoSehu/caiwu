@@ -9,9 +9,13 @@ use App\Services\Integrations\Plugins\PluginConfigRepository;
 use App\Services\Integrations\Plugins\PluginDomain;
 use App\Services\Mail\BaseMailPluginService;
 use App\Services\Mail\SmtpMailTransport;
-use App\Services\System\NotificationService;
 use Illuminate\Support\Facades\Cache;
 
+/**
+ * 多 SMTP 轮询插件：发送走轮询 + 冷却；测试流程复用基类标准骨架，
+ * 仅覆写与单账号插件不同的钩子点（校验规则、正文来源、选号投递、回执字段），
+ * 保证对外响应逐字维持既有契约。
+ */
 class MultiSmtpRoundRobinService extends BaseMailPluginService
 {
     public function __construct(
@@ -43,7 +47,6 @@ class MultiSmtpRoundRobinService extends BaseMailPluginService
         }
 
         $cooldownSeconds = max((int) ($config['cooldown_seconds'] ?? 60), 1);
-        $lastException = null;
         $accountCount = count($accounts);
         $startIndex = $this->nextIndex($accountCount);
 
@@ -60,8 +63,7 @@ class MultiSmtpRoundRobinService extends BaseMailPluginService
                 Cache::put($this->cursorKey(), ($index + 1) % $accountCount, now()->addDay());
 
                 return;
-            } catch (\Throwable $exception) {
-                $lastException = $exception;
+            } catch (\Throwable) {
                 Cache::put($cooldownKey, time() + $cooldownSeconds, now()->addSeconds($cooldownSeconds));
             }
         }
@@ -69,10 +71,60 @@ class MultiSmtpRoundRobinService extends BaseMailPluginService
         throw new BusinessException('多 SMTP 轮询发送失败，已尝试 '.$accountCount.' 个账号', 42200);
     }
 
-    public function testSmtp(int $accountIndex, string $to, string $subject, string $body = ''): void
+    /**
+     * 历史契约：send_html 不在插件侧提前校验收件人格式，交由传输层处理。
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    protected function validateSendHtmlPayload(array $payload): ?string
     {
+        unset($payload);
+
+        return null;
+    }
+
+    /**
+     * 历史契约：test_smtp 要求账号下标、收件人与主题齐备，
+     * 参数缺失文案与单账号插件的“请填写有效的收件邮箱和主题”不同。
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    protected function validateTestSmtpPayload(array $payload): ?string
+    {
+        $accountIndex = (int) ($payload['account_index'] ?? -1);
+        $to = trim((string) ($payload['to'] ?? ''));
+        $subject = trim((string) ($payload['subject'] ?? '邮箱验证码'));
+
+        if ($accountIndex < 0 || $to === '' || $subject === '') {
+            return '缺少必要参数：account_index、to、subject';
+        }
+
+        return null;
+    }
+
+    /**
+     * 历史契约：测试正文仅接受 body 或内置验证码兜底文案（忽略 html 字段）。
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    protected function resolveTestSmtpBody(array $payload, string $code): string
+    {
+        return trim((string) ($payload['body'] ?? $this->verificationBody($code)));
+    }
+
+    /**
+     * 测试邮件按指定下标直投：账号不存在或配置无效时抛业务异常，
+     * 行为与原 execute/testSmtp 分支一致。
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    protected function deliverTestSmtp(array $payload, string $to, string $subject, string $html, string $templateCode, string $code): void
+    {
+        unset($templateCode, $code);
+
         $config = $this->configRepository->resolvedConfigByDomainAndSlug(PluginDomain::MAIL, 'multi_smtp_round_robin');
         $accounts = is_array($config['accounts'] ?? null) ? array_values($config['accounts']) : [];
+        $accountIndex = (int) ($payload['account_index'] ?? -1);
 
         if (! isset($accounts[$accountIndex])) {
             throw new BusinessException('SMTP 账号不存在', 42200);
@@ -83,67 +135,30 @@ class MultiSmtpRoundRobinService extends BaseMailPluginService
             throw new BusinessException('SMTP 账号配置无效', 42200);
         }
 
-        $fallbackCode = (string) random_int(100000, 999999);
-        $html = $body !== ''
-            ? nl2br(htmlspecialchars($body, ENT_QUOTES, 'UTF-8'))
-            : '<p>'.htmlspecialchars($this->verificationBody($fallbackCode), ENT_QUOTES, 'UTF-8').'</p>';
-
         $this->transport->sendHtml($account, $to, $subject, $html);
     }
 
-    public function execute(array $request): array
+    /**
+     * 历史契约：测试回执只含 sent 与 template_code（不含 to/subject）。
+     *
+     * @return array<string, mixed>
+     */
+    protected function testSmtpSentData(string $to, string $subject, string $templateCode): array
     {
-        $action = trim((string) ($request['action'] ?? ''));
-        $payload = is_array($request['payload'] ?? null) ? $request['payload'] : [];
-
-        if ($action === 'mail.test_smtp') {
-            $accountIndex = (int) ($payload['account_index'] ?? -1);
-            $to = trim((string) ($payload['to'] ?? ''));
-            $subject = trim((string) ($payload['subject'] ?? '邮箱验证码'));
-            $code = $this->verificationCode($payload);
-            $body = trim((string) ($payload['body'] ?? $this->verificationBody($code)));
-            $templateCode = (string) ($payload['template_code'] ?? NotificationService::TEMPLATE_EMAIL_CODE);
-
-            if ($accountIndex < 0 || $to === '' || $subject === '') {
-                return [
-                    'success' => false,
-                    'action' => $action,
-                    'message' => '缺少必要参数：account_index、to、subject',
-                    'data' => [],
-                ];
-            }
-
-            $this->testSmtp($accountIndex, $to, $subject, $body);
-
-            return [
-                'success' => true,
-                'action' => $action,
-                'message' => '测试邮件发送成功',
-                'data' => ['sent' => true, 'template_code' => $templateCode],
-            ];
-        }
-
-        if ($action !== 'mail.send_html') {
-            return [
-                'success' => false,
-                'action' => $action,
-                'message' => '不支持的插件动作',
-                'data' => [],
-            ];
-        }
-
-        $this->sendHtml(
-            to: (string) ($payload['to'] ?? ''),
-            subject: (string) ($payload['subject'] ?? ''),
-            html: (string) ($payload['html'] ?? ''),
-            context: is_array($payload['context'] ?? null) ? $payload['context'] : [],
-        );
+        unset($to, $subject);
 
         return [
-            'success' => true,
-            'action' => $action,
-            'data' => ['sent' => true],
+            'sent' => true,
+            'template_code' => $templateCode,
         ];
+    }
+
+    /**
+     * 历史契约：测试成功回执携带 message 字段。
+     */
+    protected function testSmtpSuccessMessage(): ?string
+    {
+        return '测试邮件发送成功';
     }
 
     private function nextIndex(int $count): int

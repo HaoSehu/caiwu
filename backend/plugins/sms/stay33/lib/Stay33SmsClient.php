@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Caiwu\Plugins\Sms\Stay33\Lib;
 
+use App\Support\PhoneMasker;
 use App\Support\SmsTemplateCatalog;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
@@ -20,6 +21,8 @@ class Stay33SmsClient
     ) {}
 
     /**
+     * 发送验证码短信：文案渲染后走公共请求核心，成功回执附带验证码上下文。
+     *
      * @param  array<string, mixed>  $options
      * @return array<string, mixed>
      */
@@ -32,62 +35,33 @@ class Stay33SmsClient
             return $this->failure('短信发送参数不完整');
         }
 
-        $username = $this->configString('username');
-        $apiKey = $this->configString('api_key', $this->configString('key'));
-        if ($username === '' || $apiKey === '') {
-            return $this->failure('短信接口配置不完整');
-        }
-
         $signName = $this->optionString($options, 'sign_name', $this->configString('sign_name'));
         $templateCode = $this->optionString($options, 'template_code', $this->configString('template_code', SmsTemplateCatalog::TEMPLATE_VERIFY_CODE));
-        $channel = $this->resolveChannel($options);
         if ($signName === '') {
             return $this->failure('短信接口配置不完整');
         }
 
+        $channel = $this->resolveChannel($options);
         $content = $this->applySign($this->stripCodeMarkers($this->renderContent($code, $signName, $options)), $signName);
-        $params = [
-            'username' => $username,
-            'key' => $apiKey,
-            'phone' => $phone,
-            'content' => $content,
+
+        $outcome = $this->performSend($phone, $content, $channel);
+        if (isset($outcome['failure'])) {
+            return $outcome['failure'];
+        }
+
+        /** @var array<string, mixed> $result */
+        $result = $outcome['result'];
+
+        return $this->successPayload($result, $templateCode, [
+            'code' => $code,
+            'sign_name' => $signName,
             'channel' => $channel,
-        ];
-
-        $result = $this->request($params, $phone);
-        if (! is_array($result)) {
-            return $this->failure('短信接口请求失败，请稍后重试');
-        }
-
-        if ((int) ($result['code'] ?? 0) !== 1) {
-            $message = $this->resolveFailureMessage($result['msg'] ?? '');
-            Log::warning('[短信] MC云短信发送失败', [
-                'code' => (int) ($result['code'] ?? 0),
-                'message' => $message,
-                'phone' => $this->maskPhone($phone),
-            ]);
-
-            return $this->failure($message, $result);
-        }
-
-        $successData = is_array($result['success_data'] ?? null) ? $result['success_data'] : [];
-        $firstItem = is_array($successData[0] ?? null) ? $successData[0] : [];
-
-        return [
-            'success' => true,
-            'status' => 'success',
-            'request_id' => isset($firstItem['sms_code']) ? (string) $firstItem['sms_code'] : null,
-            'template_code' => $templateCode,
-            'template_params' => [
-                'code' => $code,
-                'sign_name' => $signName,
-                'channel' => $channel,
-            ],
-            'raw' => $result,
-        ];
+        ]);
     }
 
     /**
+     * 发送模板正文短信：签名处理后走公共请求核心，成功回执附带回显正文。
+     *
      * @param  array<string, mixed>  $options
      * @return array<string, mixed>
      */
@@ -101,19 +75,42 @@ class Stay33SmsClient
             return $this->failure('短信发送参数不完整');
         }
 
-        $username = $this->configString('username');
-        $apiKey = $this->configString('api_key', $this->configString('key'));
-        if ($username === '' || $apiKey === '') {
-            return $this->failure('短信接口配置不完整');
-        }
-
         $signName = $this->optionString($options, 'sign_name', $this->configString('sign_name'));
         if ($signName === '') {
             return $this->failure('短信接口配置不完整');
         }
 
         $channel = $this->resolveChannel($options);
-        $content = $this->applySign($this->stripCodeMarkers($content), $signName);
+        $signedContent = $this->applySign($this->stripCodeMarkers($content), $signName);
+
+        $outcome = $this->performSend($phone, $signedContent, $channel);
+        if (isset($outcome['failure'])) {
+            return $outcome['failure'];
+        }
+
+        /** @var array<string, mixed> $result */
+        $result = $outcome['result'];
+
+        return $this->successPayload($result, $templateCode, [
+            'content' => $signedContent,
+            'channel' => $channel,
+        ]);
+    }
+
+    /**
+     * 公共请求核心：凭据校验 → 拼装报文 → 请求 → 业务码判定 → 失败告警。
+     * 成功时返回上游原始响应（result），任一环节失败返回统一 failure 结构。
+     *
+     * @return array{result?: array<string, mixed>, failure?: array<string, mixed>}
+     */
+    private function performSend(string $phone, string $content, string $channel): array
+    {
+        $username = $this->configString('username');
+        $apiKey = $this->configString('api_key', $this->configString('key'));
+        if ($username === '' || $apiKey === '') {
+            return ['failure' => $this->failure('短信接口配置不完整')];
+        }
+
         $params = [
             'username' => $username,
             'key' => $apiKey,
@@ -124,7 +121,7 @@ class Stay33SmsClient
 
         $result = $this->request($params, $phone);
         if (! is_array($result)) {
-            return $this->failure('短信接口请求失败，请稍后重试');
+            return ['failure' => $this->failure('短信接口请求失败，请稍后重试')];
         }
 
         if ((int) ($result['code'] ?? 0) !== 1) {
@@ -132,12 +129,24 @@ class Stay33SmsClient
             Log::warning('[短信] MC云短信发送失败', [
                 'code' => (int) ($result['code'] ?? 0),
                 'message' => $message,
-                'phone' => $this->maskPhone($phone),
+                'phone' => PhoneMasker::mask($phone),
             ]);
 
-            return $this->failure($message, $result);
+            return ['failure' => $this->failure($message, $result)];
         }
 
+        return ['result' => $result];
+    }
+
+    /**
+     * 上游成功响应的回执组装：提取 request_id，并回显模板编码与模板参数。
+     *
+     * @param  array<string, mixed>  $result
+     * @param  array<string, mixed>  $templateParams
+     * @return array<string, mixed>
+     */
+    private function successPayload(array $result, string $templateCode, array $templateParams): array
+    {
         $successData = is_array($result['success_data'] ?? null) ? $result['success_data'] : [];
         $firstItem = is_array($successData[0] ?? null) ? $successData[0] : [];
 
@@ -146,10 +155,7 @@ class Stay33SmsClient
             'status' => 'success',
             'request_id' => isset($firstItem['sms_code']) ? (string) $firstItem['sms_code'] : null,
             'template_code' => $templateCode,
-            'template_params' => [
-                'content' => $content,
-                'channel' => $channel,
-            ],
+            'template_params' => $templateParams,
             'raw' => $result,
         ];
     }
@@ -169,7 +175,7 @@ class Stay33SmsClient
             } catch (ConnectionException $exception) {
                 Log::warning('[短信] MC云短信接口连接失败', [
                     'endpoint' => $endpoint,
-                    'phone' => $this->maskPhone($phone),
+                    'phone' => PhoneMasker::mask($phone),
                     'message' => $exception->getMessage(),
                 ]);
 
@@ -177,7 +183,7 @@ class Stay33SmsClient
             } catch (\Throwable $exception) {
                 Log::warning('[短信] MC云短信接口请求异常', [
                     'endpoint' => $endpoint,
-                    'phone' => $this->maskPhone($phone),
+                    'phone' => PhoneMasker::mask($phone),
                     'message' => $exception->getMessage(),
                 ]);
 
@@ -188,7 +194,7 @@ class Stay33SmsClient
                 Log::warning('[短信] MC云短信接口 HTTP 状态异常', [
                     'endpoint' => $endpoint,
                     'status' => $response->status(),
-                    'phone' => $this->maskPhone($phone),
+                    'phone' => PhoneMasker::mask($phone),
                 ]);
 
                 continue;
@@ -349,15 +355,6 @@ class Stay33SmsClient
             'message' => $message !== '' ? $message : '短信发送失败，请稍后重试',
             'raw' => $raw,
         ];
-    }
-
-    private function maskPhone(string $phone): string
-    {
-        if (mb_strlen($phone) <= 7) {
-            return $phone;
-        }
-
-        return mb_substr($phone, 0, 3).'****'.mb_substr($phone, -4);
     }
 
     private function resolveFailureMessage(mixed $message): string

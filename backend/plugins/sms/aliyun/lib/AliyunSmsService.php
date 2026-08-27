@@ -4,8 +4,7 @@ declare(strict_types=1);
 
 namespace Caiwu\Plugins\Sms\Aliyun\Lib;
 
-use Illuminate\Cache\RateLimiter;
-use Illuminate\Http\Request;
+use App\Support\NumericCodeNormalizer;
 
 class AliyunSmsService
 {
@@ -140,10 +139,7 @@ class AliyunSmsService
             return ['success' => false, 'action' => $action, 'message' => '缺少必要参数：code', 'data' => []];
         }
 
-        $rateLimitError = $this->checkRateLimit($config);
-        if ($rateLimitError !== null) {
-            return ['success' => false, 'action' => $action, 'message' => $rateLimitError, 'data' => []];
-        }
+        // 频率限制由系统入口 MessageRateLimitService 统一执行，插件不重复计数。
 
         $phone = trim((string) ($payload['phone'] ?? ''));
         $client = $this->client($config);
@@ -196,50 +192,18 @@ class AliyunSmsService
         return null;
     }
 
-    /**
-     * @param  array<string, mixed>  $config
-     */
-    private function checkRateLimit(array $config): ?string
-    {
-        $enabled = filter_var($config['rate_limit_enabled'] ?? true, FILTER_VALIDATE_BOOL);
-        if (! $enabled) {
-            return null;
-        }
-
-        $limit = (int) ($config['ip_minute_limit'] ?? 6);
-        if ($limit <= 0) {
-            return null;
-        }
-
-        /** @var Request|null $request */
-        $request = app('request');
-        $ip = $request instanceof Request ? $request->ip() : '127.0.0.1';
-
-        /** @var RateLimiter $limiter */
-        $limiter = app(RateLimiter::class);
-        $key = 'sms-aliyun:'.$ip;
-
-        if ($limiter->tooManyAttempts($key, $limit)) {
-            return '验证码发送过于频繁，请稍后再试';
-        }
-
-        $limiter->hit($key, 60);
-
-        return null;
-    }
-
     private function client(array $config): AliyunSmsClient
     {
         return new AliyunSmsClient($config);
     }
 
     /**
+     * 测试发送用的六位验证码：无效输入时以随机码兜底（共享归一化实现）。
+     *
      * @param  array<string, mixed>  $payload
      */
     private function verificationCode(array $payload): string
     {
-        $code = trim((string) ($payload['code'] ?? ''));
-
-        return preg_match('/^\d{6}$/', $code) === 1 ? $code : (string) random_int(100000, 999999);
+        return NumericCodeNormalizer::normalizeSixDigit((string) ($payload['code'] ?? ''));
     }
 }
