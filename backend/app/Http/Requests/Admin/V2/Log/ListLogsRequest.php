@@ -24,8 +24,8 @@ class ListLogsRequest extends AdminFormRequest
             'page' => ['sometimes', 'integer', 'min:1'],
             'page_size' => ['sometimes', 'integer', 'min:1', 'max:100'],
             'include_summary' => ['sometimes', 'boolean'],
-            'per_page' => ['prohibited'],
-            'pageSize' => ['prohibited'],
+            // 复用基类 trait 的旧分页参数禁用规则，替代手抄的 per_page/pageSize prohibited。
+            ...$this->legacyPaginationRules(),
             'keyword' => ['sometimes', 'string', 'max:120'],
             'actor_keyword' => ['sometimes', 'string', 'max:120'],
             'description_keyword' => ['sometimes', 'string', 'max:120'],
@@ -119,11 +119,6 @@ class ListLogsRequest extends AdminFormRequest
     public function pageNumber(): int
     {
         return max(1, (int) $this->integer('page', 1));
-    }
-
-    public function perPage(int $default = 20, int $max = 100): int
-    {
-        return max(1, min((int) $this->integer('page_size', $default), $max));
     }
 
     public function includeSummary(): bool

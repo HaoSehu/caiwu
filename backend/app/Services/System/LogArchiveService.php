@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\System;
 
 use App\Models\ArchiveAuditLog;
+use App\Support\TextSanitizer;
 use Carbon\CarbonImmutable;
 use Illuminate\Process\Pool;
 use Illuminate\Support\Facades\DB;
@@ -209,7 +210,7 @@ class LogArchiveService
                 $output = trim($result->output().PHP_EOL.$result->errorOutput());
                 $tableReport = (array) $report['tables'][$table];
                 $tableReport['exit_code'] = $result->exitCode();
-                $tableReport['tool_output'] = $this->truncate($output, 8000);
+                $tableReport['tool_output'] = TextSanitizer::truncateWithEllipsis($output, 8000);
                 $tableReport['finished_at'] = now()->toISOString();
 
                 if ($dryRun) {
@@ -697,12 +698,7 @@ class LogArchiveService
     {
         $message = trim($output);
 
-        return $this->truncate($message !== '' ? $message : "pt-archiver exited with code {$exitCode}.", 500);
-    }
-
-    private function truncate(string $value, int $length): string
-    {
-        return mb_strlen($value) <= $length ? $value : mb_substr($value, 0, $length).'...';
+        return TextSanitizer::truncateWithEllipsis($message !== '' ? $message : "pt-archiver exited with code {$exitCode}.", 500);
     }
 
     private function boundedInteger(mixed $value, int $minimum, int $maximum, string $label): int

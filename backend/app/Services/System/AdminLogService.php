@@ -571,8 +571,7 @@ class AdminLogService
         }
 
         $admins = $query->orderByDesc('last_login_at')->paginate($perPage, ['*'], 'page', $page);
-        $privacy = AdminPrivacy::current();
-        $admins->setCollection($admins->getCollection()->map(function (AdminUser $admin) use ($privacy) {
+        $admins->setCollection($admins->getCollection()->map(function (AdminUser $admin) {
             return [
                 'id' => (int) $admin->id,
                 'user_id' => (int) $admin->id,
@@ -581,7 +580,7 @@ class AdminLogService
                 'admin_username' => trim((string) $admin->username),
                 'admin_nickname' => trim((string) ($admin->nickname ?? '')),
                 'role_name' => trim((string) ($admin->role?->label ?: $admin->role?->name ?: '')),
-                'ip_address' => $privacy->ip($admin->last_login_ip ?? ''),
+                'ip_address' => trim((string) ($admin->last_login_ip ?? '')),
                 'created_at' => $admin->last_login_at?->format('Y-m-d H:i:s'),
                 'detail' => ['source' => 'admin_users.last_login_at'],
                 'source' => 'admin_snapshot',
@@ -1306,7 +1305,7 @@ class AdminLogService
                 'module' => trim((string) ($log->module ?? '')),
                 'target_id' => $log->subject_id !== null ? (int) $log->subject_id : null,
                 'detail' => $privacy->payload($detail),
-                'ip_address' => $privacy->ip($log->ip_address ?? ''),
+                'ip_address' => trim((string) ($log->ip_address ?? '')),
                 'created_at' => $log->created_at?->format('Y-m-d H:i:s'),
                 'request_id' => trim((string) ($log->trace_id ?? '')),
             ];
@@ -1401,7 +1400,7 @@ class AdminLogService
             'module' => trim((string) ($item['module'] ?? '')),
             'target_id' => $item['target_id'] ?? null,
             'detail' => $privacy->payload($detail),
-            'ip_address' => $privacy->ip($item['ip_address'] ?? ''),
+            'ip_address' => trim((string) ($item['ip_address'] ?? '')),
             'created_at' => $item['created_at'] ?? null,
         ];
     }
@@ -1713,7 +1712,7 @@ class AdminLogService
             $item = $log->toArray();
             $item['source'] = 'activity_log';
             $item['context'] = $privacy->payload($item['context'] ?? []);
-            $item['ip_address'] = $privacy->ip($item['ip_address'] ?? '');
+            $item['ip_address'] = trim((string) ($item['ip_address'] ?? ''));
             if (($item['actor_type'] ?? '') === 'client') {
                 $item['actor_name'] = $privacy->displayName($item['actor_name'] ?? '');
             }

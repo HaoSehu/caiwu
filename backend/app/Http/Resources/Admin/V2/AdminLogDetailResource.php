@@ -10,9 +10,11 @@ use Illuminate\Http\Resources\Json\JsonResource;
 
 class AdminLogDetailResource extends JsonResource
 {
+    // ip_address 按项目红线原样透传：管理端日志必须展示完整真实 IP
     private const PRIVACY_PROJECTED_FIELDS = [
         'phone',
         'to_email',
+        'ip_address',
     ];
 
     private const BUSINESS_IDENTIFIER_FIELDS = [

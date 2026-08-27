@@ -4,6 +4,7 @@ namespace App\Services\System;
 
 use App\Models\Service;
 use App\Support\ActivityLogStream;
+use App\Support\CacheKey;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
@@ -122,7 +123,7 @@ class OperationLogService
             // 失败计数与告警本身也是旁路能力，必须彼此隔离；Redis/缓存故障
             // 不能从这里再次抛出并把原业务请求判定为失败。
             try {
-                Cache::increment('activity_log:write_failures');
+                Cache::increment(CacheKey::activityLogWriteFailures());
             } catch (\Throwable) {
                 // 计数失败不影响主流程，也不覆盖原始日志异常。
             }

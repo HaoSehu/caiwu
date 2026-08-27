@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Resources\Admin\V2;
 
 use App\Support\SensitiveDataSanitizer;
+use App\Support\TextSanitizer;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -27,6 +28,7 @@ class AdminLogSummaryResource extends JsonResource
         'actor_name',
         'admin_username',
         'admin_nickname',
+        'ip_address',
         'role_name',
         'subject_type',
         'subject_id',
@@ -58,9 +60,11 @@ class AdminLogSummaryResource extends JsonResource
         'finished_at',
     ];
 
+    // ip_address 按项目红线原样透传：管理端日志必须展示完整真实 IP
     private const PRIVACY_PROJECTED_FIELDS = [
         'phone',
         'to_email',
+        'ip_address',
     ];
 
     private const BUSINESS_IDENTIFIER_FIELDS = [
@@ -129,11 +133,7 @@ class AdminLogSummaryResource extends JsonResource
         $text = $sanitize ? SensitiveDataSanitizer::sanitizeText($value) : $value;
         $value = trim(preg_replace('/\s+/u', ' ', $text) ?? '');
 
-        if (mb_strlen($value) <= $limit) {
-            return $value;
-        }
-
-        return mb_substr($value, 0, $limit).'...';
+        return TextSanitizer::truncateWithEllipsis($value, $limit);
     }
 
     private function sanitizeField(string $key, mixed $value, bool $raw = false): mixed
