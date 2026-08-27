@@ -22,7 +22,6 @@ use App\Services\Upstream\ProviderKey;
 use App\Services\Upstream\Support\CloudConfigTemplate;
 use App\Services\Upstream\Support\UpstreamJwtSessionManager;
 use App\Services\Upstream\Support\WebSessionCookieParser;
-use App\Support\SensitiveDataSanitizer;
 use Illuminate\Http\Client\Pool;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
@@ -138,7 +137,7 @@ class HostingPanelApiTransport extends UpstreamJwtSessionManager implements Prov
     }
 
     /**
-     * 登录响应缺少会话时的告警上下文：附带脱敏后的完整响应摘要。
+     * 登录响应缺少会话时的告警上下文：附带完整响应摘要（日志不做脱敏，仅长度截断）。
      *
      * @param  array<string, mixed>  $response
      * @return array<string, mixed>
@@ -554,7 +553,7 @@ class HostingPanelApiTransport extends UpstreamJwtSessionManager implements Prov
             $this->safeLog('error', '[主机面板接口] 文本接口请求失败', [
                 'supplier_id' => $supplier->id,
                 'method' => $method,
-                'url' => $this->maskUrlForLog($url),
+                'url' => $url,
                 'http_code' => $httpCode,
                 'duration_ms' => $this->elapsedMilliseconds($startedAt),
                 'error' => $lastError['message'] ?? 'unknown error',
@@ -570,10 +569,10 @@ class HostingPanelApiTransport extends UpstreamJwtSessionManager implements Prov
         $this->safeLog('info', '[主机面板接口] 文本接口响应', [
             'supplier_id' => $supplier->id,
             'method' => $method,
-            'url' => $this->maskUrlForLog($url),
+            'url' => $url,
             'http_code' => $httpCode,
             'duration_ms' => $this->elapsedMilliseconds($startedAt),
-            'response_preview' => $this->sanitizePagePreview(trim((string) $output, "\xEF\xBB\xBF")),
+            'response_preview' => $this->truncateLogValue(trim((string) $output, "\xEF\xBB\xBF")),
         ]);
 
         return (string) $output;
@@ -637,7 +636,7 @@ class HostingPanelApiTransport extends UpstreamJwtSessionManager implements Prov
             $this->safeLog('error', '[主机面板接口] 接口请求失败', [
                 'supplier_id' => $supplier->id,
                 'method' => $method,
-                'url' => $this->maskUrlForLog($url),
+                'url' => $url,
                 'http_code' => $httpCode,
                 'duration_ms' => $this->elapsedMilliseconds($startedAt),
                 'error' => $lastError['message'] ?? 'unknown error',
@@ -656,7 +655,7 @@ class HostingPanelApiTransport extends UpstreamJwtSessionManager implements Prov
         $this->safeLog('info', '[主机面板接口] 接口响应', [
             'supplier_id' => $supplier->id,
             'method' => $method,
-            'url' => $this->maskUrlForLog($url),
+            'url' => $url,
             'http_code' => $httpCode,
             'duration_ms' => $this->elapsedMilliseconds($startedAt),
             'response' => is_array($decoded) ? $this->summarizeLogResponse($decoded) : $this->truncateLogValue($output),
@@ -1113,22 +1112,6 @@ PHP;
             ->all();
     }
 
-    private function maskUrlForLog(string $url): string
-    {
-        $parts = parse_url($url);
-        if (! is_array($parts) || empty($parts['host'])) {
-            return '[upstream-url]';
-        }
-
-        $scheme = isset($parts['scheme']) ? $parts['scheme'].'://' : '';
-        $host = (string) $parts['host'];
-        $port = isset($parts['port']) ? ':'.$parts['port'] : '';
-        $path = ! empty($parts['path']) ? '/***' : '';
-        $query = ! empty($parts['query']) ? '?***' : '';
-
-        return $scheme.substr($host, 0, 2).'***'.substr($host, -2).$port.$path.$query;
-    }
-
     private function resolveHttpCode(array $responseHeaders): int
     {
         foreach ($responseHeaders as $header) {
@@ -1208,14 +1191,17 @@ PHP;
             return ['raw' => $this->sanitizeLogArray($decoded)];
         }
 
-        return ['raw' => $this->sanitizeLogValue($payload)];
+        return ['raw' => $this->truncateLogValue($payload)];
     }
 
+    /**
+     * 日志数据仅做长度截断与结构摘要，不做字段脱敏（项目红线：日志显示完整信息）。
+     */
     private function sanitizeLogArray(array $data): array
     {
         if (array_is_list($data)) {
             $preview = array_map(
-                fn ($item) => is_array($item) ? $this->sanitizeLogArray($item) : $this->sanitizeLogValue($item),
+                fn ($item) => is_array($item) ? $this->sanitizeLogArray($item) : $this->truncateLogValue($item),
                 array_slice($data, 0, 6)
             );
 
@@ -1234,22 +1220,6 @@ PHP;
                 break;
             }
 
-            $normalizedKey = strtolower((string) $key);
-
-            if (in_array($normalizedKey, ['password', 'api_key', 'jwt', 'authorization'], true)) {
-                $sanitized[$key] = '***';
-                $index++;
-
-                continue;
-            }
-
-            if (in_array($normalizedKey, ['author_url', 'pay_html'], true)) {
-                $sanitized[$key] = '[omitted]';
-                $index++;
-
-                continue;
-            }
-
             if (is_array($value)) {
                 $sanitized[$key] = $this->sanitizeLogArray($value);
                 $index++;
@@ -1257,7 +1227,7 @@ PHP;
                 continue;
             }
 
-            $sanitized[$key] = $this->sanitizeLogValue($value, (string) $key);
+            $sanitized[$key] = $this->truncateLogValue($value);
             $index++;
         }
 
@@ -1267,7 +1237,7 @@ PHP;
     private function summarizeLogResponse(mixed $response): mixed
     {
         if (! is_array($response)) {
-            return $this->sanitizeLogValue($response);
+            return $this->truncateLogValue($response);
         }
 
         $summary = $this->sanitizeLogArray($response);
@@ -1289,13 +1259,6 @@ PHP;
         return $summary;
     }
 
-    private function sanitizeLogValue(mixed $value, ?string $field = null): mixed
-    {
-        $value = $this->truncateLogValue($value);
-
-        return SensitiveDataSanitizer::sanitize($value, $field);
-    }
-
     private function truncateLogValue(mixed $value): mixed
     {
         if (! is_string($value)) {
@@ -1305,38 +1268,6 @@ PHP;
         return strlen($value) > 240
             ? substr($value, 0, 237).'...'
             : $value;
-    }
-
-    /**
-     * 页面抓取响应可能内嵌会话/CSRF token，先脱敏再截断落日志。
-     *
-     * 每条模式配对独立的替换串，避免引用不存在的捕获组导致输出畸形；
-     * 同时覆盖带引号与裸键值两种形态。
-     */
-    private function sanitizePagePreview(string $output): string
-    {
-        // 形态一：jwt=xxx / "token": "xxx" 等键值对（值带引号），保留键与两侧引号使输出结构完整。
-        $output = (string) preg_replace(
-            '/\b(jwt|token|session|sid|csrf_token|csrfmiddlewaretoken|access_token|apikey|api_key)(["\']?\s*[:=]\s*["\'])[^"\'\s]{6,}(["\'])/i',
-            '$1$2***$3',
-            $output
-        );
-
-        // 形态二：不带引号的裸值，如 jwt=eyJhbGciOi...（长度阈值过滤误伤短词）。
-        $output = (string) preg_replace(
-            '/\b(jwt|access_token|api_key|apikey)\s*[:=]\s*([A-Za-z0-9._\-]{16,})/i',
-            '$1=***',
-            $output
-        );
-
-        // 形态三：HTML 表单隐藏域 <input name="csrf_token" value="xxx">。
-        $output = (string) preg_replace(
-            '/(name=["\'](?:jwt|token|session|sid|csrf_token|csrfmiddlewaretoken)["\']\s+value=["\'])[^"\']*(["\'])/i',
-            '$1***$2',
-            $output
-        );
-
-        return $this->truncateLogValue($output);
     }
 
     private function normalizeBoolean(mixed $value): bool
