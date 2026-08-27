@@ -1008,6 +1008,18 @@
             <span>+ {{ item.label }}</span
             ><span>¥{{ item.amount }}</span>
           </div>
+          <div
+            class="cost-item cost-item--discount"
+            v-if="memberDiscountAmount > 0"
+          >
+            <span
+              >会员折扣{{
+                memberDiscount.level_name
+                  ? `（${memberDiscount.level_name}）`
+                  : ""
+              }}</span
+            ><span>-¥{{ memberDiscount.amount }}</span>
+          </div>
           <div class="cost-item cost-item--discount" v-if="appliedCoupon">
             <span>优惠券 {{ appliedCoupon.code }}</span
             ><span>-¥{{ appliedCoupon.discount_amount }}</span>
@@ -1107,8 +1119,8 @@
             </div>
             <span class="allocation-footer-discount-text">
               {{
-                appliedCoupon
-                  ? `已优惠 ¥${appliedCoupon.discount_amount}`
+                hasDiscount
+                  ? `已优惠 ¥${totalDiscountAmount}`
                   : "无折扣"
               }}
             </span>
@@ -1209,7 +1221,7 @@
             <div class="mobile-cost-table-header">
               <span>配置名称</span>
               <span>配置详情</span>
-              <span>{{ appliedCoupon ? "折后价已优惠" : "折后价无折扣" }}</span>
+              <span>{{ hasDiscount ? "折后价已优惠" : "折后价无折扣" }}</span>
             </div>
             <div
               class="mobile-cost-table-row"
@@ -1587,6 +1599,8 @@ const {
   setupFee,
   quoteItems,
   appliedCoupon,
+  memberDiscount,
+  memberDiscountAmount,
   availableCoupons,
   totalPrice,
   selectedCycleLabel,
@@ -1625,6 +1639,14 @@ const allocationFooterInnerEl = ref(null);
 const allocationFooterAnchored = ref(false);
 let allocationFooterObserver = null;
 let allocationFooterResizeObserver = null;
+
+// 会员折扣 + 优惠券合计让利，用于浮动合计条与费用明细的折扣文案
+const totalDiscountAmount = computed(() => {
+  const member = memberDiscountAmount.value;
+  const coupon = Number(appliedCoupon.value?.discount_amount || 0);
+  return (member + coupon).toFixed(2);
+});
+const hasDiscount = computed(() => Number(totalDiscountAmount.value) > 0);
 
 function cleanupAllocationFooterObserver() {
   allocationFooterObserver?.disconnect();

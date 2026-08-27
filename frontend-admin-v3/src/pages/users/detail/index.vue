@@ -1355,7 +1355,16 @@ function memberLevelDisplay(): string {
   return levelName || '未分级';
 }
 
+function promotionAmbassadorDisplay(): string {
+  const ambassador = referral.value.promotion_ambassador || user.value.promotion_ambassador;
+  const name = String(ambassador?.name || '');
+  if (!name) return '未指派';
+  const rate = Number(ambassador?.reward_rate || 0);
+  return rate > 0 ? `${name}（${rate.toFixed(2)}%）` : name;
+}
+
 const infoItems = computed(() => [
+  { label: '用户 ID', value: user.value.id || '-' },
   { label: '邮箱', value: fieldValue(user.value.email) },
   { label: '手机号', value: fieldValue(user.value.phone) },
   {
@@ -1367,6 +1376,7 @@ const infoItems = computed(() => [
   { label: 'QQ', value: fieldValue(user.value.qq) },
   { label: '账户余额', value: formatMoney(user.value.cash_balance), tone: 'success' },
   { label: '会员等级', value: memberLevelDisplay() },
+  { label: '推荐大使等级', value: promotionAmbassadorDisplay() },
   { label: '实名认证', value: verificationText(), tone: isVerified.value ? 'success' : 'warning' },
   { label: '证件号', value: fieldValue(user.value.id_card_masked) },
   { label: '推荐人 ID', value: fieldValue(user.value.referrer_user_id) },

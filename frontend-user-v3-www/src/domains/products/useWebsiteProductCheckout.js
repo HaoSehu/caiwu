@@ -87,6 +87,12 @@ export function useWebsiteProductCheckout({
   );
   const quoteItems = computed(() => quoteResult.value?.items || []);
   const appliedCoupon = computed(() => quoteResult.value?.coupon || null);
+  const memberDiscount = computed(
+    () => quoteResult.value?.member_discount || null,
+  );
+  const memberDiscountAmount = computed(() =>
+    Number(memberDiscount.value?.amount || 0),
+  );
   const availableCoupons = computed(
     () => quoteResult.value?.available_coupons || [],
   );
@@ -756,6 +762,8 @@ export function useWebsiteProductCheckout({
     setupFee,
     quoteItems,
     appliedCoupon,
+    memberDiscount,
+    memberDiscountAmount,
     availableCoupons,
     totalPrice,
     selectedCycleLabel,

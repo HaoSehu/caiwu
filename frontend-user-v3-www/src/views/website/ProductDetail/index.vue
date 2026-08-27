@@ -414,6 +414,19 @@
                   <span>+ {{ item.label }}</span>
                   <span>¥{{ item.amount }}</span>
                 </div>
+                <div
+                  class="cost-item cost-item--discount"
+                  v-if="memberDiscountAmount > 0"
+                >
+                  <span
+                    >会员折扣{{
+                      memberDiscount.level_name
+                        ? `（${memberDiscount.level_name}）`
+                        : ""
+                    }}</span
+                  >
+                  <span>-¥{{ memberDiscount.amount }}</span>
+                </div>
                 <div class="cost-item cost-item--discount" v-if="appliedCoupon">
                   <span
                     >优惠券 {{ appliedCoupon.code || appliedCoupon.name }}</span
@@ -710,6 +723,8 @@ const {
   setupFee,
   quoteItems,
   appliedCoupon,
+  memberDiscount,
+  memberDiscountAmount,
   availableCoupons,
   totalPrice,
   selectedCycleLabel,

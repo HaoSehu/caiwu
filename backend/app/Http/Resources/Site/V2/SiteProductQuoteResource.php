@@ -23,6 +23,7 @@ class SiteProductQuoteResource extends JsonResource
             'config_amount' => $this->money($payload['config_amount'] ?? 0),
             'setup_fee' => $this->money($payload['setup_fee'] ?? 0),
             'subtotal_amount' => $this->money($payload['subtotal_amount'] ?? $payload['total_amount'] ?? 0),
+            'member_discount' => $this->memberDiscount((array) $payload),
             'discount_amount' => $this->money($payload['discount_amount'] ?? 0),
             'total_amount' => $this->money($payload['total_amount'] ?? 0),
             'quantity' => (int) ($payload['quantity'] ?? 1),
@@ -38,6 +39,25 @@ class SiteProductQuoteResource extends JsonResource
     private function money(mixed $value): string
     {
         return is_numeric($value) ? number_format((float) $value, 2, '.', '') : '0.00';
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array{level_id: int, level_name: string, amount: string}|null
+     */
+    private function memberDiscount(array $payload): ?array
+    {
+        $amount = (float) ($payload['member_discount_amount'] ?? 0);
+
+        if ($amount <= 0) {
+            return null;
+        }
+
+        return [
+            'level_id' => (int) ($payload['member_level_id'] ?? 0),
+            'level_name' => (string) ($payload['member_level_name'] ?? ''),
+            'amount' => number_format($amount, 2, '.', ''),
+        ];
     }
 
     /**

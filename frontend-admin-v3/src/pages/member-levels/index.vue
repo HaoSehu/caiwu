@@ -88,18 +88,8 @@
 
       <section v-if="form.id && matrixLoaded" class="discount-matrix-section">
         <div class="discount-matrix-head">
-          <div>
-            <strong>产品组价格折扣</strong>
-            <span>按「等级 × 营销组」为新购与续费打折；百分比为折后保留比例（90=九折），未配置不打折</span>
-          </div>
-          <t-button
-            variant="outline"
-            size="small"
-            :loading="matrixSaving"
-            @click="submitMatrix"
-          >
-            保存折扣
-          </t-button>
+          <strong>产品组价格折扣</strong>
+          <span>按「等级 × 营销组」为新购与续费打折；百分比为折后保留比例（90=九折），未配置不打折；保存等级时一并生效</span>
         </div>
 
         <div v-if="matrixGroups.length" class="discount-matrix-table">
@@ -179,7 +169,6 @@ interface MatrixGroupRow {
 
 const loading = ref(false);
 const saving = ref(false);
-const matrixSaving = ref(false);
 const matrixLoaded = ref(false);
 const dialogVisible = ref(false);
 const formRef = ref<FormInstanceFunctions>();
@@ -258,11 +247,21 @@ async function submitForm() {
   try {
     if (form.id) {
       await adminApi.memberLevels.update(form.id, payload);
-      MessagePlugin.success('会员等级已更新');
     } else {
       await adminApi.memberLevels.create(payload);
-      MessagePlugin.success('会员等级已创建');
     }
+
+    // 编辑时折扣矩阵随等级一并保存；矩阵未加载完则跳过，保留线上原有折扣
+    if (form.id && matrixLoaded.value) {
+      try {
+        await adminApi.memberLevels.syncGroupDiscounts(form.id, buildDiscountRules());
+      } catch (error) {
+        MessagePlugin.error(errorMessage(error, '等级信息已保存，但折扣矩阵同步失败'));
+        return;
+      }
+    }
+
+    MessagePlugin.success(form.id ? '会员等级已更新' : '会员等级已创建');
     dialogVisible.value = false;
     await loadLevels();
   } catch (error) {
@@ -303,25 +302,15 @@ async function loadMatrix(levelId: number | string) {
   }
 }
 
-async function submitMatrix() {
-  if (!form.id) return;
-  matrixSaving.value = true;
-  try {
-    const rules = matrixGroups.value
-      // 清空下拉会得到 undefined，必须显式限定有效折扣类型，避免发出缺 discount_type 的规则
-      .filter((item) => item.discountType === 1 || item.discountType === 2)
-      .map((item) => ({
-        marketing_product_group_id: item.id,
-        discount_type: item.discountType,
-        discount_value: Number(item.discountValue || 0),
-      }));
-    await adminApi.memberLevels.syncGroupDiscounts(form.id, rules);
-    MessagePlugin.success('折扣矩阵已保存');
-  } catch (error) {
-    MessagePlugin.error(errorMessage(error, '保存折扣矩阵失败'));
-  } finally {
-    matrixSaving.value = false;
-  }
+function buildDiscountRules() {
+  return matrixGroups.value
+    // 清空下拉会得到 undefined，必须显式限定有效折扣类型，避免发出缺 discount_type 的规则
+    .filter((item) => item.discountType === 1 || item.discountType === 2)
+    .map((item) => ({
+      marketing_product_group_id: item.id,
+      discount_type: item.discountType,
+      discount_value: Number(item.discountValue || 0),
+    }));
 }
 
 function handleDelete(row: MemberLevelRecord) {

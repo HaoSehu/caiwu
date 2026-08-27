@@ -59,8 +59,12 @@
 
 .member-form-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px 16px;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 16px 24px;
+
+  .t-form-item {
+    margin-bottom: 0;
+  }
 }
 
 .member-form-span {
@@ -218,23 +222,16 @@
 }
 
 .discount-matrix-section {
-  margin-top: 20px;
-  padding-top: 16px;
+  margin-top: 16px;
+  padding-top: 14px;
   border-top: 1px solid var(--td-component-border);
 }
 
 .discount-matrix-head {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
+  flex-direction: column;
+  gap: 4px;
   margin-bottom: 12px;
-
-  > div {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
 
   strong {
     color: var(--td-text-color-primary);
@@ -256,8 +253,8 @@
 .matrix-head,
 .matrix-row {
   display: grid;
-  grid-template-columns: 1.2fr 1fr 1fr;
-  gap: 12px;
+  grid-template-columns: 1.1fr 1.5fr 1fr;
+  gap: 16px;
   padding: 10px 12px;
   align-items: center;
 }
@@ -266,7 +263,7 @@
   background: var(--td-bg-color-component);
   color: var(--td-text-color-secondary);
   font-size: var(--td-font-size-body-small, 12px);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .matrix-row + .matrix-row {
@@ -276,6 +273,7 @@
 .col-group {
   display: flex;
   flex-direction: column;
+  justify-content: center;
   gap: 2px;
 
   strong {
@@ -290,5 +288,16 @@
 }
 
 .matrix-none {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--td-component-border);
+  border-radius: var(--td-radius-default, 4px);
+  background: var(--td-bg-color-component);
   color: var(--td-text-color-disabled);
+}
+
+.discount-matrix-table .t-input-number {
+  width: 100%;
 }
