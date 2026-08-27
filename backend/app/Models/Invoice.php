@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Concerns\EnsuresTraceId;
 use App\Models\Concerns\HandlesProductSnapshot;
 use App\Models\Concerns\NormalizesTraceId;
+use App\Support\Money;
 use App\Support\OrderInvoiceNoGenerator;
 use App\Support\VersionedJson;
 use Carbon\CarbonInterface;
@@ -15,6 +16,10 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
+/**
+ * @property float $member_discount_amount 会员等级×营销组折扣减免金额
+ * @property array|null $member_discount_snapshot 会员折扣命中快照
+ */
 class Invoice extends Model
 {
     use EnsuresTraceId, HandlesProductSnapshot, NormalizesTraceId, SoftDeletes;
@@ -24,9 +29,9 @@ class Invoice extends Model
         'product_id', 'product_spec_snapshot', 'product_type_snapshot',
         'service_id',
         'coupon_id', 'user_coupon_id', 'coupon_code',
-        'amount', 'discount', 'paid_amount',
+        'amount', 'discount', 'member_discount_amount', 'paid_amount',
         'billing_cycle', 'quantity',
-        'product_snapshot_json', 'config_snapshot', 'config_pricing_snapshot', 'coupon_snapshot',
+        'product_snapshot_json', 'config_snapshot', 'config_pricing_snapshot', 'coupon_snapshot', 'member_discount_snapshot',
         'status', 'due_date', 'paid_at',
         'refunded_at', 'refund_amount', 'refund_method', 'refund_trace_id',
         'remark', 'operator', 'trace_id',
@@ -37,6 +42,7 @@ class Invoice extends Model
         return [
             'amount' => 'decimal:2',
             'discount' => 'decimal:2',
+            'member_discount_amount' => 'decimal:2',
             'paid_amount' => 'decimal:2',
             'due_date' => 'date',
             'paid_at' => 'datetime',
@@ -45,6 +51,7 @@ class Invoice extends Model
             'config_snapshot' => 'array',
             'config_pricing_snapshot' => 'array',
             'coupon_snapshot' => 'array',
+            'member_discount_snapshot' => 'array',
         ];
     }
 
@@ -275,11 +282,12 @@ class Invoice extends Model
 
     private function normalizeDecimal(mixed $value): string
     {
+        // 非 numeric 输入直接落 0.00，与 Money::format 对特殊字符串的转换行为区分开
         if (! is_numeric($value)) {
             return '0.00';
         }
 
-        return number_format((float) $value, 2, '.', '');
+        return Money::format($value);
     }
 
     private function encodeJson(?array $value): ?string

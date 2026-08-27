@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Admin\V2;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\V2\User\AdjustMemberLevelRequest;
+use App\Http\Requests\Admin\V2\User\AdjustPromotionAmbassadorRequest;
 use App\Http\Requests\Admin\V2\User\DeleteUserRequest;
 use App\Http\Requests\Admin\V2\User\ListOsOptionsRequest;
 use App\Http\Requests\Admin\V2\User\ListUserBalanceLogsRequest;
@@ -35,12 +37,14 @@ use App\Http\Resources\Admin\V2\AdminUserNotificationLogResource;
 use App\Http\Resources\Admin\V2\AdminUserOperationLogResource;
 use App\Http\Resources\Admin\V2\AdminUserTicketResource;
 use App\Http\Resources\Finance\FinanceLedgerResource;
+use App\Models\AdminUser;
 use App\Models\User;
 use App\Services\Admin\V2\AdminUserActionV2Service;
 use App\Services\Auth\AuthService;
 use App\Services\Finance\PaymentService;
 use App\Services\User\UserService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class UserController extends Controller
 {
@@ -97,6 +101,53 @@ class UserController extends Controller
         $result = $this->actions->updateStatus($user, $request->enabled());
 
         return $this->success(AdminActionResultResource::make($result)->resolve(), (string) $result['message']);
+    }
+
+    public function adjustMemberLevel(AdjustMemberLevelRequest $request, User $user): JsonResponse
+    {
+        $actor = $this->resolveAdminActor($request);
+
+        $updated = $this->users->adjustMemberLevel($user, $request->memberLevelId(), [
+            'actor_type' => 'admin',
+            'actor_user_id' => $actor['id'],
+            'actor_name' => $actor['name'],
+            'trace_id' => (string) $request->header('X-Request-Id', ''),
+            'ip_address' => (string) $request->ip(),
+        ]);
+
+        return $this->success(AdminUserDetailResource::make($this->users->detail($updated))->resolve(), '会员等级已调整');
+    }
+
+    public function adjustPromotionAmbassador(AdjustPromotionAmbassadorRequest $request, User $user): JsonResponse
+    {
+        $actor = $this->resolveAdminActor($request);
+
+        $updated = $this->users->adjustPromotionAmbassador($user, $request->promotionAmbassadorId(), [
+            'actor_type' => 'admin',
+            'actor_user_id' => $actor['id'],
+            'actor_name' => $actor['name'],
+            'trace_id' => (string) $request->header('X-Request-Id', ''),
+            'ip_address' => (string) $request->ip(),
+        ]);
+
+        return $this->success(AdminUserDetailResource::make($this->users->detail($updated))->resolve(), '推广大使已调整');
+    }
+
+    /**
+     * @return array{id: int, name: string}
+     */
+    private function resolveAdminActor(Request $request): array
+    {
+        $actor = $request->user();
+
+        if ($actor instanceof AdminUser) {
+            return [
+                'id' => (int) $actor->getKey(),
+                'name' => (string) ($actor->username ?? $actor->nickname ?? 'admin'),
+            ];
+        }
+
+        return ['id' => 0, 'name' => 'admin'];
     }
 
     public function recharge(RechargeUserRequest $request, User $user): JsonResponse

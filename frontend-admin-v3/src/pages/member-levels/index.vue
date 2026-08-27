@@ -17,17 +17,7 @@
           <template #level="{ row }">
             <div class="stack-cell">
               <strong>{{ fieldValue(row.name) }}</strong>
-              <span>{{ fieldValue(row.code) }}</span>
             </div>
-          </template>
-          <template #range="{ row }">
-            <div class="stack-cell">
-              <strong>{{ formatMoney(row.sales_amount_min) }}</strong>
-              <span>至 {{ row.sales_amount_max ? formatMoney(row.sales_amount_max) : '不封顶' }}</span>
-            </div>
-          </template>
-          <template #rate="{ row }">
-            <t-tag theme="success" variant="light">{{ formatPercent(row.reward_rate) }}</t-tag>
           </template>
           <template #status="{ row }">
             <t-tag :theme="Number(row.status) === 1 ? 'success' : 'default'" variant="light">
@@ -50,7 +40,6 @@
           <div class="member-mobile-card__head">
             <div>
               <strong>{{ fieldValue(row.name) }}</strong>
-              <t-tag theme="success" variant="light">{{ formatPercent(row.reward_rate) }}</t-tag>
             </div>
             <t-dropdown
               trigger="click"
@@ -62,13 +51,6 @@
             </t-dropdown>
           </div>
           <dl>
-            <div>
-              <dt>门槛</dt>
-              <dd>
-                {{ formatMoney(row.sales_amount_min) }} ~
-                {{ row.sales_amount_max ? formatMoney(row.sales_amount_max) : '不封顶' }}
-              </dd>
-            </div>
             <div>
               <dt>状态</dt>
               <dd>
@@ -95,21 +77,6 @@
           <t-form-item label="等级名称" name="name">
             <t-input v-model="form.name" placeholder="例如：黄金会员" />
           </t-form-item>
-          <t-form-item label="等级编码" name="code">
-            <t-input v-model="form.code" placeholder="例如：gold" />
-          </t-form-item>
-          <t-form-item label="累计销售额下限" name="sales_amount_min">
-            <t-input-number v-model="form.sales_amount_min" :min="0" :decimal-places="2" />
-          </t-form-item>
-          <t-form-item label="累计销售额上限" name="sales_amount_max">
-            <t-input v-model="form.sales_amount_max" placeholder="留空表示不封顶" />
-          </t-form-item>
-          <t-form-item label="返利比例（%）" name="reward_rate">
-            <t-input-number v-model="form.reward_rate" :min="0" :max="100" :decimal-places="2" />
-          </t-form-item>
-          <t-form-item label="排序值" name="sort_order">
-            <t-input-number v-model="form.sort_order" :min="0" :max="999999" />
-          </t-form-item>
           <t-form-item label="状态" name="status">
             <t-switch v-model="form.status" :custom-value="[1, 0]" :label="['启用', '停用']" />
           </t-form-item>
@@ -118,6 +85,64 @@
           </t-form-item>
         </div>
       </t-form>
+
+      <section v-if="form.id && matrixLoaded" class="discount-matrix-section">
+        <div class="discount-matrix-head">
+          <div>
+            <strong>产品组价格折扣</strong>
+            <span>按「等级 × 营销组」为新购与续费打折；百分比为折后保留比例（90=九折），未配置不打折</span>
+          </div>
+          <t-button
+            variant="outline"
+            size="small"
+            :loading="matrixSaving"
+            @click="submitMatrix"
+          >
+            保存折扣
+          </t-button>
+        </div>
+
+        <div v-if="matrixGroups.length" class="discount-matrix-table">
+          <div class="matrix-head">
+            <span class="col-group">营销组</span>
+            <span class="col-type">折扣类型</span>
+            <span class="col-value">数值</span>
+          </div>
+          <div v-for="item in matrixGroups" :key="item.id" class="matrix-row">
+            <span class="col-group">
+              <strong>{{ item.name }}</strong>
+              <em>{{ Number(item.product_count || 0) }} 个商品</em>
+            </span>
+            <t-select
+              v-model="item.discountType"
+              class="col-type"
+              :options="discountTypeOptions"
+              clearable
+              placeholder="无折扣"
+            />
+            <div class="col-value">
+              <t-input-number
+                v-if="item.discountType === 1"
+                v-model="item.discountValue"
+                :min="1"
+                :max="100"
+                :decimal-places="2"
+                placeholder="折后保留百分比"
+              />
+              <t-input-number
+                v-else-if="item.discountType === 2"
+                v-model="item.discountValue"
+                :min="0.01"
+                :decimal-places="2"
+                placeholder="固定减免金额"
+              />
+              <span v-else class="matrix-none">原价</span>
+            </div>
+          </div>
+        </div>
+
+        <t-empty v-else description="暂无营销组，请先到「营销推广 > 产品营销组」创建并圈选商品" />
+      </section>
     </t-dialog>
   </div>
 </template>
@@ -139,35 +164,42 @@ import { errorMessage } from '@/utils/userMessage';
 interface MemberLevelForm {
   id: number | string | null;
   name: string;
-  code: string;
-  sales_amount_min: number;
-  sales_amount_max: string;
-  reward_rate: number;
   status: number;
-  sort_order: number;
   remark: string;
+}
+
+interface MatrixGroupRow {
+  id: number | string;
+  name: string;
+  product_count: number | null;
+  /** 1=百分比（折后保留） 2=固定金额；null=无折扣 */
+  discountType: 1 | 2 | null;
+  discountValue: number;
 }
 
 const loading = ref(false);
 const saving = ref(false);
+const matrixSaving = ref(false);
+const matrixLoaded = ref(false);
 const dialogVisible = ref(false);
 const formRef = ref<FormInstanceFunctions>();
 const levels = ref<MemberLevelRecord[]>([]);
+const matrixGroups = ref<MatrixGroupRow[]>([]);
 const isMobile = useMediaQuery('(max-width: 768px)');
+
+const discountTypeOptions = [
+  { label: '百分比（折后保留，90=九折）', value: 1 },
+  { label: '固定金额减免', value: 2 },
+];
 
 const form = reactive<MemberLevelForm>(createDefaultForm());
 
 const rules: Record<string, FormRule[]> = {
   name: [required('请输入等级名称')],
-  sales_amount_min: [required('请输入累计销售额下限')],
-  reward_rate: [required('请输入返利比例')],
 };
 
 const columns: PrimaryTableCol<MemberLevelRecord>[] = [
-  { colKey: 'sort_order', title: '排序', width: 90 },
   { colKey: 'level', title: '等级信息', minWidth: 220 },
-  { colKey: 'range', title: '累计销售额门槛', minWidth: 220 },
-  { colKey: 'rate', title: '返利比例', width: 130 },
   { colKey: 'status', title: '状态', width: 110 },
   { colKey: 'remark', title: '备注', minWidth: 180 },
   { colKey: 'updatedAt', title: '更新时间', width: 170 },
@@ -182,12 +214,7 @@ function createDefaultForm(): MemberLevelForm {
   return {
     id: null,
     name: '',
-    code: '',
-    sales_amount_min: 0,
-    sales_amount_max: '',
-    reward_rate: 0,
     status: 1,
-    sort_order: 0,
     remark: '',
   };
 }
@@ -213,16 +240,11 @@ function openEditDialog(row: MemberLevelRecord) {
   Object.assign(form, {
     id: row.id,
     name: String(row.name || ''),
-    code: String(row.code || ''),
-    sales_amount_min: Number(row.sales_amount_min || 0),
-    sales_amount_max:
-      row.sales_amount_max === null || row.sales_amount_max === undefined ? '' : String(row.sales_amount_max),
-    reward_rate: Number(row.reward_rate || 0),
     status: Number(row.status ?? 1),
-    sort_order: Number(row.sort_order || 0),
     remark: String(row.remark || ''),
   });
   dialogVisible.value = true;
+  loadMatrix(row.id);
 }
 
 async function submitForm() {
@@ -251,21 +273,55 @@ async function submitForm() {
 }
 
 function buildPayload(): MemberLevelPayload | null {
-  const maxValue = form.sales_amount_max.trim();
-  if (maxValue !== '' && Number.isNaN(Number(maxValue))) {
-    MessagePlugin.warning('累计销售额上限必须是有效数字');
-    return null;
-  }
   return {
     name: form.name.trim(),
-    code: form.code.trim() || null,
-    sales_amount_min: Number(form.sales_amount_min || 0),
-    sales_amount_max: maxValue === '' ? null : Number(maxValue),
-    reward_rate: Number(form.reward_rate || 0),
     status: Number(form.status ?? 1),
-    sort_order: Number(form.sort_order || 0),
     remark: form.remark.trim() || null,
   };
+}
+
+async function loadMatrix(levelId: number | string) {
+  matrixLoaded.value = false;
+  matrixGroups.value = [];
+  try {
+    const data = await adminApi.memberLevels.groupDiscounts(levelId);
+    matrixGroups.value = (data.groups || []).map((group) => {
+      const rawType = group.discount ? Number(group.discount.discount_type) : 0;
+
+      return {
+        id: group.id,
+        name: group.name,
+        product_count: group.product_count ?? null,
+        discountType: (rawType === 1 || rawType === 2 ? rawType : null) as 1 | 2 | null,
+        discountValue: group.discount ? Number(group.discount.discount_value) : 0,
+      };
+    });
+  } catch (error) {
+    MessagePlugin.error(errorMessage(error, '加载折扣矩阵失败'));
+  } finally {
+    matrixLoaded.value = true;
+  }
+}
+
+async function submitMatrix() {
+  if (!form.id) return;
+  matrixSaving.value = true;
+  try {
+    const rules = matrixGroups.value
+      // 清空下拉会得到 undefined，必须显式限定有效折扣类型，避免发出缺 discount_type 的规则
+      .filter((item) => item.discountType === 1 || item.discountType === 2)
+      .map((item) => ({
+        marketing_product_group_id: item.id,
+        discount_type: item.discountType,
+        discount_value: Number(item.discountValue || 0),
+      }));
+    await adminApi.memberLevels.syncGroupDiscounts(form.id, rules);
+    MessagePlugin.success('折扣矩阵已保存');
+  } catch (error) {
+    MessagePlugin.error(errorMessage(error, '保存折扣矩阵失败'));
+  } finally {
+    matrixSaving.value = false;
+  }
 }
 
 function handleDelete(row: MemberLevelRecord) {
@@ -293,10 +349,6 @@ function handleMobileAction(row: MemberLevelRecord, option: DropdownOption) {
     return;
   }
   if (action === 'delete') handleDelete(row);
-}
-
-function formatPercent(value: unknown) {
-  return `${Number(value || 0).toFixed(2)}%`;
 }
 
 onMounted(loadLevels);

@@ -16,6 +16,7 @@ use App\Models\Payment;
 use App\Models\Product;
 use App\Models\User;
 use App\Services\Order\Concerns\HandlesOrderCalculation;
+use App\Services\Pricing\MemberGroupDiscountService;
 use App\Services\ProductCatalog\ProductCatalogService;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Services\ProductCatalog\ProductFullPathResolver;
@@ -46,7 +47,27 @@ class CheckoutService
         private OperationLogService $operationLogService,
         private AdminOrderNotificationService $adminOrderNotificationService,
         private ?ProductDisplayNameResolver $productDisplayNameResolver = null,
+        private ?MemberGroupDiscountService $memberGroupDiscountService = null,
     ) {}
+
+    /**
+     * 结算下单时重算会员折扣层；服务不可用时保持原价行为。
+     *
+     * @return array{discount_amount: string, final_amount: string, level_id: int, level_name: ?string, snapshot: array<string, mixed>}|null
+     */
+    private function memberDiscountFor(int $userId, Product $product, float $catalogAmount): ?array
+    {
+        if ($catalogAmount <= 0) {
+            return null;
+        }
+
+        return $this->resolveMemberGroupDiscountService()->applyForProduct($userId, (int) $product->id, $catalogAmount);
+    }
+
+    private function resolveMemberGroupDiscountService(): MemberGroupDiscountService
+    {
+        return $this->memberGroupDiscountService ??= new MemberGroupDiscountService;
+    }
 
     /**
      * 创建新购账单
@@ -132,16 +153,22 @@ class CheckoutService
                     $invoiceConfigSnapshot['stock_reserved'] = StockReservation::reserve($product, $quantity);
                     throw_if($amount <= 0, new BusinessException('无效的计费周期'));
 
+                    // 会员折扣层：目录价按「等级 × 营销组」先折算，优惠券以折后价为基数
+                    $memberDiscount = $this->memberDiscountFor((int) $userId, $product, $amount);
+                    $memberDiscountAmount = (float) ($memberDiscount['discount_amount'] ?? 0);
+                    $couponBaseAmount = max((float) ($memberDiscount['final_amount'] ?? $amount), 0);
+
                     $couponPayload = $this->couponService->reserveOwnedCouponForInvoice(
-                        $userCouponId, $userId, $product, $billingCycle, $amount, InvoiceType::NEW_PURCHASE
+                        $userCouponId, $userId, $product, $billingCycle, $couponBaseAmount, InvoiceType::NEW_PURCHASE
                     );
                     $discountAmount = (float) ($couponPayload['discount_amount'] ?? 0);
-                    $payableAmount = max($amount - $discountAmount, 0);
+                    $payableAmount = max($couponBaseAmount - $discountAmount, 0);
 
                     $this->checkoutSecurityService->assertQuoteToken(
                         $quoteToken, $product->id, $billingCycle, $quantity, $normalizedConfig,
                         $this->formatAmount($amount), $this->formatAmount($payableAmount),
-                        $couponPayload['user_coupon_id'] ?? $userCouponId
+                        $couponPayload['user_coupon_id'] ?? $userCouponId,
+                        $memberDiscount === null ? null : $this->formatAmount($memberDiscountAmount)
                     );
 
                     $invoice = Invoice::query()->create([
@@ -156,6 +183,8 @@ class CheckoutService
                         'type' => InvoiceType::NEW_PURCHASE,
                         'amount' => $payableAmount,
                         'discount' => $discountAmount,
+                        'member_discount_amount' => $memberDiscountAmount,
+                        'member_discount_snapshot' => $memberDiscount['snapshot'] ?? null,
                         'billing_cycle' => $billingCycle,
                         'quantity' => $quantity,
                         'config_snapshot' => $invoiceConfigSnapshot,
@@ -183,7 +212,6 @@ class CheckoutService
                         $payableAmount,
                         $couponPayload
                     );
-
                     $this->checkoutSecurityService->rememberCreatedInvoice(
                         $userId, $idempotencyKey, $fingerprint, (int) $invoice->id
                     );
@@ -203,6 +231,7 @@ class CheckoutService
                             'quantity' => $quantity,
                             'amount' => $this->formatAmount($amount),
                             'discount' => $this->formatAmount($discountAmount),
+                            'member_discount' => $this->formatAmount((float) ($memberDiscount['discount_amount'] ?? 0)),
                             'coupon_code' => (string) ($couponPayload['code'] ?? ''),
                             'quote_token_hash' => substr(hash('sha256', $quoteToken), 0, 16),
                             'idempotency_key_hash' => substr(hash('sha256', $idempotencyKey), 0, 16),
@@ -400,6 +429,8 @@ class CheckoutService
             'coupon_code' => $couponPayload['code'] ?? null,
             'amount' => $payableAmount,
             'discount' => $discountAmount,
+            'member_discount_amount' => (float) ($invoice->member_discount_amount ?? 0),
+            'member_discount_snapshot' => $invoice->member_discount_snapshot,
             'paid_amount' => 0,
             'billing_cycle' => $billingCycle,
             'quantity' => $quantity,

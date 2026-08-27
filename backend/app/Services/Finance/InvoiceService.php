@@ -47,8 +47,10 @@ class InvoiceService
             'user_coupon_id' => $order->user_coupon_id,
             'coupon_code' => $order->coupon_code,
             'type' => $order->type === OrderType::RENEW ? InvoiceType::RENEW : 'normal',
-            'amount' => $order->amount - $order->discount,
+            'amount' => max((float) $order->amount - (float) ($order->discount ?? 0) - (float) ($order->member_discount_amount ?? 0), 0),
             'discount' => $order->discount ?? 0,
+            'member_discount_amount' => (float) ($order->member_discount_amount ?? 0),
+            'member_discount_snapshot' => $order->member_discount_snapshot,
             'billing_cycle' => $order->billing_cycle,
             'quantity' => $order->quantity ?? 1,
             'config_snapshot' => $order->config_snapshot,
@@ -971,10 +973,12 @@ class InvoiceService
     private function resolvePaymentGatewayLabel(string $gateway): string
     {
         return match ($gateway) {
-            PaymentGatewayCode::ALIPAY => PaymentGatewayCode::label(PaymentGatewayCode::ALIPAY),
-            PaymentGatewayCode::YIPAY => PaymentGatewayCode::label(PaymentGatewayCode::YIPAY),
-            'wechat' => '微信支付',
-            'balance' => '余额支付',
+            // 与 PaymentGatewayCode::LABELS 一致的词条统一走集中定义，避免多处文案漂移。
+            PaymentGatewayCode::ALIPAY,
+            PaymentGatewayCode::YIPAY,
+            PaymentGatewayCode::WECHAT,
+            PaymentGatewayCode::BALANCE => PaymentGatewayCode::label($gateway),
+            // 业务侧扩展口径与本地历史文案不属于集中 LABELS，保留原样。
             'free' => '免支付',
             'manual' => '手动入账',
             'bank_transfer' => '银行转账',

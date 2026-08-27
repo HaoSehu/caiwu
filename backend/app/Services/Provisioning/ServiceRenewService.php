@@ -20,6 +20,7 @@ use App\Services\Finance\PaymentService;
 use App\Services\Integrations\Plugins\PluginBindingResolver;
 use App\Services\Integrations\Plugins\ServiceUpstreamBindingWriter;
 use App\Services\Integrations\Support\ProviderErrorMapper;
+use App\Services\Pricing\MemberGroupDiscountService;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Services\System\NotificationService;
 use App\Services\System\OperationLogService;
@@ -83,7 +84,27 @@ class ServiceRenewService
         private SettingService $settingService,
         private NotificationService $notificationService,
         private ?PluginBindingResolver $bindingResolver = null,
+        private ?MemberGroupDiscountService $memberGroupDiscountService = null,
     ) {}
+
+    /**
+     * 续费场景的会员折扣解析；金额无效时保持原价行为。
+     *
+     * @return array{discount_amount: string, final_amount: string, level_id: int, level_name: ?string, snapshot: array<string, mixed>}|null
+     */
+    private function memberDiscountFor(User $user, Product $product, float $catalogAmount): ?array
+    {
+        if ($catalogAmount <= 0) {
+            return null;
+        }
+
+        return $this->resolveMemberGroupDiscountService()->applyForProduct((int) $user->id, (int) $product->id, $catalogAmount);
+    }
+
+    private function resolveMemberGroupDiscountService(): MemberGroupDiscountService
+    {
+        return $this->memberGroupDiscountService ??= new MemberGroupDiscountService;
+    }
 
     public function previewForUser(User $user, int $serviceId, ?string $selectedBillingCycle = null, int $userCouponId = 0): array
     {
@@ -103,8 +124,13 @@ class ServiceRenewService
         $resolvedBillingCycle = trim((string) ($selectedBillingCycle ?: $renewConfig['default_cycle'] ?: $service->billing_cycle));
         $selectedCycleConfig = collect($renewConfig['cycles'])->firstWhere('billing_cycle', $resolvedBillingCycle);
         $selectedAmount = round((float) ($selectedCycleConfig['amount'] ?? $previewAmount), 2);
+        // 会员折扣层：优惠券预览与可用券列表均以「等级×营销组」折后价为基数
+        $selectedMemberDiscount = $effectiveProduct instanceof Product
+            ? $this->memberDiscountFor($user, $effectiveProduct, $selectedAmount)
+            : null;
+        $selectedCouponBase = max((float) ($selectedMemberDiscount['final_amount'] ?? $selectedAmount), 0.0);
         $availableCoupons = $effectiveProduct instanceof Product
-            ? $this->couponService->availableCouponsForCheckout((int) $user->id, $effectiveProduct, $resolvedBillingCycle, $selectedAmount, 'renew')
+            ? $this->couponService->availableCouponsForCheckout((int) $user->id, $effectiveProduct, $resolvedBillingCycle, $selectedCouponBase, 'renew')
             : [];
         $selectedCoupon = null;
         if ($effectiveProduct instanceof Product && $userCouponId > 0) {
@@ -114,7 +140,7 @@ class ServiceRenewService
                     (int) $user->id,
                     $effectiveProduct,
                     $resolvedBillingCycle,
-                    $selectedAmount,
+                    $selectedCouponBase,
                     'renew'
                 );
             } catch (\Throwable) {
@@ -126,8 +152,13 @@ class ServiceRenewService
             ->map(function (array $cycle) use ($effectiveProduct, $user, $userCouponId) {
                 $amount = round((float) ($cycle['amount'] ?? 0), 2);
                 $originalAmount = number_format($amount, 2, '.', '');
+                $memberDiscount = $effectiveProduct instanceof Product
+                    ? $this->memberDiscountFor($user, $effectiveProduct, $amount)
+                    : null;
+                $memberDiscountAmount = round((float) ($memberDiscount['discount_amount'] ?? 0), 2);
+                $couponBase = max($amount - $memberDiscountAmount, 0.0);
                 $discountAmount = '0.00';
-                $finalAmount = $originalAmount;
+                $finalAmount = number_format($couponBase, 2, '.', '');
 
                 if ($effectiveProduct instanceof Product && $userCouponId > 0) {
                     try {
@@ -136,13 +167,13 @@ class ServiceRenewService
                             (int) $user->id,
                             $effectiveProduct,
                             (string) ($cycle['billing_cycle'] ?? ''),
-                            $amount,
+                            $couponBase,
                             'renew'
                         );
 
                         if (is_array($couponPayload)) {
                             $discountAmount = (string) ($couponPayload['discount_amount'] ?? '0.00');
-                            $finalAmount = (string) ($couponPayload['final_amount'] ?? $originalAmount);
+                            $finalAmount = (string) ($couponPayload['final_amount'] ?? number_format($couponBase, 2, '.', ''));
                         }
                     } catch (\Throwable) {
                         // 单个周期不满足优惠条件时保留原价展示
@@ -152,6 +183,7 @@ class ServiceRenewService
                 return [
                     ...$cycle,
                     'original_amount' => $originalAmount,
+                    'member_discount_amount' => number_format($memberDiscountAmount, 2, '.', ''),
                     'discount_amount' => $discountAmount,
                     'amount' => $finalAmount,
                 ];
@@ -176,6 +208,9 @@ class ServiceRenewService
             'selected_coupon' => $selectedCoupon,
             'has_locked_pricing' => $service->usesCustomRenewPricing($productPricing),
             'has_custom_renew_pricing' => $service->usesCustomRenewPricing($productPricing),
+            'member_level_id' => $selectedMemberDiscount['level_id'] ?? null,
+            'member_level_name' => $selectedMemberDiscount['level_name'] ?? null,
+            'member_discount_amount' => number_format((float) ($selectedMemberDiscount['discount_amount'] ?? 0), 2, '.', ''),
         ];
     }
 
@@ -193,6 +228,11 @@ class ServiceRenewService
 
         $amount = round((float) ($cycleOption['amount'] ?? 0), 2);
         throw_if($amount <= 0, new BusinessException('当前续费周期金额无效'));
+
+        // 会员折扣层先于优惠券落位，券以折后价为基数；目录价基数保持 $amount 用于对账
+        $memberDiscount = $this->memberDiscountFor($user, $effectiveProduct, $amount);
+        $memberDiscountAmount = round((float) ($memberDiscount['discount_amount'] ?? 0), 2);
+        $couponBaseAmount = max($amount - $memberDiscountAmount, 0.0);
 
         $blockingPaidInvoice = $this->findBlockingPaidRenewInvoice($user, $service, $cycle, $userCouponId);
         if ($blockingPaidInvoice instanceof Invoice) {
@@ -226,26 +266,28 @@ class ServiceRenewService
             ->first();
 
         if ($existingInvoice instanceof Invoice) {
-            $existingAmount = round((float) $existingInvoice->amount + (float) ($existingInvoice->discount ?? 0), 2);
-            $existingDiscount = round((float) ($existingInvoice->discount ?? 0), 2);
+            // 还原目录价基数（应收 + 券减免 + 会员折扣）后与当前报价对账
+            $existingCatalogAmount = round((float) $existingInvoice->amount + (float) ($existingInvoice->discount ?? 0) + (float) ($existingInvoice->member_discount_amount ?? 0), 2);
+            $existingMemberDiscount = round((float) ($existingInvoice->member_discount_amount ?? 0), 2);
+            $existingCouponDiscount = round((float) ($existingInvoice->discount ?? 0), 2);
             $expectedCouponPayload = $this->couponService->previewOwnedCoupon(
                 $userCouponId > 0 ? $userCouponId : null,
                 (int) $user->id,
                 $effectiveProduct,
                 $cycle,
-                $amount,
+                $couponBaseAmount,
                 OrderType::RENEW
             );
             $expectedDiscount = round((float) ($expectedCouponPayload['discount_amount'] ?? 0), 2);
 
-            if ($existingAmount === $amount && $existingDiscount === $expectedDiscount && (int) $existingInvoice->product_id === (int) $effectiveProduct->id) {
+            if ($existingCatalogAmount === $amount && $existingMemberDiscount === $memberDiscountAmount && $existingCouponDiscount === $expectedDiscount && (int) $existingInvoice->product_id === (int) $effectiveProduct->id) {
                 $existingInvoice->loadMissing(['product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires', 'service']);
                 $this->operationLogService->writeServiceConsoleLog($service, 'service.console.renew.invoice.create', [
                     'category' => 'renew',
                     'summary' => '获取待支付续费账单',
                     'billing_cycle' => $cycle,
                     'billing_cycle_label' => $this->resolveBillingCycleLabel($cycle),
-                    'amount' => number_format(max($amount - $expectedDiscount, 0), 2, '.', ''),
+                    'amount' => number_format((float) $existingInvoice->amount, 2, '.', ''),
                     'invoice_id' => (int) $existingInvoice->id,
                     'invoice_no' => (string) $existingInvoice->invoice_no,
                     'reused_invoice' => true,
@@ -260,7 +302,7 @@ class ServiceRenewService
 
         $sourceProvisionData = $this->serviceProvisionData($service);
 
-        $invoice = DB::transaction(function () use ($user, $service, $cycle, $amount, $renewConfig, $cycleOption, $effectiveProduct, $userCouponId, $context, $sourceProvisionData) {
+        $invoice = DB::transaction(function () use ($user, $service, $cycle, $amount, $renewConfig, $cycleOption, $effectiveProduct, $userCouponId, $context, $sourceProvisionData, $memberDiscountAmount, $couponBaseAmount, $memberDiscount) {
             // 锁服务行串行化并发续费建单：把「复用检查」与「建单」收敛到同一事务/锁内，
             // 杜绝检查-新建窗口内的 TOCTOU 双账单（手动续费/支付回调/履约重试路径无缓存锁保护）。
             Service::query()->lockForUpdate()->findOrFail($service->id);
@@ -277,18 +319,19 @@ class ServiceRenewService
                 ->first();
 
             if ($concurrentInvoice instanceof Invoice) {
-                $existingAmount = round((float) $concurrentInvoice->amount + (float) ($concurrentInvoice->discount ?? 0), 2);
-                $existingDiscount = round((float) ($concurrentInvoice->discount ?? 0), 2);
+                $existingCatalogAmount = round((float) $concurrentInvoice->amount + (float) ($concurrentInvoice->discount ?? 0) + (float) ($concurrentInvoice->member_discount_amount ?? 0), 2);
+                $existingMemberDiscount = round((float) ($concurrentInvoice->member_discount_amount ?? 0), 2);
+                $existingCouponDiscount = round((float) ($concurrentInvoice->discount ?? 0), 2);
                 $expectedDiscount = round((float) ($this->couponService->previewOwnedCoupon(
                     $userCouponId > 0 ? $userCouponId : null,
                     (int) $user->id,
                     $effectiveProduct,
                     $cycle,
-                    $amount,
+                    $couponBaseAmount,
                     OrderType::RENEW
                 )['discount_amount'] ?? 0), 2);
 
-                if ($existingAmount === $amount && $existingDiscount === $expectedDiscount && (int) $concurrentInvoice->product_id === (int) $effectiveProduct->id) {
+                if ($existingCatalogAmount === $amount && $existingMemberDiscount === $memberDiscountAmount && $existingCouponDiscount === $expectedDiscount && (int) $concurrentInvoice->product_id === (int) $effectiveProduct->id) {
                     return $concurrentInvoice->load(['product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires', 'service']);
                 }
 
@@ -308,11 +351,11 @@ class ServiceRenewService
                 (int) $user->id,
                 $effectiveProduct,
                 $cycle,
-                $amount,
+                $couponBaseAmount,
                 'renew'
             );
             $discountAmount = round((float) ($couponPayload['discount_amount'] ?? 0), 2);
-            $payableAmount = round(max($amount - $discountAmount, 0), 2);
+            $payableAmount = round(max($couponBaseAmount - $discountAmount, 0), 2);
 
             $invoice = Invoice::create([
                 'invoice_no' => Invoice::generateInvoiceNo(),
@@ -324,6 +367,8 @@ class ServiceRenewService
                 'type' => OrderType::RENEW,
                 'amount' => $payableAmount,
                 'discount' => $discountAmount,
+                'member_discount_amount' => $memberDiscountAmount,
+                'member_discount_snapshot' => $memberDiscount['snapshot'] ?? null,
                 'paid_amount' => 0,
                 'coupon_id' => $couponPayload['coupon_id'] ?? null,
                 'user_coupon_id' => $couponPayload['user_coupon_id'] ?? null,
@@ -341,6 +386,7 @@ class ServiceRenewService
                     'local_renew_amount' => number_format($amount, 2, '.', ''),
                     'upstream_amount' => (string) ($cycleOption['upstream_amount'] ?? ''),
                     'discount_amount' => number_format($discountAmount, 2, '.', ''),
+                    'member_discount_amount' => number_format($memberDiscountAmount, 2, '.', ''),
                 ], fn ($value) => ! in_array($value, ['', null], true)),
                 'coupon_snapshot' => $couponPayload,
                 'status' => InvoiceStatus::UNPAID,
@@ -368,6 +414,8 @@ class ServiceRenewService
                 'coupon_code' => $couponPayload['code'] ?? null,
                 'amount' => $amount,
                 'discount' => $discountAmount,
+                'member_discount_amount' => $memberDiscountAmount,
+                'member_discount_snapshot' => $memberDiscount['snapshot'] ?? null,
                 'paid_amount' => 0,
                 'billing_cycle' => $cycle,
                 'quantity' => 1,
@@ -416,6 +464,11 @@ class ServiceRenewService
         $amount = round((float) ($cycleOption['amount'] ?? 0), 2);
         throw_if($amount <= 0, new BusinessException('当前续费周期金额无效'));
 
+        // 会员折扣层先于优惠券落位，券以折后价为基数
+        $memberDiscount = $this->memberDiscountFor($user, $effectiveProduct, $amount);
+        $memberDiscountAmount = round((float) ($memberDiscount['discount_amount'] ?? 0), 2);
+        $couponBaseAmount = max($amount - $memberDiscountAmount, 0.0);
+
         // 复用已支付未履约续费账单：用户已付过钱，直接返回既有订单，防止自动续费重复建单扣款
         $blockingPaidInvoice = $this->findBlockingPaidRenewInvoice($user, $service, $cycle, $userCouponId);
         if ($blockingPaidInvoice instanceof Invoice && $blockingPaidInvoice->order instanceof Order) {
@@ -456,9 +509,23 @@ class ServiceRenewService
             ->first();
 
         if ($existingOrder instanceof Order) {
-            $existingAmount = round((float) $existingOrder->amount + (float) ($existingOrder->discount ?? 0), 2);
+            // 还原目录价基数后与当前报价对账，会员折扣或券变化都会触发重建
+            $existingCatalogAmount = round((float) $existingOrder->amount + (float) ($existingOrder->discount ?? 0) + (float) ($existingOrder->member_discount_amount ?? 0), 2);
+            $expectedDiscount = round((float) ($this->couponService->previewOwnedCoupon(
+                $userCouponId > 0 ? $userCouponId : null,
+                (int) $user->id,
+                $effectiveProduct,
+                $cycle,
+                $couponBaseAmount,
+                OrderType::RENEW
+            )['discount_amount'] ?? 0), 2);
 
-            if ($existingAmount === $amount && (int) $existingOrder->product_id === (int) $effectiveProduct->id) {
+            if (
+                $existingCatalogAmount === $amount
+                && round((float) ($existingOrder->member_discount_amount ?? 0), 2) === $memberDiscountAmount
+                && round((float) ($existingOrder->discount ?? 0), 2) === $expectedDiscount
+                && (int) $existingOrder->product_id === (int) $effectiveProduct->id
+            ) {
                 $reusedOrder = $existingOrder->loadMissing([
                     'invoice.product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
                     'invoice.service',
@@ -487,7 +554,7 @@ class ServiceRenewService
 
         $sourceProvisionData = $this->serviceProvisionData($service);
 
-        $order = DB::transaction(function () use ($user, $service, $cycle, $amount, $renewConfig, $cycleOption, $effectiveProduct, $userCouponId, $context, $sourceProvisionData) {
+        $order = DB::transaction(function () use ($user, $service, $cycle, $amount, $renewConfig, $cycleOption, $effectiveProduct, $userCouponId, $context, $sourceProvisionData, $memberDiscountAmount, $couponBaseAmount, $memberDiscount) {
             // 锁服务行串行化并发续费建单：把「复用检查」与「建单」收敛到同一事务/锁内，
             // 杜绝检查-新建窗口内的 TOCTOU 双订单（手动续费/支付回调/履约重试路径无缓存锁保护）。
             Service::query()->lockForUpdate()->findOrFail($service->id);
@@ -504,8 +571,22 @@ class ServiceRenewService
                 ->first();
 
             if ($concurrentOrder instanceof Order) {
-                $existingAmount = round((float) $concurrentOrder->amount + (float) ($concurrentOrder->discount ?? 0), 2);
-                if ($existingAmount === $amount && (int) $concurrentOrder->product_id === (int) $effectiveProduct->id) {
+                $existingCatalogAmount = round((float) $concurrentOrder->amount + (float) ($concurrentOrder->discount ?? 0) + (float) ($concurrentOrder->member_discount_amount ?? 0), 2);
+                $expectedDiscount = round((float) ($this->couponService->previewOwnedCoupon(
+                    $userCouponId > 0 ? $userCouponId : null,
+                    (int) $user->id,
+                    $effectiveProduct,
+                    $cycle,
+                    $couponBaseAmount,
+                    OrderType::RENEW
+                )['discount_amount'] ?? 0), 2);
+
+                if (
+                    $existingCatalogAmount === $amount
+                    && round((float) ($concurrentOrder->member_discount_amount ?? 0), 2) === $memberDiscountAmount
+                    && round((float) ($concurrentOrder->discount ?? 0), 2) === $expectedDiscount
+                    && (int) $concurrentOrder->product_id === (int) $effectiveProduct->id
+                ) {
                     return $concurrentOrder->loadMissing([
                         'invoice.product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
                         'invoice.service',
@@ -530,7 +611,7 @@ class ServiceRenewService
                 (int) $user->id,
                 $effectiveProduct,
                 $cycle,
-                $amount,
+                $couponBaseAmount,
                 OrderType::RENEW
             );
             $discountAmount = round((float) ($couponPayload['discount_amount'] ?? 0), 2);
@@ -549,6 +630,8 @@ class ServiceRenewService
                 'coupon_code' => $couponPayload['code'] ?? null,
                 'amount' => $amount,
                 'discount' => $discountAmount,
+                'member_discount_amount' => $memberDiscountAmount,
+                'member_discount_snapshot' => $memberDiscount['snapshot'] ?? null,
                 'paid_amount' => 0,
                 'billing_cycle' => $cycle,
                 'quantity' => 1,
@@ -564,6 +647,7 @@ class ServiceRenewService
                     'local_renew_amount' => number_format($amount, 2, '.', ''),
                     'upstream_amount' => (string) ($cycleOption['upstream_amount'] ?? ''),
                     'discount_amount' => number_format($discountAmount, 2, '.', ''),
+                    'member_discount_amount' => number_format($memberDiscountAmount, 2, '.', ''),
                 ], fn ($value) => ! in_array($value, ['', null], true)),
                 'coupon_snapshot' => $couponPayload,
                 'status' => OrderStatus::PENDING,

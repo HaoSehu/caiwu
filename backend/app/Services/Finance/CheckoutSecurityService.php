@@ -10,6 +10,7 @@ use App\Exceptions\BusinessException;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Payment;
+use App\Support\Money;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
@@ -48,12 +49,13 @@ class CheckoutSecurityService
             'billing_cycle' => $billingCycle,
             'quantity' => max((int) ($quotePayload['quantity'] ?? 1), 1),
             'config_hash' => $this->hashPayload($config),
-            'original_amount' => $this->normalizeAmount($quotePayload['subtotal_amount'] ?? $quotePayload['total_amount'] ?? 0),
-            'amount' => $this->normalizeAmount($quotePayload['total_amount'] ?? 0),
-            'base_amount' => $this->normalizeAmount($quotePayload['base_amount'] ?? 0),
-            'config_amount' => $this->normalizeAmount($quotePayload['config_amount'] ?? 0),
-            'setup_fee' => $this->normalizeAmount($quotePayload['setup_fee'] ?? 0),
-            'discount_amount' => $this->normalizeAmount($quotePayload['discount_amount'] ?? 0),
+            'original_amount' => Money::format($quotePayload['subtotal_amount'] ?? $quotePayload['total_amount'] ?? 0),
+            'amount' => Money::format($quotePayload['total_amount'] ?? 0),
+            'base_amount' => Money::format($quotePayload['base_amount'] ?? 0),
+            'config_amount' => Money::format($quotePayload['config_amount'] ?? 0),
+            'setup_fee' => Money::format($quotePayload['setup_fee'] ?? 0),
+            'discount_amount' => Money::format($quotePayload['discount_amount'] ?? 0),
+            'member_discount_amount' => Money::format($quotePayload['member_discount_amount'] ?? 0),
             'user_coupon_id' => (int) ($quotePayload['coupon']['user_coupon_id'] ?? $quotePayload['user_coupon_id'] ?? 0),
             'request_id' => trim((string) ($context['request_id'] ?? '')),
             'ip_address' => trim((string) ($context['ip_address'] ?? '')),
@@ -76,6 +78,7 @@ class CheckoutSecurityService
         string $originalAmount,
         string $amount,
         ?int $couponId = null,
+        ?string $memberDiscountAmount = null,
     ): array {
         $payload = $this->volatileStore()->get($this->quoteCacheKey($token));
 
@@ -85,9 +88,11 @@ class CheckoutSecurityService
         $tokenBillingCycle = (string) ($payload['billing_cycle'] ?? '');
         $tokenQuantity = max((int) ($payload['quantity'] ?? 1), 1);
         $tokenConfigHash = (string) ($payload['config_hash'] ?? '');
-        $tokenOriginalAmount = $this->normalizeAmount($payload['original_amount'] ?? 0);
-        $tokenAmount = $this->normalizeAmount($payload['amount'] ?? 0);
+        $tokenOriginalAmount = Money::format($payload['original_amount'] ?? 0);
+        $tokenAmount = Money::format($payload['amount'] ?? 0);
         $tokenCouponId = (int) ($payload['user_coupon_id'] ?? 0);
+        // 旧令牌无此键时按 0 处理，与未生效会员折扣的请求天然一致
+        $tokenMemberDiscountAmount = Money::format($payload['member_discount_amount'] ?? 0);
 
         throw_if(
             $tokenProductId !== $productId
@@ -98,10 +103,15 @@ class CheckoutSecurityService
         );
 
         throw_if(
-            $tokenOriginalAmount !== $this->normalizeAmount($originalAmount)
+            $tokenOriginalAmount !== Money::format($originalAmount)
             || $tokenCouponId !== (int) ($couponId ?? 0)
-            || $tokenAmount !== $this->normalizeAmount($amount),
+            || $tokenAmount !== Money::format($amount),
             new BusinessException('报价已变更，请刷新页面后重试')
+        );
+
+        throw_if(
+            $tokenMemberDiscountAmount !== Money::format((float) ($memberDiscountAmount ?? 0)),
+            new BusinessException('会员折扣已变更，请刷新页面后重试', 40305)
         );
 
         return $payload;
@@ -230,7 +240,7 @@ class CheckoutSecurityService
             'order_id' => (int) $order->id,
             'user_id' => $userId,
             'order_status' => (int) $order->status,
-            'payable_amount' => $this->normalizeAmount($order->paid_amount ?? 0),
+            'payable_amount' => Money::format($order->paid_amount ?? 0),
             'issued_at' => $now->toIso8601String(),
             'expires_at' => $expiresAt->toIso8601String(),
         ], $expiresAt);
@@ -254,7 +264,7 @@ class CheckoutSecurityService
 
         throw_if(! is_array($payload), new BusinessException('支付会话已失效，请刷新页面后重试'));
 
-        $currentPayableAmount = $this->normalizeAmount($order->paid_amount ?? 0);
+        $currentPayableAmount = Money::format($order->paid_amount ?? 0);
 
         throw_if(
             (int) ($payload['order_id'] ?? 0) !== (int) $order->id
@@ -290,7 +300,7 @@ class CheckoutSecurityService
             'invoice_id' => (int) $invoice->id,
             'user_id' => $userId,
             'invoice_status' => (int) $invoice->status,
-            'payable_amount' => $this->normalizeAmount($payableAmount),
+            'payable_amount' => Money::format($payableAmount),
             'issued_at' => $now->toIso8601String(),
             'expires_at' => $expiresAt->toIso8601String(),
         ], $expiresAt);
@@ -309,7 +319,7 @@ class CheckoutSecurityService
 
         throw_if(! is_array($payload), new BusinessException('支付会话已失效，请刷新页面后重试'));
 
-        $currentPayableAmount = $this->normalizeAmount($this->resolveInvoicePayableAmount($invoice));
+        $currentPayableAmount = Money::format($this->resolveInvoicePayableAmount($invoice));
 
         throw_if(
             (int) ($payload['invoice_id'] ?? 0) !== (int) $invoice->id
@@ -558,11 +568,6 @@ class CheckoutSecurityService
     private function resolveInvoicePayableAmount(Invoice $invoice): float
     {
         return round(max((float) ($invoice->amount ?? 0) - (float) ($invoice->paid_amount ?? 0), 0), 2);
-    }
-
-    private function normalizeAmount(mixed $amount): string
-    {
-        return number_format((float) $amount, 2, '.', '');
     }
 
     private function hashClientIp(string $clientIp): string

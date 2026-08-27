@@ -14,6 +14,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
+/**
+ * @property float $member_discount_amount 会员等级×营销组折扣减免金额
+ * @property array|null $member_discount_snapshot 会员折扣命中快照
+ */
 class Order extends Model
 {
     use HandlesProductSnapshot, SoftDeletes;
@@ -35,12 +39,14 @@ class Order extends Model
         'amount',
         'currency',
         'discount',
+        'member_discount_amount',
         'paid_amount',
         'billing_cycle',
         'quantity',
         'config_snapshot',
         'config_pricing_snapshot',
         'coupon_snapshot',
+        'member_discount_snapshot',
         'service_snapshot',
         'status',
         'paid_at',
@@ -56,11 +62,13 @@ class Order extends Model
             'user_coupon_id' => 'integer',
             'amount' => 'decimal:2',
             'discount' => 'decimal:2',
+            'member_discount_amount' => 'decimal:2',
             'paid_amount' => 'decimal:2',
             'quantity' => 'integer',
             'config_snapshot' => 'array',
             'config_pricing_snapshot' => 'array',
             'coupon_snapshot' => 'array',
+            'member_discount_snapshot' => 'array',
             'service_snapshot' => 'array',
             'paid_at' => 'datetime',
         ];

@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Casts\LegacyEncrypted;
 use App\Models\Concerns\ReleasesUniqueKeysOnDelete;
 use App\Services\User\AccountService;
+use App\Support\Money;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -26,6 +27,7 @@ class User extends Authenticatable
         'email', 'password', 'phone', 'status',
         'nickname', 'company', 'qq', 'admin_note',
         'referral_code', 'referrer_user_id', 'referred_at', 'member_level_id', 'total_sales_amount',
+        'promotion_ambassador_id',
         'is_verified', 'real_name', 'id_card', 'verification_status', 'verification_message', 'verification_certify_id', 'verified_at',
         'alipay_real_name', 'alipay_account',
         'login_email_alert', 'login_notify', 'login_location_alert', 'password_change_alert', 'phone_change_alert', 'email_change_alert', 'marketing_alert', 'last_login_ip', 'last_login_at',
@@ -54,6 +56,7 @@ class User extends Authenticatable
             'is_verified' => 'integer',
             'verification_status' => 'integer',
             'member_level_id' => 'integer',
+            'promotion_ambassador_id' => 'integer',
             'referrer_user_id' => 'integer',
             'password' => 'hashed',
         ];
@@ -190,6 +193,11 @@ class User extends Authenticatable
         return $this->normalizeNullableInt($value);
     }
 
+    public function getPromotionAmbassadorIdAttribute(mixed $value): ?int
+    {
+        return $this->normalizeNullableInt($value);
+    }
+
     public function getTotalSalesAmountAttribute(mixed $value): string
     {
         return $this->normalizeDecimalString($value);
@@ -280,6 +288,11 @@ class User extends Authenticatable
     public function memberLevel(): BelongsTo
     {
         return $this->belongsTo(MemberLevel::class, 'member_level_id');
+    }
+
+    public function promotionAmbassador(): BelongsTo
+    {
+        return $this->belongsTo(PromotionAmbassador::class, 'promotion_ambassador_id');
     }
 
     public function account(): HasOne
@@ -431,11 +444,12 @@ class User extends Authenticatable
 
     private function normalizeDecimal(mixed $value): string
     {
+        // 非 numeric 输入直接落 0.00，与 Money::format 对特殊字符串的转换行为区分开
         if (! is_numeric($value)) {
             return '0.00';
         }
 
-        return number_format((float) $value, 2, '.', '');
+        return Money::format($value);
     }
 
     private function normalizeDecimalString(mixed $value): string

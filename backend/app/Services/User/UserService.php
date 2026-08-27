@@ -14,13 +14,16 @@ use App\Exceptions\BusinessException;
 use App\Http\Resources\Finance\FinanceLedgerResource;
 use App\Models\ActivityLog;
 use App\Models\Invoice;
+use App\Models\MemberLevel;
 use App\Models\MessageLog;
 use App\Models\Payment;
+use App\Models\PromotionAmbassador;
 use App\Models\ReferralReward;
 use App\Models\ReferralWithdrawal;
 use App\Models\Service;
 use App\Models\Ticket;
 use App\Models\User;
+use App\Models\UserReferral;
 use App\Services\Automation\ServiceStatusSyncService;
 use App\Services\ClientServiceConsole\ClientServiceConsoleService;
 use App\Services\Finance\FinanceLedgerQueryService;
@@ -70,6 +73,9 @@ class UserService
                 'phone',
                 'nickname',
                 'real_name',
+                'company',
+                'qq',
+                'member_level_id',
                 'verification_status',
                 'is_verified',
                 'status',
@@ -201,6 +207,94 @@ class UserService
     }
 
     /**
+     * 管理员设置用户会员等级（等级为手工配置，null 表示置为未分级）。
+     *
+     * @param  int|null  $levelId  目标等级 ID；null 表示置为未分级
+     */
+    public function adjustMemberLevel(User $user, ?int $levelId, array $context = []): User
+    {
+        $targetLevel = null;
+        if ($levelId !== null) {
+            $targetLevel = MemberLevel::query()->find($levelId);
+            throw_if($targetLevel === null, new BusinessException('目标会员等级不存在'));
+        }
+
+        $previousLevelId = (int) ($user->member_level_id ?? 0);
+
+        DB::transaction(function () use ($user, $targetLevel): void {
+            // 双写 users 与 user_referrals（若存在），保证投影表与主表一致
+            if (Schema::hasTable('user_referrals')) {
+                UserReferral::query()->updateOrCreate(
+                    ['user_id' => $user->id],
+                    ['member_level_id' => $targetLevel?->id]
+                );
+            }
+
+            $user->forceFill([
+                'member_level_id' => $targetLevel?->id,
+            ])->save();
+            $user->unsetRelation('memberLevel');
+        });
+
+        $this->operationLogService->write(
+            userId: (int) ($context['actor_user_id'] ?? 0) ?: null,
+            userType: (string) ($context['actor_type'] ?? 'admin'),
+            action: 'admin.user.member_level_adjust',
+            module: 'user',
+            targetId: (int) $user->id,
+            detail: [
+                'from_member_level_id' => $previousLevelId ?: null,
+                'to_member_level_id' => $targetLevel?->id,
+                'to_member_level_name' => $targetLevel?->name,
+                'actor_name' => (string) ($context['actor_name'] ?? ''),
+                'trace_id' => (string) ($context['trace_id'] ?? ''),
+            ],
+            ipAddress: ($context['ip_address'] ?? null) ? (string) $context['ip_address'] : null,
+        );
+
+        return $this->reloadUserReadRelations($user);
+    }
+
+    /**
+     * 管理员指派用户推广大使档位（null 表示置为未指派，返利按全局配置兜底）。
+     *
+     * @param  int|null  $ambassadorId  目标大使档位 ID；null 表示置为未指派
+     */
+    public function adjustPromotionAmbassador(User $user, ?int $ambassadorId, array $context = []): User
+    {
+        $targetAmbassador = null;
+        if ($ambassadorId !== null) {
+            $targetAmbassador = PromotionAmbassador::query()->find($ambassadorId);
+            throw_if($targetAmbassador === null, new BusinessException('目标推广大使档位不存在'));
+        }
+
+        $previousAmbassadorId = (int) ($user->promotion_ambassador_id ?? 0);
+
+        $user->forceFill([
+            'promotion_ambassador_id' => $targetAmbassador?->id,
+        ])->save();
+        $user->unsetRelation('promotionAmbassador');
+
+        $this->operationLogService->write(
+            userId: (int) ($context['actor_user_id'] ?? 0) ?: null,
+            userType: (string) ($context['actor_type'] ?? 'admin'),
+            action: 'admin.user.promotion_ambassador_adjust',
+            module: 'user',
+            targetId: (int) $user->id,
+            detail: [
+                'from_promotion_ambassador_id' => $previousAmbassadorId ?: null,
+                'to_promotion_ambassador_id' => $targetAmbassador?->id,
+                'to_promotion_ambassador_name' => $targetAmbassador?->name,
+                'actor_name' => (string) ($context['actor_name'] ?? ''),
+                'trace_id' => (string) ($context['trace_id'] ?? ''),
+            ],
+            ipAddress: ($context['ip_address'] ?? null) ? (string) $context['ip_address'] : null,
+        );
+
+        return $this->reloadUserReadRelations($user);
+    }
+
+    /**
      * 删除用户（资产保护）：
      * 仅当无在用服务、无未付账单、账户余额为 0 时才允许删除，否则拒绝并提示先处理资产。
      */
@@ -249,9 +343,11 @@ class UserService
     {
         $user->loadMissing([
             'memberLevel',
+            'promotionAmbassador',
             'account',
         ]);
         $memberLevel = $user->memberLevel;
+        $promotionAmbassador = $user->promotionAmbassador;
         $countStats = User::query()
             ->whereKey($user->id)
             ->withCount([
@@ -319,8 +415,11 @@ class UserService
                 'member_level' => $memberLevel ? [
                     'id' => $memberLevel->id,
                     'name' => $memberLevel->name,
-                    'code' => $memberLevel->code,
-                    'reward_rate' => (float) $memberLevel->reward_rate,
+                ] : null,
+                'promotion_ambassador' => $promotionAmbassador ? [
+                    'id' => $promotionAmbassador->id,
+                    'name' => $promotionAmbassador->name,
+                    'reward_rate' => (float) $promotionAmbassador->reward_rate,
                 ] : null,
                 'total_sales_amount' => (float) $user->total_sales_amount,
                 'referral_frozen_amount' => (float) $user->referral_frozen_amount,
@@ -866,10 +965,12 @@ class UserService
     private function resolvePaymentGatewayLabel(string $gateway): string
     {
         return match ($gateway) {
-            PaymentGatewayCode::ALIPAY => PaymentGatewayCode::label(PaymentGatewayCode::ALIPAY),
-            PaymentGatewayCode::YIPAY => PaymentGatewayCode::label(PaymentGatewayCode::YIPAY),
-            'wechat' => '微信支付',
-            'balance' => '余额支付',
+            // 与 PaymentGatewayCode::LABELS 一致的词条统一走集中定义，避免多处文案漂移。
+            PaymentGatewayCode::ALIPAY,
+            PaymentGatewayCode::YIPAY,
+            PaymentGatewayCode::WECHAT,
+            PaymentGatewayCode::BALANCE => PaymentGatewayCode::label($gateway),
+            // 业务侧扩展口径与本地历史文案不属于集中 LABELS，保留原样。
             'bank_transfer' => '银行转账',
             'offline' => '线下支付',
             default => '手动入账',

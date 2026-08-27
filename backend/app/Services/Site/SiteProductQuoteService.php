@@ -7,6 +7,7 @@ use App\Models\Product;
 use App\Services\Finance\CheckoutSecurityService;
 use App\Services\Finance\CheckoutService;
 use App\Services\Finance\CouponService;
+use App\Services\Pricing\MemberGroupDiscountService;
 use Illuminate\Database\Eloquent\Builder;
 
 class SiteProductQuoteService
@@ -15,6 +16,7 @@ class SiteProductQuoteService
         private CheckoutService $checkoutService,
         private CheckoutSecurityService $checkoutSecurityService,
         private CouponService $couponService,
+        private MemberGroupDiscountService $memberGroupDiscountService,
     ) {}
 
     public function resolveQuotePayload(int $productId, array $validated, array $requestContext = []): ?array
@@ -35,13 +37,19 @@ class SiteProductQuoteService
         $userId = (int) ($requestContext['user_id'] ?? 0);
         $normalizedConfig = $this->checkoutService->normalizeConfig($product, (array) ($validated['config'] ?? []));
         $quote = $this->checkoutService->quote($product, $billingCycle, $normalizedConfig, $quantity);
+        // 会员折扣层：目录价先按「等级 × 营销组」折算，优惠券以折后价为基数
+        $catalogAmount = round((float) ($quote['total_amount'] ?? 0), 2);
+        $memberDiscount = $userId > 0
+            ? $this->memberGroupDiscountService->applyForProduct($userId, (int) $product->id, $catalogAmount)
+            : null;
+        $couponBaseAmount = max((float) ($memberDiscount['final_amount'] ?? $catalogAmount), 0.0);
         $coupon = $userId > 0
             ? $this->couponService->previewOwnedCoupon(
                 isset($validated['user_coupon_id']) ? (int) $validated['user_coupon_id'] : null,
                 $userId,
                 $product,
                 $billingCycle,
-                (float) ($quote['total_amount'] ?? 0),
+                $couponBaseAmount,
                 'new'
             )
             : null;
@@ -50,16 +58,19 @@ class SiteProductQuoteService
                 $userId,
                 $product,
                 $billingCycle,
-                (float) ($quote['total_amount'] ?? 0),
+                $couponBaseAmount,
                 'new'
             )
             : [];
 
-        $subtotalAmount = (float) ($quote['total_amount'] ?? 0);
+        $memberDiscountAmount = (float) ($memberDiscount['discount_amount'] ?? 0);
         $discountAmount = (float) ($coupon['discount_amount'] ?? 0);
-        $quote['subtotal_amount'] = number_format($subtotalAmount, 2, '.', '');
+        $quote['subtotal_amount'] = number_format($catalogAmount, 2, '.', '');
+        $quote['member_level_id'] = $memberDiscount['level_id'] ?? null;
+        $quote['member_level_name'] = $memberDiscount['level_name'] ?? null;
+        $quote['member_discount_amount'] = number_format($memberDiscountAmount, 2, '.', '');
         $quote['discount_amount'] = number_format($discountAmount, 2, '.', '');
-        $quote['total_amount'] = number_format(max($subtotalAmount - $discountAmount, 0), 2, '.', '');
+        $quote['total_amount'] = number_format(max($catalogAmount - $memberDiscountAmount - $discountAmount, 0), 2, '.', '');
         $quote['coupon'] = $coupon;
         $quote['user_coupon_id'] = (int) ($coupon['user_coupon_id'] ?? 0);
         $quote['available_coupons'] = $availableCoupons;
