@@ -7,7 +7,6 @@ namespace App\Http\Middleware;
 use App\Contracts\Integrations\Payments\PaymentGatewayInterface;
 use App\Services\Integrations\Payments\PaymentGatewayManager;
 use App\Services\Integrations\Plugins\PaymentGatewayBindingResolver;
-use App\Support\SensitiveDataSanitizer;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -33,7 +32,7 @@ class VerifyPaymentCallbackSignature
             Log::warning('[支付回调] 网关不可用，路由层签名验证失败', [
                 'gateway' => $gatewayKey,
                 'message' => $exception->getMessage(),
-                'params' => SensitiveDataSanitizer::sanitize($params),
+                'params' => $params,
             ]);
 
             return response('fail', 200)->header('Content-Type', 'text/plain');
@@ -45,7 +44,7 @@ class VerifyPaymentCallbackSignature
                 'payment_no' => (string) $request->input('out_trade_no', ''),
                 'trade_no' => (string) $request->input('trade_no', ''),
                 'trade_status' => (string) $request->input('trade_status', ''),
-                'params' => SensitiveDataSanitizer::sanitize($params),
+                'params' => $params,
             ]);
 
             return $this->failureResponse($gateway);

@@ -18,7 +18,6 @@ use App\Services\Sms\Contracts\SmsDriver;
 use App\Services\Upstream\Contracts\UpstreamDriver;
 use App\Services\Verification\Contracts\VerificationDriver;
 use App\Support\PayloadLimiter;
-use App\Support\SensitiveDataSanitizer;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -297,11 +296,9 @@ class PluginRuntimeRegistry
             $jsonSafe[$key] = $this->jsonSafeValue($value, new \WeakMap, 0);
         }
 
-        $sanitized = SensitiveDataSanitizer::sanitize($jsonSafe);
-
         // 截断超大 meta：异常上游报文曾把单行 runtime log 撑到兆级（表均行宽 1.6KB 的主因之一）。
         return PayloadLimiter::limit(
-            is_array($sanitized) ? $sanitized : [],
+            $jsonSafe,
             PayloadLimiter::DEFAULT_LEAF_MAX_BYTES,
             self::RUNTIME_META_MAX_BYTES,
             self::RUNTIME_META_PREVIEW_BYTES,

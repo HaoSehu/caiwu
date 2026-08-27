@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Services\Integrations\Callbacks;
 
 use App\Exceptions\IntegrationException;
-use App\Support\SensitiveDataSanitizer;
 use Illuminate\Support\Facades\Log;
 
 class CallbackDispatcher
@@ -40,12 +39,12 @@ class CallbackDispatcher
      */
     private function logFailure(string $provider, string $event, array $payload, \Throwable $exception): void
     {
-        Log::warning('[第三方回调] 分发失败', SensitiveDataSanitizer::sanitize([
+        Log::warning('[第三方回调] 分发失败', [
             'provider' => $provider,
             'event' => $event,
             'payload' => $payload,
             'message' => $exception->getMessage(),
             'exception' => $exception::class,
-        ]));
+        ]);
     }
 }

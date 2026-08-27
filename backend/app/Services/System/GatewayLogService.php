@@ -10,7 +10,6 @@ use App\Services\Integrations\Plugins\PaymentGatewayBindingResolver;
 use App\Support\GatewayDetailFile;
 use App\Support\PayloadLimiter;
 use App\Support\SchemaMetadataCache;
-use App\Support\SensitiveDataSanitizer;
 
 class GatewayLogService
 {
@@ -42,8 +41,8 @@ class GatewayLogService
             : $this->paymentGatewayBindingResolver->contextForGateway($gateway);
         $resolvedTraceId = trim((string) ($traceId ?? $payment?->trace_id ?? ''));
 
-        $requestDetail = SensitiveDataSanitizer::sanitize($requestData);
-        $responseDetail = SensitiveDataSanitizer::sanitize($responseData);
+        $requestDetail = $requestData;
+        $responseDetail = $responseData;
         // 统一限量治理（叶子截断+整体摘要），文件与库内降级共用同一份结果，避免热路径重复计算
         $limitedRequest = $this->limitGatewayDetail($requestDetail);
         $limitedResponse = $this->limitGatewayDetail($responseDetail);

@@ -8,7 +8,6 @@ use App\Models\Setting;
 use App\Services\Integrations\Payments\Concerns\BuildsGatewayHttpClient;
 use App\Services\Integrations\Payments\Concerns\WrapsPemKeys;
 use App\Services\System\GatewayLogService;
-use App\Support\SensitiveDataSanitizer;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -174,15 +173,15 @@ class AlipayClient
             ]);
         }
 
-        Log::info('[支付宝当面付] precreate 响应', SensitiveDataSanitizer::sanitize([
+        Log::info('[支付宝当面付] precreate 响应', [
             'out_trade_no' => $outTradeNo,
             'response' => $result,
-        ]));
+        ]);
 
         $data = $result['alipay_trade_precreate_response'] ?? [];
 
         if (($data['code'] ?? '') !== '10000') {
-            Log::error('[支付宝当面付] 预下单失败', SensitiveDataSanitizer::sanitize(['data' => $data]));
+            Log::error('[支付宝当面付] 预下单失败', ['data' => $data]);
             app(GatewayLogService::class)->recordFailure(
                 gateway: PaymentGatewayCode::ALIPAY,
                 action: 'precreate',
@@ -271,17 +270,17 @@ class AlipayClient
             throw $exception;
         }
 
-        Log::info('[支付宝当面付] refund 响应', SensitiveDataSanitizer::sanitize([
+        Log::info('[支付宝当面付] refund 响应', [
             'out_trade_no' => $outTradeNo,
             'trade_no' => $tradeNo,
             'out_request_no' => $outRequestNo,
             'response' => $result,
-        ]));
+        ]);
 
         $data = $result['alipay_trade_refund_response'] ?? [];
 
         if (($data['code'] ?? '') !== '10000') {
-            Log::error('[支付宝当面付] 退款失败', SensitiveDataSanitizer::sanitize(['data' => $data]));
+            Log::error('[支付宝当面付] 退款失败', ['data' => $data]);
             app(GatewayLogService::class)->recordFailure(
                 gateway: PaymentGatewayCode::ALIPAY,
                 action: 'refund',

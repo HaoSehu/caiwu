@@ -9,7 +9,6 @@ use App\Models\ActivityLog;
 use App\Models\Service;
 use App\Models\User;
 use App\Services\System\OperationLogService;
-use App\Support\SensitiveDataSanitizer;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
@@ -75,7 +74,7 @@ class ServiceSecurityGroupService
         } catch (BusinessException $exception) {
             Log::warning('[服务控制台] 读取安全组失败', [
                 'service_id' => $service->id,
-                'message' => SensitiveDataSanitizer::sanitizeText($exception->getMessage()),
+                'message' => $exception->getMessage(),
             ]);
 
             $moduleUnavailable = $exception->getErrorCode() === self::SECURITY_GROUP_MODULE_UNAVAILABLE_ERROR_CODE;
@@ -95,7 +94,7 @@ class ServiceSecurityGroupService
         } catch (\Throwable $exception) {
             Log::warning('[服务控制台] 读取安全组失败', [
                 'service_id' => $service->id,
-                'message' => SensitiveDataSanitizer::sanitizeText($exception->getMessage()),
+                'message' => $exception->getMessage(),
             ]);
 
             return [

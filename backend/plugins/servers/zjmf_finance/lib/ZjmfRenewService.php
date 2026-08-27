@@ -8,7 +8,6 @@ use App\Exceptions\BusinessException;
 use App\Models\Supplier;
 use App\Services\Integrations\Support\ProviderErrorMapper;
 use App\Services\Upstream\ProviderKey;
-use App\Support\SensitiveDataSanitizer;
 use Illuminate\Support\Facades\Log;
 
 final class ZjmfRenewService
@@ -313,7 +312,7 @@ final class ZjmfRenewService
         Log::warning('[ZJMF 财务续费] 返回失败', [
             'action' => $action,
             'status' => $status,
-            'message' => SensitiveDataSanitizer::sanitizeText($message),
+            'message' => $message,
         ]);
 
         throw new BusinessException(app(ProviderErrorMapper::class)->toUserMessage(ProviderKey::ZJMF_FINANCE_API, $action, $message));

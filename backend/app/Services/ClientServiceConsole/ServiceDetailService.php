@@ -19,7 +19,6 @@ use App\Services\System\OperationLogService;
 use App\Services\Upstream\Contracts\ProvidesConsoleRuntime;
 use App\Services\Upstream\ProviderResolver;
 use App\Services\Upstream\Support\WebSessionCookieParser;
-use App\Support\SensitiveDataSanitizer;
 use App\Support\ServiceHostname;
 use App\Support\TextSanitizer;
 use Carbon\Carbon;
@@ -742,7 +741,7 @@ class ServiceDetailService
         Log::warning('[服务控制台] 上游返回失败', [
             'action' => $action,
             'status' => $status,
-            'message' => SensitiveDataSanitizer::sanitizeText($message),
+            'message' => $message,
         ]);
 
         throw new BusinessException(app(ProviderErrorMapper::class)->toUserMessage($providerKey, $action, $message), 42200);

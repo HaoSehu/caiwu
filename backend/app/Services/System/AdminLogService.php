@@ -18,7 +18,6 @@ use App\Services\System\Concerns\HandlesAdminLogCleanup;
 use App\Support\AdminPrivacy;
 use App\Support\ApiAccessLogFile;
 use App\Support\SchemaMetadataCache;
-use App\Support\SensitiveDataSanitizer;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -1010,7 +1009,7 @@ class AdminLogService
             ->limit(1000)
             ->get()
             ->map(function (ActivityLog $log) {
-                $context = is_array($log->context) ? SensitiveDataSanitizer::sanitize($log->context) : [];
+                $context = is_array($log->context) ? $log->context : [];
                 $taskKey = trim((string) ($context['task_key'] ?? ''));
                 $status = trim((string) $log->action);
 
@@ -1412,9 +1411,7 @@ class AdminLogService
     private function normalizeApiLogRow(array $item): array
     {
         [$method, $path] = $this->splitHttpAction((string) ($item['action'] ?? ''));
-        $detail = SensitiveDataSanitizer::sanitize(
-            is_array($item['detail'] ?? null) ? $item['detail'] : []
-        );
+        $detail = is_array($item['detail'] ?? null) ? $item['detail'] : [];
 
         $item['method'] = $method;
         $item['path'] = $path;
@@ -1569,7 +1566,7 @@ class AdminLogService
             return null;
         }
 
-        $message = SensitiveDataSanitizer::sanitizeText(trim((string) $matches['message']));
+        $message = trim((string) $matches['message']);
         $taskKey = $this->resolveTaskKeyFromMessage($message);
 
         // 文件条目本身没有结构化列；行尾 JSON context 常带 provider_key/plugin_key/domain，

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Http\Resources\Admin\V2;
 
-use App\Support\SensitiveDataSanitizer;
 use App\Support\TextSanitizer;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -60,19 +59,7 @@ class AdminLogSummaryResource extends JsonResource
         'finished_at',
     ];
 
-    // ip_address 按项目红线原样透传：管理端日志必须展示完整真实 IP
-    private const PRIVACY_PROJECTED_FIELDS = [
-        'phone',
-        'to_email',
-        'ip_address',
-    ];
-
-    private const BUSINESS_IDENTIFIER_FIELDS = [
-        'gateway_key',
-        'driver_key',
-        'plugin_key',
-    ];
-
+    // 管理端日志列表返回完整字段，不做脱敏（项目红线：管理员需真实审计信息）；摘要仅做长度截断
     /**
      * @return array<string, mixed>
      */
@@ -80,7 +67,6 @@ class AdminLogSummaryResource extends JsonResource
     {
         $channel = (string) ($this->resource['channel'] ?? '');
         $row = is_array($this->resource['row'] ?? null) ? $this->resource['row'] : [];
-        $rawNotification = $this->isRawNotificationChannel($channel);
 
         $payload = [
             'id' => (string) ($row['id'] ?? ''),
@@ -88,16 +74,16 @@ class AdminLogSummaryResource extends JsonResource
         ];
 
         foreach (self::FIELD_KEYS as $key) {
-            if (array_key_exists($key, $row) && ! $this->isSensitiveKey($key)) {
-                $payload[$key] = $this->sanitizeField($key, $row[$key], $rawNotification);
+            if (array_key_exists($key, $row)) {
+                $payload[$key] = $row[$key];
             }
         }
 
-        $payload['message_excerpt'] = $this->excerpt($this->messageText($row), sanitize: ! $rawNotification);
-        $payload['context_excerpt'] = $this->excerpt($this->contextText($row, $rawNotification), 240, ! $rawNotification);
-        $payload['error_excerpt'] = $this->excerpt((string) ($row['error_msg'] ?? $row['error_message'] ?? ''), 200, ! $rawNotification);
+        $payload['message_excerpt'] = $this->excerpt($this->messageText($row));
+        $payload['context_excerpt'] = $this->excerpt($this->contextText($row), 240);
+        $payload['error_excerpt'] = $this->excerpt((string) ($row['error_msg'] ?? $row['error_message'] ?? ''), 200);
 
-        return $this->dropSensitiveKeys($payload);
+        return $payload;
     }
 
     private function messageText(array $row): string
@@ -112,7 +98,7 @@ class AdminLogSummaryResource extends JsonResource
         return '';
     }
 
-    private function contextText(array $row, bool $raw = false): string
+    private function contextText(array $row): string
     {
         $context = [];
         foreach (['detail', 'context', 'params', 'request_data', 'response_data', 'request_meta', 'response_meta', 'summary'] as $key) {
@@ -125,68 +111,13 @@ class AdminLogSummaryResource extends JsonResource
             return '';
         }
 
-        return (string) json_encode($raw ? $context : $this->dropSensitiveKeys($context), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        return (string) json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
-    private function excerpt(string $value, int $limit = 160, bool $sanitize = true): string
+    private function excerpt(string $value, int $limit = 160): string
     {
-        $text = $sanitize ? SensitiveDataSanitizer::sanitizeText($value) : $value;
-        $value = trim(preg_replace('/\s+/u', ' ', $text) ?? '');
+        $value = trim(preg_replace('/\s+/u', ' ', $value) ?? '');
 
         return TextSanitizer::truncateWithEllipsis($value, $limit);
-    }
-
-    private function sanitizeField(string $key, mixed $value, bool $raw = false): mixed
-    {
-        if ($raw) {
-            return $value;
-        }
-
-        if (in_array($key, self::PRIVACY_PROJECTED_FIELDS, true)) {
-            return $value;
-        }
-
-        if (in_array($key, self::BUSINESS_IDENTIFIER_FIELDS, true)) {
-            return is_string($value) ? SensitiveDataSanitizer::sanitizeText($value) : $value;
-        }
-
-        return SensitiveDataSanitizer::sanitize($value, $key);
-    }
-
-    // 通知通道（短信/邮件）日志对管理端返回完整原文，不做脱敏（项目红线：管理员需真实审计信息）
-    private function isRawNotificationChannel(string $channel): bool
-    {
-        return in_array($channel, ['sms', 'email'], true);
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function dropSensitiveKeys(array $payload): array
-    {
-        $result = [];
-
-        foreach ($payload as $key => $value) {
-            if (is_string($key) && $this->isSensitiveKey($key)) {
-                continue;
-            }
-
-            $result[$key] = is_array($value) ? $this->dropSensitiveKeys($value) : $value;
-        }
-
-        return $result;
-    }
-
-    private function isSensitiveKey(string $key): bool
-    {
-        $key = strtolower($key);
-
-        foreach (['password', 'secret', 'api_key', 'raw_response', 'third_party_response'] as $needle) {
-            if (str_contains($key, $needle)) {
-                return true;
-            }
-        }
-
-        return false;
     }
 }

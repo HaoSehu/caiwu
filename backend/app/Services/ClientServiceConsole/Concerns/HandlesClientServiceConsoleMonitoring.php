@@ -9,7 +9,6 @@ use App\Models\Supplier;
 use App\Models\User;
 use App\Services\Integrations\Plugins\PluginBindingResolver;
 use App\Support\Money;
-use App\Support\SensitiveDataSanitizer;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -149,7 +148,7 @@ trait HandlesClientServiceConsoleMonitoring
             Log::warning('[客户端监控] 单图监控失败', [
                 'service_id' => $service->id,
                 'requested_type' => $selectedType,
-                'message' => SensitiveDataSanitizer::sanitizeText($exception->getMessage()),
+                'message' => $exception->getMessage(),
             ]);
 
             return [
@@ -350,7 +349,7 @@ trait HandlesClientServiceConsoleMonitoring
             Log::warning('[客户端监控] 批量监控失败', [
                 'service_id' => $service->id,
                 'requested_types' => $requestedTypes,
-                'message' => SensitiveDataSanitizer::sanitizeText($exception->getMessage()),
+                'message' => $exception->getMessage(),
             ]);
 
             return [

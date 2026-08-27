@@ -14,7 +14,6 @@ use App\Models\ScheduleRunLog;
 use App\Support\ApiAccessLogFile;
 use App\Support\GatewayDetailFile;
 use App\Support\SchemaMetadataCache;
-use App\Support\SensitiveDataSanitizer;
 use Illuminate\Database\Eloquent\Model;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
@@ -251,7 +250,7 @@ class AdminLogV2QueryService
                 'created_at' => $this->dateValue($activity, 'created_at'),
             ],
             'message' => (string) ($row['action'] ?? $row['description'] ?? ''),
-            'context' => $this->dropSensitiveKeys((array) ($row['context'] ?? [])),
+            'context' => (array) ($row['context'] ?? []),
             'created_at' => $this->dateValue($activity, 'created_at'),
         ];
     }
@@ -364,7 +363,7 @@ class AdminLogV2QueryService
                 'error_msg' => $row['error_msg'] ?? '',
             ],
             'message' => (string) ($row['error_msg'] ?? $row['action'] ?? ''),
-            'context' => $this->dropSensitiveKeys($this->gatewayDetailData($model)),
+            'context' => $this->gatewayDetailData($model),
             'created_at' => $this->dateValue($model, 'created_at'),
         ];
     }
@@ -433,10 +432,10 @@ class AdminLogV2QueryService
                 'time' => $this->dateValue($model, 'created_at'),
             ],
             'message' => (string) ($row['error_message'] ?? $row['action'] ?? ''),
-            'context' => $this->dropSensitiveKeys([
+            'context' => [
                 'request_meta' => $row['request_meta_json'] ?? [],
                 'response_meta' => $row['response_meta_json'] ?? [],
-            ]),
+            ],
             'created_at' => $this->dateValue($model, 'created_at'),
         ];
     }
@@ -499,7 +498,7 @@ class AdminLogV2QueryService
                 'error_msg' => $row['error_msg'] ?? '',
             ],
             'message' => (string) ($row['error_msg'] ?? $row['task_name'] ?? ''),
-            'context' => $this->dropSensitiveKeys(['summary' => $row['summary'] ?? []]),
+            'context' => ['summary' => $row['summary'] ?? []],
             'created_at' => $this->dateValue($model, 'created_at'),
         ];
     }
@@ -521,34 +520,6 @@ class AdminLogV2QueryService
         $value = $model->getAttribute($key);
 
         return method_exists($value, 'format') ? $value->format('Y-m-d H:i:s') : ($value ? (string) $value : null);
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function dropSensitiveKeys(array $payload): array
-    {
-        $result = [];
-
-        foreach ($payload as $key => $value) {
-            $keyText = is_string($key) ? strtolower($key) : '';
-            if ($keyText !== '') {
-                $blocked = false;
-                foreach (['password', 'secret', 'api_key', 'raw_response', 'third_party_response'] as $needle) {
-                    if (str_contains($keyText, $needle)) {
-                        $blocked = true;
-                        break;
-                    }
-                }
-                if ($blocked) {
-                    continue;
-                }
-            }
-
-            $result[$key] = is_array($value) ? $this->dropSensitiveKeys($value) : SensitiveDataSanitizer::sanitize($value, is_string($key) ? $key : null);
-        }
-
-        return $result;
     }
 
     private function stripLogPrefix(string $log, string $prefix): int|string

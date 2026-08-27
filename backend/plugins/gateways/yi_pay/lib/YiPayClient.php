@@ -10,7 +10,6 @@ use App\Services\Integrations\Payments\Concerns\BuildsGatewayHttpClient;
 use App\Services\Integrations\Payments\Concerns\WrapsPemKeys;
 use App\Services\Integrations\Payments\Data\PaymentRefundRequest;
 use App\Services\System\GatewayLogService;
-use App\Support\SensitiveDataSanitizer;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -434,12 +433,12 @@ class YiPayClient
             throw new BusinessException('易支付响应异常，请稍后重试', 42200, 422);
         }
 
-        Log::info('[易支付] 网关响应', SensitiveDataSanitizer::sanitize([
+        Log::info('[易支付] 网关响应', [
             'url' => $url,
             'method' => $method,
             'out_trade_no' => (string) ($payload['out_trade_no'] ?? ''),
             'response' => $result,
-        ]));
+        ]);
 
         return $result;
     }
@@ -567,7 +566,7 @@ class YiPayClient
             action: $action,
             outTradeNo: $outTradeNo,
             tradeNo: (string) ($responseData['trade_no'] ?? ''),
-            requestData: $this->sanitizeGatewayRequestData($requestData),
+            requestData: $requestData,
             responseData: $responseData,
         );
     }
@@ -587,29 +586,8 @@ class YiPayClient
             action: $action,
             errorMsg: $message,
             outTradeNo: $outTradeNo,
-            requestData: $this->sanitizeGatewayRequestData($requestData),
+            requestData: $requestData,
             responseData: $responseData,
         );
-    }
-
-    /**
-     * 易支付查询/退款 API 的商户密钥字段名就是 key，通用脱敏器不会把普通 key
-     * 全局视为敏感字段，这里在插件边界显式遮蔽。
-     *
-     * @param  array<string, mixed>  $requestData
-     * @return array<string, mixed>
-     */
-    private function sanitizeGatewayRequestData(array $requestData): array
-    {
-        $sanitized = SensitiveDataSanitizer::sanitize($requestData);
-        if (! is_array($sanitized)) {
-            return [];
-        }
-
-        if (array_key_exists('key', $sanitized) && trim((string) $sanitized['key']) !== '') {
-            $sanitized['key'] = '[REDACTED]';
-        }
-
-        return $sanitized;
     }
 }

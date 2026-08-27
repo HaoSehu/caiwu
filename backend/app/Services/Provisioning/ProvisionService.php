@@ -18,7 +18,6 @@ use App\Services\System\SettingService;
 use App\Services\Upstream\Contracts\ProvidesProvisioning;
 use App\Services\Upstream\ProviderResolver;
 use App\Support\ProductProvisionHostname;
-use App\Support\SensitiveDataSanitizer;
 use App\Support\ServiceHostname;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
@@ -839,7 +838,7 @@ class ProvisionService
         Log::warning('[上游开通] 返回失败', [
             'action' => $action,
             'status' => $status,
-            'message' => SensitiveDataSanitizer::sanitizeText($message),
+            'message' => $message,
         ]);
 
         throw new BusinessException(app(ProviderErrorMapper::class)->toUserMessage($providerKey, $action, $message));

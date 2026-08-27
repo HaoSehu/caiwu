@@ -8,7 +8,6 @@ use App\Exceptions\BusinessException;
 use App\Models\Supplier;
 use App\Services\Integrations\Support\ProviderErrorMapper;
 use App\Services\Upstream\ProviderKey;
-use App\Support\SensitiveDataSanitizer;
 use Illuminate\Support\Facades\Log;
 
 final class ZjmfStatusService
@@ -222,7 +221,7 @@ final class ZjmfStatusService
         Log::warning('[ZJMF 财务状态同步] 返回失败', [
             'action' => $action,
             'status' => $status,
-            'message' => SensitiveDataSanitizer::sanitizeText($message),
+            'message' => $message,
         ]);
 
         throw new BusinessException(app(ProviderErrorMapper::class)->toUserMessage(ProviderKey::ZJMF_FINANCE_API, $action, $message), 42200);

@@ -20,7 +20,6 @@ use App\Services\Verification\Data\VerificationScanUrlResult;
 use App\Services\Verification\Data\VerificationStatusResult;
 use App\Services\Verification\VerificationDriverManager;
 use App\Support\PublicUrl;
-use App\Support\SensitiveDataSanitizer;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -499,9 +498,9 @@ class VerificationService
             $this->verificationHistoryTableAvailable = false;
         }
 
-        Log::warning('[实名认证] verificationHistory-'.$action.'-失败', SensitiveDataSanitizer::sanitize(array_merge($context, [
+        Log::warning('[实名认证] verificationHistory-'.$action.'-失败', array_merge($context, [
             'error' => $exception->getMessage(),
-        ])));
+        ]));
     }
 
     private function resolveCallbackUrl(): string

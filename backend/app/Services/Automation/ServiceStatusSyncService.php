@@ -14,7 +14,6 @@ use App\Services\Integrations\Plugins\ServiceUpstreamBindingWriter;
 use App\Services\Integrations\Support\ProviderErrorMapper;
 use App\Services\Upstream\Contracts\ProvidesStatusSync;
 use App\Services\Upstream\ProviderResolver;
-use App\Support\SensitiveDataSanitizer;
 use App\Support\ServiceHostname;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
@@ -618,7 +617,7 @@ class ServiceStatusSyncService
         Log::warning('[上游状态同步] 返回失败', [
             'action' => $action,
             'status' => $status,
-            'message' => SensitiveDataSanitizer::sanitizeText($message),
+            'message' => $message,
         ]);
 
         throw new BusinessException(app(ProviderErrorMapper::class)->toUserMessage($providerKey, $action, $message), 42200);

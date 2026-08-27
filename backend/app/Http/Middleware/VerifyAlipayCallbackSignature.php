@@ -3,7 +3,6 @@
 namespace App\Http\Middleware;
 
 use App\Services\Integrations\Payments\PaymentGatewayManager;
-use App\Support\SensitiveDataSanitizer;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -24,7 +23,7 @@ class VerifyAlipayCallbackSignature
                 'payment_no' => (string) $request->input('out_trade_no', ''),
                 'trade_no' => (string) $request->input('trade_no', ''),
                 'trade_status' => (string) $request->input('trade_status', ''),
-                'params' => SensitiveDataSanitizer::sanitize($params),
+                'params' => $params,
             ]);
 
             return response('签名验证失败', 401)

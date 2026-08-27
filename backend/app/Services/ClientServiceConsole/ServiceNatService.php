@@ -9,7 +9,6 @@ use App\Models\Service;
 use App\Models\Supplier;
 use App\Models\User;
 use App\Services\System\OperationLogService;
-use App\Support\SensitiveDataSanitizer;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
@@ -74,7 +73,7 @@ class ServiceNatService
         } catch (\Throwable $exception) {
             Log::warning('[服务控制台] 读取 NAT 转发失败', [
                 'service_id' => $service->id,
-                'message' => SensitiveDataSanitizer::sanitizeText($exception->getMessage()),
+                'message' => $exception->getMessage(),
             ]);
 
             return [

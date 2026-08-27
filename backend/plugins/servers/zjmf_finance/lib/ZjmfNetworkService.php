@@ -8,7 +8,6 @@ use App\Exceptions\BusinessException;
 use App\Models\Supplier;
 use App\Services\Integrations\Support\ProviderErrorMapper;
 use App\Services\Upstream\ProviderKey;
-use App\Support\SensitiveDataSanitizer;
 use Illuminate\Support\Facades\Log;
 
 final class ZjmfNetworkService
@@ -268,7 +267,7 @@ final class ZjmfNetworkService
             'action' => $action,
             'status' => $status,
             'http_code' => $response[self::UPSTREAM_HTTP_CODE_META_KEY] ?? null,
-            'message' => SensitiveDataSanitizer::sanitizeText($message),
+            'message' => $message,
         ]);
 
         throw new BusinessException(app(ProviderErrorMapper::class)->toUserMessage(ProviderKey::ZJMF_FINANCE_API, $action, $message), 42200);

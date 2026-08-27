@@ -5,7 +5,6 @@ namespace App\Http\Middleware;
 use App\Models\AdminUser;
 use App\Models\User;
 use App\Services\System\OperationLogService;
-use App\Support\SensitiveDataSanitizer;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -112,12 +111,12 @@ class LogOperation
 
             $shouldPersistAudit = $this->shouldPersistAccessAudit($request, $statusCode, (string) $detail['module']);
             if ($shouldPersistAudit) {
-                $detail['params'] = SensitiveDataSanitizer::sanitize($request->all());
+                $detail['params'] = $request->all();
             }
 
             if ($exception !== null) {
                 $detail['exception'] = class_basename($exception);
-                $detail['exception_message'] = SensitiveDataSanitizer::sanitizeText($exception->getMessage());
+                $detail['exception_message'] = $exception->getMessage();
             }
 
             if ($shouldPersistAudit) {

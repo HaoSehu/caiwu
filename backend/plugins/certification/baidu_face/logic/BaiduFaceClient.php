@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Caiwu\Plugins\Certification\BaiduFace\Logic;
 
 use App\Exceptions\BusinessException;
-use App\Support\SensitiveDataSanitizer;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Cache;
@@ -270,10 +269,10 @@ class BaiduFaceClient
                 ->asJson()
                 ->post($this->withAccessToken($endpoint), $payload);
         } catch (ConnectionException $exception) {
-            Log::error('[百度实名认证] 接口请求失败', SensitiveDataSanitizer::sanitize([
+            Log::error('[百度实名认证] 接口请求失败', [
                 'endpoint' => $endpoint,
                 'message' => $exception->getMessage(),
-            ]));
+            ]);
 
             return null;
         }
@@ -316,9 +315,9 @@ class BaiduFaceClient
                     'client_secret' => $config['secret_key'],
                 ]);
         } catch (ConnectionException $exception) {
-            Log::error('[百度实名认证] access_token 获取失败', SensitiveDataSanitizer::sanitize([
+            Log::error('[百度实名认证] access_token 获取失败', [
                 'message' => $exception->getMessage(),
-            ]));
+            ]);
 
             throw new BusinessException('百度实名认证接口请求失败，请稍后重试', 50000);
         }
@@ -330,7 +329,7 @@ class BaiduFaceClient
 
         $accessToken = trim((string) ($payload['access_token'] ?? ''));
         if ($accessToken === '') {
-            Log::warning('[百度实名认证] access_token 响应异常', SensitiveDataSanitizer::sanitize($payload));
+            Log::warning('[百度实名认证] access_token 响应异常', $payload);
 
             throw new BusinessException('百度实名认证接口配置错误，请联系管理员', 42200);
         }

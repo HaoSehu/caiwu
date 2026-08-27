@@ -11,7 +11,6 @@ use App\Services\Automation\Heartbeat\HeartbeatTaskRegistry;
 use App\Services\Automation\Heartbeat\ScheduleTaskRunRepository;
 use App\Services\System\OperationLogService;
 use App\Support\CacheKey;
-use App\Support\SensitiveDataSanitizer;
 use Illuminate\Contracts\Cache\Lock;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -95,11 +94,7 @@ class ScheduleTaskTriggerService
 
         $task = $this->registry->get($taskKey);
         $lock = $this->acquireTaskTriggerLock($taskKey, $task->lockTtlSeconds());
-        $safeReason = mb_substr(
-            trim(SensitiveDataSanitizer::sanitizeText($reason)),
-            0,
-            500,
-        );
+        $safeReason = mb_substr(trim($reason), 0, 500);
 
         try {
             // 锁内重新读取，防止两个管理员同时通过状态检查。

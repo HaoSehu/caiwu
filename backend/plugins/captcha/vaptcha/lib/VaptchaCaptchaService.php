@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Caiwu\Plugins\Captcha\Vaptcha\Lib;
 
 use App\Support\CacheKey;
-use App\Support\SensitiveDataSanitizer;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -109,7 +108,7 @@ class VaptchaCaptchaService
             if (! $response->successful()) {
                 Log::warning('[captcha:vaptcha] verify request failed', [
                     'status' => $response->status(),
-                    'body' => SensitiveDataSanitizer::sanitizeText($response->body()),
+                    'body' => $response->body(),
                 ]);
 
                 return $this->failure($action, '行为验证服务暂时不可用，请稍后重试');

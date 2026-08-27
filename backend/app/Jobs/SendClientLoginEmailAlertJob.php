@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Jobs;
 
 use App\Services\System\NotificationService;
-use App\Support\SensitiveDataSanitizer;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -50,11 +49,11 @@ class SendClientLoginEmailAlertJob implements ShouldQueue
 
     public function failed(\Throwable $exception): void
     {
-        Log::warning('异步发送用户登录邮件提醒失败', SensitiveDataSanitizer::sanitize([
+        Log::warning('异步发送用户登录邮件提醒失败', [
             'user_id' => $this->userId,
             'email' => $this->email,
             'ip' => $this->ip,
             'message' => $exception->getMessage(),
-        ]));
+        ]);
     }
 }

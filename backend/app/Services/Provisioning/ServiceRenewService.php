@@ -28,7 +28,6 @@ use App\Services\System\SettingService;
 use App\Services\Upstream\Contracts\ProvidesRenewal;
 use App\Services\Upstream\ProviderResolver;
 use App\Support\OrderInvoiceNoGenerator;
-use App\Support\SensitiveDataSanitizer;
 use Carbon\Carbon;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
@@ -1871,7 +1870,7 @@ class ServiceRenewService
         Log::warning('[上游续费] 返回失败', [
             'action' => $action,
             'status' => $status,
-            'message' => SensitiveDataSanitizer::sanitizeText($message),
+            'message' => $message,
         ]);
 
         throw new BusinessException(app(ProviderErrorMapper::class)->toUserMessage($providerKey, $action, $message));
