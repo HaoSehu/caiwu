@@ -377,6 +377,38 @@
         <t-form-item label="状态" name="status">
           <t-switch v-model="editForm.status" :custom-value="[1, 0]" />
         </t-form-item>
+        <t-form-item label="会员等级" name="member_level_id">
+          <div class="member-level-edit-row">
+            <t-select
+              v-model="editForm.member_level_id"
+              :options="memberLevelOptions"
+              clearable
+              placeholder="未分级"
+              @change="handleMemberLevelChange"
+            />
+            <t-tag v-if="user.member_level_id" theme="success" variant="light">已指定</t-tag>
+            <t-tag v-else variant="light">未分级</t-tag>
+          </div>
+          <div class="member-level-edit-tip">
+            会员等级由管理员直接指定（不再按销售额自动升级）；清空下拉即置为未分级。
+          </div>
+        </t-form-item>
+        <t-form-item label="推广大使" name="promotion_ambassador_id">
+          <div class="member-level-edit-row">
+            <t-select
+              v-model="editForm.promotion_ambassador_id"
+              :options="promotionAmbassadorOptions"
+              clearable
+              placeholder="未指派"
+              @change="handlePromotionAmbassadorChange"
+            />
+            <t-tag v-if="user.promotion_ambassador_id" theme="success" variant="light">已指派</t-tag>
+            <t-tag v-else variant="light">未指派</t-tag>
+          </div>
+          <div class="member-level-edit-tip">
+            推广大使决定邀请返利比例；未指派时按系统设置的全局返利比例计算。
+          </div>
+        </t-form-item>
       </t-form>
     </t-dialog>
 
@@ -1018,10 +1050,21 @@ const resetPasswordFormRef = ref<FormInstanceFunctions>();
 const manualProvisionFormRef = ref<FormInstanceFunctions>();
 const serviceRefundFormRef = ref<FormInstanceFunctions>();
 const invoiceRefundFormRef = ref<FormInstanceFunctions>();
-const editForm = reactive({ nickname: '', phone: '', password: '', status: 1 });
+const editForm = reactive({
+  nickname: '',
+  phone: '',
+  password: '',
+  status: 1,
+  member_level_id: null as number | null,
+  member_level_changed: false,
+  promotion_ambassador_id: null as number | null,
+  promotion_ambassador_changed: false,
+});
 const noteEditing = ref(false);
 const noteSaving = ref(false);
 const noteForm = ref('');
+const memberLevelOptions = ref<Array<{ label: string; value: number }>>([]);
+const promotionAmbassadorOptions = ref<Array<{ label: string; value: number }>>([]);
 const rechargeForm = reactive({ email: '', type: 'increase', amount: 0, remark: '' });
 const addServiceForm = reactive({
   product_id: undefined as number | undefined,
@@ -1299,10 +1342,19 @@ const statCards = computed(() => [
 const referralItems = computed(() => [
   { label: '推荐码', value: referral.value.referral_code || '-' },
   { label: '当前等级', value: referral.value.member_level?.name || user.value.member_level?.name || '未分级' },
+  {
+    label: '推广大使',
+    value: referral.value.promotion_ambassador?.name || user.value.promotion_ambassador?.name || '未指派',
+  },
   { label: '直推人数', value: stats.value.direct_referral_count || 0 },
   { label: '累计奖励', value: formatMoney(stats.value.total_referral_reward), tone: 'success' },
   { label: '可提现奖励', value: formatMoney(referral.value.referral_available_amount), tone: 'success' },
 ]);
+function memberLevelDisplay(): string {
+  const levelName = String(user.value.member_level?.name || '');
+  return levelName || '未分级';
+}
+
 const infoItems = computed(() => [
   { label: '邮箱', value: fieldValue(user.value.email) },
   { label: '手机号', value: fieldValue(user.value.phone) },
@@ -1314,7 +1366,7 @@ const infoItems = computed(() => [
   { label: '公司', value: fieldValue(user.value.company) },
   { label: 'QQ', value: fieldValue(user.value.qq) },
   { label: '账户余额', value: formatMoney(user.value.cash_balance), tone: 'success' },
-  { label: '会员等级', value: user.value.member_level?.name || '未分级' },
+  { label: '会员等级', value: memberLevelDisplay() },
   { label: '实名认证', value: verificationText(), tone: isVerified.value ? 'success' : 'warning' },
   { label: '证件号', value: fieldValue(user.value.id_card_masked) },
   { label: '推荐人 ID', value: fieldValue(user.value.referrer_user_id) },
@@ -1344,6 +1396,16 @@ function syncEditForm() {
   editForm.phone = String(user.value.phone || '');
   editForm.password = '';
   editForm.status = Number(user.value.status ?? 1);
+  editForm.member_level_id =
+    user.value.member_level_id === null || user.value.member_level_id === undefined
+      ? null
+      : Number(user.value.member_level_id);
+  editForm.member_level_changed = false;
+  editForm.promotion_ambassador_id =
+    user.value.promotion_ambassador_id === null || user.value.promotion_ambassador_id === undefined
+      ? null
+      : Number(user.value.promotion_ambassador_id);
+  editForm.promotion_ambassador_changed = false;
 }
 
 function handleTabChange(value: string | number) {
@@ -1457,6 +1519,40 @@ async function saveNote() {
   }
 }
 
+function handleMemberLevelChange(value: unknown) {
+  // TDesign 清空下拉回调 undefined，须归一为 null，否则请求丢键触发后端 present 422
+  editForm.member_level_id = (value ?? null) as number | null;
+  editForm.member_level_changed = true;
+}
+
+async function loadMemberLevelOptions() {
+  try {
+    const list = await adminApi.memberLevels.list();
+    memberLevelOptions.value = (list || [])
+      .filter((item) => Number(item.status ?? 1) === 1)
+      .map((item) => ({ label: String(item.name || item.id), value: Number(item.id) }));
+  } catch (error) {
+    MessagePlugin.error(errorMessage(error, '加载会员等级选项失败'));
+  }
+}
+
+function handlePromotionAmbassadorChange(value: unknown) {
+  // TDesign 清空下拉回调 undefined，须归一为 null，否则请求丢键触发后端 present 422
+  editForm.promotion_ambassador_id = (value ?? null) as number | null;
+  editForm.promotion_ambassador_changed = true;
+}
+
+async function loadPromotionAmbassadorOptions() {
+  try {
+    const list = await adminApi.promotionAmbassadors.list();
+    promotionAmbassadorOptions.value = (list || [])
+      .filter((item) => Number(item.status ?? 1) === 1)
+      .map((item) => ({ label: String(item.name || item.id), value: Number(item.id) }));
+  } catch (error) {
+    MessagePlugin.error(errorMessage(error, '加载推广大使选项失败'));
+  }
+}
+
 async function handleSave() {
   const result = await editFormRef.value?.validate?.();
   if (!isValidationPass(result)) return;
@@ -1468,9 +1564,17 @@ async function handleSave() {
       status: editForm.status,
       ...(editForm.password.trim() ? { password: editForm.password.trim() } : {}),
     });
+    if (editForm.member_level_changed) {
+      await userApi.adjustMemberLevel(userId.value, editForm.member_level_id);
+    }
+    if (editForm.promotion_ambassador_changed) {
+      await userApi.adjustPromotionAmbassador(userId.value, editForm.promotion_ambassador_id);
+    }
     MessagePlugin.success('用户资料已更新');
     editVisible.value = false;
     await loadDetail();
+  } catch (error) {
+    MessagePlugin.error(errorMessage(error, '保存用户资料失败'));
   } finally {
     saveLoading.value = false;
   }
@@ -2449,6 +2553,8 @@ onMounted(() => {
     handleTabChange(activeTab.value);
   }
   loadDetail();
+  loadMemberLevelOptions();
+  loadPromotionAmbassadorOptions();
 });
 
 // 监听 URL tab 变化（同路由复用时触发）

@@ -4,8 +4,10 @@ import { dashboardApi } from './dashboard';
 import { databaseApi } from './database';
 import { financeMenuApi, invoiceApi, orderApi } from './finance';
 import { logsApi } from './logs';
+import { marketingProductGroupApi } from './marketingProductGroup';
 import { memberLevelsApi } from './memberLevel';
 import { pluginsApi } from './plugins';
+import { promotionAmbassadorsApi } from './promotionAmbassador';
 import { referralApi } from './referral';
 import { schedulesApi, settingsApi } from './settings';
 import { cpuModelCatalogApi, instanceSpecCatalogApi } from './spec';
@@ -45,6 +47,12 @@ export const adminApi = {
 
   // Member Levels
   memberLevels: memberLevelsApi,
+
+  // Promotion Ambassadors
+  promotionAmbassadors: promotionAmbassadorsApi,
+
+  // Marketing Product Groups
+  marketingProductGroups: marketingProductGroupApi,
 
   // Content
   content: contentApi,

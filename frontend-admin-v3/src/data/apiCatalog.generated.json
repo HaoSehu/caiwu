@@ -1,7 +1,7 @@
 {
     "meta": {
-        "generatedAt": "2026-08-03 18:05:42",
-        "total": 338,
+        "generatedAt": "2026-08-27 03:24:21",
+        "total": 362,
         "baseURL": "/api/v2",
         "dataSource": "php artisan route:list --json v2-only",
         "scopeLabels": {
@@ -21,15 +21,15 @@
             "permission": "登录 + 权限"
         },
         "scopeCounts": {
-            "admin": 196,
-            "client": 124,
-            "site": 17,
+            "admin": 216,
+            "client": 127,
+            "site": 18,
             "system": 1
         },
         "accessCounts": {
-            "public": 338
+            "public": 362
         },
-        "moduleCount": 73
+        "moduleCount": 77
     },
     "items": [
         {
@@ -1597,6 +1597,144 @@
             "sourceFiles": []
         },
         {
+            "id": "GET:/api/v2/admin/marketing-product-groups",
+            "scope": "admin",
+            "scopeLabel": "管理端",
+            "module": "marketing-product-groups",
+            "moduleLabel": "Marketing Product Groups",
+            "method": "GET",
+            "methods": [
+                "GET"
+            ],
+            "callPath": "/admin/marketing-product-groups",
+            "backendPath": "/api/v2/admin/marketing-product-groups",
+            "normalizedPath": "/admin/marketing-product-groups",
+            "access": "public",
+            "accessLabel": "公开",
+            "permission": "",
+            "throttle": "",
+            "guards": [],
+            "handler": "App\\Http\\Controllers\\Admin\\V2\\MarketingProductGroupController@index",
+            "sourceApps": [],
+            "sourceAppLabels": [],
+            "sourceFiles": []
+        },
+        {
+            "id": "POST:/api/v2/admin/marketing-product-groups",
+            "scope": "admin",
+            "scopeLabel": "管理端",
+            "module": "marketing-product-groups",
+            "moduleLabel": "Marketing Product Groups",
+            "method": "POST",
+            "methods": [
+                "POST"
+            ],
+            "callPath": "/admin/marketing-product-groups",
+            "backendPath": "/api/v2/admin/marketing-product-groups",
+            "normalizedPath": "/admin/marketing-product-groups",
+            "access": "public",
+            "accessLabel": "公开",
+            "permission": "",
+            "throttle": "",
+            "guards": [],
+            "handler": "App\\Http\\Controllers\\Admin\\V2\\MarketingProductGroupController@store",
+            "sourceApps": [],
+            "sourceAppLabels": [],
+            "sourceFiles": []
+        },
+        {
+            "id": "DELETE:/api/v2/admin/marketing-product-groups/{marketingProductGroup}",
+            "scope": "admin",
+            "scopeLabel": "管理端",
+            "module": "marketing-product-groups",
+            "moduleLabel": "Marketing Product Groups",
+            "method": "DELETE",
+            "methods": [
+                "DELETE"
+            ],
+            "callPath": "/admin/marketing-product-groups/{marketingProductGroup}",
+            "backendPath": "/api/v2/admin/marketing-product-groups/{marketingProductGroup}",
+            "normalizedPath": "/admin/marketing-product-groups/{param}",
+            "access": "public",
+            "accessLabel": "公开",
+            "permission": "",
+            "throttle": "",
+            "guards": [],
+            "handler": "App\\Http\\Controllers\\Admin\\V2\\MarketingProductGroupController@destroy",
+            "sourceApps": [],
+            "sourceAppLabels": [],
+            "sourceFiles": []
+        },
+        {
+            "id": "GET:/api/v2/admin/marketing-product-groups/{marketingProductGroup}",
+            "scope": "admin",
+            "scopeLabel": "管理端",
+            "module": "marketing-product-groups",
+            "moduleLabel": "Marketing Product Groups",
+            "method": "GET",
+            "methods": [
+                "GET"
+            ],
+            "callPath": "/admin/marketing-product-groups/{marketingProductGroup}",
+            "backendPath": "/api/v2/admin/marketing-product-groups/{marketingProductGroup}",
+            "normalizedPath": "/admin/marketing-product-groups/{param}",
+            "access": "public",
+            "accessLabel": "公开",
+            "permission": "",
+            "throttle": "",
+            "guards": [],
+            "handler": "App\\Http\\Controllers\\Admin\\V2\\MarketingProductGroupController@show",
+            "sourceApps": [],
+            "sourceAppLabels": [],
+            "sourceFiles": []
+        },
+        {
+            "id": "PUT:/api/v2/admin/marketing-product-groups/{marketingProductGroup}",
+            "scope": "admin",
+            "scopeLabel": "管理端",
+            "module": "marketing-product-groups",
+            "moduleLabel": "Marketing Product Groups",
+            "method": "PUT",
+            "methods": [
+                "PUT"
+            ],
+            "callPath": "/admin/marketing-product-groups/{marketingProductGroup}",
+            "backendPath": "/api/v2/admin/marketing-product-groups/{marketingProductGroup}",
+            "normalizedPath": "/admin/marketing-product-groups/{param}",
+            "access": "public",
+            "accessLabel": "公开",
+            "permission": "",
+            "throttle": "",
+            "guards": [],
+            "handler": "App\\Http\\Controllers\\Admin\\V2\\MarketingProductGroupController@update",
+            "sourceApps": [],
+            "sourceAppLabels": [],
+            "sourceFiles": []
+        },
+        {
+            "id": "PUT:/api/v2/admin/marketing-product-groups/{marketingProductGroup}/products",
+            "scope": "admin",
+            "scopeLabel": "管理端",
+            "module": "marketing-product-groups",
+            "moduleLabel": "Marketing Product Groups",
+            "method": "PUT",
+            "methods": [
+                "PUT"
+            ],
+            "callPath": "/admin/marketing-product-groups/{marketingProductGroup}/products",
+            "backendPath": "/api/v2/admin/marketing-product-groups/{marketingProductGroup}/products",
+            "normalizedPath": "/admin/marketing-product-groups/{param}/products",
+            "access": "public",
+            "accessLabel": "公开",
+            "permission": "",
+            "throttle": "",
+            "guards": [],
+            "handler": "App\\Http\\Controllers\\Admin\\V2\\MarketingProductGroupController@syncProducts",
+            "sourceApps": [],
+            "sourceAppLabels": [],
+            "sourceFiles": []
+        },
+        {
             "id": "POST:/api/v2/admin/media-file-reindexes",
             "scope": "admin",
             "scopeLabel": "管理端",
@@ -1799,6 +1937,52 @@
             "throttle": "",
             "guards": [],
             "handler": "App\\Http\\Controllers\\Admin\\V2\\MemberLevelController@update",
+            "sourceApps": [],
+            "sourceAppLabels": [],
+            "sourceFiles": []
+        },
+        {
+            "id": "GET:/api/v2/admin/member-levels/{memberLevel}/group-discounts",
+            "scope": "admin",
+            "scopeLabel": "管理端",
+            "module": "member-levels",
+            "moduleLabel": "Member Levels",
+            "method": "GET",
+            "methods": [
+                "GET"
+            ],
+            "callPath": "/admin/member-levels/{memberLevel}/group-discounts",
+            "backendPath": "/api/v2/admin/member-levels/{memberLevel}/group-discounts",
+            "normalizedPath": "/admin/member-levels/{param}/group-discounts",
+            "access": "public",
+            "accessLabel": "公开",
+            "permission": "",
+            "throttle": "",
+            "guards": [],
+            "handler": "App\\Http\\Controllers\\Admin\\V2\\MemberLevelGroupDiscountController@index",
+            "sourceApps": [],
+            "sourceAppLabels": [],
+            "sourceFiles": []
+        },
+        {
+            "id": "PUT:/api/v2/admin/member-levels/{memberLevel}/group-discounts",
+            "scope": "admin",
+            "scopeLabel": "管理端",
+            "module": "member-levels",
+            "moduleLabel": "Member Levels",
+            "method": "PUT",
+            "methods": [
+                "PUT"
+            ],
+            "callPath": "/admin/member-levels/{memberLevel}/group-discounts",
+            "backendPath": "/api/v2/admin/member-levels/{memberLevel}/group-discounts",
+            "normalizedPath": "/admin/member-levels/{param}/group-discounts",
+            "access": "public",
+            "accessLabel": "公开",
+            "permission": "",
+            "throttle": "",
+            "guards": [],
+            "handler": "App\\Http\\Controllers\\Admin\\V2\\MemberLevelGroupDiscountController@sync",
             "sourceApps": [],
             "sourceAppLabels": [],
             "sourceFiles": []
@@ -2609,6 +2793,98 @@
             "sourceFiles": []
         },
         {
+            "id": "GET:/api/v2/admin/promotion-ambassadors",
+            "scope": "admin",
+            "scopeLabel": "管理端",
+            "module": "promotion-ambassadors",
+            "moduleLabel": "Promotion Ambassadors",
+            "method": "GET",
+            "methods": [
+                "GET"
+            ],
+            "callPath": "/admin/promotion-ambassadors",
+            "backendPath": "/api/v2/admin/promotion-ambassadors",
+            "normalizedPath": "/admin/promotion-ambassadors",
+            "access": "public",
+            "accessLabel": "公开",
+            "permission": "",
+            "throttle": "",
+            "guards": [],
+            "handler": "App\\Http\\Controllers\\Admin\\V2\\PromotionAmbassadorController@index",
+            "sourceApps": [],
+            "sourceAppLabels": [],
+            "sourceFiles": []
+        },
+        {
+            "id": "POST:/api/v2/admin/promotion-ambassadors",
+            "scope": "admin",
+            "scopeLabel": "管理端",
+            "module": "promotion-ambassadors",
+            "moduleLabel": "Promotion Ambassadors",
+            "method": "POST",
+            "methods": [
+                "POST"
+            ],
+            "callPath": "/admin/promotion-ambassadors",
+            "backendPath": "/api/v2/admin/promotion-ambassadors",
+            "normalizedPath": "/admin/promotion-ambassadors",
+            "access": "public",
+            "accessLabel": "公开",
+            "permission": "",
+            "throttle": "",
+            "guards": [],
+            "handler": "App\\Http\\Controllers\\Admin\\V2\\PromotionAmbassadorController@store",
+            "sourceApps": [],
+            "sourceAppLabels": [],
+            "sourceFiles": []
+        },
+        {
+            "id": "DELETE:/api/v2/admin/promotion-ambassadors/{promotionAmbassador}",
+            "scope": "admin",
+            "scopeLabel": "管理端",
+            "module": "promotion-ambassadors",
+            "moduleLabel": "Promotion Ambassadors",
+            "method": "DELETE",
+            "methods": [
+                "DELETE"
+            ],
+            "callPath": "/admin/promotion-ambassadors/{promotionAmbassador}",
+            "backendPath": "/api/v2/admin/promotion-ambassadors/{promotionAmbassador}",
+            "normalizedPath": "/admin/promotion-ambassadors/{param}",
+            "access": "public",
+            "accessLabel": "公开",
+            "permission": "",
+            "throttle": "",
+            "guards": [],
+            "handler": "App\\Http\\Controllers\\Admin\\V2\\PromotionAmbassadorController@destroy",
+            "sourceApps": [],
+            "sourceAppLabels": [],
+            "sourceFiles": []
+        },
+        {
+            "id": "PUT:/api/v2/admin/promotion-ambassadors/{promotionAmbassador}",
+            "scope": "admin",
+            "scopeLabel": "管理端",
+            "module": "promotion-ambassadors",
+            "moduleLabel": "Promotion Ambassadors",
+            "method": "PUT",
+            "methods": [
+                "PUT"
+            ],
+            "callPath": "/admin/promotion-ambassadors/{promotionAmbassador}",
+            "backendPath": "/api/v2/admin/promotion-ambassadors/{promotionAmbassador}",
+            "normalizedPath": "/admin/promotion-ambassadors/{param}",
+            "access": "public",
+            "accessLabel": "公开",
+            "permission": "",
+            "throttle": "",
+            "guards": [],
+            "handler": "App\\Http\\Controllers\\Admin\\V2\\PromotionAmbassadorController@update",
+            "sourceApps": [],
+            "sourceAppLabels": [],
+            "sourceFiles": []
+        },
+        {
             "id": "GET:/api/v2/admin/referral/overview",
             "scope": "admin",
             "scopeLabel": "管理端",
@@ -2696,6 +2972,29 @@
             "throttle": "",
             "guards": [],
             "handler": "App\\Http\\Controllers\\Admin\\V2\\ReferralWithdrawalController@approve",
+            "sourceApps": [],
+            "sourceAppLabels": [],
+            "sourceFiles": []
+        },
+        {
+            "id": "POST:/api/v2/admin/referral-withdrawals/{withdrawal}/payment-confirmations",
+            "scope": "admin",
+            "scopeLabel": "管理端",
+            "module": "referral-withdrawals",
+            "moduleLabel": "Referral Withdrawals",
+            "method": "POST",
+            "methods": [
+                "POST"
+            ],
+            "callPath": "/admin/referral-withdrawals/{withdrawal}/payment-confirmations",
+            "backendPath": "/api/v2/admin/referral-withdrawals/{withdrawal}/payment-confirmations",
+            "normalizedPath": "/admin/referral-withdrawals/{param}/payment-confirmations",
+            "access": "public",
+            "accessLabel": "公开",
+            "permission": "",
+            "throttle": "",
+            "guards": [],
+            "handler": "App\\Http\\Controllers\\Admin\\V2\\ReferralWithdrawalController@confirmPayment",
             "sourceApps": [],
             "sourceAppLabels": [],
             "sourceFiles": []
@@ -2857,6 +3156,75 @@
             "throttle": "",
             "guards": [],
             "handler": "App\\Http\\Controllers\\Admin\\V2\\RoleController@copy",
+            "sourceApps": [],
+            "sourceAppLabels": [],
+            "sourceFiles": []
+        },
+        {
+            "id": "GET:/api/v2/admin/schedule-runs",
+            "scope": "admin",
+            "scopeLabel": "管理端",
+            "module": "schedule-runs",
+            "moduleLabel": "Schedule Runs",
+            "method": "GET",
+            "methods": [
+                "GET"
+            ],
+            "callPath": "/admin/schedule-runs",
+            "backendPath": "/api/v2/admin/schedule-runs",
+            "normalizedPath": "/admin/schedule-runs",
+            "access": "public",
+            "accessLabel": "公开",
+            "permission": "",
+            "throttle": "",
+            "guards": [],
+            "handler": "App\\Http\\Controllers\\Admin\\V2\\ScheduleTaskController@index",
+            "sourceApps": [],
+            "sourceAppLabels": [],
+            "sourceFiles": []
+        },
+        {
+            "id": "GET:/api/v2/admin/schedule-runs/{run}",
+            "scope": "admin",
+            "scopeLabel": "管理端",
+            "module": "schedule-runs",
+            "moduleLabel": "Schedule Runs",
+            "method": "GET",
+            "methods": [
+                "GET"
+            ],
+            "callPath": "/admin/schedule-runs/{run}",
+            "backendPath": "/api/v2/admin/schedule-runs/{run}",
+            "normalizedPath": "/admin/schedule-runs/{param}",
+            "access": "public",
+            "accessLabel": "公开",
+            "permission": "",
+            "throttle": "",
+            "guards": [],
+            "handler": "App\\Http\\Controllers\\Admin\\V2\\ScheduleTaskController@show",
+            "sourceApps": [],
+            "sourceAppLabels": [],
+            "sourceFiles": []
+        },
+        {
+            "id": "POST:/api/v2/admin/schedule-runs/{run}/retry",
+            "scope": "admin",
+            "scopeLabel": "管理端",
+            "module": "schedule-runs",
+            "moduleLabel": "Schedule Runs",
+            "method": "POST",
+            "methods": [
+                "POST"
+            ],
+            "callPath": "/admin/schedule-runs/{run}/retry",
+            "backendPath": "/api/v2/admin/schedule-runs/{run}/retry",
+            "normalizedPath": "/admin/schedule-runs/{param}/retry",
+            "access": "public",
+            "accessLabel": "公开",
+            "permission": "",
+            "throttle": "",
+            "guards": [],
+            "handler": "App\\Http\\Controllers\\Admin\\V2\\ScheduleTaskController@retry",
             "sourceApps": [],
             "sourceAppLabels": [],
             "sourceFiles": []
@@ -3552,6 +3920,29 @@
             "sourceFiles": []
         },
         {
+            "id": "GET:/api/v2/admin/system/readiness",
+            "scope": "admin",
+            "scopeLabel": "管理端",
+            "module": "system",
+            "moduleLabel": "System",
+            "method": "GET",
+            "methods": [
+                "GET"
+            ],
+            "callPath": "/admin/system/readiness",
+            "backendPath": "/api/v2/admin/system/readiness",
+            "normalizedPath": "/admin/system/readiness",
+            "access": "public",
+            "accessLabel": "公开",
+            "permission": "",
+            "throttle": "",
+            "guards": [],
+            "handler": "App\\Http\\Controllers\\Admin\\V2\\SystemReadinessController@show",
+            "sourceApps": [],
+            "sourceAppLabels": [],
+            "sourceFiles": []
+        },
+        {
             "id": "GET:/api/v2/admin/tickets",
             "scope": "admin",
             "scopeLabel": "管理端",
@@ -3708,6 +4099,29 @@
             "throttle": "",
             "guards": [],
             "handler": "App\\Http\\Controllers\\Admin\\V2\\TicketController@close",
+            "sourceApps": [],
+            "sourceAppLabels": [],
+            "sourceFiles": []
+        },
+        {
+            "id": "POST:/api/v2/admin/tickets/{ticket}/reopen",
+            "scope": "admin",
+            "scopeLabel": "管理端",
+            "module": "tickets",
+            "moduleLabel": "工单",
+            "method": "POST",
+            "methods": [
+                "POST"
+            ],
+            "callPath": "/admin/tickets/{ticket}/reopen",
+            "backendPath": "/api/v2/admin/tickets/{ticket}/reopen",
+            "normalizedPath": "/admin/tickets/{param}/reopen",
+            "access": "public",
+            "accessLabel": "公开",
+            "permission": "",
+            "throttle": "",
+            "guards": [],
+            "handler": "App\\Http\\Controllers\\Admin\\V2\\TicketController@reopen",
             "sourceApps": [],
             "sourceAppLabels": [],
             "sourceFiles": []
@@ -4035,6 +4449,29 @@
             "sourceFiles": []
         },
         {
+            "id": "PATCH:/api/v2/admin/users/{user}/member-level",
+            "scope": "admin",
+            "scopeLabel": "管理端",
+            "module": "users",
+            "moduleLabel": "用户",
+            "method": "PATCH",
+            "methods": [
+                "PATCH"
+            ],
+            "callPath": "/admin/users/{user}/member-level",
+            "backendPath": "/api/v2/admin/users/{user}/member-level",
+            "normalizedPath": "/admin/users/{param}/member-level",
+            "access": "public",
+            "accessLabel": "公开",
+            "permission": "",
+            "throttle": "",
+            "guards": [],
+            "handler": "App\\Http\\Controllers\\Admin\\V2\\UserController@adjustMemberLevel",
+            "sourceApps": [],
+            "sourceAppLabels": [],
+            "sourceFiles": []
+        },
+        {
             "id": "GET:/api/v2/admin/users/{user}/operation-logs",
             "scope": "admin",
             "scopeLabel": "管理端",
@@ -4053,6 +4490,29 @@
             "throttle": "",
             "guards": [],
             "handler": "App\\Http\\Controllers\\Admin\\V2\\UserController@operationLogs",
+            "sourceApps": [],
+            "sourceAppLabels": [],
+            "sourceFiles": []
+        },
+        {
+            "id": "PATCH:/api/v2/admin/users/{user}/promotion-ambassador",
+            "scope": "admin",
+            "scopeLabel": "管理端",
+            "module": "users",
+            "moduleLabel": "用户",
+            "method": "PATCH",
+            "methods": [
+                "PATCH"
+            ],
+            "callPath": "/admin/users/{user}/promotion-ambassador",
+            "backendPath": "/api/v2/admin/users/{user}/promotion-ambassador",
+            "normalizedPath": "/admin/users/{param}/promotion-ambassador",
+            "access": "public",
+            "accessLabel": "公开",
+            "permission": "",
+            "throttle": "",
+            "guards": [],
+            "handler": "App\\Http\\Controllers\\Admin\\V2\\UserController@adjustPromotionAmbassador",
             "sourceApps": [],
             "sourceAppLabels": [],
             "sourceFiles": []
@@ -4679,6 +5139,29 @@
             "sourceFiles": []
         },
         {
+            "id": "POST:/api/v2/client/auth/email/verify-bound-code",
+            "scope": "client",
+            "scopeLabel": "客户端",
+            "module": "auth",
+            "moduleLabel": "认证",
+            "method": "POST",
+            "methods": [
+                "POST"
+            ],
+            "callPath": "/client/auth/email/verify-bound-code",
+            "backendPath": "/api/v2/client/auth/email/verify-bound-code",
+            "normalizedPath": "/client/auth/email/verify-bound-code",
+            "access": "public",
+            "accessLabel": "公开",
+            "permission": "",
+            "throttle": "",
+            "guards": [],
+            "handler": "App\\Http\\Controllers\\Client\\V2\\AuthController@verifyBoundEmailCode",
+            "sourceApps": [],
+            "sourceAppLabels": [],
+            "sourceFiles": []
+        },
+        {
             "id": "GET:/api/v2/client/auth/info",
             "scope": "client",
             "scopeLabel": "客户端",
@@ -4858,6 +5341,29 @@
             "throttle": "",
             "guards": [],
             "handler": "App\\Http\\Controllers\\Client\\V2\\AuthController@sendPhoneCode",
+            "sourceApps": [],
+            "sourceAppLabels": [],
+            "sourceFiles": []
+        },
+        {
+            "id": "POST:/api/v2/client/auth/phone/verify-bound-code",
+            "scope": "client",
+            "scopeLabel": "客户端",
+            "module": "auth",
+            "moduleLabel": "认证",
+            "method": "POST",
+            "methods": [
+                "POST"
+            ],
+            "callPath": "/client/auth/phone/verify-bound-code",
+            "backendPath": "/api/v2/client/auth/phone/verify-bound-code",
+            "normalizedPath": "/client/auth/phone/verify-bound-code",
+            "access": "public",
+            "accessLabel": "公开",
+            "permission": "",
+            "throttle": "",
+            "guards": [],
+            "handler": "App\\Http\\Controllers\\Client\\V2\\AuthController@verifyBoundPhoneCode",
             "sourceApps": [],
             "sourceAppLabels": [],
             "sourceFiles": []
@@ -6330,7 +6836,7 @@
             "permission": "",
             "throttle": "",
             "guards": [],
-            "handler": "App\\Http\\Controllers\\Client\\V2\\ServiceConsoleController@natForwardings",
+            "handler": "App\\Http\\Controllers\\Client\\V2\\ServiceNetworkController@natForwardings",
             "sourceApps": [],
             "sourceAppLabels": [],
             "sourceFiles": []
@@ -6353,7 +6859,7 @@
             "permission": "",
             "throttle": "",
             "guards": [],
-            "handler": "App\\Http\\Controllers\\Client\\V2\\ServiceConsoleController@createNatForwarding",
+            "handler": "App\\Http\\Controllers\\Client\\V2\\ServiceNetworkController@createNatForwarding",
             "sourceApps": [],
             "sourceAppLabels": [],
             "sourceFiles": []
@@ -6376,7 +6882,7 @@
             "permission": "",
             "throttle": "",
             "guards": [],
-            "handler": "App\\Http\\Controllers\\Client\\V2\\ServiceConsoleController@deleteNatForwarding",
+            "handler": "App\\Http\\Controllers\\Client\\V2\\ServiceNetworkController@deleteNatForwarding",
             "sourceApps": [],
             "sourceAppLabels": [],
             "sourceFiles": []
@@ -6468,7 +6974,7 @@
             "permission": "",
             "throttle": "",
             "guards": [],
-            "handler": "App\\Http\\Controllers\\Client\\V2\\ServiceConsoleController@renewPreview",
+            "handler": "App\\Http\\Controllers\\Client\\V2\\ServiceBillingController@renewPreview",
             "sourceApps": [],
             "sourceAppLabels": [],
             "sourceFiles": []
@@ -6491,7 +6997,7 @@
             "permission": "",
             "throttle": "",
             "guards": [],
-            "handler": "App\\Http\\Controllers\\Client\\V2\\ServiceConsoleController@createRenewOrder",
+            "handler": "App\\Http\\Controllers\\Client\\V2\\ServiceBillingController@createRenewOrder",
             "sourceApps": [],
             "sourceAppLabels": [],
             "sourceFiles": []
@@ -6514,7 +7020,7 @@
             "permission": "",
             "throttle": "",
             "guards": [],
-            "handler": "App\\Http\\Controllers\\Client\\V2\\ServiceConsoleController@updateAutoRenew",
+            "handler": "App\\Http\\Controllers\\Client\\V2\\ServiceBillingController@updateAutoRenew",
             "sourceApps": [],
             "sourceAppLabels": [],
             "sourceFiles": []
@@ -6537,7 +7043,7 @@
             "permission": "",
             "throttle": "",
             "guards": [],
-            "handler": "App\\Http\\Controllers\\Client\\V2\\ServiceConsoleController@securityGroups",
+            "handler": "App\\Http\\Controllers\\Client\\V2\\ServiceNetworkController@securityGroups",
             "sourceApps": [],
             "sourceAppLabels": [],
             "sourceFiles": []
@@ -6560,7 +7066,7 @@
             "permission": "",
             "throttle": "",
             "guards": [],
-            "handler": "App\\Http\\Controllers\\Client\\V2\\ServiceConsoleController@createSecurityGroup",
+            "handler": "App\\Http\\Controllers\\Client\\V2\\ServiceNetworkController@createSecurityGroup",
             "sourceApps": [],
             "sourceAppLabels": [],
             "sourceFiles": []
@@ -6583,7 +7089,7 @@
             "permission": "",
             "throttle": "",
             "guards": [],
-            "handler": "App\\Http\\Controllers\\Client\\V2\\ServiceConsoleController@deleteSecurityGroup",
+            "handler": "App\\Http\\Controllers\\Client\\V2\\ServiceNetworkController@deleteSecurityGroup",
             "sourceApps": [],
             "sourceAppLabels": [],
             "sourceFiles": []
@@ -6606,7 +7112,7 @@
             "permission": "",
             "throttle": "",
             "guards": [],
-            "handler": "App\\Http\\Controllers\\Client\\V2\\ServiceConsoleController@applySecurityGroup",
+            "handler": "App\\Http\\Controllers\\Client\\V2\\ServiceNetworkController@applySecurityGroup",
             "sourceApps": [],
             "sourceAppLabels": [],
             "sourceFiles": []
@@ -6629,7 +7135,7 @@
             "permission": "",
             "throttle": "",
             "guards": [],
-            "handler": "App\\Http\\Controllers\\Client\\V2\\ServiceConsoleController@securityGroupRules",
+            "handler": "App\\Http\\Controllers\\Client\\V2\\ServiceNetworkController@securityGroupRules",
             "sourceApps": [],
             "sourceAppLabels": [],
             "sourceFiles": []
@@ -6652,7 +7158,7 @@
             "permission": "",
             "throttle": "",
             "guards": [],
-            "handler": "App\\Http\\Controllers\\Client\\V2\\ServiceConsoleController@createSecurityRule",
+            "handler": "App\\Http\\Controllers\\Client\\V2\\ServiceNetworkController@createSecurityRule",
             "sourceApps": [],
             "sourceAppLabels": [],
             "sourceFiles": []
@@ -6675,7 +7181,7 @@
             "permission": "",
             "throttle": "",
             "guards": [],
-            "handler": "App\\Http\\Controllers\\Client\\V2\\ServiceConsoleController@deleteSecurityRule",
+            "handler": "App\\Http\\Controllers\\Client\\V2\\ServiceNetworkController@deleteSecurityRule",
             "sourceApps": [],
             "sourceAppLabels": [],
             "sourceFiles": []
@@ -6698,7 +7204,7 @@
             "permission": "",
             "throttle": "",
             "guards": [],
-            "handler": "App\\Http\\Controllers\\Client\\V2\\ServiceConsoleController@trafficPackages",
+            "handler": "App\\Http\\Controllers\\Client\\V2\\ServiceBillingController@trafficPackages",
             "sourceApps": [],
             "sourceAppLabels": [],
             "sourceFiles": []
@@ -6721,7 +7227,7 @@
             "permission": "",
             "throttle": "",
             "guards": [],
-            "handler": "App\\Http\\Controllers\\Client\\V2\\ServiceConsoleController@createTrafficPackageOrder",
+            "handler": "App\\Http\\Controllers\\Client\\V2\\ServiceBillingController@createTrafficPackageOrder",
             "sourceApps": [],
             "sourceAppLabels": [],
             "sourceFiles": []
@@ -6744,7 +7250,7 @@
             "permission": "",
             "throttle": "",
             "guards": [],
-            "handler": "App\\Http\\Controllers\\Client\\V2\\ServiceConsoleController@quoteTrafficPackage",
+            "handler": "App\\Http\\Controllers\\Client\\V2\\ServiceBillingController@quoteTrafficPackage",
             "sourceApps": [],
             "sourceAppLabels": [],
             "sourceFiles": []
@@ -6767,7 +7273,7 @@
             "permission": "",
             "throttle": "",
             "guards": [],
-            "handler": "App\\Http\\Controllers\\Client\\V2\\ServiceConsoleController@hostUpgradePreview",
+            "handler": "App\\Http\\Controllers\\Client\\V2\\ServiceBillingController@hostUpgradePreview",
             "sourceApps": [],
             "sourceAppLabels": [],
             "sourceFiles": []
@@ -6790,7 +7296,7 @@
             "permission": "",
             "throttle": "",
             "guards": [],
-            "handler": "App\\Http\\Controllers\\Client\\V2\\ServiceConsoleController@createHostUpgradeOrder",
+            "handler": "App\\Http\\Controllers\\Client\\V2\\ServiceBillingController@createHostUpgradeOrder",
             "sourceApps": [],
             "sourceAppLabels": [],
             "sourceFiles": []
@@ -6813,7 +7319,7 @@
             "permission": "",
             "throttle": "",
             "guards": [],
-            "handler": "App\\Http\\Controllers\\Client\\V2\\ServiceConsoleController@quoteHostUpgrade",
+            "handler": "App\\Http\\Controllers\\Client\\V2\\ServiceBillingController@quoteHostUpgrade",
             "sourceApps": [],
             "sourceAppLabels": [],
             "sourceFiles": []
@@ -7090,6 +7596,29 @@
             "throttle": "",
             "guards": [],
             "handler": "App\\Http\\Controllers\\Client\\V2\\TicketWorkflowController@close",
+            "sourceApps": [],
+            "sourceAppLabels": [],
+            "sourceFiles": []
+        },
+        {
+            "id": "POST:/api/v2/client/tickets/{id}/reopen",
+            "scope": "client",
+            "scopeLabel": "客户端",
+            "module": "tickets",
+            "moduleLabel": "工单",
+            "method": "POST",
+            "methods": [
+                "POST"
+            ],
+            "callPath": "/client/tickets/{id}/reopen",
+            "backendPath": "/api/v2/client/tickets/{id}/reopen",
+            "normalizedPath": "/client/tickets/{param}/reopen",
+            "access": "public",
+            "accessLabel": "公开",
+            "permission": "",
+            "throttle": "",
+            "guards": [],
+            "handler": "App\\Http\\Controllers\\Client\\V2\\TicketWorkflowController@reopen",
             "sourceApps": [],
             "sourceAppLabels": [],
             "sourceFiles": []
@@ -7597,6 +8126,29 @@
             "throttle": "",
             "guards": [],
             "handler": "App\\Http\\Controllers\\Site\\V2\\ProductGroupController@index",
+            "sourceApps": [],
+            "sourceAppLabels": [],
+            "sourceFiles": []
+        },
+        {
+            "id": "GET:/api/v2/site/product-groups/{group}/catalog",
+            "scope": "site",
+            "scopeLabel": "站点",
+            "module": "product-groups",
+            "moduleLabel": "产品分组",
+            "method": "GET",
+            "methods": [
+                "GET"
+            ],
+            "callPath": "/site/product-groups/{group}/catalog",
+            "backendPath": "/api/v2/site/product-groups/{group}/catalog",
+            "normalizedPath": "/site/product-groups/{param}/catalog",
+            "access": "public",
+            "accessLabel": "公开",
+            "permission": "",
+            "throttle": "",
+            "guards": [],
+            "handler": "App\\Http\\Controllers\\Site\\V2\\ProductGroupController@catalog",
             "sourceApps": [],
             "sourceAppLabels": [],
             "sourceFiles": []

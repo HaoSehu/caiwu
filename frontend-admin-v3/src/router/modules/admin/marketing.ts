@@ -14,6 +14,30 @@ export const marketingRoutes: RouteRecordRaw[] = [
     },
   },
   {
+    path: 'promotion-ambassadors',
+    name: 'AdminPromotionAmbassadors',
+    component: () => import('@/pages/promotion-ambassadors/index.vue'),
+    meta: {
+      title: {
+        zh_CN: '推广大使',
+        en_US: 'Promotion Ambassadors',
+      },
+      permission: 'promotion_ambassador.list',
+    },
+  },
+  {
+    path: 'marketing-groups',
+    name: 'AdminMarketingGroups',
+    component: () => import('@/pages/marketing-groups/index.vue'),
+    meta: {
+      title: {
+        zh_CN: '产品营销组',
+        en_US: 'Marketing Product Groups',
+      },
+      permission: 'product.list',
+    },
+  },
+  {
     path: 'coupons',
     name: 'AdminCoupons',
     component: () => import('@/pages/products/coupons/index.vue'),

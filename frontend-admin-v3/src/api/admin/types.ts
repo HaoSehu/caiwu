@@ -849,12 +849,7 @@ export interface VerificationRecord {
 export interface MemberLevelRecord {
   id: number | string;
   name?: string;
-  code?: string | null;
-  sales_amount_min?: number | string;
-  sales_amount_max?: number | string | null;
-  reward_rate?: number | string;
   status?: number | string;
-  sort_order?: number | string;
   remark?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
@@ -863,11 +858,63 @@ export interface MemberLevelRecord {
 
 export interface MemberLevelPayload {
   name: string;
-  code: string | null;
-  sales_amount_min: number;
-  sales_amount_max: number | null;
+  status: number;
+  remark: string | null;
+}
+
+// ─── Promotion Ambassador ─────────────────────────────────────────────
+export interface PromotionAmbassadorRecord {
+  id: number | string;
+  name?: string;
+  reward_rate?: number | string;
+  status?: number | string;
+  remark?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  [key: string]: unknown;
+}
+
+export interface PromotionAmbassadorPayload {
+  name: string;
   reward_rate: number;
   status: number;
-  sort_order: number;
   remark: string | null;
+}
+
+/** 等级 × 营销组 折扣矩阵中的单条规则 */
+export interface MemberLevelGroupDiscountRule {
+  /** 1=百分比（折后保留，90=九折） 2=固定金额减免 */
+  discount_type: 1 | 2 | number;
+  discount_value: number | string;
+}
+
+/** 等级折扣矩阵编辑页一次拉齐的数据 */
+export interface MemberLevelGroupDiscountMatrix {
+  member_level: {
+    id: number | string;
+    name?: string;
+    status?: number | string;
+  };
+  groups: Array<{
+    id: number | string;
+    name: string;
+    sort_order?: number | string;
+    product_count?: number | null;
+    discount: MemberLevelGroupDiscountRule | null;
+  }>;
+}
+
+export interface MarketingProductGroupRecord {
+  id: number | string;
+  name: string;
+  sort_order?: number | string;
+  product_count?: number | null;
+  product_ids?: Array<number | string>;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface MarketingProductGroupPayload {
+  name: string;
+  sort_order?: number;
 }

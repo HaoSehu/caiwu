@@ -25,6 +25,9 @@ export interface AdminUser {
   real_name?: string;
   id_card_masked?: string;
   member_level?: Record<string, unknown> | null;
+  member_level_id?: number | string | null;
+  promotion_ambassador?: Record<string, unknown> | null;
+  promotion_ambassador_id?: number | string | null;
   referrer_user_id?: number | string | null;
   last_login_at?: string;
   last_login_ip?: string;
@@ -146,6 +149,10 @@ export const userApi = {
   delete: (id: number | string) => request.delete({ url: `/v2/admin/users/${id}` }),
   toggleStatus: (id: number | string, enabled: boolean) =>
     request.patch({ url: `/v2/admin/users/${id}/status`, data: { enabled } }),
+  adjustMemberLevel: (id: number | string, memberLevelId: number | null) =>
+    request.patch({ url: `/v2/admin/users/${id}/member-level`, data: { member_level_id: memberLevelId } }),
+  adjustPromotionAmbassador: (id: number | string, promotionAmbassadorId: number | null) =>
+    request.patch({ url: `/v2/admin/users/${id}/promotion-ambassador`, data: { promotion_ambassador_id: promotionAmbassadorId } }),
   recharge: (id: number | string, data: UserRechargePayload) =>
     request.post({ url: `/v2/admin/users/${id}/recharges`, data }),
   loginAs: (id: number | string) =>

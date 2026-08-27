@@ -20,9 +20,9 @@
             </template>
             <template #level="{ row }">
               <div class="stack-cell">
-                <strong>{{ fieldValue(row.member_level?.name || '未分级') }}</strong>
+                <strong>{{ fieldValue(row.promotion_ambassador?.name || '未指派') }}</strong>
                 <span>{{
-                  row.member_level?.reward_rate ? formatPercent(row.member_level.reward_rate) : '默认比例'
+                  row.promotion_ambassador?.reward_rate ? formatPercent(row.promotion_ambassador.reward_rate) : '默认比例'
                 }}</span>
               </div>
             </template>
@@ -375,7 +375,7 @@ const overviewMetrics = computed(() => {
 
 const overviewColumns: PrimaryTableCol<Record<string, unknown>>[] = [
   { colKey: 'user', title: '推广用户', minWidth: 220 },
-  { colKey: 'level', title: '会员等级', minWidth: 150 },
+  { colKey: 'level', title: '推广大使', minWidth: 150 },
   { colKey: 'sales', title: '累计销售额', width: 130 },
   { colKey: 'frozen', title: '冻结中', width: 120 },
   { colKey: 'available', title: '可提现', width: 120 },
