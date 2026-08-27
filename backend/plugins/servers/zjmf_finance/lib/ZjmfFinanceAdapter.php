@@ -91,6 +91,11 @@ final class ZjmfFinanceAdapter implements ProvidesConsoleAccess, ProvidesConsole
         return $this->transport->getBalance($supplier);
     }
 
+    public function getProductCatalogTree(Supplier $supplier): array
+    {
+        return $this->catalogService->getProductCatalogTree($supplier);
+    }
+
     public function getProductCatalog(Supplier $supplier): array
     {
         return $this->catalogService->getProductCatalog($supplier);

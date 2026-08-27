@@ -349,7 +349,13 @@ class AdminConfigurationV2QueryService
         $runtimeSupplier = $this->supplierWithRuntimeCredentials($supplier);
         $provider = app(ProviderResolver::class)->resolveForSupplier($runtimeSupplier);
         $catalogCapability = $provider->require(ProvidesConsoleCatalog::class, '当前供应商暂不支持商品同步');
-        $catalog = $this->appendLocalProductMappings($supplier, $catalogCapability->getProductCatalog($runtimeSupplier));
+        // 列表/级联只需目录树；价格详情由“拉取模板”按商品 id 单独获取，避免全量 prodetail 拖慢列表。
+        $catalog = $this->appendLocalProductMappings(
+            $supplier,
+            method_exists($catalogCapability, 'getProductCatalogTree')
+                ? $catalogCapability->getProductCatalogTree($runtimeSupplier)
+                : $catalogCapability->getProductCatalog($runtimeSupplier),
+        );
 
         return [
             'supplier_id' => (int) $supplier->id,

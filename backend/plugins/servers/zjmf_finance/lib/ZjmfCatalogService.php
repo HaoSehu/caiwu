@@ -63,10 +63,19 @@ final class ZjmfCatalogService
         private readonly ZjmfProductTypeMapper $productTypeMapper = new ZjmfProductTypeMapper,
     ) {}
 
-    public function getProductCatalog(Supplier $supplier): array
+    /**
+     * 轻量目录：仅 /cart/all 商品树，不合并价格详情，供列表/级联展示按需使用。
+     */
+    public function getProductCatalogTree(Supplier $supplier): array
     {
         $response = $this->transport->get($supplier, '/cart/all', $this->transport->login($supplier));
-        $catalog = $this->normalizeProductCatalog($response);
+
+        return $this->normalizeProductCatalog($response);
+    }
+
+    public function getProductCatalog(Supplier $supplier): array
+    {
+        $catalog = $this->getProductCatalogTree($supplier);
         $catalog['products'] = $this->mergeUpstreamProductPricing($supplier, $catalog['products']);
 
         return $catalog;
@@ -74,7 +83,8 @@ final class ZjmfCatalogService
 
     public function getProductConfigTemplate(Supplier $supplier, int $productId): array
     {
-        $catalog = $this->getProductCatalog($supplier);
+        // 模板只需单个商品：目录树定位商品，配置项按商品 id 单独获取。
+        $catalog = $this->getProductCatalogTree($supplier);
         $product = collect($catalog['products'] ?? [])->first(
             fn (array $item) => (int) ($item['id'] ?? 0) === $productId
         );
