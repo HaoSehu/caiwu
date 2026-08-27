@@ -134,7 +134,7 @@ export function useReferral() {
       withdrawals.value = resolveList(withdrawalsRes.data?.list);
       directReferrals.value = resolveList(directRes.data?.list);
     } catch (error: unknown) {
-      MessagePlugin.error(getErrorMessage(error, '推荐奖励数据加载失败'));
+      MessagePlugin.error(getErrorMessage(error, '推广大使数据加载失败'));
     } finally {
       loading.value = false;
     }
@@ -142,10 +142,10 @@ export function useReferral() {
 
   async function copyReferralLink() {
     if (!referralLink.value || referralLink.value === '--') {
-      MessagePlugin.warning('推荐链接暂不可用');
+      MessagePlugin.warning('推广链接暂不可用');
       return;
     }
-    await copyText(referralLink.value, { successMsg: '推荐链接已复制' });
+    await copyText(referralLink.value, { successMsg: '推广链接已复制' });
   }
 
   function openBindDialog() {

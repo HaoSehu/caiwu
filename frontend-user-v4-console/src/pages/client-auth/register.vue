@@ -56,13 +56,13 @@
 
       <t-form-item name="referral_code">
         <div class="client-auth-field">
-          <label class="client-auth-label" for="register-referral">推荐码</label>
+          <label class="client-auth-label" for="register-referral">推广码</label>
           <t-input
             id="register-referral"
             v-model="form.referral_code"
             size="large"
             maxlength="24"
-            placeholder="选填，如有邀请推荐可填写"
+            placeholder="选填，如有推广邀请可填写"
           />
         </div>
       </t-form-item>
@@ -190,7 +190,7 @@ const rules: Record<keyof RegisterForm, FormRule[]> = {
     { len: 6, message: '验证码为 6 位', type: 'error', trigger: 'blur' },
   ],
   nickname: [{ max: 50, message: '用户名不能超过 50 个字符', type: 'error', trigger: 'blur' }],
-  referral_code: [{ max: 24, message: '推荐码不能超过 24 个字符', type: 'error', trigger: 'blur' }],
+  referral_code: [{ max: 24, message: '推广码不能超过 24 个字符', type: 'error', trigger: 'blur' }],
   password: [
     { required: true, message: '请输入登录密码', type: 'error', trigger: 'blur' },
     { min: 6, message: '密码长度不能少于 6 位', type: 'error', trigger: 'blur' },
@@ -296,7 +296,7 @@ function validateForm() {
     errors.nickname = '用户名不能超过 50 个字符';
   }
   if (form.referral_code.length > 24) {
-    errors.referral_code = '推荐码不能超过 24 个字符';
+    errors.referral_code = '推广码不能超过 24 个字符';
   }
   if (!form.password) {
     errors.password = '请输入登录密码';

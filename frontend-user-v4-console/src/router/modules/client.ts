@@ -157,7 +157,7 @@ export default [
             path: '/client/referral',
             name: 'ClientReferral',
             component: () => import('@/pages/client/referral/index.vue'),
-            meta: { title: title('推荐奖励'), icon: icon(GiftIcon), requireAuth: true, orderNo: 20 },
+            meta: { title: title('推广大使'), icon: icon(GiftIcon), requireAuth: true, orderNo: 20 },
           },
         ],
       },

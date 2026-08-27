@@ -1,10 +1,10 @@
 <template>
   <section class="referral-page">
     <header class="client-page-heading">
-      <h1>推荐奖励</h1>
+      <h1>推广大使</h1>
     </header>
 
-    <t-loading :loading="loading" text="正在加载推荐奖励">
+    <t-loading :loading="loading" text="正在加载推广大使">
       <div class="referral-stats">
         <t-card v-for="item in summaryCards" :key="item.key" class="referral-stat" :bordered="false">
           <span>{{ item.label }}</span>
@@ -13,7 +13,7 @@
       </div>
 
       <t-card class="referral-card" :bordered="false">
-        <template #title>我的推荐链接</template>
+        <template #title>我的推广链接</template>
         <template #actions>
           <t-tag variant="light">{{ levelName }} - 佣金比例 {{ rewardRateText }}</t-tag>
         </template>

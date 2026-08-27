@@ -669,7 +669,7 @@ const quickLinks = [
   { label: '账户充值', path: '/client/recharge', icon: WalletIcon },
   { label: '帮助中心', path: '/client/help', icon: HelpCircleIcon },
   { label: '优惠券', path: '/client/coupons', icon: CouponIcon },
-  { label: '推荐奖励', path: '/client/referral', icon: GiftIcon },
+  { label: '推广大使', path: '/client/referral', icon: GiftIcon },
 ];
 
 async function loadDashboard() {
