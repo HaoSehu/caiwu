@@ -147,7 +147,26 @@ class ServiceNatService
             'product.supplier',
         ]);
 
-        [$runtime, $supplier, $hostId, $jwt, $natContext] = $this->resolveNatAclContext($service, true);
+        // 纵深防御：先从缓存检查越权（避免为非法请求消耗上游资源），缓存未命中时再拉取新列表二次校验
+        $cachedContext = $this->resolveNatAclContext($service, false);
+        $cachedList = $cachedContext[4]['list'] ?? [];
+        $cachedTarget = collect($cachedList)->first(
+            fn (array $item) => (int) ($item['id'] ?? 0) === $forwardingId && (bool) ($item['can_delete'] ?? false)
+        );
+
+        // 缓存中找到且校验通过，继续；缓存未命中或过期，强制刷新后二次校验
+        if (! is_array($cachedTarget)) {
+            [$runtime, $supplier, $hostId, $jwt, $natContext] = $this->resolveNatAclContext($service, true);
+            $target = collect($natContext['list'])->first(
+                fn (array $item) => (int) ($item['id'] ?? 0) === $forwardingId && (bool) ($item['can_delete'] ?? false)
+            );
+            throw_if(! is_array($target), new BusinessException('端口转发规则不存在或不属于当前服务', 42200));
+        } else {
+            // 缓存命中且校验通过，刷新获取最新 JWT 用于实际删除操作
+            [$runtime, $supplier, $hostId, $jwt, $natContext] = $this->resolveNatAclContext($service, true);
+            $target = $cachedTarget;
+        }
+
         $payload = ['func' => 'delNatAcl', 'id' => $forwardingId];
         $response = is_callable([$runtime, 'submitCustomModuleAction'])
             ? $runtime->submitCustomModuleAction($supplier, $natContext['endpoint'], $payload, $jwt)

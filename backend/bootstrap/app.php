@@ -58,9 +58,8 @@ return Application::configure(basePath: dirname(__DIR__))
             return '/';
         });
 
-        $middleware->validateCsrfTokens(except: [
-            'api/v2/callback/*',
-        ]);
+        // api/* 走 api 中间件组本身不含 CSRF 校验，回调等路径无需任何例外配置。
+        $middleware->validateCsrfTokens();
 
         $middleware->alias([
             'verified' => EnsureEmailIsVerified::class,
@@ -115,6 +114,21 @@ return Application::configure(basePath: dirname(__DIR__))
             }
 
             return null;
+        });
+
+        // 兜底渲染：未被上方专用渲染命中的异常统一转为标准 JSON 信封，
+        // 避免 API 调用方拿到 Laravel 默认的 HTML 错误页或调试页。
+        // debug 关闭时固定返回通用文案，防止异常消息、SQL 等细节泄漏；debug 开启时保留原始消息便于排查。
+        $exceptions->render(function (Throwable $exception, Request $request) {
+            if (! $request->is('api/*')) {
+                return null;
+            }
+
+            $message = config('app.debug') === true && $exception->getMessage() !== ''
+                ? $exception->getMessage()
+                : '服务器内部错误，请稍后再试';
+
+            return ApiResponseBuilder::error(50000, $message, null, 500);
         });
 
         // 首次部署时允许执行生成密钥和 Composer 发现命令，其余场景仍强制要求 APP_KEY 已配置。

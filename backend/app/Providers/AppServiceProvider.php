@@ -10,8 +10,11 @@ use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Services\ProductCatalog\ProductFullPathResolver;
 use App\Services\System\UploadedAssetReferenceService;
 use Carbon\CarbonInterface;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
 use Illuminate\Queue\Events\JobTimedOut;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Sanctum\PersonalAccessToken;
@@ -45,6 +48,9 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->loadSiteNameFromSettings();
+
+        // 公开询价接口按 IP 收敛阈值：默认 throttle:60,1 不足以限制竞品批量抓取价格。
+        RateLimiter::for('product-quote', fn (Request $request) => Limit::perMinute(10)->by('product-quote:'.$request->ip()));
 
         // 心跳任务超时被杀时，Worker 在 SIGKILL 前同步派发 JobTimedOut；
         // 监听器把运行台账收敛为 retrying/failed，避免队列重试被状态 CAS 永久拒绝。
