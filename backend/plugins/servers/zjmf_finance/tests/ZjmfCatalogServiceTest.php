@@ -12,8 +12,8 @@ use ReflectionMethod;
 use ReflectionProperty;
 
 // 插件类由运行时的 PluginFileLoader 按 require 加载，测试中需手动引入
-require_once dirname(__DIR__, 2).'/plugins/servers/zjmf_finance/lib/ZjmfProductTypeMapper.php';
-require_once dirname(__DIR__, 2).'/plugins/servers/zjmf_finance/lib/ZjmfCatalogService.php';
+require_once __DIR__.'/../lib/ZjmfProductTypeMapper.php';
+require_once __DIR__.'/../lib/ZjmfCatalogService.php';
 
 class ZjmfCatalogServiceTest extends TestCase
 {

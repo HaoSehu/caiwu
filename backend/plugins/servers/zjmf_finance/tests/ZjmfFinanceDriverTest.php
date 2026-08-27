@@ -23,19 +23,19 @@ use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 
 // 插件类由运行时的 PluginFileLoader 按 require 加载，测试中需手动引入
-require_once dirname(__DIR__, 2).'/plugins/servers/zjmf_finance/lib/ZjmfProductTypeMapper.php';
-require_once dirname(__DIR__, 2).'/plugins/servers/zjmf_finance/lib/ZjmfCloudConfigTemplate.php';
-require_once dirname(__DIR__, 2).'/plugins/servers/zjmf_finance/lib/ZjmfAuthManager.php';
-require_once dirname(__DIR__, 2).'/plugins/servers/zjmf_finance/lib/ZjmfFinanceTransport.php';
-require_once dirname(__DIR__, 2).'/plugins/servers/zjmf_finance/lib/ZjmfCatalogService.php';
-require_once dirname(__DIR__, 2).'/plugins/servers/zjmf_finance/lib/ZjmfProvisionService.php';
-require_once dirname(__DIR__, 2).'/plugins/servers/zjmf_finance/lib/ZjmfRenewService.php';
-require_once dirname(__DIR__, 2).'/plugins/servers/zjmf_finance/lib/ZjmfStatusService.php';
-require_once dirname(__DIR__, 2).'/plugins/servers/zjmf_finance/lib/ZjmfConsoleService.php';
-require_once dirname(__DIR__, 2).'/plugins/servers/zjmf_finance/lib/ZjmfNetworkService.php';
-require_once dirname(__DIR__, 2).'/plugins/servers/zjmf_finance/lib/ZjmfSecurityService.php';
-require_once dirname(__DIR__, 2).'/plugins/servers/zjmf_finance/lib/ZjmfFinanceAdapter.php';
-require_once dirname(__DIR__, 2).'/plugins/servers/zjmf_finance/lib/ZjmfFinanceDriver.php';
+require_once __DIR__.'/../lib/ZjmfProductTypeMapper.php';
+require_once __DIR__.'/../lib/ZjmfCloudConfigTemplate.php';
+require_once __DIR__.'/../lib/ZjmfAuthManager.php';
+require_once __DIR__.'/../lib/ZjmfFinanceTransport.php';
+require_once __DIR__.'/../lib/ZjmfCatalogService.php';
+require_once __DIR__.'/../lib/ZjmfProvisionService.php';
+require_once __DIR__.'/../lib/ZjmfRenewService.php';
+require_once __DIR__.'/../lib/ZjmfStatusService.php';
+require_once __DIR__.'/../lib/ZjmfConsoleService.php';
+require_once __DIR__.'/../lib/ZjmfNetworkService.php';
+require_once __DIR__.'/../lib/ZjmfSecurityService.php';
+require_once __DIR__.'/../lib/ZjmfFinanceAdapter.php';
+require_once __DIR__.'/../lib/ZjmfFinanceDriver.php';
 
 class ZjmfFinanceDriverTest extends TestCase
 {
