@@ -26,6 +26,7 @@ class AdminPermissions
 
     public const ORDER_DETAIL = 'order.detail';
 
+    // 预留权限码：管理端订单暂无写操作路由（仅 index/show），保留以维持 impliedPermissions 下发 order.list/order.detail
     public const ORDER_MANAGE = 'order.manage';
 
     public const INVOICE_LIST = 'invoice.list';
@@ -97,6 +98,10 @@ class AdminPermissions
     public const MEMBER_LEVEL_MANAGE = 'member_level.manage';
 
     public const MEMBER_LEVEL_LIST = 'member_level.list';
+
+    public const PROMOTION_AMBASSADOR_MANAGE = 'promotion_ambassador.manage';
+
+    public const PROMOTION_AMBASSADOR_LIST = 'promotion_ambassador.list';
 
     public const REFERRAL_WITHDRAWAL_LIST = 'referral_withdrawal.list';
 

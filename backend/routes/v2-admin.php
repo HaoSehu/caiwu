@@ -16,12 +16,15 @@ use App\Http\Controllers\Admin\V2\InstanceSpecCatalogController;
 use App\Http\Controllers\Admin\V2\IntegrationPluginController;
 use App\Http\Controllers\Admin\V2\InvoiceController;
 use App\Http\Controllers\Admin\V2\LogController;
+use App\Http\Controllers\Admin\V2\MarketingProductGroupController;
 use App\Http\Controllers\Admin\V2\MediaFileController;
 use App\Http\Controllers\Admin\V2\MemberLevelController;
+use App\Http\Controllers\Admin\V2\MemberLevelGroupDiscountController;
 use App\Http\Controllers\Admin\V2\OrderController;
 use App\Http\Controllers\Admin\V2\ProductController;
 use App\Http\Controllers\Admin\V2\ProductGroupController;
 use App\Http\Controllers\Admin\V2\ProductTypeController;
+use App\Http\Controllers\Admin\V2\PromotionAmbassadorController;
 use App\Http\Controllers\Admin\V2\ReferralController;
 use App\Http\Controllers\Admin\V2\ReferralWithdrawalController;
 use App\Http\Controllers\Admin\V2\RoleController;
@@ -30,6 +33,7 @@ use App\Http\Controllers\Admin\V2\ServiceController;
 use App\Http\Controllers\Admin\V2\SettingController;
 use App\Http\Controllers\Admin\V2\StaffController;
 use App\Http\Controllers\Admin\V2\SupplierController;
+use App\Http\Controllers\Admin\V2\SystemReadinessController;
 use App\Http\Controllers\Admin\V2\TicketController;
 use App\Http\Controllers\Admin\V2\UserController;
 use App\Http\Controllers\Admin\V2\UserServiceController;
@@ -108,6 +112,8 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
         Route::put('/users/{user}', [UserController::class, 'update']);
         Route::delete('/users/{user}', [UserController::class, 'destroy']);
         Route::patch('/users/{user}/status', [UserController::class, 'updateStatus']);
+        Route::patch('/users/{user}/member-level', [UserController::class, 'adjustMemberLevel']);
+        Route::patch('/users/{user}/promotion-ambassador', [UserController::class, 'adjustPromotionAmbassador']);
         Route::post('/services/custom-hostnames/batch', [ServiceController::class, 'batchUpdateCustomHostnames']);
         Route::post('/users/{user}/services', [UserServiceController::class, 'store']);
         Route::post('/users/{user}/services/refresh-statuses', [UserServiceController::class, 'refreshStatuses']);
@@ -195,6 +201,12 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
         Route::post('/product-groups', [ProductGroupController::class, 'store']);
         Route::put('/product-groups/{group}', [ProductGroupController::class, 'update']);
         Route::delete('/product-groups/{group}', [ProductGroupController::class, 'destroy']);
+        Route::get('/marketing-product-groups', [MarketingProductGroupController::class, 'index']);
+        Route::get('/marketing-product-groups/{marketingProductGroup}', [MarketingProductGroupController::class, 'show']);
+        Route::post('/marketing-product-groups', [MarketingProductGroupController::class, 'store']);
+        Route::put('/marketing-product-groups/{marketingProductGroup}', [MarketingProductGroupController::class, 'update']);
+        Route::delete('/marketing-product-groups/{marketingProductGroup}', [MarketingProductGroupController::class, 'destroy']);
+        Route::put('/marketing-product-groups/{marketingProductGroup}/products', [MarketingProductGroupController::class, 'syncProducts']);
         Route::post('/coupons', [CouponController::class, 'store']);
         Route::put('/coupons/{coupon}', [CouponController::class, 'update']);
         Route::delete('/coupons/{coupon}', [CouponController::class, 'destroy']);
@@ -246,8 +258,16 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
         Route::post('/schedule-runs/{run}/retry', [ScheduleTaskController::class, 'retry']);
     });
 
-    Route::middleware(['permission:'.AdminPermissions::CONTENT_MANAGE])->group(function (): void {
+    // 站点首页外观独立于文章内容管理：横幅与视频由 site.* 把关，避免内容管理员越权修改首页
+    Route::middleware(['permission:'.AdminPermissions::SITE_MANAGE])->group(function (): void {
         Route::post('/site/home-hero', [HomeHeroController::class, 'update']);
+    });
+
+    Route::middleware(['permission:'.AdminPermissions::SITE_VIEW])->group(function (): void {
+        Route::get('/site/home-hero', [HomeHeroController::class, 'show']);
+    });
+
+    Route::middleware(['permission:'.AdminPermissions::CONTENT_MANAGE])->group(function (): void {
         Route::post('/content/categories', [ContentCategoryController::class, 'store']);
         Route::put('/content/categories/{category}', [ContentCategoryController::class, 'update']);
         Route::delete('/content/categories/{category}', [ContentCategoryController::class, 'destroy']);
@@ -260,7 +280,6 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
     });
 
     Route::middleware(['permission:'.AdminPermissions::CONTENT_LIST])->group(function (): void {
-        Route::get('/site/home-hero', [HomeHeroController::class, 'show']);
         Route::get('/content/summary', [ContentArticleController::class, 'summary']);
         Route::get('/content/categories', [ContentCategoryController::class, 'index']);
         Route::get('/content/articles', [ContentArticleController::class, 'index']);
@@ -271,12 +290,24 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
 
     Route::middleware(['permission:'.AdminPermissions::MEMBER_LEVEL_LIST])->group(function (): void {
         Route::get('/member-levels', [MemberLevelController::class, 'index']);
+        Route::get('/member-levels/{memberLevel}/group-discounts', [MemberLevelGroupDiscountController::class, 'index']);
     });
 
     Route::middleware(['permission:'.AdminPermissions::MEMBER_LEVEL_MANAGE])->group(function (): void {
         Route::post('/member-levels', [MemberLevelController::class, 'store']);
         Route::put('/member-levels/{memberLevel}', [MemberLevelController::class, 'update']);
         Route::delete('/member-levels/{memberLevel}', [MemberLevelController::class, 'destroy']);
+        Route::put('/member-levels/{memberLevel}/group-discounts', [MemberLevelGroupDiscountController::class, 'sync']);
+    });
+
+    Route::middleware(['permission:'.AdminPermissions::PROMOTION_AMBASSADOR_LIST])->group(function (): void {
+        Route::get('/promotion-ambassadors', [PromotionAmbassadorController::class, 'index']);
+    });
+
+    Route::middleware(['permission:'.AdminPermissions::PROMOTION_AMBASSADOR_MANAGE])->group(function (): void {
+        Route::post('/promotion-ambassadors', [PromotionAmbassadorController::class, 'store']);
+        Route::put('/promotion-ambassadors/{promotionAmbassador}', [PromotionAmbassadorController::class, 'update']);
+        Route::delete('/promotion-ambassadors/{promotionAmbassador}', [PromotionAmbassadorController::class, 'destroy']);
     });
 
     Route::middleware(['permission:'.AdminPermissions::INTEGRATION_PLUGIN_VIEW])->group(function (): void {
@@ -346,6 +377,7 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
 
     Route::middleware(['permission:'.AdminPermissions::DATABASE_VIEW])->group(function (): void {
         Route::get('/database/status', [DatabaseStatusController::class, 'status']);
+        Route::get('/system/readiness', [SystemReadinessController::class, 'show']);
     });
 
     Route::middleware(['permission:'.AdminPermissions::DATABASE_MANAGE])->group(function (): void {

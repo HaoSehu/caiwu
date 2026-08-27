@@ -6,6 +6,7 @@ namespace App\Services\Content;
 
 use App\Models\MediaFile;
 use App\Models\Setting;
+use App\Support\CacheKey;
 use App\Support\UploadUrl;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -129,7 +130,9 @@ class MediaLibraryOrganizer
 
             $removedEmptyDirectories = $this->removeEmptyLegacyDirectories();
 
-            Cache::forget('site:home:hero');
+            Cache::forget(CacheKey::homeHero());
+            // 旧版首页聚合键（早于版本号后缀的历史遗留格式）一并失效，
+            // 目标字符串必须保持不变，否则升级部署后残留缓存无法清理。
             Cache::forget('site:home:4:50:4');
         }
 

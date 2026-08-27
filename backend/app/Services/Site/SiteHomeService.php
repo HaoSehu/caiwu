@@ -7,6 +7,7 @@ namespace App\Services\Site;
 use App\Models\ContentArticle;
 use App\Services\Content\ContentArticleService;
 use App\Services\Content\HomeHeroService;
+use App\Support\CacheKey;
 use App\Support\ContentPublishedCacheVersion;
 use App\Support\SiteConfigPayload;
 use App\Support\SiteHomeCacheVersion;
@@ -30,8 +31,7 @@ class SiteHomeService
         $groupLimit = max(0, $groupLimit);
         $contentVersion = ContentPublishedCacheVersion::current();
         $homeVersion = SiteHomeCacheVersion::current();
-        $cacheKey = sprintf(
-            'site:home:%s:%d:%d:v%d:b%d',
+        $cacheKey = CacheKey::siteHome(
             $groupLimit > 0 ? (string) $groupLimit : 'all',
             $noticeLimit,
             $helpLimit,

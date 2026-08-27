@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Content;
 
 use App\Models\Setting;
+use App\Support\CacheKey;
 use App\Support\ContentPublishedCacheVersion;
 use App\Support\SiteHomeCacheVersion;
 use Illuminate\Support\Facades\Cache;
@@ -27,8 +28,6 @@ class HomeHeroService
 
     public const KEY_FEATURES = 'features';
 
-    private const CACHE_KEY = 'site:home:hero';
-
     private const CACHE_TTL_SECONDS = 300; // 5分钟：首页内容不频繁变化
 
     public const SHAPE_OPTIONS = ['computer', 'connection', 'security', 'value', 'support'];
@@ -49,7 +48,7 @@ class HomeHeroService
     public function getHero(): array
     {
         return Cache::remember(
-            self::CACHE_KEY,
+            CacheKey::homeHero(),
             now()->addSeconds(self::CACHE_TTL_SECONDS),
             function (): array {
                 return [
@@ -84,11 +83,11 @@ class HomeHeroService
             self::KEY_FEATURES => $this->encodeJson($normalizedFeatures),
         ]);
 
-        Cache::forget(self::CACHE_KEY);
+        Cache::forget(CacheKey::homeHero());
         $contentVersion = ContentPublishedCacheVersion::current();
         $homeVersion = SiteHomeCacheVersion::current();
-        Cache::forget(sprintf('site:home:%s:%d:%d:v%d:b%d', 'all', 50, 4, $contentVersion, $homeVersion));
-        Cache::forget(sprintf('site:home:%d:%d:%d:v%d:b%d', 4, 50, 4, $contentVersion, $homeVersion));
+        Cache::forget(CacheKey::siteHome('all', 50, 4, $contentVersion, $homeVersion));
+        Cache::forget(CacheKey::siteHome('4', 50, 4, $contentVersion, $homeVersion));
 
         return [
             'slides' => $normalizedSlides,

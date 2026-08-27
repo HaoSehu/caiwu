@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace App\Http\Resources\V2\Content;
 
 use App\Models\ContentArticle;
+use App\Support\ContentExcerpt;
 use App\Support\UploadUrl;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
-use Illuminate\Support\Str;
 
 /** @mixin ContentArticle */
 class PublishedContentSummaryResource extends JsonResource
@@ -52,10 +52,11 @@ class PublishedContentSummaryResource extends JsonResource
             return (string) $this->summary;
         }
 
-        return Str::limit(
-            preg_replace('/\s+/u', ' ', strip_tags(Str::markdown((string) $this->content))) ?: '',
-            120,
-            '...'
-        );
+        // 公开端列表 select 白名单不含 content；正常情况摘要已由落库与回填固化到 excerpt 列。
+        if (trim((string) ($this->excerpt ?? '')) !== '') {
+            return (string) $this->excerpt;
+        }
+
+        return ContentExcerpt::fromMarkdown((string) ($this->content ?? ''));
     }
 }

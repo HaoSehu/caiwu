@@ -45,6 +45,7 @@ class ContentArticle extends Model
         'title',
         'slug',
         'summary',
+        'excerpt',
         'content',
         'category_name',
         'category',

@@ -5,6 +5,7 @@ namespace App\Services\Content;
 use App\Exceptions\BusinessException;
 use App\Models\ContentArticle;
 use App\Models\ContentCategory;
+use App\Support\ContentExcerpt;
 use App\Support\ContentPublishedCacheVersion;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
@@ -168,6 +169,7 @@ class ContentArticleService
         }
 
         return $query
+            ->select($this->publishedListColumns())
             ->with('contentCategory:id,name,slug')
             ->orderByDesc('is_pinned')
             ->orderBy('sort_order')
@@ -242,6 +244,7 @@ class ContentArticleService
         $query = ContentArticle::query()
             ->ofType($type)
             ->published()
+            ->select($this->publishedListColumns())
             ->with('contentCategory')
             ->orderByDesc('is_pinned');
 
@@ -255,6 +258,34 @@ class ContentArticleService
             ->orderByDesc('id')
             ->limit($limit)
             ->get();
+    }
+
+    /**
+     * 公开列表列白名单：排除 content 长文本，摘要由 summary/excerpt 固化列承担。
+     *
+     * @return array<int, string>
+     */
+    private function publishedListColumns(): array
+    {
+        return [
+            // 仅限真实表列：type/content_category_id/category 为兼容历史契约的空字段，由模型层缺省输出
+            'id',
+            'content_type',
+            'category_id',
+            'title',
+            'slug',
+            'summary',
+            'excerpt',
+            'category_name',
+            'cover_image',
+            'status',
+            'is_pinned',
+            'is_recommended',
+            'view_count',
+            'publish_at',
+            'last_published_at',
+            'created_at',
+        ];
     }
 
     /**
@@ -295,6 +326,9 @@ class ContentArticleService
                 : now();
         }
 
+        // 公开列表不再实时渲染正文，摘要在写入侧固化；有 summary 时读取端直接用 summary。
+        $summary = $this->normalizeNullableString($data['summary'] ?? null);
+
         return [
             'content_type' => $type,
             'category_id' => $contentCategoryId,
@@ -304,7 +338,8 @@ class ContentArticleService
                 type: $type,
                 ignoreId: $article?->id,
             ),
-            'summary' => $this->normalizeNullableString($data['summary'] ?? null),
+            'summary' => $summary,
+            'excerpt' => trim((string) ($summary ?? '')) !== '' ? null : ContentExcerpt::fromMarkdown($content),
             'content' => $content,
             'category_name' => $contentCategory->name,
             'keywords' => $this->normalizeNullableString($data['keywords'] ?? null),
