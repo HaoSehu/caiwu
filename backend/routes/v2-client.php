@@ -55,6 +55,10 @@ Route::middleware(['auth:sanctum', 'ensure.client'])->group(function (): void {
     Route::put('/auth/notification-preferences', [AuthController::class, 'updateNotificationPreferences']);
     Route::put('/auth/phone', [AuthController::class, 'updatePhone']);
     Route::put('/auth/email', [AuthController::class, 'updateEmail']);
+    Route::post('/auth/phone/verify-bound-code', [AuthController::class, 'verifyBoundPhoneCode'])
+        ->middleware('throttle:10,1,client-auth-phone-verify');
+    Route::post('/auth/email/verify-bound-code', [AuthController::class, 'verifyBoundEmailCode'])
+        ->middleware('throttle:10,1,client-auth-email-verify');
 
     Route::get('/verification/fee-config', [VerificationController::class, 'feeConfig']);
     Route::post('/verification/init', [VerificationController::class, 'init']);

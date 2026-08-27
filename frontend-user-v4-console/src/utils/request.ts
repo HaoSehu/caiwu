@@ -103,6 +103,10 @@ const httpClient = createHttpClient({
   // 认证前公开接口不携带过期 token，避免它们 401 干扰登录流程
   resolveToken: (config) => {
     const requestUrl = String(config.url || '');
+    // 登录后仍走公开发码接口的"验证已绑定手机/邮箱"场景需要显式要求携带凭证
+    if ((config as { authBearer?: boolean }).authBearer) {
+      return getClientToken();
+    }
     return isPublicAuthRequest(requestUrl) ? null : getClientToken();
   },
 });

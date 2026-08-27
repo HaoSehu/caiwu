@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Auth;
 
+use App\Support\CacheKey;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\RateLimiter;
 
@@ -55,7 +56,7 @@ class LoginRiskControlService
         $ip = $this->normalizeIp($ip);
 
         if ($account !== '' && $ip !== '' && RateLimiter::tooManyAttempts(
-            $this->accountIpKey($account, $ip),
+            CacheKey::loginRiskAccountIp($account, $ip),
             self::SOFT_LOCK_ACCOUNT_IP_MAX_ATTEMPTS
         )) {
             return true;
@@ -65,7 +66,7 @@ class LoginRiskControlService
             && $account !== ''
             && $this->distinctFailedIpCount($account) >= self::SOFT_LOCK_ACCOUNT_MIN_IPS
             && RateLimiter::tooManyAttempts(
-                $this->accountKey($account),
+                CacheKey::loginRiskAccount($account),
                 self::SOFT_LOCK_ACCOUNT_MAX_ATTEMPTS
             );
     }
@@ -80,21 +81,21 @@ class LoginRiskControlService
         $ip = $this->normalizeIp($ip);
 
         if ($account !== '' && $ip !== '' && RateLimiter::tooManyAttempts(
-            $this->accountIpKey($account, $ip),
+            CacheKey::loginRiskAccountIp($account, $ip),
             self::ACCOUNT_IP_MAX_ATTEMPTS
         )) {
             return true;
         }
 
         if ($account !== '' && RateLimiter::tooManyAttempts(
-            $this->accountKey($account),
+            CacheKey::loginRiskAccount($account),
             self::ACCOUNT_MAX_ATTEMPTS
         )) {
             return true;
         }
 
         return $ip !== '' && RateLimiter::tooManyAttempts(
-            $this->ipKey($ip),
+            CacheKey::loginRiskIp($ip),
             self::IP_MAX_ATTEMPTS
         );
     }
@@ -105,16 +106,16 @@ class LoginRiskControlService
         $ip = $this->normalizeIp($ip);
 
         if ($account !== '' && $ip !== '') {
-            RateLimiter::hit($this->accountIpKey($account, $ip), self::ACCOUNT_IP_DECAY_SECONDS);
+            RateLimiter::hit(CacheKey::loginRiskAccountIp($account, $ip), self::ACCOUNT_IP_DECAY_SECONDS);
             $this->recordFailedIpForAccount($account, $ip);
         }
 
         if ($account !== '') {
-            RateLimiter::hit($this->accountKey($account), self::ACCOUNT_DECAY_SECONDS);
+            RateLimiter::hit(CacheKey::loginRiskAccount($account), self::ACCOUNT_DECAY_SECONDS);
         }
 
         if ($ip !== '') {
-            RateLimiter::hit($this->ipKey($ip), self::IP_DECAY_SECONDS);
+            RateLimiter::hit(CacheKey::loginRiskIp($ip), self::IP_DECAY_SECONDS);
         }
     }
 
@@ -124,17 +125,17 @@ class LoginRiskControlService
         $ip = $this->normalizeIp($ip);
 
         if ($account !== '' && $ip !== '') {
-            RateLimiter::clear($this->accountIpKey($account, $ip));
+            RateLimiter::clear(CacheKey::loginRiskAccountIp($account, $ip));
         }
 
         if ($account !== '') {
-            RateLimiter::clear($this->accountKey($account));
-            Cache::store('redis_volatile')->forget($this->failureAlertKey($account));
-            Cache::store('redis_volatile')->forget($this->accountFailedIpsKey($account));
+            RateLimiter::clear(CacheKey::loginRiskAccount($account));
+            Cache::store('redis_volatile')->forget(CacheKey::loginRiskFailureAlert($account));
+            Cache::store('redis_volatile')->forget(CacheKey::loginRiskFailedIps($account));
         }
 
         if ($ip !== '') {
-            RateLimiter::clear($this->ipKey($ip));
+            RateLimiter::clear(CacheKey::loginRiskIp($ip));
         }
     }
 
@@ -146,41 +147,16 @@ class LoginRiskControlService
         }
 
         return Cache::store('redis_volatile')->add(
-            $this->failureAlertKey($account),
+            CacheKey::loginRiskFailureAlert($account),
             1,
             now()->addSeconds(self::FAILURE_ALERT_DECAY_SECONDS)
         );
     }
 
-    private function accountIpKey(string $account, string $ip): string
-    {
-        return 'login-risk:account-ip:'.sha1($account.'|'.$ip);
-    }
-
-    private function accountKey(string $account): string
-    {
-        return 'login-risk:account:'.sha1($account);
-    }
-
-    private function ipKey(string $ip): string
-    {
-        return 'login-risk:ip:'.sha1($ip);
-    }
-
-    private function failureAlertKey(string $account): string
-    {
-        return 'login-risk:failure-alert:'.sha1($account);
-    }
-
-    private function accountFailedIpsKey(string $account): string
-    {
-        return 'login-risk:failed-ips:'.sha1($account);
-    }
-
     private function recordFailedIpForAccount(string $account, string $ip): void
     {
         $store = Cache::store('redis_volatile');
-        $key = $this->accountFailedIpsKey($account);
+        $key = CacheKey::loginRiskFailedIps($account);
         $ips = (array) $store->get($key, []);
         $ips[$ip] = true;
         $store->put($key, $ips, now()->addSeconds(self::ACCOUNT_FAILED_IPS_DECAY_SECONDS));
@@ -189,7 +165,7 @@ class LoginRiskControlService
     private function distinctFailedIpCount(string $account): int
     {
         try {
-            $ips = (array) Cache::store('redis_volatile')->get($this->accountFailedIpsKey($account), []);
+            $ips = (array) Cache::store('redis_volatile')->get(CacheKey::loginRiskFailedIps($account), []);
         } catch (\Throwable) {
             return 0;
         }

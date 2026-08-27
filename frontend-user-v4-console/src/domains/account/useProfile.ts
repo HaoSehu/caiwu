@@ -2,7 +2,7 @@ import { MessagePlugin } from 'tdesign-vue-next';
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
-import { clientAuthApi } from '@/api/auth';
+import { AUTH_BOUND_CODE_CONFIG, clientAuthApi } from '@/api/auth';
 import { useGeeTestCaptcha } from '@/composables/useGeeTestCaptcha';
 import { useUserStore } from '@/store';
 import type { ClientNotificationPreferences, ClientUserInfo } from '@/types/client';
@@ -30,6 +30,8 @@ export function useProfile() {
   const passwordDialogVisible = ref(false);
   const phoneDialogVisible = ref(false);
   const emailDialogVisible = ref(false);
+  const phoneChangeStep = ref<1 | 2>(1);
+  const emailChangeStep = ref<1 | 2>(1);
   const notificationLoading = ref(false);
   const phoneForm = reactive({ phone: '', code: '', oldCode: '' });
   const emailForm = reactive({ email: '', code: '', oldCode: '' });
@@ -248,6 +250,7 @@ export function useProfile() {
     phoneOldCountdown.value = 0;
     clearPhoneTimer();
     clearPhoneOldTimer();
+    phoneChangeStep.value = profileForm.phone ? 1 : 2;
     phoneDialogVisible.value = true;
   }
 
@@ -259,7 +262,40 @@ export function useProfile() {
     emailOldCountdown.value = 0;
     clearEmailTimer();
     clearEmailOldTimer();
+    emailChangeStep.value = profileForm.email ? 1 : 2;
     emailDialogVisible.value = true;
+  }
+
+  async function goPhoneNextStep() {
+    if (!phoneForm.oldCode || phoneForm.oldCode.length !== 6) {
+      MessagePlugin.warning('请输入 6 位原手机号验证码');
+      return;
+    }
+    profileLoading.value = true;
+    try {
+      await clientAuthApi.verifyBoundPhoneCode({ code: phoneForm.oldCode });
+      phoneChangeStep.value = 2;
+    } catch (error: unknown) {
+      MessagePlugin.error(getErrorMessage(error, '原手机验证码错误或已过期'));
+    } finally {
+      profileLoading.value = false;
+    }
+  }
+
+  async function goEmailNextStep() {
+    if (!emailForm.oldCode || emailForm.oldCode.length !== 6) {
+      MessagePlugin.warning('请输入 6 位原邮箱验证码');
+      return;
+    }
+    profileLoading.value = true;
+    try {
+      await clientAuthApi.verifyBoundEmailCode({ code: emailForm.oldCode });
+      emailChangeStep.value = 2;
+    } catch (error: unknown) {
+      MessagePlugin.error(getErrorMessage(error, '原邮箱验证码错误或已过期'));
+    } finally {
+      profileLoading.value = false;
+    }
   }
 
   async function sendPhoneOldVerificationCode() {
@@ -269,7 +305,10 @@ export function useProfile() {
     }
     try {
       await runWithCaptcha(async (captcha: unknown) => {
-        await clientAuthApi.sendPhoneCode({ phone: profileForm.phone, purpose: 'verify_bound_phone', captcha });
+        await clientAuthApi.sendPhoneCode(
+          { phone: profileForm.phone, purpose: 'verify_bound_phone', captcha },
+          AUTH_BOUND_CODE_CONFIG,
+        );
       });
       MessagePlugin.success('验证码已发送至原手机号');
       phoneOldCountdown.value = 60;
@@ -292,7 +331,10 @@ export function useProfile() {
     }
     try {
       await runWithCaptcha(async (captcha: unknown) => {
-        await clientAuthApi.sendEmailCode({ email: profileForm.email, purpose: 'verify_bound_email', captcha });
+        await clientAuthApi.sendEmailCode(
+          { email: profileForm.email, purpose: 'verify_bound_email', captcha },
+          AUTH_BOUND_CODE_CONFIG,
+        );
       });
       MessagePlugin.success('验证码已发送至原邮箱');
       emailOldCountdown.value = 60;
@@ -554,6 +596,8 @@ export function useProfile() {
     emailCountdown,
     phoneOldCountdown,
     emailOldCountdown,
+    phoneChangeStep,
+    emailChangeStep,
     notificationList,
     balanceText,
     enabledNotificationCount,
@@ -568,6 +612,8 @@ export function useProfile() {
     sendEmailVerificationCode,
     sendPhoneOldVerificationCode,
     sendEmailOldVerificationCode,
+    goPhoneNextStep,
+    goEmailNextStep,
     submitPhoneChange,
     submitEmailChange,
     saveNotificationPreferences,

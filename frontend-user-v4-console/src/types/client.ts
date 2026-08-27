@@ -35,7 +35,12 @@ export interface ClientAlipayAccount {
 export interface ClientMemberLevel {
   id?: number;
   name?: string;
-  code?: string;
+  [key: string]: unknown;
+}
+
+export interface ClientPromotionAmbassador {
+  id?: number;
+  name?: string;
   reward_rate?: number | string;
   [key: string]: unknown;
 }
@@ -59,6 +64,8 @@ export interface ClientUserInfo {
   member_level_id?: number | string | null;
   total_sales_amount?: string | number;
   member_level?: ClientMemberLevel | null;
+  promotion_ambassador_id?: number | string | null;
+  promotion_ambassador?: ClientPromotionAmbassador | null;
   is_verified?: number | string;
   real_name?: string;
   id_card_masked?: string;
@@ -444,11 +451,9 @@ export interface ReferralUserBrief {
   nickname?: string;
   display_name?: string;
   created_at?: string;
-  referred_at?: string;
-  [key: string]: unknown;
 }
 
-export interface ReferralMemberLevel {
+export interface ReferralAmbassador {
   id?: number;
   name?: string;
   code?: string;
@@ -475,9 +480,8 @@ export interface ReferralOverviewPayload {
   direct_referral_count?: number;
   rewarded_orders_count?: number;
   total_reward_amount?: number | string;
-  current_member_level?: ReferralMemberLevel | null;
-  next_member_level?: ReferralMemberLevel | null;
-  member_levels?: ReferralMemberLevel[];
+  current_ambassador?: ReferralAmbassador | null;
+  ambassadors?: ReferralAmbassador[];
   recent_referrals?: ReferralUserBrief[];
   [key: string]: unknown;
 }

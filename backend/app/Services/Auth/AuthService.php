@@ -14,6 +14,7 @@ use App\Services\System\NotificationService;
 use App\Services\System\OperationLogService;
 use App\Services\User\AdminRoleBridgeService;
 use App\Support\AccountIdentifier;
+use App\Support\CacheKey;
 use App\Support\SensitiveDataSanitizer;
 use App\Support\TextSanitizer;
 use Illuminate\Support\Facades\Cache;
@@ -661,7 +662,7 @@ class AuthService
 
         $code = Str::random(64);
         $targetUrl = $this->resolveAdminLoginAsTargetUrl();
-        $cacheKey = $this->buildAdminLoginAsCacheKey($code);
+        $cacheKey = CacheKey::adminLoginAs($code);
         $adminId = (int) ($context['admin_id'] ?? 0);
         $ipAddress = trim((string) ($context['ip_address'] ?? ''));
         $userAgentHash = $this->hashLoginAsUserAgent((string) ($context['user_agent'] ?? ''));
@@ -782,7 +783,7 @@ class AuthService
             throw new BusinessException('代登录凭证不能为空', 42200, 422);
         }
 
-        $payload = Cache::store('redis_volatile')->pull($this->buildAdminLoginAsCacheKey($code));
+        $payload = Cache::store('redis_volatile')->pull(CacheKey::adminLoginAs($code));
         if (! is_array($payload)) {
             throw new BusinessException('代登录凭证已失效，请重新发起', 41000, 410);
         }
@@ -1190,14 +1191,9 @@ class AuthService
         return $ipAddress !== '' ? $ipAddress : null;
     }
 
-    private function buildAdminLoginAsCacheKey(string $code): string
-    {
-        return 'auth:admin_login_as:'.hash('sha256', $code);
-    }
-
     private function ensureAdminLoginNotLocked(string $normalizedUsername): void
     {
-        $attempts = (int) Cache::store('redis_volatile')->get($this->adminLoginFailureKey($normalizedUsername), 0);
+        $attempts = (int) Cache::store('redis_volatile')->get(CacheKey::adminLoginFailure($normalizedUsername), 0);
 
         if ($attempts >= self::ADMIN_LOGIN_MAX_FAILED_ATTEMPTS) {
             throw new BusinessException('登录失败次数过多，请 30 分钟后再试', 42900, 429);
@@ -1206,19 +1202,14 @@ class AuthService
 
     private function recordAdminLoginFailure(string $normalizedUsername): void
     {
-        $key = $this->adminLoginFailureKey($normalizedUsername);
+        $key = CacheKey::adminLoginFailure($normalizedUsername);
         $attempts = (int) Cache::store('redis_volatile')->increment($key, 1);
         Cache::store('redis_volatile')->put($key, $attempts, now()->addSeconds(self::ADMIN_LOGIN_FAILED_WINDOW_SECONDS));
     }
 
     private function clearAdminLoginFailures(string $normalizedUsername): void
     {
-        Cache::store('redis_volatile')->forget($this->adminLoginFailureKey($normalizedUsername));
-    }
-
-    private function adminLoginFailureKey(string $normalizedUsername): string
-    {
-        return 'admin-login-fail:account:'.sha1($normalizedUsername);
+        Cache::store('redis_volatile')->forget(CacheKey::adminLoginFailure($normalizedUsername));
     }
 
     private function hashLoginAsUserAgent(string $userAgent): string

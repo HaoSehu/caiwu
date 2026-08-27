@@ -10,9 +10,11 @@ import type {
 } from '@/types/client';
 import request from '@/utils/request';
 
-type RequestConfig = AxiosRequestConfig & { silentError?: boolean };
+type RequestConfig = AxiosRequestConfig & { silentError?: boolean; authBearer?: boolean };
 
 const SILENT_ERROR_CONFIG: RequestConfig = { silentError: true };
+// 已登录态下发"验证已绑定号码"验证码：公开发码路由需显式携带凭证供后端识别绑定归属
+export const AUTH_BOUND_CODE_CONFIG: RequestConfig = { authBearer: true };
 
 function getEnvelope<T>(url: string, config?: RequestConfig) {
   return request.get<ApiEnvelope<T>, ApiEnvelope<T>>(url, config);
@@ -56,8 +58,14 @@ export const clientAuthApi = {
   notificationPreferences: () => getEnvelope<ClientNotificationPreferences>('/v2/client/auth/notification-preferences'),
   updateNotificationPreferences: (data: Record<string, unknown>) =>
     putEnvelope<ClientNotificationPreferences>('/v2/client/auth/notification-preferences', data),
-  sendPhoneCode: (data: Record<string, unknown>) => request.post('/v2/client/auth/phone-code', data),
-  sendEmailCode: (data: Record<string, unknown>) => request.post('/v2/client/auth/email-code', data),
+  sendPhoneCode: (data: Record<string, unknown>, config?: RequestConfig) =>
+    request.post('/v2/client/auth/phone-code', data, config),
+  sendEmailCode: (data: Record<string, unknown>, config?: RequestConfig) =>
+    request.post('/v2/client/auth/email-code', data, config),
+  verifyBoundPhoneCode: (data: Record<string, unknown>) =>
+    request.post('/v2/client/auth/phone/verify-bound-code', data),
+  verifyBoundEmailCode: (data: Record<string, unknown>) =>
+    request.post('/v2/client/auth/email/verify-bound-code', data),
   resetPassword: (data: Record<string, unknown>) => request.post('/v2/client/auth/reset-password', data),
   logout: () => request.post('/v2/client/auth/logout'),
 };

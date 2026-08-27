@@ -18,6 +18,8 @@ use App\Http\Requests\Client\V2\Auth\UpdateNotificationPreferencesRequest;
 use App\Http\Requests\Client\V2\Auth\UpdatePasswordRequest;
 use App\Http\Requests\Client\V2\Auth\UpdatePhoneRequest;
 use App\Http\Requests\Client\V2\Auth\UpdateProfileRequest;
+use App\Http\Requests\Client\V2\Auth\VerifyBoundEmailCodeRequest;
+use App\Http\Requests\Client\V2\Auth\VerifyBoundPhoneCodeRequest;
 use App\Http\Resources\Client\V2\ClientUserInfoResource;
 use App\Models\User;
 use App\Services\Auth\AuthService;
@@ -165,6 +167,7 @@ class AuthController extends Controller
         $user = $request->user();
         $user->loadMissing([
             'memberLevel',
+            'promotionAmbassador',
             'account',
         ]);
 
@@ -275,6 +278,44 @@ class AuthController extends Controller
         ], '通知设置更新成功');
     }
 
+    /**
+     * 换绑第一步预校验原手机验证码：只校验不消费，最终提交时仍需原验证码复核。
+     */
+    public function verifyBoundPhoneCode(VerifyBoundPhoneCodeRequest $request)
+    {
+        $user = $request->user();
+        $phone = trim((string) ($user->phone ?? ''));
+
+        if ($phone === '') {
+            return $this->error(42200, '当前账号未绑定手机号');
+        }
+
+        if (! $this->codeService->peekPhoneCode($user->id, $phone, (string) $request->validated('code'))) {
+            return $this->error(42200, '原手机验证码错误或已过期');
+        }
+
+        return $this->success(null, '验证通过');
+    }
+
+    /**
+     * 换绑第一步预校验原邮箱验证码：只校验不消费，最终提交时仍需原验证码复核。
+     */
+    public function verifyBoundEmailCode(VerifyBoundEmailCodeRequest $request)
+    {
+        $user = $request->user();
+        $email = trim((string) ($user->email ?? ''));
+
+        if ($email === '') {
+            return $this->error(42200, '当前账号未绑定邮箱');
+        }
+
+        if (! $this->codeService->peekEmailCode($user->id, $email, (string) $request->validated('code'))) {
+            return $this->error(42200, '原邮箱验证码错误或已过期');
+        }
+
+        return $this->success(null, '验证通过');
+    }
+
     public function updatePhone(UpdatePhoneRequest $request)
     {
         $data = $request->validated();
@@ -311,7 +352,7 @@ class AuthController extends Controller
         $this->loginFlowService->assertCaptchaVerified($request->input('captcha'), (string) $request->ip());
 
         $this->sendAccountCodeService->sendPhoneCode(
-            $request->user(),
+            $this->resolveOptionalUser($request),
             (string) $data['phone'],
             (string) ($data['purpose'] ?? 'generic'),
             $request->ip(),
@@ -357,7 +398,7 @@ class AuthController extends Controller
         $this->loginFlowService->assertCaptchaVerified($request->input('captcha'), (string) $request->ip());
 
         $this->sendAccountCodeService->sendEmailCode(
-            $request->user(),
+            $this->resolveOptionalUser($request),
             (string) $data['email'],
             (string) ($data['purpose'] ?? 'generic'),
             $request->ip(),
@@ -407,6 +448,23 @@ class AuthController extends Controller
             'user_agent' => (string) ($request->userAgent() ?? ''),
             'trace_id' => (string) $request->header('X-Request-Id', ''),
         ];
+    }
+
+    private function resolveOptionalUser(Request $request): ?User
+    {
+        if ($user = $request->user()) {
+            return $user;
+        }
+
+        $token = $request->bearerToken();
+        if ($token) {
+            $accessToken = PersonalAccessToken::findToken($token);
+            if ($accessToken?->tokenable instanceof User) {
+                return $accessToken->tokenable;
+            }
+        }
+
+        return null;
     }
 
     private function resolveCodeOwnerId(Request $request): int|string

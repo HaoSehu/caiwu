@@ -147,7 +147,18 @@
     </t-dialog>
 
     <t-dialog v-model:visible="phoneDialogVisible" header="更换绑定手机" width="min(30rem, calc(100vw - 2rem))">
-      <t-form label-align="top">
+      <t-form v-if="phoneChangeStep === 1" label-align="top">
+        <div class="reset-single-tip">为确认是本人操作，请先验证当前绑定的手机号 {{ profileForm.phone }}</div>
+        <t-form-item label="验证码">
+          <div class="bind-code-row">
+            <t-input v-model="phoneForm.oldCode" placeholder="请输入 6 位验证码" maxlength="6" />
+            <t-button variant="outline" :disabled="phoneOldCountdown > 0" @click="sendPhoneOldVerificationCode">
+              {{ phoneOldCountdown > 0 ? `${phoneOldCountdown}s` : '发送验证码' }}
+            </t-button>
+          </div>
+        </t-form-item>
+      </t-form>
+      <t-form v-else label-align="top">
         <t-form-item label="新手机号"><t-input v-model="phoneForm.phone" placeholder="请输入新手机号" /></t-form-item>
         <t-form-item label="验证码">
           <div class="bind-code-row">
@@ -160,12 +171,32 @@
       </t-form>
       <template #footer>
         <t-button variant="outline" @click="phoneDialogVisible = false">取消</t-button>
-        <t-button theme="primary" :loading="profileLoading" @click="submitPhoneChange">确定</t-button>
+        <t-button
+          v-if="phoneChangeStep === 2 && profileForm.phone"
+          variant="outline"
+          @click="phoneChangeStep = 1"
+          >上一步</t-button
+        >
+        <t-button v-if="phoneChangeStep === 1" theme="primary" :loading="profileLoading" @click="goPhoneNextStep"
+          >下一步</t-button
+        >
+        <t-button v-else theme="primary" :loading="profileLoading" @click="submitPhoneChange">确定</t-button>
       </template>
     </t-dialog>
 
     <t-dialog v-model:visible="emailDialogVisible" header="更换绑定邮箱" width="min(30rem, calc(100vw - 2rem))">
-      <t-form label-align="top">
+      <t-form v-if="emailChangeStep === 1" label-align="top">
+        <div class="reset-single-tip">为确认是本人操作，请先验证当前绑定的邮箱 {{ profileForm.email }}</div>
+        <t-form-item label="验证码">
+          <div class="bind-code-row">
+            <t-input v-model="emailForm.oldCode" placeholder="请输入 6 位验证码" maxlength="6" />
+            <t-button variant="outline" :disabled="emailOldCountdown > 0" @click="sendEmailOldVerificationCode">
+              {{ emailOldCountdown > 0 ? `${emailOldCountdown}s` : '发送验证码' }}
+            </t-button>
+          </div>
+        </t-form-item>
+      </t-form>
+      <t-form v-else label-align="top">
         <t-form-item label="新邮箱"><t-input v-model="emailForm.email" placeholder="请输入新邮箱" /></t-form-item>
         <t-form-item label="验证码">
           <div class="bind-code-row">
@@ -178,7 +209,16 @@
       </t-form>
       <template #footer>
         <t-button variant="outline" @click="emailDialogVisible = false">取消</t-button>
-        <t-button theme="primary" :loading="profileLoading" @click="submitEmailChange">确定</t-button>
+        <t-button
+          v-if="emailChangeStep === 2 && profileForm.email"
+          variant="outline"
+          @click="emailChangeStep = 1"
+          >上一步</t-button
+        >
+        <t-button v-if="emailChangeStep === 1" theme="primary" :loading="profileLoading" @click="goEmailNextStep"
+          >下一步</t-button
+        >
+        <t-button v-else theme="primary" :loading="profileLoading" @click="submitEmailChange">确定</t-button>
       </template>
     </t-dialog>
   </section>
@@ -201,6 +241,8 @@ const {
   passwordDialogVisible,
   phoneDialogVisible,
   emailDialogVisible,
+  phoneChangeStep,
+  emailChangeStep,
   passwordMode,
   profileForm,
   passwordForm,
@@ -210,6 +252,8 @@ const {
   emailForm,
   phoneCountdown,
   emailCountdown,
+  phoneOldCountdown,
+  emailOldCountdown,
   notificationList,
   balanceText,
   enabledNotificationCount,
@@ -222,6 +266,10 @@ const {
   submitResetPassword,
   sendPhoneVerificationCode,
   sendEmailVerificationCode,
+  sendPhoneOldVerificationCode,
+  sendEmailOldVerificationCode,
+  goPhoneNextStep,
+  goEmailNextStep,
   submitPhoneChange,
   submitEmailChange,
   saveNotificationPreferences,
