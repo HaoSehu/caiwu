@@ -12,6 +12,7 @@ use App\Services\Upstream\Contracts\ProvidesConsoleSecurity;
 use App\Services\Upstream\Contracts\ProvidesProvisioning;
 use App\Services\Upstream\Contracts\ProvidesRenewal;
 use App\Services\Upstream\Contracts\ProvidesScheduledAuthRefresh;
+use App\Services\Upstream\Contracts\ProvidesSelfStatusSync;
 use App\Services\Upstream\Contracts\ProvidesStatusSync;
 use App\Services\Upstream\Contracts\ProvidesSupplierFormSchema;
 use App\Services\Upstream\Contracts\UpstreamDriver;
@@ -28,6 +29,7 @@ final class ZjmfFinanceDriver implements ProvidesSupplierFormSchema, UpstreamDri
         ProvidesProvisioning::class,
         ProvidesRenewal::class,
         ProvidesScheduledAuthRefresh::class,
+        ProvidesSelfStatusSync::class,
         ProvidesStatusSync::class,
     ];
 

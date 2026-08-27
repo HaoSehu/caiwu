@@ -10,6 +10,7 @@ use App\Services\Upstream\Contracts\ProvidesConsoleSecurity;
 use App\Services\Upstream\Contracts\ProvidesProvisioning;
 use App\Services\Upstream\Contracts\ProvidesRenewal;
 use App\Services\Upstream\Contracts\ProvidesScheduledAuthRefresh;
+use App\Services\Upstream\Contracts\ProvidesSelfStatusSync;
 use App\Services\Upstream\Contracts\ProvidesStatusSync;
 use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfInventoryAndServiceSyncHook;
 use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfInventoryAndServiceSyncTask;
@@ -36,6 +37,7 @@ return [
             ProvidesProvisioning::class,
             ProvidesRenewal::class,
             ProvidesScheduledAuthRefresh::class,
+            ProvidesSelfStatusSync::class,
             ProvidesStatusSync::class,
         ],
         'extra' => [

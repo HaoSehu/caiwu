@@ -12,7 +12,6 @@ use App\Services\Automation\Heartbeat\Contracts\ScheduledTask;
 use App\Services\Automation\Heartbeat\Contracts\ScheduledTaskProvider;
 use App\Services\Automation\Heartbeat\Contracts\TriggerRule;
 use App\Services\Automation\Heartbeat\Data\TaskContext;
-use App\Services\Automation\Heartbeat\HeartbeatTaskRegistry;
 use App\Services\Automation\Heartbeat\ScheduleRule;
 use App\Services\Automation\InvoiceCleanupAutomationService;
 use App\Services\Automation\ServiceLifecycleAutomationService;
@@ -23,7 +22,9 @@ use App\Services\Referral\ReferralService;
 use App\Services\System\SettingService;
 use App\Services\Ticket\TicketAutomationService;
 use App\Services\Upstream\Contracts\ProvidesScheduledAuthRefresh;
+use App\Services\Upstream\Contracts\ProvidesSelfStatusSync;
 use App\Services\Upstream\ProviderKey;
+use App\Services\Upstream\ProviderRegistry;
 use App\Services\Upstream\ProviderResolver;
 use App\Support\AutomationScheduleExpression;
 use Closure;
@@ -118,13 +119,10 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
                 description: '定时拉取上游实例详情与运行状态，并同步回本地用户服务状态。',
                 triggers: [ScheduleRule::everyTicks(1)],
                 handler: function (): array {
-                    // 插件任务 sync-zjmf-finance-inventory-and-services 已定向同步 ZJMF 服务状态时，
-                    // 全量任务排除 ZJMF，避免同一服务每 15 分钟被上游拉取两轮；插件禁用时回退全量兜底。
-                    $excludedProviderKeys = app(HeartbeatTaskRegistry::class)
-                        ->supports('sync-zjmf-finance-inventory-and-services')
-                        ? [ProviderKey::ZJMF_FINANCE_API]
-                        : [];
-                    $summary = app(ServiceStatusSyncService::class)->handle(100, 10, $excludedProviderKeys);
+                    // 启用中且声明 ProvidesSelfStatusSync 能力的上游插件已自带定向状态同步，
+                    // 全量任务据此排除对应 provider_key，避免同一服务被上游重复拉取；
+                    // 插件停用后自动回退全量兜底。
+                    $summary = app(ServiceStatusSyncService::class)->handle(100, 10, $this->selfSyncedProviderKeys());
                     Log::debug('[定时任务] 用户产品状态同步执行完成', $summary);
 
                     return $summary;
@@ -403,6 +401,28 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
 
             return SettingService::defaultAutomationConfig();
         }
+    }
+
+    /**
+     * 已启用的上游插件中以 ProvidesSelfStatusSync 能力声明"自带定向状态同步"的 provider_key 集合。
+     *
+     * 能力判定走 ProviderRegistry 的实时插件清单，不读 capabilities_json 落库快照：
+     * manifest 增补能力后部署即生效；插件清单损坏或文件缺失时驱动不注册进排除集，
+     * 对应 provider 自动回退全量同步兜底，不会出现"定向任务与全量任务同时失效"。
+     *
+     * @return list<string>
+     */
+    private function selfSyncedProviderKeys(): array
+    {
+        $keys = [];
+        foreach (app(ProviderRegistry::class)->all() as $key => $driver) {
+            $normalizedKey = trim($key);
+            if ($normalizedKey !== '' && $driver->supports(ProvidesSelfStatusSync::class)) {
+                $keys[] = $normalizedKey;
+            }
+        }
+
+        return $keys;
     }
 
     /**
