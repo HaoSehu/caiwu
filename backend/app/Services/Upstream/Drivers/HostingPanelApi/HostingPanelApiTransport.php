@@ -15,6 +15,7 @@ use App\Services\Upstream\Contracts\ProvidesProvisioning;
 use App\Services\Upstream\Contracts\ProvidesRenewal;
 use App\Services\Upstream\Contracts\ProvidesScheduledAuthRefresh;
 use App\Services\Upstream\Contracts\ProvidesStatusSync;
+use App\Services\Upstream\Contracts\ProvidesUpstreamLoginEndpoints;
 use App\Services\Upstream\Drivers\HostingPanelApi\Concerns\HandlesApiConfigOptions;
 use App\Services\Upstream\Drivers\HostingPanelApi\Concerns\HandlesCatalogNormalization;
 use App\Services\Upstream\ProviderKey;
@@ -26,8 +27,10 @@ use Illuminate\Http\Client\Pool;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\Process\Exception\ProcessTimedOutException;
 use Symfony\Component\Process\Process;
+use Throwable;
 
 class HostingPanelApiTransport extends UpstreamJwtSessionManager implements ProvidesConsoleAccess, ProvidesConsoleCatalog, ProvidesConsoleNetwork, ProvidesConsoleRuntime, ProvidesConsoleSecurity, ProvidesProvisioning, ProvidesRenewal, ProvidesScheduledAuthRefresh, ProvidesStatusSync
 {
@@ -458,7 +461,7 @@ class HostingPanelApiTransport extends UpstreamJwtSessionManager implements Prov
                     $decoded = [];
                     $error = $this->buildInvalidJsonMessage($status, $contentType, $body);
                 }
-            } elseif ($response instanceof \Throwable) {
+            } elseif ($response instanceof Throwable) {
                 $error = '并发请求连接失败：'.$response->getMessage();
             } else {
                 $error = '并发请求未返回有效响应';
@@ -994,7 +997,7 @@ class HostingPanelApiTransport extends UpstreamJwtSessionManager implements Prov
 
         try {
             $addresses = $this->runDnsLookupProcess($host, (int) $this->serviceConfig['dns_resolver_timeout']);
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             if ($e instanceof ProcessTimedOutException) {
                 $this->safeLog('warning', '[主机面板接口] 异步DNS解析超时', ['host' => $host, 'message' => $e->getMessage()]);
             } else {
@@ -1436,12 +1439,59 @@ PHP;
 
     private function isLoginEndpoint(string $uri): bool
     {
-        $uri = strtolower(trim($uri));
+        $normalizedUri = strtolower(trim($uri));
 
-        return $uri === '/v1/login_api'
-            || str_contains($uri, '/v1/login_api?')
-            || $uri === '/zjmf_api_login'
-            || str_contains($uri, '/zjmf_api_login?');
+        // 先聚合各上游插件声明的原生登录端点，再判定本类自有的主机面板端点；
+        // 两类集合互斥时顺序不影响结果，仅决定短路路径。
+        foreach ($this->declaredUpstreamLoginEndpoints() as $endpoint) {
+            if ($normalizedUri === $endpoint || str_contains($normalizedUri, $endpoint.'?')) {
+                return true;
+            }
+        }
+
+        return $normalizedUri === '/v1/login_api'
+            || str_contains($normalizedUri, '/v1/login_api?');
+    }
+
+    /**
+     * 聚合容器 tag `upstream.login_endpoints` 中各上游插件声明的登录端点。
+     * 注意三点：纯 tag 注册不会出现在 bound() 里，不能用 bound() 做守卫；
+     * tagged() 返回的 RewindableGenerator 必须用 foreach 消费，
+     * 不能用 (array) 强转（那会取出对象的内部属性而非元素）；
+     * 单个 policy 声明异常只跳过该 policy，不得打断全部上游请求。
+     *
+     * @return list<string>
+     */
+    private function declaredUpstreamLoginEndpoints(): array
+    {
+        $endpoints = [];
+
+        foreach (app()->tagged('upstream.login_endpoints') as $policy) {
+            if (! $policy instanceof ProvidesUpstreamLoginEndpoints) {
+                continue;
+            }
+
+            try {
+                $uris = $policy->loginEndpointUris();
+            } catch (Throwable $exception) {
+                Log::warning('[上游传输] 插件登录端点声明读取失败，已跳过该声明', [
+                    'policy' => $policy::class,
+                    'message' => $exception->getMessage(),
+                    'exception' => $exception::class,
+                ]);
+
+                continue;
+            }
+
+            foreach ($uris as $endpoint) {
+                $normalized = strtolower(trim((string) $endpoint));
+                if ($normalized !== '') {
+                    $endpoints[] = $normalized;
+                }
+            }
+        }
+
+        return array_values(array_unique($endpoints));
     }
 
     private function supportsConfigTemplate(array $product): bool

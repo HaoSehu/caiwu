@@ -19,6 +19,7 @@ use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfFinanceTransport;
 use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfInventoryAndServiceSyncHook;
 use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfInventoryAndServiceSyncTask;
 use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfLegacyPasswordVerifier;
+use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfLoginEndpointPolicy;
 use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfNetworkService;
 use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfProductTypeMapper;
 use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfProvisionService;
@@ -40,9 +41,11 @@ final class ZjmfFinanceServiceProvider extends ServiceProvider
         $this->app->singleton(ZjmfBillingRestoreService::class);
 
         $this->registerUpstreamGraph();
+        $this->app->singleton(ZjmfLoginEndpointPolicy::class);
 
         $this->app->tag([ZjmfCredentialParser::class], 'upstream.web_session_credential_parsers');
         $this->app->tag([ZjmfLegacyPasswordVerifier::class], 'auth.legacy_password_verifiers');
+        $this->app->tag([ZjmfLoginEndpointPolicy::class], 'upstream.login_endpoints');
     }
 
     /**
