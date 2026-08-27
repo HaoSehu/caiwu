@@ -25,11 +25,14 @@ return [
             'ignore_exceptions' => false,
         ],
 
+        // 部署约定 storage 为 775/www（组可写）；日志文件必须组可写，
+        // 否则后续启动的 PHP-FPM worker 或 cron 无法写入当日文件。
         'single' => [
             'driver' => 'single',
             'path' => storage_path('logs/laravel.log'),
             'level' => env('LOG_LEVEL', $defaultLevel),
             'replace_placeholders' => true,
+            'permission' => 0664,
         ],
 
         'daily' => [
@@ -38,6 +41,7 @@ return [
             'level' => env('LOG_LEVEL', $defaultLevel),
             'days' => (int) env('LOG_DAILY_DAYS', 14),
             'replace_placeholders' => true,
+            'permission' => 0664,
         ],
 
         'stderr' => [
@@ -77,6 +81,7 @@ return [
             'handler_with' => [
                 'filename' => storage_path('logs/api-json.log'),
                 'maxFiles' => (int) env('API_LOG_DAYS', 31),
+                'filePermission' => 0664,
             ],
             'formatter' => JsonFormatter::class,
             'level' => 'info',
@@ -93,6 +98,7 @@ return [
             'handler_with' => [
                 'filename' => storage_path('logs/gateway-json.log'),
                 'maxFiles' => (int) env('GATEWAY_LOG_DAYS', 90),
+                'filePermission' => 0664,
             ],
             'formatter' => JsonFormatter::class,
             'level' => 'info',
