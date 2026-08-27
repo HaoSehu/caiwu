@@ -6,6 +6,7 @@ namespace App\Http\Resources\Admin\V2;
 
 use App\Models\ScheduleTaskRun;
 use App\Support\SensitiveDataSanitizer;
+use App\Support\TextSanitizer;
 use DateTimeInterface;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -61,9 +62,7 @@ class AdminScheduleTaskRunResource extends JsonResource
         $value = SensitiveDataSanitizer::sanitizeText((string) $value);
         $value = trim(preg_replace('/\s+/u', ' ', $value) ?? $value);
 
-        return mb_strlen($value) > self::MAX_TEXT
-            ? mb_substr($value, 0, self::MAX_TEXT).'...'
-            : $value;
+        return TextSanitizer::truncateWithEllipsis($value, self::MAX_TEXT);
     }
 
     private function date(mixed $value): ?string

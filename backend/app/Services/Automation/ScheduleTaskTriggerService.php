@@ -10,6 +10,7 @@ use App\Services\Automation\Heartbeat\Contracts\ScheduledTask;
 use App\Services\Automation\Heartbeat\HeartbeatTaskRegistry;
 use App\Services\Automation\Heartbeat\ScheduleTaskRunRepository;
 use App\Services\System\OperationLogService;
+use App\Support\CacheKey;
 use App\Support\SensitiveDataSanitizer;
 use Illuminate\Contracts\Cache\Lock;
 use Illuminate\Support\Facades\Cache;
@@ -364,7 +365,7 @@ class ScheduleTaskTriggerService
     {
         try {
             $lock = Cache::lock(
-                'scheduler:task-trigger:'.$taskKey,
+                CacheKey::lock('scheduler', 'task-trigger:'.$taskKey),
                 max(30, min(3600, $lockTtlSeconds)),
             );
 

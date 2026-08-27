@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Console\Commands;
 
 use App\Constants\InvoiceStatus;
+use App\Services\System\LedgerConsistencyCheck;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
@@ -20,6 +21,9 @@ use Illuminate\Support\Facades\DB;
  * 用法：
  *   php artisan finance:audit-ledger-consistency
  *   php artisan finance:audit-ledger-consistency --json --strict
+ *
+ * 余额与流水的合计口径核对由 App\Services\System\LedgerConsistencyCheck
+ * 共享提供，reconcile:account-balance 的快照口径核对也复用同一服务。
  */
 class AuditLedgerConsistencyCommand extends Command
 {
@@ -29,6 +33,12 @@ class AuditLedgerConsistencyCommand extends Command
         {--sample=5 : 每类异常样本数量}';
 
     protected $description = '审计账户流水与余额的一致性、来源完整性与充值桥接覆盖';
+
+    public function __construct(
+        private readonly LedgerConsistencyCheck $ledgerConsistencyCheck,
+    ) {
+        parent::__construct();
+    }
 
     public function handle(): int
     {
@@ -58,7 +68,7 @@ class AuditLedgerConsistencyCommand extends Command
         $noSourceId = (int) DB::table('account_transactions')->whereNull('source_id')->count();
         $noTrace = (int) DB::table('account_transactions')->whereNull('trace_id')->count();
 
-        $balanceVsLedger = $this->balanceVsLedgerMismatches();
+        $balanceVsLedger = $this->ledgerConsistencyCheck->cashBalanceSumMismatches();
         $rechargeBridgeGap = $this->rechargeBridgeGap();
 
         return [
@@ -77,45 +87,6 @@ class AuditLedgerConsistencyCommand extends Command
                 'recharge_bridge_gap' => array_slice($rechargeBridgeGap['samples'], 0, $sampleLimit),
             ],
         ];
-    }
-
-    /**
-     * 余额（user_accounts.cash_balance）与流水（account_transactions 现金入账合计）不一致的用户。
-     *
-     * @return array{count: int, samples: array<int,array<string,mixed>>}
-     */
-    private function balanceVsLedgerMismatches(): array
-    {
-        $ledgerSub = DB::table('account_transactions')
-            ->select('user_id', DB::raw('SUM(change_amount) AS ledger_sum'))
-            ->where('account_type', 'cash')
-            ->groupBy('user_id');
-
-        $rows = DB::table('user_accounts as ua')
-            ->leftJoinSub($ledgerSub, 'lt', 'lt.user_id', '=', 'ua.user_id')
-            ->where(function ($query): void {
-                $query->whereNull('lt.ledger_sum')
-                    ->orWhereColumn('ua.cash_balance', '<>', 'lt.ledger_sum');
-            })
-            ->select([
-                'ua.user_id',
-                'ua.cash_balance',
-                DB::raw('COALESCE(lt.ledger_sum, 0) AS ledger_sum'),
-            ])
-            ->orderBy('ua.user_id')
-            ->limit(200)
-            ->get();
-
-        $samples = $rows
-            ->map(fn ($row): array => [
-                'user_id' => (int) $row->user_id,
-                'cash_balance' => (string) $row->cash_balance,
-                'ledger_sum' => (string) $row->ledger_sum,
-            ])
-            ->values()
-            ->all();
-
-        return ['count' => count($samples), 'samples' => $samples];
     }
 
     /**

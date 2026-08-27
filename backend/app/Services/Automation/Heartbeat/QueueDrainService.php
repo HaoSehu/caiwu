@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Automation\Heartbeat;
 
+use App\Support\CacheKey;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -200,7 +201,7 @@ class QueueDrainService
         $busyWorkers = [];
         foreach ($definitions as $name => $queues) {
             try {
-                $lock = Cache::lock('scheduler:queue-drain:'.$name, $this->drainLockTtl());
+                $lock = Cache::lock(CacheKey::lock('scheduler', 'queue-drain:'.$name), $this->drainLockTtl());
                 if ($lock->get()) {
                     $available[$name] = $queues;
                     $locks[$name] = $lock;

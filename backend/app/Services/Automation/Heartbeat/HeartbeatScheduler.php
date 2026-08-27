@@ -10,6 +10,7 @@ use App\Models\ScheduleTick;
 use App\Services\Automation\Heartbeat\Contracts\ScheduledTask;
 use App\Services\Automation\Heartbeat\Data\TickContext;
 use App\Services\Automation\Heartbeat\Data\TickSummary;
+use App\Support\CacheKey;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Cache\Lock;
 use Illuminate\Support\Facades\Cache;
@@ -29,14 +30,16 @@ class HeartbeatScheduler
     public function tick(CarbonImmutable $now): TickSummary
     {
         $slot = TickSlot::floorToFifteenMinutes($now);
+        $slotKey = $slot->format('YmdHi');
+        $lockName = CacheKey::lock('scheduler', 'heartbeat:'.$slotKey);
         // 先获取槽位锁再创建/读取 tick：避免多实例并发心跳对唯一索引的写入冲突；
         // 锁失败时不触碰 tick 表，直接返回无 id 的空上下文。
-        $lock = Cache::lock('scheduler:heartbeat:'.$slot->format('YmdHi'), 900);
+        $lock = Cache::lock($lockName, 900);
 
         if (! $lock->get()) {
             Log::warning('[调度] 心跳槽位锁被占用，本槽位跳过派发', [
-                'slot' => $slot->format('YmdHi'),
-                'lock' => 'scheduler:heartbeat:'.$slot->format('YmdHi'),
+                'slot' => $slotKey,
+                'lock' => $lockName,
             ]);
 
             return new TickSummary(TickSlot::context(null, $slot), [], [], [], []);
@@ -169,7 +172,7 @@ class HeartbeatScheduler
     {
         try {
             $lock = Cache::lock(
-                'scheduler:task-trigger:'.$task->key(),
+                CacheKey::lock('scheduler', 'task-trigger:'.$task->key()),
                 max(30, min(3600, $task->lockTtlSeconds())),
             );
             if (! $lock->get()) {

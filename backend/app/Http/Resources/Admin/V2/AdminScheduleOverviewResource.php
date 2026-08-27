@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Resources\Admin\V2;
 
 use App\Support\SensitiveDataSanitizer;
+use App\Support\TextSanitizer;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -193,11 +194,7 @@ class AdminScheduleOverviewResource extends JsonResource
         $text = SensitiveDataSanitizer::sanitizeText((string) $value);
         $text = trim(preg_replace('/\s+/u', ' ', $text) ?? $text);
 
-        if (mb_strlen($text) <= self::TEXT_LIMIT) {
-            return $text;
-        }
-
-        return mb_substr($text, 0, self::TEXT_LIMIT).'...';
+        return TextSanitizer::truncateWithEllipsis($text, self::TEXT_LIMIT);
     }
 
     private function isSensitiveKey(string $key): bool
