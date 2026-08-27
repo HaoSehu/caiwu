@@ -89,7 +89,7 @@ const ADMIN_MENU_GROUPS: MenuGroupConfig[] = [
       {
         path: '/admin/menu/user-management/member-benefits',
         title: { zh_CN: '会员权益', en_US: 'Member Benefits' },
-        children: ['/admin/member-levels', '/admin/promotion-ambassadors'],
+        children: ['/admin/member-levels', '/admin/promotion-ambassadors', '/admin/marketing-groups'],
       },
     ],
   },
@@ -145,11 +145,6 @@ const ADMIN_MENU_GROUPS: MenuGroupConfig[] = [
         path: '/admin/menu/marketing-promotion/coupons',
         title: { zh_CN: '优惠券', en_US: 'Coupons' },
         children: ['/admin/coupons', '/admin/coupon-campaigns'],
-      },
-      {
-        path: '/admin/menu/marketing-promotion/marketing-groups',
-        title: { zh_CN: '产品营销组', en_US: 'Marketing Groups' },
-        children: ['/admin/marketing-groups'],
       },
       {
         path: '/admin/menu/marketing-promotion/referral-management',

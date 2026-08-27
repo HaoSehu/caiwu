@@ -131,7 +131,7 @@
           </div>
         </div>
 
-        <t-empty v-else description="暂无营销组，请先到「营销推广 > 产品营销组」创建并圈选商品" />
+        <t-empty v-else description="暂无营销组，请先到「用户管理 > 会员权益 > 产品营销组」创建并圈选商品" />
       </section>
     </t-dialog>
   </div>
