@@ -9,9 +9,10 @@ use App\Exceptions\BusinessException;
 use App\Models\Supplier;
 use App\Services\ProductCatalog\ProductCatalogService;
 use App\Services\Upstream\Contracts\ProvidesRenewal;
+use App\Services\Upstream\Support\AbstractUpstreamServerPlugin;
 use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfFinanceDriver;
 
-class ZjmfFinance
+class ZjmfFinance extends AbstractUpstreamServerPlugin
 {
     public function __construct(
         private readonly ZjmfFinanceDriver $driver,
@@ -32,6 +33,11 @@ class ZjmfFinance
         return $this->driver->capabilities();
     }
 
+    /**
+     * 历史行为保留：本插件的能力判定与解析完全委托 lib 内的
+     * ZjmfFinanceDriver（承载对象是其内部 adapter，外部不可见），
+     * 因此不落基类的 capabilityCarrier 方案，维持原委托语义。
+     */
     public function supports(string $capability): bool
     {
         return $this->driver->supports($capability);
@@ -42,49 +48,31 @@ class ZjmfFinance
         return $this->driver->resolve($capability);
     }
 
-    public function execute(array $request): array
+    public function supplierFormSchema(): array
     {
-        $action = trim((string) ($request['action'] ?? ''));
-        $payload = is_array($request['payload'] ?? null) ? $request['payload'] : [];
+        return $this->driver->supplierFormSchema();
+    }
 
+    /**
+     * ZJMF 特有动作在基类钩子中声明；server.metadata 无附加键，
+     * default 文案保持原有的英文输出。
+     *
+     * @param  array<string, mixed>  $request
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>|null
+     */
+    protected function dispatchSpecificAction(string $action, array $request, array $payload): ?array
+    {
         return match ($action) {
-            'server.metadata' => [
-                'success' => true,
-                'action' => $action,
-                'data' => [
-                    'key' => $this->key(),
-                    'label' => $this->label(),
-                    'capabilities' => $this->capabilities(),
-                ],
-            ],
-            'server.supports' => [
-                'success' => true,
-                'action' => $action,
-                'data' => [
-                    'supported' => $this->supports((string) ($payload['capability'] ?? '')),
-                ],
-            ],
-            'server.resolve_capability' => [
-                'success' => true,
-                'action' => $action,
-                'data' => [
-                    'resolved' => $this->resolve((string) ($payload['capability'] ?? '')),
-                ],
-            ],
-            'server.supplier_form_schema' => [
-                'success' => true,
-                'action' => $action,
-                'data' => $this->driver->supplierFormSchema(),
-            ],
             'server.supplier.refresh_card' => $this->refreshSupplierCard($action, $request),
             'server.supplier.bulk_connect' => $this->bulkConnectSupplierProducts($action, $request, $payload),
-            default => [
-                'success' => false,
-                'action' => $action,
-                'message' => 'Unsupported plugin action',
-                'data' => [],
-            ],
+            default => null,
         };
+    }
+
+    protected function unsupportedActionMessage(): string
+    {
+        return 'Unsupported plugin action';
     }
 
     /**
@@ -314,17 +302,6 @@ class ZjmfFinance
             || trim((string) ($supplier->api_key ?? '')) !== '';
 
         return $hasBaseUrl && $hasUsername && $hasApiKey;
-    }
-
-    private function formatCardDateTime(mixed $value): string
-    {
-        if ($value instanceof \DateTimeInterface) {
-            return $value->format('Y-m-d H:i:s');
-        }
-
-        $string = trim((string) ($value ?? ''));
-
-        return $string !== '' ? $string : '-';
     }
 
     private function positiveInt(mixed $value): ?int

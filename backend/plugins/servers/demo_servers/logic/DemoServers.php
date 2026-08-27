@@ -18,8 +18,9 @@ use App\Services\Upstream\Contracts\ProvidesScheduledAuthRefresh;
 use App\Services\Upstream\Contracts\ProvidesStatusSync;
 use App\Services\Upstream\Contracts\ProvidesSupplierFormSchema;
 use App\Services\Upstream\Contracts\UpstreamDriver;
+use App\Services\Upstream\Support\AbstractUpstreamServerPlugin;
 
-class DemoServers implements ProvidesConsoleAccess, ProvidesConsoleCatalog, ProvidesConsoleNetwork, ProvidesConsoleRuntime, ProvidesConsoleSecurity, ProvidesProvisioning, ProvidesRenewal, ProvidesScheduledAuthRefresh, ProvidesStatusSync, ProvidesSupplierFormSchema, UpstreamDriver
+class DemoServers extends AbstractUpstreamServerPlugin implements ProvidesConsoleAccess, ProvidesConsoleCatalog, ProvidesConsoleNetwork, ProvidesConsoleRuntime, ProvidesConsoleSecurity, ProvidesProvisioning, ProvidesRenewal, ProvidesScheduledAuthRefresh, ProvidesStatusSync, ProvidesSupplierFormSchema, UpstreamDriver
 {
     private const CAPABILITIES = [
         ProvidesConsoleAccess::class,
@@ -48,16 +49,6 @@ class DemoServers implements ProvidesConsoleAccess, ProvidesConsoleCatalog, Prov
         return self::CAPABILITIES;
     }
 
-    public function supports(string $capability): bool
-    {
-        return in_array($capability, self::CAPABILITIES, true);
-    }
-
-    public function resolve(string $capability): ?object
-    {
-        return $this->supports($capability) ? $this : null;
-    }
-
     public function supplierFormSchema(): array
     {
         return [
@@ -75,43 +66,33 @@ class DemoServers implements ProvidesConsoleAccess, ProvidesConsoleCatalog, Prov
         ];
     }
 
-    public function execute(array $request): array
+    /**
+     * 历史行为保留：server.metadata 的 demo_region 来自 config，health_check
+     * 是 Demo 特有动作，均在基类钩子中声明；其余通用动作由基类分发。
+     *
+     * @param  array<string, mixed>  $request
+     * @return array<string, mixed>
+     */
+    protected function metadataExtras(array $request): array
     {
-        $action = trim((string) ($request['action'] ?? ''));
-        $payload = is_array($request['payload'] ?? null) ? $request['payload'] : [];
         $config = is_array($request['config'] ?? null) ? $request['config'] : [];
 
-        return match ($action) {
-            'server.metadata' => [
-                'success' => true,
-                'action' => $action,
-                'data' => [
-                    'key' => $this->key(),
-                    'label' => $this->label(),
-                    'capabilities' => $this->capabilities(),
-                    'demo_region' => $this->resolveRegion($config),
-                ],
-            ],
-            'server.supports' => [
-                'success' => true,
-                'action' => $action,
-                'data' => [
-                    'supported' => $this->supports((string) ($payload['capability'] ?? '')),
-                ],
-            ],
-            'server.resolve_capability' => [
-                'success' => true,
-                'action' => $action,
-                'data' => [
-                    'resolved' => $this->resolve((string) ($payload['capability'] ?? '')),
-                ],
-            ],
-            'server.supplier_form_schema' => [
-                'success' => true,
-                'action' => $action,
-                'data' => $this->supplierFormSchema(),
-            ],
-            'server.health_check' => [
+        return [
+            'demo_region' => $this->resolveRegion($config),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $request
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>|null
+     */
+    protected function dispatchSpecificAction(string $action, array $request, array $payload): ?array
+    {
+        if ($action === 'server.health_check') {
+            $config = is_array($request['config'] ?? null) ? $request['config'] : [];
+
+            return [
                 'success' => true,
                 'action' => $action,
                 'data' => [
@@ -120,14 +101,10 @@ class DemoServers implements ProvidesConsoleAccess, ProvidesConsoleCatalog, Prov
                     'message' => 'Demo 上游服务加载正常',
                     'demo_region' => $this->resolveRegion($config),
                 ],
-            ],
-            default => [
-                'success' => false,
-                'action' => $action,
-                'message' => '不支持的上游插件动作',
-                'data' => [],
-            ],
-        };
+            ];
+        }
+
+        return null;
     }
 
     public function healthCheck(): array
@@ -208,16 +185,6 @@ class DemoServers implements ProvidesConsoleAccess, ProvidesConsoleCatalog, Prov
     public function fetchRealConfigOptions(Supplier $supplier, int $productId): array
     {
         return $this->getProductConfigTemplate($supplier, $productId);
-    }
-
-    public function fetchBatchProductConfigOptions(Supplier $supplier, array $productIds, int $chunkSize = 8): array
-    {
-        $items = [];
-        foreach ($productIds as $productId) {
-            $items[(int) $productId] = $this->getProductConfigTemplate($supplier, (int) $productId);
-        }
-
-        return $items;
     }
 
     public function fetchBatchProductStocks(Supplier $supplier, array $productIds, int $chunkSize = 8): array
@@ -527,11 +494,6 @@ class DemoServers implements ProvidesConsoleAccess, ProvidesConsoleCatalog, Prov
                 'port' => 22,
             ],
         ];
-    }
-
-    private function supplierId(Supplier $supplier): int
-    {
-        return max(0, (int) ($supplier->id ?? 0));
     }
 
     private function resolveRegion(array $config): string

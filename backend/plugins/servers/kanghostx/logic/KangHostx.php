@@ -16,9 +16,10 @@ use App\Services\Upstream\Contracts\ProvidesRenewal;
 use App\Services\Upstream\Contracts\ProvidesStatusSync;
 use App\Services\Upstream\Contracts\ProvidesSupplierFormSchema;
 use App\Services\Upstream\Contracts\UpstreamDriver;
+use App\Services\Upstream\Support\AbstractUpstreamServerPlugin;
 use Caiwu\Plugins\Servers\KangHostx\Lib\KangHostxClient;
 
-class KangHostx implements ProvidesConsoleCatalog, ProvidesConsoleRuntime, ProvidesProvisioning, ProvidesRenewal, ProvidesStatusSync, ProvidesSupplierFormSchema, UpstreamDriver
+class KangHostx extends AbstractUpstreamServerPlugin implements ProvidesConsoleCatalog, ProvidesConsoleRuntime, ProvidesProvisioning, ProvidesRenewal, ProvidesStatusSync, ProvidesSupplierFormSchema, UpstreamDriver
 {
     private const KEY = 'kanghostx';
 
@@ -56,17 +57,6 @@ class KangHostx implements ProvidesConsoleCatalog, ProvidesConsoleRuntime, Provi
     public function capabilities(): array
     {
         return self::CAPABILITIES;
-    }
-
-    public function supports(string $capability): bool
-    {
-        return in_array($capability, self::CAPABILITIES, true)
-            && $this instanceof $capability;
-    }
-
-    public function resolve(string $capability): ?object
-    {
-        return $this->supports($capability) ? $this : null;
     }
 
     public function supplierFormSchema(): array
@@ -171,16 +161,6 @@ class KangHostx implements ProvidesConsoleCatalog, ProvidesConsoleRuntime, Provi
     public function fetchRealConfigOptions(Supplier $supplier, int $productId): array
     {
         return $this->getProductConfigTemplate($supplier, $productId);
-    }
-
-    public function fetchBatchProductConfigOptions(Supplier $supplier, array $productIds, int $chunkSize = 8): array
-    {
-        $items = [];
-        foreach ($productIds as $productId) {
-            $items[(int) $productId] = $this->getProductConfigTemplate($supplier, (int) $productId);
-        }
-
-        return $items;
     }
 
     public function fetchBatchProductStocks(Supplier $supplier, array $productIds, int $chunkSize = 8): array
@@ -329,44 +309,27 @@ class KangHostx implements ProvidesConsoleCatalog, ProvidesConsoleRuntime, Provi
     }
 
     /**
-     * @param  array<string, mixed>  $request
+     * 历史行为保留：server.metadata 的 account_rule 是康乐特有附加键，
+     * refresh_card 与 health_check 是康乐特有动作，均在基类钩子中声明；
+     * 其余通用动作由基类分发。
+     *
      * @return array<string, mixed>
      */
-    public function execute(array $request): array
+    protected function metadataExtras(array $request): array
     {
-        $action = trim((string) ($request['action'] ?? ''));
-        $payload = is_array($request['payload'] ?? null) ? $request['payload'] : [];
+        return [
+            'account_rule' => self::ACCOUNT_PREFIX.'{service_id}',
+        ];
+    }
 
+    /**
+     * @param  array<string, mixed>  $request
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>|null
+     */
+    protected function dispatchSpecificAction(string $action, array $request, array $payload): ?array
+    {
         return match ($action) {
-            'server.metadata' => [
-                'success' => true,
-                'action' => $action,
-                'data' => [
-                    'key' => $this->key(),
-                    'label' => $this->label(),
-                    'capabilities' => $this->capabilities(),
-                    'account_rule' => self::ACCOUNT_PREFIX.'{service_id}',
-                ],
-            ],
-            'server.supports' => [
-                'success' => true,
-                'action' => $action,
-                'data' => [
-                    'supported' => $this->supports((string) ($payload['capability'] ?? '')),
-                ],
-            ],
-            'server.resolve_capability' => [
-                'success' => true,
-                'action' => $action,
-                'data' => [
-                    'resolved' => $this->resolve((string) ($payload['capability'] ?? '')),
-                ],
-            ],
-            'server.supplier_form_schema' => [
-                'success' => true,
-                'action' => $action,
-                'data' => $this->supplierFormSchema(),
-            ],
             'server.supplier.refresh_card' => $this->refreshSupplierCard($action, $request),
             'server.health_check' => [
                 'success' => true,
@@ -377,12 +340,7 @@ class KangHostx implements ProvidesConsoleCatalog, ProvidesConsoleRuntime, Provi
                     'message' => '康乐虚拟主机插件加载正常',
                 ],
             ],
-            default => [
-                'success' => false,
-                'action' => $action,
-                'message' => '不支持的上游插件动作',
-                'data' => [],
-            ],
+            default => null,
         };
     }
 
@@ -1161,11 +1119,6 @@ class KangHostx implements ProvidesConsoleCatalog, ProvidesConsoleRuntime, Provi
         return is_array($supplier->provider_config ?? null) ? (array) $supplier->provider_config : [];
     }
 
-    private function supplierId(Supplier $supplier): int
-    {
-        return max(0, (int) ($supplier->id ?? 0));
-    }
-
     private function serverIp(Supplier $supplier): string
     {
         $baseUrl = $this->firstScalarString($supplier->api_url ?? null, $this->providerConfig($supplier)['api_url'] ?? null);
@@ -1222,58 +1175,5 @@ class KangHostx implements ProvidesConsoleCatalog, ProvidesConsoleRuntime, Provi
             || $this->scalarString($supplier->api_key ?? null) !== '';
 
         return $hasBaseUrl && $hasApiKey;
-    }
-
-    private function formatCardDateTime(mixed $value): string
-    {
-        if ($value instanceof \DateTimeInterface) {
-            return $value->format('Y-m-d H:i:s');
-        }
-
-        $string = $this->scalarString($value);
-
-        return $string !== '' ? $string : '-';
-    }
-
-    private function scalarString(mixed $value): string
-    {
-        if ($value === null) {
-            return '';
-        }
-
-        if (is_scalar($value)) {
-            return trim((string) $value);
-        }
-
-        if ($value instanceof \Stringable) {
-            return trim((string) $value);
-        }
-
-        return '';
-    }
-
-    private function firstScalarString(mixed ...$values): string
-    {
-        foreach ($values as $value) {
-            $string = $this->scalarString($value);
-            if ($string !== '') {
-                return $string;
-            }
-        }
-
-        return '';
-    }
-
-    private function truthy(mixed $value): bool
-    {
-        if (is_bool($value)) {
-            return $value;
-        }
-
-        if (is_string($value)) {
-            return filter_var($value, FILTER_VALIDATE_BOOL);
-        }
-
-        return (bool) $value;
     }
 }

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Services\Upstream\Support;
 
+use App\Support\Money;
+
 class CloudConfigTemplate
 {
     public function supports(array $product): bool
@@ -302,13 +304,13 @@ class CloudConfigTemplate
             $memoryGb = (float) $matches[1];
             $memoryMb = (int) round($memoryGb * 1024);
             if ($memoryMb > 0) {
-                $memoryText = rtrim(rtrim(number_format($memoryGb, 2, '.', ''), '0'), '.');
+                $memoryText = Money::trimZero(number_format($memoryGb, 2, '.', ''));
                 $facts['memory'] = "{$memoryMb}|{$memoryText}G";
             }
         }
 
         if (preg_match('/带宽[:：]\s*(\d+(?:\.\d+)?)\s*M/iu', $description, $matches) === 1) {
-            $bandwidth = rtrim(rtrim(number_format((float) $matches[1], 2, '.', ''), '0'), '.');
+            $bandwidth = Money::trimZero(number_format((float) $matches[1], 2, '.', ''));
             if ($bandwidth !== '' && (float) $bandwidth > 0) {
                 $facts['bw'] = "{$bandwidth}|{$bandwidth}Mbps";
             }
@@ -318,18 +320,18 @@ class CloudConfigTemplate
             $flowTb = (float) $matches[1];
             $flowGb = (int) round($flowTb * 1024);
             if ($flowGb > 0) {
-                $flowText = rtrim(rtrim(number_format($flowTb, 2, '.', ''), '0'), '.');
+                $flowText = Money::trimZero(number_format($flowTb, 2, '.', ''));
                 $facts['flow_limit'] = "{$flowGb}|{$flowText}T";
             }
         } elseif (preg_match('/流量[:：]\s*(\d+(?:\.\d+)?)\s*G/iu', $description, $matches) === 1) {
-            $flowGb = rtrim(rtrim(number_format((float) $matches[1], 2, '.', ''), '0'), '.');
+            $flowGb = Money::trimZero(number_format((float) $matches[1], 2, '.', ''));
             if ($flowGb !== '' && (float) $flowGb > 0) {
                 $facts['flow_limit'] = "{$flowGb}|{$flowGb}G";
             }
         }
 
         if (preg_match('/硬盘[:：]\s*(\d+(?:\.\d+)?)\s*G/iu', $description, $matches) === 1) {
-            $disk = rtrim(rtrim(number_format((float) $matches[1], 2, '.', ''), '0'), '.');
+            $disk = Money::trimZero(number_format((float) $matches[1], 2, '.', ''));
             if ($disk !== '' && (float) $disk > 0) {
                 $facts['system_disk_size'] = "{$disk}|系统盘";
             }

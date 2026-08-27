@@ -19,26 +19,19 @@ use App\Services\Upstream\Drivers\HostingPanelApi\Concerns\HandlesApiConfigOptio
 use App\Services\Upstream\Drivers\HostingPanelApi\Concerns\HandlesCatalogNormalization;
 use App\Services\Upstream\ProviderKey;
 use App\Services\Upstream\Support\CloudConfigTemplate;
+use App\Services\Upstream\Support\UpstreamJwtSessionManager;
 use App\Services\Upstream\Support\WebSessionCookieParser;
 use App\Support\SensitiveDataSanitizer;
-use Illuminate\Contracts\Cache\Repository as CacheRepository;
 use Illuminate\Http\Client\Pool;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
 use Symfony\Component\Process\Exception\ProcessTimedOutException;
 use Symfony\Component\Process\Process;
 
-class HostingPanelApiTransport implements ProvidesConsoleAccess, ProvidesConsoleCatalog, ProvidesConsoleNetwork, ProvidesConsoleRuntime, ProvidesConsoleSecurity, ProvidesProvisioning, ProvidesRenewal, ProvidesScheduledAuthRefresh, ProvidesStatusSync
+class HostingPanelApiTransport extends UpstreamJwtSessionManager implements ProvidesConsoleAccess, ProvidesConsoleCatalog, ProvidesConsoleNetwork, ProvidesConsoleRuntime, ProvidesConsoleSecurity, ProvidesProvisioning, ProvidesRenewal, ProvidesScheduledAuthRefresh, ProvidesStatusSync
 {
     use HandlesApiConfigOptions, HandlesCatalogNormalization;
-
-    private const DEFAULT_JWT_CACHE_TTL_SECONDS = 1800;
-
-    private const MIN_JWT_CACHE_TTL_SECONDS = 300;
-
-    private const MAX_JWT_CACHE_TTL_SECONDS = 7200;
 
     private const DNS_CACHE_TTL_SECONDS = 300;
 
@@ -115,75 +108,53 @@ class HostingPanelApiTransport implements ProvidesConsoleAccess, ProvidesConsole
     }
 
     /**
-     * 使用供应商 API 账号登录上游主机面板，获取 JWT。
+     * 会话日志统一前缀：主机面板上游的所有会话生命周期日志共用。
      */
-    public function login(Supplier $supplier): string
+    protected function sessionLogPrefix(): string
     {
-        $cacheKey = $this->jwtCacheKey($supplier);
-        $cachedJwt = trim((string) $this->jwtCache()->get($cacheKey, ''));
-
-        if ($cachedJwt !== '') {
-            return $cachedJwt;
-        }
-
-        $startedAt = microtime(true);
-        $response = $this->loginResponse($supplier);
-        $jwt = trim((string) ($response['jwt'] ?? ''));
-
-        if ($jwt === '') {
-            $this->safeLog('warning', '[主机面板接口] JWT响应缺少会话', [
-                'supplier_id' => $supplier->id,
-                'response' => $this->summarizeLogResponse($response),
-            ]);
-
-            throw new BusinessException('供应商接口认证失败，请检查接口配置', 42200);
-        }
-
-        $ttlSeconds = $this->resolveJwtCacheTtlSeconds($jwt);
-        $this->jwtCache()->put($cacheKey, $jwt, now()->addSeconds($ttlSeconds));
-
-        $this->safeLog('info', '[主机面板接口] JWT缓存写入', [
-            'supplier_id' => $supplier->id,
-            'cache_store' => $this->serviceConfig['jwt_cache_store'],
-            'ttl_seconds' => $ttlSeconds,
-            'duration_ms' => $this->elapsedMilliseconds($startedAt),
-        ]);
-
-        return $jwt;
+        return '[主机面板接口] ';
     }
 
     /**
-     * 强制刷新 JWT（忽略缓存，重新登录上游）。
+     * JWT 缓存仓库名来自构造时归一化的服务配置。
      */
-    public function refreshJwt(Supplier $supplier): string
+    protected function configuredJwtCacheStoreName(): string
     {
-        $cacheKey = $this->jwtCacheKey($supplier);
-        $this->jwtCache()->forget($cacheKey);
+        return trim((string) ($this->serviceConfig['jwt_cache_store'] ?? 'redis'));
+    }
 
-        $startedAt = microtime(true);
-        $response = $this->loginResponse($supplier);
-        $jwt = trim((string) ($response['jwt'] ?? ''));
-
-        if ($jwt === '') {
-            $this->safeLog('warning', '[主机面板接口] JWT刷新响应缺少会话', [
-                'supplier_id' => $supplier->id,
-                'response' => $this->summarizeLogResponse($response),
-            ]);
-
-            throw new BusinessException('供应商接口认证刷新失败，请稍后重试', 42200);
-        }
-
-        $ttlSeconds = $this->resolveJwtCacheTtlSeconds($jwt);
-        $this->jwtCache()->put($cacheKey, $jwt, now()->addSeconds($ttlSeconds));
-
-        $this->safeLog('info', '[主机面板接口] JWT强制刷新', [
+    /**
+     * 会话成功日志的固定基础字段；响应摘要口径与插件端不同，仅输出响应整体摘要。
+     */
+    protected function sessionBaseLogContext(Supplier $supplier): array
+    {
+        return [
             'supplier_id' => $supplier->id,
             'cache_store' => $this->serviceConfig['jwt_cache_store'],
-            'ttl_seconds' => $ttlSeconds,
-            'duration_ms' => $this->elapsedMilliseconds($startedAt),
-        ]);
+        ];
+    }
 
-        return $jwt;
+    /**
+     * 登录响应缺少会话时的告警上下文：附带脱敏后的完整响应摘要。
+     *
+     * @param  array<string, mixed>  $response
+     * @return array<string, mixed>
+     */
+    protected function missingSessionLogContext(Supplier $supplier, array $response): array
+    {
+        return [
+            'supplier_id' => $supplier->id,
+            'response' => $this->summarizeLogResponse($response),
+        ];
+    }
+
+    /**
+     * 主机面板的 JWT 收口策略与插件端有意不同：剩余有效期不足安全余量时
+     * 仍至少兜底缓存 MIN_JWT_CACHE_TTL_SECONDS 秒，稳定降低上游登录频次。
+     */
+    protected function clampResolvedJwtCacheTtl(int $ttlSeconds): int
+    {
+        return max(self::MIN_JWT_CACHE_TTL_SECONDS, min($ttlSeconds, self::MAX_JWT_CACHE_TTL_SECONDS));
     }
 
     /**
@@ -1378,11 +1349,6 @@ PHP;
         return (bool) $value;
     }
 
-    private function elapsedMilliseconds(float $startedAt): int
-    {
-        return (int) round((microtime(true) - $startedAt) * 1000);
-    }
-
     private function resolveResponseDurationMs(mixed $response): ?int
     {
         if (! $response || ! method_exists($response, 'handlerStats')) {
@@ -1395,28 +1361,14 @@ PHP;
         return is_numeric($seconds) ? (int) round(((float) $seconds) * 1000) : null;
     }
 
-    private function jwtCacheKey(Supplier $supplier): string
+    /**
+     * JWT 缓存键：provider_key 优先（插件派生驱动共享本面板协议时按来源隔离）。
+     */
+    protected function jwtCacheKey(Supplier $supplier): string
     {
         $providerKey = trim((string) ($supplier->provider_key ?? '')) ?: ProviderKey::HOSTING_PANEL_API;
 
         return "upstream:{$providerKey}:jwt:".$supplier->id;
-    }
-
-    private function jwtCache(): CacheRepository
-    {
-        $store = trim((string) ($this->serviceConfig['jwt_cache_store'] ?? 'redis'));
-
-        try {
-            return Cache::store($store !== '' ? $store : config('cache.default', 'redis'));
-        } catch (\Throwable $exception) {
-            $this->safeLog('warning', '[主机面板接口] JWT缓存仓库不可用，回退默认缓存仓库', [
-                'store' => $store,
-                'message' => $exception->getMessage(),
-                'exception' => $exception::class,
-            ]);
-
-            return Cache::store(config('cache.default', 'file'));
-        }
     }
 
     private function shouldForgetJwtCacheForResponse(int $httpCode, mixed $decoded, ?string $jwt): bool
@@ -1436,14 +1388,6 @@ PHP;
         $status = (int) ($decoded['status'] ?? $decoded['code'] ?? $decoded['status_code'] ?? 0);
 
         return $status === 401;
-    }
-
-    private function safeLog(string $level, string $message, array $context = []): void
-    {
-        try {
-            Log::log($level, $message, $context);
-        } catch (\Throwable) {
-        }
     }
 
     private function forgetJwtCache(Supplier $supplier): void
@@ -1498,48 +1442,6 @@ PHP;
             || str_contains($uri, '/v1/login_api?')
             || $uri === '/zjmf_api_login'
             || str_contains($uri, '/zjmf_api_login?');
-    }
-
-    private function resolveJwtCacheTtlSeconds(string $jwt): int
-    {
-        $payload = $this->decodeJwtPayload($jwt);
-        $expiresAt = (int) ($payload['exp'] ?? 0);
-
-        if ($expiresAt <= 0) {
-            return self::DEFAULT_JWT_CACHE_TTL_SECONDS;
-        }
-
-        $ttlSeconds = $expiresAt - time() - 300;
-
-        return max(
-            self::MIN_JWT_CACHE_TTL_SECONDS,
-            min($ttlSeconds, self::MAX_JWT_CACHE_TTL_SECONDS)
-        );
-    }
-
-    private function decodeJwtPayload(string $jwt): array
-    {
-        $parts = explode('.', $jwt);
-
-        if (count($parts) < 2) {
-            return [];
-        }
-
-        $decoded = json_decode($this->decodeBase64Url($parts[1]), true);
-
-        return is_array($decoded) ? $decoded : [];
-    }
-
-    private function decodeBase64Url(string $value): string
-    {
-        $remainder = strlen($value) % 4;
-        if ($remainder > 0) {
-            $value .= str_repeat('=', 4 - $remainder);
-        }
-
-        $decoded = base64_decode(strtr($value, '-_', '+/'), true);
-
-        return $decoded === false ? '' : $decoded;
     }
 
     private function supportsConfigTemplate(array $product): bool
