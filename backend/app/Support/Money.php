@@ -61,4 +61,15 @@ final class Money
     {
         return number_format(self::round($value), 2, '.', '');
     }
+
+    /**
+     * 去掉已格式化金额字符串的小数尾零与孤立小数点。
+     *
+     * 仅用于展示层收敛："12.30" -> "12.3"、"12.00" -> "12"、"9.90" -> "9.9"。
+     * 入参必须是 number_format 的产物，本方法不做任何舍入。
+     */
+    public static function trimZero(string $formatted): string
+    {
+        return rtrim(rtrim($formatted, '0'), '.');
+    }
 }

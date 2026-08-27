@@ -6,6 +6,11 @@ namespace App\Support;
 
 final class AccountIdentifier
 {
+    /**
+     * 中国大陆手机号的锚定全串匹配正则，供各处统一引用。
+     */
+    public const PHONE_PATTERN = '/^1[3-9]\d{9}$/';
+
     public static function detectType(?string $value): ?string
     {
         $email = self::normalizeEmail($value);
@@ -14,7 +19,7 @@ final class AccountIdentifier
         }
 
         $phone = self::normalizePhone($value);
-        if ($phone !== '' && preg_match('/^1[3-9]\d{9}$/', $phone) === 1) {
+        if ($phone !== '' && preg_match(self::PHONE_PATTERN, $phone) === 1) {
             return 'phone';
         }
 

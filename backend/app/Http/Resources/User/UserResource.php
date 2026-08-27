@@ -4,6 +4,7 @@ namespace App\Http\Resources\User;
 
 use App\Models\User;
 use App\Support\AdminPrivacy;
+use App\Support\Money;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -14,6 +15,7 @@ class UserResource extends JsonResource
     {
         $privacy = AdminPrivacy::fromRequest($request);
         $memberLevel = $this->resource->relationLoaded('memberLevel') ? $this->resource->getRelation('memberLevel') : null;
+        $promotionAmbassador = $this->resource->relationLoaded('promotionAmbassador') ? $this->resource->getRelation('promotionAmbassador') : null;
         $profile = $this->resource->relationLoaded('profile') ? $this->resource->getRelation('profile') : null;
         $nickname = trim((string) ($profile?->nickname ?? $this->resource->getRawOriginal('nickname') ?? ''));
         $company = trim((string) ($profile?->company ?? $this->resource->getRawOriginal('company') ?? ''));
@@ -39,15 +41,19 @@ class UserResource extends JsonResource
             'member_level' => $memberLevel ? [
                 'id' => $memberLevel->id,
                 'name' => $memberLevel->name,
-                'code' => $memberLevel->code,
-                'reward_rate' => $memberLevel->reward_rate,
             ] : null,
-            'cash_balance' => $this->formatMoney($this->resource->balance),
-            'credit_limit' => $this->formatMoney($this->resource->credit_limit),
-            'referral_frozen_balance' => $this->formatMoney($this->resource->referral_frozen_amount),
-            'referral_available_balance' => $this->formatMoney($this->resource->referral_available_amount),
-            'referral_pending_withdrawal_balance' => $this->formatMoney($this->resource->referral_withdrawing_amount),
-            'referral_withdrawn_balance' => $this->formatMoney($this->resource->referral_withdrawn_amount),
+            'promotion_ambassador_id' => $this->promotion_ambassador_id,
+            'promotion_ambassador' => $promotionAmbassador ? [
+                'id' => $promotionAmbassador->id,
+                'name' => $promotionAmbassador->name,
+                'reward_rate' => $promotionAmbassador->reward_rate,
+            ] : null,
+            'cash_balance' => Money::format($this->resource->balance),
+            'credit_limit' => Money::format($this->resource->credit_limit),
+            'referral_frozen_balance' => Money::format($this->resource->referral_frozen_amount),
+            'referral_available_balance' => Money::format($this->resource->referral_available_amount),
+            'referral_pending_withdrawal_balance' => Money::format($this->resource->referral_withdrawing_amount),
+            'referral_withdrawn_balance' => Money::format($this->resource->referral_withdrawn_amount),
             'active_services_count' => $this->active_services_count ?? 0,
             'status' => $this->status,
             'is_verified' => $this->is_verified,
@@ -80,10 +86,5 @@ class UserResource extends JsonResource
         }
 
         return trim((string) ($this->phone ?? ''));
-    }
-
-    private function formatMoney(mixed $value): string
-    {
-        return number_format((float) $value, 2, '.', '');
     }
 }

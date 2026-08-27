@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Resources\Client\V2;
 
 use App\Models\User;
+use App\Support\SensitiveDataSanitizer;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -19,6 +20,7 @@ class ClientUserInfoResource extends JsonResource
     public function toArray(Request $request): array
     {
         $memberLevel = $this->memberLevel;
+        $promotionAmbassador = $this->relationLoaded('promotionAmbassador') ? $this->getRelation('promotionAmbassador') : null;
 
         return [
             'id' => $this->id,
@@ -39,8 +41,12 @@ class ClientUserInfoResource extends JsonResource
             'member_level' => $memberLevel ? [
                 'id' => $memberLevel->id,
                 'name' => $memberLevel->name,
-                'code' => $memberLevel->code,
-                'reward_rate' => $memberLevel->reward_rate,
+            ] : null,
+            'promotion_ambassador_id' => $this->promotion_ambassador_id,
+            'promotion_ambassador' => $promotionAmbassador ? [
+                'id' => $promotionAmbassador->id,
+                'name' => $promotionAmbassador->name,
+                'reward_rate' => $promotionAmbassador->reward_rate,
             ] : null,
             'status' => $this->status,
             'is_verified' => $this->is_verified,
@@ -74,11 +80,11 @@ class ClientUserInfoResource extends JsonResource
             return '';
         }
 
-        $length = mb_strlen($idCard);
-        if ($length <= 8) {
+        // 证件号不足 8 位视为未录入完整证件，沿用原样返回的历史约定。
+        if (mb_strlen($idCard) <= 8) {
             return $idCard;
         }
 
-        return mb_substr($idCard, 0, 1).str_repeat('*', max($length - 2, 1)).mb_substr($idCard, -1);
+        return SensitiveDataSanitizer::maskKeepingEnds($idCard);
     }
 }

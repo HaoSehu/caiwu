@@ -8,6 +8,7 @@ use App\Http\Resources\Admin\V2\Concerns\StripsSensitiveResourceData;
 use App\Models\ActivityLog;
 use App\Support\AdminPrivacy;
 use App\Support\SensitiveDataSanitizer;
+use App\Support\TextSanitizer;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -54,10 +55,6 @@ class AdminUserOperationLogResource extends JsonResource
         $text = SensitiveDataSanitizer::sanitizeText($json);
         $value = trim(preg_replace('/\s+/u', ' ', $text) ?? '');
 
-        if (mb_strlen($value) <= 240) {
-            return $value;
-        }
-
-        return mb_substr($value, 0, 240).'...';
+        return TextSanitizer::truncateWithEllipsis($value, 240);
     }
 }

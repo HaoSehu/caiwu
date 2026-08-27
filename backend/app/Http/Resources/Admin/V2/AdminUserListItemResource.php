@@ -18,8 +18,8 @@ class AdminUserListItemResource extends JsonResource
     public function toArray(Request $request): array
     {
         $privacy = AdminPrivacy::fromRequest($request);
-        $profile = $this->resource->relationLoaded('profile') ? $this->resource->getRelation('profile') : null;
-        $nickname = trim((string) ($profile?->nickname ?? $this->resource->getRawOriginal('nickname') ?? ''));
+        // users 主表列直读；模型无 profile 关联，列表查询亦不加载画像关联。
+        $nickname = trim((string) ($this->resource->getRawOriginal('nickname') ?? ''));
         $email = (string) ($this->email ?? '');
         $phone = (string) ($this->phone ?? '');
         $realName = (string) ($this->real_name ?? '');
@@ -30,8 +30,8 @@ class AdminUserListItemResource extends JsonResource
             'phone' => $privacy->phone($phone),
             'nickname' => $nickname,
             'display_name' => $privacy->displayName($this->resolveDisplayName($nickname), $email, $phone, $realName),
-            'company' => trim((string) ($profile?->company ?? $this->resource->getRawOriginal('company') ?? '')),
-            'qq' => trim((string) ($profile?->qq ?? $this->resource->getRawOriginal('qq') ?? '')),
+            'company' => trim((string) ($this->resource->getRawOriginal('company') ?? '')),
+            'qq' => trim((string) ($this->resource->getRawOriginal('qq') ?? '')),
             'member_level_id' => $this->member_level_id !== null ? (int) $this->member_level_id : null,
             'verification_status' => (int) ($this->verification_status ?? 0),
             'verification_status_label' => User::verificationStatusLabel((int) ($this->verification_status ?? 0)),

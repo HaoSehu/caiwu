@@ -24,6 +24,21 @@ class TextSanitizer
         return self::finalize($normalized, $preserveNewLines);
     }
 
+    /**
+     * 带省略号的定长截断：字符数不超过 $limit 时原样返回；
+     * 超出时取前 $limit 个字符并追加 '...'。
+     *
+     * 刻意沿用 mb_strlen / mb_substr 按字符计数，而非 Laravel
+     * Str::limit 的 mb_strwidth 显示宽度口径（CJK 计 2），确保
+     * 既有接口输出逐字节不变。
+     */
+    public static function truncateWithEllipsis(string $value, int $limit): string
+    {
+        return mb_strlen($value) <= $limit
+            ? $value
+            : mb_substr($value, 0, $limit).'...';
+    }
+
     public static function nullable(?string $value, bool $preserveNewLines = false): ?string
     {
         $cleaned = self::clean($value, $preserveNewLines);

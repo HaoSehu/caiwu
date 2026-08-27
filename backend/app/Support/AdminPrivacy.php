@@ -147,7 +147,7 @@ class AdminPrivacy
 
         $length = mb_strlen($idCard);
         if ($length <= 8) {
-            return mb_substr($idCard, 0, 1).str_repeat('*', max($length - 2, 1)).mb_substr($idCard, -1);
+            return SensitiveDataSanitizer::maskKeepingEnds($idCard);
         }
 
         return mb_substr($idCard, 0, 6).str_repeat('*', max($length - 10, 1)).mb_substr($idCard, -4);
@@ -184,7 +184,7 @@ class AdminPrivacy
             return $this->email($account);
         }
 
-        if (preg_match('/^1[3-9]\d{9}$/', $account) === 1) {
+        if (preg_match(AccountIdentifier::PHONE_PATTERN, $account) === 1) {
             return $this->phone($account);
         }
 

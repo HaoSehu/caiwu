@@ -8,6 +8,19 @@ final class SensitiveDataSanitizer
 {
     private const REDACTED = '[REDACTED]';
 
+    /**
+     * 保留首尾各 1 字符的通用打码核心：首字符 + 星号 + 尾字符。
+     *
+     * 中间星号数量为 max(字符长度 - 2, 1)，保证非空输入至少出现 1 个星号。
+     * 多端打码实现共用该格式，确保输出逐字节一致；调用方需自行排除空串。
+     */
+    public static function maskKeepingEnds(string $value): string
+    {
+        $length = mb_strlen($value);
+
+        return mb_substr($value, 0, 1).str_repeat('*', max($length - 2, 1)).mb_substr($value, -1);
+    }
+
     private const EXACT_SENSITIVE_FIELDS = [
         'password',
         'password_confirmation',

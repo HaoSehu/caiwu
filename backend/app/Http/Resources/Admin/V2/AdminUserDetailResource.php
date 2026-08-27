@@ -6,6 +6,7 @@ namespace App\Http\Resources\Admin\V2;
 
 use App\Models\User;
 use App\Support\AdminPrivacy;
+use App\Support\Money;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -51,6 +52,7 @@ class AdminUserDetailResource extends JsonResource
     private function projectUser(User $user, AdminPrivacy $privacy): array
     {
         $memberLevel = $user->relationLoaded('memberLevel') ? $user->getRelation('memberLevel') : null;
+        $promotionAmbassador = $user->relationLoaded('promotionAmbassador') ? $user->getRelation('promotionAmbassador') : null;
         $profile = $user->relationLoaded('profile') ? $user->getRelation('profile') : null;
         $nickname = trim((string) ($profile?->nickname ?? $user->getRawOriginal('nickname') ?? ''));
         $company = trim((string) ($profile?->company ?? $user->getRawOriginal('company') ?? ''));
@@ -72,19 +74,23 @@ class AdminUserDetailResource extends JsonResource
             'referral_code' => (string) ($user->referral_code ?? ''),
             'referrer_user_id' => $user->referrer_user_id !== null ? (int) $user->referrer_user_id : null,
             'member_level_id' => $user->member_level_id !== null ? (int) $user->member_level_id : null,
-            'total_sales_amount' => $this->formatMoney($user->total_sales_amount ?? 0),
+            'promotion_ambassador_id' => $user->promotion_ambassador_id !== null ? (int) $user->promotion_ambassador_id : null,
+            'total_sales_amount' => Money::format($user->total_sales_amount ?? 0),
             'member_level' => $memberLevel ? [
                 'id' => (int) $memberLevel->id,
                 'name' => (string) $memberLevel->name,
-                'code' => (string) $memberLevel->code,
-                'reward_rate' => $this->formatMoney($memberLevel->reward_rate ?? 0),
             ] : null,
-            'cash_balance' => $this->formatMoney($user->balance ?? 0),
-            'credit_limit' => $this->formatMoney($user->credit_limit ?? 0),
-            'referral_frozen_balance' => $this->formatMoney($user->referral_frozen_amount ?? 0),
-            'referral_available_balance' => $this->formatMoney($user->referral_available_amount ?? 0),
-            'referral_pending_withdrawal_balance' => $this->formatMoney($user->referral_withdrawing_amount ?? 0),
-            'referral_withdrawn_balance' => $this->formatMoney($user->referral_withdrawn_amount ?? 0),
+            'promotion_ambassador' => $promotionAmbassador ? [
+                'id' => (int) $promotionAmbassador->id,
+                'name' => (string) $promotionAmbassador->name,
+                'reward_rate' => Money::format($promotionAmbassador->reward_rate ?? 0),
+            ] : null,
+            'cash_balance' => Money::format($user->balance ?? 0),
+            'credit_limit' => Money::format($user->credit_limit ?? 0),
+            'referral_frozen_balance' => Money::format($user->referral_frozen_amount ?? 0),
+            'referral_available_balance' => Money::format($user->referral_available_amount ?? 0),
+            'referral_pending_withdrawal_balance' => Money::format($user->referral_withdrawing_amount ?? 0),
+            'referral_withdrawn_balance' => Money::format($user->referral_withdrawn_amount ?? 0),
             'active_services_count' => (int) ($user->active_services_count ?? 0),
             'status' => (int) ($user->status ?? 0),
             'is_verified' => (int) ($user->is_verified ?? 0),
@@ -122,6 +128,7 @@ class AdminUserDetailResource extends JsonResource
         }
 
         $memberLevel = is_array($referral['member_level'] ?? null) ? $referral['member_level'] : null;
+        $promotionAmbassador = is_array($referral['promotion_ambassador'] ?? null) ? $referral['promotion_ambassador'] : null;
 
         return [
             'referral_code' => (string) ($referral['referral_code'] ?? ''),
@@ -129,8 +136,11 @@ class AdminUserDetailResource extends JsonResource
             'member_level' => $memberLevel ? [
                 'id' => (int) ($memberLevel['id'] ?? 0),
                 'name' => (string) ($memberLevel['name'] ?? ''),
-                'code' => (string) ($memberLevel['code'] ?? ''),
-                'reward_rate' => (float) ($memberLevel['reward_rate'] ?? 0),
+            ] : null,
+            'promotion_ambassador' => $promotionAmbassador ? [
+                'id' => (int) ($promotionAmbassador['id'] ?? 0),
+                'name' => (string) ($promotionAmbassador['name'] ?? ''),
+                'reward_rate' => (float) ($promotionAmbassador['reward_rate'] ?? 0),
             ] : null,
             'total_sales_amount' => (float) ($referral['total_sales_amount'] ?? 0),
             'referral_frozen_amount' => (float) ($referral['referral_frozen_amount'] ?? 0),
@@ -184,10 +194,5 @@ class AdminUserDetailResource extends JsonResource
         }
 
         return trim((string) ($user->phone ?? ''));
-    }
-
-    private function formatMoney(mixed $value): string
-    {
-        return number_format((float) $value, 2, '.', '');
     }
 }
