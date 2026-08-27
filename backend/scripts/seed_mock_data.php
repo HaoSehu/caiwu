@@ -58,6 +58,7 @@ $summary = DB::transaction(function () use ($now, $json, $money, $mockUserPasswo
         [
             'name' => '默认大使',
             'reward_rate' => '10.00',
+            'renewal_reward_rate' => '5.00',
             'status' => 1,
             'remark' => '模拟数据：默认推广大使档位',
             'created_at' => $now,

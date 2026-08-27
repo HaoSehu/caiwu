@@ -13,6 +13,7 @@ class CreatePromotionAmbassadorRequest extends AdminFormRequest
         return [
             'name' => ['required', 'string', 'max:50'],
             'reward_rate' => ['required', 'numeric', 'min:0', 'max:100'],
+            'renewal_reward_rate' => ['required', 'numeric', 'min:0', 'max:100'],
             'status' => ['nullable', 'integer', 'in:0,1'],
             'remark' => ['nullable', 'string', 'max:255'],
             'per_page' => ['prohibited'],
@@ -25,6 +26,7 @@ class CreatePromotionAmbassadorRequest extends AdminFormRequest
         return $this->safe()->only([
             'name',
             'reward_rate',
+            'renewal_reward_rate',
             'status',
             'remark',
         ]);

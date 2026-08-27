@@ -17,6 +17,7 @@ class AdminPromotionAmbassadorDetailResource extends JsonResource
             'id' => (int) $this->id,
             'name' => (string) $this->name,
             'reward_rate' => number_format((float) $this->reward_rate, 2, '.', ''),
+            'renewal_reward_rate' => number_format((float) $this->renewal_reward_rate, 2, '.', ''),
             'status' => (int) $this->status,
             'remark' => $this->remark !== null ? (string) $this->remark : null,
             'created_at' => $this->created_at?->format('Y-m-d H:i:s'),

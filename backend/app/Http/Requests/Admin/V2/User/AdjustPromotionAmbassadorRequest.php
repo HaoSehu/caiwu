@@ -11,7 +11,7 @@ class AdjustPromotionAmbassadorRequest extends AdminFormRequest
     public function rules(): array
     {
         return [
-            // null 表示置为未指派（返利按全局 referral.reward_rate 兜底）
+            // null 表示置为未指派（新购/续费返利分别按全局 referral.reward_rate / renewal_reward_rate 兜底）
             'promotion_ambassador_id' => ['present', 'nullable', 'integer', 'exists:promotion_ambassadors,id'],
         ];
     }

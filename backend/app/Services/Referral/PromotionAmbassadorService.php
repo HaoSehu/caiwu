@@ -13,9 +13,10 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 /**
- * 推广大使管理：大使为返利比例档位（名称/返利比例/启停），
+ * 推广大使管理：大使为新购/续费返利比例档位（名称/新购返利/续费返利/启停），
  * 继承原会员等级的邀请返利职责；用户档位由管理员在用户详情页指派
- * （UserService::adjustPromotionAmbassador），未指派按全局 referral.reward_rate 兜底。
+ * （UserService::adjustPromotionAmbassador），未指派分别回退全局 referral.reward_rate 与
+ * referral.renewal_reward_rate。
  */
 class PromotionAmbassadorService
 {
@@ -81,7 +82,11 @@ class PromotionAmbassadorService
         throw_if($name === '', new BusinessException('大使名称不能为空'));
 
         $rewardRate = round((float) ($data['reward_rate'] ?? 0), 2);
-        throw_if($rewardRate < 0 || $rewardRate > 100, new BusinessException('返利比例必须在 0-100 之间'));
+        throw_if($rewardRate < 0 || $rewardRate > 100, new BusinessException('新购返利比例必须在 0-100 之间'));
+
+        // 续费比例缺省继承原值：与 reward_rate 的“缺省归 0”不同，避免编辑漏传时重置运营配置
+        $renewalRewardRate = round((float) ($data['renewal_reward_rate'] ?? $ambassador->renewal_reward_rate ?? 0), 2);
+        throw_if($renewalRewardRate < 0 || $renewalRewardRate > 100, new BusinessException('续费返利比例必须在 0-100 之间'));
 
         $nameExists = PromotionAmbassador::query()
             ->when($ambassador?->id, fn ($query) => $query->where('id', '!=', $ambassador->id))
@@ -94,6 +99,7 @@ class PromotionAmbassadorService
         return [
             'name' => $name,
             'reward_rate' => $rewardRate,
+            'renewal_reward_rate' => $renewalRewardRate,
             'status' => (int) (($data['status'] ?? $inheritedStatus ?? 1) ? 1 : 0),
             'remark' => $this->normalizeNullableString($data['remark'] ?? $ambassador?->remark),
         ];
