@@ -14,8 +14,8 @@ use App\Http\Resources\Admin\V2\AdminMediaFileResource;
 use App\Models\MediaFile;
 use App\Services\Admin\V2\AdminOperationalActionV2Service;
 use App\Services\Content\MediaFileService;
-use App\Support\ApiResponseBuilder;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Pagination\LengthAwarePaginator;
 
 class MediaFileController extends Controller
 {
@@ -29,7 +29,7 @@ class MediaFileController extends Controller
         $filters = $request->validated();
 
         if (($filters['group'] ?? null) === MediaFileService::HERO_VIDEO_GROUP) {
-            return $this->success($this->heroVideoPayload($request, $filters));
+            return $this->heroVideoResponse($request, $filters);
         }
 
         $paginator = $this->mediaFileService->list(
@@ -37,7 +37,8 @@ class MediaFileController extends Controller
             perPage: $request->perPage(24, 100),
         );
 
-        return $this->success(ApiResponseBuilder::pagination($paginator, AdminMediaFileResource::class));
+        // 统一走基类 paginate() 封装，保持分页信封由 ApiResponseBuilder 单点生成。
+        return $this->paginate($paginator, AdminMediaFileResource::class);
     }
 
     public function store(StoreMediaFileRequest $request): JsonResponse
@@ -72,11 +73,7 @@ class MediaFileController extends Controller
         return $this->success(AdminActionResultResource::make($result)->resolve(), (string) $result['message']);
     }
 
-    /**
-     * @param  array<string, mixed>  $filters
-     * @return array<string, mixed>
-     */
-    private function heroVideoPayload(ListMediaFilesRequest $request, array $filters): array
+    private function heroVideoResponse(ListMediaFilesRequest $request, array $filters): JsonResponse
     {
         $items = collect($this->mediaFileService->listHeroVideos((string) ($filters['keyword'] ?? '')));
 
@@ -88,11 +85,13 @@ class MediaFileController extends Controller
         $pageSize = $request->perPage(24, 100);
         $list = $items->forPage($page, $pageSize)->values()->all();
 
-        return [
-            'list' => AdminMediaFileResource::collection($list)->resolve(),
-            'total' => $items->count(),
-            'page' => $page,
-            'page_size' => $pageSize,
-        ];
+        // 内存集合分页包装回标准分页器复用基类 paginate()，
+        // 保持分页信封由 ApiResponseBuilder 单点生成（输出形状与原手拼一致）。
+        return $this->paginate(new LengthAwarePaginator(
+            $list,
+            $items->count(),
+            $pageSize,
+            $page,
+        ), AdminMediaFileResource::class);
     }
 }

@@ -20,6 +20,7 @@ use App\Models\Role;
 use App\Services\Admin\Rbac\AdminRoleService;
 use App\Services\Admin\Rbac\PermissionCatalogService;
 use App\Services\Admin\V2\AdminRbacActionV2Service;
+use Illuminate\Pagination\LengthAwarePaginator;
 
 class RoleController extends Controller
 {
@@ -31,16 +32,22 @@ class RoleController extends Controller
 
     public function permissions(ListPermissionsRequest $request)
     {
-        return $this->success([
-            'list' => AdminPermissionCatalogResource::collection($this->permissions->list())->resolve(),
-        ]);
+        $list = AdminPermissionCatalogResource::collection($this->permissions->list())->resolve();
+
+        // 全量权限目录无真实分页，统一经标准分页器出信封（page=1、page_size=条目数）。
+        $total = count($list);
+
+        return $this->paginate(new LengthAwarePaginator($list, $total, max($total, 1), 1));
     }
 
     public function index(ListRolesRequest $request)
     {
-        return $this->success([
-            'list' => AdminRoleListItemResource::collection($this->roles->list($request->filters()))->resolve(),
-        ]);
+        $list = AdminRoleListItemResource::collection($this->roles->list($request->filters()))->resolve();
+
+        // 全量角色列表无真实分页，统一经标准分页器出信封（page=1、page_size=条目数）。
+        $total = count($list);
+
+        return $this->paginate(new LengthAwarePaginator($list, $total, max($total, 1), 1));
     }
 
     public function show(ShowRoleRequest $request, Role $role)

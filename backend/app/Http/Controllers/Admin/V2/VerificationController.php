@@ -19,6 +19,7 @@ use App\Services\Auth\AdminVerificationQueryService;
 use App\Services\Auth\VerificationService;
 use App\Services\System\OperationLogService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Pagination\LengthAwarePaginator;
 
 class VerificationController extends Controller
 {
@@ -62,13 +63,13 @@ class VerificationController extends Controller
             ->values()
             ->all();
 
-        return $this->success([
-            'user_name' => (string) ($history['user_name'] ?? ''),
-            'list' => $list,
-            'total' => $items->count(),
-            'page' => $page,
-            'page_size' => $pageSize,
-        ]);
+        // 内存切片分页包装回标准分页器复用基类 paginate()，
+        // user_name 为非分页附加字段，经 extra 透传（键序变化但字段语义不变）。
+        return $this->paginate(
+            new LengthAwarePaginator($list, $items->count(), $pageSize, $page),
+            null,
+            ['user_name' => (string) ($history['user_name'] ?? '')],
+        );
     }
 
     public function unbind(User $user, UnbindVerificationRequest $request): JsonResponse

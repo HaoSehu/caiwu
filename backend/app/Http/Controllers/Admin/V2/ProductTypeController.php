@@ -13,6 +13,7 @@ use App\Http\Requests\Admin\V2\ProductType\UpdateProductTypeRequest;
 use App\Http\Resources\Admin\V2\AdminProductTypeResource;
 use App\Services\ProductCatalog\ProductTypeService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Pagination\LengthAwarePaginator;
 
 class ProductTypeController extends Controller
 {
@@ -20,9 +21,12 @@ class ProductTypeController extends Controller
 
     public function index(ListProductTypesRequest $request): JsonResponse
     {
-        return $this->success([
-            'list' => AdminProductTypeResource::collection($this->productTypes->list())->resolve(),
-        ]);
+        $list = AdminProductTypeResource::collection($this->productTypes->list())->resolve();
+
+        // 全量种类列表无真实分页，统一经标准分页器出信封（page=1、page_size=条目数）。
+        $total = count($list);
+
+        return $this->paginate(new LengthAwarePaginator($list, $total, max($total, 1), 1));
     }
 
     public function store(StoreProductTypeRequest $request): JsonResponse

@@ -18,6 +18,7 @@ use App\Http\Resources\Admin\V2\AdminProductOperationPayloadResource;
 use App\Services\ProductCatalog\ProductCatalogService;
 use App\Services\ProductCatalog\ProductGroupV2QueryService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Pagination\LengthAwarePaginator;
 
 class ProductGroupController extends Controller
 {
@@ -44,11 +45,15 @@ class ProductGroupController extends Controller
             $tree = $this->filterAdminGroupTree($tree, $keyword);
         }
 
-        return $this->success([
-            'tree' => $tree,
-            'list' => $tree,
-            'total' => count($tree),
-        ]);
+        // 树形结构无真实分页，这里统一经标准分页器出信封（page=1、page_size=条目数），
+        // tree 为非分页附加字段，经 extra 透传，list 与 tree 内容一致保持不变。
+        $total = count($tree);
+
+        return $this->paginate(
+            new LengthAwarePaginator($tree, $total, max($total, 1), 1),
+            null,
+            ['tree' => $tree],
+        );
     }
 
     public function show(ShowProductGroupRequest $request, int $group): JsonResponse

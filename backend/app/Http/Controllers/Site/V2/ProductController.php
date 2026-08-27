@@ -22,6 +22,7 @@ use App\Services\Site\SiteProductQuoteService;
 use App\Services\Site\SiteProductReadService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
 
 class ProductController extends Controller
@@ -35,10 +36,12 @@ class ProductController extends Controller
     public function types(ListProductTypesRequest $request): JsonResponse
     {
         $payload = $this->siteProductReadService->productTypes();
+        $list = SiteProductTypeResource::collection((array) ($payload['list'] ?? []))->resolve();
 
-        return $this->success([
-            'list' => SiteProductTypeResource::collection((array) ($payload['list'] ?? []))->resolve(),
-        ]);
+        // 全量商品类型列表无真实分页，统一经标准分页器出信封（page=1、page_size=条目数）。
+        $total = count($list);
+
+        return $this->paginate(new LengthAwarePaginator($list, $total, max($total, 1), 1));
     }
 
     public function index(ListProductsRequest $request): JsonResponse

@@ -18,6 +18,7 @@ use App\Services\System\NotificationTemplateTestSendService;
 use App\Services\System\OperationLogService;
 use App\Services\System\SettingService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Pagination\LengthAwarePaginator;
 
 class SettingController extends Controller
 {
@@ -41,11 +42,12 @@ class SettingController extends Controller
     public function notificationTemplates(ListNotificationTemplatesRequest $request)
     {
         $templates = collect($this->notificationTemplates->list($request->channel()));
+        $list = AdminNotificationTemplateResource::collection($templates)->resolve();
 
-        return $this->success([
-            'list' => AdminNotificationTemplateResource::collection($templates)->resolve(),
-            'total' => $templates->count(),
-        ]);
+        // 全量模板列表无真实分页，统一经标准分页器出信封（page=1、page_size=条目数）。
+        $total = count($list);
+
+        return $this->paginate(new LengthAwarePaginator($list, $total, max($total, 1), 1));
     }
 
     public function revealSecret(RevealSettingSecretRequest $request)

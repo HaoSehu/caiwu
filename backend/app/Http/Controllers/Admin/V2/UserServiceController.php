@@ -23,6 +23,7 @@ use App\Models\User;
 use App\Services\User\UserService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 
 class UserServiceController extends Controller
 {
@@ -34,15 +35,19 @@ class UserServiceController extends Controller
     {
         $result = $this->users->services($user, $request->filters(), $request->perPage());
 
-        return $this->success([
-            'list' => collect((array) ($result['list'] ?? []))
-                ->map(fn (mixed $item): array => AdminUserServiceListItemResource::make($item)->resolve())
-                ->values()
-                ->all(),
-            'total' => (int) ($result['total'] ?? 0),
-            'page' => (int) ($result['page'] ?? $request->integer('page', 1)),
-            'page_size' => (int) ($result['page_size'] ?? $request->perPage()),
-        ]);
+        $list = collect((array) ($result['list'] ?? []))
+            ->map(fn (mixed $item): array => AdminUserServiceListItemResource::make($item)->resolve())
+            ->values()
+            ->all();
+
+        // 服务层已返回完整分页元数据，包装回标准分页器复用基类 paginate()，
+        // 保持分页信封由 ApiResponseBuilder 单点生成（兜底取值语义与原手拼一致）。
+        return $this->paginate(new LengthAwarePaginator(
+            $list,
+            (int) ($result['total'] ?? 0),
+            (int) ($result['page_size'] ?? $request->perPage()),
+            (int) ($result['page'] ?? $request->integer('page', 1)),
+        ));
     }
 
     public function store(StoreUserServiceRequest $request, User $user): JsonResponse

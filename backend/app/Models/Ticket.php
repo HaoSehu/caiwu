@@ -23,6 +23,9 @@ class Ticket extends Model
         return $this->belongsTo(Service::class);
     }
 
+    /**
+     * @return HasMany<TicketReply, $this>
+     */
     public function replies(): HasMany
     {
         return $this->hasMany(TicketReply::class);

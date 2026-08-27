@@ -13,6 +13,7 @@ use App\Http\Resources\Admin\V2\AdminContentCategoryResource;
 use App\Models\ContentCategory;
 use App\Services\Content\ContentCategoryService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Pagination\LengthAwarePaginator;
 
 class ContentCategoryController extends Controller
 {
@@ -25,14 +26,13 @@ class ContentCategoryController extends Controller
         $items = $this->contentCategoryService->adminList($request->contentType());
         $page = max((int) ($request->validated('page') ?? 1), 1);
         $pageSize = $request->perPage(100, 100);
-        $list = $items->forPage($page, $pageSize)->values();
+        $list = $items->forPage($page, $pageSize)->values()->all();
 
-        return $this->success([
-            'list' => AdminContentCategoryResource::collection($list)->resolve(),
-            'total' => $items->count(),
-            'page' => $page,
-            'page_size' => $pageSize,
-        ]);
+        // 内存集合分页包装回标准分页器复用基类 paginate()，保持信封由 ApiResponseBuilder 单点生成。
+        return $this->paginate(
+            new LengthAwarePaginator($list, $items->count(), $pageSize, $page),
+            AdminContentCategoryResource::class,
+        );
     }
 
     public function store(StoreContentCategoryRequest $request): JsonResponse

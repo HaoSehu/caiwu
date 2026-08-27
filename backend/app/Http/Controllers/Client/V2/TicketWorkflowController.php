@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Client\V2;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Client\V2\Ticket\ListTicketsRequest;
 use App\Http\Requests\Client\V2\Ticket\ReplyRequest;
 use App\Http\Requests\Client\V2\Ticket\ServiceOptionsRequest;
 use App\Http\Requests\Client\V2\Ticket\StoreRequest;
@@ -18,11 +19,11 @@ class TicketWorkflowController extends Controller
 
     public function __construct(private TicketService $ticketService) {}
 
-    public function index(Request $request)
+    public function index(ListTicketsRequest $request)
     {
         $filters = $request->only(['keyword', 'status']);
-        $perPage = max(1, min((int) $request->input('page_size', 15), 50));
-        $paginator = $this->ticketService->clientList($request->user()->id, $filters, $perPage);
+        // 页大小统一由基类 perPage() 提取，消除内联钳制逻辑。
+        $paginator = $this->ticketService->clientList($request->user()->id, $filters, $request->perPage());
 
         return $this->paginate($paginator);
     }

@@ -28,6 +28,7 @@ use App\Support\UploadedImage;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
@@ -161,8 +162,13 @@ class TicketService
             $lockedTicket->update(['status' => self::STATUS_CLIENT_REPLY]);
 
             $lockedTicket->loadMissing('user:id,email,nickname');
+            $clientName = $lockedTicket->user?->display_name ?: '客户';
 
-            return $this->formatReply($reply, $lockedTicket->user?->display_name ?: '客户');
+            return $this->formatReply(
+                $reply,
+                $clientName,
+                $this->buildReplyContext($lockedTicket, collect([$reply]), $clientName)
+            );
         });
 
         $this->notifyAdminsOfClientReply($ticket, $content, $attachments !== []);
@@ -215,7 +221,13 @@ class TicketService
             ]);
             $lockedTicket->update(['status' => self::STATUS_STAFF_REPLY]);
 
-            return $this->formatReply($reply, $staffName);
+            $lockedTicket->loadMissing('user:id,email,nickname');
+
+            return $this->formatReply(
+                $reply,
+                $staffName,
+                $this->buildReplyContext($lockedTicket, collect([$reply]), $lockedTicket->user?->display_name ?: '客户')
+            );
         });
 
         $this->notifyClientOfStaffReply($ticket, $staffName, $content, $attachments !== []);
@@ -527,18 +539,13 @@ class TicketService
                 ->paginate($perPage);
 
             $items = collect($paginator->items());
-            $staffMap = AdminUser::query()
-                ->whereIn('id', $items->where('is_staff', 1)->pluck('user_id')->unique()->values())
-                ->get(['id', 'username', 'nickname'])
-                ->mapWithKeys(fn (AdminUser $admin) => [
-                    (int) $admin->id => trim((string) $admin->nickname) !== '' ? $admin->nickname : $admin->username,
-                ])
-                ->all();
+            $replyContext = $this->buildReplyContext($ticket, $items, $clientName);
 
             $paginator->setCollection($items
                 ->map(fn (TicketReply $reply) => $this->formatReply(
                     $reply,
-                    $reply->is_staff ? ($staffMap[(int) $reply->user_id] ?? '员工') : $clientName
+                    $reply->is_staff ? ($replyContext['staff_map'][(int) $reply->user_id] ?? '员工') : $clientName,
+                    $replyContext
                 ))
                 ->values());
 
@@ -672,45 +679,21 @@ class TicketService
 
     private function notifyAdminsOfNewTicket(Ticket $ticket, string $content, bool $hasAttachments): void
     {
-        $ticket->loadMissing('user:id,email,nickname');
-
-        $recipients = $this->resolveTicketAdminRecipients($ticket);
-        if ($recipients->isEmpty()) {
-            return;
-        }
-
-        $department = self::DEPT_LABELS[$ticket->department] ?? (string) $ticket->department;
-        $priority = self::PRIORITIES[(int) $ticket->priority] ?? (string) $ticket->priority;
-        $status = self::STATUS_LABELS[(int) $ticket->status] ?? (string) $ticket->status;
-        $clientName = $ticket->user?->display_name ?: ($ticket->user?->email ?: '客户');
-        $preview = $this->buildReplyPreview($content, $hasAttachments);
-
-        foreach ($recipients as $admin) {
-            $this->sendTicketEmail(
-                (string) $admin->email,
-                NotificationService::TEMPLATE_TICKET_CREATED,
-                [
-                    'site_name' => $this->siteName(),
-                    'recipient_name' => (string) $admin->display_name,
-                    'ticket_id' => (int) $ticket->id,
-                    'ticket_subject' => (string) $ticket->subject,
-                    'department' => $department,
-                    'priority' => $priority,
-                    'status' => $status,
-                    'client_name' => $clientName,
-                    'client_email' => (string) ($ticket->user?->email ?: '未绑定'),
-                    'message_preview' => $preview,
-                ],
-                [
-                    'scene' => 'ticket_created',
-                    'ticket_id' => (int) $ticket->id,
-                    'recipient_admin_id' => (int) $admin->id,
-                ]
-            );
-        }
+        // 新工单与客户回复共用同一套收件人与模板变量，仅模板码与 scene 不同。
+        $this->sendAdminTicketNotification($ticket, $content, $hasAttachments, NotificationService::TEMPLATE_TICKET_CREATED, 'ticket_created');
     }
 
     private function notifyAdminsOfClientReply(Ticket $ticket, string $content, bool $hasAttachments): void
+    {
+        $this->sendAdminTicketNotification($ticket, $content, $hasAttachments, NotificationService::TEMPLATE_TICKET_CLIENT_REPLY, 'ticket_client_reply');
+    }
+
+    /**
+     * 管理员工单邮件通知核心：notifyAdminsOfNewTicket 与 notifyAdminsOfClientReply 共用结构。
+     * 收件人解析、工单信息渲染与发送上下文在此统一生成，仅以模板码与场景标记表达差异，
+     * 保证两条路径的邮件变量、scene 字符串与日志文案逐字一致。
+     */
+    private function sendAdminTicketNotification(Ticket $ticket, string $content, bool $hasAttachments, string $templateCode, string $scene): void
     {
         $ticket->loadMissing('user:id,email,nickname');
 
@@ -728,7 +711,7 @@ class TicketService
         foreach ($recipients as $admin) {
             $this->sendTicketEmail(
                 (string) $admin->email,
-                NotificationService::TEMPLATE_TICKET_CLIENT_REPLY,
+                $templateCode,
                 [
                     'site_name' => $this->siteName(),
                     'recipient_name' => (string) $admin->display_name,
@@ -742,7 +725,7 @@ class TicketService
                     'message_preview' => $preview,
                 ],
                 [
-                    'scene' => 'ticket_client_reply',
+                    'scene' => $scene,
                     'ticket_id' => (int) $ticket->id,
                     'recipient_admin_id' => (int) $admin->id,
                 ]
@@ -754,38 +737,29 @@ class TicketService
     {
         $ticket->loadMissing('user:id,email,nickname');
 
+        // 原有守卫保持不变：取不到客户邮箱时整条通知（含站内信）一并不发。
         $email = trim((string) ($ticket->user?->email ?? ''));
         if ($email === '') {
             return;
         }
 
-        $status = self::STATUS_LABELS[(int) $ticket->status] ?? (string) $ticket->status;
-        $clientName = $ticket->user?->display_name ?: '客户';
         $preview = $this->buildReplyPreview($content, $hasAttachments);
-        $ticketsUrl = $this->clientTicketsUrl();
-        $this->sendTicketEmail($email, NotificationService::TEMPLATE_TICKET_STAFF_REPLY, [
-            'site_name' => $this->siteName(),
-            'display_name' => $clientName,
-            'ticket_id' => (int) $ticket->id,
-            'ticket_subject' => (string) $ticket->subject,
-            'status' => $status,
-            'staff_name' => $staffName,
-            'message_preview' => $preview,
-            'tickets_url' => $ticketsUrl,
-            'login_tip' => $ticketsUrl === '' ? '请登录会员中心的工单页面查看详情。' : '',
-        ], [
-            'scene' => 'ticket_staff_reply',
-            'ticket_id' => (int) $ticket->id,
-            'recipient_user_id' => (int) ($ticket->user?->id ?? 0),
-        ]);
 
-        $this->userNotificationService->create(
-            (int) ($ticket->user?->id ?? 0),
-            UserNotificationType::TICKET_STAFF_REPLY,
-            '工单收到回复',
-            "工单「{$ticket->subject}」{$staffName} 回复：{$preview}",
-            '/client/tickets/'.$ticket->id,
-            ['ticket_id' => (int) $ticket->id]
+        // 与自动关闭通知的差异面：模板码/场景、追加邮件变量 staff_name 与 message_preview、站内信类型标题与正文。
+        $this->sendClientTicketNotification(
+            ticket: $ticket,
+            email: $email,
+            notifyUserId: (int) ($ticket->user?->id ?? 0),
+            status: self::STATUS_LABELS[(int) $ticket->status] ?? (string) $ticket->status,
+            templateCode: NotificationService::TEMPLATE_TICKET_STAFF_REPLY,
+            extraParams: [
+                'staff_name' => $staffName,
+                'message_preview' => $preview,
+            ],
+            scene: 'ticket_staff_reply',
+            notificationType: UserNotificationType::TICKET_STAFF_REPLY,
+            notificationTitle: '工单收到回复',
+            notificationBody: "工单「{$ticket->subject}」{$staffName} 回复：{$preview}",
         );
     }
 
@@ -803,32 +777,75 @@ class TicketService
             return;
         }
 
-        $status = self::STATUS_LABELS[self::STATUS_CLOSED] ?? '已关闭';
+        $this->sendClientTicketNotification(
+            ticket: $ticket,
+            email: $email,
+            notifyUserId: $userId,
+            status: self::STATUS_LABELS[self::STATUS_CLOSED] ?? '已关闭',
+            templateCode: NotificationService::TEMPLATE_TICKET_AUTO_CLOSED,
+            extraParams: [],
+            scene: 'ticket_auto_closed',
+            notificationType: UserNotificationType::TICKET_AUTO_CLOSED,
+            notificationTitle: '工单已自动关闭',
+            notificationBody: "工单「{$ticket->subject}」因长期未跟进已自动关闭，如需继续处理请重新开启或提交新工单。",
+        );
+    }
+
+    /**
+     * 客户侧工单通知核心：notifyClientOfStaffReply 与 notifyClientOfAutoClose 共用的
+     * 「sendTicketEmail + userNotificationService->create」双发结构。
+     *
+     * $email 为空时跳过邮件、$notifyUserId 小于等于 0 时跳过站内信；
+     * 公共邮件变量（display_name/tickets_url/login_tip 等）在此统一生成，
+     * $extraParams 按原键序插在 message 类变量之后、tickets_url 之前，
+     * 保证两条路径发出的邮件变量、scene 字符串与站内信文案逐字一致。
+     */
+    private function sendClientTicketNotification(
+        Ticket $ticket,
+        ?string $email,
+        int $notifyUserId,
+        string $status,
+        string $templateCode,
+        array $extraParams,
+        string $scene,
+        string $notificationType,
+        string $notificationTitle,
+        string $notificationBody,
+    ): void {
         $clientName = $ticket->user?->display_name ?: '客户';
         $ticketsUrl = $this->clientTicketsUrl();
 
-        if ($email !== '') {
-            $this->sendTicketEmail($email, NotificationService::TEMPLATE_TICKET_AUTO_CLOSED, [
+        if ($email !== null && $email !== '') {
+            $params = [
                 'site_name' => $this->siteName(),
                 'display_name' => $clientName,
                 'ticket_id' => (int) $ticket->id,
                 'ticket_subject' => (string) $ticket->subject,
                 'status' => $status,
-                'tickets_url' => $ticketsUrl,
-                'login_tip' => $ticketsUrl === '' ? '请登录会员中心的工单页面查看详情。' : '',
-            ], [
-                'scene' => 'ticket_auto_closed',
+            ];
+
+            if ($extraParams !== []) {
+                foreach ($extraParams as $extraKey => $extraValue) {
+                    $params[$extraKey] = $extraValue;
+                }
+            }
+
+            $params['tickets_url'] = $ticketsUrl;
+            $params['login_tip'] = $ticketsUrl === '' ? '请登录会员中心的工单页面查看详情。' : '';
+
+            $this->sendTicketEmail($email, $templateCode, $params, [
+                'scene' => $scene,
                 'ticket_id' => (int) $ticket->id,
-                'recipient_user_id' => $userId,
+                'recipient_user_id' => $notifyUserId,
             ]);
         }
 
-        if ($userId > 0) {
+        if ($notifyUserId > 0) {
             $this->userNotificationService->create(
-                $userId,
-                UserNotificationType::TICKET_AUTO_CLOSED,
-                '工单已自动关闭',
-                "工单「{$ticket->subject}」因长期未跟进已自动关闭，如需继续处理请重新开启或提交新工单。",
+                $notifyUserId,
+                $notificationType,
+                $notificationTitle,
+                $notificationBody,
                 '/client/tickets/'.$ticket->id,
                 ['ticket_id' => (int) $ticket->id]
             );
@@ -1234,7 +1251,11 @@ class TicketService
         return $projection === [] ? $legacy : array_replace($legacy, $projection);
     }
 
-    private function formatReply(TicketReply $reply, string $senderName): array
+    /**
+     * @param  array{client_name: string, staff_map: array<int, string>, quoted_map: Collection<int, TicketReply>}  $replyContext
+     * @return array<string, mixed>
+     */
+    private function formatReply(TicketReply $reply, string $senderName, array $replyContext): array
     {
         $isRecalled = $reply->recalled_at !== null;
 
@@ -1257,7 +1278,7 @@ class TicketService
                 ];
             }
             try {
-                $attachment = $this->buildStoredAttachmentMeta($item['path'] ?? '', $item['name'] ?? null, $item['mime_type'] ?? null);
+                $attachment = $this->restoreStoredAttachmentMeta((string) ($item['path'] ?? ''), $item);
 
                 return $this->serializeAttachmentForClient($attachment);
             } catch (\Throwable) {
@@ -1266,25 +1287,20 @@ class TicketService
         })->filter()->values()->all();
 
         $quote = null;
-        if (! empty($reply->quote_reply_id)) {
-            $quoted = TicketReply::where('ticket_id', $reply->ticket_id)->find((int) $reply->quote_reply_id);
-            if ($quoted) {
-                $quoted->loadMissing('ticket.user:id,nickname,email');
-                $isQuotedStaff = (int) $quoted->is_staff === 1;
-                $quotedSenderName = '客户';
-                if ($isQuotedStaff) {
-                    $admin = AdminUser::query()->find((int) $quoted->user_id);
-                    $quotedSenderName = $admin?->nickname ?: $admin?->username ?: '员工';
-                } else {
-                    $quotedSenderName = $quoted->ticket?->user?->display_name ?: '客户';
-                }
-                $quote = [
-                    'id' => (int) $quoted->id,
-                    'sender_name' => $quotedSenderName,
-                    'content' => $quoted->recalled_at !== null ? '消息已撤回' : Str::limit(trim((string) ($quoted->content ?? '')), 100),
-                    'recalled' => $quoted->recalled_at !== null,
-                ];
-            }
+        $quoted = ! empty($reply->quote_reply_id)
+            ? $replyContext['quoted_map']->get((int) $reply->quote_reply_id)
+            : null;
+        if ($quoted !== null) {
+            $isQuotedStaff = (int) $quoted->is_staff === 1;
+            $quotedSenderName = $isQuotedStaff
+                ? (($replyContext['staff_map'][(int) $quoted->user_id] ?? '') ?: '员工')
+                : (($replyContext['client_name'] ?: '') ?: '客户');
+            $quote = [
+                'id' => (int) $quoted->id,
+                'sender_name' => $quotedSenderName,
+                'content' => $quoted->recalled_at !== null ? '消息已撤回' : Str::limit(trim((string) ($quoted->content ?? '')), 100),
+                'recalled' => $quoted->recalled_at !== null,
+            ];
         }
 
         return [
@@ -1322,20 +1338,88 @@ class TicketService
     {
         $ticket->load(['replies' => fn ($q) => $q->orderBy('created_at')]);
 
-        $staffMap = AdminUser::query()
-            ->whereIn('id', $ticket->replies->where('is_staff', 1)->pluck('user_id')->unique()->values())
+        // relation 集合转标准集合，保证 buildReplyContext 的泛型契约稳定
+        $replies = collect($ticket->replies->all());
+
+        $replyContext = $this->buildReplyContext($ticket, $replies, $clientName);
+
+        return $replies
+            ->map(fn (TicketReply $reply) => $this->formatReply(
+                $reply,
+                $reply->is_staff ? ($replyContext['staff_map'][(int) $reply->user_id] ?? '员工') : $clientName,
+                $replyContext
+            ))
+            ->values()
+            ->all();
+    }
+
+    /**
+     * 批量预取回复渲染上下文：被引用回复与管理员名各查一次，避免逐条回复触发 N+1。
+     * 引用与主回复同属一张工单，客户名直接复用工单归属人。
+     *
+     * @param  Collection<int, TicketReply>  $replies
+     * @return array{client_name: string, staff_map: array<int, string>, quoted_map: Collection<int, TicketReply>}
+     */
+    private function buildReplyContext(Ticket $ticket, Collection $replies, string $clientName): array
+    {
+        $quoteIds = $replies
+            ->map(fn (TicketReply $reply) => (int) ($reply->quote_reply_id ?? 0))
+            ->filter()
+            ->unique()
+            ->values();
+
+        $quotedMap = $quoteIds->isEmpty() ? collect() : TicketReply::query()
+            ->where('ticket_id', (int) $ticket->id)
+            ->whereIn('id', $quoteIds->all())
+            ->get()
+            ->keyBy(fn (TicketReply $reply) => (int) $reply->id);
+
+        $staffCandidates = $replies->concat($quotedMap->values())
+            ->filter(fn (TicketReply $reply) => (int) $reply->is_staff === 1);
+        $staffIds = $staffCandidates->pluck('user_id')->map(fn ($id) => (int) $id)->unique()->values();
+
+        $staffMap = $staffIds->isEmpty() ? [] : AdminUser::query()
+            ->whereIn('id', $staffIds->all())
             ->get(['id', 'username', 'nickname'])
             ->mapWithKeys(fn (AdminUser $admin) => [
                 (int) $admin->id => trim((string) $admin->nickname) !== '' ? $admin->nickname : $admin->username,
             ])
             ->all();
 
-        return $ticket->replies
-            ->map(fn (TicketReply $reply) => $this->formatReply(
-                $reply,
-                $reply->is_staff ? ($staffMap[(int) $reply->user_id] ?? '员工') : $clientName
-            ))
-            ->values()
-            ->all();
+        return [
+            'client_name' => $clientName,
+            'staff_map' => $staffMap,
+            'quoted_map' => $quotedMap,
+        ];
+    }
+
+    /**
+     * 读取端附件元数据：落库时已固化 name/size/mime_type，优先信任固化值，
+     * 仅历史数据缺字段或字段不可信时回退文件系统校验。
+     *
+     * @param  array<string, mixed>  $stored
+     * @return array<string, mixed>
+     */
+    private function restoreStoredAttachmentMeta(string $path, array $stored): array
+    {
+        $normalizedPath = $this->normalizeAttachmentPath($path);
+        $mimeType = trim((string) ($stored['mime_type'] ?? ''));
+        $size = (int) ($stored['size'] ?? 0);
+
+        if ($mimeType === '' || $size <= 0 || ! str_starts_with($mimeType, 'image/')) {
+            return $this->buildStoredAttachmentMeta($normalizedPath, (string) ($stored['name'] ?? null), $mimeType !== '' ? $mimeType : null);
+        }
+
+        if (! File::exists(SecureAsset::absolutePath($normalizedPath))) {
+            throw new \RuntimeException('图片不存在或已失效');
+        }
+
+        return [
+            'name' => trim((string) TextSanitizer::clean((string) ($stored['name'] ?? ''))) ?: basename($normalizedPath),
+            'path' => $normalizedPath,
+            'size' => $size,
+            'mime_type' => $mimeType,
+            'type' => (string) ($stored['type'] ?? 'image'),
+        ];
     }
 }

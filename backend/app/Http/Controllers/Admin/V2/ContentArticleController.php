@@ -15,7 +15,6 @@ use App\Http\Resources\Admin\V2\AdminContentArticleListResource;
 use App\Http\Resources\Admin\V2\AdminContentSummaryResource;
 use App\Models\ContentArticle;
 use App\Services\Content\ContentArticleService;
-use App\Support\ApiResponseBuilder;
 use Illuminate\Http\JsonResponse;
 
 class ContentArticleController extends Controller
@@ -38,7 +37,8 @@ class ContentArticleController extends Controller
             perPage: $request->perPage(),
         );
 
-        return $this->success(ApiResponseBuilder::pagination($paginator, AdminContentArticleListResource::class));
+        // 统一走基类 paginate() 封装，保持分页信封由 ApiResponseBuilder 单点生成。
+        return $this->paginate($paginator, AdminContentArticleListResource::class);
     }
 
     public function show(ShowContentArticleRequest $request, ContentArticle $article): JsonResponse
