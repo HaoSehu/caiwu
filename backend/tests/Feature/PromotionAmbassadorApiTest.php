@@ -75,6 +75,7 @@ class PromotionAmbassadorApiTest extends TestCase
                 ->where('data.list', fn ($list) => collect($list)->contains(
                     fn (array $item) => (int) $item['id'] === (int) $ambassador->id
                         && $item['reward_rate'] === '12.50'
+                        && $item['renewal_reward_rate'] === '0.00'
                 ))
                 ->etc());
     }
@@ -87,6 +88,22 @@ class PromotionAmbassadorApiTest extends TestCase
         $this->postJson('/api/v2/admin/promotion-ambassadors', [
             'name' => '超标大使',
             'reward_rate' => 120,
+            'renewal_reward_rate' => 5,
+            'status' => 1,
+        ])
+            ->assertStatus(422)
+            ->assertJson(fn (AssertableJson $json) => $json->where('code', 42200)->etc());
+    }
+
+    public function test_validation_rejects_renewal_rate_out_of_range(): void
+    {
+        $admin = $this->makeAdmin();
+        Sanctum::actingAs($admin);
+
+        $this->postJson('/api/v2/admin/promotion-ambassadors', [
+            'name' => '续费超标大使',
+            'reward_rate' => 5,
+            'renewal_reward_rate' => 120,
             'status' => 1,
         ])
             ->assertStatus(422)
@@ -102,6 +119,7 @@ class PromotionAmbassadorApiTest extends TestCase
         $this->postJson('/api/v2/admin/promotion-ambassadors', [
             'name' => $existing->name,
             'reward_rate' => 5,
+            'renewal_reward_rate' => 5,
             'status' => 1,
         ])
             ->assertStatus(422);
@@ -115,6 +133,7 @@ class PromotionAmbassadorApiTest extends TestCase
         $this->postJson('/api/v2/admin/promotion-ambassadors', [
             'name' => '推广大使'.uniqid(),
             'reward_rate' => 8.88,
+            'renewal_reward_rate' => 6.66,
             'status' => 1,
             'remark' => '测试档位',
         ])
@@ -122,12 +141,13 @@ class PromotionAmbassadorApiTest extends TestCase
             ->assertJson(fn (AssertableJson $json) => $json
                 ->where('code', 0)
                 ->where('data.reward_rate', '8.88')
+                ->where('data.renewal_reward_rate', '6.66')
                 ->etc());
 
         $this->assertSame(1, PromotionAmbassador::query()->where('remark', '测试档位')->count());
     }
 
-    public function test_update_changes_rate(): void
+    public function test_update_changes_rates(): void
     {
         $admin = $this->makeAdmin();
         Sanctum::actingAs($admin);
@@ -136,12 +156,15 @@ class PromotionAmbassadorApiTest extends TestCase
         $this->putJson("/api/v2/admin/promotion-ambassadors/{$ambassador->id}", [
             'name' => $ambassador->name,
             'reward_rate' => 15,
+            'renewal_reward_rate' => 12,
             'status' => 1,
         ])
             ->assertStatus(200)
-            ->assertJsonPath('data.reward_rate', '15.00');
+            ->assertJsonPath('data.reward_rate', '15.00')
+            ->assertJsonPath('data.renewal_reward_rate', '12.00');
 
         $this->assertSame('15.00', (string) $ambassador->refresh()->reward_rate);
+        $this->assertSame('12.00', (string) $ambassador->refresh()->renewal_reward_rate);
     }
 
     public function test_destroy_blocks_ambassador_with_users(): void
