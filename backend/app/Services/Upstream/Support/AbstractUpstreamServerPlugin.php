@@ -9,21 +9,20 @@ use App\Models\Supplier;
 /**
  * servers 域上游插件公共骨架（系统侧基类）。
  *
- * 参照 BaseMailPluginService 供 mail 插件继承的先例：把三家服务器插件
- * （demo_servers / kanghostx / zjmf_finance）互相复制的标准骨架收敛到系统侧，
- * 各家的上游协议细节仍留在插件 logic 类中。
+ * 参照 BaseMailPluginService 供 mail 插件继承的先例：把各服务器插件
+ * 相互复制的标准骨架收敛到系统侧，各家上游协议细节仍留在插件 logic 类中。
  *
  * 零行为变化承诺：
  * - 对外方法签名、execute 动作名、返回数组结构与文案保持不变；
  * - 差异通过受保护钩子注入（capabilityCarrier/metadataExtras/
  *   dispatchSpecificAction/unsupportedActionMessage），钩子默认值即三家
  *   历史输出的公共部分；
- * - resolve() 的能力承载对象默认是本类自身；zjmf 这类把能力委托给 lib
- *   内部 adapter 的插件应完整覆写 supports()/resolve() 保持原有委托语义。
+ * - resolve() 的能力承载对象默认是本类自身；把能力委托给 lib 内部
+ *   adapter 的插件应完整覆写 supports()/resolve() 保持原有委托语义。
  *
  * 目录批量取数循环依赖软契约 ProvidesConsoleCatalog::getProductConfigTemplate，
  * 由实现了目录能力的子类提供具体内容（与接口的 @method 标注同等性质），
- * 未实现目录能力且不调用批量取数的插件（如 zjmf_finance）不受影响。
+ * 未实现目录能力且不调用批量取数的插件不受影响。
  *
  * @method array getProductConfigTemplate(\App\Models\Supplier $supplier, int $productId)
  */
@@ -145,8 +144,7 @@ abstract class AbstractUpstreamServerPlugin
     }
 
     /**
-     * execute 的 default 分支文案。demo_servers 与 kanghostx 历史输出相同中文，
-     * zjmf_finance 覆写为原有的英文文案。
+     * execute 的 default 分支文案；个别上游插件可按既有对外行为覆写为自有文案。
      */
     protected function unsupportedActionMessage(): string
     {
@@ -236,9 +234,8 @@ abstract class AbstractUpstreamServerPlugin
      * 供应商卡片"最近更新时间"格式化：DateTimeInterface 直出，
      * 其余按 scalarString 处理后兜底 '-'。
      *
-     * demo_servers 无此函数；kanghostx 用 scalarString、zjmf_finance 用
-     * trim((string)) 强转——对两家实际可能出现的输入（null / 标量 /
-     * DateTimeInterface）输出完全一致，取 scalarString 语义更安全。
+     * 各家插件对可能出现的输入（null / 标量 / DateTimeInterface）强转后
+     * 输出完全一致，统一取 scalarString 语义更安全。
      */
     protected function formatCardDateTime(mixed $value): string
     {

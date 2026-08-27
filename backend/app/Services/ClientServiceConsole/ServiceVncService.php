@@ -390,7 +390,7 @@ class ServiceVncService
             parse_str($queryStr, $queryParams);
         }
 
-        // 情形一：含 base64 WSS（ZJMF/美得云格式）
+        // 情形一：含 base64 WSS（多上游共享格式）
         $encodedWssUrl = trim((string) ($queryParams['url'] ?? ''));
         if ($encodedWssUrl !== '') {
             $wssUrl = base64_decode($encodedWssUrl, true);

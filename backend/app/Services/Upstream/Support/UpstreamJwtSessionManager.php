@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Log;
  * 上游面板 JWT 会话缓存管理器骨架。
  *
  * 承载「登录换 JWT — 按剩余有效期写入缓存 — 缺会话告警 — 主动失效」的通用流程，
- * 系统侧 HostingPanelApiTransport 与 zjmf_finance 等插件的认证管理器共用本骨架，
+ * 系统侧共享传输层与各上游插件的认证管理器共用本骨架，
  * 仅通过下列受保护扩展点定制差异：
  * - 日志口径：sessionLogPrefix / sessionBaseLogContext / missingSessionLogContext；
  * - 缓存落点：jwtCacheKey / configuredJwtCacheStoreName；
@@ -114,7 +114,7 @@ abstract class UpstreamJwtSessionManager
     abstract protected function jwtCacheKey(Supplier $supplier): string;
 
     /**
-     * 会话日志统一前缀，例如「[主机面板接口] 」或「[ZJMF 财务接口] 」（含尾随空格）。
+     * 会话日志统一前缀，由各实现按自身上游产品命名（含尾随空格）。
      */
     abstract protected function sessionLogPrefix(): string;
 

@@ -1281,7 +1281,7 @@ class ServiceRenewService
     }
 
     /**
-     * 兼容上游到期字段的两种格式：秒级时间戳（ZJMF 常用）或 Y-m-d / Y-m-d H:i:s 日期字符串。
+     * 兼容上游到期字段的两种格式：秒级时间戳或 Y-m-d / Y-m-d H:i:s 日期字符串。
      * 上游若返回日期字符串而本地只认数值，会静默回退本地计算，与上游实际延期口径漂移。
      */
     private function resolveUpstreamDueDate(mixed $nextDueDate): ?Carbon

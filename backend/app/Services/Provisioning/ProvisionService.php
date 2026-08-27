@@ -1499,7 +1499,7 @@ class ProvisionService
     }
 
     /**
-     * 魔方的购物车按上游登录账号共享，不能仅按本地 supplier_id 互斥。
+     * 上游购物车按登录账号共享，不能仅按本地 supplier_id 互斥。
      * 多条供应商记录复用同一上游地址和账号时，必须落到同一个分布式锁。
      */
     private function supplierCartLockKey(Supplier $supplier): string

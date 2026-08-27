@@ -6,15 +6,8 @@ import { toUserMessage } from '@/utils/userMessage';
  */
 
 export const providerTypeFallbackLabels: Record<string, string> = {
-  zjmf_finance_api: 'ZJMF 财务',
-  zjmf_cloud_api: 'ZJMF 云',
   hosting_panel_api: '通用主机面板',
 };
-
-export const fallbackProviderTypeOptions = Object.entries(providerTypeFallbackLabels).map(([value, label]) => ({
-  value,
-  label,
-}));
 
 /**
  * Flatten category tree into a flat list with indented labels

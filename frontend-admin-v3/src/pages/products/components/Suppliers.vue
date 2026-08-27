@@ -113,7 +113,7 @@
     <div class="split-dialog-intro">
       <strong>左右穿梭对接商品</strong>
       <p>
-        左侧选择 ZJMF 财务未对接商品，右侧选择当前系统分类作为导入位置，执行后会创建或更新本地商品并绑定当前提供商商品
+        左侧选择当前提供商未对接商品，右侧选择当前系统分类作为导入位置，执行后会创建或更新本地商品并绑定当前提供商商品
         ID。
       </p>
     </div>
@@ -165,7 +165,7 @@
         <div class="supplier-batch-panel__head">
           <div class="supplier-batch-panel__title">
             <strong>未对接</strong>
-            <span>ZJMF 财务商品结构（含已对接）</span>
+            <span>上游商品结构（含已对接）</span>
           </div>
           <div class="supplier-batch-panel__actions">
             <t-tag variant="light" theme="warning"
@@ -453,6 +453,7 @@ import {
   flattenCategories,
   isSelectableProductGroup,
   mergeProviderTypeOptions,
+  normalizeProviderTypeOptions,
   productGroupOptionKey,
   productGroupOptionLabel,
   productGroupPayload,
@@ -1486,42 +1487,6 @@ function handleDeleteSupplier(row: SupplierRecord) {
       }
     },
   });
-}
-
-function normalizeProviderTypeOptions(value: unknown): ProviderTypeRecord[] {
-  const record = toPlainRecord(value);
-  const rawItems = Array.isArray(value)
-    ? value
-    : Array.isArray(record.list)
-      ? record.list
-      : Array.isArray(record.options)
-        ? record.options
-        : Array.isArray(record.items)
-          ? record.items
-          : Array.isArray(record.types)
-            ? record.types
-            : Array.isArray(record.provider_types)
-              ? record.provider_types
-              : record.value
-                ? [record]
-                : Object.entries(record).map(([entryValue, entryLabel]) => ({ value: entryValue, label: entryLabel }));
-
-  return rawItems
-    .map((item) => {
-      if (typeof item === 'string') {
-        return { value: item, label: providerTypeFallbackLabels[item] || item };
-      }
-
-      const rec = toPlainRecord(item);
-      const val = String(rec.value ?? rec.key ?? rec.type ?? rec.code ?? '').trim();
-      if (!val) return null;
-
-      const rawLabel = rec.label ?? rec.name ?? rec.title;
-      const label =
-        providerTypeFallbackLabels[val] || (typeof rawLabel === 'string' ? rawLabel : String(rawLabel || val));
-      return { ...rec, value: val, label };
-    })
-    .filter((item): item is ProviderTypeRecord => !!item);
 }
 
 function handleSupplierProviderChange() {
