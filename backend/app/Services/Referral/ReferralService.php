@@ -42,6 +42,9 @@ class ReferralService
 {
     private const DEFAULT_REWARD_RATE = 10.00;
 
+    /** 续费返利为新功能，全局兜底默认 0.00（由运营在设置页配置后生效） */
+    private const DEFAULT_RENEWAL_REWARD_RATE = 0.00;
+
     /**
      * 推广奖励相关退款阻断错误码。
      * 用于区分"奖励已提现/可提余额不足"等需人工处理的场景，
@@ -187,7 +190,7 @@ class ReferralService
             return null;
         }
 
-        if ($order->type !== 'new') {
+        if (! in_array((string) $order->type, ['new', 'renew'], true)) {
             return null;
         }
 
@@ -221,6 +224,7 @@ class ReferralService
             logRemark: "推荐奖励冻结，来源订单 {$order->order_no}",
             sourceNoValue: $order->order_no,
             traceId: $traceId,
+            type: (string) $order->type,
         );
     }
 
@@ -233,7 +237,7 @@ class ReferralService
             return null;
         }
 
-        if (! in_array((string) $invoice->type, ['normal', 'new'], true)) {
+        if (! in_array((string) $invoice->type, ['normal', 'new', 'renew'], true)) {
             return null;
         }
 
@@ -268,17 +272,19 @@ class ReferralService
             logRemark: "推荐奖励冻结，来源账单 {$invoiceNo}",
             sourceNoValue: $invoiceNo,
             traceId: $traceId,
+            type: (string) $invoice->type === 'renew' ? 'renew' : 'new',
         );
     }
 
     /**
      * 推荐奖励发放核心：rewardForPaidOrder 与 rewardForPaidInvoice 共用的加锁幂等、
-     * 销量累计、等级费率解算与冻结落库流程。
+     * 销量累计、费率解算与冻结落库流程。
      *
      * $sourceType 目前仅取 'order' 与 'invoice'，决定：
      * - 锁键中段："lock:referral:reward:{$sourceType}:{$sourceId}"
      * - ReferralReward 的幂等列与外键列：{$sourceType}_id
      * - 账号日志 relatedType 与操作日志 detail 中 {$sourceType}_no / {$sourceType}_amount 键名
+     * $type 取 'new'（新购）或 'renew'（续费），决定按大使的 reward_rate 或 renewal_reward_rate 结算。
      * 来源侧的业务守卫、取数金额与中文文案由各薄壳组装后传入；
      * 资金运算保持与拆分前逐字一致（先乘后除再 round）。
      */
@@ -292,15 +298,20 @@ class ReferralService
         string $logRemark,
         ?string $sourceNoValue,
         ?string $traceId,
+        string $type,
     ): ?ReferralReward {
-        // 白名单校验：防止非预期 sourceType 导致 SQL 错误
+        // 白名单校验：防止非预期 sourceType / type 导致 SQL 错误或费率错配
         if (! in_array($sourceType, ['order', 'invoice'], true)) {
             throw new \InvalidArgumentException("Invalid referral source type: {$sourceType}");
         }
 
+        if (! in_array($type, ['new', 'renew'], true)) {
+            throw new \InvalidArgumentException("Invalid referral reward type: {$type}");
+        }
+
         $lockKey = "lock:referral:reward:{$sourceType}:{$sourceId}";
 
-        return Cache::lock($lockKey, 30)->block(5, function () use ($sourceType, $sourceId, $productId, $buyer, $referrer, $amount, $logRemark, $sourceNoValue, $traceId) {
+        return Cache::lock($lockKey, 30)->block(5, function () use ($sourceType, $sourceId, $productId, $buyer, $referrer, $amount, $logRemark, $sourceNoValue, $traceId, $type) {
             $existing = ReferralReward::query()->where("{$sourceType}_id", $sourceId)->first();
             if ($existing) {
                 return $existing;
@@ -310,7 +321,7 @@ class ReferralService
                 return null;
             }
 
-            return DB::transaction(function () use ($sourceType, $sourceId, $productId, $buyer, $referrer, $amount, $logRemark, $sourceNoValue, $traceId) {
+            return DB::transaction(function () use ($sourceType, $sourceId, $productId, $buyer, $referrer, $amount, $logRemark, $sourceNoValue, $traceId, $type) {
                 $lockedReferrer = User::query()->lockForUpdate()->findOrFail($referrer->id);
                 $referrerProfile = $this->hasReferralProfilesTable()
                     ? $this->lockReferralProfile($lockedReferrer->id)
@@ -320,12 +331,14 @@ class ReferralService
                     ? (float) $referrerProfile->total_sales_amount
                     : (float) $lockedReferrer->total_sales_amount;
                 $nextSalesAmount = round($currentSalesAmount + $amount, 2);
-                // 返利比例取推荐人所属推广大使档位的 reward_rate；未指派回退全局配置
+                // 返利比例取推荐人所属推广大使档位的对应业务类型比例；未指派回退全局配置
                 $currentAmbassador = $lockedReferrer->promotion_ambassador_id
                     ? PromotionAmbassador::query()->find((int) $lockedReferrer->promotion_ambassador_id)
                     : null;
-                $currentRewardRate = $currentAmbassador === null ? null : (float) $currentAmbassador->reward_rate;
-                $rewardRate = round($currentRewardRate ?? $this->rewardRate(), 2);
+                $currentRewardRate = $currentAmbassador === null
+                    ? null
+                    : (float) ($type === 'renew' ? $currentAmbassador->renewal_reward_rate : $currentAmbassador->reward_rate);
+                $rewardRate = round($currentRewardRate ?? ($type === 'renew' ? $this->renewalRewardRate() : $this->rewardRate()), 2);
                 $rewardAmount = round($amount * $rewardRate / 100, 2);
 
                 if ($rewardAmount <= 0) {
@@ -371,6 +384,7 @@ class ReferralService
                         'referred_user_id' => $buyer->id,
                         "{$sourceType}_no" => $sourceNoValue,
                         "{$sourceType}_amount" => $amount,
+                        'reward_type' => $type === 'renew' ? 'renew' : 'new',
                         'reward_rate' => $rewardRate,
                         'reward_amount' => $rewardAmount,
                         'promotion_ambassador' => $currentAmbassador?->name,
@@ -422,17 +436,22 @@ class ReferralService
             'reward_rate' => $currentAmbassador
                 ? number_format((float) $currentAmbassador->reward_rate, 2, '.', '')
                 : number_format($this->rewardRate(), 2, '.', ''),
+            'renewal_reward_rate' => $currentAmbassador
+                ? number_format((float) $currentAmbassador->renewal_reward_rate, 2, '.', '')
+                : number_format($this->renewalRewardRate(), 2, '.', ''),
             'reward_freeze_days' => $this->rewardFreezeDays(),
             'withdraw_min_amount' => number_format($this->withdrawMinAmount(), 2, '.', ''),
             'current_ambassador' => $currentAmbassador ? [
                 'id' => $currentAmbassador->id,
                 'name' => $currentAmbassador->name,
                 'reward_rate' => number_format((float) $currentAmbassador->reward_rate, 2, '.', ''),
+                'renewal_reward_rate' => number_format((float) $currentAmbassador->renewal_reward_rate, 2, '.', ''),
             ] : null,
             'ambassadors' => $ambassadors->map(fn (PromotionAmbassador $ambassador) => [
                 'id' => $ambassador->id,
                 'name' => $ambassador->name,
                 'reward_rate' => number_format((float) $ambassador->reward_rate, 2, '.', ''),
+                'renewal_reward_rate' => number_format((float) $ambassador->renewal_reward_rate, 2, '.', ''),
             ])->values()->all(),
             'total_sales_amount' => number_format((float) $user->total_sales_amount, 2, '.', ''),
             'referral_frozen_amount' => number_format((float) $user->referral_frozen_amount, 2, '.', ''),
@@ -878,6 +897,32 @@ class ReferralService
             ->where('order_id', $order->id)
             ->first();
 
+        $this->assertRewardRefundableByRecord($reward, (int) $order->id);
+    }
+
+    /**
+     * 账单退款前阻断校验：与订单退款同规则（奖励已释放且可提余额不足时阻断）。
+     * 奖励记录可能以 invoice_id 落库（无订单账单），也可能以关联订单的 order_id 落库。
+     */
+    public function assertInvoiceRewardRefundable(Invoice $invoice): void
+    {
+        $reward = $this->findRewardByInvoice($invoice);
+
+        $this->assertRewardRefundableByRecord($reward, (int) $invoice->id);
+    }
+
+    private function findRewardByInvoice(Invoice $invoice): ?ReferralReward
+    {
+        return ReferralReward::query()
+            ->where(function (Builder $query) use ($invoice) {
+                $query->where('invoice_id', $invoice->id)
+                    ->when($invoice->order_id, fn (Builder $inner) => $inner->orWhere('order_id', $invoice->order_id));
+            })
+            ->first();
+    }
+
+    private function assertRewardRefundableByRecord(?ReferralReward $reward, int $targetId): void
+    {
         if (! $reward || (int) $reward->status !== ReferralReward::STATUS_REWARDED) {
             return;
         }
@@ -888,7 +933,7 @@ class ReferralService
 
         if (! $referrer) {
             throw new BusinessException(
-                '该订单已产生推广奖励，但推荐人账户不存在，无法继续退款。',
+                '该笔消费已产生推广奖励，但推荐人账户不存在，无法继续退款。',
                 self::REFUND_BLOCKED_REFERRER_MISSING_CODE
             );
         }
@@ -904,9 +949,9 @@ class ReferralService
                 userType: 'client',
                 action: 'referral.reward.refund_blocked',
                 module: 'referral',
-                targetId: (int) $order->id,
+                targetId: $targetId,
                 detail: [
-                    'order_id' => (int) $order->id,
+                    'reward_id' => (int) $reward->id,
                     'referrer_user_id' => (int) $referrer->id,
                     'reward_amount' => number_format($rewardAmount, 2, '.', ''),
                     'available_balance' => number_format($availableAmount, 2, '.', ''),
@@ -915,7 +960,7 @@ class ReferralService
             );
 
             throw new BusinessException(
-                '该订单对应的推广奖励已释放且可提余额不足（可能已被提现）。需先追回推广返利资金或走人工挂账流程后再发起退款。错误码 42211。',
+                '该笔消费对应的推广奖励已释放且可提余额不足（可能已被提现）。需先追回推广返利资金或走人工挂账流程后再发起退款。错误码 42211。',
                 self::REFUND_BLOCKED_REWARD_WITHDRAWN_CODE
             );
         }
@@ -932,114 +977,160 @@ class ReferralService
                     ->where('order_id', $order->id)
                     ->first();
 
-                if (! $reward || (int) $reward->status === ReferralReward::STATUS_REVERSED) {
-                    return $reward;
-                }
-
-                if (! in_array((int) $reward->status, [ReferralReward::STATUS_FROZEN, ReferralReward::STATUS_REWARDED], true)) {
-                    return $reward;
-                }
-
-                $referrer = User::query()
-                    ->lockForUpdate()
-                    ->find((int) $reward->referrer_user_id);
-
-                if (! $referrer) {
-                    throw new BusinessException(
-                        '该订单已产生推广奖励，但推荐人账户不存在，无法继续退款。',
-                        self::REFUND_BLOCKED_REFERRER_MISSING_CODE
-                    );
-                }
-
-                $referrerProfile = $this->hasReferralProfilesTable()
-                    ? $this->lockReferralProfile((int) $referrer->id)
-                    : null;
-                $referrerAccount = $this->lockUserAccount((int) $referrer->id);
-                $rewardAmount = round((float) $reward->reward_amount, 2);
-                $orderAmount = round((float) $reward->order_amount, 2);
-                $accountType = 'referral_frozen';
-
-                if ((int) $reward->status === ReferralReward::STATUS_FROZEN) {
-                    throw_if(
-                        (float) $referrerAccount->referral_frozen_balance + 0.00001 < $rewardAmount,
-                        new BusinessException(
-                            '推广冻结奖励余额不足，无法继续退款。错误码 42212。',
-                            self::REFUND_BLOCKED_FROZEN_INSUFFICIENT_CODE
-                        ),
-                    );
-
-                    $referrerAccount = $this->accounts()->updateAccount($referrerAccount, [
-                        'referral_frozen_balance' => max(round((float) $referrerAccount->referral_frozen_balance - $rewardAmount, 2), 0),
-                    ]);
-                } else {
-                    throw_if(
-                        (float) $referrerAccount->referral_available_balance + 0.00001 < $rewardAmount,
-                        new BusinessException(
-                            '该订单对应的推广奖励已释放且可提余额不足（可能已被提现）。需先追回推广返利资金或走人工挂账流程后再发起退款。错误码 42211。',
-                            self::REFUND_BLOCKED_REWARD_WITHDRAWN_CODE
-                        ),
-                    );
-
-                    $referrerAccount = $this->accounts()->updateAccount($referrerAccount, [
-                        'referral_available_balance' => max(round((float) $referrerAccount->referral_available_balance - $rewardAmount, 2), 0),
-                    ]);
-
-                    $accountType = 'referral_available';
-                }
-
-                $currentSalesAmount = $referrerProfile
-                    ? (float) $referrerProfile->total_sales_amount
-                    : (float) $referrer->total_sales_amount;
-                $nextSalesAmount = max(round($currentSalesAmount - $orderAmount, 2), 0);
-
-                if ($referrerProfile) {
-                    $referrerProfile->forceFill([
-                        'total_sales_amount' => $nextSalesAmount,
-                    ])->save();
-                    $this->syncUserFromReferralProfile($referrer, $referrerProfile);
-                } else {
-                    $referrer->forceFill([
-                        'total_sales_amount' => number_format($nextSalesAmount, 2, '.', ''),
-                    ])->save();
-                }
-                $this->resetUserAggregateRelations($referrer);
-
-                $reward->forceFill([
-                    'status' => ReferralReward::STATUS_REVERSED,
-                    'remark' => '订单退款，推广奖励已撤销',
-                    'trace_id' => $traceId ?: $reward->trace_id,
-                ])->save();
-
-                $this->writeAccountLog(
-                    user: $referrer,
-                    type: self::ACCOUNT_LOG_TYPE_REWARD_REVERSED,
-                    amount: -$rewardAmount,
-                    remark: "订单退款，推广奖励已撤销 #{$order->order_no}",
-                    relatedId: (int) $reward->id,
-                    relatedType: 'reward',
-                    operator: 'system',
-                    traceId: $traceId ?: $reward->trace_id,
-                    balances: $this->buildReferralBalanceSnapshot($referrerAccount),
-                    accountTypeOverride: $accountType,
-                );
-
-                $this->operationLogService->write(
-                    userId: $referrer->id,
-                    userType: 'system',
-                    action: 'referral.reward.reversed',
-                    module: 'referral',
-                    targetId: $reward->id,
-                    detail: [
+                return $this->reverseRewardRecord(
+                    $reward,
+                    "订单退款，推广奖励已撤销 #{$order->order_no}",
+                    [
                         'order_id' => (int) $order->id,
                         'order_no' => (string) $order->order_no,
-                        'reward_amount' => $rewardAmount,
-                        'order_amount' => $orderAmount,
                     ],
+                    $traceId,
                 );
-
-                return $reward->refresh();
             });
         });
+    }
+
+    /**
+     * 账单退款回退：奖励可能以 invoice_id 落库（无订单账单），也可能以关联订单的 order_id 落库；
+     * 与订单退款回退共用核心并幂等（已撤销直接返回），避免订单/账单两条退款路径双扣。
+     */
+    public function reverseRewardForRefundedInvoice(Invoice $invoice, ?string $traceId = null): ?ReferralReward
+    {
+        $lockKey = "lock:referral:reward:reverse:invoice:{$invoice->id}";
+
+        return Cache::lock($lockKey, 30)->block(5, function () use ($invoice, $traceId) {
+            return DB::transaction(function () use ($invoice, $traceId) {
+                $reward = ReferralReward::query()
+                    ->lockForUpdate()
+                    ->where(function (Builder $query) use ($invoice) {
+                        $query->where('invoice_id', $invoice->id)
+                            ->when($invoice->order_id, fn (Builder $inner) => $inner->orWhere('order_id', $invoice->order_id));
+                    })
+                    ->first();
+
+                return $this->reverseRewardRecord(
+                    $reward,
+                    '账单退款，推广奖励已撤销 #'.(string) ($invoice->invoice_no ?? $invoice->id),
+                    [
+                        'invoice_id' => (int) $invoice->id,
+                        'invoice_no' => (string) ($invoice->invoice_no ?? ''),
+                    ],
+                    $traceId,
+                );
+            });
+        });
+    }
+
+    private function reverseRewardRecord(
+        ?ReferralReward $reward,
+        string $reversedRemark,
+        array $logContext,
+        ?string $traceId,
+    ): ?ReferralReward {
+        if (! $reward || (int) $reward->status === ReferralReward::STATUS_REVERSED) {
+            return $reward;
+        }
+
+        if (! in_array((int) $reward->status, [ReferralReward::STATUS_FROZEN, ReferralReward::STATUS_REWARDED], true)) {
+            return $reward;
+        }
+
+        $referrer = User::query()
+            ->lockForUpdate()
+            ->find((int) $reward->referrer_user_id);
+
+        if (! $referrer) {
+            throw new BusinessException(
+                '该订单已产生推广奖励，但推荐人账户不存在，无法继续退款。',
+                self::REFUND_BLOCKED_REFERRER_MISSING_CODE
+            );
+        }
+
+        $referrerProfile = $this->hasReferralProfilesTable()
+            ? $this->lockReferralProfile((int) $referrer->id)
+            : null;
+        $referrerAccount = $this->lockUserAccount((int) $referrer->id);
+        $rewardAmount = round((float) $reward->reward_amount, 2);
+        $orderAmount = round((float) $reward->order_amount, 2);
+        $accountType = 'referral_frozen';
+
+        if ((int) $reward->status === ReferralReward::STATUS_FROZEN) {
+            throw_if(
+                (float) $referrerAccount->referral_frozen_balance + 0.00001 < $rewardAmount,
+                new BusinessException(
+                    '推广冻结奖励余额不足，无法继续退款。错误码 42212。',
+                    self::REFUND_BLOCKED_FROZEN_INSUFFICIENT_CODE
+                ),
+            );
+
+            $referrerAccount = $this->accounts()->updateAccount($referrerAccount, [
+                'referral_frozen_balance' => max(round((float) $referrerAccount->referral_frozen_balance - $rewardAmount, 2), 0),
+            ]);
+        } else {
+            throw_if(
+                (float) $referrerAccount->referral_available_balance + 0.00001 < $rewardAmount,
+                new BusinessException(
+                    '该订单对应的推广奖励已释放且可提余额不足（可能已被提现）。需先追回推广返利资金或走人工挂账流程后再发起退款。错误码 42211。',
+                    self::REFUND_BLOCKED_REWARD_WITHDRAWN_CODE
+                ),
+            );
+
+            $referrerAccount = $this->accounts()->updateAccount($referrerAccount, [
+                'referral_available_balance' => max(round((float) $referrerAccount->referral_available_balance - $rewardAmount, 2), 0),
+            ]);
+
+            $accountType = 'referral_available';
+        }
+
+        $currentSalesAmount = $referrerProfile
+            ? (float) $referrerProfile->total_sales_amount
+            : (float) $referrer->total_sales_amount;
+        $nextSalesAmount = max(round($currentSalesAmount - $orderAmount, 2), 0);
+
+        if ($referrerProfile) {
+            $referrerProfile->forceFill([
+                'total_sales_amount' => $nextSalesAmount,
+            ])->save();
+            $this->syncUserFromReferralProfile($referrer, $referrerProfile);
+        } else {
+            $referrer->forceFill([
+                'total_sales_amount' => number_format($nextSalesAmount, 2, '.', ''),
+            ])->save();
+        }
+        $this->resetUserAggregateRelations($referrer);
+
+        $reward->forceFill([
+            'status' => ReferralReward::STATUS_REVERSED,
+            'remark' => $reversedRemark,
+            'trace_id' => $traceId ?: $reward->trace_id,
+        ])->save();
+
+        $this->writeAccountLog(
+            user: $referrer,
+            type: self::ACCOUNT_LOG_TYPE_REWARD_REVERSED,
+            amount: -$rewardAmount,
+            remark: $reversedRemark,
+            relatedId: (int) $reward->id,
+            relatedType: 'reward',
+            operator: 'system',
+            traceId: $traceId ?: $reward->trace_id,
+            balances: $this->buildReferralBalanceSnapshot($referrerAccount),
+            accountTypeOverride: $accountType,
+        );
+
+        $this->operationLogService->write(
+            userId: $referrer->id,
+            userType: 'system',
+            action: 'referral.reward.reversed',
+            module: 'referral',
+            targetId: $reward->id,
+            detail: array_merge($logContext, [
+                'reward_amount' => $rewardAmount,
+                'order_amount' => $orderAmount,
+            ]),
+        );
+
+        return $reward->refresh();
     }
 
     public function processWithdrawal(
@@ -1246,6 +1337,14 @@ class ReferralService
     {
         $settingValue = Setting::getValue('referral', 'reward_rate');
         $rate = is_numeric($settingValue) ? (float) $settingValue : self::DEFAULT_REWARD_RATE;
+
+        return max(0, min($rate, 100));
+    }
+
+    public function renewalRewardRate(): float
+    {
+        $settingValue = Setting::getValue('referral', 'renewal_reward_rate');
+        $rate = is_numeric($settingValue) ? (float) $settingValue : self::DEFAULT_RENEWAL_REWARD_RATE;
 
         return max(0, min($rate, 100));
     }

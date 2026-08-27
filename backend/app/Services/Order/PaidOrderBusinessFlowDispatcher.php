@@ -120,7 +120,7 @@ class PaidOrderBusinessFlowDispatcher
 
     private function shouldDispatchReferralReward(Invoice $invoice): bool
     {
-        return (string) ($invoice->order?->type ?? $invoice->type ?? '') === 'new';
+        return in_array((string) ($invoice->order?->type ?? $invoice->type ?? ''), ['new', 'renew'], true);
     }
 
     private function shouldSynchronouslyFulfill(Invoice $invoice): bool

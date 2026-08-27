@@ -35,7 +35,7 @@ class AdminReferralOverviewService
 
         $topReferrersQuery = User::query()
             ->withReadAggregates()
-            ->with(['promotionAmbassador:id,name,reward_rate']);
+            ->with(['promotionAmbassador:id,name,reward_rate,renewal_reward_rate']);
 
         if ($this->userReferralsTableAvailable()) {
             $topReferrersQuery
@@ -93,6 +93,7 @@ class AdminReferralOverviewService
                     'id' => (int) $user->promotionAmbassador->id,
                     'name' => (string) $user->promotionAmbassador->name,
                     'reward_rate' => $user->promotionAmbassador->reward_rate,
+                    'renewal_reward_rate' => $user->promotionAmbassador->renewal_reward_rate,
                 ] : null,
                 'total_sales_amount' => (float) $user->total_sales_amount,
                 'referral_frozen_amount' => (float) $user->referral_frozen_amount,

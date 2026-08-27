@@ -1645,6 +1645,9 @@ class PaymentService
                     new BusinessException('当前订单状态不支持退款')
                 );
 
+                // 账单退款与订单退款同规则：奖励已释放且可提余额不足时先阻断，避免退款后无法追回返利
+                $this->referralService->assertInvoiceRewardRefundable($lockedInvoice);
+
                 $payment = $this->resolvePrimaryRefundablePayment($lockedInvoice);
 
                 if ($payment instanceof Payment && (int) $payment->status === PaymentStatus::REFUNDED) {
@@ -1749,6 +1752,13 @@ class PaymentService
 
                 if ($isFullyRefunded) {
                     $this->markInvoiceRefunded($lockedInvoice, $refundRecord, $refundMethod, $refundAmount, $context);
+
+                    // 全款退款回退推广奖励（幂等：订单退款流程已回退则直接跳过）
+                    $refundTraceId = trim((string) ($context['trace_id'] ?? ''));
+                    $this->referralService->reverseRewardForRefundedInvoice(
+                        $lockedInvoice,
+                        $refundTraceId !== '' ? "refund:{$refundTraceId}" : "refund:invoice:{$lockedInvoice->id}",
+                    );
                 } else {
                     $this->markInvoicePartiallyRefunded(
                         $lockedInvoice,
@@ -1838,7 +1848,8 @@ class PaymentService
                 $this->clearFulfillmentPending($invoice);
             }
 
-            if (! in_array($invoiceType, ['renew', 'upgrade'], true)) {
+            // 升级账单不触发推荐奖励；新购/续费账单（含无订单场景）均按各自比例发放
+            if ($invoiceType !== 'upgrade') {
                 $this->dispatchInvoiceOnlyReferralReward($invoice, $traceId);
             }
         }

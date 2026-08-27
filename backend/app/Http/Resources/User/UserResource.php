@@ -47,6 +47,7 @@ class UserResource extends JsonResource
                 'id' => $promotionAmbassador->id,
                 'name' => $promotionAmbassador->name,
                 'reward_rate' => $promotionAmbassador->reward_rate,
+                'renewal_reward_rate' => $promotionAmbassador->renewal_reward_rate,
             ] : null,
             'cash_balance' => Money::format($this->resource->balance),
             'credit_limit' => Money::format($this->resource->credit_limit),

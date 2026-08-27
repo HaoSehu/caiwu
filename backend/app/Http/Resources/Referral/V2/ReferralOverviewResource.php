@@ -70,6 +70,7 @@ class ReferralOverviewResource extends JsonResource
             'id' => (int) ($item['id'] ?? 0),
             'name' => (string) ($item['name'] ?? ''),
             'reward_rate' => $this->money($item['reward_rate'] ?? 0),
+            'renewal_reward_rate' => $this->money($item['renewal_reward_rate'] ?? 0),
         ];
     }
 

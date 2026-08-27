@@ -47,6 +47,7 @@ class ClientUserInfoResource extends JsonResource
                 'id' => $promotionAmbassador->id,
                 'name' => $promotionAmbassador->name,
                 'reward_rate' => $promotionAmbassador->reward_rate,
+                'renewal_reward_rate' => $promotionAmbassador->renewal_reward_rate,
             ] : null,
             'status' => $this->status,
             'is_verified' => $this->is_verified,

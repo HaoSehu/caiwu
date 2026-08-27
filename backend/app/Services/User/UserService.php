@@ -420,6 +420,7 @@ class UserService
                     'id' => $promotionAmbassador->id,
                     'name' => $promotionAmbassador->name,
                     'reward_rate' => (float) $promotionAmbassador->reward_rate,
+                    'renewal_reward_rate' => (float) $promotionAmbassador->renewal_reward_rate,
                 ] : null,
                 'total_sales_amount' => (float) $user->total_sales_amount,
                 'referral_frozen_amount' => (float) $user->referral_frozen_amount,
