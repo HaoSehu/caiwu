@@ -3853,12 +3853,6 @@ parameters:
 			path: app/Services/Finance/PaymentService.php
 
 		-
-			message: '#^Strict comparison using \!\=\= between 1\|6 and 5 will always evaluate to true\.$#'
-			identifier: notIdentical.alwaysTrue
-			count: 1
-			path: app/Services/Finance/PaymentService.php
-
-		-
 			message: '#^Ternary operator condition is always false\.$#'
 			identifier: ternary.alwaysFalse
 			count: 3
@@ -5605,6 +5599,12 @@ parameters:
 			path: app/Services/Referral/AdminReferralOverviewService.php
 
 		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$renewal_reward_rate\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Services/Referral/AdminReferralOverviewService.php
+
+		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$reward_rate\.$#'
 			identifier: property.notFound
 			count: 1
@@ -5794,6 +5794,12 @@ parameters:
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$real_name\.$#'
 			identifier: property.notFound
 			count: 1
+			path: app/Services/Referral/ReferralService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$renewal_reward_rate\.$#'
+			identifier: property.notFound
+			count: 2
 			path: app/Services/Referral/ReferralService.php
 
 		-
@@ -7102,6 +7108,12 @@ parameters:
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$pricing\.$#'
 			identifier: property.notFound
 			count: 2
+			path: app/Services/User/UserService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$renewal_reward_rate\.$#'
+			identifier: property.notFound
+			count: 1
 			path: app/Services/User/UserService.php
 
 		-
