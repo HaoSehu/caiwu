@@ -86,10 +86,10 @@ export function useReferral() {
   const withdrawnAmountText = computed(() => money(overview.referral_withdrawn_amount));
   const withdrawMinAmountText = computed(() => money(overview.withdraw_min_amount || 20));
   const rewardRateText = computed(
-    () => `${money(overview.reward_rate || overview.current_member_level?.reward_rate || 0)}%`,
+    () => `${money(overview.reward_rate || overview.current_ambassador?.reward_rate || 0)}%`,
   );
   const freezeDaysText = computed(() => String(Number(overview.reward_freeze_days || 0)));
-  const levelName = computed(() => overview.current_member_level?.name || 'V1');
+  const levelName = computed(() => overview.current_ambassador?.name || '默认大使');
   const isAlipayBound = computed(() => Boolean(alipayAccount.is_bound && alipayAccount.account));
   const referralLink = computed(() => {
     if (overview.referral_link) return overview.referral_link;

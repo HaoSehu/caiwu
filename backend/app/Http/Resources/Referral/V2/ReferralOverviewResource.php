@@ -51,7 +51,7 @@ class ReferralOverviewResource extends JsonResource
             'email' => (string) ($item['email'] ?? ''),
             'nickname' => (string) ($item['nickname'] ?? ''),
             'display_name' => (string) ($item['display_name'] ?? ''),
-            'member_level' => $this->memberLevel($item['member_level'] ?? null),
+            'promotion_ambassador' => $this->promotionAmbassador($item['promotion_ambassador'] ?? null),
             'total_sales_amount' => $this->money($item['total_sales_amount'] ?? 0),
             'referral_frozen_amount' => $this->money($item['referral_frozen_amount'] ?? 0),
             'referral_available_amount' => $this->money($item['referral_available_amount'] ?? 0),
@@ -60,7 +60,7 @@ class ReferralOverviewResource extends JsonResource
         ];
     }
 
-    private function memberLevel(mixed $item): ?array
+    private function promotionAmbassador(mixed $item): ?array
     {
         if (! is_array($item)) {
             return null;
@@ -69,7 +69,6 @@ class ReferralOverviewResource extends JsonResource
         return [
             'id' => (int) ($item['id'] ?? 0),
             'name' => (string) ($item['name'] ?? ''),
-            'code' => (string) ($item['code'] ?? ''),
             'reward_rate' => $this->money($item['reward_rate'] ?? 0),
         ];
     }

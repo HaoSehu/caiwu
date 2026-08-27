@@ -6,12 +6,17 @@ use App\Constants\OrderType;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Client\V2\Referral\AccountLogsRequest;
 use App\Http\Requests\Client\V2\Referral\ApplyWithdrawalRequest;
+use App\Http\Requests\Client\V2\Referral\DirectReferralsRequest;
 use App\Http\Requests\Client\V2\Referral\RewardsRequest;
 use App\Http\Requests\Client\V2\Referral\WithdrawalsRequest;
 use App\Models\ReferralWithdrawal;
 use App\Services\Referral\ReferralService;
+use App\Support\EmailMasker;
 use App\Support\PublicUrl;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator as PaginatorContract;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 
 class ReferralController extends Controller
 {
@@ -26,46 +31,39 @@ class ReferralController extends Controller
 
     public function rewards(RewardsRequest $request)
     {
-        // validation handled by RewardsRequest
+        // 页大小统一由基类 perPage() 提取（默认 15、上限 50，与原内联钳制一致）。
+        $paginator = $this->referralService->rewardLogs($request->user(), $request->perPage());
 
-        $perPage = max(1, min((int) $request->input('page_size', 15), 50));
-        $paginator = $this->referralService->rewardLogs($request->user(), $perPage);
-
-        return $this->success([
-            'list' => collect($paginator->items())->map(function ($item) {
-                return [
-                    'id' => $item->id,
-                    'reward_amount' => number_format((float) $item->reward_amount, 2, '.', ''),
-                    'reward_rate' => number_format((float) $item->reward_rate, 2, '.', ''),
-                    'order_amount' => number_format((float) $item->order_amount, 2, '.', ''),
-                    'order_type' => $this->resolveOrderTypeLabel($item->order?->type),
-                    'status' => (int) $item->status,
-                    'rewarded_at' => $item->rewarded_at?->format('Y-m-d H:i:s'),
-                    'available_at' => $item->available_at?->format('Y-m-d H:i:s'),
-                    'released_at' => $item->released_at?->format('Y-m-d H:i:s'),
-                    'remark' => $item->remark,
-                    'referred_user' => [
-                        'id' => $item->referredUser?->id,
-                        'email' => $item->referredUser?->email,
-                        'nickname' => $item->referredUser?->nickname,
-                        'display_name' => $item->referredUser?->display_name ?: $item->referredUser?->email,
-                    ],
-                    'invoice' => [
-                        'id' => $item->invoice?->id,
-                        'invoice_no' => $item->invoice?->invoice_no,
-                        'product_display_name' => $this->referralService->resolveRewardProductDisplayName($item),
-                    ],
-                    'product' => [
-                        'id' => $item->product?->id,
-                        'custom_display_name' => $item->product?->custom_display_name,
-                        'display_name' => $this->referralService->resolveRewardProductDisplayName($item),
-                    ],
-                ];
-            })->values()->all(),
-            'total' => $paginator->total(),
-            'page' => $paginator->currentPage(),
-            'page_size' => $paginator->perPage(),
-        ]);
+        return $this->paginatedList($paginator, collect($paginator->items())->map(function ($item) {
+            return [
+                'id' => $item->id,
+                'reward_amount' => number_format((float) $item->reward_amount, 2, '.', ''),
+                'reward_rate' => number_format((float) $item->reward_rate, 2, '.', ''),
+                'order_amount' => number_format((float) $item->order_amount, 2, '.', ''),
+                'order_type' => $this->resolveOrderTypeLabel($item->order?->type),
+                'status' => (int) $item->status,
+                'rewarded_at' => $item->rewarded_at?->format('Y-m-d H:i:s'),
+                'available_at' => $item->available_at?->format('Y-m-d H:i:s'),
+                'released_at' => $item->released_at?->format('Y-m-d H:i:s'),
+                'remark' => $item->remark,
+                'referred_user' => [
+                    'id' => $item->referredUser?->id,
+                    'email' => EmailMasker::mask($item->referredUser?->email),
+                    'nickname' => $item->referredUser?->nickname,
+                    'display_name' => $item->referredUser?->display_name ?: EmailMasker::mask($item->referredUser?->email),
+                ],
+                'invoice' => [
+                    'id' => $item->invoice?->id,
+                    'invoice_no' => $item->invoice?->invoice_no,
+                    'product_display_name' => $this->referralService->resolveRewardProductDisplayName($item),
+                ],
+                'product' => [
+                    'id' => $item->product?->id,
+                    'custom_display_name' => $item->product?->custom_display_name,
+                    'display_name' => $this->referralService->resolveRewardProductDisplayName($item),
+                ],
+            ];
+        })->values()->all());
     }
 
     public function accountLogs(AccountLogsRequest $request)
@@ -78,68 +76,55 @@ class ReferralController extends Controller
 
         unset($filters['type']);
 
-        $perPage = max(1, min((int) $request->input('page_size', 15), 50));
-        $paginator = $this->referralService->accountLogs($request->user(), $filters, $perPage);
+        // 页大小统一由基类 perPage() 提取（默认 15、上限 50，与原内联钳制一致）。
+        $paginator = $this->referralService->accountLogs($request->user(), $filters, $request->perPage());
 
-        return $this->success([
-            'list' => collect($paginator->items())
+        return $this->paginatedList(
+            $paginator,
+            collect($paginator->items())
                 ->map(fn ($item) => $this->referralService->transformAccountLogRecord($item))
                 ->values()
                 ->all(),
-            'total' => $paginator->total(),
-            'page' => $paginator->currentPage(),
-            'page_size' => $paginator->perPage(),
-        ]);
+        );
     }
 
-    public function directReferrals(Request $request)
+    public function directReferrals(DirectReferralsRequest $request)
     {
-        $perPage = max(1, min((int) $request->input('page_size', 15), 50));
-        $paginator = $this->referralService->directReferrals((int) $request->user()->id, $perPage);
+        // 页大小统一由基类 perPage() 提取（默认 15、上限 50，与原内联钳制一致）。
+        $paginator = $this->referralService->directReferrals((int) $request->user()->id, $request->perPage());
 
-        return $this->success([
-            'list' => collect($paginator->items())->map(function ($item) {
-                return [
-                    'id' => $item->id,
-                    'email' => $item->email,
-                    'nickname' => $item->nickname,
-                    'display_name' => $item->display_name,
-                    'created_at' => $item->created_at?->format('Y-m-d H:i:s'),
-                    'referred_at' => $item->referred_at?->format('Y-m-d H:i:s'),
-                    'customer_consumption' => number_format((float) ($item->customer_consumption ?? 0), 2, '.', ''),
-                    'my_earnings' => number_format((float) ($item->my_earnings ?? 0), 2, '.', ''),
-                ];
-            })->values()->all(),
-            'total' => $paginator->total(),
-            'page' => $paginator->currentPage(),
-            'page_size' => $paginator->perPage(),
-        ]);
+        return $this->paginatedList($paginator, collect($paginator->items())->map(function ($item) {
+            return [
+                'id' => $item->id,
+                // 管理端同场景经 AdminPrivacy 脱敏，客户端保持一致的隐私边界
+                'email' => EmailMasker::mask($item->email),
+                'nickname' => $item->nickname,
+                'display_name' => $item->display_name,
+                'created_at' => $item->created_at?->format('Y-m-d H:i:s'),
+                'referred_at' => $item->referred_at?->format('Y-m-d H:i:s'),
+                'customer_consumption' => number_format((float) ($item->customer_consumption ?? 0), 2, '.', ''),
+                'my_earnings' => number_format((float) ($item->my_earnings ?? 0), 2, '.', ''),
+            ];
+        })->values()->all());
     }
 
     public function withdrawals(WithdrawalsRequest $request)
     {
-        // validation handled by WithdrawalsRequest
+        // 页大小统一由基类 perPage() 提取（默认 15、上限 50，与原内联钳制一致）。
+        $paginator = $this->referralService->withdrawalLogs($request->user(), $request->perPage());
 
-        $perPage = max(1, min((int) $request->input('page_size', 15), 50));
-        $paginator = $this->referralService->withdrawalLogs($request->user(), $perPage);
-
-        return $this->success([
-            'list' => collect($paginator->items())->map(fn ($item) => [
-                'id' => $item->id,
-                'amount' => number_format((float) $item->amount, 2, '.', ''),
-                'method' => $item->method,
-                'account_name' => $item->account_name_display,
-                'account_no' => $item->account_no,
-                'status' => (int) $item->status,
-                'status_label' => ReferralWithdrawal::statusLabel((int) $item->status),
-                'remark' => $item->remark,
-                'created_at' => $item->created_at?->format('Y-m-d H:i:s'),
-                'processed_at' => $item->processed_at?->format('Y-m-d H:i:s'),
-            ])->values()->all(),
-            'total' => $paginator->total(),
-            'page' => $paginator->currentPage(),
-            'page_size' => $paginator->perPage(),
-        ]);
+        return $this->paginatedList($paginator, collect($paginator->items())->map(fn ($item) => [
+            'id' => $item->id,
+            'amount' => number_format((float) $item->amount, 2, '.', ''),
+            'method' => $item->method,
+            'account_name' => $item->account_name_display,
+            'account_no' => $item->account_no,
+            'status' => (int) $item->status,
+            'status_label' => ReferralWithdrawal::statusLabel((int) $item->status),
+            'remark' => $item->remark,
+            'created_at' => $item->created_at?->format('Y-m-d H:i:s'),
+            'processed_at' => $item->processed_at?->format('Y-m-d H:i:s'),
+        ])->values()->all());
     }
 
     public function applyWithdrawal(ApplyWithdrawalRequest $request)
@@ -159,6 +144,23 @@ class ReferralController extends Controller
             'status_label' => ReferralWithdrawal::statusLabel((int) $withdrawal->status),
             'created_at' => $withdrawal->created_at?->format('Y-m-d H:i:s'),
         ], '提现申请已提交');
+    }
+
+    /**
+     * 将服务层分页器与控制器内联变换后的列表合并为标准分页信封。
+     *
+     * @param  list<mixed>  $list
+     */
+    private function paginatedList(PaginatorContract $paginator, array $list): JsonResponse
+    {
+        // 内联变换无法直接套用 Resource 类，这里包装回标准分页器，
+        // 复用基类 paginate()，保证分页信封由 ApiResponseBuilder 单点生成。
+        return $this->paginate(new LengthAwarePaginator(
+            $list,
+            $paginator->total(),
+            $paginator->perPage(),
+            $paginator->currentPage(),
+        ));
     }
 
     private function resolveOrderTypeLabel(?string $type): string

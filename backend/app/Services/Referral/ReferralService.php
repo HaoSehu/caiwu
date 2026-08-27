@@ -9,9 +9,9 @@ use App\Constants\OrderStatus;
 use App\Exceptions\BusinessException;
 use App\Models\AccountTransaction;
 use App\Models\Invoice;
-use App\Models\MemberLevel;
 use App\Models\Order;
 use App\Models\Product;
+use App\Models\PromotionAmbassador;
 use App\Models\ReferralReward;
 use App\Models\ReferralWithdrawal;
 use App\Models\Setting;
@@ -30,6 +30,7 @@ use Carbon\CarbonInterface;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -74,7 +75,7 @@ class ReferralService
     ];
 
     public function __construct(
-        private MemberLevelService $memberLevelService,
+        private PromotionAmbassadorService $promotionAmbassadorService,
         private OperationLogService $operationLogService,
         private InvoiceService $invoiceService,
         private readonly ?ProductDisplayNameResolver $productDisplayNameResolver = null,
@@ -162,7 +163,6 @@ class ReferralService
         }
 
         $this->ensureReferralCode($referrer);
-        $this->ensureUserLevel($referrer);
 
         if ($userProfile) {
             $userProfile->forceFill([
@@ -208,103 +208,20 @@ class ReferralService
             return null;
         }
 
-        $lockKey = "lock:referral:reward:order:{$order->id}";
+        // 订单来源的差异面只剩守卫、取数金额与来源文案，加锁与结算主体统一走 resolveRewardCore。
+        $orderAmount = round((float) ($order->paid_amount ?: $order->amount), 2);
 
-        return Cache::lock($lockKey, 30)->block(5, function () use ($order, $buyer, $referrer, $traceId) {
-            $existing = ReferralReward::query()->where('order_id', $order->id)->first();
-            if ($existing) {
-                return $existing;
-            }
-
-            $orderAmount = round((float) ($order->paid_amount ?: $order->amount), 2);
-            if ($orderAmount <= 0) {
-                return null;
-            }
-
-            return DB::transaction(function () use ($order, $buyer, $referrer, $traceId, $orderAmount) {
-                $lockedReferrer = User::query()->lockForUpdate()->findOrFail($referrer->id);
-                $referrerProfile = $this->hasReferralProfilesTable()
-                    ? $this->lockReferralProfile($lockedReferrer->id)
-                    : null;
-                $referrerAccount = $this->lockUserAccount($lockedReferrer->id);
-                $currentSalesAmount = $referrerProfile
-                    ? (float) $referrerProfile->total_sales_amount
-                    : (float) $lockedReferrer->total_sales_amount;
-                $nextSalesAmount = round($currentSalesAmount + $orderAmount, 2);
-                $level = $this->memberLevelService->resolveLevelBySales($nextSalesAmount);
-                $rewardRate = $level
-                    ? round((float) $level->reward_rate, 2)
-                    : $this->rewardRate();
-                $rewardAmount = round($orderAmount * $rewardRate / 100, 2);
-
-                if ($rewardAmount <= 0) {
-                    return null;
-                }
-
-                if ($referrerProfile) {
-                    $referrerProfile->forceFill([
-                        'total_sales_amount' => $nextSalesAmount,
-                        'member_level_id' => $level?->id,
-                    ])->save();
-                    $this->syncUserFromReferralProfile($lockedReferrer, $referrerProfile);
-                } else {
-                    $lockedReferrer->forceFill([
-                        'total_sales_amount' => number_format($nextSalesAmount, 2, '.', ''),
-                        'member_level_id' => $level?->id,
-                    ])->save();
-                }
-
-                $referrerAccount = $this->accounts()->updateAccount($referrerAccount, [
-                    'referral_frozen_balance' => round((float) $referrerAccount->referral_frozen_balance + $rewardAmount, 2),
-                ]);
-
-                $this->resetUserAggregateRelations($lockedReferrer);
-
-                $this->writeAccountLog(
-                    user: $lockedReferrer,
-                    type: self::ACCOUNT_LOG_TYPE_REWARD_FROZEN,
-                    amount: $rewardAmount,
-                    remark: "推荐奖励冻结，来源订单 {$order->order_no}",
-                    relatedId: $order->id,
-                    relatedType: 'order',
-                    operator: 'system',
-                    traceId: $traceId,
-                    balances: $this->buildReferralBalanceSnapshot($referrerAccount),
-                );
-
-                $this->operationLogService->write(
-                    userId: $lockedReferrer->id,
-                    userType: 'client',
-                    action: 'referral.reward.frozen',
-                    module: 'referral',
-                    targetId: $order->id,
-                    detail: [
-                        'referred_user_id' => $buyer->id,
-                        'order_no' => $order->order_no,
-                        'order_amount' => $orderAmount,
-                        'reward_rate' => $rewardRate,
-                        'reward_amount' => $rewardAmount,
-                        'member_level' => $level?->name,
-                    ],
-                );
-
-                return ReferralReward::query()->create([
-                    'referrer_user_id' => $lockedReferrer->id,
-                    'referred_user_id' => $buyer->id,
-                    'order_id' => $order->id,
-                    'product_id' => $order->product_id,
-                    'order_amount' => $orderAmount,
-                    'reward_rate' => $rewardRate,
-                    'reward_amount' => $rewardAmount,
-                    'status' => ReferralReward::STATUS_FROZEN,
-                    'available_at' => now()->addDays($this->rewardFreezeDays()),
-                    'operator' => 'system',
-                    'remark' => '下级用户成功购买产品后进入冻结期',
-                    'trace_id' => $traceId,
-                    'rewarded_at' => now(),
-                ]);
-            });
-        });
+        return $this->resolveRewardCore(
+            sourceType: 'order',
+            sourceId: (int) $order->id,
+            productId: $order->product_id,
+            amount: $orderAmount,
+            buyer: $buyer,
+            referrer: $referrer,
+            logRemark: "推荐奖励冻结，来源订单 {$order->order_no}",
+            sourceNoValue: $order->order_no,
+            traceId: $traceId,
+        );
     }
 
     /**
@@ -337,20 +254,63 @@ class ReferralService
             return null;
         }
 
-        $lockKey = "lock:referral:reward:invoice:{$invoice->id}";
+        // 账单来源的差异面只剩守卫、取数金额与来源文案（含 invoice_no 的空值收窄），主体统一走 resolveRewardCore。
+        $invoiceAmount = round((float) ($invoice->paid_amount ?: $invoice->amount), 2);
+        $invoiceNo = (string) ($invoice->invoice_no ?? '');
 
-        return Cache::lock($lockKey, 30)->block(5, function () use ($invoice, $buyer, $referrer, $traceId) {
-            $existing = ReferralReward::query()->where('invoice_id', $invoice->id)->first();
+        return $this->resolveRewardCore(
+            sourceType: 'invoice',
+            sourceId: (int) $invoice->id,
+            productId: $invoice->product_id,
+            amount: $invoiceAmount,
+            buyer: $buyer,
+            referrer: $referrer,
+            logRemark: "推荐奖励冻结，来源账单 {$invoiceNo}",
+            sourceNoValue: $invoiceNo,
+            traceId: $traceId,
+        );
+    }
+
+    /**
+     * 推荐奖励发放核心：rewardForPaidOrder 与 rewardForPaidInvoice 共用的加锁幂等、
+     * 销量累计、等级费率解算与冻结落库流程。
+     *
+     * $sourceType 目前仅取 'order' 与 'invoice'，决定：
+     * - 锁键中段："lock:referral:reward:{$sourceType}:{$sourceId}"
+     * - ReferralReward 的幂等列与外键列：{$sourceType}_id
+     * - 账号日志 relatedType 与操作日志 detail 中 {$sourceType}_no / {$sourceType}_amount 键名
+     * 来源侧的业务守卫、取数金额与中文文案由各薄壳组装后传入；
+     * 资金运算保持与拆分前逐字一致（先乘后除再 round）。
+     */
+    private function resolveRewardCore(
+        string $sourceType,
+        int $sourceId,
+        int|string|null $productId,
+        float $amount,
+        Model $buyer,
+        User $referrer,
+        string $logRemark,
+        ?string $sourceNoValue,
+        ?string $traceId,
+    ): ?ReferralReward {
+        // 白名单校验：防止非预期 sourceType 导致 SQL 错误
+        if (! in_array($sourceType, ['order', 'invoice'], true)) {
+            throw new \InvalidArgumentException("Invalid referral source type: {$sourceType}");
+        }
+
+        $lockKey = "lock:referral:reward:{$sourceType}:{$sourceId}";
+
+        return Cache::lock($lockKey, 30)->block(5, function () use ($sourceType, $sourceId, $productId, $buyer, $referrer, $amount, $logRemark, $sourceNoValue, $traceId) {
+            $existing = ReferralReward::query()->where("{$sourceType}_id", $sourceId)->first();
             if ($existing) {
                 return $existing;
             }
 
-            $invoiceAmount = round((float) ($invoice->paid_amount ?: $invoice->amount), 2);
-            if ($invoiceAmount <= 0) {
+            if ($amount <= 0) {
                 return null;
             }
 
-            return DB::transaction(function () use ($invoice, $buyer, $referrer, $traceId, $invoiceAmount) {
+            return DB::transaction(function () use ($sourceType, $sourceId, $productId, $buyer, $referrer, $amount, $logRemark, $sourceNoValue, $traceId) {
                 $lockedReferrer = User::query()->lockForUpdate()->findOrFail($referrer->id);
                 $referrerProfile = $this->hasReferralProfilesTable()
                     ? $this->lockReferralProfile($lockedReferrer->id)
@@ -359,12 +319,14 @@ class ReferralService
                 $currentSalesAmount = $referrerProfile
                     ? (float) $referrerProfile->total_sales_amount
                     : (float) $lockedReferrer->total_sales_amount;
-                $nextSalesAmount = round($currentSalesAmount + $invoiceAmount, 2);
-                $level = $this->memberLevelService->resolveLevelBySales($nextSalesAmount);
-                $rewardRate = $level
-                    ? round((float) $level->reward_rate, 2)
-                    : $this->rewardRate();
-                $rewardAmount = round($invoiceAmount * $rewardRate / 100, 2);
+                $nextSalesAmount = round($currentSalesAmount + $amount, 2);
+                // 返利比例取推荐人所属推广大使档位的 reward_rate；未指派回退全局配置
+                $currentAmbassador = $lockedReferrer->promotion_ambassador_id
+                    ? PromotionAmbassador::query()->find((int) $lockedReferrer->promotion_ambassador_id)
+                    : null;
+                $currentRewardRate = $currentAmbassador === null ? null : (float) $currentAmbassador->reward_rate;
+                $rewardRate = round($currentRewardRate ?? $this->rewardRate(), 2);
+                $rewardAmount = round($amount * $rewardRate / 100, 2);
 
                 if ($rewardAmount <= 0) {
                     return null;
@@ -373,13 +335,11 @@ class ReferralService
                 if ($referrerProfile) {
                     $referrerProfile->forceFill([
                         'total_sales_amount' => $nextSalesAmount,
-                        'member_level_id' => $level?->id,
                     ])->save();
                     $this->syncUserFromReferralProfile($lockedReferrer, $referrerProfile);
                 } else {
                     $lockedReferrer->forceFill([
                         'total_sales_amount' => number_format($nextSalesAmount, 2, '.', ''),
-                        'member_level_id' => $level?->id,
                     ])->save();
                 }
 
@@ -389,15 +349,13 @@ class ReferralService
 
                 $this->resetUserAggregateRelations($lockedReferrer);
 
-                $invoiceNo = (string) ($invoice->invoice_no ?? '');
-
                 $this->writeAccountLog(
                     user: $lockedReferrer,
                     type: self::ACCOUNT_LOG_TYPE_REWARD_FROZEN,
                     amount: $rewardAmount,
-                    remark: "推荐奖励冻结，来源账单 {$invoiceNo}",
-                    relatedId: $invoice->id,
-                    relatedType: 'invoice',
+                    remark: $logRemark,
+                    relatedId: $sourceId,
+                    relatedType: $sourceType,
                     operator: 'system',
                     traceId: $traceId,
                     balances: $this->buildReferralBalanceSnapshot($referrerAccount),
@@ -408,23 +366,23 @@ class ReferralService
                     userType: 'client',
                     action: 'referral.reward.frozen',
                     module: 'referral',
-                    targetId: $invoice->id,
+                    targetId: $sourceId,
                     detail: [
                         'referred_user_id' => $buyer->id,
-                        'invoice_no' => $invoiceNo,
-                        'invoice_amount' => $invoiceAmount,
+                        "{$sourceType}_no" => $sourceNoValue,
+                        "{$sourceType}_amount" => $amount,
                         'reward_rate' => $rewardRate,
                         'reward_amount' => $rewardAmount,
-                        'member_level' => $level?->name,
+                        'promotion_ambassador' => $currentAmbassador?->name,
                     ],
                 );
 
                 return ReferralReward::query()->create([
                     'referrer_user_id' => $lockedReferrer->id,
                     'referred_user_id' => $buyer->id,
-                    'invoice_id' => $invoice->id,
-                    'product_id' => $invoice->product_id,
-                    'order_amount' => $invoiceAmount,
+                    "{$sourceType}_id" => $sourceId,
+                    'product_id' => $productId,
+                    'order_amount' => $amount,
                     'reward_rate' => $rewardRate,
                     'reward_amount' => $rewardAmount,
                     'status' => ReferralReward::STATUS_FROZEN,
@@ -443,13 +401,10 @@ class ReferralService
         $this->releaseMaturedRewards($user);
         $code = $this->ensureReferralCode($user);
         $frontendBaseUrl = $this->resolveFrontendBaseUrl($origin);
-        $user = $this->ensureUserLevel($user)->loadMissing(['memberLevel']);
+        $user = $user->loadMissing(['promotionAmbassador']);
 
-        $levels = $this->memberLevelService->list(true);
-        $currentLevel = $user->memberLevel;
-        $nextLevel = $levels->first(function (MemberLevel $level) use ($user) {
-            return (float) $level->sales_amount_min > (float) $user->total_sales_amount;
-        });
+        $ambassadors = $this->promotionAmbassadorService->list(true);
+        $currentAmbassador = $user->promotionAmbassador;
 
         $summary = ReferralReward::query()
             ->where('referrer_user_id', $user->id)
@@ -464,34 +419,20 @@ class ReferralService
             'referral_code' => $code,
             'register_path' => '/client/register?ref='.$code,
             'referral_link' => $frontendBaseUrl.'/client/register?ref='.$code,
-            'reward_rate' => $currentLevel
-                ? number_format((float) $currentLevel->reward_rate, 2, '.', '')
+            'reward_rate' => $currentAmbassador
+                ? number_format((float) $currentAmbassador->reward_rate, 2, '.', '')
                 : number_format($this->rewardRate(), 2, '.', ''),
             'reward_freeze_days' => $this->rewardFreezeDays(),
             'withdraw_min_amount' => number_format($this->withdrawMinAmount(), 2, '.', ''),
-            'current_member_level' => $currentLevel ? [
-                'id' => $currentLevel->id,
-                'name' => $currentLevel->name,
-                'code' => $currentLevel->code,
-                'reward_rate' => number_format((float) $currentLevel->reward_rate, 2, '.', ''),
+            'current_ambassador' => $currentAmbassador ? [
+                'id' => $currentAmbassador->id,
+                'name' => $currentAmbassador->name,
+                'reward_rate' => number_format((float) $currentAmbassador->reward_rate, 2, '.', ''),
             ] : null,
-            'next_member_level' => $nextLevel ? [
-                'id' => $nextLevel->id,
-                'name' => $nextLevel->name,
-                'code' => $nextLevel->code,
-                'reward_rate' => number_format((float) $nextLevel->reward_rate, 2, '.', ''),
-                'sales_amount_min' => number_format((float) $nextLevel->sales_amount_min, 2, '.', ''),
-                'distance_amount' => number_format(max((float) $nextLevel->sales_amount_min - (float) $user->total_sales_amount, 0), 2, '.', ''),
-            ] : null,
-            'member_levels' => $levels->map(fn (MemberLevel $level) => [
-                'id' => $level->id,
-                'name' => $level->name,
-                'code' => $level->code,
-                'reward_rate' => number_format((float) $level->reward_rate, 2, '.', ''),
-                'sales_amount_min' => number_format((float) $level->sales_amount_min, 2, '.', ''),
-                'sales_amount_max' => $level->sales_amount_max !== null
-                    ? number_format((float) $level->sales_amount_max, 2, '.', '')
-                    : null,
+            'ambassadors' => $ambassadors->map(fn (PromotionAmbassador $ambassador) => [
+                'id' => $ambassador->id,
+                'name' => $ambassador->name,
+                'reward_rate' => number_format((float) $ambassador->reward_rate, 2, '.', ''),
             ])->values()->all(),
             'total_sales_amount' => number_format((float) $user->total_sales_amount, 2, '.', ''),
             'referral_frozen_amount' => number_format((float) $user->referral_frozen_amount, 2, '.', ''),
@@ -1050,18 +991,15 @@ class ReferralService
                     ? (float) $referrerProfile->total_sales_amount
                     : (float) $referrer->total_sales_amount;
                 $nextSalesAmount = max(round($currentSalesAmount - $orderAmount, 2), 0);
-                $level = $this->memberLevelService->resolveLevelBySales($nextSalesAmount);
 
                 if ($referrerProfile) {
                     $referrerProfile->forceFill([
                         'total_sales_amount' => $nextSalesAmount,
-                        'member_level_id' => $level?->id,
                     ])->save();
                     $this->syncUserFromReferralProfile($referrer, $referrerProfile);
                 } else {
                     $referrer->forceFill([
                         'total_sales_amount' => number_format($nextSalesAmount, 2, '.', ''),
-                        'member_level_id' => $level?->id,
                     ])->save();
                 }
                 $this->resetUserAggregateRelations($referrer);
@@ -1338,37 +1276,6 @@ class ReferralService
     public function registerPathByCode(string $referralCode): string
     {
         return '/client/register?ref='.$referralCode;
-    }
-
-    public function ensureUserLevel(User $user): User
-    {
-        if (! $this->hasReferralProfilesTable()) {
-            $salesAmount = round((float) $user->total_sales_amount, 2);
-            $level = $this->memberLevelService->resolveLevelBySales($salesAmount);
-
-            if ((int) ($user->member_level_id ?? 0) !== (int) ($level?->id ?? 0)) {
-                $user->forceFill([
-                    'member_level_id' => $level?->id,
-                ])->save();
-            }
-
-            return $user->fresh(['memberLevel']) ?? $user->loadMissing(['memberLevel']);
-        }
-
-        $profile = $this->ensureReferralProfile($user);
-        $salesAmount = round((float) $profile->total_sales_amount, 2);
-        $level = $this->memberLevelService->resolveLevelBySales($salesAmount);
-
-        if ((int) ($profile->member_level_id ?? 0) !== (int) ($level?->id ?? 0)) {
-            $profile->forceFill([
-                'member_level_id' => $level?->id,
-            ])->save();
-        }
-
-        $this->syncUserFromReferralProfile($user, $profile);
-        $this->resetUserAggregateRelations($user);
-
-        return $user->fresh() ?? $user;
     }
 
     public function releaseMaturedRewards(?User $targetUser = null): int
