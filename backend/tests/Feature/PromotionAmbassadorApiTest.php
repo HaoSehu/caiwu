@@ -167,6 +167,43 @@ class PromotionAmbassadorApiTest extends TestCase
         $this->assertSame('12.00', (string) $ambassador->refresh()->renewal_reward_rate);
     }
 
+    public function test_update_clears_remark_with_null(): void
+    {
+        $admin = $this->makeAdmin();
+        Sanctum::actingAs($admin);
+        $ambassador = $this->makeAmbassador(['remark' => '原始备注']);
+
+        $this->putJson("/api/v2/admin/promotion-ambassadors/{$ambassador->id}", [
+            'name' => $ambassador->name,
+            'reward_rate' => 5,
+            'renewal_reward_rate' => 5,
+            'status' => 1,
+            'remark' => null,
+        ])
+            ->assertStatus(200)
+            ->assertJsonPath('data.remark', null);
+
+        $this->assertNull($ambassador->refresh()->remark);
+    }
+
+    public function test_update_omitting_remark_keeps_original(): void
+    {
+        $admin = $this->makeAdmin();
+        Sanctum::actingAs($admin);
+        $ambassador = $this->makeAmbassador(['remark' => '原始备注']);
+
+        $this->putJson("/api/v2/admin/promotion-ambassadors/{$ambassador->id}", [
+            'name' => $ambassador->name,
+            'reward_rate' => 5,
+            'renewal_reward_rate' => 5,
+            'status' => 1,
+        ])
+            ->assertStatus(200)
+            ->assertJsonPath('data.remark', '原始备注');
+
+        $this->assertSame('原始备注', (string) $ambassador->refresh()->remark);
+    }
+
     public function test_destroy_blocks_ambassador_with_users(): void
     {
         $admin = $this->makeAdmin();

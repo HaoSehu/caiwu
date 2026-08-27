@@ -22,6 +22,9 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
+// 新建文件/目录为组可写（664/775），避免 root cron 先创建当日日志后 PHP-FPM(www) 因 644 写入失败
+umask(0002);
+
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web: __DIR__.'/../routes/web.php',

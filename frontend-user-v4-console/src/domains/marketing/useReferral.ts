@@ -1,6 +1,6 @@
 import { ACCOUNT_TRANSACTION_EVENT_MAP, getStatusLabel } from '@shared/statusConfig';
 import { MessagePlugin } from 'tdesign-vue-next';
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onActivated, onMounted, reactive, ref } from 'vue';
 
 import { clientAuthApi } from '@/api/auth';
 import clientApi from '@/api/client';
@@ -200,8 +200,18 @@ export function useReferral() {
     }
   }
 
+  let mounted = false;
+
   onMounted(() => {
+    mounted = true;
     void Promise.all([loadAll(), loadAlipayAccount()]);
+  });
+
+  // keep-alive 复用页面时重新拉取，避免管理端修改返利比例后用户端仍显示旧值
+  onActivated(() => {
+    if (mounted) {
+      void loadAll();
+    }
   });
 
   return {

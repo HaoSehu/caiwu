@@ -101,7 +101,10 @@ class PromotionAmbassadorService
             'reward_rate' => $rewardRate,
             'renewal_reward_rate' => $renewalRewardRate,
             'status' => (int) (($data['status'] ?? $inheritedStatus ?? 1) ? 1 : 0),
-            'remark' => $this->normalizeNullableString($data['remark'] ?? $ambassador?->remark),
+            // 显式传 null 表示清空备注，不能用 ?? 回退原值
+            'remark' => $this->normalizeNullableString(
+                array_key_exists('remark', $data) ? $data['remark'] : $ambassador?->remark
+            ),
         ];
     }
 
