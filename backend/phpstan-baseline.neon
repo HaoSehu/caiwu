@@ -6055,12 +6055,6 @@ parameters:
 			path: app/Services/System/AdminLogService.php
 
 		-
-			message: '#^Offset ''log_keywords'' on array\{title\: ''ZJMF 财务认证刷新'', log_keywords\: array\{''ZJMF 财务认证刷新'', ''refresh\-zjmf…''\}\}\|array\{title\: ''上游产品配置同步'', log_keywords\: array\{''上游产品配置同步执行完成'', ''product\-upstream…''\}\}\|array\{title\: ''优惠券活动发放'', log_keywords\: array\{''优惠券活动自动发放执行完成'', ''coupon\-campaign…''\}\}\|array\{title\: ''工单自动关闭'', log_keywords\: array\{''工单自动关闭执行完成'', ''ticket\-auto\-close''\}\}\|array\{title\: ''接口认证刷新'', log_keywords\: array\{''JWT刷新'', ''接口认证刷新'', ''refresh\-hosting…''\}\}\|array\{title\: ''推荐奖励释放'', log_keywords\: array\{''推荐奖励释放执行完成'', ''推荐奖励'', ''referral\-release…''\}\}\|array\{title\: ''服务生命周期维护'', log_keywords\: array\{''服务生命周期维护执行完成'', ''service\-lifecycle…''\}\}\|array\{title\: ''服务自动续费'', log_keywords\: array\{''自动续费执行完成'', ''\[自动续费\]'', ''service\-auto\-renew''\}\}\|array\{title\: ''用户产品状态同步'', log_keywords\: array\{''用户产品状态同步执行完成'', ''service\-status\-sync''\}\}\|array\{title\: ''账单与充值清理'', log_keywords\: array\{''账单与充值清理执行完成'', ''订单与充值清理执行完成'', ''order\-cleanup''\}\}\|array\{title\: ''账单自动化维护'', log_keywords\: array\{''账单自动化维护执行完成'', ''billing\-maintenance''\}\} on left side of \?\? always exists and is not nullable\.$#'
-			identifier: nullCoalesce.offset
-			count: 1
-			path: app/Services/System/AdminLogService.php
-
-		-
 			message: '#^Offset ''params_json'' on non\-empty\-array\<mixed\> on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
 			count: 1
@@ -6074,12 +6068,6 @@ parameters:
 
 		-
 			message: '#^Offset ''task_key'' on array\{\} on left side of \?\? does not exist\.$#'
-			identifier: nullCoalesce.offset
-			count: 1
-			path: app/Services/System/AdminLogService.php
-
-		-
-			message: '#^Offset non\-empty\-string on array\{refresh\-hosting\-panel\-auth\: array\{title\: ''接口认证刷新'', log_keywords\: array\{''JWT刷新'', ''接口认证刷新'', ''refresh\-hosting…''\}\}, refresh\-zjmf\-finance\-auth\: array\{title\: ''ZJMF 财务认证刷新'', log_keywords\: array\{''ZJMF 财务认证刷新'', ''refresh\-zjmf…''\}\}, service\-auto\-renew\: array\{title\: ''服务自动续费'', log_keywords\: array\{''自动续费执行完成'', ''\[自动续费\]'', ''service\-auto\-renew''\}\}, referral\-release\-rewards\: array\{title\: ''推荐奖励释放'', log_keywords\: array\{''推荐奖励释放执行完成'', ''推荐奖励'', ''referral\-release…''\}\}, service\-lifecycle\-maintenance\: array\{title\: ''服务生命周期维护'', log_keywords\: array\{''服务生命周期维护执行完成'', ''service\-lifecycle…''\}\}, service\-status\-sync\: array\{title\: ''用户产品状态同步'', log_keywords\: array\{''用户产品状态同步执行完成'', ''service\-status\-sync''\}\}, billing\-maintenance\: array\{title\: ''账单自动化维护'', log_keywords\: array\{''账单自动化维护执行完成'', ''billing\-maintenance''\}\}, product\-upstream\-config\-sync\: array\{title\: ''上游产品配置同步'', log_keywords\: array\{''上游产品配置同步执行完成'', ''product\-upstream…''\}\}, \.\.\.\} on left side of \?\? does not exist\.$#'
 			identifier: nullCoalesce.offset
 			count: 1
 			path: app/Services/System/AdminLogService.php
@@ -6153,12 +6141,6 @@ parameters:
 		-
 			message: '#^Parameter \#1 \$collection of method Illuminate\\Pagination\\AbstractPaginator\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:setCollection\(\) expects Illuminate\\Support\\Collection\<int, Illuminate\\Database\\Eloquent\\Model\>, Illuminate\\Support\\Collection\<int, non\-empty\-array\<mixed, mixed\>\> given\.$#'
 			identifier: argument.type
-			count: 1
-			path: app/Services/System/AdminLogService.php
-
-		-
-			message: '#^Strict comparison using \!\=\= between ''\[自动续费\]''\|''billing\-maintenance''\|''coupon\-campaign…''\|''JWT刷新''\|''order\-cleanup''\|''product\-upstream…''\|''referral\-release…''\|''refresh\-hosting…''\|''refresh\-zjmf…''\|''service\-auto\-renew''\|''service\-lifecycle…''\|''service\-status\-sync''\|''ticket\-auto\-close''\|''ZJMF 财务认证刷新''\|''上游产品配置同步执行完成''\|''优惠券活动自动发放执行完成''\|''工单自动关闭执行完成''\|''接口认证刷新''\|''推荐奖励''\|''推荐奖励释放执行完成''\|''服务生命周期维护执行完成''\|''用户产品状态同步执行完成''\|''自动续费执行完成''\|''订单与充值清理执行完成''\|''账单与充值清理执行完成''\|''账单自动化维护执行完成'' and '''' will always evaluate to true\.$#'
-			identifier: notIdentical.alwaysTrue
 			count: 1
 			path: app/Services/System/AdminLogService.php
 

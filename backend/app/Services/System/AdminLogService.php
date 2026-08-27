@@ -13,6 +13,7 @@ use App\Models\MessageLog;
 use App\Models\Role;
 use App\Models\ScheduleRunLog;
 use App\Models\User;
+use App\Services\Automation\Heartbeat\HeartbeatTaskRegistry;
 use App\Services\System\Concerns\HandlesAdminLogCleanup;
 use App\Support\AdminPrivacy;
 use App\Support\ApiAccessLogFile;
@@ -47,14 +48,11 @@ class AdminLogService
     // 防止恶意/误传超大 page 触发全表结果集进入 PHP 内存。
     public const API_CANDIDATE_MAX_ROWS = 10000;
 
+    /** 核心静态任务元数据：title 与 log_keywords 同时收录，供日志展示与文件日志反查。 */
     private const TASK_META = [
         'refresh-hosting-panel-auth' => [
             'title' => '接口认证刷新',
             'log_keywords' => ['JWT刷新', '接口认证刷新', 'refresh-hosting-panel-auth'],
-        ],
-        'refresh-zjmf-finance-auth' => [
-            'title' => 'ZJMF 财务认证刷新',
-            'log_keywords' => ['ZJMF 财务认证刷新', 'refresh-zjmf-finance-auth'],
         ],
         'service-auto-renew' => [
             'title' => '服务自动续费',
@@ -965,7 +963,7 @@ class AdminLogService
             'finished_at' => $log->finished_at?->format('Y-m-d H:i:s'),
             'task_key' => $taskKey,
             'task_name' => $taskKey,
-            'task_title' => self::TASK_META[$taskKey]['title'] ?? $taskKey,
+            'task_title' => $this->taskTitle($taskKey),
             'status' => trim((string) $log->status),
             'level' => $this->levelFromTaskStatus((string) $log->status),
             'duration_ms' => (int) $log->duration_ms,
@@ -1024,7 +1022,7 @@ class AdminLogService
                     'finished_at' => $log->created_at?->format('Y-m-d H:i:s'),
                     'task_key' => $taskKey,
                     'task_name' => $taskKey ?: trim((string) $log->subject_type),
-                    'task_title' => $taskKey !== '' ? (self::TASK_META[$taskKey]['title'] ?? $taskKey) : trim((string) $log->subject_type),
+                    'task_title' => $taskKey !== '' ? $this->taskTitle($taskKey) : trim((string) $log->subject_type),
                     'status' => $status,
                     'level' => $this->levelFromTaskStatus($status),
                     'duration_ms' => isset($context['duration_ms']) ? (int) $context['duration_ms'] : null,
@@ -1586,7 +1584,7 @@ class AdminLogService
             'message' => preg_replace('/\s+\{.*$/u', '', $message) ?: $message,
             'raw' => $message,
             'task_key' => $taskKey,
-            'task_title' => $taskKey ? (self::TASK_META[$taskKey]['title'] ?? $taskKey) : '',
+            'task_title' => $taskKey ? $this->taskTitle($taskKey) : '',
             'plugin_key' => $logSource,
             'log_origin' => isset($context['provider_key']) ? 'provider' : (isset($context['domain']) ? 'plugin' : ($logSource !== '' ? 'component' : '')),
         ];
@@ -1610,8 +1608,8 @@ class AdminLogService
 
     private function resolveTaskKeyFromMessage(string $message): ?string
     {
-        foreach (self::TASK_META as $taskKey => $meta) {
-            foreach ((array) ($meta['log_keywords'] ?? []) as $keyword) {
+        foreach ($this->taskKeywordIndex() as $taskKey => $keywords) {
+            foreach ((array) $keywords as $keyword) {
                 if ($keyword !== '' && str_contains($message, $keyword)) {
                     return $taskKey;
                 }
@@ -1619,6 +1617,64 @@ class AdminLogService
         }
 
         return null;
+    }
+
+    /**
+     * 核心静态任务元数据与心跳注册表动态任务标题的兜底链；
+     * 注册表不可用时回退静态表，静态表同样未收录时退回原始 task key。
+     */
+    private function taskTitle(string $taskKey): string
+    {
+        $entry = self::TASK_META[$taskKey] ?? null;
+        if (is_array($entry)) {
+            return trim((string) $entry['title']);
+        }
+
+        try {
+            $title = trim((string) app(HeartbeatTaskRegistry::class)->get($taskKey)->title());
+            if ($title !== '') {
+                return $title;
+            }
+        } catch (\Throwable) {
+            // 心跳注册表不可用时退到下一级兜底
+        }
+
+        return $taskKey;
+    }
+
+    /**
+     * task key → 日志关键词索引：静态核心条目优先，插件心跳任务以
+     * `[title(), key()]` 动态补充，保证文件日志反查不依赖硬编码清单。
+     *
+     * @return array<string, list<string>>
+     */
+    private function taskKeywordIndex(): array
+    {
+        $index = [];
+
+        foreach (self::TASK_META as $key => $meta) {
+            $index[$key] = array_values(array_filter(
+                array_map('strval', $meta['log_keywords']),
+                static fn (string $keyword): bool => trim($keyword) !== '',
+            ));
+        }
+
+        try {
+            foreach (app(HeartbeatTaskRegistry::class)->enabledTasks() as $task) {
+                $key = trim((string) $task->key());
+                if ($key === '' || isset($index[$key])) {
+                    continue;
+                }
+                $index[$key] = array_values(array_filter([
+                    trim((string) $task->title()),
+                    $key,
+                ], static fn (string $keyword): bool => $keyword !== ''));
+            }
+        } catch (\Throwable) {
+            // 心跳注册表不可用时仅保留静态核心条目
+        }
+
+        return $index;
     }
 
     private function matchLogDateRange(string $time, array $filters): bool
