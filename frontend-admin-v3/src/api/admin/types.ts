@@ -867,6 +867,7 @@ export interface PromotionAmbassadorRecord {
   id: number | string;
   name?: string;
   reward_rate?: number | string;
+  renewal_reward_rate?: number | string;
   status?: number | string;
   remark?: string | null;
   created_at?: string | null;
@@ -877,6 +878,7 @@ export interface PromotionAmbassadorRecord {
 export interface PromotionAmbassadorPayload {
   name: string;
   reward_rate: number;
+  renewal_reward_rate: number;
   status: number;
   remark: string | null;
 }

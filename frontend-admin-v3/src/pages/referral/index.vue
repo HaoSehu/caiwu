@@ -24,6 +24,9 @@
                 <span>{{
                   row.promotion_ambassador?.reward_rate ? formatPercent(row.promotion_ambassador.reward_rate) : '默认比例'
                 }}</span>
+                <span v-if="row.promotion_ambassador?.renewal_reward_rate">
+                  续费 {{ formatPercent(row.promotion_ambassador.renewal_reward_rate) }}
+                </span>
               </div>
             </template>
             <template #sales="{ row }">{{ formatMoney(row.total_sales_amount) }}</template>

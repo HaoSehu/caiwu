@@ -2,7 +2,7 @@
   <div class="promotion-ambassadors-page">
     <t-card :bordered="false" :loading="loading">
       <template #title>推广大使档位</template>
-      <template #subtitle>共 {{ ambassadors.length }} 个档位 · 返利比例按用户所属档位生效，未指派走全局设置</template>
+      <template #subtitle>共 {{ ambassadors.length }} 个档位 · 新购/续费返利按用户所属档位分别生效，未指派走全局设置</template>
       <template #actions>
         <t-space>
           <t-button theme="primary" @click="openCreateDialog">
@@ -21,6 +21,9 @@
           </template>
           <template #rate="{ row }">
             <t-tag theme="success" variant="light">{{ formatPercent(row.reward_rate) }}</t-tag>
+          </template>
+          <template #renewalRate="{ row }">
+            <t-tag theme="warning" variant="light">{{ formatPercent(row.renewal_reward_rate) }}</t-tag>
           </template>
           <template #status="{ row }">
             <t-tag :theme="Number(row.status) === 1 ? 'success' : 'default'" variant="light">
@@ -43,7 +46,8 @@
           <div class="ambassador-mobile-card__head">
             <div>
               <strong>{{ fieldValue(row.name) }}</strong>
-              <t-tag theme="success" variant="light">{{ formatPercent(row.reward_rate) }}</t-tag>
+              <t-tag theme="success" variant="light">新购 {{ formatPercent(row.reward_rate) }}</t-tag>
+              <t-tag theme="warning" variant="light">续费 {{ formatPercent(row.renewal_reward_rate) }}</t-tag>
             </div>
             <t-dropdown
               trigger="click"
@@ -81,8 +85,11 @@
           <t-form-item label="大使名称" name="name">
             <t-input v-model="form.name" placeholder="例如：推广大使" />
           </t-form-item>
-          <t-form-item label="返利比例（%）" name="reward_rate">
+          <t-form-item label="新购返利（%）" name="reward_rate">
             <t-input-number v-model="form.reward_rate" :min="0" :max="100" :decimal-places="2" />
+          </t-form-item>
+          <t-form-item label="续费返利（%）" name="renewal_reward_rate">
+            <t-input-number v-model="form.renewal_reward_rate" :min="0" :max="100" :decimal-places="2" />
           </t-form-item>
           <t-form-item label="状态" name="status">
             <t-switch v-model="form.status" :custom-value="[1, 0]" :label="['启用', '停用']" />
@@ -114,6 +121,7 @@ interface AmbassadorForm {
   id: number | string | null;
   name: string;
   reward_rate: number;
+  renewal_reward_rate: number;
   status: number;
   remark: string;
 }
@@ -129,12 +137,14 @@ const form = reactive<AmbassadorForm>(createDefaultForm());
 
 const rules: Record<string, FormRule[]> = {
   name: [required('请输入大使名称')],
-  reward_rate: [required('请输入返利比例')],
+  reward_rate: [required('请输入新购返利比例')],
+  renewal_reward_rate: [required('请输入续费返利比例')],
 };
 
 const columns: PrimaryTableCol<PromotionAmbassadorRecord>[] = [
   { colKey: 'name', title: '大使名称', minWidth: 220 },
-  { colKey: 'rate', title: '返利比例', width: 130 },
+  { colKey: 'rate', title: '新购返利', width: 130 },
+  { colKey: 'renewalRate', title: '续费返利', width: 130 },
   { colKey: 'status', title: '状态', width: 110 },
   { colKey: 'remark', title: '备注', minWidth: 180 },
   { colKey: 'updatedAt', title: '更新时间', width: 170 },
@@ -150,6 +160,7 @@ function createDefaultForm(): AmbassadorForm {
     id: null,
     name: '',
     reward_rate: 0,
+    renewal_reward_rate: 0,
     status: 1,
     remark: '',
   };
@@ -177,6 +188,7 @@ function openEditDialog(row: PromotionAmbassadorRecord) {
     id: row.id,
     name: String(row.name || ''),
     reward_rate: Number(row.reward_rate || 0),
+    renewal_reward_rate: Number(row.renewal_reward_rate || 0),
     status: Number(row.status ?? 1),
     remark: String(row.remark || ''),
   });
@@ -190,6 +202,7 @@ async function submitForm() {
   const payload: PromotionAmbassadorPayload = {
     name: form.name.trim(),
     reward_rate: Number(form.reward_rate || 0),
+    renewal_reward_rate: Number(form.renewal_reward_rate || 0),
     status: Number(form.status ?? 1),
     remark: form.remark.trim() || null,
   };

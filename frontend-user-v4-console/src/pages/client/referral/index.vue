@@ -15,7 +15,7 @@
       <t-card class="referral-card" :bordered="false">
         <template #title>我的推广链接</template>
         <template #actions>
-          <t-tag variant="light">{{ levelName }} - 佣金比例 {{ rewardRateText }}</t-tag>
+          <t-tag variant="light">{{ levelName }} - 新购 {{ rewardRateText }} / 续费 {{ renewalRewardRateText }}</t-tag>
         </template>
         <div class="referral-link-row">
           <t-input :value="referralLink" readonly>
@@ -24,7 +24,7 @@
           <t-button @click="copyReferralLink">复制链接</t-button>
         </div>
         <p>
-          好友通过此链接注册并消费，您可获得 {{ rewardRateText }} 佣金，冻结
+          好友通过此链接注册，新购可获得 {{ rewardRateText }} 佣金、续费可获得 {{ renewalRewardRateText }} 佣金，冻结
           {{ freezeDaysText }} 天后自动释放。最低提现金额 ¥{{ withdrawMinAmountText }}。
         </p>
       </t-card>
@@ -147,6 +147,7 @@ const {
   bindSubmitting,
   withdrawMinAmountText,
   rewardRateText,
+  renewalRewardRateText,
   freezeDaysText,
   levelName,
   isAlipayBound,

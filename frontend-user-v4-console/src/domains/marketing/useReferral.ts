@@ -88,6 +88,9 @@ export function useReferral() {
   const rewardRateText = computed(
     () => `${money(overview.reward_rate || overview.current_ambassador?.reward_rate || 0)}%`,
   );
+  const renewalRewardRateText = computed(
+    () => `${money(overview.renewal_reward_rate || overview.current_ambassador?.renewal_reward_rate || 0)}%`,
+  );
   const freezeDaysText = computed(() => String(Number(overview.reward_freeze_days || 0)));
   const levelName = computed(() => overview.current_ambassador?.name || '默认大使');
   const isAlipayBound = computed(() => Boolean(alipayAccount.is_bound && alipayAccount.account));
@@ -219,6 +222,7 @@ export function useReferral() {
     availableAmountText,
     withdrawMinAmountText,
     rewardRateText,
+    renewalRewardRateText,
     freezeDaysText,
     levelName,
     isAlipayBound,

@@ -42,6 +42,7 @@ export interface ClientPromotionAmbassador {
   id?: number;
   name?: string;
   reward_rate?: number | string;
+  renewal_reward_rate?: number | string;
   [key: string]: unknown;
 }
 
@@ -458,6 +459,7 @@ export interface ReferralAmbassador {
   name?: string;
   code?: string;
   reward_rate?: number | string;
+  renewal_reward_rate?: number | string;
   sales_amount_min?: number | string;
   sales_amount_max?: number | string | null;
   distance_amount?: number | string;
@@ -470,6 +472,7 @@ export interface ReferralOverviewPayload {
   referral_link?: string;
   available_coupons?: number;
   reward_rate?: number | string;
+  renewal_reward_rate?: number | string;
   reward_freeze_days?: number | string;
   withdraw_min_amount?: number | string;
   total_sales_amount?: number | string;

@@ -536,7 +536,8 @@ const configs: Record<Exclude<SettingsTab, 'site_hero'>, SettingsConfig> = {
         title: '奖励规则',
         fields: [
           { key: 'enabled', label: '启用推荐返利', type: 'switch', default: true },
-          { key: 'reward_rate', label: '默认奖励比例（%）', type: 'number', default: 10, min: 0, max: 100 },
+          { key: 'reward_rate', label: '新购默认奖励比例（%）', type: 'number', default: 10, min: 0, max: 100 },
+          { key: 'renewal_reward_rate', label: '续费默认奖励比例（%）', type: 'number', default: 0, min: 0, max: 100 },
           { key: 'reward_freeze_days', label: '奖励冻结期（天）', type: 'number', default: 4, min: 0, max: 365 },
           { key: 'withdraw_min_amount', label: '最低提现金额（元）', type: 'number', default: 20, min: 0 },
         ],
