@@ -9,6 +9,8 @@
           class="seo-hero__asset"
           :src="page.visual.src"
           :alt="page.visual.alt"
+          loading="lazy"
+          decoding="async"
         />
       </div>
 
@@ -492,6 +494,7 @@ watch(
   right: 7%;
   bottom: 68px;
   width: min(220px, 22vw);
+  height: 180px;
   max-height: 180px;
   object-fit: contain;
   opacity: 0.22;

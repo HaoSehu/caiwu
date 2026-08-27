@@ -20,6 +20,7 @@ import {
   clearPendingWebsiteCoupon,
   getPendingWebsiteCouponId,
 } from "@/utils/websiteCoupon";
+import { createAbortController } from "@/utils/compat";
 
 export function useWebsiteProductCheckout({
   productDetail,
@@ -364,7 +365,7 @@ export function useWebsiteProductCheckout({
     const token = ++quoteTokenId;
     const requestVersion = quoteVersion;
     quoteAbortController?.abort();
-    quoteAbortController = new AbortController();
+    quoteAbortController = createAbortController();
     quoteLoading.value = true;
 
     try {
@@ -519,14 +520,14 @@ export function useWebsiteProductCheckout({
     }
 
     detailAbortController?.abort();
-    detailAbortController = new AbortController();
+    detailAbortController = createAbortController();
     configLoading.value = true;
     try {
       let product = await fetchProductDetail(productId, {
         signal: detailAbortController.signal,
       }).catch(async (error) => {
         if (isCanceledError(error) && token === detailToken && currentProductId === productId) {
-          detailAbortController = new AbortController();
+          detailAbortController = createAbortController();
           return fetchProductDetail(productId, {
             signal: detailAbortController.signal,
           });
@@ -628,7 +629,7 @@ export function useWebsiteProductCheckout({
     }
 
     const token = ++prefetchToken;
-    prefetchAbortController = new AbortController();
+    prefetchAbortController = createAbortController();
     let cursor = 0;
 
     const runWorker = async () => {
@@ -665,7 +666,7 @@ export function useWebsiteProductCheckout({
 
     const token = ++stockToken;
     stockAbortController?.abort();
-    stockAbortController = new AbortController();
+    stockAbortController = createAbortController();
     productStockLoading.value = true;
     productStockError.value = "";
     productStock.value = null;

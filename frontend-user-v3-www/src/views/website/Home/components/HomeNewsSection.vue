@@ -363,7 +363,7 @@ function openNotice(item) {
 
 .news-feature__date span {
   margin-top: 6px;
-  color: #94a0b2;
+  color: #606d80;
   font-size: 11px;
   letter-spacing: 0.06em;
 }
@@ -442,7 +442,7 @@ function openNotice(item) {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: #94a0b2;
+  color: #606d80;
   font-size: 12px;
 }
 

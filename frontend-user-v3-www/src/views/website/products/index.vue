@@ -443,8 +443,9 @@
               v-if="desktopMachineSpecRows.length"
               class="desktop-machine-spec-panel"
             >
-              <div class="desktop-machine-table">
-                <div class="desktop-machine-table-head">
+              <div class="desktop-machine-table-scroll">
+                <div class="desktop-machine-table">
+                  <div class="desktop-machine-table-head">
                   <span class="machine-spec-cell machine-spec-cell--name"
                     >实例规格</span
                   >
@@ -611,6 +612,7 @@
                       >{{ row.name }}：{{ row.note }}</span
                     >
                   </template>
+                </div>
                 </div>
               </div>
               <div v-if="osConfig" class="desktop-machine-os-panel">

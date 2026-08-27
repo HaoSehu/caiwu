@@ -27,7 +27,7 @@ $bg-color-overlay: rgba(245, 247, 251, 0.96);
 // 3. Text
 $text-color-primary: #1f2937;
 $text-color-secondary: #5b6b82;
-$text-color-placeholder: #94a0b2;
+$text-color-placeholder: #606d80;
 $text-color-disabled: #c9cdd4;
 $text-color-inverse: #ffffff;
 
@@ -53,6 +53,8 @@ $base-margin: 16px;
 $base-border-radius: 14px;
 $sm-border-radius: 10px;
 $lg-border-radius: 16px;
+$breakpoint-nav: 960px;
+$breakpoint-narrow: 768px;
 
 // 7. Shadow
 $shadow-sm: 0 2px 10px rgba(15, 23, 42, 0.04);

@@ -124,7 +124,60 @@
           <div class="cfg-group" v-if="osConfig">
             <div class="cfg-group-head">操作系统</div>
             <div class="cfg-group-body">
-              <div class="os-row">
+              <div v-if="isMobile" class="pd-mobile-picker-row">
+                <div class="pd-mobile-picker-col">
+                  <div class="pd-mobile-picker-label">系统</div>
+                  <button
+                    type="button"
+                    class="pd-mobile-picker-trigger"
+                    @click="openMobileOsDrawer"
+                  >
+                    <span>{{ currentOsGroup?.label || "请选择系统" }}</span>
+                    <svg
+                      viewBox="0 0 12 12"
+                      fill="none"
+                      width="12"
+                      height="12"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M3 4.5l3 3 3-3"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      />
+                    </svg>
+                  </button>
+                </div>
+                <div class="pd-mobile-picker-col">
+                  <div class="pd-mobile-picker-label">版本</div>
+                  <button
+                    type="button"
+                    class="pd-mobile-picker-trigger"
+                    :disabled="!currentOsGroup?.versions?.length"
+                    @click="openMobileOsDrawer"
+                  >
+                    <span>{{ currentOsVerLabel || "请选择版本" }}</span>
+                    <svg
+                      viewBox="0 0 12 12"
+                      fill="none"
+                      width="12"
+                      height="12"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M3 4.5l3 3 3-3"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              <div class="os-row" v-else>
                 <div class="os-col">
                   <div class="os-col-label">系统</div>
                   <el-select
@@ -383,7 +436,31 @@
                 </button>
               </div>
               <div class="coupon-panel-form">
+                <button
+                  v-if="isMobile"
+                  type="button"
+                  class="pd-mobile-trigger"
+                  @click="openMobileCouponDrawer"
+                >
+                  <span>{{ selectedCouponLabel || "请选择优惠券" }}</span>
+                  <svg
+                    viewBox="0 0 12 12"
+                    fill="none"
+                    width="12"
+                    height="12"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M3 4.5l3 3 3-3"
+                      stroke="currentColor"
+                      stroke-width="1.5"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                  </svg>
+                </button>
                 <el-select
+                  v-else
                   :model-value="selectedCouponId || undefined"
                   clearable
                   placeholder="请选择优惠券"
@@ -490,6 +567,50 @@
         >
       </el-empty>
     </div>
+
+    <MobileOsPicker
+      v-if="osConfig"
+      :visible="mobileOsDrawer"
+      :os-groups="osGroups"
+      :active-os-group-id="configForm.os_group || ''"
+      :active-os-version-id="configForm.os || ''"
+      @close="mobileOsDrawer = false"
+      @confirm="confirmMobileOsSelection"
+    />
+
+    <MobileSheet
+      v-model="mobileCouponDrawer"
+      size="42%"
+      title="选择优惠券"
+      confirm-text="关闭"
+      @confirm="mobileCouponDrawer = false"
+    >
+      <div class="pd-coupon-sheet">
+        <button
+          type="button"
+          class="pd-coupon-option pd-coupon-option--none"
+          :class="{ 'is-active': !selectedCouponId }"
+          @click="selectMobileCoupon(0)"
+        >
+          <span>不使用优惠券</span>
+        </button>
+        <button
+          v-for="item in availableCoupons"
+          :key="item.id"
+          type="button"
+          class="pd-coupon-option"
+          :class="{ 'is-active': selectedCouponId === item.id }"
+          @click="selectMobileCoupon(item.id)"
+        >
+          <span class="pd-coupon-name"
+            >{{ item.name }} · {{ item.discount_label }}</span
+          >
+          <span v-if="selectedCouponId === item.id" class="pd-coupon-check"
+            >✓</span
+          >
+        </button>
+      </div>
+    </MobileSheet>
   </div>
 </template>
 
@@ -509,9 +630,66 @@ import {
 } from "@/domains/products/machineSpecResolver";
 import { useWebsiteProductConfigurator } from "@/domains/products/useWebsiteProductConfigurator";
 import { useWebsiteProductCheckout } from "@/domains/products/useWebsiteProductCheckout";
+import MobileOsPicker from "@/components/MobileOsPicker.vue";
+import MobileSheet from "@/components/MobileSheet.vue";
 
 const route = useRoute();
 const router = useRouter();
+
+// 移动布局阈值与本页 768 CSS 家族一致
+const MOBILE_MEDIA_QUERY = "(max-width: 768px)";
+const isMobile = ref(false);
+const mobileOsDrawer = ref(false);
+const mobileCouponDrawer = ref(false);
+let mobileMediaQuery = null;
+let mobileMediaListener = null;
+
+function updateMobileState() {
+  if (
+    typeof window === "undefined" ||
+    typeof window.matchMedia !== "function"
+  ) {
+    return;
+  }
+  isMobile.value = window.matchMedia(MOBILE_MEDIA_QUERY).matches;
+}
+
+function openMobileOsDrawer() {
+  if (!osGroups.value.length) return;
+  mobileOsDrawer.value = true;
+}
+
+function confirmMobileOsSelection(groupId, versionId) {
+  mobileOsDrawer.value = false;
+  const group = osGroups.value.find((g) => g.id === groupId);
+  if (!group) {
+    return;
+  }
+  selectOsGroup(group);
+  if (versionId) {
+    configForm.os = versionId;
+  }
+}
+
+const selectedCouponLabel = computed(() => {
+  if (!appliedCoupon.value) return "";
+  return `${appliedCoupon.value.code || appliedCoupon.value.name} · ${
+    appliedCoupon.value.discount_label
+  }`;
+});
+
+function openMobileCouponDrawer() {
+  mobileCouponDrawer.value = true;
+}
+
+function selectMobileCoupon(id) {
+  mobileCouponDrawer.value = false;
+  if (id) {
+    handleCouponChange(id);
+  } else {
+    clearCoupon();
+  }
+}
 
 const loading = ref(false);
 const product = ref(null);
@@ -834,11 +1012,37 @@ watch(
   },
   { immediate: true },
 );
-onMounted(loadProduct);
+onMounted(() => {
+  updateMobileState();
+  if (
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function"
+  ) {
+    // 实例复用：removeEventListener/removeListener 仅对同一实例生效
+    mobileMediaQuery = window.matchMedia(MOBILE_MEDIA_QUERY);
+    mobileMediaListener = (event) => {
+      isMobile.value = event.matches;
+    };
+    if (typeof mobileMediaQuery.addEventListener === "function") {
+      mobileMediaQuery.addEventListener("change", mobileMediaListener);
+    } else if (typeof mobileMediaQuery.addListener === "function") {
+      mobileMediaQuery.addListener(mobileMediaListener);
+    }
+  }
+  loadProduct();
+});
 
 onBeforeUnmount(() => {
   // 使仍在途的 loadProduct 响应失效；报价/库存在途请求由 checkout 的 onBeforeUnmount 中止
   productLoadToken += 1;
+
+  if (mobileMediaQuery && mobileMediaListener) {
+    if (typeof mobileMediaQuery.removeEventListener === "function") {
+      mobileMediaQuery.removeEventListener("change", mobileMediaListener);
+    } else if (typeof mobileMediaQuery.removeListener === "function") {
+      mobileMediaQuery.removeListener(mobileMediaListener);
+    }
+  }
 });
 </script>
 
@@ -851,7 +1055,7 @@ onBeforeUnmount(() => {
    边框   #e8e8e8 / #d0d3d9
    文字主 #1d2129
    文字辅 #4e5969
-   文字淡 #86909c
+   文字淡 #606d80
 */
 
 .pd-page {
@@ -897,7 +1101,7 @@ onBeforeUnmount(() => {
   }
 
   svg {
-    color: #86909c;
+    color: #606d80;
   }
 }
 
@@ -1026,7 +1230,7 @@ onBeforeUnmount(() => {
 
   svg {
     flex-shrink: 0;
-    color: #86909c;
+    color: #606d80;
   }
 
   &.active {
@@ -1145,7 +1349,7 @@ onBeforeUnmount(() => {
   width: 64px;
   padding-top: 8px;
   font-size: 13px;
-  color: #86909c;
+  color: #606d80;
   line-height: 1.4;
 }
 
@@ -1227,7 +1431,7 @@ onBeforeUnmount(() => {
 
 .os-col-label {
   font-size: 12px;
-  color: #86909c;
+  color: #606d80;
   margin-bottom: 6px;
 }
 
@@ -1275,7 +1479,7 @@ onBeforeUnmount(() => {
 
 .cycle-price {
   font-size: 12px;
-  color: #86909c;
+  color: #606d80;
   line-height: 1.4;
 }
 
@@ -1446,7 +1650,7 @@ onBeforeUnmount(() => {
   gap: 8px;
 
   > span:first-child {
-    color: #86909c;
+    color: #606d80;
     flex-shrink: 0;
   }
 
@@ -1460,7 +1664,7 @@ onBeforeUnmount(() => {
 
 .cost-item--extra {
   > span:first-child {
-    color: #86909c;
+    color: #606d80;
     font-size: 12px;
   }
 
@@ -1547,7 +1751,7 @@ onBeforeUnmount(() => {
 
 .cost-total-label {
   font-size: 13px;
-  color: #86909c;
+  color: #606d80;
 }
 
 .cost-price-wrap {
@@ -1574,7 +1778,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 6px;
   font-size: 18px;
-  color: #86909c;
+  color: #606d80;
 
   &::after {
     content: "";
@@ -1594,7 +1798,7 @@ onBeforeUnmount(() => {
 
 .cost-cycle {
   font-size: 12px;
-  color: #86909c;
+  color: #606d80;
   margin-left: 2px;
 }
 
@@ -1677,7 +1881,7 @@ onBeforeUnmount(() => {
 .allocation-footer-label {
   font-size: 11px;
   line-height: 1;
-  color: #86909c;
+  color: #606d80;
 }
 
 .allocation-footer-price {
@@ -1701,7 +1905,7 @@ onBeforeUnmount(() => {
 
 .allocation-footer-cycle {
   font-size: 12px;
-  color: #86909c;
+  color: #606d80;
 }
 
 .allocation-footer-meta {
@@ -1805,5 +2009,113 @@ onBeforeUnmount(() => {
   justify-content: center;
   align-items: center;
   min-height: 400px;
+}
+
+/* ===== 移动端选择器（≤768px 替换 el-select） ===== */
+.pd-mobile-picker-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.pd-mobile-picker-col {
+  min-width: 0;
+}
+
+.pd-mobile-picker-label {
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: #5b6b82;
+}
+
+.pd-mobile-picker-trigger,
+.pd-mobile-trigger {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid #d0d3d9;
+  border-radius: 4px;
+  background: #fff;
+  color: #1d2129;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  transition:
+    border-color 0.15s,
+    color 0.15s;
+
+  span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &:hover:not(:disabled) {
+    border-color: #165dff;
+    color: #165dff;
+  }
+
+  &:disabled {
+    color: #c0c4cc;
+    cursor: not-allowed;
+  }
+}
+
+.pd-coupon-sheet {
+  padding: 10px 14px 18px;
+}
+
+.pd-coupon-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-height: 52px;
+  padding: 0 14px;
+  border: 1px solid #eef2f7;
+  border-radius: 6px;
+  background: #fff;
+  color: #1d2129;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background-color 0.15s;
+
+  & + .pd-coupon-option {
+    margin-top: 8px;
+  }
+
+  &.is-active {
+    border-color: #165dff;
+    background: #e8f1ff;
+    color: #165dff;
+    font-weight: 600;
+  }
+
+  &--none {
+    color: #4e5969;
+    font-weight: 400;
+  }
+}
+
+.pd-coupon-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pd-coupon-check {
+  flex-shrink: 0;
+  font-weight: 700;
 }
 </style>

@@ -91,6 +91,7 @@ body,
 }
 
 body {
+  overflow-wrap: break-word;
   background:
     linear-gradient(
       180deg,
@@ -498,7 +499,7 @@ ol {
 
 @include meta.load-css("record-list");
 
-@media (max-width: 900px) {
+@media (max-width: $breakpoint-nav) {
   .client-metric-strip {
     grid-template-columns: 1fr;
   }
@@ -539,7 +540,7 @@ ol {
   }
 }
 
-@media (max-width: 767px) {
+@media (max-width: $breakpoint-narrow) {
   .el-dialog {
     width: min(560px, calc(100vw - 24px)) !important;
     max-width: calc(100vw - 24px) !important;
@@ -564,6 +565,7 @@ ol {
   .el-dialog__body {
     padding: 0 16px 16px !important;
     max-height: calc(100vh - 172px);
+    max-height: calc(100dvh - 172px);
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
   }

@@ -1266,6 +1266,7 @@ onBeforeUnmount(() => {
   border-bottom: 1px solid $divider-color;
   box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
   max-height: calc(100vh - 80px);
+  max-height: calc(100dvh - 80px);
   overflow-y: auto;
 }
 

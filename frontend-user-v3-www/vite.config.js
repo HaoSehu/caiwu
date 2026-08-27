@@ -228,6 +228,15 @@ export default defineConfig(({ mode }) => {
       host: "127.0.0.1",
       port: 5175,
     },
+    preview: {
+      // e2e 冒烟（.env.e2e 的 VITE_API_BASE_URL=/api）经此处代理到本地后端，规避跨源
+      proxy: {
+        "/api": {
+          target: "http://127.0.0.1:8000",
+          changeOrigin: true,
+        },
+      },
+    },
     optimizeDeps: {
       include: [
         "vue",

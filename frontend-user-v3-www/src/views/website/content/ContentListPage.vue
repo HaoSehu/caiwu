@@ -232,12 +232,13 @@ function parseQueryString(value) {
 }
 
 function normalizeQuery(query) {
-  return Object.fromEntries(
-    Object.entries(query).filter(
-      ([, value]) =>
-        value !== undefined && value !== null && value !== "" && value !== 0,
-    ),
-  );
+  const result = {};
+  for (const [key, value] of Object.entries(query)) {
+    if (value !== undefined && value !== null && value !== "" && value !== 0) {
+      result[key] = value;
+    }
+  }
+  return result;
 }
 
 async function loadOverview(token) {
@@ -310,8 +311,12 @@ async function loadSidebarContent(token) {
 
     recentArticles.value = [...list]
       .sort((a, b) => {
-        const timeA = new Date(a.publish_at || a.created_at || 0).getTime();
-        const timeB = new Date(b.publish_at || b.created_at || 0).getTime();
+        const parseTimestamp = (item) => {
+          const t = new Date(item.publish_at || item.created_at || 0).getTime();
+          return Number.isNaN(t) ? 0 : t;
+        };
+        const timeA = parseTimestamp(a);
+        const timeB = parseTimestamp(b);
         return timeB - timeA;
       })
       .slice(0, 5);
@@ -647,6 +652,12 @@ onBeforeUnmount(() => {
   display: flex;
   justify-content: flex-end;
   padding: 20px 24px;
+
+  @media (max-width: 640px) {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+  }
 }
 
 .content-sidebar {
@@ -784,7 +795,7 @@ onBeforeUnmount(() => {
   }
 }
 
-@media (max-width: 900px) {
+@media (max-width: $breakpoint-nav) {
   .hero-panel__inner,
   .content-sidebar {
     grid-template-columns: 1fr;

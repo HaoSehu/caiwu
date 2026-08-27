@@ -135,8 +135,10 @@ watch(
       updateSpacers();
       refreshCache();
       bindScrolls();
-      resizeObs = new ResizeObserver(() => updateSpacers());
-      resizeObs.observe(groupCol.value);
+      if (typeof ResizeObserver === "function") {
+        resizeObs = new ResizeObserver(() => updateSpacers());
+        resizeObs.observe(groupCol.value);
+      }
     });
   },
 );

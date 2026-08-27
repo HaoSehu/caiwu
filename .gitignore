@@ -28,6 +28,9 @@ frontend-admin-v3/test-results/
 frontend-admin-v3/.auth/
 frontend-user-v3-www/node_modules/
 frontend-user-v3-www/dist/
+frontend-user-v3-www/dist-e2e/
+frontend-user-v3-www/test-results/
+frontend-user-v3-www/playwright-report/
 frontend-user-v3-www/public/novnc/
 frontend-user-v3-www/build_output*.txt
 frontend-user-v3-www/build-*.log

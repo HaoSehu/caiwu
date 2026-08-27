@@ -12,7 +12,7 @@ import {
   readWebsiteProductRouteParams,
 } from "@/utils/productRoute";
 
-const MOBILE_BREAKPOINT = 900;
+const MOBILE_BREAKPOINT = 960;
 
 // 进行中的目录请求去重（site.js 的 catalogCache 负责结果缓存）
 const catalogPendingMap = new Map();
