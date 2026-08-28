@@ -47,17 +47,35 @@ final class ZjmfStatusService
                 $responses = $this->transport->parallelGet($supplier, $requests, $jwt);
             }
 
+            // 电源状态按批并发拉取，替代逐个串行请求（此前是整批耗时的主体）。
+            $runtimeRequests = $this->buildRuntimeRequests($chunk);
+            $runtimeResponses = $runtimeRequests === []
+                ? []
+                : $this->transport->parallelPost(
+                    $supplier,
+                    $runtimeRequests,
+                    $jwt,
+                    ['content-type: application/x-www-form-urlencoded']
+                );
+            if ($runtimeResponses !== [] && $this->shouldRetryWithFreshJwt($runtimeResponses)) {
+                $jwt = $this->transport->refreshJwt($supplier);
+                $runtimeResponses = $this->transport->parallelPost(
+                    $supplier,
+                    $runtimeRequests,
+                    $jwt,
+                    ['content-type: application/x-www-form-urlencoded']
+                );
+            }
+
             foreach ($chunk as $item) {
                 $serviceId = (int) ($item['service_id'] ?? 0);
-                $hostId = (int) ($item['host_id'] ?? 0);
                 if ($serviceId <= 0) {
                     continue;
                 }
 
                 try {
                     $host = $this->extractHostPayload($responses['detail_'.$serviceId] ?? []);
-                    $runtimeResponse = $this->fetchRuntimeStatus($supplier, $hostId, $jwt);
-                    $runtime = $this->extractRuntimePayload($runtimeResponse, $host);
+                    $runtime = $this->extractRuntimePayload($runtimeResponses['runtime_'.$serviceId] ?? [], $host);
 
                     $results[$serviceId] = [
                         'host' => $this->normalizeHost($host),
@@ -76,6 +94,29 @@ final class ZjmfStatusService
         return [
             'services' => $results,
         ];
+    }
+
+    private function buildRuntimeRequests(array $items): array
+    {
+        $requests = [];
+
+        foreach ($items as $item) {
+            $serviceId = (int) ($item['service_id'] ?? 0);
+            $hostId = (int) ($item['host_id'] ?? 0);
+            if ($serviceId <= 0 || $hostId <= 0) {
+                continue;
+            }
+
+            $requests['runtime_'.$serviceId] = [
+                'uri' => '/provision/default',
+                'payload' => [
+                    'id' => $hostId,
+                    'func' => 'status',
+                ],
+            ];
+        }
+
+        return $requests;
     }
 
     private function buildBatchRequests(array $items): array
@@ -99,39 +140,6 @@ final class ZjmfStatusService
         }
 
         return $requests;
-    }
-
-    private function fetchRuntimeStatus(Supplier $supplier, int $hostId, string &$jwt): array
-    {
-        $response = $this->requestRuntimeStatus($supplier, $hostId, $jwt);
-        if ($this->isUnauthorizedPayload($response)) {
-            $jwt = $this->transport->refreshJwt($supplier);
-            $response = $this->requestRuntimeStatus($supplier, $hostId, $jwt);
-        }
-
-        return [
-            'status_code' => 0,
-            'response' => $response,
-        ];
-    }
-
-    private function requestRuntimeStatus(Supplier $supplier, int $hostId, string $jwt): array
-    {
-        return $this->transport->post(
-            $supplier,
-            '/provision/default',
-            [
-                'id' => $hostId,
-                'func' => 'status',
-            ],
-            $jwt,
-            ['content-type: application/x-www-form-urlencoded']
-        );
-    }
-
-    private function isUnauthorizedPayload(array $response): bool
-    {
-        return (int) ($response['status'] ?? $response['code'] ?? $response['status_code'] ?? 0) === 401;
     }
 
     private function shouldRetryWithFreshJwt(array $responses): bool

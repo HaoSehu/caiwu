@@ -186,28 +186,65 @@ final class ZjmfCatalogService
             return [];
         }
 
-        $chunkSize = max(1, min($chunkSize, 12));
-        $jwt = $this->transport->login($supplier);
+        // 批量明细接口一次覆盖全部商品（prodetail 单批最多 500 个），
+        // 仅对明细缺失的商品回退逐商品配置接口，避免逐商品拉取。
+        $results = $this->fetchProductStocksFromDetails($supplier, $ids);
+        $missingIds = collect($ids)
+            ->filter(fn (int $productId) => ! is_array($results[$productId] ?? null))
+            ->values()
+            ->all();
+
+        if ($missingIds !== []) {
+            $chunkSize = max(1, min($chunkSize, 12));
+            $jwt = $this->transport->login($supplier);
+
+            foreach (array_chunk($missingIds, $chunkSize) as $chunk) {
+                $responses = $this->transport->parallelGet(
+                    $supplier,
+                    collect($chunk)->mapWithKeys(fn (int $productId) => [
+                        (string) $productId => [
+                            'uri' => '/cart/get_product_config',
+                            'query' => ['pid' => $productId],
+                        ],
+                    ])->all(),
+                    $jwt,
+                );
+
+                foreach ($chunk as $productId) {
+                    $response = $responses[(string) $productId]['response'] ?? null;
+                    $results[$productId] = is_array($response)
+                        ? $this->extractLegacyProductStock($response, $productId)
+                        : null;
+                }
+            }
+        }
+
+        return $results;
+    }
+
+    /**
+     * 从 prodetail 批量明细提取库存；未返回 stock_control 的商品视为缺失。
+     *
+     * @param  array<int, int>  $productIds
+     * @return array<int, array<string, mixed>|null>
+     */
+    private function fetchProductStocksFromDetails(Supplier $supplier, array $productIds): array
+    {
+        $details = $this->fetchBatchProductDetails($supplier, $productIds);
         $results = [];
 
-        foreach (array_chunk($ids, $chunkSize) as $chunk) {
-            $responses = $this->transport->parallelGet(
-                $supplier,
-                collect($chunk)->mapWithKeys(fn (int $productId) => [
-                    (string) $productId => [
-                        'uri' => '/cart/get_product_config',
-                        'query' => ['pid' => $productId],
-                    ],
-                ])->all(),
-                $jwt,
-            );
-
-            foreach ($chunk as $productId) {
-                $response = $responses[(string) $productId]['response'] ?? null;
-                $results[$productId] = is_array($response)
-                    ? $this->extractLegacyProductStock($response, $productId)
-                    : null;
+        foreach ($productIds as $productId) {
+            $detail = $details[$productId] ?? null;
+            if (! is_array($detail) || ! array_key_exists('stock_control', $detail)) {
+                continue;
             }
+
+            $results[$productId] = [
+                'stock_control' => (int) ($detail['stock_control'] ?? 0),
+                'qty' => is_numeric($detail['qty'] ?? null) ? max((int) $detail['qty'], 0) : null,
+                'stock' => $this->normalizeCatalogStock($detail),
+                'allow_qty' => (int) ($detail['allow_qty'] ?? 0),
+            ];
         }
 
         return $results;

@@ -124,6 +124,40 @@ class ZjmfFinanceTransportTest extends TestCase
         $this->assertNotNull($platform);
     }
 
+    public function test_parallel_post_rejects_uri_outside_whitelist(): void
+    {
+        $platform = $this->createMock(HostingPanelApiTransport::class);
+        $platform->expects($this->never())->method('parallelPost');
+
+        $transport = new ZjmfFinanceTransport($platform, new ZjmfAuthManager($platform));
+
+        $this->expectException(BusinessException::class);
+        $transport->parallelPost($this->supplier(1), [['uri' => '/admin/delete-all']]);
+    }
+
+    public function test_parallel_post_delegates_and_forgets_jwt_on_401(): void
+    {
+        $platform = $this->createMock(HostingPanelApiTransport::class);
+        $platform->method('parallelPost')->willReturn([
+            'runtime_1' => ['status_code' => 401, 'response' => [], 'error' => '', 'content_type' => 'application/json'],
+        ]);
+
+        $transport = new ZjmfFinanceTransport($platform, new ZjmfAuthManager($platform));
+        $responses = $transport->parallelPost(
+            $this->supplier(1),
+            [
+                'runtime_1' => [
+                    'uri' => '/provision/default',
+                    'payload' => ['id' => 9, 'func' => 'status'],
+                ],
+            ],
+            'jwt-1',
+            ['content-type: application/x-www-form-urlencoded']
+        );
+
+        $this->assertSame(401, $responses['runtime_1']['status_code'] ?? null);
+    }
+
     private function assertAllowedUriMethod(): ReflectionMethod
     {
         $method = new ReflectionMethod(ZjmfFinanceTransport::class, 'assertAllowedRequestUri');

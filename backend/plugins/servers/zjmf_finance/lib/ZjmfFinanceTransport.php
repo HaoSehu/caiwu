@@ -309,6 +309,27 @@ final class ZjmfFinanceTransport
         return $responses;
     }
 
+    public function parallelPost(Supplier $supplier, array $requests, ?string $jwt = null, array $headers = []): array
+    {
+        foreach ($requests as $request) {
+            $this->assertAllowedRequestUri((string) ($request['uri'] ?? ''));
+        }
+
+        $resolvedJwt = $this->resolveRequestJwt($supplier, $jwt, '', $headers);
+        $responses = $this->transport->parallelPost(
+            $supplier,
+            $requests,
+            $resolvedJwt,
+            $this->withBearerAuthorization($resolvedJwt, $headers)
+        );
+
+        if ($this->containsUnauthorizedResponse($responses)) {
+            $this->authManager->forget($supplier);
+        }
+
+        return $responses;
+    }
+
     public function put(Supplier $supplier, string $uri, array|string $payload = [], ?string $jwt = null, array $headers = [], array $query = []): array
     {
         return $this->request($supplier, 'PUT', $uri, $payload, $jwt, $headers, $query);

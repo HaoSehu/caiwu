@@ -6897,7 +6897,7 @@ parameters:
 		-
 			message: '#^Access to an undefined property App\\Models\\Supplier\:\:\$api_url\.$#'
 			identifier: property.notFound
-			count: 4
+			count: 5
 			path: app/Services/Upstream/Drivers/HostingPanelApi/HostingPanelApiTransport.php
 
 		-
@@ -6933,12 +6933,6 @@ parameters:
 		-
 			message: '#^Offset ''onetime'' on array\{hour\?\: numeric\-string, day\?\: numeric\-string, ontrial\?\: numeric\-string, monthly\?\: numeric\-string, quarterly\?\: numeric\-string, semiannually\?\: numeric\-string, annually\?\: numeric\-string, biennially\?\: numeric\-string, \.\.\.\} in isset\(\) does not exist\.$#'
 			identifier: isset.offset
-			count: 1
-			path: app/Services/Upstream/Drivers/HostingPanelApi/HostingPanelApiTransport.php
-
-		-
-			message: '#^Strict comparison using \!\=\= between string and null will always evaluate to true\.$#'
-			identifier: notIdentical.alwaysTrue
 			count: 1
 			path: app/Services/Upstream/Drivers/HostingPanelApi/HostingPanelApiTransport.php
 

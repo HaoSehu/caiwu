@@ -5,28 +5,34 @@ declare(strict_types=1);
 namespace Tests\Unit;
 
 use App\Models\Supplier;
+use App\Services\Upstream\Drivers\HostingPanelApi\HostingPanelApiTransport;
+use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfAuthManager;
+use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfFinanceTransport;
 use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfStatusService;
-use PHPUnit\Framework\TestCase;
-use ReflectionClass;
 use ReflectionMethod;
+use Tests\TestCase;
 
 // 插件类由运行时的 PluginFileLoader 按 require 加载，测试中需手动引入
+require_once __DIR__.'/../lib/ZjmfAuthManager.php';
 require_once __DIR__.'/../lib/ZjmfFinanceTransport.php';
 require_once __DIR__.'/../lib/ZjmfStatusService.php';
 
 class ZjmfStatusServiceTest extends TestCase
 {
-    private function service(): ZjmfStatusService
-    {
-        return (new ReflectionClass(ZjmfStatusService::class))->newInstanceWithoutConstructor();
-    }
-
     private function supplier(): Supplier
     {
         $supplier = new Supplier;
         $supplier->id = 9;
 
         return $supplier;
+    }
+
+    private function service(): ZjmfStatusService
+    {
+        return new ZjmfStatusService(new ZjmfFinanceTransport(
+            $this->createMock(HostingPanelApiTransport::class),
+            new ZjmfAuthManager($this->createMock(HostingPanelApiTransport::class)),
+        ));
     }
 
     private function method(string $name): ReflectionMethod
@@ -37,13 +43,88 @@ class ZjmfStatusServiceTest extends TestCase
         return $method;
     }
 
-    public function test_unauthorized_payload_detection_covers_body_status(): void
+    public function test_runtime_requests_built_per_service_with_valid_host(): void
     {
         $service = $this->service();
 
-        $this->assertTrue($this->method('isUnauthorizedPayload')->invoke($service, ['status' => 401]));
-        $this->assertTrue($this->method('isUnauthorizedPayload')->invoke($service, ['code' => 401]));
-        $this->assertFalse($this->method('isUnauthorizedPayload')->invoke($service, ['status' => 200]));
+        $requests = $this->method('buildRuntimeRequests')->invoke($service, [
+            ['service_id' => 1, 'host_id' => 9],
+            ['service_id' => 2, 'host_id' => 0],
+            ['service_id' => 0, 'host_id' => 9],
+        ]);
+
+        $this->assertSame([
+            'uri' => '/provision/default',
+            'payload' => ['id' => 9, 'func' => 'status'],
+        ], $requests['runtime_1'] ?? null);
+        $this->assertCount(1, $requests);
+    }
+
+    public function test_sync_service_statuses_fetches_runtime_in_parallel(): void
+    {
+        $platform = $this->createMock(HostingPanelApiTransport::class);
+        $platform->method('request')->willReturn(['status' => 200, 'jwt' => 'jwt-1']);
+        $platform->method('parallelGet')->willReturn([
+            'detail_7' => [
+                'status_code' => 200,
+                'response' => ['status' => 200, 'data' => ['host_data' => ['id' => 9, 'domainstatus' => 'Active']]],
+                'error' => '',
+                'content_type' => 'application/json',
+            ],
+        ]);
+        $platform->expects($this->exactly(1))->method('parallelPost')->willReturn([
+            'runtime_7' => [
+                'status_code' => 200,
+                'response' => ['status' => 1001, 'data' => ['status' => 'on', 'des' => 'ok']],
+                'error' => '',
+                'content_type' => 'application/json',
+            ],
+        ]);
+
+        $transport = new ZjmfFinanceTransport($platform, new ZjmfAuthManager($platform));
+        $service = new ZjmfStatusService($transport);
+        $result = $service->syncServiceStatuses($this->supplier(), [['service_id' => 7, 'host_id' => 9]], 10);
+
+        $this->assertSame('on', $result['services'][7]['runtime']['status'] ?? null);
+        $this->assertSame('Active', $result['services'][7]['host']['domainstatus'] ?? null);
+    }
+
+    public function test_sync_service_statuses_retries_runtime_batch_with_fresh_jwt_on_401(): void
+    {
+        $platform = $this->createMock(HostingPanelApiTransport::class);
+        $platform->method('request')->willReturn(['status' => 200, 'jwt' => 'jwt-1']);
+        $platform->method('parallelGet')->willReturn([
+            'detail_7' => [
+                'status_code' => 200,
+                'response' => ['status' => 200, 'data' => ['host_data' => ['id' => 9, 'domainstatus' => 'Active']]],
+                'error' => '',
+                'content_type' => 'application/json',
+            ],
+        ]);
+        $platform->expects($this->exactly(2))->method('parallelPost')->willReturnOnConsecutiveCalls(
+            [
+                'runtime_7' => [
+                    'status_code' => 401,
+                    'response' => ['status' => 401],
+                    'error' => '',
+                    'content_type' => 'application/json',
+                ],
+            ],
+            [
+                'runtime_7' => [
+                    'status_code' => 200,
+                    'response' => ['status' => 1001, 'data' => ['status' => 'on']],
+                    'error' => '',
+                    'content_type' => 'application/json',
+                ],
+            ],
+        );
+
+        $transport = new ZjmfFinanceTransport($platform, new ZjmfAuthManager($platform));
+        $service = new ZjmfStatusService($transport);
+        $result = $service->syncServiceStatuses($this->supplier(), [['service_id' => 7, 'host_id' => 9]], 10);
+
+        $this->assertSame('on', $result['services'][7]['runtime']['status'] ?? null);
     }
 
     public function test_runtime_unavailable_degraded_for_suspended_without_operation_message(): void

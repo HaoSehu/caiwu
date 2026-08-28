@@ -4,15 +4,23 @@ declare(strict_types=1);
 
 namespace Tests\Unit;
 
+use App\Models\Supplier;
+use App\Services\Upstream\Drivers\HostingPanelApi\HostingPanelApiTransport;
+use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfAuthManager;
 use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfCatalogService;
+use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfCloudConfigTemplate;
+use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfFinanceTransport;
 use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfProductTypeMapper;
-use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use ReflectionMethod;
 use ReflectionProperty;
+use Tests\TestCase;
 
 // 插件类由运行时的 PluginFileLoader 按 require 加载，测试中需手动引入
+require_once __DIR__.'/../lib/ZjmfAuthManager.php';
+require_once __DIR__.'/../lib/ZjmfFinanceTransport.php';
 require_once __DIR__.'/../lib/ZjmfProductTypeMapper.php';
+require_once __DIR__.'/../lib/ZjmfCloudConfigTemplate.php';
 require_once __DIR__.'/../lib/ZjmfCatalogService.php';
 
 class ZjmfCatalogServiceTest extends TestCase
@@ -266,6 +274,100 @@ class ZjmfCatalogServiceTest extends TestCase
         $this->assertSame('', $item['billingcycle']);
         $this->assertNull($item['product_price']);
         $this->assertSame(-1, $item['stock']);
+    }
+
+    public function test_fetch_batch_stocks_prefers_prodetail_and_falls_back_for_missing(): void
+    {
+        $platform = $this->createMock(HostingPanelApiTransport::class);
+        $platform->method('request')->willReturnCallback(function (Supplier $supplier, string $method, string $uri, array $payload = []): array {
+            if ($uri === '/zjmf_api_login') {
+                return ['status' => 200, 'jwt' => 'jwt-1'];
+            }
+
+            if ($uri === '/api/product/prodetail') {
+                return [
+                    'status' => 1001,
+                    'data' => [
+                        'detail' => [
+                            '1' => ['stock_control' => 1, 'qty' => 5, 'allow_qty' => 1],
+                            '2' => ['stock_control' => 0, 'allow_qty' => 0],
+                        ],
+                    ],
+                ];
+            }
+
+            return ['status' => 1001, 'data' => []];
+        });
+        $platform->expects($this->exactly(1))->method('parallelGet')->with(
+            $this->anything(),
+            $this->callback(function (array $requests): bool {
+                // 明细缺失的商品 3 才回退逐商品配置接口
+                return array_keys($requests) === [3];
+            })
+        )->willReturn([
+            '3' => [
+                'status_code' => 200,
+                'response' => ['status' => 200, 'data' => ['products' => ['id' => 3, 'stock_control' => 1, 'qty' => 9, 'allow_qty' => 1]]],
+                'error' => '',
+                'content_type' => 'application/json',
+            ],
+        ]);
+
+        $service = new ZjmfCatalogService(
+            new ZjmfFinanceTransport($platform, new ZjmfAuthManager($platform)),
+            new ZjmfCloudConfigTemplate,
+        );
+        $results = $service->fetchBatchProductStocks($this->supplier(), [1, 2, 3]);
+
+        $this->assertSame(['stock_control' => 1, 'qty' => 5, 'stock' => 5, 'allow_qty' => 1], $results[1]);
+        $this->assertSame(['stock_control' => 0, 'qty' => null, 'stock' => -1, 'allow_qty' => 0], $results[2]);
+        $this->assertSame(['stock_control' => 1, 'qty' => 9, 'stock' => 9, 'allow_qty' => 1], $results[3]);
+    }
+
+    public function test_fetch_batch_stocks_skips_fallback_when_prodetail_covers_all(): void
+    {
+        $platform = $this->createMock(HostingPanelApiTransport::class);
+        $platform->method('request')->willReturnCallback(function (Supplier $supplier, string $method, string $uri, array $payload = []): array {
+            if ($uri === '/zjmf_api_login') {
+                return ['status' => 200, 'jwt' => 'jwt-1'];
+            }
+
+            if ($uri === '/api/product/prodetail') {
+                return [
+                    'status' => 1001,
+                    'data' => [
+                        'detail' => [
+                            '1' => ['stock_control' => 1, 'qty' => 5, 'allow_qty' => 1],
+                            '2' => ['stock_control' => 1, 'qty' => 2, 'allow_qty' => 1],
+                            '3' => ['stock_control' => 1, 'qty' => 9, 'allow_qty' => 1],
+                        ],
+                    ],
+                ];
+            }
+
+            return ['status' => 1001, 'data' => []];
+        });
+        $platform->expects($this->never())->method('parallelGet');
+
+        $service = new ZjmfCatalogService(
+            new ZjmfFinanceTransport($platform, new ZjmfAuthManager($platform)),
+            new ZjmfCloudConfigTemplate,
+        );
+        $results = $service->fetchBatchProductStocks($this->supplier(), [1, 2, 3]);
+
+        $this->assertCount(3, $results);
+        $this->assertSame(5, $results[1]['stock'] ?? null);
+        $this->assertSame(9, $results[3]['stock'] ?? null);
+    }
+
+    private function supplier(): Supplier
+    {
+        $supplier = new Supplier;
+        $supplier->id = 21;
+        $supplier->api_username = 'test-user';
+        $supplier->api_key = 'test-key';
+
+        return $supplier;
     }
 
     private function serviceWithoutTransport(): ZjmfCatalogService

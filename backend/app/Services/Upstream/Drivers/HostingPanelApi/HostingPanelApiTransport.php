@@ -418,7 +418,6 @@ class HostingPanelApiTransport extends UpstreamJwtSessionManager implements Prov
             ];
         }
 
-        $startedAt = microtime(true);
         $responses = Http::pool(function (Pool $pool) use ($requestsByAlias, $headerMap, $httpOptions) {
             $pendingRequests = [];
 
@@ -439,6 +438,78 @@ class HostingPanelApiTransport extends UpstreamJwtSessionManager implements Prov
             return $pendingRequests;
         });
 
+        return $this->normalizePoolResponses($requestsByAlias, $responses, $jwt, $supplier);
+    }
+
+    /**
+     * 并发 POST：与 parallelGet 共享同一池化与归一化逻辑，表单体按
+     * buildRequestBody 规则序列化；用于状态同步等并行写场景。
+     */
+    public function parallelPost(Supplier $supplier, array $requests, ?string $jwt = null, array $headers = []): array
+    {
+        $baseUrl = trim((string) $supplier->api_url);
+
+        if ($baseUrl === '') {
+            throw new BusinessException('供应商接口地址未配置', 42200);
+        }
+
+        $jwt = $jwt !== null && trim($jwt) !== ''
+            ? trim($jwt)
+            : $this->login($supplier);
+        $requestHeaders = $this->buildHeaders($jwt, $headers);
+        $headerMap = $this->buildHeaderMap($requestHeaders);
+        $httpOptions = $this->buildHttpClientOptions();
+        $requestsByAlias = [];
+
+        foreach ($requests as $key => $request) {
+            $rawAlias = is_string($key) ? $key : (string) ($request['key'] ?? $key);
+            $alias = (string) $rawAlias;
+            $query = is_array($request['query'] ?? null) ? $request['query'] : [];
+            $urlsAlias = $this->normalizePoolAlias($alias);
+            $requestsByAlias[$alias] = [
+                'pool_alias' => $urlsAlias,
+                'url' => $this->buildUrl($baseUrl, (string) ($request['uri'] ?? ''), $query),
+                'body' => $this->buildRequestBody('POST', $request['payload'] ?? []) ?? '',
+                'connect_timeout' => max((int) ($request['connect_timeout'] ?? $this->serviceConfig['connect_timeout']), 1),
+                'timeout' => max((int) ($request['timeout'] ?? $this->serviceConfig['timeout']), 1),
+            ];
+        }
+
+        $responses = Http::pool(function (Pool $pool) use ($requestsByAlias, $headerMap, $httpOptions) {
+            $pendingRequests = [];
+
+            foreach ($requestsByAlias as $requestMeta) {
+                $request = $pool->as($requestMeta['pool_alias'])
+                    ->withHeaders($headerMap)
+                    ->connectTimeout((int) $requestMeta['connect_timeout'])
+                    ->timeout((int) $requestMeta['timeout'])
+                    ->withOptions($httpOptions);
+
+                if ($this->serviceConfig['user_agent'] !== '') {
+                    $request = $request->withUserAgent($this->serviceConfig['user_agent']);
+                }
+
+                $pendingRequests[] = $request
+                    ->withBody($requestMeta['body'], 'application/x-www-form-urlencoded')
+                    ->send('POST', $requestMeta['url']);
+            }
+
+            return $pendingRequests;
+        });
+
+        return $this->normalizePoolResponses($requestsByAlias, $responses, $jwt, $supplier);
+    }
+
+    /**
+     * 统一归一化并发池响应：解析 JSON、收集错误并统计耗时，401 时失效 JWT 缓存。
+     *
+     * @param  array<string, array{pool_alias: string, url: string, connect_timeout: int, timeout: int, body?: string}>  $requestsByAlias
+     * @param  array<string, Response|Throwable>  $responses
+     * @return array<string, array{status_code: int, response: array, error: string, content_type: string}>
+     */
+    private function normalizePoolResponses(array $requestsByAlias, array $responses, ?string $jwt, Supplier $supplier): array
+    {
+        $startedAt = microtime(true);
         $normalized = [];
         $errors = [];
         $statusCodes = [];
@@ -482,13 +553,13 @@ class HostingPanelApiTransport extends UpstreamJwtSessionManager implements Prov
             }
         }
 
-        $totalMs = $this->elapsedMilliseconds($startedAt);
-        $logContext = [
+        Log::debug('[上游传输] 并发池请求完成', [
             'supplier_id' => $supplier->id,
             'count' => count($requestsByAlias),
-            'duration_ms' => $totalMs,
+            'duration_ms' => $this->elapsedMilliseconds($startedAt),
             'status_codes' => $statusCodes,
-        ];
+            'errors' => $errors,
+        ]);
 
         return $normalized;
     }
