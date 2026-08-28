@@ -54,42 +54,6 @@
           <template #paid="{ row }">
             <span class="invoice-money">¥{{ formatMoney(row.paid_amount) }}</span>
           </template>
-          <template #related_refs="{ row }">
-            <div class="stack-cell">
-              <div class="related-ref-line">
-                <span class="related-ref-label">订单</span>
-                <t-button v-if="row.order" variant="text" theme="primary" size="small" @click="goToOrder(row)">
-                  {{ invoiceOrderNo(row) }}
-                </t-button>
-                <span v-else>--</span>
-                <status-tag
-                  v-if="row.order"
-                  :status-map="ORDER_STATUS_MAP"
-                  :status="Number(row.order.status)"
-                  size="small"
-                />
-              </div>
-              <div class="related-ref-line">
-                <span class="related-ref-label">充值</span>
-                <t-button
-                  v-if="isRechargeInvoice(row) && row.payment_summary?.id"
-                  variant="text"
-                  theme="primary"
-                  size="small"
-                  @click="goToPayment(row)"
-                >
-                  {{ rechargePaymentNo(row) }}
-                </t-button>
-                <span v-else>{{ rechargePaymentNo(row) }}</span>
-                <status-tag
-                  v-if="isRechargeInvoice(row) && row.payment_summary"
-                  :status-map="PAYMENT_STATUS_MAP"
-                  :status="Number(row.payment_summary.status)"
-                  size="small"
-                />
-              </div>
-            </div>
-          </template>
           <template #status="{ row }">
             <status-tag :status-map="INVOICE_STATUS_MAP" :status="Number(row.status)" />
           </template>
@@ -132,8 +96,6 @@
             </div>
 
             <div class="record-mobile-card__meta">
-              <span>订单：{{ invoiceOrderNo(row) }}</span>
-              <span>充值：{{ rechargePaymentNo(row) }}</span>
               <span>{{ formatDateTime(row.created_at) }}</span>
             </div>
 
@@ -168,7 +130,7 @@
   </section>
 </template>
 <script setup lang="ts">
-import { INVOICE_STATUS_MAP, ORDER_STATUS_MAP, PAYMENT_STATUS_MAP } from '@caiwu/shared/statusConfig';
+import { INVOICE_STATUS_MAP } from '@caiwu/shared/statusConfig';
 import DataState from '@shared/user-v3/components/DataState.vue';
 import StatusTag from '@shared/user-v3/components/StatusTag.vue';
 import { SearchIcon } from 'tdesign-icons-vue-next';
@@ -209,41 +171,14 @@ function goToDetail(row: InvoiceRecord) {
   router.push(`/client/invoices/${row.id}`);
 }
 
-function goToOrder(row: InvoiceRecord) {
-  const orderId = Number(row.order?.id || 0);
-  if (!orderId) return;
-  router.push(`/client/orders/${orderId}`);
-}
-
-function goToPayment(row: InvoiceRecord) {
-  const paymentId = Number(row.payment_summary?.id || 0);
-  if (!paymentId) return;
-  router.push(`/client/payments/${paymentId}`);
-}
-
 const columns: PrimaryTableCol[] = [
   { colKey: 'invoice', title: '账单号', minWidth: '12rem' },
   { colKey: 'amount', title: '账单金额', width: '9rem', align: 'right' },
   { colKey: 'paid', title: '已付金额', width: '9rem', align: 'right' },
-  { colKey: 'related_refs', title: '关联单据', minWidth: '14rem' },
   { colKey: 'status', title: '状态', width: '8rem' },
   { colKey: 'created_at', title: '创建时间', minWidth: '12rem' },
   { colKey: 'operation', title: '操作', width: '10rem', fixed: 'right', align: 'right' },
 ];
-
-function invoiceOrderNo(row: InvoiceRecord) {
-  return String(row.order?.order_no || '--');
-}
-
-function isRechargeInvoice(row: InvoiceRecord) {
-  return String(row.type || '').trim() === 'recharge';
-}
-
-function rechargePaymentNo(row: InvoiceRecord) {
-  if (!isRechargeInvoice(row)) return '--';
-
-  return String(row.payment_summary?.payment_no || '--');
-}
 </script>
 <style scoped lang="less">
 @import '../record-page.less';
@@ -253,18 +188,5 @@ function rechargePaymentNo(row: InvoiceRecord) {
   font: var(--td-font-body-medium);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-}
-
-.related-ref-line {
-  display: flex;
-  align-items: center;
-  min-height: 1.75rem;
-  gap: var(--td-comp-margin-xs);
-}
-
-.related-ref-label {
-  color: var(--td-text-color-secondary);
-  font: var(--td-font-body-small);
-  min-width: 2rem;
 }
 </style>
