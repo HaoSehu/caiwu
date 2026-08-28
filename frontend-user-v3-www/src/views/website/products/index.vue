@@ -50,6 +50,7 @@
     <div class="shop-body">
       <!-- 中间配置区 -->
       <div class="shop-main" v-loading="pageLoading">
+        <h1 class="sr-only">产品与服务 - 配置选型与报价</h1>
         <div v-if="isMobile" class="mobile-picker-row mobile-picker-row--duo">
           <div class="mobile-picker-col">
             <div class="config-block-title">地区</div>
@@ -910,6 +911,17 @@
           </div>
         </div>
 
+        <div
+          v-if="!pageLoading && pageError"
+          class="catalog-error"
+          role="alert"
+        >
+          <p class="catalog-error__text">产品数据加载失败，请检查网络连接</p>
+          <button type="button" class="catalog-error__retry" @click="retryInit">
+            重新加载
+          </button>
+        </div>
+
         <el-empty
           v-else-if="
             !pageLoading &&
@@ -917,18 +929,19 @@
             !selectedProduct &&
             visibleProducts.length
           "
-          description="请选择需要使用优惠券的商品"
+          description="请选择商品后查看配置与报价"
           style="padding: 60px 0"
         />
 
         <el-empty
-          v-if="
+          v-else-if="
             !pageLoading &&
+            !pageError &&
             !configLoading &&
             !selectedProduct &&
             !visibleProducts.length
           "
-          description="当前分类暂无商品"
+          description="当前分类暂无商品，可切换其他分类查看"
           style="padding: 60px 0"
         />
       </div>
@@ -997,7 +1010,7 @@
           <div class="cost-item">
             <span>基础价格</span><span>¥{{ baseAmount }}</span>
           </div>
-          <div class="cost-item" v-if="Number(setupFee) > 0">
+          <div class="cost-item" v-if="toMoneyNumber(setupFee) > 0">
             <span>开通费</span><span>¥{{ setupFee }}</span>
           </div>
           <div
@@ -1080,12 +1093,26 @@
         >
           <span class="cost-total-label">合计费用</span>
           <div class="cost-price-wrap">
-            <span class="cost-currency">¥</span>
-            <span v-if="quoteLoading" class="cost-amount cost-amount--loading"
-              >计算中</span
-            >
-            <span v-else class="cost-amount">{{ totalPrice }}</span>
-            <span class="cost-cycle">/{{ selectedCycleLabel || "月付" }}</span>
+            <template v-if="quoteError && !quoteLoading">
+              <span class="cost-quote-error">价格计算失败</span>
+              <button
+                type="button"
+                class="cost-quote-retry"
+                @click="retryQuote"
+              >
+                重试
+              </button>
+            </template>
+            <template v-else>
+              <span class="cost-currency">¥</span>
+              <span
+                v-if="quoteLoading"
+                class="cost-amount cost-amount--loading"
+                >计算中</span
+              >
+              <span v-else class="cost-amount">{{ totalPrice }}</span>
+              <span class="cost-cycle">/{{ selectedCycleLabel || "月付" }}</span>
+            </template>
           </div>
         </div>
 
@@ -1113,9 +1140,23 @@
           <div class="allocation-footer-summary">
             <span class="allocation-footer-label">费用合计：</span>
             <div class="allocation-footer-price">
-              <span class="allocation-footer-symbol">¥</span>
-              <span v-if="quoteLoading" class="allocation-footer-num">…</span>
-              <span v-else class="allocation-footer-num">{{ totalPrice }}</span>
+              <template v-if="quoteError && !quoteLoading">
+                <span class="allocation-footer-quote-error">价格计算失败</span>
+                <button
+                  type="button"
+                  class="allocation-footer-quote-retry"
+                  @click="retryQuote"
+                >
+                  重试
+                </button>
+              </template>
+              <template v-else>
+                <span class="allocation-footer-symbol">¥</span>
+                <span v-if="quoteLoading" class="allocation-footer-num">…</span>
+                <span v-else class="allocation-footer-num">{{
+                  totalPrice
+                }}</span>
+              </template>
             </div>
             <span class="allocation-footer-discount-text">
               {{
@@ -1152,7 +1193,7 @@
             @click="handleSubmit"
           >
             <span>{{
-              soldOut ? "已售罄" : submitting ? "提交中..." : "加入购物车"
+              soldOut ? "已售罄" : submitting ? "提交中..." : "立即购买"
             }}</span>
           </button>
         </div>
@@ -1548,7 +1589,10 @@ import MobileOsPicker from "@/components/MobileOsPicker.vue";
 import MobileOptionPicker from "@/components/MobileOptionPicker.vue";
 import MobileRangePicker from "@/components/MobileRangePicker.vue";
 import MobileSheet from "@/components/MobileSheet.vue";
-import { resolveProductDisplayName } from "@/utils/websiteProductConfig";
+import {
+  resolveProductDisplayName,
+  toMoneyNumber,
+} from "@/utils/websiteProductConfig";
 import {
   buildInstanceSpecName,
   buildMachineSpecDisplayName,
@@ -1561,6 +1605,8 @@ import {
 
 const {
   pageLoading,
+  pageError,
+  retryInit,
   configLoading,
   submitting,
   sidebarCollapsed,
@@ -1581,6 +1627,8 @@ const {
   configForm,
   selectedCycle,
   quoteLoading,
+  quoteError,
+  retryQuote,
   productStockLoading,
   productStockError,
   selectedProductDisplayName,
@@ -1705,9 +1753,26 @@ watch([isMobile, selectedProduct], () => {
   nextTick(setupAllocationFooterObserver);
 });
 
+// 跨断点切换为桌面形态时，收起 view 层的移动抽屉，避免 DOM 被 v-if 隐藏后状态残留
+watch(isMobile, (mobile) => {
+  if (!mobile) {
+    mobileOsDrawer.value = false;
+    mobileIntroDrawer.value = false;
+    mobileCostDrawer.value = false;
+    mobileCouponDrawer.value = false;
+  }
+});
+
 function formatMoneyText(value) {
   const amount = Number(value || 0);
-  return amount.toFixed(2);
+  if (Number.isNaN(amount)) {
+    return "0.00";
+  }
+  // 千分位仅用于展示
+  return amount.toLocaleString("zh-CN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }
 
 function formatProductListPrice(product) {
@@ -1907,8 +1972,9 @@ function sortMobileSpecRows(left, right) {
 
 const mobileCostRows = computed(() => {
   const rows = [];
+  // baseAmount/setupFee 可能是千分位展示文本，经 toMoneyNumber 回读避免 NaN
   const productBaseAmount =
-    Number(baseAmount.value || 0) + Number(setupFee.value || 0);
+    toMoneyNumber(baseAmount.value) + toMoneyNumber(setupFee.value);
 
   if (selectedProduct.value) {
     rows.push({

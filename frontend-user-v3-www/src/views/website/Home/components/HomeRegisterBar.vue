@@ -7,7 +7,7 @@
         <span class="register-bar__decor-item register-bar__decor-item--c"></span>
       </div>
       <div class="register-bar__inner container">
-        <h3 class="register-bar__title">现在注册，开启您的互联网高速稳定之旅！</h3>
+        <h2 class="register-bar__title">现在注册，开启您的互联网高速稳定之旅！</h2>
         <button
           type="button"
           class="register-bar__button"
@@ -45,7 +45,7 @@ function goRegister() {
   border-radius: 14px;
   width: min(1200px, calc(100% - 48px));
   margin: 0 auto;
-  background: #1e49cf;
+  background: $color-primary;
   box-shadow: 0 24px 48px rgba(27, 58, 166, 0.22);
 
   /* 9.1 Visual Mode: Grain Texture */
@@ -125,7 +125,7 @@ function goRegister() {
   border: none;
   border-radius: 6px;
   background: #ffffff;
-  color: #2f5ef3; /* Using blue for primary as per AGENTS.md */
+  color: $color-primary; /* Using blue for primary as per AGENTS.md */
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;

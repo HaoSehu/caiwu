@@ -8,6 +8,11 @@
         <el-button type="primary" @click="router.push('/')">返回首页</el-button>
         <el-button @click="router.back()">返回上一页</el-button>
       </div>
+      <div class="not-found-alt-links">
+        <router-link to="/products">浏览产品</router-link>
+        <router-link to="/help">帮助中心</router-link>
+        <router-link to="/notices">站点公告</router-link>
+      </div>
     </div>
   </div>
 </template>
@@ -38,7 +43,7 @@ const router = useRouter()
 
 .not-found-code {
   margin: 0 0 12px;
-  color: #2f5ef3;
+  color: $color-primary;
   font-size: 56px;
   font-weight: 700;
   line-height: 1;
@@ -61,5 +66,23 @@ p {
   justify-content: center;
   gap: 12px;
   margin-top: 24px;
+}
+
+.not-found-alt-links {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  margin-top: 20px;
+  font-size: 13px;
+
+  a {
+    color: $text-color-secondary;
+    text-decoration: none;
+    transition: color $motion-fast ease;
+  }
+
+  a:hover {
+    color: $color-primary;
+  }
 }
 </style>

@@ -14,7 +14,8 @@ export function createClientRouter() {
       const prefersReducedMotion = typeof window !== 'undefined'
         && typeof window.matchMedia === 'function'
         && window.matchMedia('(prefers-reduced-motion: reduce)').matches
-      const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768
+      // 断点与 WebsiteLayout 的 isMobile 判定保持一致（960）
+      const isMobile = typeof window !== 'undefined' && window.innerWidth <= 960
 
       return {
         top: 0,

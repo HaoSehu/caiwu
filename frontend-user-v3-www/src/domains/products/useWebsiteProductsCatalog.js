@@ -50,6 +50,7 @@ export function useWebsiteProductsCatalog({
   const route = useRoute();
   const router = useRouter();
   const pageLoading = ref(false);
+  const pageError = ref(false);
   const sidebarCollapsed = ref(false);
   const isMobile = ref(false);
   const mobileCategoryDrawer = ref(false);
@@ -346,6 +347,7 @@ export function useWebsiteProductsCatalog({
   async function loadRootGroups(options = {}) {
     const token = ++rootToken;
     pageLoading.value = true;
+    pageError.value = false;
 
     try {
       const typeValue = activeTypeValue.value || "";
@@ -380,6 +382,15 @@ export function useWebsiteProductsCatalog({
         productsByGroup.value = {};
         childGroups.value = [];
         resetSelectedProduct({ syncRoute: shouldSyncRoute(options) });
+      }
+    } catch (error) {
+      // 失败态与空态分离：目录拉取失败必须显式呈现并允许重试，
+      // 不能落入「当前分类暂无商品」的假空态
+      if (error?.code === "ERR_CANCELED" || error?.name === "CanceledError") {
+        return;
+      }
+      if (token === rootToken) {
+        pageError.value = true;
       }
     } finally {
       if (token === rootToken) {
@@ -570,6 +581,7 @@ export function useWebsiteProductsCatalog({
 
   async function init() {
     pageLoading.value = true;
+    pageError.value = false;
 
     try {
       const linked = await initWithAggregatedApi();
@@ -582,6 +594,9 @@ export function useWebsiteProductsCatalog({
           void syncSelectionRoute();
         }
       }
+    } catch {
+      // init 内任何聚合/兜底请求失败都收敛为页面错误态，避免 unhandled rejection
+      pageError.value = true;
     } finally {
       pageLoading.value = false;
     }
@@ -741,6 +756,8 @@ export function useWebsiteProductsCatalog({
 
   return {
     pageLoading,
+    pageError,
+    retryInit: init,
     sidebarCollapsed,
     isMobile,
     mobileCategoryDrawer,

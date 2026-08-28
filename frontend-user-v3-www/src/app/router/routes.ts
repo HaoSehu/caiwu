@@ -117,12 +117,13 @@ export const clientRoutes: RouteRecordRaw[] = [
         component: lazyRouteView(() => import('@/pages/website/help-detail/index.vue')),
         meta: { title: '帮助详情' },
       },
+      {
+        // 404 兜底放在布局内，保留站头/页脚导航上下文
+        path: ':pathMatch(.*)*',
+        name: 'WwwNotFound',
+        component: lazyRouteView(() => import('@/pages/common/NotFound.vue')),
+        meta: { title: '404', robots: 'noindex,nofollow' },
+      },
     ],
-  },
-  {
-    path: '/:pathMatch(.*)*',
-    name: 'WwwNotFound',
-    component: lazyRouteView(() => import('@/pages/common/NotFound.vue')),
-    meta: { title: '404', robots: 'noindex,nofollow' },
   },
 ]

@@ -55,6 +55,7 @@
         type="range"
         class="mrange-slider"
         :class="{ 'is-disabled': isFixed }"
+        :aria-label="label"
         :min="sliderMin"
         :max="sliderMax"
         :step="stepSize"
@@ -173,8 +174,12 @@ function step(delta) {
   height: 4px;
   background: #e5eaf3;
   border-radius: 2px;
-  outline: none;
   cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid $color-primary;
+    outline-offset: 4px;
+  }
 
   &::-webkit-slider-thumb {
     -webkit-appearance: none;

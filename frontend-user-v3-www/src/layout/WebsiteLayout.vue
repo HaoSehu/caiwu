@@ -1,7 +1,11 @@
 <template>
   <div class="website-layout">
     <a class="skip-to-content" href="#main-content">跳到主内容</a>
-    <header class="site-header" :class="{ scrolled: headerScrolled }">
+    <header
+      class="site-header"
+      :class="{ scrolled: headerScrolled }"
+      @keydown.esc="closeMegaMenu"
+    >
       <div class="container header-bar">
         <router-link to="/" class="logo" :aria-label="appStore.siteName">
           <img
@@ -18,7 +22,6 @@
         <nav
           class="main-nav"
           @mouseleave="scheduleCloseMegaMenu()"
-          @keydown.esc="closeMegaMenu"
           aria-label="主导航"
         >
           <router-link
@@ -29,7 +32,7 @@
             :class="{ 'is-active': isNavActive(item) }"
             @mouseenter="handleNavHover(item)"
             @focus="item.menuId && openMegaMenu(item.menuId)"
-            :aria-haspopup="item.menuId ? 'menu' : undefined"
+            :aria-haspopup="item.menuId ? 'true' : undefined"
             :aria-expanded="
               item.menuId ? activeMenuId === item.menuId : undefined
             "
@@ -60,6 +63,8 @@
                     class="mega-type-btn"
                     :class="{ active: navActiveTypeValue === type.value }"
                     @mouseenter="navActivateType(type.value)"
+                    @focus="navActivateType(type.value)"
+                    @click="navActivateType(type.value)"
                   >
                     <span class="mega-type-btn__label">{{ type.label }}</span>
                     <span class="mega-type-btn__count">{{
@@ -95,6 +100,8 @@
                     class="mega-type-btn"
                     :class="{ active: !navNoticesActiveCategory }"
                     @mouseenter="navNoticesActivateCategory(null)"
+                    @focus="navNoticesActivateCategory(null)"
+                    @click="navNoticesActivateCategory(null)"
                   >
                     <span class="mega-type-btn__label">全部公告</span>
                     <span class="mega-type-btn__count">{{
@@ -108,6 +115,8 @@
                     class="mega-type-btn"
                     :class="{ active: navNoticesActiveCategory === cat.label }"
                     @mouseenter="navNoticesActivateCategory(cat.label)"
+                    @focus="navNoticesActivateCategory(cat.label)"
+                    @click="navNoticesActivateCategory(cat.label)"
                   >
                     <span class="mega-type-btn__label">{{ cat.label }}</span>
                     <span class="mega-type-btn__count">{{ cat.count }}</span>
@@ -144,6 +153,8 @@
                     class="mega-type-btn"
                     :class="{ active: !navHelpActiveCategory }"
                     @mouseenter="navHelpActivateCategory(null)"
+                    @focus="navHelpActivateCategory(null)"
+                    @click="navHelpActivateCategory(null)"
                   >
                     <span class="mega-type-btn__label">全部文档</span>
                     <span class="mega-type-btn__count">{{
@@ -157,6 +168,8 @@
                     class="mega-type-btn"
                     :class="{ active: navHelpActiveCategory === cat.label }"
                     @mouseenter="navHelpActivateCategory(cat.label)"
+                    @focus="navHelpActivateCategory(cat.label)"
+                    @click="navHelpActivateCategory(cat.label)"
                   >
                     <span class="mega-type-btn__label">{{ cat.label }}</span>
                     <span class="mega-type-btn__count">{{ cat.count }}</span>
@@ -188,8 +201,8 @@
 
               <template v-else-if="activeMenuId === 'about'">
                 <div class="mega-menu__types">
-                  <div class="mega-type-heading">帮助中心</div>
-                  <div class="mega-type-desc">快速获取联系方式与常用入口</div>
+                  <div class="mega-type-heading">支持</div>
+                  <div class="mega-type-desc">联系方式与常用服务入口</div>
                 </div>
                 <div class="mega-menu__groups">
                   <template v-for="link in aboutQuickLinks" :key="link.to">
@@ -681,6 +694,7 @@
                 :src="logoSrc"
                 :alt="appStore.siteName"
                 class="footer-logo-image"
+                loading="lazy"
                 @error="handleFooterLogoError"
               />
               <span v-if="footerLogoLoadFailed" class="footer-logo-fallback">{{
@@ -700,7 +714,7 @@
 
           <div class="footer-columns">
             <div class="footer-col">
-              <h4>产品</h4>
+              <h3>产品</h3>
               <router-link
                 v-for="item in seoLandingFooterLinks"
                 :key="item.to"
@@ -711,7 +725,7 @@
             </div>
 
             <div class="footer-col">
-              <h4>解决方案</h4>
+              <h3>解决方案</h3>
               <router-link to="/products">电商行业</router-link>
               <router-link to="/products">游戏行业</router-link>
               <router-link to="/products">金融行业</router-link>
@@ -719,15 +733,17 @@
             </div>
 
             <div class="footer-col">
-              <h4>支持</h4>
+              <h3>支持</h3>
               <router-link to="/notices">站点公告</router-link>
               <router-link to="/help">帮助中心</router-link>
               <a :href="consoleUrl('/client/tickets')">工单系统</a>
               <router-link to="/about">关于我们</router-link>
+              <router-link to="/terms">服务条款</router-link>
+              <router-link to="/privacy">隐私政策</router-link>
             </div>
 
             <div class="footer-col">
-              <h4>账户</h4>
+              <h3>账户</h3>
               <a :href="consoleUrl('/client/register')">免费注册</a>
               <a :href="consoleUrl('/client/login')">账户登录</a>
               <a :href="consoleUrl('/client/dashboard')">进入控制台</a>
@@ -749,7 +765,13 @@
               >增值电信业务经营许可证：{{ appStore.valueAddedLicense }}</span
             >
             <span v-if="appStore.icpRecord"
-              >ICP 备案号：{{ appStore.icpRecord }}</span
+              ><a
+                href="https://beian.miit.gov.cn/"
+                target="_blank"
+                rel="noopener nofollow"
+                class="footer-icp-link"
+                >ICP 备案号：{{ appStore.icpRecord }}</a
+              ></span
             >
           </p>
         </div>
@@ -898,8 +920,44 @@ function closeUserMenusOnOutside(event) {
 
 function closeUserMenusOnEscape(event) {
   if (event.key === "Escape") {
-    userMenuOpen.value = false;
-    mobileUserMenuOpen.value = false;
+    if (userMenuOpen.value) {
+      userMenuOpen.value = false;
+      userMenuTriggerRef.value?.focus();
+    }
+    if (mobileUserMenuOpen.value) {
+      mobileUserMenuOpen.value = false;
+      mobileUserMenuTriggerRef.value?.focus();
+    }
+  }
+}
+
+// 移动抽屉声明了 aria-modal，键盘焦点必须困在面板内：Tab 在首尾元素间循环，
+// 焦点意外逃逸时（如面板内容动态增删）也拉回面板，Esc 兜底关闭。
+function handleMobileMenuKeydown(event) {
+  if (!mobileNavVisible.value) return;
+  if (event.key === "Escape") {
+    closeMobileMenu();
+    return;
+  }
+  if (event.key !== "Tab") return;
+  const panel = document.getElementById("mobile-menu-panel");
+  if (!panel) return;
+  const focusables = panel.querySelectorAll(
+    'button, a[href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+  );
+  if (!focusables.length) return;
+  const first = focusables[0];
+  const last = focusables[focusables.length - 1];
+  const active = document.activeElement;
+  const inside = panel.contains(active);
+  if (event.shiftKey) {
+    if (active === first || !inside) {
+      event.preventDefault();
+      last.focus();
+    }
+  } else if (active === last || !inside) {
+    event.preventDefault();
+    first.focus();
   }
 }
 
@@ -929,11 +987,6 @@ function closeMegaMenu() {
 
 function handleNavHover(item) {
   if (item.menuId) {
-    const suppressOnActive = item.menuId !== "about";
-    if (suppressOnActive && isNavActive(item)) {
-      scheduleCloseMegaMenu();
-      return;
-    }
     // 延迟打开，避免鼠标快速滑过导航时触发菜单与接口拉取
     clearTimeout(megaMenuOpenTimer);
     megaMenuOpenTimer = setTimeout(() => {
@@ -997,7 +1050,7 @@ const navigationItems = [
     match: ["WwwHelp", "WwwHelpDetail"],
     menuId: "help",
   },
-  { to: "/about", label: "其他", match: ["WwwAbout"], menuId: "about" },
+  { to: "/about", label: "支持", match: ["WwwAbout"], menuId: "about" },
 ];
 
 const aboutQuickLinks = [
@@ -1069,6 +1122,8 @@ function handleResize() {
   if (!isMobile.value) {
     closeMobileMenu();
   }
+  // 跨断点时隐藏态残留的 mega menu（DOM 被 media query 隐藏但状态仍在）
+  closeMegaMenu();
 }
 
 watch(
@@ -1107,6 +1162,7 @@ onMounted(() => {
   window.addEventListener("resize", handleResize, { passive: true });
   document.addEventListener("pointerdown", closeUserMenusOnOutside);
   document.addEventListener("keydown", closeUserMenusOnEscape);
+  document.addEventListener("keydown", handleMobileMenuKeydown);
 });
 
 onBeforeUnmount(() => {
@@ -1114,6 +1170,7 @@ onBeforeUnmount(() => {
   window.removeEventListener("resize", handleResize);
   document.removeEventListener("pointerdown", closeUserMenusOnOutside);
   document.removeEventListener("keydown", closeUserMenusOnEscape);
+  document.removeEventListener("keydown", handleMobileMenuKeydown);
   if (scrollRaf) cancelAnimationFrame(scrollRaf);
   scrollRaf = null;
   document.body.style.overflow = "";
@@ -1268,6 +1325,7 @@ onBeforeUnmount(() => {
   max-height: calc(100vh - 80px);
   max-height: calc(100dvh - 80px);
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .mega-menu__inner {
@@ -1356,7 +1414,7 @@ onBeforeUnmount(() => {
 
 .mega-menu__groups {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0;
   padding: 8px 0;
   align-content: start;
@@ -1366,6 +1424,7 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-width: 0;
   padding: 14px 20px;
   text-decoration: none;
   transition: background 0.14s ease;
@@ -1380,6 +1439,9 @@ onBeforeUnmount(() => {
   font-size: 13px;
   font-weight: 600;
   transition: color 0.14s ease;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .mega-group-card:hover .mega-group-card__name {
@@ -1420,6 +1482,29 @@ onBeforeUnmount(() => {
 .mega-menu-leave-to {
   opacity: 0;
   transform: translateY(-6px);
+}
+
+// 同布局子页面切换过渡（router-view transition name="page-fade"）：
+// 进场 ease-out 上移入场，退场 ease-in 淡出
+.page-fade-enter-active {
+  transition:
+    opacity 0.18s ease-out,
+    transform 0.18s ease-out;
+}
+
+.page-fade-leave-active {
+  transition:
+    opacity 0.14s ease-in,
+    transform 0.14s ease-in;
+}
+
+.page-fade-enter-from {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+.page-fade-leave-to {
+  opacity: 0;
 }
 
 .header-actions {
@@ -1487,7 +1572,7 @@ onBeforeUnmount(() => {
 
   .header-user-arrow {
     font-size: 12px;
-    color: #9ca3af;
+    color: #6b7280;
     transition:
       transform 0.25s ease,
       color 0.16s ease;
@@ -1702,8 +1787,8 @@ onBeforeUnmount(() => {
   display: none;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   color: $text-color-primary;
   cursor: pointer;
   flex-shrink: 0;
@@ -1716,8 +1801,8 @@ onBeforeUnmount(() => {
   display: none;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   color: #374151;
   text-decoration: none;
   flex-shrink: 0;
@@ -1801,6 +1886,7 @@ onBeforeUnmount(() => {
   background: $bg-color-card;
   border-bottom: 1px solid $divider-color;
   overflow-y: auto;
+  overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -1934,7 +2020,7 @@ onBeforeUnmount(() => {
 
 .mobile-third-level-item {
   display: block;
-  padding: 8px 4px;
+  padding: 12px 4px;
   color: $text-color-secondary;
   font-size: 13px;
   text-decoration: none;
@@ -1988,7 +2074,7 @@ onBeforeUnmount(() => {
 .mobile-left-login-btn {
   display: block;
   width: 100%;
-  padding: 8px 0;
+  padding: 12px 0;
   text-align: center;
   font-size: 13px;
   font-weight: 500;
@@ -2036,7 +2122,7 @@ onBeforeUnmount(() => {
   margin-top: 16px;
   color: $text-color-secondary;
   font-size: 13px;
-  line-height: 1.85;
+  line-height: 1.75;
 }
 
 .footer-logo {
@@ -2106,12 +2192,12 @@ onBeforeUnmount(() => {
 .footer-col {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 4px;
   min-width: 0;
 }
 
-.footer-col h4 {
-  margin: 0 0 4px;
+.footer-col h3 {
+  margin: 0 0 8px;
   color: $text-color-primary;
   font-size: 14px;
   font-weight: 600;
@@ -2120,6 +2206,8 @@ onBeforeUnmount(() => {
 .footer-col a {
   color: $text-color-secondary;
   font-size: 13px;
+  line-height: 1;
+  padding: 6px 0;
   text-decoration: none;
   transition: color 0.16s ease;
 }
@@ -2152,6 +2240,15 @@ onBeforeUnmount(() => {
   color: $text-color-placeholder;
 }
 
+.footer-icp-link {
+  color: inherit;
+  transition: color 0.16s ease;
+}
+
+.footer-icp-link:hover {
+  color: $color-primary;
+}
+
 .mobile-menu-mask-enter-active,
 .mobile-menu-mask-leave-active,
 .mobile-menu-panel-enter-active,
@@ -2180,6 +2277,23 @@ onBeforeUnmount(() => {
 
   .main-nav__link {
     padding: 0 12px;
+  }
+
+  // 961~1180 收起桌面登录入口时，同步切换为用户图标，避免该区间未登录用户无登录入口
+  .user-menu {
+    display: none;
+  }
+
+  .header-register {
+    display: none;
+  }
+
+  .mobile-user-menu {
+    display: block;
+  }
+
+  .mobile-user-icon {
+    display: inline-flex;
   }
 }
 
@@ -2301,7 +2415,7 @@ onBeforeUnmount(() => {
     gap: 18px 12px;
   }
 
-  .footer-col h4 {
+  .footer-col h3 {
     font-size: 13px;
   }
 

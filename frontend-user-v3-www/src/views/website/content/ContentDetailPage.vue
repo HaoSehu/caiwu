@@ -1,10 +1,10 @@
 <template>
   <div class="content-reader-page">
-    <div class="reader-breadcrumb">
+    <nav class="reader-breadcrumb" aria-label="面包屑">
       <router-link class="reader-breadcrumb__link" :to="backToListRoute">
         {{ config.pageTitle }}
       </router-link>
-      <el-icon><ArrowRight /></el-icon>
+      <el-icon aria-hidden="true"><ArrowRight /></el-icon>
       <router-link
         v-if="currentCategoryId"
         class="reader-breadcrumb__link"
@@ -15,11 +15,11 @@
       <span v-else class="reader-breadcrumb__text">{{
         currentCategoryName
       }}</span>
-      <el-icon><ArrowRight /></el-icon>
-      <span class="reader-breadcrumb__current">
+      <el-icon aria-hidden="true"><ArrowRight /></el-icon>
+      <span class="reader-breadcrumb__current" aria-current="page">
         {{ currentArticle?.title || config.detailTitle }}
       </span>
-    </div>
+    </nav>
 
     <div v-loading="loading" class="reader-layout">
       <section class="reader-main">
@@ -42,6 +42,18 @@
               v-html="articleContentHtml"
             />
           </template>
+
+          <div v-else-if="!loading && loadFailed" class="reader-failed">
+            <p class="reader-failed__text">内容加载失败，请检查网络连接</p>
+            <div class="reader-failed__actions">
+              <el-button type="primary" @click="retryLoadArticle"
+                >重新加载</el-button
+              >
+              <el-button @click="router.push(backToListRoute)">{{
+                config.pageTitle
+              }}</el-button>
+            </div>
+          </div>
 
           <el-empty
             v-else-if="!loading"
@@ -213,6 +225,7 @@ function applyArticleMeta(article) {
 }
 
 const loading = ref(false);
+const loadFailed = ref(false);
 const categories = ref([]);
 const currentArticle = ref(null);
 const currentCategoryId = ref(null);
@@ -305,18 +318,27 @@ async function loadArticleDetail(articleId) {
     }
     currentArticle.value = res.data || null;
     currentCategoryId.value = Number(res.data?.category_id || 0) || null;
+    loadFailed.value = false;
     applyArticleMeta(res.data);
   } catch {
-    // 请求失败：仅当仍是当前请求时清空，避免残留上一篇文章
+    // 请求失败：仅当仍是当前请求时清空，避免残留上一篇文章；
+    // 失败态与空态分离，允许用户重试
     if (token === articleLoadToken) {
       currentArticle.value = null;
       currentCategoryId.value = null;
+      loadFailed.value = true;
     }
   }
 }
 
+function retryLoadArticle() {
+  loadFailed.value = false;
+  syncPage();
+}
+
 async function syncPage() {
   loading.value = true;
+  loadFailed.value = false;
   // 请求前清空旧文章，避免快速切换时旧文章短暂残留
   currentArticle.value = null;
   currentCategoryId.value = null;
@@ -484,7 +506,7 @@ watch(
 .reader-content {
   color: $text-color-primary;
   font-size: 15px;
-  line-height: 2;
+  line-height: 1.8;
   word-break: break-word;
 
   :deep(h1),
@@ -569,6 +591,25 @@ watch(
   border: 1px solid $border-color;
   background: $bg-color-card;
   padding: 48px 20px;
+}
+
+.reader-failed {
+  border: 1px solid $border-color;
+  background: $bg-color-card;
+  padding: 48px 20px;
+  text-align: center;
+}
+
+.reader-failed__text {
+  margin: 0 0 16px;
+  color: $text-color-secondary;
+  font-size: 14px;
+}
+
+.reader-failed__actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
 }
 
 .reader-sidebar {

@@ -15,16 +15,9 @@
       </div>
 
       <div class="seo-container seo-hero__inner">
-        <nav class="seo-hero__nav" aria-label="核心卖点">
-          <a
-            v-for="(item, index) in heroNavItems"
-            :key="item"
-            :class="{ 'is-active': index === 0 }"
-            href="#seo-products"
-          >
-            {{ item }}
-          </a>
-        </nav>
+        <ul class="seo-hero__nav" aria-label="核心卖点">
+          <li v-for="item in heroNavItems" :key="item">{{ item }}</li>
+        </ul>
 
         <div class="seo-hero__content">
           <p class="seo-hero__kicker">
@@ -86,16 +79,16 @@
           <router-link to="/products">查看全部产品 &gt;</router-link>
         </div>
 
-        <div class="seo-category-tabs" aria-label="产品分类">
-          <button
+        <div class="seo-category-tabs" aria-label="产品能力标签">
+          <span
             v-for="tab in productTabs"
             :key="tab"
             :class="{ 'is-active': tab === '推荐' }"
-            type="button"
+            class="seo-category-tabs__tag"
           >
             <span class="seo-category-tabs__icon" aria-hidden="true"></span>
             {{ tab }}
-          </button>
+          </span>
         </div>
 
         <div class="seo-product-grid">
@@ -122,7 +115,7 @@
               <router-link class="is-primary" :to="page.cta.primaryTo"
                 >立即选购</router-link
               >
-              <router-link to="/help">产品详情</router-link>
+              <router-link to="/help">帮助文档</router-link>
             </div>
           </article>
         </div>
@@ -517,6 +510,7 @@ watch(
   display: grid;
   gap: 30px;
   padding-left: 12px;
+  list-style: none;
 }
 
 .seo-hero__nav::after {
@@ -534,7 +528,7 @@ watch(
   content: "";
 }
 
-.seo-hero__nav a {
+.seo-hero__nav li {
   position: relative;
   display: flex;
   align-items: center;
@@ -543,21 +537,6 @@ watch(
   font-size: 14px;
   font-weight: 600;
   line-height: 1.5;
-  text-decoration: none;
-}
-
-.seo-hero__nav a.is-active {
-  color: #165dff;
-}
-
-.seo-hero__nav a.is-active::after {
-  position: absolute;
-  right: -36px;
-  width: 3px;
-  height: 42px;
-  border-radius: 999px;
-  background: #165dff;
-  content: "";
 }
 
 .seo-hero__content {
@@ -801,27 +780,26 @@ watch(
 
 .seo-category-tabs {
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
   gap: 42px;
   margin-top: 34px;
 }
 
-.seo-category-tabs button {
+// 纯能力标签（非交互控件）：移除按钮语义后改为标签样式
+.seo-category-tabs__tag {
   display: grid;
   justify-items: center;
   gap: 10px;
   min-width: 76px;
   min-height: 72px;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  background: transparent;
   color: #4f5f75;
   font-size: 14px;
-  cursor: pointer;
+  font-weight: 600;
+  text-align: center;
 }
 
-.seo-category-tabs button.is-active {
-  border-bottom-color: #165dff;
+.seo-category-tabs__tag.is-active {
   color: #165dff;
   font-weight: 700;
 }
@@ -1197,12 +1175,12 @@ watch(
     padding: 0;
   }
 
-  .seo-hero__nav::after,
-  .seo-hero__nav a.is-active::after {
+  // 桌面态的分隔竖线在横向滚动布局下成为多余装饰，窄屏隐藏
+  .seo-hero__nav::after {
     display: none;
   }
 
-  .seo-hero__nav a {
+  .seo-hero__nav li {
     flex: 0 0 auto;
   }
 
@@ -1291,15 +1269,18 @@ watch(
     font-size: 24px;
   }
 
+  // 横向滚动标签带：禁止换行以保持滚动意图（桌面基础样式允许 wrap）
   .seo-category-tabs {
+    flex-wrap: nowrap;
     justify-content: flex-start;
     gap: 18px;
     overflow-x: auto;
     padding-bottom: 2px;
   }
 
-  .seo-category-tabs button {
+  .seo-category-tabs__tag {
     flex: 0 0 72px;
+    min-height: 64px;
   }
 
   .seo-product-card {

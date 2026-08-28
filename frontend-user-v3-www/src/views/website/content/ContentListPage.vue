@@ -27,6 +27,7 @@
                 v-model="keyword"
                 :placeholder="config.searchPlaceholder"
                 class="hero-search__input"
+                autocomplete="off"
                 @keyup.enter="submitSearch"
                 @clear="submitSearch"
                 clearable
@@ -97,7 +98,23 @@
             </article>
           </template>
 
-          <el-empty v-else-if="!loading" :description="config.emptyText" />
+          <div v-else-if="!loading" class="list-empty">
+            <el-empty
+              :description="
+                keyword.trim()
+                  ? `未找到与“${keyword.trim()}”相关的内容`
+                  : config.emptyText
+              "
+            />
+            <div class="list-empty__actions">
+              <el-button v-if="keyword.trim()" @click="clearSearch"
+                >清除搜索</el-button
+              >
+              <el-button type="primary" @click="router.push('/products')"
+                >查看产品</el-button
+              >
+            </div>
+          </div>
 
           <div v-if="total > pageSize" class="list-panel__pager">
             <el-pagination
@@ -389,6 +406,12 @@ function applyKeyword(value) {
   submitSearch();
 }
 
+// 清除搜索并回到无条件列表
+function clearSearch() {
+  keyword.value = "";
+  submitSearch();
+}
+
 function goShortcut(path) {
   if (path === route.path) {
     return;
@@ -610,21 +633,29 @@ onBeforeUnmount(() => {
   font-weight: 700;
   line-height: 1.5;
   transition: color $motion-fast ease;
+  // 超长标题限两行，避免条目高度不可控
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
 
   &:hover {
     color: $color-primary;
   }
 }
 
+// 置顶徽标：按设计基线使用浅底标签（实底红白字对比 3.76 不达标）
 .list-item__badge {
   display: inline-flex;
   align-items: center;
   height: 24px;
   padding: 0 10px;
-  background: $color-danger;
-  color: #fff;
+  background: $color-danger-soft;
+  color: $color-danger-text;
   font-size: 12px;
   font-weight: 600;
+  border-radius: 2px;
 }
 
 .list-item__summary {
@@ -658,6 +689,17 @@ onBeforeUnmount(() => {
     justify-content: center;
     gap: 8px;
   }
+}
+
+.list-empty {
+  padding: 40px 20px;
+}
+
+.list-empty__actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-top: -12px;
 }
 
 .content-sidebar {
@@ -748,18 +790,19 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
 
   &.top-1 {
+    // 12px 文字需 ≥4.5:1，原 #d97706/#3b82f6/#b45309 不达标，加深文字色
     background: #fff0d9;
-    color: #d97706;
+    color: #92400e;
   }
 
   &.top-2 {
     background: #e9f1fb;
-    color: #3b82f6;
+    color: #1d4ed8;
   }
 
   &.top-3 {
     background: #f7e8de;
-    color: #b45309;
+    color: #7c2d12;
   }
 }
 

@@ -12,7 +12,7 @@
         </p>
       </header>
 
-      <div class="news-board">
+      <div v-if="featuredNotice || newsListEntries.length" class="news-board">
         <button
           v-if="featuredNotice"
           type="button"
@@ -72,13 +72,23 @@
           >
             <strong class="news-list__title">{{ item.title }}</strong>
             <div class="news-list__meta">
-              <el-icon><Calendar /></el-icon>
+              <el-icon aria-hidden="true"><Calendar /></el-icon>
               <span>{{
                 formatNoticeDate(item.publish_at || item.updated_at)
               }}</span>
             </div>
           </button>
         </div>
+      </div>
+
+      <div
+        v-if="!featuredNotice && !newsListEntries.length"
+        class="news-section__empty"
+      >
+        暂无动态，您可以
+        <router-link to="/notices" class="news-section__more"
+          >查看全部公告</router-link
+        >
       </div>
 
       <div v-if="promoEntries.length" class="news-promos">
@@ -231,18 +241,25 @@ function openNotice(item) {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  color: #2f5ef3;
+  color: $color-primary;
   font-weight: 500;
   text-decoration: none;
   transition: color 0.22s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .news-section__more:hover {
-  color: #2754e3;
+  color: $color-primary-hover;
 }
 
 .news-section__more .el-icon {
   font-size: 12px;
+}
+
+.news-section__empty {
+  padding: 40px 0;
+  color: $text-color-secondary;
+  font-size: 13px;
+  text-align: center;
 }
 
 .news-board {
@@ -287,7 +304,7 @@ function openNotice(item) {
       rgba(255, 255, 255, 0.18),
       transparent 55%
     ),
-    #1e49cf;
+    $color-primary;
   overflow: hidden;
 }
 
@@ -506,7 +523,7 @@ function openNotice(item) {
   padding: 0 10px;
   border-radius: 4px;
   background: rgba(22, 93, 255, 0.12);
-  color: #2f5ef3;
+  color: $color-primary;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -549,7 +566,7 @@ function openNotice(item) {
   height: 30px;
   border-radius: 50%;
   background: rgba(22, 93, 255, 0.1);
-  color: #2f5ef3;
+  color: $color-primary;
   font-size: 12px;
   transition:
     background 0.22s cubic-bezier(0.22, 1, 0.36, 1),
@@ -557,7 +574,7 @@ function openNotice(item) {
 }
 
 .news-promo:hover .news-promo__arrow {
-  background: #2f5ef3;
+  background: $color-primary;
   color: #ffffff;
   transform: translateX(2px);
 }

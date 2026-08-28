@@ -322,7 +322,7 @@ defineProps({
   justify-content: space-between;
   gap: 24px;
   padding: 28px 40px;
-  background: #1e49cf;
+  background: $color-primary;
   border: none;
   box-shadow: 0 24px 48px rgba(27, 58, 166, 0.18);
 }

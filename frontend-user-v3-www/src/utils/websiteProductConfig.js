@@ -63,7 +63,17 @@ export function normalizeMoneyText(value) {
     return "0.00";
   }
 
-  return Number(value).toFixed(2);
+  // 千分位仅用于展示，调用方不得将返回值回读为数值；数值回读用 toMoneyNumber
+  return Number(value).toLocaleString("zh-CN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+// 千分位展示文本安全回读为数值（"1,234.00" → 1234）
+export function toMoneyNumber(value) {
+  const num = Number(String(value ?? "").replace(/,/g, ""));
+  return Number.isFinite(num) ? num : 0;
 }
 
 export function parseField(item = {}) {

@@ -402,7 +402,7 @@
                   <span>基础价格</span>
                   <span>¥{{ baseAmount }}</span>
                 </div>
-                <div class="cost-item" v-if="Number(setupFee) > 0">
+                <div class="cost-item" v-if="toMoneyNumber(setupFee) > 0">
                   <span>开通费</span>
                   <span>¥{{ setupFee }}</span>
                 </div>
@@ -512,16 +512,28 @@
             >
               <span class="cost-total-label">合计费用</span>
               <div class="cost-price-wrap">
-                <span class="cost-currency">¥</span>
-                <span
-                  v-if="quoteLoading"
-                  class="cost-amount cost-amount--loading"
-                  >计算中</span
-                >
-                <span v-else class="cost-amount">{{ totalPrice }}</span>
-                <span class="cost-cycle"
-                  >/{{ selectedCycleLabel || "月付" }}</span
-                >
+                <template v-if="quoteError && !quoteLoading">
+                  <span class="cost-quote-error">价格计算失败</span>
+                  <button
+                    type="button"
+                    class="cost-quote-retry"
+                    @click="retryQuote"
+                  >
+                    重试
+                  </button>
+                </template>
+                <template v-else>
+                  <span class="cost-currency">¥</span>
+                  <span
+                    v-if="quoteLoading"
+                    class="cost-amount cost-amount--loading"
+                    >计算中</span
+                  >
+                  <span v-else class="cost-amount">{{ totalPrice }}</span>
+                  <span class="cost-cycle"
+                    >/{{ selectedCycleLabel || "月付" }}</span
+                  >
+                </template>
               </div>
             </div>
 
@@ -543,12 +555,26 @@
           <div class="allocation-footer-main">
             <div class="allocation-footer-label">合计费用</div>
             <div class="allocation-footer-price">
-              <span class="allocation-footer-symbol">¥</span>
-              <span class="allocation-footer-num" v-if="quoteLoading">…</span>
-              <span class="allocation-footer-num" v-else>{{ totalPrice }}</span>
-              <span class="allocation-footer-cycle"
-                >/{{ selectedCycleLabel || "月付" }}</span
-              >
+              <template v-if="quoteError && !quoteLoading">
+                <span class="allocation-footer-quote-error">价格计算失败</span>
+                <button
+                  type="button"
+                  class="allocation-footer-quote-retry"
+                  @click="retryQuote"
+                >
+                  重试
+                </button>
+              </template>
+              <template v-else>
+                <span class="allocation-footer-symbol">¥</span>
+                <span class="allocation-footer-num" v-if="quoteLoading">…</span>
+                <span class="allocation-footer-num" v-else>{{
+                  totalPrice
+                }}</span>
+                <span class="allocation-footer-cycle"
+                  >/{{ selectedCycleLabel || "月付" }}</span
+                >
+              </template>
             </div>
             <div class="allocation-footer-meta">
               <span v-if="selectedCycleLabel">{{ selectedCycleLabel }}</span>
@@ -574,10 +600,17 @@
     </div>
 
     <div class="pd-empty" v-else-if="!loading">
-      <el-empty description="商品不存在或已下架">
-        <el-button type="primary" @click="router.push('/products')"
-          >返回产品页</el-button
-        >
+      <el-empty
+        :description="
+          loadFailed ? '商品加载失败，请检查网络连接' : '商品不存在或已下架'
+        "
+      >
+        <div class="pd-empty__actions">
+          <el-button v-if="loadFailed" type="primary" @click="loadProduct"
+            >重新加载</el-button
+          >
+          <el-button @click="router.push('/products')">返回产品页</el-button>
+        </div>
       </el-empty>
     </div>
 
@@ -635,7 +668,10 @@ import {
   buildWebsiteProductPath,
   resolveWebsiteProductRoutePayloadByDetail,
 } from "@/utils/productRoute";
-import { resolveProductDisplayName } from "@/utils/websiteProductConfig";
+import {
+  resolveProductDisplayName,
+  toMoneyNumber,
+} from "@/utils/websiteProductConfig";
 import {
   isCpuConfigKey,
   isMemoryConfigKey,
@@ -649,8 +685,8 @@ import MobileSheet from "@/components/MobileSheet.vue";
 const route = useRoute();
 const router = useRouter();
 
-// 移动布局阈值与本页 768 CSS 家族一致
-const MOBILE_MEDIA_QUERY = "(max-width: 768px)";
+// 移动布局阈值与全站 isMobile 断点一致（WebsiteLayout 同为 960）
+const MOBILE_MEDIA_QUERY = "(max-width: 960px)";
 const isMobile = ref(false);
 const mobileOsDrawer = ref(false);
 const mobileCouponDrawer = ref(false);
@@ -717,6 +753,8 @@ const {
   submitting,
   selectedCycle,
   quoteLoading,
+  quoteError,
+  retryQuote,
   productStockLoading,
   productStockError,
   baseAmount,
@@ -983,6 +1021,8 @@ function switchProduct(id) {
   );
 }
 
+const loadFailed = ref(false);
+
 async function loadProduct() {
   const pid = Number(route.params.id || 0);
   if (!pid) {
@@ -991,6 +1031,7 @@ async function loadProduct() {
   }
   const token = ++productLoadToken;
   loading.value = true;
+  loadFailed.value = false;
   try {
     const res = await siteApi.product(pid);
     if (token !== productLoadToken) return;
@@ -1001,6 +1042,7 @@ async function loadProduct() {
   } catch {
     if (token !== productLoadToken) return;
     product.value = null;
+    loadFailed.value = true;
   } finally {
     if (token === productLoadToken) {
       loading.value = false;
@@ -1062,23 +1104,21 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped lang="scss">
-/* 目标页精确色值：
-   主色   #165dff (rgb(22,93,255))
-   激活bg #e8f1ff (rgb(232,241,255))
-   页面bg #f7f8fa (rgb(247,248,250))
-   卡片bg #fff
-   边框   #e8e8e8 / #d0d3d9
-   文字主 #1d2129
-   文字辅 #4e5969
-   文字淡 #606d80
+/* 本页色值统一收编到全局 SCSS token（variables.scss），不再维护独立色板：
+   主色   $color-primary / hover $color-primary-hover
+   激活bg $color-primary-soft
+   页面bg $bg-color
+   卡片bg $bg-color-card
+   边框   $border-color / 强边框 $border-color-strong
+   文字   $text-color-primary / secondary / placeholder
 */
 
 .pd-page {
   min-height: calc(100vh - 160px);
-  background: #f7f8fa;
+  background: $bg-color;
   padding-bottom: 40px;
 
-  @media (max-width: 768px) {
+  @media (max-width: 960px) {
     padding-bottom: 108px;
   }
 }
@@ -1099,10 +1139,10 @@ onBeforeUnmount(() => {
   gap: 6px;
   height: 34px;
   padding: 0 12px;
-  border: 1px solid #d0d3d9;
+  border: 1px solid $border-color-strong;
   border-radius: 4px;
   background: #fff;
-  color: #4e5969;
+  color: $text-color-secondary;
   font-size: 13px;
   cursor: pointer;
   white-space: nowrap;
@@ -1116,7 +1156,7 @@ onBeforeUnmount(() => {
   }
 
   svg {
-    color: #606d80;
+    color: $text-color-placeholder;
   }
 }
 
@@ -1134,10 +1174,10 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
   height: 34px;
   padding: 0 14px;
-  border: 1px solid #d0d3d9;
+  border: 1px solid $border-color-strong;
   border-radius: 4px;
   background: #fff;
-  color: #4e5969;
+  color: $text-color-secondary;
   font-size: 13px;
   cursor: pointer;
   white-space: nowrap;
@@ -1167,7 +1207,7 @@ onBeforeUnmount(() => {
   gap: 20px;
   margin: 12px 16px 0;
   padding: 18px 20px;
-  border: 1px solid #e8e8e8;
+  border: 1px solid $border-color;
   border-radius: 4px;
   background: linear-gradient(135deg, #ffffff 0%, #f5f9ff 100%);
 }
@@ -1190,14 +1230,14 @@ onBeforeUnmount(() => {
 
 .pd-hero-copy h1 {
   margin: 10px 0 0;
-  color: #1d2129;
+  color: $text-color-primary;
   font-size: 26px;
   line-height: 1.2;
 }
 
 .pd-hero-copy p {
   margin: 8px 0 0;
-  color: #4e5969;
+  color: $text-color-secondary;
   font-size: 14px;
   line-height: 1.7;
 }
@@ -1214,10 +1254,10 @@ onBeforeUnmount(() => {
   align-items: center;
   min-height: 32px;
   padding: 0 12px;
-  border: 1px solid #d0d3d9;
+  border: 1px solid $border-color-strong;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.9);
-  color: #4e5969;
+  color: $text-color-secondary;
   font-size: 12px;
   white-space: nowrap;
 }
@@ -1228,10 +1268,10 @@ onBeforeUnmount(() => {
   gap: 6px;
   height: 36px;
   padding: 0 14px;
-  border: 1px solid #d0d3d9;
+  border: 1px solid $border-color-strong;
   border-radius: 4px;
   background: #fff;
-  color: #1d2129;
+  color: $text-color-primary;
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -1245,7 +1285,7 @@ onBeforeUnmount(() => {
 
   svg {
     flex-shrink: 0;
-    color: #606d80;
+    color: $text-color-placeholder;
   }
 
   &.active {
@@ -1265,12 +1305,12 @@ onBeforeUnmount(() => {
   padding: 12px 16px 0;
   align-items: start;
 
-  @media (max-width: 768px) {
+  @media (max-width: 960px) {
     grid-template-columns: 1fr;
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 960px) {
   .pd-hero {
     flex-direction: column;
     align-items: flex-start;
@@ -1292,14 +1332,14 @@ onBeforeUnmount(() => {
   background: #fff;
   border-radius: 4px;
   margin-bottom: 10px;
-  border: 1px solid #e8e8e8;
+  border: 1px solid $border-color;
 }
 
 .cfg-group-head {
   padding: 12px 16px 10px;
   font-size: 14px;
   font-weight: 600;
-  color: #1d2129;
+  color: $text-color-primary;
   border-bottom: 1px solid #f2f3f5;
 }
 
@@ -1319,10 +1359,10 @@ onBeforeUnmount(() => {
   align-items: center;
   height: 34px;
   padding: 0 14px;
-  border: 1px solid #d0d3d9;
+  border: 1px solid $border-color-strong;
   border-radius: 4px;
   background: #fafafa;
-  color: #1d2129;
+  color: $text-color-primary;
   font-size: 13px;
   cursor: pointer;
   white-space: nowrap;
@@ -1364,7 +1404,7 @@ onBeforeUnmount(() => {
   width: 64px;
   padding-top: 8px;
   font-size: 13px;
-  color: #606d80;
+  color: $text-color-placeholder;
   line-height: 1.4;
 }
 
@@ -1377,7 +1417,7 @@ onBeforeUnmount(() => {
 .stepper {
   display: inline-flex;
   align-items: stretch;
-  border: 1px solid #d0d3d9;
+  border: 1px solid $border-color-strong;
   border-radius: 4px;
   overflow: hidden;
   height: 34px;
@@ -1391,7 +1431,7 @@ onBeforeUnmount(() => {
   width: 34px;
   border: none;
   background: #fafafa;
-  color: #4e5969;
+  color: $text-color-secondary;
   cursor: pointer;
   transition: background 0.15s;
   flex-shrink: 0;
@@ -1407,10 +1447,10 @@ onBeforeUnmount(() => {
 }
 
 .stepper-dec {
-  border-right: 1px solid #d0d3d9;
+  border-right: 1px solid $border-color-strong;
 }
 .stepper-inc {
-  border-left: 1px solid #d0d3d9;
+  border-left: 1px solid $border-color-strong;
 }
 
 .stepper-val {
@@ -1419,9 +1459,13 @@ onBeforeUnmount(() => {
   text-align: center;
   font-size: 14px;
   font-weight: 600;
-  color: #1d2129;
+  color: $text-color-primary;
   background: #fff;
-  outline: none;
+
+  &:focus-visible {
+    outline: 2px solid $color-primary;
+    outline-offset: -2px;
+  }
 
   &::-webkit-outer-spin-button,
   &::-webkit-inner-spin-button {
@@ -1446,7 +1490,7 @@ onBeforeUnmount(() => {
 
 .os-col-label {
   font-size: 12px;
-  color: #606d80;
+  color: $text-color-placeholder;
   margin-bottom: 6px;
 }
 
@@ -1463,7 +1507,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 2px;
   padding: 8px 14px;
-  border: 1px solid #d0d3d9;
+  border: 1px solid $border-color-strong;
   border-radius: 4px;
   background: #fafafa;
   cursor: pointer;
@@ -1488,13 +1532,13 @@ onBeforeUnmount(() => {
 
 .cycle-name {
   font-size: 13px;
-  color: #1d2129;
+  color: $text-color-primary;
   line-height: 1.4;
 }
 
 .cycle-price {
   font-size: 12px;
-  color: #606d80;
+  color: $text-color-placeholder;
   line-height: 1.4;
 }
 
@@ -1503,14 +1547,14 @@ onBeforeUnmount(() => {
   position: sticky;
   top: 80px;
 
-  @media (max-width: 768px) {
+  @media (max-width: 960px) {
     position: static;
   }
 }
 
 .aside-card {
   background: #fff;
-  border: 1px solid #e8e8e8;
+  border: 1px solid $border-color;
   border-radius: 4px;
   padding: 16px;
 }
@@ -1525,7 +1569,7 @@ onBeforeUnmount(() => {
 .cost-title {
   font-size: 15px;
   font-weight: 700;
-  color: #1d2129;
+  color: $text-color-primary;
 }
 
 .stock-badge {
@@ -1534,17 +1578,18 @@ onBeforeUnmount(() => {
   padding: 2px 10px;
   border-radius: 2px;
 
+  // 浅底标签文字用深色变体，保证 12px 小字满足 WCAG AA（≥4.5:1）
   &.ok {
     background: $color-success-soft;
-    color: $color-success;
+    color: $color-success-text;
   }
   &.warn {
     background: $color-warning-soft;
-    color: $color-warning;
+    color: $color-warning-text;
   }
   &.empty {
     background: $color-danger-soft;
-    color: $color-danger;
+    color: $color-danger-text;
   }
   &.sync {
     background: $color-primary-soft;
@@ -1585,13 +1630,13 @@ onBeforeUnmount(() => {
 }
 
 .stock-info--ok .stock-main strong {
-  color: $color-success;
+  color: $color-success-text;
 }
 .stock-info--warn .stock-main strong {
-  color: $color-warning;
+  color: $color-warning-text;
 }
 .stock-info--empty .stock-main strong {
-  color: $color-danger;
+  color: $color-danger-text;
 }
 .stock-info--sync .stock-main strong {
   color: $color-primary;
@@ -1618,7 +1663,7 @@ onBeforeUnmount(() => {
 .aside-section-title {
   font-size: 13px;
   font-weight: 700;
-  color: #1d2129;
+  color: $text-color-primary;
 }
 
 .cost-detail {
@@ -1665,12 +1710,12 @@ onBeforeUnmount(() => {
   gap: 8px;
 
   > span:first-child {
-    color: #606d80;
+    color: $text-color-placeholder;
     flex-shrink: 0;
   }
 
   > span:last-child {
-    color: #1d2129;
+    color: $text-color-primary;
     font-weight: 500;
     text-align: right;
     word-break: break-all;
@@ -1679,25 +1724,25 @@ onBeforeUnmount(() => {
 
 .cost-item--extra {
   > span:first-child {
-    color: #606d80;
+    color: $text-color-placeholder;
     font-size: 12px;
   }
 
   > span:last-child {
-    color: $color-warning;
+    color: $color-warning-text;
     font-size: 12px;
   }
 }
 
 .cost-item--discount {
   > span:first-child {
-    color: $color-success;
+    color: $color-success-text;
     font-size: 12px;
     font-weight: 600;
   }
 
   > span:last-child {
-    color: $color-success;
+    color: $color-success-text;
     font-size: 13px;
     font-weight: 700;
   }
@@ -1719,14 +1764,14 @@ onBeforeUnmount(() => {
 .coupon-panel-title {
   font-size: 13px;
   font-weight: 700;
-  color: #1d2129;
+  color: $text-color-primary;
 }
 
 .coupon-clear-btn {
   border: none;
   background: none;
-  padding: 0;
-  color: $color-danger;
+  padding: 8px 0;
+  color: $color-danger-text;
   font-size: 12px;
   cursor: pointer;
 }
@@ -1741,7 +1786,7 @@ onBeforeUnmount(() => {
   padding: 10px 12px;
   border-radius: 4px;
   background: $color-success-soft;
-  color: $color-success;
+  color: $color-success-text;
   font-size: 12px;
   line-height: 1.6;
 }
@@ -1766,7 +1811,7 @@ onBeforeUnmount(() => {
 
 .cost-total-label {
   font-size: 13px;
-  color: #606d80;
+  color: $text-color-placeholder;
 }
 
 .cost-price-wrap {
@@ -1793,7 +1838,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 6px;
   font-size: 18px;
-  color: #606d80;
+  color: $text-color-placeholder;
 
   &::after {
     content: "";
@@ -1813,11 +1858,11 @@ onBeforeUnmount(() => {
 
 .cost-cycle {
   font-size: 12px;
-  color: #606d80;
+  color: $text-color-placeholder;
   margin-left: 2px;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 960px) {
   .coupon-panel-form {
     grid-template-columns: 1fr;
   }
@@ -1836,10 +1881,15 @@ onBeforeUnmount(() => {
   letter-spacing: 0.04em;
   transition:
     background 0.15s,
-    opacity 0.15s;
+    opacity 0.15s,
+    transform 0.15s;
 
   &:hover:not(:disabled) {
-    background: #0e4ee0;
+    background: $color-primary-hover;
+  }
+  &:active:not(:disabled) {
+    background: $color-primary-active;
+    transform: scale(0.985);
   }
   &:disabled {
     opacity: 0.5;
@@ -1863,7 +1913,7 @@ onBeforeUnmount(() => {
 .allocation-footer {
   display: none;
 
-  @media (max-width: 768px) {
+  @media (max-width: 960px) {
     position: fixed;
     left: 0;
     right: 0;
@@ -1882,7 +1932,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 12px;
   padding: 10px 12px;
-  border: 1px solid #e8e8e8;
+  border: 1px solid $border-color;
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.98);
   box-shadow: 0 10px 28px rgba(29, 33, 41, 0.12);
@@ -1896,7 +1946,7 @@ onBeforeUnmount(() => {
 .allocation-footer-label {
   font-size: 11px;
   line-height: 1;
-  color: #606d80;
+  color: $text-color-placeholder;
 }
 
 .allocation-footer-price {
@@ -1920,7 +1970,7 @@ onBeforeUnmount(() => {
 
 .allocation-footer-cycle {
   font-size: 12px;
-  color: #606d80;
+  color: $text-color-placeholder;
 }
 
 .allocation-footer-meta {
@@ -1930,7 +1980,7 @@ onBeforeUnmount(() => {
   margin-top: 6px;
   font-size: 11px;
   line-height: 1.5;
-  color: #4e5969;
+  color: $text-color-secondary;
 
   span {
     min-width: 0;
@@ -1950,10 +2000,15 @@ onBeforeUnmount(() => {
   cursor: pointer;
   transition:
     background 0.15s,
-    opacity 0.15s;
+    opacity 0.15s,
+    transform 0.15s;
 
   &:hover:not(:disabled) {
-    background: #0e4ee0;
+    background: $color-primary-hover;
+  }
+  &:active:not(:disabled) {
+    background: $color-primary-active;
+    transform: scale(0.97);
   }
   &:disabled {
     opacity: 0.5;
@@ -1972,6 +2027,34 @@ onBeforeUnmount(() => {
   &.is-sold-out:hover {
     background: linear-gradient(135deg, #b91c1c 0%, #ef4444 100%);
   }
+}
+
+/* ===== 报价失败提示（桌面合计区 + 移动吸底栏共用） ===== */
+.cost-quote-error {
+  color: $color-danger-text;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.cost-quote-retry,
+.allocation-footer-quote-retry {
+  border: none;
+  background: none;
+  padding: 8px 4px;
+  color: $color-primary;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    color: $color-primary-hover;
+  }
+}
+
+.allocation-footer-quote-error {
+  color: $color-danger-text;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 @keyframes costLoadingSweep {
@@ -2008,7 +2091,7 @@ onBeforeUnmount(() => {
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 960px) {
   .pd-aside {
     position: static;
   }
@@ -2026,7 +2109,13 @@ onBeforeUnmount(() => {
   min-height: 400px;
 }
 
-/* ===== 移动端选择器（≤768px 替换 el-select） ===== */
+.pd-empty__actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+/* ===== 移动端选择器（≤960px 替换 el-select） ===== */
 .pd-mobile-picker-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -2048,10 +2137,10 @@ onBeforeUnmount(() => {
   width: 100%;
   min-height: 48px;
   padding: 0 14px;
-  border: 1px solid #d0d3d9;
+  border: 1px solid $border-color-strong;
   border-radius: 4px;
   background: #fff;
-  color: #1d2129;
+  color: $text-color-primary;
   display: inline-flex;
   align-items: center;
   justify-content: space-between;
@@ -2097,7 +2186,7 @@ onBeforeUnmount(() => {
   border: 1px solid #eef2f7;
   border-radius: 6px;
   background: #fff;
-  color: #1d2129;
+  color: $text-color-primary;
   font-size: 14px;
   text-align: left;
   cursor: pointer;
@@ -2117,7 +2206,7 @@ onBeforeUnmount(() => {
   }
 
   &--none {
-    color: #4e5969;
+    color: $text-color-secondary;
     font-weight: 400;
   }
 }

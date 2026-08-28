@@ -360,14 +360,14 @@ watch(
   align-items: center;
   gap: 4px;
   margin-left: 8px;
-  color: #2f5ef3;
+  color: $color-primary;
   font-weight: 500;
   text-decoration: none;
   transition: color 0.22s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .product-tabs__more:hover {
-  color: #2754e3;
+  color: $color-primary-hover;
 }
 
 .product-tabs__more .el-icon {
@@ -379,7 +379,7 @@ watch(
   flex-wrap: wrap;
   justify-content: center;
   gap: 0 32px;
-  margin: 34px auto 28px;
+  margin: 32px auto 28px;
   border-bottom: 1px solid rgba(15, 23, 42, 0.08);
 }
 
@@ -397,7 +397,7 @@ watch(
 }
 
 .product-tabs__tab:hover {
-  color: #2f5ef3;
+  color: $color-primary;
 }
 
 .product-tabs__tab::after {
@@ -407,13 +407,13 @@ watch(
   bottom: -1px;
   width: 0;
   height: 2px;
-  background: #2f5ef3;
+  background: $color-primary;
   transform: translateX(-50%);
   transition: width 0.28s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .product-tabs__tab.is-active {
-  color: #2f5ef3;
+  color: $color-primary;
   font-weight: 600;
 }
 
@@ -454,6 +454,10 @@ watch(
   transform: translateY(-3px);
 }
 
+.product-card:active {
+  transform: translateY(-1px) scale(0.99);
+}
+
 .product-card__title {
   flex: 1;
   min-width: 0;
@@ -484,19 +488,30 @@ watch(
   align-self: flex-end;
   gap: 4px;
   margin-top: auto;
-  color: #2f5ef3;
+  color: $color-primary;
   font-size: 13px;
   font-weight: 600;
-  opacity: 0;
-  transform: translateX(-4px);
+  opacity: 1;
+  transform: none;
   transition:
-    opacity 0.24s cubic-bezier(0.22, 1, 0.36, 1),
     transform 0.24s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.product-card:hover .product-card__cta {
-  opacity: 1;
-  transform: translateX(0);
+// 行动提示常显（触屏无 hover，原默认隐藏会让 CTA 在移动端不可见）；
+// 悬停仅做箭头位移增强
+@media (hover: hover) {
+  .product-card__cta {
+    opacity: 0.72;
+    transform: translateX(-4px);
+    transition:
+      opacity 0.24s cubic-bezier(0.22, 1, 0.36, 1),
+      transform 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .product-card:hover .product-card__cta {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 @media (max-width: 1180px) {

@@ -284,36 +284,70 @@
   padding: 0 0 48px;
 }
 
-/* ===== 页面主标题（桌面 + 移动通用） ===== */
-.shop-main-heading {
-  padding: 18px 20px 10px;
+/* ===== 页面加载失败态 ===== */
+.catalog-error {
+  padding: 48px 20px;
+  text-align: center;
+}
 
-  h1 {
-    margin: 0;
-    color: $text-color-primary;
-    font-size: 20px;
-    font-weight: 700;
-    line-height: 1.4;
-    letter-spacing: 0.01em;
+.catalog-error__text {
+  margin: 0 0 16px;
+  color: $text-color-secondary;
+  font-size: 14px;
+}
+
+.catalog-error__retry {
+  padding: 10px 32px;
+  border: 1px solid $color-primary;
+  border-radius: 6px;
+  background: $color-primary;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color $motion-fast ease,
+    transform $motion-fast ease;
+
+  &:hover {
+    background: $color-primary-hover;
+  }
+
+  &:active {
+    background: $color-primary-active;
+    transform: scale(0.98);
   }
 }
 
-.shop-main-heading__sub {
-  margin: 6px 0 0;
-  color: $text-color-secondary;
-  font-size: 13px;
-  line-height: 1.75;
+/* ===== 报价失败提示（桌面合计区 + 移动吸底栏共用） ===== */
+.cost-quote-error {
+  color: $color-danger-text;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.cost-quote-retry,
+.allocation-footer-quote-retry {
+  border: none;
+  background: none;
+  padding: 8px 4px;
+  color: $color-primary;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    color: $color-primary-hover;
+  }
+}
+
+.allocation-footer-quote-error {
+  color: $color-danger-text;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 @media (max-width: 768px) {
-  .shop-main-heading {
-    padding: 14px 14px 8px;
-
-    h1 {
-      font-size: 18px;
-    }
-  }
-
   // 移动端配置区底部留白，避免被 sticky footer 遮挡
   .shop-main {
     padding-bottom: 120px;
@@ -704,6 +738,14 @@
   }
 }
 
+// 移动端配置项是购买主链路的核心触点，热区提升到 ≥40px
+@media (max-width: 960px) {
+  .opt-btn {
+    height: 40px;
+    padding: 0 18px;
+  }
+}
+
 /* 计费周期按钮 */
 .cycle-btn {
   flex-direction: column;
@@ -821,7 +863,6 @@
   display: inline-flex;
   flex-direction: column;
   gap: 1px;
-  width: 14px;
   flex-shrink: 0;
 }
 
@@ -829,13 +870,14 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 14px;
-  height: 9px;
+  // 原 14×9 远低于最小可点尺寸，扩展到 24×24 并以图标自身尺寸保持视觉不变
+  width: 24px;
+  height: 24px;
   padding: 0;
   border: 0;
   background: transparent;
   color: $text-color-secondary;
-  font-size: 9px;
+  font-size: 12px;
   line-height: 1;
   cursor: pointer;
   transition: color $motion-fast ease;
@@ -985,7 +1027,8 @@
 
   svg {
     flex-shrink: 0;
-    color: #b8bec8;
+    // 原 #b8bec8 图形对比 1.87:1 不达 3:1，加深为次文本色
+    color: $text-color-secondary;
   }
 }
 
@@ -1115,8 +1158,8 @@
 }
 
 .ver-btn {
-  height: 30px;
-  padding: 0 12px;
+  height: 36px;
+  padding: 0 14px;
   border: 1px solid $border-color;
   border-radius: 4px;
   background: #fff;
@@ -1174,17 +1217,18 @@
   padding: 2px 10px;
   border-radius: 2px;
 
+  // 浅底标签文字用深色变体，保证 12px 小字满足 WCAG AA（≥4.5:1）
   &.ok {
     background: $color-success-soft;
-    color: $color-success;
+    color: $color-success-text;
   }
   &.warn {
     background: $color-warning-soft;
-    color: $color-warning;
+    color: $color-warning-text;
   }
   &.empty {
     background: $color-danger-soft;
-    color: $color-danger;
+    color: $color-danger-text;
   }
   &.sync {
     background: $color-primary-soft;
@@ -1205,7 +1249,7 @@
   strong {
     font-size: 14px;
     font-weight: 700;
-    color: $color-success;
+    color: $color-success-text;
   }
 }
 
@@ -1288,20 +1332,20 @@
   }
 
   > span:last-child {
-    color: $color-warning;
+    color: $color-warning-text;
     font-size: 12px;
   }
 }
 
 .cost-item--discount {
   > span:first-child {
-    color: $color-success;
+    color: $color-success-text;
     font-size: 12px;
     font-weight: 600;
   }
 
   > span:last-child {
-    color: $color-success;
+    color: $color-success-text;
     font-size: 13px;
     font-weight: 700;
   }
@@ -1329,8 +1373,8 @@
 .coupon-clear-btn {
   border: none;
   background: none;
-  padding: 0;
-  color: $color-danger;
+  padding: 8px 0;
+  color: $color-danger-text;
   font-size: 12px;
   cursor: pointer;
 }
@@ -1345,7 +1389,7 @@
   padding: 10px 12px;
   border-radius: 2px;
   background: $color-success-soft;
-  color: $color-success;
+  color: $color-success-text;
   font-size: 12px;
   line-height: 1.6;
 }
@@ -1440,10 +1484,16 @@
   font-weight: 700;
   cursor: pointer;
   letter-spacing: 0.06em;
-  transition: background-color $motion-fast ease;
+  transition:
+    background-color $motion-fast ease,
+    transform $motion-fast ease;
 
   &:hover {
     background: $color-primary-hover;
+  }
+  &:active:not(:disabled) {
+    background: $color-primary-active;
+    transform: scale(0.985);
   }
   &:disabled {
     opacity: 0.5;
@@ -1519,7 +1569,8 @@
 .allocation-footer-discount-text {
   min-width: 0;
   font-size: 12px;
-  color: #b7bcc5;
+  // 原 #b7bcc5 在白底上仅 1.91:1，交易关键信息必须可读
+  color: $text-color-secondary;
   line-height: 1.2;
   white-space: nowrap;
 }
@@ -1568,7 +1619,7 @@
   align-items: center;
   gap: 3px;
   border: none;
-  padding: 0;
+  padding: 10px 0;
   background: transparent;
   color: $text-color-secondary;
   font-size: 12px;
@@ -1592,7 +1643,7 @@
   align-items: center;
   gap: 3px;
   border: none;
-  padding: 0;
+  padding: 10px 0;
   background: transparent;
   color: $text-color-secondary;
   font-size: 12px;
@@ -1623,10 +1674,15 @@
   cursor: pointer;
   transition:
     background-color $motion-fast ease,
-    opacity $motion-fast ease;
+    opacity $motion-fast ease,
+    transform $motion-fast ease;
 
   &:hover:not(:disabled) {
     background: $color-primary-hover;
+  }
+  &:active:not(:disabled) {
+    background: $color-primary-active;
+    transform: scale(0.985);
   }
   &:disabled {
     opacity: 0.5;
@@ -1749,7 +1805,8 @@
 
 .mobile-cost-table-header {
   background: #f4f7fc;
-  color: #7c8593;
+  // 原 #7c8593 在 #f4f7fc 上 3.47:1 不达标，改用次文本色（5.05:1）
+  color: $text-color-secondary;
   font-size: 13px;
   font-weight: 600;
 }
@@ -1770,7 +1827,8 @@
 }
 
 .mobile-cost-table-amount {
-  color: #8d929a;
+  // 原 #8d929a 在白底上 3.13:1，金额列加深到次文本色
+  color: $text-color-secondary;
   font-weight: 600;
   text-align: right;
 }

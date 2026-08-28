@@ -46,7 +46,7 @@ const appStore = useAppStore()
 
 .about-kicker {
   margin: 0;
-  color: #2f5ef3;
+  color: $color-primary;
   font-weight: 600;
 }
 

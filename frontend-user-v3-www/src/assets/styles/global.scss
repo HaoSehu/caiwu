@@ -618,3 +618,17 @@ ol {
     width: min(420px, calc(100vw - 24px)) !important;
   }
 }
+
+// ========== 全局减弱动效（prefers-reduced-motion） ==========
+// 用户系统开启"减少动态效果"时，压平全站过渡与循环动画；
+// hero 视频/跑马灯等组件级降级已在各自组件内处理。
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

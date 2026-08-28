@@ -929,13 +929,14 @@ onBeforeUnmount(() => {
 
 <style scoped lang="scss">
 .container {
-  width: min(1280px, calc(100% - 48px));
+  // 与 WebsiteLayout 布局壳的 .container 对齐（1200px），保证首页各 section 左右边缘一致
+  width: min(1200px, calc(100% - 48px));
   margin: 0 auto;
 }
 
 @media (max-width: 960px) {
   .container {
-    width: calc(100% - 32px);
+    width: calc(100% - 48px);
   }
 }
 
@@ -1115,13 +1116,13 @@ onBeforeUnmount(() => {
 
 .hero-rail__item:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(47, 94, 243, 0.22);
+  box-shadow: 0 0 0 3px rgba(22, 93, 255, 0.22);
 }
 
 .hero-rail__item.is-active {
-  background: #2f5ef3;
+  background: $color-primary;
   color: #ffffff;
-  box-shadow: 0 14px 28px rgba(47, 94, 243, 0.28);
+  box-shadow: 0 14px 28px rgba(22, 93, 255, 0.28);
   transform: none;
 }
 
@@ -1150,18 +1151,19 @@ onBeforeUnmount(() => {
 }
 
 .hero-rail__ribbon--hot {
-  background: #e8213a;
-  box-shadow: 0 3px 8px rgba(232, 33, 58, 0.24);
+  // 白字 11px 需 ≥4.5:1，浅红底不达标，改用深红文字色变体
+  background: $color-danger-text;
+  box-shadow: 0 3px 8px rgba(180, 35, 24, 0.24);
 }
 
 .hero-rail__ribbon--warm {
-  background: #f4651b;
-  box-shadow: 0 3px 8px rgba(244, 101, 27, 0.22);
+  background: $color-warning-text;
+  box-shadow: 0 3px 8px rgba(181, 71, 8, 0.22);
 }
 
 .hero-rail__ribbon--new {
-  background: #2f5ef3;
-  box-shadow: 0 3px 8px rgba(47, 94, 243, 0.22);
+  background: $color-primary;
+  box-shadow: 0 3px 8px rgba(22, 93, 255, 0.22);
 }
 
 .hero-rail__item.is-active .hero-rail__ribbon {
@@ -1186,10 +1188,17 @@ onBeforeUnmount(() => {
     transform 0.2s ease;
 }
 
-.hero-rail__item.is-active .hero-rail__arrow,
-.hero-rail__item:hover .hero-rail__arrow {
+// 触屏设备无 hover：激活项箭头常显，避免入口指示不可见
+.hero-rail__item.is-active .hero-rail__arrow {
   opacity: 1;
   transform: translateX(0);
+}
+
+@media (hover: hover) {
+  .hero-rail__item:hover .hero-rail__arrow {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 .hero-dots {
@@ -1203,35 +1212,53 @@ onBeforeUnmount(() => {
 }
 
 .hero-dots__item {
+  position: relative;
   width: 28px;
-  height: 3px;
+  height: 20px;
   padding: 0;
   border: none;
   border-radius: 999px;
-  background: rgba(44, 54, 84, 0.22);
+  background: transparent;
   cursor: pointer;
+}
+
+// 视觉条与命中区分离：细条居中绘制，可点击区域整体 44px 高
+.hero-dots__item::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 3px;
+  transform: translateY(-50%);
+  border-radius: 999px;
+  background: rgba(44, 54, 84, 0.45);
   transition:
     background 0.28s cubic-bezier(0.22, 1, 0.36, 1),
-    width 0.36s cubic-bezier(0.22, 1, 0.36, 1),
     transform 0.18s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.hero-dots__item:hover {
-  background: rgba(44, 54, 84, 0.4);
+.hero-dots__item::after {
+  content: "";
+  position: absolute;
+  inset: -12px 0;
+}
+
+.hero-dots__item:hover::before {
+  background: rgba(44, 54, 84, 0.6);
 }
 
 .hero-dots__item:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(47, 94, 243, 0.22);
+  box-shadow: 0 0 0 3px rgba(22, 93, 255, 0.22);
 }
 
-.hero-dots__item.is-active {
-  width: 44px;
-  background: #2f5ef3;
+.hero-dots__item.is-active::before {
+  background: $color-primary;
 }
 
-.hero-dots__item.is-active:hover {
-  background: #2754e3;
+.hero-dots__item.is-active:hover::before {
+  background: $color-primary-hover;
 }
 
 .hero-body {
@@ -1294,8 +1321,8 @@ onBeforeUnmount(() => {
 .hero-cta:focus-visible {
   outline: none;
   box-shadow:
-    0 14px 30px rgba(47, 94, 243, 0.34),
-    0 0 0 3px rgba(47, 94, 243, 0.32);
+    0 14px 30px rgba(22, 93, 255, 0.34),
+    0 0 0 3px rgba(22, 93, 255, 0.32);
 }
 
 .hero-cta:active {
@@ -1303,29 +1330,29 @@ onBeforeUnmount(() => {
 }
 
 .hero-cta--primary {
-  background: #2f5ef3;
+  background: $color-primary;
   color: #ffffff;
-  box-shadow: 0 14px 30px rgba(47, 94, 243, 0.34);
+  box-shadow: 0 14px 30px rgba(22, 93, 255, 0.34);
 }
 
 .hero-cta--primary:hover {
   transform: translateY(-2px);
-  background: #2754e3;
-  box-shadow: 0 20px 40px rgba(47, 94, 243, 0.45);
+  background: $color-primary-hover;
+  box-shadow: 0 20px 40px rgba(22, 93, 255, 0.45);
 }
 
 .hero-cta--secondary {
   background: #ffffff;
-  color: #2f5ef3;
-  box-shadow: 0 10px 24px rgba(47, 94, 243, 0.12);
-  border: 1px solid rgba(47, 94, 243, 0.24);
+  color: $color-primary;
+  box-shadow: 0 10px 24px rgba(22, 93, 255, 0.12);
+  border: 1px solid rgba(22, 93, 255, 0.24);
 }
 
 .hero-cta--secondary:hover {
   transform: translateY(-2px);
   background: #f5f8ff;
-  border-color: rgba(47, 94, 243, 0.44);
-  box-shadow: 0 16px 30px rgba(47, 94, 243, 0.22);
+  border-color: rgba(22, 93, 255, 0.44);
+  box-shadow: 0 16px 30px rgba(22, 93, 255, 0.22);
 }
 
 .hero-mobile-nav {
@@ -1354,7 +1381,7 @@ onBeforeUnmount(() => {
   background: rgba(255, 255, 255, 0.94);
   border: 1px solid rgba(22, 93, 255, 0.1);
   border-radius: 12px;
-  box-shadow: 0 12px 30px rgba(47, 94, 243, 0.08);
+  box-shadow: 0 12px 30px rgba(22, 93, 255, 0.08);
 }
 
 .hero-feature {
@@ -1377,7 +1404,7 @@ onBeforeUnmount(() => {
   border-radius: 999px;
   background: linear-gradient(
     90deg,
-    rgba(47, 94, 243, 0.6),
+    rgba(22, 93, 255, 0.6),
     rgba(122, 155, 255, 0)
   );
   transform: scaleX(0);
@@ -1404,12 +1431,13 @@ onBeforeUnmount(() => {
 .hero-feature:focus-visible {
   outline: none;
   background: rgba(255, 255, 255, 0.86);
-  box-shadow: inset 0 0 0 2px rgba(47, 94, 243, 0.34);
+  box-shadow: inset 0 0 0 2px rgba(22, 93, 255, 0.34);
 }
 
 .hero-feature__kicker {
   display: block;
-  color: rgba(31, 42, 77, 0.62);
+  // 0.62 透明度混白后 4.21:1 不达 AA，加深到 0.8（>4.5:1）
+  color: rgba(31, 42, 77, 0.8);
   font-size: 12px;
   font-weight: 500;
   letter-spacing: 0.04em;
@@ -1426,7 +1454,7 @@ onBeforeUnmount(() => {
 
 .hero-feature__desc {
   margin: 8px 0 0;
-  color: rgba(31, 42, 77, 0.68);
+  color: rgba(31, 42, 77, 0.78);
   font-size: 12px;
   line-height: 1.7;
   display: -webkit-box;
@@ -1523,7 +1551,7 @@ onBeforeUnmount(() => {
   }
 
   .hero-rail__item.is-active {
-    background: #2f5ef3;
+    background: $color-primary;
   }
 
   .hero-rail__arrow {
@@ -1609,11 +1637,11 @@ onBeforeUnmount(() => {
   }
 
   .hero-cta--primary {
-    box-shadow: 0 8px 20px rgba(47, 94, 243, 0.22);
+    box-shadow: 0 8px 20px rgba(22, 93, 255, 0.22);
   }
 
   .hero-cta--secondary {
-    box-shadow: 0 6px 16px rgba(47, 94, 243, 0.08);
+    box-shadow: 0 6px 16px rgba(22, 93, 255, 0.08);
   }
 
   .hero-mobile-nav {
@@ -1627,27 +1655,37 @@ onBeforeUnmount(() => {
   .hero-mobile-nav__dots {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 2px;
   }
 
   .hero-mobile-nav__dot {
-    width: 6px;
-    height: 6px;
+    position: relative;
+    width: 24px;
+    height: 24px;
     padding: 0;
     border: none;
-    border-radius: 50%;
-    background: rgba(44, 54, 84, 0.22);
+    border-radius: 999px;
+    background: transparent;
     cursor: pointer;
-    transition:
-      background 0.22s ease,
-      width 0.22s ease,
-      border-radius 0.22s ease;
   }
 
-  .hero-mobile-nav__dot.is-active {
-    width: 20px;
+  // 视觉圆点与命中区分离，命中区整体 24px 高、相邻圆点共 22px 宽
+  .hero-mobile-nav__dot::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 6px;
+    height: 6px;
+    transform: translate(-50%, -50%);
     border-radius: 999px;
-    background: #2f5ef3;
+    background: rgba(44, 54, 84, 0.45);
+    transition: background 0.22s ease;
+  }
+
+  .hero-mobile-nav__dot.is-active::before {
+    width: 24px;
+    background: $color-primary;
   }
 
   .hero-feature-strip {

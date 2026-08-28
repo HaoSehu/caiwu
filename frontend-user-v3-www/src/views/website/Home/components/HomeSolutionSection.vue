@@ -260,13 +260,13 @@ function onRailKeydown(event) {
 }
 
 .solution-panel__rail-item:hover {
-  color: #2f5ef3;
+  color: $color-primary;
   background: rgba(22, 93, 255, 0.04);
 }
 
 .solution-panel__rail-item.is-active {
   color: #ffffff;
-  background: #2f5ef3;
+  background: $color-primary;
   font-weight: 600;
 }
 
@@ -329,12 +329,12 @@ function onRailKeydown(event) {
 .solution-panel__feature-icon {
   display: grid;
   place-items: center;
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
   background: rgba(22, 93, 255, 0.12);
-  color: #2f5ef3;
-  font-size: 10px;
+  color: $color-primary;
+  font-size: 12px;
   flex-shrink: 0;
 }
 
@@ -368,19 +368,19 @@ function onRailKeydown(event) {
 
 .solution-panel__action:hover {
   border-color: rgba(22, 93, 255, 0.48);
-  color: #2f5ef3;
+  color: $color-primary;
 }
 
 .solution-panel__action--primary {
-  border-color: #2f5ef3;
-  background: #2f5ef3;
+  border-color: $color-primary;
+  background: $color-primary;
   color: #ffffff;
   box-shadow: 0 8px 18px rgba(22, 93, 255, 0.22);
 }
 
 .solution-panel__action--primary:hover {
-  border-color: #2754e3;
-  background: #2754e3;
+  border-color: $color-primary-hover;
+  background: $color-primary-hover;
   color: #ffffff;
 }
 

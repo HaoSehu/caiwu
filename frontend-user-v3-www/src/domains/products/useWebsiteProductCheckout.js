@@ -8,6 +8,7 @@ import {
 import {
   normalizeMoneyText,
   resolveProductDisplayName,
+  toMoneyNumber,
 } from "@/utils/websiteProductConfig";
 import { navigateToConsole } from "@/utils/consoleUrl";
 import {
@@ -36,6 +37,7 @@ export function useWebsiteProductCheckout({
   const quantity = ref(1);
   const quoteResult = ref(null);
   const quoteLoading = ref(false);
+  const quoteError = ref(false);
   const quoteToken = ref("");
   const productStock = ref(null);
   const productStockLoading = ref(false);
@@ -101,9 +103,10 @@ export function useWebsiteProductCheckout({
       return quoteResult.value.total_amount || "0.00";
     }
 
-    // 无报价时估算：开通费按一次性计（每单仅收一次），基础价按台数计
-    const amount = Number(selectedPricingEntry.value?.amount || 0);
-    const setup = Number(productDetail.value?.setup_fee || 0);
+    // 无报价时估算：开通费按一次性计（每单仅收一次），基础价按台数计。
+    // amount 可能是千分位展示文本，必须经 toMoneyNumber 回读
+    const amount = toMoneyNumber(selectedPricingEntry.value?.amount);
+    const setup = toMoneyNumber(productDetail.value?.setup_fee);
     return (amount * quantity.value + setup).toFixed(2);
   });
   const selectedCycleLabel = computed(
@@ -201,6 +204,7 @@ export function useWebsiteProductCheckout({
     );
     // 报价结果只对发起时的配置版本有效；配置已变化时旧响应即使写回也无法通过 canSubmit
     quoteSnapshotVersion = requestVersion;
+    quoteError.value = false;
   }
 
   function normalizeProductId(id) {
@@ -263,6 +267,8 @@ export function useWebsiteProductCheckout({
     // 切换到新商品：配置从零开始，旧报价版本整体失效
     quoteVersion = 0;
     quoteSnapshotVersion = -1;
+    // 切换商品后旧商品的报价失败态不再有意义，防抖窗口内不闪错误提示
+    quoteError.value = false;
     suspendQuoteWatch();
     try {
       initProductDefaults({
@@ -285,6 +291,7 @@ export function useWebsiteProductCheckout({
     selectedCycle.value = "";
     quantity.value = 1;
     resetQuoteState();
+    quoteError.value = false;
     productStock.value = null;
     productStockLoading.value = false;
     productStockError.value = "";
@@ -418,12 +425,20 @@ export function useWebsiteProductCheckout({
           applyQuoteResult(fallbackRes.data || null, requestVersion, 0);
           return false;
         } catch {
+          if (token !== quoteTokenId) {
+            return false;
+          }
           resetQuoteState();
+          quoteError.value = true;
           return false;
         }
       }
 
+      if (token !== quoteTokenId) {
+        return false;
+      }
       resetQuoteState();
+      quoteError.value = true;
       return false;
     } finally {
       if (token === quoteTokenId) {
@@ -458,6 +473,12 @@ export function useWebsiteProductCheckout({
     quoteTimer = setTimeout(() => {
       executeQuote(selectedCouponId.value, { fallbackInvalidCoupon: true });
     }, 250);
+  }
+
+  // 报价失败后的用户重试入口：清错误态并按当前配置重新询价
+  function retryQuote() {
+    quoteError.value = false;
+    void executeQuote(selectedCouponId.value, { fallbackInvalidCoupon: true });
   }
 
   async function submitOrder() {
@@ -597,6 +618,7 @@ export function useWebsiteProductCheckout({
       quantity.value = 1;
     }
     resetQuoteState();
+    quoteError.value = false;
     productStock.value = null;
     productStockLoading.value = false;
     productStockError.value = "";
@@ -755,6 +777,8 @@ export function useWebsiteProductCheckout({
     selectedCycle,
     quantity,
     quoteLoading,
+    quoteError,
+    retryQuote,
     productStockLoading,
     productStockError,
     selectedProductDisplayName,
