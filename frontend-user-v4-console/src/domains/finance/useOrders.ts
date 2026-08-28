@@ -1,4 +1,4 @@
-import { ORDER_STATUS_MAP, ORDER_TYPE_MAP, toSelectOptions } from '@caiwu/shared/statusConfig';
+import { ORDER_STATUS_FILTER_OPTIONS, ORDER_TYPE_MAP } from '@caiwu/shared/statusConfig';
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import { ref, shallowRef } from 'vue';
 
@@ -9,7 +9,7 @@ import { formatMoney } from '@/utils/format';
 
 import { useRecordList } from './useRecords';
 
-export const ORDER_STATUS_OPTIONS = toSelectOptions(ORDER_STATUS_MAP, false);
+export const ORDER_STATUS_OPTIONS = ORDER_STATUS_FILTER_OPTIONS;
 
 export const ORDER_TYPE_OPTIONS = ['new', 'renew', 'upgrade'].map((value) => ({
   label: ORDER_TYPE_MAP[value] || value,

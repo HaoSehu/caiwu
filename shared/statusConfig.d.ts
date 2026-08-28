@@ -32,6 +32,7 @@ export const INVOICE_TYPE_MAP: Record<string, string>
 export const TRANSACTION_TYPE_MAP: Record<string, string>
 
 export const ORDER_STATUS_MAP: StatusMap
+export const ORDER_STATUS_FILTER_OPTIONS: Array<{ label: string, value: string | number }>
 export const INVOICE_STATUS_MAP: StatusMap
 export const PAYMENT_STATUS_MAP: StatusMap
 export const SERVICE_STATUS_MAP: StatusMap

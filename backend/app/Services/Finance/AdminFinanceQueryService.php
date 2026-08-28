@@ -51,7 +51,7 @@ class AdminFinanceQueryService
         }
 
         if (isset($filters['status']) && $filters['status'] !== '') {
-            $query->where('status', (int) $filters['status']);
+            $query->whereIn('status', OrderStatus::filterValues((int) $filters['status']));
         }
 
         $this->applyKeywordFilter($query, trim((string) ($filters['keyword'] ?? '')));
@@ -233,7 +233,7 @@ class AdminFinanceQueryService
         }
 
         if (isset($filters['status']) && $filters['status'] !== '') {
-            $query->where('status', (int) $filters['status']);
+            $query->whereIn('status', OrderStatus::filterValues((int) $filters['status']));
         }
 
         $this->applyKeywordFilter($query, trim((string) ($filters['keyword'] ?? '')));
@@ -582,10 +582,8 @@ class AdminFinanceQueryService
     private function orderStatusLabel(int $status): string
     {
         return match ($status) {
-            OrderStatus::PENDING => '待付款',
-            OrderStatus::PAID => '已付款',
-            OrderStatus::PROCESSING => '开通中',
-            OrderStatus::COMPLETED => '已完成',
+            OrderStatus::PENDING => '待支付',
+            OrderStatus::PAID, OrderStatus::PROCESSING, OrderStatus::COMPLETED => '已支付',
             OrderStatus::CANCELLED => '已取消',
             OrderStatus::REFUNDED => '已退款',
             default => (string) $status,

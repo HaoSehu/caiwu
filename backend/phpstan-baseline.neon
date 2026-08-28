@@ -4033,12 +4033,6 @@ parameters:
 			path: app/Services/Order/ClientOrderQueryService.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Order\:\:\$completed\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Order/ClientOrderQueryService.php
-
-		-
 			message: '#^Access to an undefined property App\\Models\\Order\:\:\$paid\.$#'
 			identifier: property.notFound
 			count: 1
@@ -4046,12 +4040,6 @@ parameters:
 
 		-
 			message: '#^Access to an undefined property App\\Models\\Order\:\:\$pending\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Order/ClientOrderQueryService.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Order\:\:\$processing\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Services/Order/ClientOrderQueryService.php
@@ -4135,12 +4123,6 @@ parameters:
 			path: app/Services/Order/ClientOrderQueryService.php
 
 		-
-			message: '#^Using nullsafe property access "\?\-\>completed" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Services/Order/ClientOrderQueryService.php
-
-		-
 			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
@@ -4154,12 +4136,6 @@ parameters:
 
 		-
 			message: '#^Using nullsafe property access "\?\-\>pending" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Services/Order/ClientOrderQueryService.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>processing" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Services/Order/ClientOrderQueryService.php

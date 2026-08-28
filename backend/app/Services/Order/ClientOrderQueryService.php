@@ -33,7 +33,7 @@ class ClientOrderQueryService
             ->orderByDesc('id');
 
         if (($filters['status'] ?? null) !== null) {
-            $query->where('status', (int) $filters['status']);
+            $query->whereIn('status', OrderStatus::filterValues((int) $filters['status']));
         }
         if (! empty($filters['type'])) {
             $query->where('type', $filters['type']);
@@ -68,9 +68,9 @@ class ClientOrderQueryService
             ->where('user_id', $userId)
             ->selectRaw('COUNT(*) AS total')
             ->selectRaw('SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS pending', [OrderStatus::PENDING])
-            ->selectRaw('SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS paid', [OrderStatus::PAID])
-            ->selectRaw('SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS processing', [OrderStatus::PROCESSING])
-            ->selectRaw('SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS completed', [OrderStatus::COMPLETED])
+            ->selectRaw('SUM(CASE WHEN status IN (?, ?, ?) THEN 1 ELSE 0 END) AS paid', [
+                OrderStatus::PAID, OrderStatus::PROCESSING, OrderStatus::COMPLETED,
+            ])
             ->selectRaw('SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS cancelled', [OrderStatus::CANCELLED])
             ->selectRaw('SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS refunded', [OrderStatus::REFUNDED])
             ->selectRaw('SUM(CASE WHEN status = ? THEN COALESCE(amount, 0) - COALESCE(paid_amount, 0) ELSE 0 END) AS unpaid_amount', [OrderStatus::PENDING])
@@ -87,8 +87,6 @@ class ClientOrderQueryService
             'total' => (int) ($row?->total ?? 0),
             'pending' => (int) ($row?->pending ?? 0),
             'paid' => (int) ($row?->paid ?? 0),
-            'processing' => (int) ($row?->processing ?? 0),
-            'completed' => (int) ($row?->completed ?? 0),
             'cancelled' => (int) ($row?->cancelled ?? 0),
             'refunded' => (int) ($row?->refunded ?? 0),
             'unpaid_amount' => number_format((float) ($row?->unpaid_amount ?? 0), 2, '.', ''),

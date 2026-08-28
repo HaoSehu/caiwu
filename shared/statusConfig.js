@@ -47,41 +47,42 @@ export const STATUS_TAG_TYPES = {
 };
 
 // ===================== 购买状态（历史订单状态） =====================
+// 对外仅展示 4 态：待支付 / 已支付 / 已取消 / 已退款。
+// PROCESSING(开通中)、COMPLETED(已完成) 为内部过渡子状态，展示与筛选均并入"已支付"。
 
 export const ORDER_STATUS = {
-  PENDING: 0, // 待付款
-  PAID: 1, // 已付款
-  PROCESSING: 2, // 开通中
-  COMPLETED: 3, // 已完成
+  PENDING: 0, // 待支付
+  PAID: 1, // 已支付
+  PROCESSING: 2, // 已支付（内部：开通中）
+  COMPLETED: 3, // 已支付（内部：已完成）
   CANCELLED: 4, // 已取消
   REFUNDED: 5, // 已退款
 };
 
 export const ORDER_STATUS_MAP = {
   [ORDER_STATUS.PENDING]: {
-    label: "待付款",
+    label: "待支付",
     color: STATUS_COLORS.warning,
     tagType: "warning",
     icon: "Clock",
   },
   [ORDER_STATUS.PAID]: {
-    label: "已付款",
+    label: "已支付",
     color: STATUS_COLORS.blue,
-    tagType: "",
+    tagType: "primary",
     icon: "CreditCard",
   },
   [ORDER_STATUS.PROCESSING]: {
-    label: "开通中",
+    label: "已支付",
     color: STATUS_COLORS.blue,
-    tagType: "",
-    icon: "Loading",
-    pulse: true,
+    tagType: "primary",
+    icon: "CreditCard",
   },
   [ORDER_STATUS.COMPLETED]: {
-    label: "已完成",
-    color: STATUS_COLORS.success,
-    tagType: "success",
-    icon: "CircleCheck",
+    label: "已支付",
+    color: STATUS_COLORS.blue,
+    tagType: "primary",
+    icon: "CreditCard",
   },
   [ORDER_STATUS.CANCELLED]: {
     label: "已取消",
@@ -96,6 +97,14 @@ export const ORDER_STATUS_MAP = {
     icon: "RefreshLeft",
   },
 };
+
+// 订单状态筛选选项（4 态；选择"已支付"时后端会一并匹配开通中/已完成）
+export const ORDER_STATUS_FILTER_OPTIONS = [
+  { value: ORDER_STATUS.PENDING, label: "待支付" },
+  { value: ORDER_STATUS.PAID, label: "已支付" },
+  { value: ORDER_STATUS.CANCELLED, label: "已取消" },
+  { value: ORDER_STATUS.REFUNDED, label: "已退款" },
+];
 
 // 购买类型（历史订单类型）
 export const ORDER_TYPE_MAP = {
@@ -136,8 +145,8 @@ export const INVOICE_STATUS_MAP = {
   },
   [INVOICE_STATUS.PAID]: {
     label: "已支付",
-    color: STATUS_COLORS.success,
-    tagType: "success",
+    color: STATUS_COLORS.blue,
+    tagType: "primary",
     icon: "Select",
   },
   [INVOICE_STATUS.CANCELLED]: {
@@ -185,8 +194,8 @@ export const PAYMENT_STATUS_MAP = {
   },
   [PAYMENT_STATUS.PAID]: {
     label: "成功",
-    color: STATUS_COLORS.success,
-    tagType: "success",
+    color: STATUS_COLORS.blue,
+    tagType: "primary",
     icon: "Select",
   },
   [PAYMENT_STATUS.FAILED]: {
@@ -197,8 +206,8 @@ export const PAYMENT_STATUS_MAP = {
   },
   [PAYMENT_STATUS.REFUNDED]: {
     label: "已退款",
-    color: STATUS_COLORS.info,
-    tagType: "info",
+    color: STATUS_COLORS.danger,
+    tagType: "danger",
     icon: "RefreshLeft",
   },
   [PAYMENT_STATUS.CANCELLED]: {

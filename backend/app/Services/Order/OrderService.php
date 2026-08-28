@@ -59,7 +59,7 @@ class OrderService
 
             throw_if(
                 (int) $lockedOrder->status !== OrderStatus::PENDING,
-                new BusinessException('仅待付款订单可取消')
+                new BusinessException('仅待支付订单可取消')
             );
 
             $lockedOrder->setRelation('invoice', $invoice);
@@ -289,7 +289,7 @@ class OrderService
         $invoice = $order->invoice;
 
         throw_if(! $invoice instanceof Invoice, new BusinessException('订单未关联账单，无法修改支付状态'));
-        throw_if((int) $order->status !== OrderStatus::PENDING, new BusinessException('仅待付款订单支持手动设为已支付'));
+        throw_if((int) $order->status !== OrderStatus::PENDING, new BusinessException('仅待支付订单支持手动设为已支付'));
         throw_if(
             ! in_array((int) $invoice->status, [InvoiceStatus::UNPAID, InvoiceStatus::OVERDUE], true),
             new BusinessException('当前账单状态不支持手动设为已支付')
@@ -398,7 +398,7 @@ class OrderService
         $invoice = $order->invoice;
 
         throw_if(! $invoice instanceof Invoice, new BusinessException('订单未关联账单，无法修改支付状态'));
-        throw_if((int) $order->status !== OrderStatus::PAID, new BusinessException('仅已付款订单支持恢复为未支付'));
+        throw_if((int) $order->status !== OrderStatus::PAID, new BusinessException('仅已支付订单支持恢复为未支付'));
         throw_if((int) ($order->service_id ?? 0) > 0, new BusinessException('订单已进入服务流程，不支持恢复为未支付'));
 
         $hasRealSuccessPayment = Payment::query()
