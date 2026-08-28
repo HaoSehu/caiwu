@@ -1176,13 +1176,12 @@ class ServiceRenewService
                 'renew_error' => null,
             ]);
 
-            // 续费账单的影子订单履约成功后需一并完结，否则订单列表永远停留在"已付款"。
-            // 只处理已付款的订单：历史遗留的未付订单可能挂在同一张账单上，不得被连带完结。
+            // 续费账单的影子订单补记服务关联。只处理已付款的订单：
+            // 历史遗留的未付订单可能挂在同一张账单上，不得被连带处理。
             $renewOrder = $invoice->order;
             if ($renewOrder instanceof Order && (int) $renewOrder->status === OrderStatus::PAID) {
                 $renewOrder->forceFill([
                     'service_id' => (int) $service->id,
-                    'status' => OrderStatus::COMPLETED,
                 ])->save();
             }
         });
@@ -1329,7 +1328,6 @@ class ServiceRenewService
 
             $order->forceFill([
                 'service_id' => (int) $service->id,
-                'status' => OrderStatus::COMPLETED,
             ])->save();
         });
 
@@ -1346,10 +1344,6 @@ class ServiceRenewService
 
     private function isRenewOrderAlreadyCompleted(Order $order, Service $service): bool
     {
-        if ((int) $order->status === OrderStatus::COMPLETED) {
-            return true;
-        }
-
         $provisionData = $this->serviceProvisionData($service);
 
         return (int) ($provisionData['last_renew_order_id'] ?? 0) === (int) $order->id;

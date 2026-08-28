@@ -47,14 +47,11 @@ export const STATUS_TAG_TYPES = {
 };
 
 // ===================== 购买状态（历史订单状态） =====================
-// 对外仅展示 4 态：待支付 / 已支付 / 已取消 / 已退款。
-// PROCESSING(开通中)、COMPLETED(已完成) 为内部过渡子状态，展示与筛选均并入"已支付"。
+// 4 态：待支付 / 已支付 / 已取消 / 已退款。
 
 export const ORDER_STATUS = {
   PENDING: 0, // 待支付
   PAID: 1, // 已支付
-  PROCESSING: 2, // 已支付（内部：开通中）
-  COMPLETED: 3, // 已支付（内部：已完成）
   CANCELLED: 4, // 已取消
   REFUNDED: 5, // 已退款
 };
@@ -67,18 +64,6 @@ export const ORDER_STATUS_MAP = {
     icon: "Clock",
   },
   [ORDER_STATUS.PAID]: {
-    label: "已支付",
-    color: STATUS_COLORS.blue,
-    tagType: "primary",
-    icon: "CreditCard",
-  },
-  [ORDER_STATUS.PROCESSING]: {
-    label: "已支付",
-    color: STATUS_COLORS.blue,
-    tagType: "primary",
-    icon: "CreditCard",
-  },
-  [ORDER_STATUS.COMPLETED]: {
     label: "已支付",
     color: STATUS_COLORS.blue,
     tagType: "primary",
@@ -98,7 +83,7 @@ export const ORDER_STATUS_MAP = {
   },
 };
 
-// 订单状态筛选选项（4 态；选择"已支付"时后端会一并匹配开通中/已完成）
+// 订单状态筛选选项（4 态）
 export const ORDER_STATUS_FILTER_OPTIONS = [
   { value: ORDER_STATUS.PENDING, label: "待支付" },
   { value: ORDER_STATUS.PAID, label: "已支付" },

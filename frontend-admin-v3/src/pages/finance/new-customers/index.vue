@@ -52,7 +52,7 @@ const columns: PrimaryTableCol<NewCustomerDailyRecord>[] = [
   { colKey: 'date', title: '日期', minWidth: 130 },
   { colKey: 'new_customers', title: '新增客户', minWidth: 110 },
   { colKey: 'new_orders', title: '新订单', minWidth: 100 },
-  { colKey: 'completed_orders', title: '完成', minWidth: 100 },
+  { colKey: 'completed_orders', title: '已支付', minWidth: 100 },
   { colKey: 'new_tickets', title: '新建工单', minWidth: 110 },
   { colKey: 'ticket_replies', title: '回复工单', minWidth: 110 },
   { colKey: 'cancel_requests', title: '取消请求', minWidth: 110 },

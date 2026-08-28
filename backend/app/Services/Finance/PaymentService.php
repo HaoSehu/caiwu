@@ -10,6 +10,7 @@ use App\Constants\InvoiceType;
 use App\Constants\OrderStatus;
 use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
+use App\Constants\ServiceStatus;
 use App\Constants\UserNotificationType;
 use App\Contracts\Integrations\Payments\PaymentGatewayInterface;
 use App\Exceptions\BusinessException;
@@ -1452,7 +1453,7 @@ class PaymentService
 
                 throw_if((int) $invoice->status !== InvoiceStatus::PAID, new BusinessException("当前账单状态不支持{$gatewayLabel}退款"));
                 throw_if(
-                    ! in_array((int) $lockedOrder->status, [OrderStatus::PAID, OrderStatus::COMPLETED], true),
+                    (int) $lockedOrder->status !== OrderStatus::PAID,
                     new BusinessException("当前订单状态不支持{$gatewayLabel}退款")
                 );
 
@@ -1641,7 +1642,7 @@ class PaymentService
                 }
 
                 throw_if(
-                    $order && ! in_array((int) $order->status, [OrderStatus::PAID, OrderStatus::COMPLETED], true),
+                    $order && (int) $order->status !== OrderStatus::PAID,
                     new BusinessException('当前订单状态不支持退款')
                 );
 
@@ -2087,7 +2088,7 @@ class PaymentService
     {
         $order = $invoice?->order;
 
-        if (! $order || (int) $invoice->status !== InvoiceStatus::PAID) {
+        if (! $order instanceof Order || (int) $invoice->status !== InvoiceStatus::PAID) {
             return true;
         }
 
@@ -2107,10 +2108,10 @@ class PaymentService
                 $upgradeKind = (string) data_get($order->config_pricing_snapshot ?? [], 'meta.kind', '');
 
                 if ($upgradeKind === 'host_upgrade') {
-                    $service = app(ServiceUpgradeService::class)
-                        ->processPaidUpgradeOrder($order);
+                    $upgradeService = app(ServiceUpgradeService::class);
+                    $service = $upgradeService->processPaidUpgradeOrder($order);
 
-                    if (! $service || (int) $order->getAttribute('status') !== OrderStatus::COMPLETED) {
+                    if (! $service || ! $upgradeService->isUpgradeOrderFulfilled($order, $service)) {
                         return false;
                     }
                 } else {
@@ -2127,7 +2128,8 @@ class PaymentService
                 return true;
             }
 
-            if ((int) $order->status !== OrderStatus::COMPLETED) {
+            // 订单状态不再有开通中/已完成子状态，履约是否完成以服务是否脱离待开通为准
+            if ((int) $service->status === ServiceStatus::PENDING) {
                 return false;
             }
 
@@ -2259,7 +2261,7 @@ class PaymentService
             return null;
         }
 
-        if (! in_array((int) $order->status, [OrderStatus::PAID, OrderStatus::PROCESSING, OrderStatus::COMPLETED], true)) {
+        if ((int) $order->status !== OrderStatus::PAID) {
             return null;
         }
 

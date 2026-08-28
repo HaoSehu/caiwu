@@ -446,15 +446,9 @@ class ServiceTrafficPackageService
             $provisionData['last_upgraded_at'] = now()->format('Y-m-d H:i:s');
             $provisionData['upgrade_error'] = null;
 
-            DB::transaction(function () use ($service, $order, $provisionData) {
-                $service->forceFill([
-                    'provision_data' => $provisionData,
-                ])->save();
-
-                $order->forceFill([
-                    'status' => OrderStatus::COMPLETED,
-                ])->save();
-            });
+            $service->forceFill([
+                'provision_data' => $provisionData,
+            ])->save();
             $this->serviceBindingWriter()->syncServiceState($service, $service->product, $provisionData);
             $this->serviceBindingWriter()->recordProvisionAttempt(
                 $service,
@@ -495,15 +489,9 @@ class ServiceTrafficPackageService
             $provisionData['last_upgrade_attempt_at'] = now()->format('Y-m-d H:i:s');
             $provisionData['last_upgrade_kind'] = self::TRAFFIC_ORDER_KIND;
 
-            DB::transaction(function () use ($service, $order, $provisionData) {
-                $service->forceFill([
-                    'provision_data' => $provisionData,
-                ])->save();
-
-                $order->forceFill([
-                    'status' => OrderStatus::PROCESSING,
-                ])->save();
-            });
+            $service->forceFill([
+                'provision_data' => $provisionData,
+            ])->save();
             $this->serviceBindingWriter()->syncServiceState($service, $service->product, $provisionData);
             $this->serviceBindingWriter()->recordProvisionAttempt(
                 $service,
@@ -1410,10 +1398,6 @@ class ServiceTrafficPackageService
 
     private function isTrafficPackageOrderAlreadyCompleted(Order $order, Service $service): bool
     {
-        if ((int) $order->status === OrderStatus::COMPLETED) {
-            return true;
-        }
-
         $provisionData = $this->serviceProvisionData($service);
 
         return (int) ($provisionData['last_upgrade_order_id'] ?? 0) === (int) $order->id

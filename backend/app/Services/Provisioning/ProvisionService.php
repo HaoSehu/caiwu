@@ -2,7 +2,6 @@
 
 namespace App\Services\Provisioning;
 
-use App\Constants\OrderStatus;
 use App\Constants\ServiceStatus;
 use App\Exceptions\BusinessException;
 use App\Models\Invoice;
@@ -71,7 +70,6 @@ class ProvisionService
         if ($this->isAdminManualOrder($order) && $service->status !== ServiceStatus::PENDING) {
             $order->forceFill([
                 'service_id' => $service->id,
-                'status' => OrderStatus::COMPLETED,
                 'service_snapshot' => $this->buildServiceSnapshot($service),
             ])->save();
 
@@ -87,7 +85,6 @@ class ProvisionService
         if ($service->status === ServiceStatus::ACTIVE && $this->resolveServiceUpstreamServiceId($service) !== null) {
             $order->forceFill([
                 'service_id' => $service->id,
-                'status' => OrderStatus::COMPLETED,
                 'service_snapshot' => $this->buildServiceSnapshot($service),
             ])->save();
 
@@ -186,28 +183,6 @@ class ProvisionService
         throw new BusinessException('账单未关联订单，暂不支持重新提交上游开通');
     }
 
-    /**
-     * 管理员主动发起的上游开通（不检查 auto_setup，直接走完整购物车流程）
-     */
-    public function adminInitiatedProvision(Order $order): Service
-    {
-        $order->loadMissing(['product.supplier', 'user', 'service']);
-
-        if (! $order->exists || ! $order->product) {
-            throw new BusinessException('订单未关联商品，无法发起上游开通');
-        }
-
-        if (! $this->resolveProductSupplier($order->product) instanceof Supplier) {
-            throw new BusinessException('当前商品未配置供应商，无法发起上游开通');
-        }
-
-        $service = $this->ensureLocalService($order);
-
-        $this->assertNoUnresolvedUpstreamProvisionInvoice($service);
-
-        return $this->submitUpstreamProvision($order, $service, true);
-    }
-
     private function submitUpstreamProvision(Order $order, Service $service, bool $throwOnFailure = true): Service
     {
         $this->markPending($order, $service);
@@ -272,7 +247,6 @@ class ProvisionService
 
             $order->forceFill([
                 'service_id' => $service->id,
-                'status' => $serviceStatus === ServiceStatus::ACTIVE ? OrderStatus::COMPLETED : OrderStatus::PROCESSING,
                 'service_snapshot' => $this->buildServiceSnapshot($service),
             ])->save();
 
@@ -309,7 +283,6 @@ class ProvisionService
 
             $order->forceFill([
                 'service_id' => $service->id,
-                'status' => OrderStatus::PROCESSING,
                 'service_snapshot' => $this->buildServiceSnapshot($service),
             ])->save();
 
@@ -399,7 +372,6 @@ class ProvisionService
 
         $order->forceFill([
             'service_id' => $service->id,
-            'status' => OrderStatus::PROCESSING,
             'service_snapshot' => $this->buildServiceSnapshot($service),
         ])->save();
     }

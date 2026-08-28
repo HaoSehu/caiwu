@@ -2032,11 +2032,10 @@ class ProductSyncService
             ->whereIn('status', [
                 OrderStatus::PENDING,
                 OrderStatus::PAID,
-                OrderStatus::PROCESSING,
             ])
             ->where(function ($query) {
                 $query->whereNull('service_id')
-                    // 服务已挂单但仍在开通中时，库存仍然需要继续占用。
+                    // 服务已挂单但尚未开通完成时，库存仍然需要继续占用。
                     ->orWhereHas('service', function ($serviceQuery) {
                         $serviceQuery->where('status', ServiceStatus::PENDING);
                     });

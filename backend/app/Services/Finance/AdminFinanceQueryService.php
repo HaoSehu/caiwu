@@ -51,7 +51,7 @@ class AdminFinanceQueryService
         }
 
         if (isset($filters['status']) && $filters['status'] !== '') {
-            $query->whereIn('status', OrderStatus::filterValues((int) $filters['status']));
+            $query->where('status', (int) $filters['status']);
         }
 
         $this->applyKeywordFilter($query, trim((string) ($filters['keyword'] ?? '')));
@@ -117,7 +117,7 @@ class AdminFinanceQueryService
 
         $this->mergeDailyCounts($days, 'new_customers', $this->countsByDay('users', 'created_at', $start, $end));
         $this->mergeDailyCounts($days, 'new_orders', $this->countsByDay('orders', 'created_at', $start, $end));
-        $this->mergeDailyCounts($days, 'completed_orders', $this->countsByDay('orders', 'updated_at', $start, $end, ['status' => OrderStatus::COMPLETED]));
+        $this->mergeDailyCounts($days, 'completed_orders', $this->countsByDay('orders', 'updated_at', $start, $end, ['status' => OrderStatus::PAID]));
         $this->mergeDailyCounts($days, 'new_tickets', $this->countsByDay('tickets', 'created_at', $start, $end));
         $this->mergeDailyCounts($days, 'ticket_replies', $this->countsByDay('ticket_replies', 'created_at', $start, $end, ['is_staff' => 1]));
         $this->mergeDailyCounts($days, 'cancel_requests', $this->countsByDay('orders', 'updated_at', $start, $end, ['status' => OrderStatus::CANCELLED]));
@@ -233,7 +233,7 @@ class AdminFinanceQueryService
         }
 
         if (isset($filters['status']) && $filters['status'] !== '') {
-            $query->whereIn('status', OrderStatus::filterValues((int) $filters['status']));
+            $query->where('status', (int) $filters['status']);
         }
 
         $this->applyKeywordFilter($query, trim((string) ($filters['keyword'] ?? '')));
@@ -583,7 +583,7 @@ class AdminFinanceQueryService
     {
         return match ($status) {
             OrderStatus::PENDING => '待支付',
-            OrderStatus::PAID, OrderStatus::PROCESSING, OrderStatus::COMPLETED => '已支付',
+            OrderStatus::PAID => '已支付',
             OrderStatus::CANCELLED => '已取消',
             OrderStatus::REFUNDED => '已退款',
             default => (string) $status,

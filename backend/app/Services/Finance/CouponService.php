@@ -41,8 +41,6 @@ class CouponService
 
     private const USED_ORDER_STATUSES = [
         OrderStatus::PAID,
-        OrderStatus::PROCESSING,
-        OrderStatus::COMPLETED,
         OrderStatus::REFUNDED,
     ];
 

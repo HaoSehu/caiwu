@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Services\Finance;
 
-use App\Constants\OrderStatus;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\Product;
@@ -120,7 +119,7 @@ class OrderV2QueryService
         }
 
         if (isset($filters['status']) && $filters['status'] !== '') {
-            $query->whereIn('status', OrderStatus::filterValues((int) $filters['status']));
+            $query->where('status', (int) $filters['status']);
         }
 
         $this->applyKeywordFilter($query, trim((string) ($filters['keyword'] ?? '')));

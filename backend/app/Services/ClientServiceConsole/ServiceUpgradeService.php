@@ -332,8 +332,8 @@ class ServiceUpgradeService
             return null;
         }
 
-        // 已完成的订单是上游操作的幂等边界，不能因重复回调或任务重放再次升降级。
-        if ((int) $order->status === OrderStatus::COMPLETED) {
+        // 本订单的升级是否已成功以 provision_data 为幂等边界，不能因重复回调或任务重放再次升降级。
+        if ($this->isUpgradeOrderFulfilled($order, $service)) {
             return $service->fresh(['product.supplier', 'order']) ?? $service;
         }
 
@@ -401,7 +401,6 @@ class ServiceUpgradeService
                 $provisionData['last_upgraded_at'] = now()->format('Y-m-d H:i:s');
 
                 $service->forceFill(['provision_data' => $provisionData])->save();
-                $order->forceFill(['status' => OrderStatus::COMPLETED])->save();
 
                 return $provisionData;
             });
@@ -438,14 +437,13 @@ class ServiceUpgradeService
 
             return $service->fresh(['product.supplier', 'order']) ?? $service;
         } catch (\Throwable $exception) {
-            $provisionData = DB::transaction(function () use ($service, $order, $exception): array {
+            $provisionData = DB::transaction(function () use ($service, $exception): array {
                 $provisionData = $this->serviceProvisionData($service);
                 $provisionData['upgrade_error'] = $exception instanceof BusinessException ? $exception->getMessage() : '产品升降级失败，请联系管理员处理';
                 $provisionData['last_upgrade_attempt_at'] = now()->format('Y-m-d H:i:s');
                 $provisionData['last_upgrade_kind'] = self::ORDER_KIND;
 
                 $service->forceFill(['provision_data' => $provisionData])->save();
-                $order->forceFill(['status' => OrderStatus::PROCESSING])->save();
 
                 return $provisionData;
             });
@@ -474,6 +472,18 @@ class ServiceUpgradeService
 
             return $service->fresh(['product.supplier', 'order']) ?? $service;
         }
+    }
+
+    /**
+     * 本订单的升降级是否已在上游成功完成（provision_data 记录为本订单且无失败标记）。
+     */
+    public function isUpgradeOrderFulfilled(Order $order, Service $service): bool
+    {
+        $provisionData = (array) $service->provision_data;
+
+        return (int) ($provisionData['last_upgrade_order_id'] ?? 0) === (int) $order->id
+            && filled($provisionData['last_upgraded_at'] ?? null)
+            && blank($provisionData['upgrade_error'] ?? null);
     }
 
     private function serviceBindingWriter(): ServiceUpstreamBindingWriter

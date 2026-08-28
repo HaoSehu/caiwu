@@ -14,72 +14,66 @@ use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\TestCase;
 
 /**
- * 订单状态对外统一 4 态：筛选选中"已支付"(1) 时一并匹配
- * PROCESSING(2)/COMPLETED(3) 内部子状态，其余状态精确匹配；
- * 客户端 summary 的 paid 计数同样合并三个内部子状态。
+ * 订单状态为 4 态（0待支付/1已支付/4已取消/5已退款），
+ * 无开通中/已完成内部子状态：各状态筛选均精确匹配，
+ * 客户端 summary 的 paid 计数即 status=PAID。
  * 使用 DatabaseTransactions，测试结束回滚。
  */
 class OrderStatusFilterTest extends TestCase
 {
     use DatabaseTransactions;
 
-    public function test_admin_finance_order_filter_merges_paid_substatuses(): void
+    public function test_admin_finance_order_filter_matches_exact_status(): void
     {
         $keyword = $this->makeOrdersForFilter();
 
         $service = app(AdminFinanceQueryService::class);
 
-        $this->assertSame(3, $service->paginateOrders(['status' => OrderStatus::PAID, 'keyword' => $keyword])->total());
-
-        foreach ([OrderStatus::PENDING, OrderStatus::PROCESSING, OrderStatus::COMPLETED, OrderStatus::CANCELLED, OrderStatus::REFUNDED] as $status) {
+        foreach (array_keys(OrderStatus::$labels) as $status) {
             $this->assertSame(1, $service->paginateOrders(['status' => $status, 'keyword' => $keyword])->total());
         }
     }
 
-    public function test_admin_v2_order_filter_merges_paid_substatuses(): void
+    public function test_admin_v2_order_filter_matches_exact_status(): void
     {
         $keyword = $this->makeOrdersForFilter();
 
         $service = app(OrderV2QueryService::class);
 
-        $this->assertSame(3, $service->paginateAdminOrders(['status' => OrderStatus::PAID, 'keyword' => $keyword])->total());
-
-        foreach ([OrderStatus::PENDING, OrderStatus::PROCESSING, OrderStatus::COMPLETED, OrderStatus::CANCELLED, OrderStatus::REFUNDED] as $status) {
+        foreach (array_keys(OrderStatus::$labels) as $status) {
             $this->assertSame(1, $service->paginateAdminOrders(['status' => $status, 'keyword' => $keyword])->total());
         }
     }
 
-    public function test_admin_upgrade_order_filter_merges_paid_substatuses(): void
+    public function test_admin_upgrade_order_filter_matches_exact_status(): void
     {
         $keyword = $this->makeOrdersForFilter('upgrade');
 
         $service = app(AdminFinanceQueryService::class);
 
-        $this->assertSame(3, $service->paginateUpgradeOrders(['status' => OrderStatus::PAID, 'keyword' => $keyword])->total());
+        $this->assertSame(1, $service->paginateUpgradeOrders(['status' => OrderStatus::PAID, 'keyword' => $keyword])->total());
         $this->assertSame(1, $service->paginateUpgradeOrders(['status' => OrderStatus::CANCELLED, 'keyword' => $keyword])->total());
     }
 
-    public function test_client_order_filter_merges_paid_substatuses(): void
+    public function test_client_order_filter_matches_exact_status(): void
     {
         [$userId] = $this->makeOrdersForClient();
 
         $service = app(ClientOrderQueryService::class);
 
-        $this->assertSame(3, $service->paginate($userId, ['status' => OrderStatus::PAID], [])['total']);
-
-        foreach ([OrderStatus::PENDING, OrderStatus::CANCELLED, OrderStatus::REFUNDED] as $status) {
+        foreach (array_keys(OrderStatus::$labels) as $status) {
             $this->assertSame(1, $service->paginate($userId, ['status' => $status], [])['total']);
         }
     }
 
-    public function test_client_summary_merges_paid_substatuses(): void
+    public function test_client_summary_counts_paid_only(): void
     {
         [$userId] = $this->makeOrdersForClient();
 
         $summary = app(ClientOrderQueryService::class)->summary($userId, []);
 
         $this->assertSame(1, $summary['pending']);
-        $this->assertSame(3, $summary['paid']);
+        $this->assertSame(1, $summary['paid']);
         $this->assertSame(1, $summary['cancelled']);
         $this->assertSame(1, $summary['refunded']);
         $this->assertArrayNotHasKey('processing', $summary);

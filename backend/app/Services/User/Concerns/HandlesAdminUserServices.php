@@ -540,7 +540,6 @@ trait HandlesAdminUserServices
         throw_if($deductBalance && ! $createInvoice, new BusinessException('从余额扣款需同时开启自动创建账单'));
 
         $now = now();
-        $orderStatus = $status === ServiceStatus::PENDING ? OrderStatus::PROCESSING : OrderStatus::COMPLETED;
         $expiresAt = $this->resolveManualServiceExpiresAt(
             $data['expires_at'] ?? null,
             $billingCycle,
@@ -580,7 +579,6 @@ trait HandlesAdminUserServices
             $sourceType,
             $domain,
             $now,
-            $orderStatus,
             $expiresAt,
             $serviceName,
             $traceId,
@@ -764,7 +762,7 @@ trait HandlesAdminUserServices
 
                 if ($order instanceof Order) {
                     $order->forceFill([
-                        'status' => $orderStatus,
+                        'status' => OrderStatus::PAID,
                         'paid_amount' => $amount,
                         'paid_at' => $now,
                     ])->save();

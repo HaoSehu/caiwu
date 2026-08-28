@@ -194,7 +194,7 @@ class ReferralService
             return null;
         }
 
-        if (! in_array((int) $order->status, [OrderStatus::PAID, OrderStatus::COMPLETED, OrderStatus::PROCESSING], true)) {
+        if ((int) $order->status !== OrderStatus::PAID) {
             return null;
         }
 

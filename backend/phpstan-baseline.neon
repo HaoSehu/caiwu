@@ -3759,7 +3759,7 @@ parameters:
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
 			identifier: property.notFound
-			count: 10
+			count: 9
 			path: app/Services/Finance/PaymentService.php
 
 		-
@@ -3771,13 +3771,13 @@ parameters:
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$status\.$#'
 			identifier: property.notFound
-			count: 3
+			count: 2
 			path: app/Services/Finance/PaymentService.php
 
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$type\.$#'
 			identifier: property.notFound
-			count: 2
+			count: 1
 			path: app/Services/Finance/PaymentService.php
 
 		-
@@ -3823,31 +3823,7 @@ parameters:
 			path: app/Services/Finance/PaymentService.php
 
 		-
-			message: '#^Parameter \#1 \$order of method App\\Services\\ClientServiceConsole\\ServiceTrafficPackageService\:\:processPaidTrafficPackageOrder\(\) expects App\\Models\\Order, Illuminate\\Database\\Eloquent\\Model given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Services/Finance/PaymentService.php
-
-		-
-			message: '#^Parameter \#1 \$order of method App\\Services\\ClientServiceConsole\\ServiceUpgradeService\:\:processPaidUpgradeOrder\(\) expects App\\Models\\Order, Illuminate\\Database\\Eloquent\\Model given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Services/Finance/PaymentService.php
-
-		-
 			message: '#^Parameter \#1 \$order of method App\\Services\\Finance\\PaymentService\:\:restoreOrderProductStockIfNeeded\(\) expects App\\Models\\Order, Illuminate\\Database\\Eloquent\\Model given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Services/Finance/PaymentService.php
-
-		-
-			message: '#^Parameter \#1 \$order of method App\\Services\\Provisioning\\ProvisionService\:\:processPaidOrder\(\) expects App\\Models\\Order, Illuminate\\Database\\Eloquent\\Model given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Services/Finance/PaymentService.php
-
-		-
-			message: '#^Parameter \#1 \$order of method App\\Services\\Provisioning\\ServiceRenewService\:\:processPaidRenewOrder\(\) expects App\\Models\\Order, Illuminate\\Database\\Eloquent\\Model given\.$#'
 			identifier: argument.type
 			count: 1
 			path: app/Services/Finance/PaymentService.php
@@ -5222,12 +5198,6 @@ parameters:
 
 		-
 			message: '#^Parameter \#1 \$product of method App\\Services\\Provisioning\\ProvisionService\:\:buildUpstreamConfigOptionMap\(\) expects App\\Models\\Product, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Services/Provisioning/ProvisionService.php
-
-		-
-			message: '#^Parameter \#1 \$product of method App\\Services\\Provisioning\\ProvisionService\:\:resolveProductSupplier\(\) expects App\\Models\\Product, Illuminate\\Database\\Eloquent\\Model given\.$#'
 			identifier: argument.type
 			count: 1
 			path: app/Services/Provisioning/ProvisionService.php

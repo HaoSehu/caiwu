@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\Log;
  * 上游开通失败孤儿单补偿。
  *
  * 孤儿单特征：service.status=PENDING（开通中）且 provision_data.provision_error 非空、
- * order.status=PROCESSING（已付款处理中），即"已付款未开通"且自动开通链路失败的单。
+ * order.status=PAID（已付款），即"已付款未开通"且自动开通链路失败的单。
  *
  * 默认 dry-run：只扫描并告警，不自动重试。--execute 才对 retry_count 未超上限的
  * 孤儿单调用 ProvisionService::retryFailedProvision 重试。
@@ -117,7 +117,7 @@ class RetryFailedProvisionCommand extends Command
     }
 
     /**
-     * 扫描孤儿单：service 停在 PENDING、provision_error 非空、关联 order 处于 PROCESSING。
+     * 扫描孤儿单：service 停在 PENDING、provision_error 非空、关联 order 已付款。
      */
     private function findOrphans(int $limit): array
     {
@@ -125,7 +125,7 @@ class RetryFailedProvisionCommand extends Command
             ->where('status', ServiceStatus::PENDING)
             ->whereNotNull('order_id')
             ->whereHas('order', function ($query): void {
-                $query->where('status', OrderStatus::PROCESSING);
+                $query->where('status', OrderStatus::PAID);
             })
             ->whereNotNull(DB::raw("JSON_EXTRACT(provision_data, '$.provision_error')"))
             ->whereRaw("JSON_EXTRACT(provision_data, '$.provision_error') != ''")

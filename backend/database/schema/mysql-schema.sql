@@ -65,7 +65,7 @@ CREATE TABLE `activity_logs` (
   KEY `activity_logs_stream_created_at_index` (`stream`,`created_at`),
   KEY `activity_logs_trace_id_index` (`trace_id`),
   KEY `activity_logs_module_subject_id_index` (`module`,`subject_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=1101814 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=1101828 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `admin_user_roles`;
@@ -500,7 +500,7 @@ CREATE TABLE `integration_plugin_runtime_logs` (
   KEY `plugin_runtime_status_created_idx` (`status`,`created_at`),
   KEY `plugin_runtime_bindable_idx` (`bindable_type`,`bindable_id`,`created_at`),
   CONSTRAINT `integration_plugin_runtime_logs_plugin_id_foreign` FOREIGN KEY (`plugin_id`) REFERENCES `integration_plugins` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=1047249 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=1047255 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `integration_plugins`;
@@ -632,7 +632,7 @@ CREATE TABLE `jobs` (
   `created_at` int unsigned NOT NULL,
   PRIMARY KEY (`id`),
   KEY `jobs_queue_index` (`queue`)
-) ENGINE=InnoDB AUTO_INCREMENT=5502 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=5504 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `marketing_product_group_items`;
@@ -751,7 +751,7 @@ CREATE TABLE `message_logs` (
   KEY `message_logs_trace_idx` (`trace_id`),
   KEY `message_logs_request_id_idx` (`request_id`),
   CONSTRAINT `message_logs_plugin_fk` FOREIGN KEY (`plugin_id`) REFERENCES `integration_plugins` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=3558 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=3560 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `migrations`;
@@ -762,7 +762,7 @@ CREATE TABLE `migrations` (
   `migration` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `batch` int NOT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=214 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=215 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `notice_reads`;
@@ -858,7 +858,7 @@ CREATE TABLE `orders` (
   `coupon_snapshot` json DEFAULT NULL,
   `member_discount_snapshot` json DEFAULT NULL COMMENT '会员折扣命中快照 JSON',
   `service_snapshot` json DEFAULT NULL COMMENT '服务实例快照：{instance_id, hostname}',
-  `status` tinyint NOT NULL DEFAULT '0' COMMENT '订单状态：0待支付 1已支付 2已支付(内部:开通中) 3已支付(内部:已完成) 4已取消 5已退款',
+  `status` tinyint NOT NULL DEFAULT '0' COMMENT '订单状态：0待支付 1已支付 4已取消 5已退款',
   `paid_at` timestamp NULL DEFAULT NULL,
   `deleted_at` timestamp NULL DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
@@ -987,7 +987,7 @@ CREATE TABLE `personal_access_tokens` (
   UNIQUE KEY `personal_access_tokens_token_unique` (`token`),
   KEY `personal_access_tokens_tokenable_type_tokenable_id_index` (`tokenable_type`,`tokenable_id`),
   KEY `personal_access_tokens_expires_at_index` (`expires_at`)
-) ENGINE=InnoDB AUTO_INCREMENT=645 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=647 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `product_groups`;
@@ -2072,6 +2072,7 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (210,'2026_08_27_00
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (211,'2026_08_27_000011_add_renewal_reward_rate_to_promotion_ambassadors_table',113);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (212,'2026_08_28_000001_add_unique_index_to_referral_rewards_invoice_id',114);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (213,'2026_08_28_100000_update_orders_status_comment_external_states',115);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (214,'2026_08_29_100000_normalize_order_status_to_four_states',116);
 
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
