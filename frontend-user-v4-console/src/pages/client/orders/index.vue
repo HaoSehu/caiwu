@@ -60,20 +60,6 @@
           <template #status="{ row }">
             <status-tag :status-map="ORDER_STATUS_MAP" :status="Number(row.status)" />
           </template>
-          <template #invoice_ref="{ row }">
-            <div v-if="row.invoice" class="stack-cell">
-              <t-button
-                variant="text"
-                theme="primary"
-                size="small"
-                @click="router.push(`/client/invoices/${row.invoice.id}`)"
-              >
-                {{ row.invoice.invoice_no || '--' }}
-              </t-button>
-              <status-tag :status-map="INVOICE_STATUS_MAP" :status="Number(row.invoice.status)" size="small" />
-            </div>
-            <span v-else>--</span>
-          </template>
           <template #created_at="{ row }">{{ formatDateTime(row.created_at) }}</template>
           <template #operation="{ row }">
             <t-space>
@@ -124,7 +110,6 @@
               <span class="stack-money">¥{{ formatMoney(row.amount) }}</span>
             </div>
             <div class="record-mobile-card__meta">
-              <span v-if="row.invoice">账单: {{ row.invoice.invoice_no || '--' }}</span>
               <span>{{ formatDateTime(row.created_at) }}</span>
             </div>
             <div class="record-mobile-card__actions">
@@ -175,7 +160,7 @@
   </section>
 </template>
 <script setup lang="ts">
-import { INVOICE_STATUS_MAP, ORDER_STATUS_MAP } from '@caiwu/shared/statusConfig';
+import { ORDER_STATUS_MAP } from '@caiwu/shared/statusConfig';
 import DataState from '@shared/user-v3/components/DataState.vue';
 import StatusTag from '@shared/user-v3/components/StatusTag.vue';
 import { SearchIcon } from 'tdesign-icons-vue-next';
@@ -216,7 +201,6 @@ const columns: PrimaryTableCol[] = [
   { colKey: 'product', title: '产品/服务', minWidth: '12rem' },
   { colKey: 'amount', title: '金额', width: '9rem', align: 'right' },
   { colKey: 'status', title: '状态', width: '8rem' },
-  { colKey: 'invoice_ref', title: '关联账单', minWidth: '12rem' },
   { colKey: 'created_at', title: '创建时间', minWidth: '12rem' },
   { colKey: 'operation', title: '操作', width: '12rem', fixed: 'right', align: 'right' },
 ];
