@@ -26,7 +26,7 @@
 
       <div class="staff-summary">
         <span>共 {{ total }} 位员工</span>
-        <span>第 {{ page }} 页，每页 {{ pageSize }} 条</span>
+        <span>第 {{ pagination.page }} 页，每页 {{ pagination.page_size }} 条</span>
       </div>
 
       <t-table
@@ -35,10 +35,8 @@
         :data="list"
         :columns="columns"
         :loading="loading"
-        :pagination="pagination"
         hover
         table-layout="fixed"
-        @page-change="handlePageChange"
       >
         <template #account="{ row }">
           <div class="staff-account">
@@ -85,6 +83,17 @@
         </template>
       </t-table>
 
+      <div v-if="!isMobile && total > 0" class="staff-desktop-pagination">
+        <t-pagination
+          :current="pagination.page"
+          :page-size="pagination.page_size"
+          :total="total"
+          :page-size-options="[20, 50, 100]"
+          show-jumper
+          @change="handlePaginationChange"
+        />
+      </div>
+
       <div v-else class="staff-mobile-list">
         <t-loading :loading="loading" size="small">
           <div v-if="list.length" class="staff-mobile-stack">
@@ -113,11 +122,11 @@
         </t-loading>
         <t-pagination
           v-if="total > 0"
-          v-model:current="page"
-          v-model:page-size="pageSize"
+          v-model:current="pagination.page"
+          v-model:page-size="pagination.page_size"
           class="staff-mobile-pagination"
           :total="total"
-          @change="handlePageChange"
+          @change="handlePaginationChange"
         />
       </div>
     </t-card>
@@ -183,7 +192,7 @@
 import './index.less';
 
 import { SearchIcon, UserAddIcon } from 'tdesign-icons-vue-next';
-import type { FormInstanceFunctions, FormRule, PageInfo, PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
+import type { FormInstanceFunctions, FormRule, PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import { computed, onMounted, reactive, ref } from 'vue';
 
@@ -191,6 +200,7 @@ import type { CreateStaffPayload, StaffPayload, StaffRecord, StaffRoleOption } f
 import { adminStaffApi } from '@/api/admin-staff';
 import MobileRecordCard from '@/components/mobile-record-card/index.vue';
 import { AdminPermissions, hasPermissionInList } from '@/constants/permissions';
+import { useListPage } from '@/hooks/useListPage';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useUserStore } from '@/store';
 import { required } from '@/utils/formRules';
@@ -211,38 +221,37 @@ interface StaffForm {
 }
 
 const userStore = useUserStore();
-const loading = ref(false);
 const saving = ref(false);
 const resetting = ref(false);
 const formVisible = ref(false);
 const resetVisible = ref(false);
 const formRef = ref<FormInstanceFunctions>();
 const resetFormRef = ref<FormInstanceFunctions>();
-const list = ref<StaffRecord[]>([]);
 const roles = ref<StaffRoleOption[]>([]);
-const total = ref(0);
-const page = ref(1);
-const pageSize = ref(20);
 const currentResetStaff = ref<StaffRecord | null>(null);
 
-const filters = reactive<{ keyword: string; status: number | ''; role_id: number | string | '' }>({
-  keyword: '',
-  status: '',
-  role_id: '',
+interface StaffFilter {
+  keyword: string;
+  status: number | '';
+  role_id: number | string | '';
+}
+
+const { filters, list, total, loading, pagination, loadList, handleSearch, handlePaginationChange } = useListPage<
+  StaffFilter,
+  StaffRecord
+>({
+  defaultFilters: { keyword: '', status: '', role_id: '' },
+  defaultPageSize: 20,
+  onError: (error) => MessagePlugin.error(errorMessage(error, '加载员工列表失败')),
+  fetch: (params) => adminStaffApi.list(params),
 });
+
 const form = reactive<StaffForm>(createDefaultForm());
 const resetForm = reactive({ password: '', password_confirmation: '' });
 
 const canManage = computed(() => hasPermission(AdminPermissions.STAFF_MANAGE));
 const canEditStaffIdentity = computed(() => hasPermission(AdminPermissions.ALL));
 const isMobile = useMediaQuery('(max-width: 768px)');
-const pagination = computed(() => ({
-  current: page.value,
-  pageSize: pageSize.value,
-  total: total.value,
-  pageSizeOptions: [20, 50, 100],
-  showJumper: true,
-}));
 
 const formRules = computed<Record<string, FormRule[]>>(() => ({
   username: [
@@ -273,7 +282,8 @@ const columns: PrimaryTableCol<TableRowData>[] = [
 ];
 
 onMounted(async () => {
-  await Promise.all([loadRoles(), loadList()]);
+  // 员工列表由引擎自动加载，此处只补角色选项（筛选与表单共用）
+  await loadRoles();
 });
 
 function createDefaultForm(): StaffForm {
@@ -295,38 +305,6 @@ async function loadRoles() {
   } catch (error) {
     MessagePlugin.error(errorMessage(error, '加载角色列表失败'));
   }
-}
-
-async function loadList() {
-  loading.value = true;
-  try {
-    const response = await adminStaffApi.list({
-      keyword: filters.keyword,
-      status: filters.status,
-      role_id: filters.role_id,
-      page: page.value,
-      page_size: pageSize.value,
-    });
-    list.value = response.list || [];
-    total.value = Number(response.total || 0);
-  } catch (error) {
-    list.value = [];
-    total.value = 0;
-    MessagePlugin.error(errorMessage(error, '加载员工列表失败'));
-  } finally {
-    loading.value = false;
-  }
-}
-
-function handleSearch() {
-  page.value = 1;
-  loadList();
-}
-
-function handlePageChange(pageInfo: PageInfo) {
-  page.value = pageInfo.current;
-  pageSize.value = pageInfo.pageSize;
-  loadList();
 }
 
 function staffMobileActions(row: StaffRecord) {

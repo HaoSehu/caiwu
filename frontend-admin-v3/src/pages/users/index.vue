@@ -23,7 +23,7 @@
 
       <div class="users-list-summary">
         <span>共 {{ total }} 位用户</span>
-        <span>第 {{ page }} 页，每页 {{ pageSize }} 条</span>
+        <span>第 {{ pagination.page }} 页，每页 {{ pagination.page_size }} 条</span>
       </div>
 
       <t-table
@@ -33,9 +33,7 @@
         :columns="columns"
         :loading="loading"
         :hover="true"
-        :pagination="pagination"
         table-layout="fixed"
-        @page-change="handlePageChange"
       >
         <template #account="{ row }">
           <button class="users-account" type="button" @click="openDetail(row.id)">
@@ -67,6 +65,17 @@
         </template>
         <template #createdAt="{ row }">{{ formatDateTime(row.created_at) }}</template>
       </t-table>
+
+      <div v-if="total > 0" class="users-desktop-pagination pagination-row">
+        <t-pagination
+          :current="pagination.page"
+          :page-size="pagination.page_size"
+          :total="total"
+          :page-size-options="[20, 50, 100]"
+          show-jumper
+          @change="handlePaginationChange"
+        />
+      </div>
 
       <div class="users-mobile-list">
         <t-loading :loading="loading" size="small">
@@ -107,12 +116,12 @@
           <t-empty v-else />
         </t-loading>
         <t-pagination
-          v-model:current="page"
-          v-model:page-size="pageSize"
+          v-model:current="pagination.page"
+          v-model:page-size="pagination.page_size"
           class="users-mobile-pagination"
           :total="total"
           :page-size-options="[20, 50, 100]"
-          @change="handlePageChange"
+          @change="handlePaginationChange"
         />
       </div>
     </t-card>
@@ -145,17 +154,19 @@
 import './index.less';
 
 import { CheckCircleFilledIcon, SearchIcon, UserAddIcon } from 'tdesign-icons-vue-next';
-import type { FormInstanceFunctions, FormRule, PageInfo, PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
+import type { FormInstanceFunctions, FormRule, PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
-import { computed, onActivated, onMounted, reactive, ref } from 'vue';
+import { reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
-import type { AdminUser } from '@/api/user';
+import type { AdminUser, UserListParams } from '@/api/user';
 import { userApi } from '@/api/user';
 import { AdminPermissions, hasPermissionInList } from '@/constants/permissions';
+import { useListPage } from '@/hooks/useListPage';
 import { useUserStore } from '@/store';
 import { formatDateTime, formatMoney } from '@/utils/format';
 import { phoneRule, required } from '@/utils/formRules';
+import { errorMessage } from '@/utils/userMessage';
 
 defineOptions({
   name: 'AdminUsers',
@@ -171,31 +182,32 @@ function userPermissions() {
 
 const canManage = hasPermissionInList(userPermissions(), AdminPermissions.USER_MANAGE);
 
-const loading = ref(false);
 const submitLoading = ref(false);
-const list = ref<AdminUser[]>([]);
-const total = ref(0);
-const page = ref(1);
-const pageSize = ref(20);
-const filters = reactive<{ keyword: string; status: number | '' }>({ keyword: '', status: '' });
+
+const { filters, list, total, loading, pagination, loadList, handleSearch, handlePaginationChange } = useListPage<
+  UserFilter,
+  AdminUser
+>({
+  defaultFilters: { keyword: '', status: '' },
+  defaultPageSize: 20,
+  onError: (error) => MessagePlugin.error(errorMessage(error, '加载用户列表失败')),
+  fetch: (params) => userApi.list(params as UserListParams),
+});
+
+interface UserFilter {
+  keyword: string;
+  status: number | '';
+}
 
 const columns: PrimaryTableCol<TableRowData>[] = [
   { title: 'ID', colKey: 'id', width: 80 },
   { title: '手机号 / 邮箱', colKey: 'account', width: 220 },
   { title: '昵称', colKey: 'nickname', width: 180 },
-  { title: '余额', colKey: 'cash_balance', width: 120, align: 'right' },
+  { title: '余额', colKey: 'balance', width: 120, align: 'right' },
   { title: '已开通服务', colKey: 'openedServices', width: 130, align: 'center' },
   { title: '状态', colKey: 'status', width: 100 },
   { title: '注册时间', colKey: 'createdAt', width: 180 },
 ];
-
-const pagination = computed(() => ({
-  current: page.value,
-  pageSize: pageSize.value,
-  total: total.value,
-  pageSizeOptions: [20, 50, 100],
-  showJumper: true,
-}));
 
 const createVisible = ref(false);
 const createFormRef = ref<FormInstanceFunctions>();
@@ -205,36 +217,6 @@ const createRules: Record<string, FormRule[]> = {
   phone: [phoneRule()],
   password: [required('请输入密码')],
 };
-
-async function loadList() {
-  loading.value = true;
-  try {
-    const response = await userApi.list({
-      keyword: filters.keyword,
-      status: filters.status,
-      page: page.value,
-      page_size: pageSize.value,
-    });
-    list.value = response.list || [];
-    total.value = Number(response.total || 0);
-  } catch {
-    list.value = [];
-    total.value = 0;
-  } finally {
-    loading.value = false;
-  }
-}
-
-function handleSearch() {
-  page.value = 1;
-  loadList();
-}
-
-function handlePageChange(pageInfo: PageInfo) {
-  page.value = pageInfo.current;
-  pageSize.value = pageInfo.pageSize;
-  loadList();
-}
 
 function openCreateDialog() {
   Object.assign(createForm, { email: '', nickname: '', phone: '', password: '' });
@@ -259,15 +241,4 @@ async function handleCreate() {
 function openDetail(id: number | string) {
   router.push(`/admin/users/${id}`);
 }
-
-// 列表页开启 keep-alive 后，从详情返回时刷新数据；首次激活跳过（onMounted 已加载）
-let skipFirstActivate = true;
-onMounted(() => loadList());
-onActivated(() => {
-  if (skipFirstActivate) {
-    skipFirstActivate = false;
-    return;
-  }
-  loadList();
-});
 </script>

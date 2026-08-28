@@ -124,7 +124,7 @@
           :total="total"
           :page-size-options="[20, 50, 100]"
           show-jumper
-          @change="handlePageChange"
+          @change="handlePaginationChange"
         />
       </div>
     </t-card>
@@ -171,15 +171,16 @@ import './index.less';
 
 import { SERVICE_STATUS_MAP, toSelectOptions } from '@shared/statusConfig';
 import { SearchIcon } from 'tdesign-icons-vue-next';
-import type { PageInfo, PrimaryTableCol } from 'tdesign-vue-next';
+import type { PrimaryTableCol } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
-import type { ServiceRecord } from '@/api/service';
+import type { ServiceListParams, ServiceRecord } from '@/api/service';
 import { serviceApi } from '@/api/service';
 import MobileRecordCard from '@/components/mobile-record-card/index.vue';
 import StatusTag from '@/components/status-tag/index.vue';
+import { useListPage } from '@/hooks/useListPage';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { fieldValue, formatMoney } from '@/utils/format';
 import { errorMessage } from '@/utils/userMessage';
@@ -194,24 +195,44 @@ interface HostnameRow {
   hostname: string;
 }
 
+interface ServiceFilter {
+  keyword: string;
+  status: string;
+}
+
 const router = useRouter();
-const loading = ref(false);
-const services = ref<ServiceRecord[]>([]);
-const total = ref(0);
 const selectedRowKeys = ref<Array<string | number>>([]);
 const hostnameDialogVisible = ref(false);
 const hostnameSubmitting = ref(false);
 const hostnameRows = ref<HostnameRow[]>([]);
 const isMobile = useMediaQuery('(max-width: 768px)');
 
-const filters = reactive({
-  keyword: '',
-  status: '',
-});
-
-const pagination = reactive({
-  page: 1,
-  page_size: 20,
+const {
+  filters,
+  list: services,
+  total,
+  loading,
+  pagination,
+  loadList,
+  handleSearch,
+  handlePaginationChange,
+} = useListPage<ServiceFilter, ServiceRecord>({
+  defaultFilters: { keyword: '', status: '' },
+  defaultPageSize: 20,
+  onError: (error) => MessagePlugin.error(errorMessage(error, '加载服务列表失败')),
+  // 换页后旧选中随数据变化失效，加载成功后清空多选（保持原行为）
+  afterLoad: () => {
+    selectedRowKeys.value = [];
+  },
+  fetch: (params) => {
+    const requestParams: Record<string, unknown> = {
+      page: params.page,
+      page_size: params.page_size,
+    };
+    if (String(params.keyword || '').trim()) requestParams.keyword = String(params.keyword).trim();
+    if (params.status !== '') requestParams.status = params.status;
+    return serviceApi.list(requestParams as ServiceListParams);
+  },
 });
 
 const statusOptions = computed(() =>
@@ -241,41 +262,6 @@ const selectedRows = computed(() => {
   const selected = new Set(selectedRowKeys.value.map((item) => String(item)));
   return services.value.filter((row) => selected.has(String(row.id)));
 });
-
-function buildParams() {
-  const params: Record<string, unknown> = {
-    page: pagination.page,
-    page_size: pagination.page_size,
-  };
-  if (filters.keyword.trim()) params.keyword = filters.keyword.trim();
-  if (filters.status !== '') params.status = filters.status;
-  return params;
-}
-
-async function loadList() {
-  loading.value = true;
-  try {
-    const response = await serviceApi.list(buildParams());
-    services.value = response.list || [];
-    total.value = Number(response.total || 0);
-    selectedRowKeys.value = [];
-  } catch (error) {
-    MessagePlugin.error(errorMessage(error, '加载服务列表失败'));
-  } finally {
-    loading.value = false;
-  }
-}
-
-function handleSearch() {
-  pagination.page = 1;
-  loadList();
-}
-
-function handlePageChange(data: PageInfo) {
-  pagination.page = data.current;
-  pagination.page_size = data.pageSize;
-  loadList();
-}
 
 function handleSelectChange(keys: Array<string | number>) {
   selectedRowKeys.value = keys;
@@ -406,6 +392,4 @@ function shortDate(value: unknown) {
 function toRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 }
-
-onMounted(() => loadList());
 </script>

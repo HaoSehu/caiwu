@@ -26,9 +26,7 @@
         :columns="columns"
         :loading="listLoading"
         :hover="true"
-        :pagination="pagination"
         table-layout="fixed"
-        @page-change="handlePageChange"
       >
         <template #displayName="{ row }">{{ row.display_name || '-' }}</template>
         <template #realName="{ row }">{{ row.real_name || '-' }}</template>
@@ -54,6 +52,17 @@
           </t-space>
         </template>
       </t-table>
+
+      <div v-if="total > 0" class="verification-desktop-pagination">
+        <t-pagination
+          :current="pagination.page"
+          :page-size="pagination.page_size"
+          :total="total"
+          :page-size-options="[20, 50, 100]"
+          show-jumper
+          @change="handlePaginationChange"
+        />
+      </div>
 
       <div class="verification-mobile-list">
         <t-loading :loading="listLoading" size="small">
@@ -93,12 +102,12 @@
           <t-empty v-else />
         </t-loading>
         <t-pagination
-          v-model:current="page"
-          v-model:page-size="pageSize"
+          v-model:current="pagination.page"
+          v-model:page-size="pagination.page_size"
           class="verification-mobile-pagination"
           :total="total"
           :page-size-options="[20, 50, 100]"
-          @change="handlePageChange"
+          @change="handlePaginationChange"
         />
       </div>
     </section>
@@ -198,31 +207,63 @@
 </template>
 <script setup lang="ts">
 import { ChevronLeftIcon, SearchIcon } from 'tdesign-icons-vue-next';
-import type { FormInstanceFunctions, FormRule, PageInfo, PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
+import type { FormInstanceFunctions, FormRule, PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
-import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { onMounted, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 
 import type { VerificationRecord } from '@/api/admin';
 import { adminApi } from '@/api/admin';
+import { useListPage } from '@/hooks/useListPage';
 import { useUserStore } from '@/store';
 import { formatDateTime } from '@/utils/format';
 import { required } from '@/utils/formRules';
+import { errorMessage } from '@/utils/userMessage';
 
 const userStore = useUserStore();
 const route = useRoute();
 const validPanes = ['list', 'manage'] as const;
 type VerificationPane = (typeof validPanes)[number];
 const activePane = ref<VerificationPane>(resolveRoutePane());
-const listLoading = ref(false);
 const feeLoading = ref(false);
 const actionLoadingId = ref<number | string | null>(null);
-const list = ref<VerificationRecord[]>([]);
-const total = ref(0);
-const page = ref(1);
-const pageSize = ref(20);
 const quickStatus = ref('all');
-const filters = reactive({ keyword: '' });
+
+interface VerificationFilter {
+  keyword: string;
+}
+
+// quickStatus 单控件映射多参数（success 双参数）留在页面自定义，引擎只接管 keyword/分页/列表状态
+const {
+  filters,
+  list,
+  total,
+  loading: listLoading,
+  pagination,
+  loadList,
+  handleSearch,
+  handlePaginationChange,
+} = useListPage<VerificationFilter, VerificationRecord>({
+  defaultFilters: { keyword: '' },
+  defaultPageSize: 20,
+  onError: (error) => MessagePlugin.error(errorMessage(error, '加载实名认证列表失败')),
+  fetch: (params) => {
+    const requestParams: Record<string, number | string> = {
+      page: params.page,
+      page_size: params.page_size,
+    };
+    if (String(params.keyword || '').trim()) requestParams.keyword = String(params.keyword).trim();
+    if (quickStatus.value === 'success') {
+      requestParams.verification_status = 2;
+      requestParams.is_verified = 1;
+    } else if (quickStatus.value === 'pending') {
+      requestParams.verification_status = 1;
+    } else if (quickStatus.value === 'failed') {
+      requestParams.verification_status = 3;
+    }
+    return adminApi.verifications.list(requestParams);
+  },
+});
 
 const feeFormRef = ref<FormInstanceFunctions>();
 const feeForm = reactive({
@@ -261,14 +302,6 @@ const historyColumns: PrimaryTableCol<TableRowData>[] = [
   { title: '提交时间', colKey: 'submittedAt', width: 180 },
 ];
 
-const pagination = computed(() => ({
-  current: page.value,
-  pageSize: pageSize.value,
-  total: total.value,
-  pageSizeOptions: [20, 50, 100],
-  showJumper: true,
-}));
-
 const feeRules: Record<string, FormRule[]> = {
   free_attempts: [required('请输入免费认证次数')],
   retry_fee: [required('请输入再次认证费用')],
@@ -290,34 +323,6 @@ watch(
   },
 );
 
-function buildListParams() {
-  const params: Record<string, string | number> = {
-    page: page.value,
-    page_size: pageSize.value,
-  };
-  if (filters.keyword) params.keyword = filters.keyword;
-  if (quickStatus.value === 'success') {
-    params.verification_status = 2;
-    params.is_verified = 1;
-  } else if (quickStatus.value === 'pending') {
-    params.verification_status = 1;
-  } else if (quickStatus.value === 'failed') {
-    params.verification_status = 3;
-  }
-  return params;
-}
-
-async function loadList() {
-  listLoading.value = true;
-  try {
-    const response = await adminApi.verifications.list(buildListParams());
-    list.value = response.list || [];
-    total.value = Number(response.total || 0);
-  } finally {
-    listLoading.value = false;
-  }
-}
-
 async function loadSummary() {
   try {
     const response = await adminApi.verifications.summary();
@@ -332,21 +337,9 @@ async function loadSummary() {
   }
 }
 
-function handleSearch() {
-  page.value = 1;
-  loadList();
-}
-
 function handleQuickStatusChange(value: string | number) {
   quickStatus.value = String(value || 'all');
-  page.value = 1;
-  loadList();
-}
-
-function handlePageChange(pageInfo: PageInfo) {
-  page.value = pageInfo.current;
-  pageSize.value = pageInfo.pageSize;
-  loadList();
+  handleSearch();
 }
 
 function verificationMethodLabel(row: VerificationRecord) {
@@ -494,7 +487,7 @@ function formatDetailValue(value?: string | number | null) {
 }
 
 onMounted(() => {
-  loadList();
+  // 列表由引擎自动加载，此处只补费用设置与认证方式兜底配置
   loadSummary();
 });
 </script>
@@ -636,6 +629,12 @@ onMounted(() => {
   margin-top: var(--td-comp-margin-l);
 }
 
+.verification-desktop-pagination {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--td-comp-margin-m);
+}
+
 .verification-drawer-actions {
   position: sticky;
   bottom: 0;
@@ -654,6 +653,10 @@ onMounted(() => {
   }
 
   .verification-table {
+    display: none;
+  }
+
+  .verification-desktop-pagination {
     display: none;
   }
 

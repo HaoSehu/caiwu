@@ -227,6 +227,12 @@
   margin-top: var(--td-comp-margin-l);
 }
 
+.users-desktop-pagination {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--td-comp-margin-m);
+}
+
 @media (width <= 768px) {
   .users-page {
     gap: var(--td-comp-margin-l);
@@ -263,6 +269,10 @@
   }
 
   .users-desktop-table {
+    display: none;
+  }
+
+  .users-desktop-pagination {
     display: none;
   }
 

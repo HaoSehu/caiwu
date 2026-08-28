@@ -159,12 +159,12 @@
 
         <div v-if="total > 0" class="pagination-row">
           <t-pagination
-            :current="page"
-            :page-size="pageSize"
+            :current="pagination.page"
+            :page-size="pagination.page_size"
             :total="total"
             :page-size-options="[20, 50, 100]"
             show-jumper
-            @change="handlePageChange"
+            @change="handlePaginationChange"
           />
         </div>
       </t-card>
@@ -401,6 +401,7 @@ import { userApi } from '@/api/user';
 import MobileRecordCard from '@/components/mobile-record-card/index.vue';
 import ProductBindingTreeSelect from '@/components/product-binding-tree-select/index.vue';
 import { AdminPermissions } from '@/constants/permissions';
+import { useListPage } from '@/hooks/useListPage';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { formatDateTime } from '@/utils/format';
 import { hasAdminPermission } from '@/utils/permission';
@@ -462,15 +463,10 @@ function syncTabFromRoute() {
 onMounted(syncTabFromRoute);
 watch(() => [route.path, route.query.tab, route.meta.couponTab], syncTabFromRoute);
 
-const loading = ref(false);
 const saving = ref(false);
 const actionLoading = ref<number | string | null>(null);
 const dialogVisible = ref(false);
 const formRef = ref<FormInstanceFunctions>();
-const coupons = ref<CouponRecord[]>([]);
-const total = ref(0);
-const page = ref(1);
-const pageSize = ref(20);
 const couponFeatureEnabled = ref(false);
 const userOptions = ref<UserOption[]>([]);
 const userSearchResults = ref<UserOption[]>([]);
@@ -479,13 +475,35 @@ const userOptionsLoading = ref(false);
 const isMobile = useMediaQuery('(max-width: 768px)');
 const canManage = computed(() => hasAdminPermission(AdminPermissions.PRODUCT_MANAGE));
 
-const filters = reactive({
-  keyword: '',
-  status: '',
-  discount_type: '',
-  discount_scope: '',
-  distribution_type: '',
+interface CouponFilter {
+  keyword: string;
+  status: string;
+  discount_type: string;
+  discount_scope: string;
+  distribution_type: string;
+}
+
+const {
+  filters,
+  list: coupons,
+  total,
+  loading,
+  pagination,
+  loadList,
+  handleSearch: engineHandleSearch,
+  handlePaginationChange,
+} = useListPage<CouponFilter, CouponRecord>({
+  defaultFilters: { keyword: '', status: '', discount_type: '', discount_scope: '', distribution_type: '' },
+  defaultPageSize: 20,
+  onError: (error) => MessagePlugin.error(errorMessage(error, '加载优惠券列表失败')),
+  fetch: (params) => adminApi.coupons.list(params),
 });
+
+// 筛选条件变化时列表与功能开关并行刷新（分页切换只刷新列表）
+function handleSearch() {
+  engineHandleSearch();
+  loadSummary();
+}
 
 const form = reactive<CouponForm>(createDefaultForm());
 const lockedFields = ref<string[]>([]);
@@ -633,25 +651,6 @@ async function ensureSelectedUsersLoaded(userIds: number[]) {
   mergeUserOptions(results.filter(Boolean) as UserOption[]);
 }
 
-async function loadList() {
-  loading.value = true;
-  try {
-    const response = await adminApi.coupons.list({
-      ...filters,
-      page: page.value,
-      page_size: pageSize.value,
-    });
-    coupons.value = response.list || [];
-    total.value = Number(response.total || 0);
-  } catch (error) {
-    coupons.value = [];
-    total.value = 0;
-    MessagePlugin.error(errorMessage(error, '加载优惠券列表失败'));
-  } finally {
-    loading.value = false;
-  }
-}
-
 async function loadSummary() {
   try {
     const response = await adminApi.coupons.summary({
@@ -669,17 +668,6 @@ async function loadSummary() {
 
 async function loadData() {
   await Promise.all([loadList(), loadSummary()]);
-}
-
-function handleSearch() {
-  page.value = 1;
-  loadData();
-}
-
-function handlePageChange(data: { current: number; pageSize: number }) {
-  page.value = data.current;
-  pageSize.value = data.pageSize;
-  loadList();
 }
 
 async function openCouponDialog(row?: CouponRecord) {
@@ -955,6 +943,7 @@ function validityText(row: CouponRecord) {
 }
 
 onMounted(async () => {
-  await Promise.all([loadData(), loadUserOptions('')]);
+  // 列表由引擎自动加载，此处补功能开关与用户搜索选项
+  await Promise.all([loadSummary(), loadUserOptions('')]);
 });
 </script>

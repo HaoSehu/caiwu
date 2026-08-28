@@ -292,11 +292,11 @@
           </t-loading>
         </div>
 
-        <div v-if="logPagination.total > 0" class="pagination-row">
+        <div v-if="total > 0" class="pagination-row">
           <t-pagination
             :current="logPagination.page"
             :page-size="logPagination.page_size"
-            :total="logPagination.total"
+            :total="total"
             :page-size-options="[20, 50, 100]"
             show-jumper
             @change="handleLogPageChange"
@@ -522,7 +522,7 @@
 import './index.less';
 
 import { SearchIcon } from 'tdesign-icons-vue-next';
-import type { PageInfo, PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
+import type { PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -530,6 +530,7 @@ import { useRoute, useRouter } from 'vue-router';
 import type { LogListParams, PaginatedList } from '@/api/admin';
 import { adminApi } from '@/api/admin';
 import { AdminPermissions, hasPermissionInList } from '@/constants/permissions';
+import { useListPage } from '@/hooks/useListPage';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useUserStore } from '@/store';
 import { fieldValue, formatDateTime } from '@/utils/format';
@@ -557,7 +558,6 @@ const validTabs: LogsTab[] = [
   'cleanup',
 ];
 const activeTab = ref<LogsTab>(resolveRouteTab());
-const logLoading = ref(false);
 const scheduleLoading = ref(false);
 const scheduleSourceFilter = ref<'all' | 'system' | 'third_party'>('all');
 const cleanupLoading = ref(false);
@@ -565,19 +565,39 @@ const cleanupSubmitting = ref(false);
 const triggeringKey = ref('');
 const detailVisible = ref(false);
 const currentLog = ref<RecordRow | null>(null);
-const logRows = ref<RecordRow[]>([]);
 const scheduleOverview = ref<Record<string, unknown>>({ tasks: [], recent_logs: [] });
 const cleanupOverview = ref<Record<string, unknown>>({ database: {}, file: {}, supported_cleanup_types: [] });
 const lastCleanupResult = ref<Record<string, unknown> | null>(null);
 
-const filters = reactive({
+interface LogFilter {
+  keyword: string;
+  level: string;
+  task_key: string;
+  method: string;
+  module: string;
+  user_type: string;
+  status: string | number;
+  phone: string;
+  email: string;
+  start_date: string;
+  end_date: string;
+  gateway: string;
+  gateway_key: string;
+  driver_key: string;
+  plugin_id: string;
+  trace_id: string;
+  action: string;
+  result_status: string;
+}
+
+const DEFAULT_LOG_FILTERS: LogFilter = {
   keyword: '',
   level: '',
   task_key: '',
   method: '',
   module: '',
   user_type: '',
-  status: '' as string | number,
+  status: '',
   phone: '',
   email: '',
   start_date: '',
@@ -589,14 +609,45 @@ const filters = reactive({
   trace_id: '',
   action: '',
   result_status: '',
-});
-type LogFilterKey = keyof typeof filters;
+};
 
-const logPagination = reactive({
-  page: 1,
-  page_size: 20,
-  total: 0,
+// 日志中心使用单引擎 + 按 Tab 白名单动态构建筛选（fetch 内按 currentLogMeta 取参），
+// 组件树数据与清理任务表单不经过引擎
+const {
+  filters,
+  list: logRows,
+  total,
+  loading: logLoading,
+  pagination: logPagination,
+  loadList: logLoadList,
+  handleSearch: handleLogSearch,
+  handlePaginationChange: handleLogPageChange,
+} = useListPage<LogFilter, RecordRow>({
+  defaultFilters: DEFAULT_LOG_FILTERS,
+  defaultPageSize: 20,
+  immediate: false,
+  afterLoad: () => {
+    messageSegmentsCache.clear();
+  },
+  onError: (error) => MessagePlugin.error(errorMessage(error, `加载${currentLogMeta.value.title}失败`)),
+  fetch: (params) => {
+    const requestParams: LogListParams = { page: params.page, page_size: params.page_size };
+    for (const key of currentLogMeta.value.filters) {
+      if (key === 'date') {
+        if (String(params.start_date || '').trim()) requestParams.start_date = String(params.start_date).trim();
+        if (String(params.end_date || '').trim()) requestParams.end_date = String(params.end_date).trim();
+        continue;
+      }
+      const value = (params as unknown as Record<string, unknown>)[key];
+      if (value !== '' && value !== null && value !== undefined) {
+        (requestParams as Record<string, unknown>)[key] = typeof value === 'string' ? value.trim() : value;
+      }
+    }
+    // schedules/cleanup Tab 不经过列表引擎，此处仅对日志 Tab 发请求
+    return requestLogList(isLogTab(activeTab.value) ? activeTab.value : 'api', requestParams);
+  },
 });
+
 const cleanupForm = reactive({
   type: '',
   keep_days: 30,
@@ -965,28 +1016,9 @@ function showFilter(name: string) {
 }
 
 function refreshCurrentTab() {
-  if (isLogTab(activeTab.value)) return loadLogs();
+  if (isLogTab(activeTab.value)) return logLoadList();
   if (activeTab.value === 'schedules') return loadScheduleOverview();
   return loadCleanupOverview();
-}
-
-function buildLogParams(): LogListParams {
-  const params: LogListParams = {
-    page: logPagination.page,
-    page_size: logPagination.page_size,
-  };
-  for (const key of currentLogMeta.value.filters) {
-    if (key === 'date') {
-      if (filters.start_date.trim()) params.start_date = filters.start_date.trim();
-      if (filters.end_date.trim()) params.end_date = filters.end_date.trim();
-      continue;
-    }
-    const value = filters[key as keyof typeof filters];
-    if (value !== '' && value !== null && value !== undefined) {
-      (params as Record<string, unknown>)[key] = typeof value === 'string' ? value.trim() : value;
-    }
-  }
-  return params;
 }
 
 function applyRouteFilterQuery() {
@@ -997,34 +1029,7 @@ function applyRouteFilterQuery() {
 
     const normalizedValue = Array.isArray(queryValue) ? queryValue[0] : queryValue;
     if (normalizedValue !== null && key in filters) {
-      (filters as Record<LogFilterKey, string | number>)[key as LogFilterKey] = String(normalizedValue);
-    }
-  }
-}
-
-const logRequestSeq = ref(0);
-
-async function loadLogs() {
-  if (!isLogTab(activeTab.value)) return;
-  logLoading.value = true;
-  const seq = ++logRequestSeq.value;
-  try {
-    const params = buildLogParams();
-    const response = await requestLogList(activeTab.value, params);
-    if (seq !== logRequestSeq.value) return;
-    logRows.value = response.list || [];
-    messageSegmentsCache.clear();
-    logPagination.total = Number(response.total || 0);
-    logPagination.page = Number(response.page || logPagination.page);
-    logPagination.page_size = Number(response.page_size || logPagination.page_size);
-  } catch (error) {
-    if (seq !== logRequestSeq.value) return;
-    logRows.value = [];
-    logPagination.total = 0;
-    MessagePlugin.error(errorMessage(error, `加载${currentLogMeta.value.title}失败`));
-  } finally {
-    if (seq === logRequestSeq.value) {
-      logLoading.value = false;
+      (filters as unknown as Record<string, string | number>)[key] = String(normalizedValue);
     }
   }
 }
@@ -1042,40 +1047,10 @@ function requestLogList(tab: LogTab, params: LogListParams): Promise<PaginatedLi
   return map[tab](params);
 }
 
-function handleLogSearch() {
-  logPagination.page = 1;
-  loadLogs();
-}
-
 function resetLogFilters(shouldLoad = true) {
-  Object.assign(filters, {
-    keyword: '',
-    level: '',
-    task_key: '',
-    method: '',
-    module: '',
-    user_type: '',
-    status: '',
-    phone: '',
-    email: '',
-    start_date: '',
-    end_date: '',
-    gateway: '',
-    gateway_key: '',
-    driver_key: '',
-    plugin_id: '',
-    trace_id: '',
-    action: '',
-    result_status: '',
-  });
+  Object.assign(filters, DEFAULT_LOG_FILTERS);
   logPagination.page = 1;
-  if (shouldLoad && isLogTab(activeTab.value)) loadLogs();
-}
-
-function handleLogPageChange(data: PageInfo) {
-  logPagination.page = data.current;
-  logPagination.page_size = data.pageSize;
-  loadLogs();
+  if (shouldLoad && isLogTab(activeTab.value)) logLoadList();
 }
 
 async function loadScheduleOverview() {

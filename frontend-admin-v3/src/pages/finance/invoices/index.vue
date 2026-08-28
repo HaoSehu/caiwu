@@ -1,6 +1,7 @@
 <template>
   <div class="finance-invoices-page">
     <t-card :bordered="false">
+      <quick-filter-tags v-model="filters.quickFilter" @change="applyQuickFilter" />
       <div class="invoice-filter">
         <t-input
           v-model="filters.keyword"
@@ -18,25 +19,13 @@
         <t-select v-model="filters.status" class="filter-status" clearable placeholder="状态" @change="handleSearch">
           <t-option v-for="item in invoiceStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
         </t-select>
-        <t-date-picker
-          v-model="filters.start_date"
-          class="filter-start"
+        <t-date-range-picker
+          v-model="dateRange"
+          class="filter-date"
           clearable
-          mode="date"
           format="YYYY-MM-DD"
           value-type="YYYY-MM-DD"
-          placeholder="开始日期"
-          @change="handleSearch"
-        />
-        <t-date-picker
-          v-model="filters.end_date"
-          class="filter-end"
-          clearable
-          mode="date"
-          format="YYYY-MM-DD"
-          value-type="YYYY-MM-DD"
-          placeholder="结束日期"
-          @change="handleSearch"
+          placeholder="选择日期范围"
         />
       </div>
 
@@ -55,8 +44,12 @@
             </div>
           </template>
           <template #type="{ row }">{{ row.type_label || invoiceTypeLabel(row.type) }}</template>
-          <template #amount="{ row }"><span class="t-num-strong">{{ formatMoney(row.amount) }}</span></template>
-          <template #paid="{ row }"><span class="t-num-strong">{{ formatMoney(row.paid_amount) }}</span></template>
+          <template #amount="{ row }"
+            ><span class="t-num-strong">{{ formatMoney(row.amount) }}</span></template
+          >
+          <template #paid="{ row }"
+            ><span class="t-num-strong">{{ formatMoney(row.paid_amount) }}</span></template
+          >
           <template #status="{ row }">
             <status-tag :status-map="INVOICE_STATUS_MAP" :status="row.status" />
           </template>
@@ -83,9 +76,9 @@
         </t-table>
       </div>
 
-      <div v-else class="invoice-mobile-list">
+      <div v-else class="record-mobile-list">
         <t-loading :loading="loading" size="small">
-          <div v-if="invoices.length" class="invoice-mobile-stack">
+          <div v-if="invoices.length" class="record-mobile-stack">
             <mobile-record-card
               v-for="row in invoices"
               :key="row.id"
@@ -113,7 +106,7 @@
           :total="total"
           :page-size-options="[20, 50, 100]"
           show-jumper
-          @change="handlePageChange"
+          @change="handlePaginationChange"
         />
       </div>
     </t-card>
@@ -143,15 +136,18 @@ import './index.less';
 import { INVOICE_STATUS_MAP, INVOICE_TYPE_MAP, toLabelMap, toTagTypeMap } from '@shared/statusConfig';
 import type { DropdownOption, PrimaryTableCol } from 'tdesign-vue-next';
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
-import { computed, onActivated, onMounted, reactive, ref } from 'vue';
+import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 import type { InvoiceRecord } from '@/api/admin';
 import { adminApi } from '@/api/admin';
 import InvoiceDetailDrawer from '@/components/finance-record-detail/InvoiceDetailDrawer.vue';
 import MobileRecordCard from '@/components/mobile-record-card/index.vue';
+import QuickFilterTags from '@/components/quick-filter-tags/index.vue';
 import StatusTag from '@/components/status-tag/index.vue';
 import { AdminPermissions, hasPermissionInList } from '@/constants/permissions';
+import { useFinanceDetailDrawer } from '@/hooks/useFinanceDetailDrawer';
+import { useListPage } from '@/hooks/useListPage';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useUserStore } from '@/store';
 import { fieldValue, formatDateTime, formatMoney } from '@/utils/format';
@@ -161,38 +157,50 @@ defineOptions({
   name: 'AdminFinanceInvoices',
 });
 
-const loading = ref(false);
-const invoices = ref<InvoiceRecord[]>([]);
-const total = ref(0);
+interface InvoiceFilter {
+  keyword: string;
+  type: string;
+  status: string;
+  start_date: string;
+  end_date: string;
+  quickFilter: string;
+}
+
 const cancelLoadingId = ref<number | string | null>(null);
 const userStore = useUserStore();
 const router = useRouter();
 const isMobile = useMediaQuery('(max-width: 768px)');
 
-const filters = reactive({
-  keyword: '',
-  type: '',
-  status: '',
-  start_date: '',
-  end_date: '',
-});
-
-const pagination = reactive({
-  page: 1,
-  page_size: 20,
-});
-
-const detailState = reactive({
-  visible: false,
-  loading: false,
-  cancelLoading: false,
-  currentId: 0,
-  detail: {
-    invoice: {} as InvoiceRecord,
-    payments: [] as Record<string, unknown>[],
-    items: [] as Record<string, unknown>[],
-    logs: [] as Record<string, unknown>[],
+const {
+  filters,
+  list: invoices,
+  total,
+  loading,
+  pagination,
+  loadList,
+  handleSearch,
+  handlePaginationChange,
+  applyQuickFilter,
+  dateRange,
+} = useListPage<InvoiceFilter, InvoiceRecord>({
+  defaultFilters: {
+    keyword: '',
+    type: '',
+    status: '',
+    start_date: '',
+    end_date: '',
+    quickFilter: '',
   },
+  defaultPageSize: 20,
+  syncUrl: true,
+  enableQuickFilter: true,
+  onError: (error) => MessagePlugin.error(errorMessage(error, '加载账单列表失败')),
+  fetch: (params) => adminApi.invoices.list(params),
+});
+
+const { detailState, openDetail, reloadDetail, closeDetail } = useFinanceDetailDrawer({
+  fetchDetail: (id) => adminApi.invoices.detail(id),
+  errorFallback: '加载账单详情失败',
 });
 
 const statusLabelMap = toLabelMap(INVOICE_STATUS_MAP);
@@ -233,93 +241,6 @@ function userPermissions() {
 function hasPermission(permission: string) {
   const permissions = userPermissions();
   return hasPermissionInList(permissions, permission);
-}
-
-function buildParams() {
-  const params: Record<string, unknown> = {
-    page: pagination.page,
-    page_size: pagination.page_size,
-  };
-  if (filters.keyword) params.keyword = filters.keyword;
-  if (filters.type) params.type = filters.type;
-  if (filters.status !== '') params.status = filters.status;
-  if (filters.start_date) params.start_date = filters.start_date;
-  if (filters.end_date) params.end_date = filters.end_date;
-  return params;
-}
-
-async function loadList() {
-  loading.value = true;
-  try {
-    const response = await adminApi.invoices.list(buildParams());
-    invoices.value = response.list || [];
-    total.value = Number(response.total || 0);
-    pagination.page = Number(response.page || pagination.page);
-    pagination.page_size = Number(response.page_size || pagination.page_size);
-  } catch (error) {
-    MessagePlugin.error(errorMessage(error, '加载账单列表失败'));
-  } finally {
-    loading.value = false;
-  }
-}
-
-function handleSearch() {
-  pagination.page = 1;
-  loadList();
-}
-
-function handlePageChange(data: { current: number; pageSize: number }) {
-  pagination.page = data.current;
-  pagination.page_size = data.pageSize;
-  loadList();
-}
-
-async function openDetail(row: InvoiceRecord) {
-  if (!row.id) return;
-  detailState.visible = true;
-  detailState.currentId = Number(row.id);
-  detailState.detail = { invoice: row, payments: [], items: [], logs: [] };
-  await reloadDetail();
-}
-
-async function reloadDetail() {
-  if (!detailState.currentId) return;
-  detailState.loading = true;
-  try {
-    const response = await adminApi.invoices.detail(detailState.currentId);
-    detailState.detail = normalizeInvoiceDetail(response, currentInvoice.value);
-  } catch (error) {
-    MessagePlugin.error(errorMessage(error, '加载账单详情失败'));
-  } finally {
-    detailState.loading = false;
-  }
-}
-
-function normalizeInvoiceDetail(payload: Record<string, unknown> = {}, fallback: InvoiceRecord = {}) {
-  const invoice =
-    payload.invoice && typeof payload.invoice === 'object'
-      ? (payload.invoice as InvoiceRecord)
-      : (payload as InvoiceRecord);
-  return {
-    invoice: {
-      ...fallback,
-      ...invoice,
-      payment_summary: { ...(fallback.payment_summary || {}), ...(invoice.payment_summary || {}) },
-      order: invoice.order || fallback.order || null,
-      product: invoice.product || fallback.product || null,
-      scene: invoice.scene || fallback.scene || {},
-    },
-    payments: Array.isArray(payload.payments) ? (payload.payments as Record<string, unknown>[]) : [],
-    items: Array.isArray(payload.items) ? (payload.items as Record<string, unknown>[]) : [],
-    logs: Array.isArray(payload.logs) ? (payload.logs as Record<string, unknown>[]) : [],
-  };
-}
-
-function closeDetail() {
-  detailState.visible = false;
-  detailState.currentId = 0;
-  detailState.cancelLoading = false;
-  detailState.detail = { invoice: {}, payments: [], items: [], logs: [] };
 }
 
 function canCancel(row: InvoiceRecord) {
@@ -416,15 +337,4 @@ function userName(user: unknown) {
 function toRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 }
-
-// 列表页开启 keep-alive 后，返回时刷新数据；首次激活跳过（onMounted 已加载）
-let skipFirstActivate = true;
-onMounted(() => loadList());
-onActivated(() => {
-  if (skipFirstActivate) {
-    skipFirstActivate = false;
-    return;
-  }
-  loadList();
-});
 </script>

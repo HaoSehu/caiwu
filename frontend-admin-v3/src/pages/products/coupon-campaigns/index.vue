@@ -153,12 +153,12 @@
 
       <div v-if="total > 0" class="pagination-row">
         <t-pagination
-          :current="page"
-          :page-size="pageSize"
+          :current="pagination.page"
+          :page-size="pagination.page_size"
           :total="total"
           :page-size-options="[20, 50, 100]"
           show-jumper
-          @change="handlePageChange"
+          @change="handlePaginationChange"
         />
       </div>
     </t-card>
@@ -294,13 +294,14 @@ import './index.less';
 import { AddIcon, SearchIcon } from 'tdesign-icons-vue-next';
 import type { DropdownOption, FormInstanceFunctions, FormRule, PrimaryTableCol } from 'tdesign-vue-next';
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, reactive, ref } from 'vue';
 
 import type { CouponCampaignPayload, CouponCampaignRecord } from '@/api/admin';
 import { adminApi } from '@/api/admin';
 import MobileRecordCard from '@/components/mobile-record-card/index.vue';
 import ProductBindingTreeSelect from '@/components/product-binding-tree-select/index.vue';
 import { AdminPermissions } from '@/constants/permissions';
+import { useListPage } from '@/hooks/useListPage';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { formatDateTime } from '@/utils/format';
 import { hasAdminPermission } from '@/utils/permission';
@@ -345,21 +346,32 @@ const weekdayOptions = [
   { label: '周日', value: 0 },
 ];
 
-const loading = ref(false);
 const saving = ref(false);
 const dialogVisible = ref(false);
 const formRef = ref<FormInstanceFunctions>();
-const campaigns = ref<CouponCampaignRecord[]>([]);
-const total = ref(0);
-const page = ref(1);
-const pageSize = ref(20);
 const rowActionState = reactive<Record<string, string>>({});
 const isMobile = useMediaQuery('(max-width: 768px)');
 const canManage = computed(() => hasAdminPermission(AdminPermissions.PRODUCT_MANAGE));
 
-const filters = reactive({
-  keyword: '',
-  status: '',
+interface CampaignFilter {
+  keyword: string;
+  status: string;
+}
+
+const {
+  filters,
+  list: campaigns,
+  total,
+  loading,
+  pagination,
+  loadList,
+  handleSearch,
+  handlePaginationChange,
+} = useListPage<CampaignFilter, CouponCampaignRecord>({
+  defaultFilters: { keyword: '', status: '' },
+  defaultPageSize: 20,
+  onError: (error) => MessagePlugin.error(errorMessage(error, '加载活动列表失败')),
+  fetch: (params) => adminApi.couponCampaigns.list(params),
 });
 
 const form = reactive<CampaignForm>(createDefaultForm());
@@ -433,40 +445,6 @@ function campaignDeleteDisabled(row: CouponCampaignRecord) {
 
 function campaignLockReason(row: CouponCampaignRecord) {
   return String(row.lock_reason || '活动已生成优惠券批次，不允许删除；编辑仅影响后续批次');
-}
-
-async function loadList() {
-  loading.value = true;
-  try {
-    const response = await adminApi.couponCampaigns.list({
-      ...filters,
-      page: page.value,
-      page_size: pageSize.value,
-    });
-    campaigns.value = response.list || [];
-    total.value = Number(response.total || 0);
-  } catch (error) {
-    campaigns.value = [];
-    total.value = 0;
-    MessagePlugin.error(errorMessage(error, '加载活动列表失败'));
-  } finally {
-    loading.value = false;
-  }
-}
-
-async function loadData() {
-  await loadList();
-}
-
-function handleSearch() {
-  page.value = 1;
-  loadData();
-}
-
-function handlePageChange(data: { current: number; pageSize: number }) {
-  page.value = data.current;
-  pageSize.value = data.pageSize;
-  loadList();
 }
 
 async function openCampaignDialog(row?: CouponCampaignRecord) {
@@ -559,7 +537,7 @@ async function submitForm() {
       MessagePlugin.success('活动已创建');
     }
     dialogVisible.value = false;
-    await loadData();
+    await loadList();
   } catch (error) {
     MessagePlugin.error(errorMessage(error, '保存活动失败'));
   } finally {
@@ -617,7 +595,7 @@ function handleTrigger(row: CouponCampaignRecord) {
         await adminApi.couponCampaigns.trigger(row.id);
         MessagePlugin.success('活动批次已发放');
         dialog.hide();
-        await loadData();
+        await loadList();
       });
     },
   });
@@ -631,7 +609,7 @@ async function handleToggleStatus(row: CouponCampaignRecord) {
   await runRowAction(row, 'toggle', '更新活动状态失败', async () => {
     await adminApi.couponCampaigns.toggleStatus(row.id, Number(row.status) !== 1);
     MessagePlugin.success('活动状态已更新');
-    await loadData();
+    await loadList();
   });
 }
 
@@ -655,7 +633,7 @@ function handleDelete(row: CouponCampaignRecord) {
         await adminApi.couponCampaigns.delete(row.id);
         MessagePlugin.success('活动已删除');
         dialog.hide();
-        await loadData();
+        await loadList();
       });
     },
   });
@@ -734,8 +712,4 @@ function scheduleText(row: CouponCampaignRecord) {
   const dayText = weekdays.length ? weekdays.map((item) => map.get(Number(item)) || item).join('、') : '未配置星期';
   return `${dayText} ${row.trigger_time || '未配置时间'}`;
 }
-
-onMounted(async () => {
-  await loadData();
-});
 </script>

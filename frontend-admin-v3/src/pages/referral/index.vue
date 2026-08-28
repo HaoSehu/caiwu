@@ -22,7 +22,9 @@
               <div class="stack-cell">
                 <strong>{{ fieldValue(row.promotion_ambassador?.name || '未指派') }}</strong>
                 <span>{{
-                  row.promotion_ambassador?.reward_rate ? formatPercent(row.promotion_ambassador.reward_rate) : '默认比例'
+                  row.promotion_ambassador?.reward_rate
+                    ? formatPercent(row.promotion_ambassador.reward_rate)
+                    : '默认比例'
                 }}</span>
                 <span v-if="row.promotion_ambassador?.renewal_reward_rate">
                   续费 {{ formatPercent(row.promotion_ambassador.renewal_reward_rate) }}
@@ -282,8 +284,9 @@ import { MessagePlugin } from 'tdesign-vue-next';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 
-import type { ReferralOverview, ReferralRewardRecord, ReferralWithdrawalRecord } from '@/api/admin';
+import type { ReferralListParams, ReferralOverview, ReferralRewardRecord, ReferralWithdrawalRecord } from '@/api/admin';
 import { adminApi } from '@/api/admin';
+import { useListPage } from '@/hooks/useListPage';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { fieldValue, formatDateTime, formatMoney } from '@/utils/format';
 import { errorMessage } from '@/utils/userMessage';
@@ -314,35 +317,61 @@ watch(
   },
 );
 const overviewLoading = ref(false);
-const rewardsLoading = ref(false);
-const withdrawalsLoading = ref(false);
 const withdrawalSubmitting = ref(false);
 
 const overview = ref<ReferralOverview>({
   summary: {},
   top_referrers: [],
 });
-const rewardList = ref<ReferralRewardRecord[]>([]);
-const rewardTotal = ref(0);
-const withdrawalList = ref<ReferralWithdrawalRecord[]>([]);
-const withdrawalTotal = ref(0);
 
-const rewardFilters = reactive({
-  keyword: '',
-  status: '',
+interface ReferralFilter {
+  keyword: string;
+  status: string | number;
+}
+
+// 奖励记录与提现记录各自独立筛选/分页，引擎实例化两次，互不串状态
+const {
+  filters: rewardFilters,
+  list: rewardList,
+  total: rewardTotal,
+  loading: rewardsLoading,
+  pagination: rewardPagination,
+  loadList: loadRewards,
+  handleSearch: handleRewardSearch,
+  handlePaginationChange: handleRewardPageChange,
+} = useListPage<ReferralFilter, ReferralRewardRecord>({
+  defaultFilters: { keyword: '', status: '' },
+  defaultPageSize: 20,
+  onError: (error) => MessagePlugin.error(errorMessage(error, '加载奖励记录失败')),
+  fetch: (params) => {
+    const requestParams: Record<string, unknown> = { page: params.page, page_size: params.page_size };
+    if (String(params.keyword || '').trim()) requestParams.keyword = String(params.keyword).trim();
+    if (params.status !== '') requestParams.status = params.status;
+    return adminApi.referral.rewards(requestParams as ReferralListParams);
+  },
 });
-const withdrawalFilters = reactive({
-  keyword: '',
-  status: '',
+
+const {
+  filters: withdrawalFilters,
+  list: withdrawalList,
+  total: withdrawalTotal,
+  loading: withdrawalsLoading,
+  pagination: withdrawalPagination,
+  loadList: loadWithdrawals,
+  handleSearch: handleWithdrawalSearch,
+  handlePaginationChange: handleWithdrawalPageChange,
+} = useListPage<ReferralFilter, ReferralWithdrawalRecord>({
+  defaultFilters: { keyword: '', status: '' },
+  defaultPageSize: 20,
+  onError: (error) => MessagePlugin.error(errorMessage(error, '加载提现记录失败')),
+  fetch: (params) => {
+    const requestParams: Record<string, unknown> = { page: params.page, page_size: params.page_size };
+    if (String(params.keyword || '').trim()) requestParams.keyword = String(params.keyword).trim();
+    if (params.status !== '') requestParams.status = params.status;
+    return adminApi.referral.withdrawals(requestParams as ReferralListParams);
+  },
 });
-const rewardPagination = reactive({
-  page: 1,
-  page_size: 20,
-});
-const withdrawalPagination = reactive({
-  page: 1,
-  page_size: 20,
-});
+
 const withdrawalDialog = reactive<{
   visible: boolean;
   mode: WithdrawalMode;
@@ -424,86 +453,10 @@ async function loadOverview() {
   }
 }
 
-async function loadRewards() {
-  rewardsLoading.value = true;
-  try {
-    const response = await adminApi.referral.rewards(buildRewardParams());
-    rewardList.value = response.list || [];
-    rewardTotal.value = Number(response.total || 0);
-    rewardPagination.page = Number(response.page || rewardPagination.page);
-    rewardPagination.page_size = Number(response.page_size || rewardPagination.page_size);
-  } catch (error) {
-    MessagePlugin.error(errorMessage(error, '加载奖励记录失败'));
-  } finally {
-    rewardsLoading.value = false;
-  }
-}
-
-async function loadWithdrawals() {
-  withdrawalsLoading.value = true;
-  try {
-    const response = await adminApi.referral.withdrawals(buildWithdrawalParams());
-    withdrawalList.value = response.list || [];
-    withdrawalTotal.value = Number(response.total || 0);
-    withdrawalPagination.page = Number(response.page || withdrawalPagination.page);
-    withdrawalPagination.page_size = Number(response.page_size || withdrawalPagination.page_size);
-  } catch (error) {
-    MessagePlugin.error(errorMessage(error, '加载提现记录失败'));
-  } finally {
-    withdrawalsLoading.value = false;
-  }
-}
-
-async function loadAll() {
-  await Promise.allSettled([loadOverview(), loadRewards(), loadWithdrawals()]);
-}
-
 function refreshCurrentTab() {
   if (activeTab.value === 'overview') return loadOverview();
   if (activeTab.value === 'rewards') return loadRewards();
   return loadWithdrawals();
-}
-
-function handleRewardSearch() {
-  rewardPagination.page = 1;
-  loadRewards();
-}
-
-function handleWithdrawalSearch() {
-  withdrawalPagination.page = 1;
-  loadWithdrawals();
-}
-
-function handleRewardPageChange(data: { current: number; pageSize: number }) {
-  rewardPagination.page = data.current;
-  rewardPagination.page_size = data.pageSize;
-  loadRewards();
-}
-
-function handleWithdrawalPageChange(data: { current: number; pageSize: number }) {
-  withdrawalPagination.page = data.current;
-  withdrawalPagination.page_size = data.pageSize;
-  loadWithdrawals();
-}
-
-function buildRewardParams() {
-  const params: Record<string, unknown> = {
-    page: rewardPagination.page,
-    page_size: rewardPagination.page_size,
-  };
-  if (rewardFilters.keyword.trim()) params.keyword = rewardFilters.keyword.trim();
-  if (rewardFilters.status !== '') params.status = rewardFilters.status;
-  return params;
-}
-
-function buildWithdrawalParams() {
-  const params: Record<string, unknown> = {
-    page: withdrawalPagination.page,
-    page_size: withdrawalPagination.page_size,
-  };
-  if (withdrawalFilters.keyword.trim()) params.keyword = withdrawalFilters.keyword.trim();
-  if (withdrawalFilters.status !== '') params.status = withdrawalFilters.status;
-  return params;
 }
 
 function openWithdrawalDialog(mode: WithdrawalMode, row: ReferralWithdrawalRecord) {
@@ -593,5 +546,8 @@ function toRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 }
 
-onMounted(loadAll);
+onMounted(() => {
+  // 奖励/提现列表由两个引擎实例自动加载，此处只补推广大使概览
+  loadOverview();
+});
 </script>

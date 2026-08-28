@@ -1,6 +1,7 @@
 <template>
   <div class="finance-recharges-page">
     <t-card :bordered="false">
+      <quick-filter-tags v-model="filters.quickFilter" @change="applyQuickFilter" />
       <div class="recharge-filter">
         <t-input
           v-model="filters.keyword"
@@ -15,25 +16,13 @@
         <t-select v-model="filters.status" class="filter-status" clearable placeholder="状态" @change="handleSearch">
           <t-option v-for="item in paymentStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
         </t-select>
-        <t-date-picker
-          v-model="filters.start_date"
-          class="filter-start"
+        <t-date-range-picker
+          v-model="dateRange"
+          class="filter-date"
           clearable
-          mode="date"
           format="YYYY-MM-DD"
           value-type="YYYY-MM-DD"
-          placeholder="开始日期"
-          @change="handleSearch"
-        />
-        <t-date-picker
-          v-model="filters.end_date"
-          class="filter-end"
-          clearable
-          mode="date"
-          format="YYYY-MM-DD"
-          value-type="YYYY-MM-DD"
-          placeholder="结束日期"
-          @change="handleSearch"
+          placeholder="选择日期范围"
         />
       </div>
 
@@ -51,8 +40,12 @@
               <span>{{ paymentSummary(row.payment || paymentRecord(row)) }}</span>
             </div>
           </template>
-          <template #amount="{ row }"><span class="t-num-strong">{{ formatMoney(row.amount) }}</span></template>
-          <template #paid="{ row }"><span class="t-num-strong">{{ formatMoney(row.paid_amount) }}</span></template>
+          <template #amount="{ row }"
+            ><span class="t-num-strong">{{ formatMoney(row.amount) }}</span></template
+          >
+          <template #paid="{ row }"
+            ><span class="t-num-strong">{{ formatMoney(row.paid_amount) }}</span></template
+          >
           <template #status="{ row }">
             <status-tag :status-map="PAYMENT_STATUS_MAP" :status="row.status" />
           </template>
@@ -64,9 +57,9 @@
         </t-table>
       </div>
 
-      <div v-else class="recharge-mobile-list">
+      <div v-else class="record-mobile-list">
         <t-loading :loading="loading" size="small">
-          <div v-if="recharges.length" class="recharge-mobile-stack">
+          <div v-if="recharges.length" class="record-mobile-stack">
             <mobile-record-card
               v-for="row in recharges"
               :key="row.id"
@@ -94,7 +87,7 @@
           :total="total"
           :page-size-options="[20, 50, 100]"
           show-jumper
-          @change="handlePageChange"
+          @change="handlePaginationChange"
         />
       </div>
     </t-card>
@@ -121,14 +114,18 @@ import './index.less';
 import { PAYMENT_STATUS_MAP, toLabelMap, toTagTypeMap } from '@shared/statusConfig';
 import type { PrimaryTableCol } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
-import { computed, onActivated, onMounted, reactive, ref } from 'vue';
+import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 
 import type { InvoiceRecord, RechargeRecord } from '@/api/admin';
 import { adminApi } from '@/api/admin';
 import InvoiceDetailDrawer from '@/components/finance-record-detail/InvoiceDetailDrawer.vue';
 import MobileRecordCard from '@/components/mobile-record-card/index.vue';
+import QuickFilterTags from '@/components/quick-filter-tags/index.vue';
 import StatusTag from '@/components/status-tag/index.vue';
+import type { InvoiceDetailPayload } from '@/hooks/useFinanceDetailDrawer';
+import { useFinanceDetailDrawer } from '@/hooks/useFinanceDetailDrawer';
+import { useListPage } from '@/hooks/useListPage';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { fieldValue, formatDateTime, formatMoney } from '@/utils/format';
 import { errorMessage } from '@/utils/userMessage';
@@ -137,33 +134,73 @@ defineOptions({
   name: 'AdminFinanceRecharges',
 });
 
-const loading = ref(false);
-const recharges = ref<RechargeRecord[]>([]);
-const total = ref(0);
+interface RechargeFilter {
+  keyword: string;
+  status: string;
+  start_date: string;
+  end_date: string;
+  quickFilter: string;
+}
+
 const router = useRouter();
 const isMobile = useMediaQuery('(max-width: 768px)');
-const detailState = reactive({
-  visible: false,
-  loading: false,
-  currentId: 0,
-  detail: {
-    invoice: {} as InvoiceRecord,
-    payments: [] as Record<string, unknown>[],
-    items: [] as Record<string, unknown>[],
-    logs: [] as Record<string, unknown>[],
+
+const {
+  filters,
+  list: recharges,
+  total,
+  loading,
+  pagination,
+  handleSearch,
+  handlePaginationChange,
+  applyQuickFilter,
+  dateRange,
+} = useListPage<RechargeFilter, RechargeRecord>({
+  defaultFilters: {
+    keyword: '',
+    status: '',
+    start_date: '',
+    end_date: '',
+    quickFilter: '',
   },
+  defaultPageSize: 20,
+  syncUrl: true,
+  enableQuickFilter: true,
+  onError: (error) => MessagePlugin.error(errorMessage(error, '加载充值记录失败')),
+  fetch: (params) => adminApi.financeMenu.recharges(params),
 });
 
-const filters = reactive({
-  keyword: '',
-  status: '',
-  start_date: '',
-  end_date: '',
-});
+// 详情归一化：type 兜底为 recharge，payments 失败时保留抽屉已展示的支付记录
+function normalizeRechargeDetail(
+  payload: Record<string, unknown> = {},
+  fallback: InvoiceRecord = {},
+): InvoiceDetailPayload {
+  const invoice =
+    payload.invoice && typeof payload.invoice === 'object'
+      ? (payload.invoice as InvoiceRecord)
+      : (payload as InvoiceRecord);
+  return {
+    invoice: {
+      ...fallback,
+      ...invoice,
+      type: invoice.type || fallback.type || 'recharge',
+      payment_summary: { ...(fallback.payment_summary || {}), ...(invoice.payment_summary || {}) },
+      order: invoice.order || fallback.order || null,
+      product: invoice.product || fallback.product || null,
+      scene: invoice.scene || fallback.scene || {},
+    },
+    payments: Array.isArray(payload.payments)
+      ? (payload.payments as Record<string, unknown>[])
+      : detailState.detail.payments,
+    items: Array.isArray(payload.items) ? (payload.items as Record<string, unknown>[]) : [],
+    logs: Array.isArray(payload.logs) ? (payload.logs as Record<string, unknown>[]) : [],
+  };
+}
 
-const pagination = reactive({
-  page: 1,
-  page_size: 20,
+const { detailState, reloadDetail, closeDetail } = useFinanceDetailDrawer({
+  fetchDetail: (id) => adminApi.invoices.detail(id),
+  errorFallback: '加载充值详情失败',
+  normalize: normalizeRechargeDetail,
 });
 
 const statusLabelMap = toLabelMap(PAYMENT_STATUS_MAP);
@@ -191,44 +228,6 @@ const invoiceItems = computed(() => {
 });
 const invoiceLogs = computed(() => detailState.detail.logs || []);
 
-function buildParams() {
-  const params: Record<string, unknown> = {
-    page: pagination.page,
-    page_size: pagination.page_size,
-  };
-  if (filters.keyword) params.keyword = filters.keyword;
-  if (filters.status !== '') params.status = filters.status;
-  if (filters.start_date) params.start_date = filters.start_date;
-  if (filters.end_date) params.end_date = filters.end_date;
-  return params;
-}
-
-async function loadList() {
-  loading.value = true;
-  try {
-    const response = await adminApi.financeMenu.recharges(buildParams());
-    recharges.value = response.list || [];
-    total.value = Number(response.total || 0);
-    pagination.page = Number(response.page || pagination.page);
-    pagination.page_size = Number(response.page_size || pagination.page_size);
-  } catch (error) {
-    MessagePlugin.error(errorMessage(error, '加载充值记录失败'));
-  } finally {
-    loading.value = false;
-  }
-}
-
-function handleSearch() {
-  pagination.page = 1;
-  loadList();
-}
-
-function handlePageChange(data: { current: number; pageSize: number }) {
-  pagination.page = data.current;
-  pagination.page_size = data.pageSize;
-  loadList();
-}
-
 async function openDetail(row: RechargeRecord) {
   const invoiceId = row.invoice_id;
   detailState.visible = true;
@@ -240,48 +239,6 @@ async function openDetail(row: RechargeRecord) {
     logs: [],
   };
   if (invoiceId) await reloadDetail();
-}
-
-async function reloadDetail() {
-  if (!detailState.currentId) return;
-  detailState.loading = true;
-  try {
-    const response = await adminApi.invoices.detail(detailState.currentId);
-    detailState.detail = normalizeInvoiceDetail(response, currentInvoice.value);
-  } catch (error) {
-    MessagePlugin.error(errorMessage(error, '加载充值详情失败'));
-  } finally {
-    detailState.loading = false;
-  }
-}
-
-function closeDetail() {
-  detailState.visible = false;
-  detailState.currentId = 0;
-  detailState.detail = { invoice: {}, payments: [], items: [], logs: [] };
-}
-
-function normalizeInvoiceDetail(payload: Record<string, unknown> = {}, fallback: InvoiceRecord = {}) {
-  const invoice =
-    payload.invoice && typeof payload.invoice === 'object'
-      ? (payload.invoice as InvoiceRecord)
-      : (payload as InvoiceRecord);
-  return {
-    invoice: {
-      ...fallback,
-      ...invoice,
-      type: invoice.type || fallback.type || 'recharge',
-      payment_summary: { ...(fallback.payment_summary || {}), ...(invoice.payment_summary || {}) },
-      order: invoice.order || fallback.order || null,
-      product: invoice.product || fallback.product || null,
-      scene: invoice.scene || fallback.scene || {},
-    },
-    payments: Array.isArray(payload.payments)
-      ? (payload.payments as Record<string, unknown>[])
-      : detailState.detail.payments,
-    items: Array.isArray(payload.items) ? (payload.items as Record<string, unknown>[]) : [],
-    logs: Array.isArray(payload.logs) ? (payload.logs as Record<string, unknown>[]) : [],
-  };
 }
 
 function normalizeRechargeInvoice(row: RechargeRecord): InvoiceRecord {
@@ -356,15 +313,4 @@ function invoiceStatusTheme(status: unknown) {
 function toRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 }
-
-// 列表页开启 keep-alive 后，从详情返回时刷新数据；首次激活跳过（onMounted 已加载）
-let skipFirstActivate = true;
-onMounted(() => loadList());
-onActivated(() => {
-  if (skipFirstActivate) {
-    skipFirstActivate = false;
-    return;
-  }
-  loadList();
-});
 </script>

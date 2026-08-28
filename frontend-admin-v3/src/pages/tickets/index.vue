@@ -57,12 +57,12 @@
 
     <div v-if="total > 0" class="ticket-pagination">
       <t-pagination
-        :current="page"
-        :page-size="pageSize"
+        :current="pagination.page"
+        :page-size="pagination.page_size"
         :total="total"
         :page-size-options="[20, 50, 100]"
         show-jumper
-        @change="handlePageChange"
+        @change="handlePaginationChange"
       />
     </div>
   </div>
@@ -71,29 +71,39 @@
 import './index.less';
 
 import { SearchIcon, UserIcon } from 'tdesign-icons-vue-next';
-import type { PageInfo } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
-import { onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 import type { TicketRecord } from '@/api/admin';
 import { adminApi } from '@/api/admin';
+import { useListPage } from '@/hooks/useListPage';
 import { formatDateTime } from '@/utils/format';
 import { errorMessage } from '@/utils/userMessage';
 
 const DEFAULT_STATUS_FILTER = 'ongoing';
 
 const router = useRouter();
-const loading = ref(false);
-const list = ref<TicketRecord[]>([]);
-const total = ref(0);
-const page = ref(1);
-const pageSize = ref(20);
-const filters = reactive({
-  keyword: '',
-  status: DEFAULT_STATUS_FILTER as string | number,
-  priority: '' as string | number,
-  department: '',
+
+interface TicketFilter {
+  keyword: string;
+  status: string | number;
+  priority: string | number;
+  department: string;
+}
+
+const { filters, list, total, loading, pagination, handleSearch, handlePaginationChange } = useListPage<
+  TicketFilter,
+  TicketRecord
+>({
+  defaultFilters: {
+    keyword: '',
+    status: DEFAULT_STATUS_FILTER,
+    priority: '',
+    department: '',
+  },
+  defaultPageSize: 20,
+  onError: (error) => MessagePlugin.error(errorMessage(error, '加载工单列表失败')),
+  fetch: (params) => adminApi.tickets.list(params),
 });
 
 const statusOptions = [
@@ -115,38 +125,6 @@ const departmentOptions = [
   { label: '财务', value: 'billing' },
   { label: '投诉', value: 'abuse' },
 ];
-
-async function loadList() {
-  loading.value = true;
-  try {
-    const response = await adminApi.tickets.list({
-      ...filters,
-      page: page.value,
-      page_size: pageSize.value,
-    });
-    list.value = Array.isArray(response.list) ? response.list : [];
-    total.value = Number(response.total || 0);
-    page.value = Number(response.page || page.value);
-    pageSize.value = Number(response.page_size || pageSize.value);
-  } catch (error) {
-    list.value = [];
-    total.value = 0;
-    MessagePlugin.error(errorMessage(error, '加载工单列表失败'));
-  } finally {
-    loading.value = false;
-  }
-}
-
-function handleSearch() {
-  page.value = 1;
-  loadList();
-}
-
-function handlePageChange(pageInfo: PageInfo) {
-  page.value = pageInfo.current;
-  pageSize.value = pageInfo.pageSize;
-  loadList();
-}
 
 function openDetail(id: number | string) {
   router.push(`/admin/ticket-conversations/${id}`);
@@ -203,6 +181,4 @@ function statusTheme(value: unknown): 'default' | 'success' | 'warning' | 'dange
   if (number === 2) return 'success';
   return 'default';
 }
-
-onMounted(loadList);
 </script>

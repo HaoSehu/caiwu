@@ -1,6 +1,7 @@
 <template>
   <div class="finance-orders-page">
     <t-card :bordered="false">
+      <quick-filter-tags v-model="filters.quickFilter" @change="applyQuickFilter" />
       <div class="order-filter">
         <t-input
           v-model="filters.keyword"
@@ -36,25 +37,13 @@
         <t-select v-model="filters.status" class="filter-status" clearable placeholder="状态" @change="handleSearch">
           <t-option v-for="item in orderStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
         </t-select>
-        <t-date-picker
-          v-model="filters.start_date"
-          class="filter-start"
+        <t-date-range-picker
+          v-model="dateRange"
+          class="filter-date"
           clearable
-          mode="date"
           format="YYYY-MM-DD"
           value-type="YYYY-MM-DD"
-          placeholder="开始日期"
-          @change="handleSearch"
-        />
-        <t-date-picker
-          v-model="filters.end_date"
-          class="filter-end"
-          clearable
-          mode="date"
-          format="YYYY-MM-DD"
-          value-type="YYYY-MM-DD"
-          placeholder="结束日期"
-          @change="handleSearch"
+          placeholder="选择日期范围"
         />
       </div>
 
@@ -79,7 +68,9 @@
               <span>{{ fieldValue(row.upgrade_target_label || row.upgrade_mode) }}</span>
             </div>
           </template>
-          <template #amount="{ row }"><span class="t-num-strong">{{ formatMoney(row.amount) }}</span></template>
+          <template #amount="{ row }"
+            ><span class="t-num-strong">{{ formatMoney(row.amount) }}</span></template
+          >
           <template #quantity="{ row }">{{ row.quantity || 1 }}</template>
           <template #status="{ row }">
             <status-tag :status-map="ORDER_STATUS_MAP" :status="row.status" />
@@ -136,7 +127,7 @@
 <script setup lang="ts">
 import './index.less';
 
-import { ORDER_STATUS_MAP, ORDER_TYPE_MAP, toSelectOptions } from '@shared/statusConfig';
+import { ORDER_STATUS_FILTER_OPTIONS, ORDER_STATUS_MAP, ORDER_TYPE_MAP } from '@shared/statusConfig';
 import type { PrimaryTableCol } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
 import { computed, onMounted, ref, watch } from 'vue';
@@ -145,6 +136,7 @@ import { useRoute, useRouter } from 'vue-router';
 import type { OrderRecord } from '@/api/admin';
 import { adminApi } from '@/api/admin';
 import MobileRecordCard from '@/components/mobile-record-card/index.vue';
+import QuickFilterTags from '@/components/quick-filter-tags/index.vue';
 import StatusTag from '@/components/status-tag/index.vue';
 import { useListPage } from '@/hooks/useListPage';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
@@ -187,7 +179,7 @@ watch(() => [route.path, route.query.tab, route.meta.orderTab], syncTabFromRoute
 
 const orderTypeOptions = Object.entries(ORDER_TYPE_MAP).map(([value, label]) => ({ value, label }));
 const mode = computed<FinanceOrderMode>(() => activeTab.value);
-const orderStatusOptions = computed(() => toSelectOptions(ORDER_STATUS_MAP, false));
+const orderStatusOptions = ORDER_STATUS_FILTER_OPTIONS;
 const mobileEyebrow = computed(() => {
   const found = ORDER_TAB_OPTIONS.find((o) => o.value === mode.value);
   return found?.label || '订单管理';
@@ -202,6 +194,8 @@ const {
   handleSearch,
   resetFilters,
   handlePaginationChange,
+  applyQuickFilter,
+  dateRange,
 } = useListPage<Record<string, any>, OrderRecord>({
   defaultFilters: {
     keyword: '',
@@ -210,8 +204,11 @@ const {
     status: '',
     start_date: '',
     end_date: '',
+    quickFilter: '',
   },
   defaultPageSize: 20,
+  syncUrl: true,
+  enableQuickFilter: true,
   onError: (error) => MessagePlugin.error(errorMessage(error, '加载订单列表失败')),
   fetch: async () => {
     const apiCall =

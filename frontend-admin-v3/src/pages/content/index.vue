@@ -123,7 +123,9 @@
                 :options="mobileActionOptions()"
                 @click="handleMobileActionHandler(row)"
               >
-                <t-button class="content-mobile-card__more" variant="text" shape="square" aria-label="更多操作">...</t-button>
+                <t-button class="content-mobile-card__more" variant="text" shape="square" aria-label="更多操作"
+                  >...</t-button
+                >
               </t-dropdown>
             </div>
           </div>
@@ -155,7 +157,7 @@
           :total="total"
           :page-size-options="[20, 50, 100]"
           show-jumper
-          @change="handlePageChange"
+          @change="handlePaginationChange"
         />
       </div>
     </t-card>
@@ -225,8 +227,14 @@ import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
-import type { ContentArticleRecord, ContentCategoryPayload, ContentCategoryRecord } from '@/api/admin';
+import type {
+  ContentArticleRecord,
+  ContentCategoryPayload,
+  ContentCategoryRecord,
+  ContentListParams,
+} from '@/api/admin';
 import { adminApi } from '@/api/admin';
+import { useListPage } from '@/hooks/useListPage';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { fieldValue, formatDateTime } from '@/utils/format';
 import { required } from '@/utils/formRules';
@@ -236,25 +244,46 @@ type ContentType = 'notice' | 'help';
 
 const route = useRoute();
 const router = useRouter();
-const loading = ref(false);
 const categoryLoading = ref(false);
 const categorySaving = ref(false);
 const categoryDialogVisible = ref(false);
 const categoryFormRef = ref<FormInstanceFunctions>();
-const articles = ref<ContentArticleRecord[]>([]);
 const categories = ref<ContentCategoryRecord[]>([]);
-const total = ref(0);
 
-const filters = reactive({
-  keyword: '',
-  category_id: '' as string | number,
-  status: '' as string | number,
-  is_pinned: '' as string | number,
+interface ArticleFilter {
+  keyword: string;
+  category_id: string | number;
+  status: string | number;
+  is_pinned: string | number;
+}
+
+const {
+  filters,
+  list: articles,
+  total,
+  loading,
+  pagination,
+  loadList,
+  handleSearch,
+  handlePaginationChange,
+} = useListPage<ArticleFilter, ContentArticleRecord>({
+  defaultFilters: { keyword: '', category_id: '', status: '', is_pinned: '' },
+  defaultPageSize: 20,
+  onError: (error) => MessagePlugin.error(errorMessage(error, '加载内容列表失败')),
+  fetch: (params) => {
+    const requestParams: Record<string, unknown> = {
+      content_type: contentType.value,
+      page: params.page,
+      page_size: params.page_size,
+    };
+    if (String(params.keyword || '').trim()) requestParams.keyword = String(params.keyword).trim();
+    if (params.category_id !== '') requestParams.category_id = params.category_id;
+    if (params.status !== '') requestParams.status = params.status;
+    if (params.is_pinned !== '') requestParams.is_pinned = params.is_pinned;
+    return adminApi.content.articles.list(requestParams as ContentListParams);
+  },
 });
-const pagination = reactive({
-  page: 1,
-  page_size: 20,
-});
+
 const categoryForm = reactive({
   id: null as number | string | null,
   name: '',
@@ -324,21 +353,9 @@ function resetCategoryForm() {
   categoryFormRef.value?.clearValidate?.();
 }
 
-function handleSearch() {
-  pagination.page = 1;
-  loadArticles();
-}
-
 function applyCategoryFilter(value: string | number) {
   filters.category_id = value;
-  pagination.page = 1;
-  loadArticles();
-}
-
-function handlePageChange(data: { current: number; pageSize: number }) {
-  pagination.page = data.current;
-  pagination.page_size = data.pageSize;
-  loadArticles();
+  handleSearch();
 }
 
 function mobileActionOptions() {
@@ -357,19 +374,6 @@ function handleMobileAction(value: unknown, row: ContentArticleRecord) {
   if (value === 'delete') handleDeleteArticle(row);
 }
 
-function buildArticleParams() {
-  const params: Record<string, unknown> = {
-    content_type: contentType.value,
-    page: pagination.page,
-    page_size: pagination.page_size,
-  };
-  if (filters.keyword.trim()) params.keyword = filters.keyword.trim();
-  if (filters.category_id !== '') params.category_id = filters.category_id;
-  if (filters.status !== '') params.status = filters.status;
-  if (filters.is_pinned !== '') params.is_pinned = filters.is_pinned;
-  return params;
-}
-
 async function loadCategories() {
   categoryLoading.value = true;
   try {
@@ -379,25 +383,6 @@ async function loadCategories() {
   } finally {
     categoryLoading.value = false;
   }
-}
-
-async function loadArticles() {
-  loading.value = true;
-  try {
-    const response = await adminApi.content.articles.list(buildArticleParams());
-    articles.value = response.list || [];
-    total.value = Number(response.total || 0);
-    pagination.page = Number(response.page || pagination.page);
-    pagination.page_size = Number(response.page_size || pagination.page_size);
-  } catch (error) {
-    MessagePlugin.error(errorMessage(error, '加载内容列表失败'));
-  } finally {
-    loading.value = false;
-  }
-}
-
-async function loadAll() {
-  await Promise.allSettled([loadCategories(), loadArticles()]);
 }
 
 function openCategoryDialog() {
@@ -437,7 +422,7 @@ async function submitCategory() {
       MessagePlugin.success('分类已创建');
     }
     resetCategoryForm();
-    await Promise.allSettled([loadCategories(), loadArticles()]);
+    await Promise.allSettled([loadCategories(), loadList()]);
   } catch (error) {
     MessagePlugin.error(errorMessage(error, '保存分类失败'));
   } finally {
@@ -456,7 +441,7 @@ function handleDeleteCategory(row: ContentCategoryRecord) {
         MessagePlugin.success('分类已删除');
         dialog.destroy();
         if (String(filters.category_id) === String(row.id)) filters.category_id = '';
-        await Promise.allSettled([loadCategories(), loadArticles()]);
+        await Promise.allSettled([loadCategories(), loadList()]);
       } catch (error) {
         MessagePlugin.error(errorMessage(error, '删除分类失败'));
       }
@@ -474,7 +459,7 @@ function handleDeleteArticle(row: ContentArticleRecord) {
         await adminApi.content.articles.delete(row.id);
         MessagePlugin.success(`${articleLabel.value}已删除`);
         dialog.destroy();
-        await loadArticles();
+        await loadList();
       } catch (error) {
         MessagePlugin.error(errorMessage(error, '删除内容失败'));
       }
@@ -493,6 +478,7 @@ function contentStatusTheme(status: unknown) {
 }
 
 onMounted(() => {
-  loadAll();
+  // 分类是筛选选项源与分类管理弹窗的公共数据，与文章列表并行加载互不影响
+  loadCategories();
 });
 </script>
