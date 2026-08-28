@@ -195,8 +195,14 @@ class NotificationService
         ]);
     }
 
-    public function sendLoginEmailAlertToAddress(string $email, string $displayName, string $loginAt, string $ip, ?string $userAgent = null): void
-    {
+    public function sendLoginEmailAlertToAddress(
+        string $email,
+        string $displayName,
+        string $loginAt,
+        string $ip,
+        ?string $userAgent = null,
+        ?string $previousIp = null
+    ): void {
         $email = trim($email);
         if ($email === '') {
             throw new \InvalidArgumentException('登录提醒邮箱不能为空');
@@ -213,17 +219,19 @@ class NotificationService
             'login_at' => $loginAt,
             'ip' => $ip,
             'device' => $this->resolveUserAgentSummary($userAgent),
+            'previous_ip' => trim((string) $previousIp) !== '' ? $previousIp : '无历史记录',
         ]);
     }
 
-    public function sendLoginEmailAlert(User $user, string $loginAt, string $ip, ?string $userAgent = null): void
+    public function sendLoginEmailAlert(User $user, string $loginAt, string $ip, ?string $userAgent = null, ?string $previousIp = null): void
     {
         $this->sendLoginEmailAlertToAddress(
             (string) $user->email,
             (string) $user->display_name,
             $loginAt,
             $ip,
-            $userAgent
+            $userAgent,
+            $previousIp ?? (string) ($user->last_login_ip ?? '')
         );
     }
 

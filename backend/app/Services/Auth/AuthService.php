@@ -868,7 +868,7 @@ class AuthService
             $this->persistClientLoginState($userId, $loginAt, $ip, $passwordToRehash);
 
             if ($email !== '' && $loginNotifyEnabled) {
-                $this->dispatchClientLoginEmailAlert($userId, $email, $displayName, $loginAt, $ip, $userAgent);
+                $this->dispatchClientLoginEmailAlert($userId, $email, $displayName, $loginAt, $ip, $userAgent, $previousIp);
             }
 
             if (
@@ -915,13 +915,14 @@ class AuthService
         string $displayName,
         string $loginAt,
         string $ip,
-        ?string $userAgent
+        ?string $userAgent,
+        ?string $previousIp = null
     ): void {
         // sync 队列驱动下降级为同步发送（开发环境兜底）
         if ((string) config('queue.default', 'sync') === 'sync') {
             try {
                 $this->notificationService->sendLoginEmailAlertToAddress(
-                    $email, $displayName, $loginAt, $ip, $userAgent
+                    $email, $displayName, $loginAt, $ip, $userAgent, $previousIp
                 );
             } catch (\Throwable $exception) {
                 Log::warning('同步发送用户登录邮件提醒失败', [
@@ -943,6 +944,7 @@ class AuthService
                 loginAt: $loginAt,
                 ip: $ip,
                 userAgent: $userAgent,
+                previousIp: $previousIp,
             );
         } catch (\Throwable $exception) {
             Log::warning('投递用户登录邮件提醒任务失败', [

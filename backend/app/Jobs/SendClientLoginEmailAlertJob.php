@@ -32,6 +32,7 @@ class SendClientLoginEmailAlertJob implements ShouldQueue
         public string $loginAt,
         public string $ip,
         public ?string $userAgent = null,
+        public ?string $previousIp = null,
     ) {
         $this->afterCommit();
     }
@@ -43,7 +44,8 @@ class SendClientLoginEmailAlertJob implements ShouldQueue
             $this->displayName,
             $this->loginAt,
             $this->ip,
-            $this->userAgent
+            $this->userAgent,
+            $this->previousIp
         );
     }
 
