@@ -218,7 +218,7 @@ const columns: PrimaryTableCol[] = [
   { colKey: 'status', title: '状态', width: '8rem' },
   { colKey: 'invoice_ref', title: '关联账单', minWidth: '12rem' },
   { colKey: 'created_at', title: '创建时间', minWidth: '12rem' },
-  { colKey: 'operation', title: '操作', width: '14rem', fixed: 'right', align: 'right' },
+  { colKey: 'operation', title: '操作', width: '12rem', fixed: 'right', align: 'right' },
 ];
 </script>
 <style scoped lang="less">
