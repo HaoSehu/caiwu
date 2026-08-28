@@ -678,7 +678,8 @@ async function fetchAllPagedList<T>(
   extraParams: Record<string, unknown> = {},
   maxPages = 20,
 ): Promise<T[]> {
-  const pageSize = 200;
+  // 后端各列表接口 page_size 上限为 100（invoices 校验 max:100 且服务端再截断），取最小公约值
+  const pageSize = 100;
   const rows: T[] = [];
   for (let page = 1; page <= maxPages; page += 1) {
     const res = await fetcher({ page, page_size: pageSize, ...extraParams });
