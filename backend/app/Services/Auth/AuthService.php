@@ -916,6 +916,7 @@ class AuthService
         string $loginAt,
         string $ip,
         ?string $userAgent,
+        // null 仅兼容部署前已入队的旧任务 payload，新任务始终携带登录前快照
         ?string $previousIp = null
     ): void {
         // sync 队列驱动下降级为同步发送（开发环境兜底）

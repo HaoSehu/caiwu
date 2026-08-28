@@ -4,7 +4,6 @@ namespace App\Services\System;
 
 use App\Models\MessageLog;
 use App\Models\Setting;
-use App\Models\User;
 use App\Services\Integrations\Plugins\IntegrationDriverBindingResolver;
 use App\Services\Mail\MailDriverManager;
 use App\Services\System\Concerns\InteractsWithMessageLogs;
@@ -18,6 +17,9 @@ use TijsVerkoyen\CssToInlineStyles\CssToInlineStyles;
 class NotificationService
 {
     use InteractsWithMessageLogs;
+
+    /** 模板 100003「上次 IP」行无可供展示的历史 IP 时的兜底文案 */
+    private const NO_PREVIOUS_IP_HINT = '无历史记录';
 
     public const TEMPLATE_EMAIL_CODE = '100001';
 
@@ -219,20 +221,8 @@ class NotificationService
             'login_at' => $loginAt,
             'ip' => $ip,
             'device' => $this->resolveUserAgentSummary($userAgent),
-            'previous_ip' => trim((string) $previousIp) !== '' ? $previousIp : '无历史记录',
+            'previous_ip' => trim((string) $previousIp) !== '' ? $previousIp : self::NO_PREVIOUS_IP_HINT,
         ]);
-    }
-
-    public function sendLoginEmailAlert(User $user, string $loginAt, string $ip, ?string $userAgent = null, ?string $previousIp = null): void
-    {
-        $this->sendLoginEmailAlertToAddress(
-            (string) $user->email,
-            (string) $user->display_name,
-            $loginAt,
-            $ip,
-            $userAgent,
-            $previousIp ?? (string) ($user->last_login_ip ?? '')
-        );
     }
 
     public function sendLoginFailureEmailAlertToAddress(
@@ -259,6 +249,8 @@ class NotificationService
             'attempt_at' => $attemptAt,
             'ip' => $ip,
             'device' => $this->resolveUserAgentSummary($userAgent),
+            // 失败提醒复用模板 100003 的「上次 IP」行，失败场景无法可靠取到历史 IP，显式兜底避免空值
+            'previous_ip' => self::NO_PREVIOUS_IP_HINT,
         ]);
     }
 
@@ -285,7 +277,7 @@ class NotificationService
             'email' => $email,
             'login_at' => $loginAt,
             'ip' => $ip,
-            'previous_ip' => trim($previousIp) !== '' ? $previousIp : '无历史记录',
+            'previous_ip' => trim($previousIp) !== '' ? $previousIp : self::NO_PREVIOUS_IP_HINT,
             'device' => $this->resolveUserAgentSummary($userAgent),
         ]);
     }
