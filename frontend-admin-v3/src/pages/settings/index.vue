@@ -26,17 +26,21 @@
             >
               <div class="field-info">
                 <strong>
-                  <span v-if="isFieldRequired(field)" class="required-mark">*</span>
+                  <span v-if="isFieldRequired(field)" class="required-mark">
+                    <span aria-hidden="true">*</span>
+                    <span class="sr-only">（必填）</span>
+                  </span>
                   {{ field.label }}
                 </strong>
                 <p v-if="field.help">{{ field.help }}</p>
               </div>
               <div class="field-control">
-                <t-switch v-if="field.type === 'switch'" v-model="form[field.key]" />
+                <t-switch v-if="field.type === 'switch'" v-model="form[field.key]" :aria-label="field.label" />
                 <t-select
                   v-else-if="field.type === 'select'"
                   v-model="form[field.key]"
                   clearable
+                  :aria-label="field.label"
                   :placeholder="field.placeholder || `请选择${field.label}`"
                 >
                   <t-option
@@ -52,6 +56,7 @@
                   theme="normal"
                   :min="field.min"
                   :max="field.max"
+                  :aria-label="field.label"
                   :placeholder="field.placeholder || `请输入${field.label}`"
                 />
                 <t-textarea
@@ -59,6 +64,7 @@
                   v-model="form[field.key]"
                   :autosize="{ minRows: field.rows || 3, maxRows: Math.max(field.rows || 3, 6) }"
                   :maxlength="field.maxlength"
+                  :aria-label="field.label"
                   :placeholder="field.placeholder || `请输入${field.label}`"
                 />
                 <t-time-picker
@@ -66,9 +72,19 @@
                   v-model="form[field.key]"
                   clearable
                   format="HH:mm:ss"
+                  :aria-label="field.label"
                   :placeholder="field.placeholder || `请选择${field.label}`"
                 />
-                <div v-else-if="field.type === 'image'" class="cover-image-selector" @click="selectImage(field)">
+                <div
+                  v-else-if="field.type === 'image'"
+                  class="cover-image-selector"
+                  role="button"
+                  tabindex="0"
+                  :aria-label="`选择${field.label}`"
+                  @click="selectImage(field)"
+                  @keydown.enter.prevent="selectImage(field)"
+                  @keydown.space.prevent="selectImage(field)"
+                >
                   <image-icon />
                   <span v-if="form[field.key]" class="cover-image-selector__name">{{
                     String(form[field.key]).split('/').pop()
@@ -79,6 +95,7 @@
                 <secret-input
                   v-else-if="isSecretSettingField(field)"
                   v-model="form[field.key]"
+                  :aria-label="field.label"
                   :has-value="hasSettingSecretValue(field)"
                   :placeholder="field.placeholder || `请输入${field.label}`"
                   :reset-key="settingSecretResetKey(field)"
@@ -92,6 +109,7 @@
                   v-model="form[field.key]"
                   :type="field.type === 'password' ? 'password' : 'text'"
                   :maxlength="field.maxlength"
+                  :aria-label="field.label"
                   :placeholder="field.placeholder || `请输入${field.label}`"
                 />
               </div>
@@ -132,12 +150,19 @@
               <span class="slide-card-head__index">{{ index + 1 }}</span>
               <strong class="slide-card-head__name">{{ slide.rail_title || '未命名轮播' }}</strong>
               <div class="slide-card-head__actions">
-                <t-button variant="text" size="small" :disabled="index === 0" @click="moveSlide(index, -1)">
+                <t-button
+                  variant="text"
+                  size="small"
+                  :aria-label="`上移第 ${index + 1} 个轮播`"
+                  :disabled="index === 0"
+                  @click="moveSlide(index, -1)"
+                >
                   <template #icon><arrow-up-icon /></template>
                 </t-button>
                 <t-button
                   variant="text"
                   size="small"
+                  :aria-label="`下移第 ${index + 1} 个轮播`"
                   :disabled="index === heroForm.slides.length - 1"
                   @click="moveSlide(index, 1)"
                 >
@@ -147,6 +172,7 @@
                   theme="danger"
                   variant="text"
                   size="small"
+                  :aria-label="`删除第 ${index + 1} 个轮播`"
                   :disabled="heroForm.slides.length <= 1"
                   @click="removeSlide(index)"
                 >
@@ -158,10 +184,17 @@
             <div class="slide-body">
               <div class="slide-row">
                 <label class="slide-label">标题</label>
-                <t-input v-model="slide.rail_title" maxlength="20" placeholder="导航名" class="slide-field--sm" />
+                <t-input
+                  v-model="slide.rail_title"
+                  maxlength="20"
+                  aria-label="导航名称"
+                  placeholder="导航名"
+                  class="slide-field--sm"
+                />
                 <t-input
                   v-model="slide.title"
                   maxlength="80"
+                  aria-label="主标题"
                   placeholder="主标题，例如：官网焕新 · 云上新体验"
                   class="slide-field--lg"
                 />
@@ -171,10 +204,17 @@
                 <label class="slide-label">按钮</label>
                 <div class="slide-btn-group">
                   <span class="slide-btn-group__tag">主</span>
-                  <t-input v-model="slide.primary_text" maxlength="20" placeholder="按钮文案" class="slide-field--sm" />
+                  <t-input
+                    v-model="slide.primary_text"
+                    maxlength="20"
+                    aria-label="主按钮文案"
+                    placeholder="按钮文案"
+                    class="slide-field--sm"
+                  />
                   <t-input
                     v-model="slide.primary_path"
                     maxlength="255"
+                    aria-label="主按钮跳转路径"
                     placeholder="跳转路径"
                     class="slide-field--lg"
                   />
@@ -184,12 +224,14 @@
                   <t-input
                     v-model="slide.secondary_text"
                     maxlength="20"
+                    aria-label="次按钮文案"
                     placeholder="按钮文案"
                     class="slide-field--sm"
                   />
                   <t-input
                     v-model="slide.secondary_path"
                     maxlength="255"
+                    aria-label="次按钮跳转路径"
                     placeholder="跳转路径"
                     class="slide-field--lg"
                   />
@@ -202,6 +244,7 @@
                   v-model="slide.desc"
                   :autosize="{ minRows: 2, maxRows: 4 }"
                   maxlength="300"
+                  aria-label="轮播描述"
                   placeholder="轮播描述文案"
                   class="slide-field--full"
                 />
@@ -209,7 +252,15 @@
 
               <div class="slide-row">
                 <label class="slide-label">视频</label>
-                <div class="slide-video-selector" @click="openVideoDrawer(index)">
+                <div
+                  class="slide-video-selector"
+                  role="button"
+                  tabindex="0"
+                  :aria-label="`选择第 ${index + 1} 个轮播的背景视频`"
+                  @click="openVideoDrawer(index)"
+                  @keydown.enter.prevent="openVideoDrawer(index)"
+                  @keydown.space.prevent="openVideoDrawer(index)"
+                >
                   <video-icon />
                   <span v-if="slide.video" class="slide-video-selector__name">{{ videoDisplayName(slide.video) }}</span>
                   <span v-else class="slide-video-selector__placeholder">点击选择背景视频</span>

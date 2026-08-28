@@ -379,20 +379,20 @@ const overviewMetrics = computed(() => {
 const overviewColumns: PrimaryTableCol<Record<string, unknown>>[] = [
   { colKey: 'user', title: '推广用户', minWidth: 220 },
   { colKey: 'level', title: '推广大使', minWidth: 150 },
-  { colKey: 'sales', title: '累计销售额', width: 130 },
-  { colKey: 'frozen', title: '冻结中', width: 120 },
-  { colKey: 'available', title: '可提现', width: 120 },
-  { colKey: 'withdrawing', title: '提现中', width: 120 },
-  { colKey: 'withdrawn', title: '已提现', width: 120 },
+  { colKey: 'sales', title: '累计销售额', width: 130, align: 'right' },
+  { colKey: 'frozen', title: '冻结中', width: 120, align: 'right' },
+  { colKey: 'available', title: '可提现', width: 120, align: 'right' },
+  { colKey: 'withdrawing', title: '提现中', width: 120, align: 'right' },
+  { colKey: 'withdrawn', title: '已提现', width: 120, align: 'right' },
 ];
 
 const rewardColumns: PrimaryTableCol<ReferralRewardRecord>[] = [
   { colKey: 'id', title: 'ID', width: 80 },
   { colKey: 'relation', title: '推荐关系', minWidth: 220 },
   { colKey: 'order', title: '订单 / 配置', minWidth: 220 },
-  { colKey: 'orderAmount', title: '订单金额', width: 120 },
+  { colKey: 'orderAmount', title: '订单金额', width: 120, align: 'right' },
   { colKey: 'rate', title: '比例', width: 100 },
-  { colKey: 'amount', title: '奖励金额', width: 120 },
+  { colKey: 'amount', title: '奖励金额', width: 120, align: 'right' },
   { colKey: 'status', title: '状态', width: 110 },
   { colKey: 'time', title: '时间', minWidth: 190 },
   { colKey: 'remark', title: '备注', minWidth: 180 },
@@ -401,7 +401,7 @@ const rewardColumns: PrimaryTableCol<ReferralRewardRecord>[] = [
 const withdrawalColumns: PrimaryTableCol<ReferralWithdrawalRecord>[] = [
   { colKey: 'id', title: 'ID', width: 80 },
   { colKey: 'user', title: '申请用户', minWidth: 220 },
-  { colKey: 'amount', title: '提现金额', width: 120 },
+  { colKey: 'amount', title: '提现金额', width: 120, align: 'right' },
   { colKey: 'method', title: '提现方式', minWidth: 220 },
   { colKey: 'status', title: '状态', width: 110 },
   { colKey: 'time', title: '申请 / 处理时间', minWidth: 220 },

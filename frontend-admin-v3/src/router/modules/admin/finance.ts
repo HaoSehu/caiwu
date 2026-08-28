@@ -24,8 +24,8 @@ export const financeRoutes: RouteRecordRaw[] = [
         en_US: 'All Orders',
       },
       permission: 'order.list',
-      keepAlive: false,
       orderTab: 'all',
+      keepAliveName: 'AdminFinanceOrders',
     },
   },
   {
@@ -38,8 +38,8 @@ export const financeRoutes: RouteRecordRaw[] = [
         en_US: 'Normal Orders',
       },
       permission: 'order.list',
-      keepAlive: false,
       orderTab: 'orders',
+      keepAliveName: 'AdminFinanceOrders',
     },
   },
   {
@@ -52,8 +52,8 @@ export const financeRoutes: RouteRecordRaw[] = [
         en_US: 'Renewal Orders',
       },
       permission: 'order.list',
-      keepAlive: false,
       orderTab: 'renewals',
+      keepAliveName: 'AdminFinanceOrders',
     },
   },
   {
@@ -66,8 +66,8 @@ export const financeRoutes: RouteRecordRaw[] = [
         en_US: 'Upgrade Orders',
       },
       permission: 'order.list',
-      keepAlive: false,
       orderTab: 'upgrade',
+      keepAliveName: 'AdminFinanceOrders',
     },
   },
   {
@@ -105,7 +105,6 @@ export const financeRoutes: RouteRecordRaw[] = [
         en_US: 'Recharges',
       },
       permission: 'invoice.list',
-      keepAlive: false,
     },
   },
   {

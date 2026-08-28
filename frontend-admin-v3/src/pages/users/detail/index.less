@@ -78,17 +78,17 @@
 .is-success,
 .text-success,
 .amount-up {
-  color: var(--td-success-color) !important;
+  color: var(--caiwu-text-success) !important;
 }
 
 .is-warning,
 .text-warning {
-  color: var(--td-warning-color) !important;
+  color: var(--caiwu-text-warning) !important;
 }
 
 .is-danger,
 .text-danger {
-  color: var(--td-error-color) !important;
+  color: var(--caiwu-text-danger) !important;
 }
 
 .is-primary,
@@ -103,7 +103,7 @@
 }
 
 .amount-down {
-  color: var(--td-error-color) !important;
+  color: var(--caiwu-text-danger) !important;
 }
 
 .user-detail-section {
@@ -114,10 +114,6 @@
   display: grid;
   grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.65fr);
   gap: var(--td-comp-margin-l);
-
-  .t-card__body {
-    padding: 0;
-  }
 }
 
 .info-grid {
@@ -173,10 +169,28 @@
   color: var(--td-text-color-placeholder);
 }
 
-.note-header {
+// 外层 tabs 卡片内的分区容器：浅灰底替代嵌套白卡，消除卡中卡
+.user-detail-subpanel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--td-comp-margin-m);
+  height: 100%;
+  padding: var(--td-comp-paddingTB-xxl) var(--td-comp-paddingLR-xxl);
+  border-radius: var(--td-radius-medium);
+  background: var(--td-bg-color-secondarycontainer);
+}
+
+.user-detail-subpanel__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+
+.user-detail-subpanel__title {
+  margin: 0;
+  color: var(--td-text-color-primary);
+  font-size: var(--td-font-size-size-4, 16px);
+  font-weight: 600;
 }
 
 .note-edit {
@@ -430,7 +444,7 @@
 .invoice-detail-section h4 {
   margin: 0;
   color: var(--td-text-color-primary);
-  font-size: 15px;
+  font-size: var(--td-font-size-size-4, 16px);
   line-height: 22px;
 }
 

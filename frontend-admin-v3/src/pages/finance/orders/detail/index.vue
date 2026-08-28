@@ -581,6 +581,10 @@ async function loadDetail() {
 }
 
 function goBack() {
+  if (window.history.length > 1) {
+    router.back();
+    return;
+  }
   router.push('/admin/finance/orders');
 }
 

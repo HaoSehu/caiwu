@@ -79,7 +79,7 @@
               <span>{{ fieldValue(row.upgrade_target_label || row.upgrade_mode) }}</span>
             </div>
           </template>
-          <template #amount="{ row }">{{ formatMoney(row.amount) }}</template>
+          <template #amount="{ row }"><span class="t-num-strong">{{ formatMoney(row.amount) }}</span></template>
           <template #quantity="{ row }">{{ row.quantity || 1 }}</template>
           <template #status="{ row }">
             <status-tag :status-map="ORDER_STATUS_MAP" :status="row.status" />
@@ -150,6 +150,10 @@ import { useListPage } from '@/hooks/useListPage';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { fieldValue, formatDateTime, formatMoney } from '@/utils/format';
 import { errorMessage } from '@/utils/userMessage';
+
+defineOptions({
+  name: 'AdminFinanceOrders',
+});
 
 type FinanceOrderMode = 'all' | 'orders' | 'renewals' | 'upgrade';
 
@@ -223,7 +227,7 @@ const {
 
 const columns = computed<PrimaryTableCol<OrderRecord>[]>(() => {
   const base: PrimaryTableCol<OrderRecord>[] = [
-    { colKey: 'order_no', title: '订单号', minWidth: 170 },
+    { colKey: 'order_no', title: '订单号', minWidth: 170, ellipsis: true },
     { colKey: 'user', title: '用户', minWidth: 180 },
     { colKey: 'product', title: '产品/服务', minWidth: 240 },
     { colKey: 'type', title: '类型', width: 110 },
@@ -232,7 +236,7 @@ const columns = computed<PrimaryTableCol<OrderRecord>[]>(() => {
     base.push({ colKey: 'upgrade', title: '配置', minWidth: 140 });
   }
   base.push(
-    { colKey: 'amount', title: '金额', width: 120 },
+    { colKey: 'amount', title: '金额', width: 120, align: 'right' },
     { colKey: 'quantity', title: '数量', width: 80 },
     { colKey: 'status', title: '状态', width: 110 },
     { colKey: 'invoice', title: '关联账单', minWidth: 170 },

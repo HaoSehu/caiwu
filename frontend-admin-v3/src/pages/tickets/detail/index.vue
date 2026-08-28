@@ -59,7 +59,13 @@
                         :class="{ 'is-deleted': attachment.deleted || !attachment.url }"
                         @click="previewAttachment(attachment)"
                       >
-                        <img v-if="attachment.url" :src="attachment.url" :alt="attachment.name || '附件'" />
+                        <img
+                          v-if="attachment.url"
+                          :src="attachment.url"
+                          :alt="attachment.name || '附件'"
+                          loading="lazy"
+                          decoding="async"
+                        />
                         <span v-else>已删除</span>
                       </button>
                     </div>

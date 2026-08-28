@@ -55,8 +55,8 @@
             </div>
           </template>
           <template #type="{ row }">{{ row.type_label || invoiceTypeLabel(row.type) }}</template>
-          <template #amount="{ row }">{{ formatMoney(row.amount) }}</template>
-          <template #paid="{ row }">{{ formatMoney(row.paid_amount) }}</template>
+          <template #amount="{ row }"><span class="t-num-strong">{{ formatMoney(row.amount) }}</span></template>
+          <template #paid="{ row }"><span class="t-num-strong">{{ formatMoney(row.paid_amount) }}</span></template>
           <template #status="{ row }">
             <status-tag :status-map="INVOICE_STATUS_MAP" :status="row.status" />
           </template>
@@ -143,7 +143,7 @@ import './index.less';
 import { INVOICE_STATUS_MAP, INVOICE_TYPE_MAP, toLabelMap, toTagTypeMap } from '@shared/statusConfig';
 import type { DropdownOption, PrimaryTableCol } from 'tdesign-vue-next';
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onActivated, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 import type { InvoiceRecord } from '@/api/admin';
@@ -156,6 +156,10 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useUserStore } from '@/store';
 import { fieldValue, formatDateTime, formatMoney } from '@/utils/format';
 import { errorMessage } from '@/utils/userMessage';
+
+defineOptions({
+  name: 'AdminFinanceInvoices',
+});
 
 const loading = ref(false);
 const invoices = ref<InvoiceRecord[]>([]);
@@ -200,12 +204,12 @@ const invoiceTypeOptions = Object.entries(INVOICE_TYPE_MAP)
 const invoiceStatusOptions = Object.entries(statusLabelMap).map(([value, label]) => ({ value, label }));
 
 const columns: PrimaryTableCol<InvoiceRecord>[] = [
-  { colKey: 'invoice_no', title: '账单号', minWidth: 170 },
+  { colKey: 'invoice_no', title: '账单号', minWidth: 170, ellipsis: true },
   { colKey: 'user', title: '用户', minWidth: 180 },
   { colKey: 'item', title: '账单项目', minWidth: 240 },
   { colKey: 'type', title: '类型', width: 120 },
-  { colKey: 'amount', title: '金额', width: 120 },
-  { colKey: 'paid', title: '已付', width: 120 },
+  { colKey: 'amount', title: '金额', width: 120, align: 'right' },
+  { colKey: 'paid', title: '已付', width: 120, align: 'right' },
   { colKey: 'status', title: '状态', width: 110 },
   { colKey: 'createdAt', title: '创建时间', width: 170 },
   { colKey: 'paidAt', title: '支付时间', width: 170 },
@@ -413,5 +417,14 @@ function toRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 }
 
+// 列表页开启 keep-alive 后，返回时刷新数据；首次激活跳过（onMounted 已加载）
+let skipFirstActivate = true;
 onMounted(() => loadList());
+onActivated(() => {
+  if (skipFirstActivate) {
+    skipFirstActivate = false;
+    return;
+  }
+  loadList();
+});
 </script>

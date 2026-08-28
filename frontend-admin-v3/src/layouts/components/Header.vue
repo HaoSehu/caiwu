@@ -279,10 +279,10 @@ const handleLogout = () => {
       right: 0;
       z-index: 10;
       width: auto;
-      transition: all 0.3s;
+      transition: left 0.3s @anim-time-fn-easing;
 
       &-compact {
-        left: 64px;
+        left: 72px;
       }
     }
   }

@@ -54,6 +54,14 @@
   font-weight: 600;
 }
 
+// 状态文本深色变体：高饱和状态色（--td-success/warning/error-color）直接作正文时
+// 对白底对比度仅 2.15~3.76，不满足 WCAG AA；正文/图标改用以下深色同族色（均 ≥4.5:1）。
+:root {
+  --caiwu-text-success: #067647;
+  --caiwu-text-warning: #b54708;
+  --caiwu-text-danger: #b42318;
+}
+
 // 响应式字号（随视口平滑缩放）
 .t-text-responsive-title {
   font-size: clamp(16px, 2vw, 20px);

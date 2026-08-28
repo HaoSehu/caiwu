@@ -219,7 +219,7 @@
                       :options="smtpAccountActionOptions(account)"
                       @click="handleSmtpAccountActionHandler(index)"
                     >
-                      <t-button variant="text" shape="square">
+                      <t-button variant="text" shape="square" aria-label="更多操作">
                         <more-icon />
                       </t-button>
                     </t-dropdown>

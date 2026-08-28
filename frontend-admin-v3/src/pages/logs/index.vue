@@ -297,7 +297,7 @@
             :current="logPagination.page"
             :page-size="logPagination.page_size"
             :total="logPagination.total"
-            :page-size-options="[10, 15, 20, 50, 100]"
+            :page-size-options="[20, 50, 100]"
             show-jumper
             @change="handleLogPageChange"
           />
@@ -594,7 +594,7 @@ type LogFilterKey = keyof typeof filters;
 
 const logPagination = reactive({
   page: 1,
-  page_size: 15,
+  page_size: 20,
   total: 0,
 });
 const cleanupForm = reactive({

@@ -41,7 +41,7 @@
 .coupons-filter {
   display: grid;
   grid-template-columns: minmax(240px, 1fr) repeat(4, minmax(120px, 145px)) auto;
-  gap: 12px;
+  gap: var(--td-comp-margin-m);
   align-items: stretch;
   margin-bottom: 16px;
 }
@@ -166,7 +166,7 @@
   height: 38px;
   border-radius: var(--td-radius-default, 4px) 4px 0 0;
   padding: 0 18px;
-  background: #eef2fd;
+  background: var(--td-brand-color-light);
   color: var(--td-text-color-primary);
   font-size: var(--td-font-size-size-2, 13px);
   font-weight: 600;
@@ -197,7 +197,7 @@
   left: 0;
   display: flex;
   justify-content: flex-end;
-  gap: 12px;
+  gap: var(--td-comp-margin-m);
   border-top: 1px solid var(--td-component-border);
   padding: 14px 22px;
   background: var(--td-bg-color-container);
@@ -215,7 +215,7 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--td-comp-margin-m);
   margin-bottom: 12px;
 }
 
@@ -239,7 +239,7 @@
 .user-picker-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: var(--td-comp-margin-m);
 }
 
 .user-picker-title {

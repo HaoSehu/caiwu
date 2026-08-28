@@ -55,7 +55,7 @@
               :options="mobileActionOptions"
               @click="handleMobileAction(row, $event)"
             >
-              <t-button class="ambassador-mobile-card__more" variant="text" shape="square">...</t-button>
+              <t-button class="ambassador-mobile-card__more" variant="text" shape="square" aria-label="更多操作">...</t-button>
             </t-dropdown>
           </div>
           <dl>

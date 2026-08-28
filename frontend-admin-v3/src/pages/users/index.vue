@@ -15,7 +15,7 @@
           <t-option label="正常" :value="1" />
           <t-option label="禁用" :value="0" />
         </t-select>
-        <t-button size="medium" theme="primary" @click="openCreateDialog">
+        <t-button v-if="canManage" size="medium" theme="primary" @click="openCreateDialog">
           <template #icon><user-add-icon /></template>
           新增用户
         </t-button>
@@ -53,7 +53,7 @@
           </span>
         </template>
         <template #balance="{ row }">
-          <span class="users-balance">{{ formatMoney(row.cash_balance) }}</span>
+          <span class="users-balance t-num-strong">{{ formatMoney(row.cash_balance) }}</span>
         </template>
         <template #openedServices="{ row }">
           <span :class="{ 'users-empty-count': !Number(row.opened_product_count || 0) }">
@@ -132,7 +132,7 @@
           <t-input v-model="createForm.nickname" />
         </t-form-item>
         <t-form-item label="手机号" name="phone">
-          <t-input v-model="createForm.phone" />
+          <t-input v-model="createForm.phone" :maxlength="11" placeholder="选填，11 位大陆手机号" />
         </t-form-item>
         <t-form-item label="密码" name="password">
           <t-input v-model="createForm.password" type="password" />
@@ -147,19 +147,29 @@ import './index.less';
 import { CheckCircleFilledIcon, SearchIcon, UserAddIcon } from 'tdesign-icons-vue-next';
 import type { FormInstanceFunctions, FormRule, PageInfo, PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onActivated, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 import type { AdminUser } from '@/api/user';
 import { userApi } from '@/api/user';
+import { AdminPermissions, hasPermissionInList } from '@/constants/permissions';
+import { useUserStore } from '@/store';
 import { formatDateTime, formatMoney } from '@/utils/format';
-import { required } from '@/utils/formRules';
+import { phoneRule, required } from '@/utils/formRules';
 
 defineOptions({
   name: 'AdminUsers',
 });
 
 const router = useRouter();
+const userStore = useUserStore();
+
+function userPermissions() {
+  const info = userStore.userInfo as { permissions?: string[] };
+  return Array.isArray(info.permissions) ? info.permissions : [];
+}
+
+const canManage = hasPermissionInList(userPermissions(), AdminPermissions.USER_MANAGE);
 
 const loading = ref(false);
 const submitLoading = ref(false);
@@ -173,7 +183,7 @@ const columns: PrimaryTableCol<TableRowData>[] = [
   { title: 'ID', colKey: 'id', width: 80 },
   { title: '手机号 / 邮箱', colKey: 'account', width: 220 },
   { title: '昵称', colKey: 'nickname', width: 180 },
-  { title: '余额', colKey: 'cash_balance', width: 120 },
+  { title: '余额', colKey: 'cash_balance', width: 120, align: 'right' },
   { title: '已开通服务', colKey: 'openedServices', width: 130, align: 'center' },
   { title: '状态', colKey: 'status', width: 100 },
   { title: '注册时间', colKey: 'createdAt', width: 180 },
@@ -192,6 +202,7 @@ const createFormRef = ref<FormInstanceFunctions>();
 const createForm = reactive({ email: '', nickname: '', phone: '', password: '' });
 const createRules: Record<string, FormRule[]> = {
   email: [required('请输入有效邮箱'), { email: true, message: '请输入有效邮箱', type: 'warning' }],
+  phone: [phoneRule()],
   password: [required('请输入密码')],
 };
 
@@ -249,5 +260,14 @@ function openDetail(id: number | string) {
   router.push(`/admin/users/${id}`);
 }
 
+// 列表页开启 keep-alive 后，从详情返回时刷新数据；首次激活跳过（onMounted 已加载）
+let skipFirstActivate = true;
 onMounted(() => loadList());
+onActivated(() => {
+  if (skipFirstActivate) {
+    skipFirstActivate = false;
+    return;
+  }
+  loadList();
+});
 </script>

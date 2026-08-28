@@ -29,7 +29,7 @@
         </aside>
 
         <div class="product-edit-main">
-          <t-form ref="formRef" class="product-edit-form" :data="form" :rules="rules" label-width="96px">
+          <t-form ref="formRef" class="product-edit-form" :data="form" :rules="rules" label-align="top">
             <!-- 详情 -->
             <section v-show="activeSection === 'basic'" class="product-edit-section">
               <h3 class="product-edit-section-title">详情</h3>
@@ -264,6 +264,7 @@
             <t-button
               shape="square"
               variant="outline"
+              :aria-label="`删除第 ${index + 1} 行配置值`"
               :disabled="configOptionSubItemRows.length <= 1"
               @click="removeConfigSubItemRow(index)"
             >

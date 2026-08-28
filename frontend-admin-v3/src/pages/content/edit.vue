@@ -84,7 +84,15 @@
           <h3 class="edit-section__title">封面与摘要</h3>
           <div class="edit-section__body edit-section__body--single">
             <t-form-item label="封面" name="cover_image">
-              <div class="cover-image-selector" @click="openCoverImageDrawer">
+              <div
+                class="cover-image-selector"
+                role="button"
+                tabindex="0"
+                aria-label="选择封面图片或视频"
+                @click="openCoverImageDrawer"
+                @keydown.enter.prevent="openCoverImageDrawer"
+                @keydown.space.prevent="openCoverImageDrawer"
+              >
                 <image-icon v-if="!isCoverVideo" />
                 <video-icon v-else />
                 <span v-if="form.cover_image" class="cover-image-selector__name">{{

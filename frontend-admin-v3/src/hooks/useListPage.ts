@@ -1,5 +1,5 @@
 import type { Ref } from 'vue';
-import { onMounted, reactive, ref } from 'vue';
+import { onActivated, onMounted, reactive, ref } from 'vue';
 
 export interface ListPageResponse<T> {
   list?: T[];
@@ -93,7 +93,18 @@ export function useListPage<F extends Record<string, any>, T>(options: UseListPa
     return loadList();
   }
 
-  if (immediate) onMounted(loadList);
+  if (immediate) {
+    onMounted(loadList);
+    // 列表页被 keep-alive 缓存后，再次激活时刷新数据；首次激活跳过（onMounted 已加载）
+    let skipFirstActivate = true;
+    onActivated(() => {
+      if (skipFirstActivate) {
+        skipFirstActivate = false;
+        return;
+      }
+      loadList();
+    });
+  }
 
   return {
     filters,

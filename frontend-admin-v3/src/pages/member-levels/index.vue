@@ -47,7 +47,7 @@
               :options="mobileActionOptions"
               @click="handleMobileAction(row, $event)"
             >
-              <t-button class="member-mobile-card__more" variant="text" shape="square">...</t-button>
+              <t-button class="member-mobile-card__more" variant="text" shape="square" aria-label="更多操作">...</t-button>
             </t-dropdown>
           </div>
           <dl>
@@ -108,6 +108,7 @@
               class="col-type"
               :options="discountTypeOptions"
               clearable
+              :aria-label="`${item.name} 折扣类型`"
               placeholder="无折扣"
             />
             <div class="col-value">
@@ -117,6 +118,7 @@
                 :min="1"
                 :max="100"
                 :decimal-places="2"
+                :aria-label="`${item.name} 折后保留百分比`"
                 placeholder="折后保留百分比"
               />
               <t-input-number
@@ -124,6 +126,7 @@
                 v-model="item.discountValue"
                 :min="0.01"
                 :decimal-places="2"
+                :aria-label="`${item.name} 固定减免金额`"
                 placeholder="固定减免金额"
               />
               <span v-else class="matrix-none">原价</span>

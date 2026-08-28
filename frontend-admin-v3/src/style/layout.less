@@ -59,6 +59,11 @@
   overflow: visible;
 }
 
+// 表格数字统一等宽（tabular-nums），保证金额/ID 列纵向可比对
+.t-table {
+  font-variant-numeric: tabular-nums;
+}
+
 @media (width <= 768px) {
   html,
   body,
@@ -498,11 +503,6 @@
     flex-direction: column;
   }
 
-  &-main-wrapper {
-    height: 500px;
-    overflow: scroll;
-  }
-
   &-side-nav-layout {
     &-relative {
       height: 100%;
@@ -551,7 +551,7 @@
   }
 
   &-sidebar-compact {
-    width: 64px;
+    width: 72px;
   }
 
   &-sidebar-layout-side {
@@ -563,7 +563,7 @@
     top: 0;
     bottom: 0;
     z-index: 200;
-    transition: all 0.3s;
+    transition: width 0.3s @anim-time-fn-easing, transform 0.3s @anim-time-fn-easing;
     min-height: 100%;
 
     &-mix {
@@ -610,7 +610,7 @@
     &-logo-normal {
       color: var(--td-brand-color);
       font: var(--td-font-body-large);
-      transition: all 0.3s;
+      transition: color 0.3s @anim-time-fn-easing, font 0.3s @anim-time-fn-easing;
     }
   }
 
@@ -621,12 +621,12 @@
   &-side-nav-placeholder {
     flex: 1 1 232px;
     min-width: 232px;
-    transition: all 0.3s;
+    transition: flex-basis 0.3s @anim-time-fn-easing, min-width 0.3s @anim-time-fn-easing;
 
     &-hidden {
       flex: 1 1 72px;
       min-width: 72px;
-      transition: all 0.3s;
+      transition: flex-basis 0.3s @anim-time-fn-easing, min-width 0.3s @anim-time-fn-easing;
     }
   }
 }

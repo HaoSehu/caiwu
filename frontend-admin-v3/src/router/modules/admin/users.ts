@@ -11,7 +11,6 @@ export const usersRoutes: RouteRecordRaw[] = [
         en_US: 'User List',
       },
       permission: 'user.list',
-      keepAlive: false,
     },
   },
   {

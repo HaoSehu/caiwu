@@ -51,7 +51,8 @@
 
       <section v-if="activeTab === 'basic'" class="user-detail-section">
         <div class="basic-grid">
-          <t-card header="基础信息" :bordered="true">
+          <div class="user-detail-subpanel">
+            <h3 class="user-detail-subpanel__title">基础信息</h3>
             <div class="info-grid">
               <div v-for="item in infoItems" :key="item.label" class="info-field">
                 <span class="info-label">{{ item.label }}</span>
@@ -60,16 +61,14 @@
                 </t-popup>
               </div>
             </div>
-          </t-card>
-          <t-card :bordered="true">
-            <template #header>
-              <div class="note-header">
-                <span>管理员备注</span>
-                <t-button v-if="!noteEditing" variant="text" theme="primary" size="small" @click="startEditNote"
-                  >编辑</t-button
-                >
-              </div>
-            </template>
+          </div>
+          <div class="user-detail-subpanel">
+            <div class="user-detail-subpanel__header">
+              <h3 class="user-detail-subpanel__title">管理员备注</h3>
+              <t-button v-if="!noteEditing" variant="text" theme="primary" size="small" @click="startEditNote"
+                >编辑</t-button
+              >
+            </div>
             <div v-if="!noteEditing" class="user-note" :class="{ 'is-empty': !user.admin_note }">
               {{ user.admin_note || '暂无备注' }}
             </div>
@@ -97,7 +96,7 @@
                 </div>
               </div>
             </div>
-          </t-card>
+          </div>
         </div>
       </section>
 
@@ -369,7 +368,7 @@
           <t-input v-model="editForm.nickname" />
         </t-form-item>
         <t-form-item label="手机号" name="phone">
-          <t-input v-model="editForm.phone" />
+          <t-input v-model="editForm.phone" :maxlength="11" />
         </t-form-item>
         <t-form-item label="新密码" name="password">
           <t-input v-model="editForm.password" type="password" placeholder="留空则不修改" />
@@ -978,7 +977,7 @@ import { userApi } from '@/api/user';
 import ProductBindingTreeSelect from '@/components/product-binding-tree-select/index.vue';
 import { AdminPermissions } from '@/constants/permissions';
 import { fieldValue, formatDateTime, formatMoney } from '@/utils/format';
-import { required } from '@/utils/formRules';
+import { phoneRule, required } from '@/utils/formRules';
 import { hasAdminPermission } from '@/utils/permission';
 import { errorMessage } from '@/utils/userMessage';
 
@@ -1161,6 +1160,7 @@ const notices = reactive<PageState>({
 
 const editRules: Record<string, FormRule[]> = {
   password: [{ validator: (val) => !val || String(val).length >= 6, message: '密码至少需要 6 位', type: 'warning' }],
+  phone: [phoneRule()],
 };
 const rechargeRules: Record<string, FormRule[]> = {
   amount: [required('请输入金额')],
@@ -2240,6 +2240,10 @@ async function handleInvoiceRefund() {
 }
 
 function goBack() {
+  if (window.history.length > 1) {
+    router.back();
+    return;
+  }
   router.push('/admin/users');
 }
 

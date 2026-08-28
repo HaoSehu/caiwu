@@ -51,8 +51,8 @@
               <span>{{ paymentSummary(row.payment || paymentRecord(row)) }}</span>
             </div>
           </template>
-          <template #amount="{ row }">{{ formatMoney(row.amount) }}</template>
-          <template #paid="{ row }">{{ formatMoney(row.paid_amount) }}</template>
+          <template #amount="{ row }"><span class="t-num-strong">{{ formatMoney(row.amount) }}</span></template>
+          <template #paid="{ row }"><span class="t-num-strong">{{ formatMoney(row.paid_amount) }}</span></template>
           <template #status="{ row }">
             <status-tag :status-map="PAYMENT_STATUS_MAP" :status="row.status" />
           </template>
@@ -121,7 +121,7 @@ import './index.less';
 import { PAYMENT_STATUS_MAP, toLabelMap, toTagTypeMap } from '@shared/statusConfig';
 import type { PrimaryTableCol } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onActivated, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 import type { InvoiceRecord, RechargeRecord } from '@/api/admin';
@@ -132,6 +132,10 @@ import StatusTag from '@/components/status-tag/index.vue';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { fieldValue, formatDateTime, formatMoney } from '@/utils/format';
 import { errorMessage } from '@/utils/userMessage';
+
+defineOptions({
+  name: 'AdminFinanceRecharges',
+});
 
 const loading = ref(false);
 const recharges = ref<RechargeRecord[]>([]);
@@ -167,11 +171,11 @@ const statusTypeMap = toTagTypeMap(PAYMENT_STATUS_MAP);
 const paymentStatusOptions = computed(() => Object.entries(statusLabelMap).map(([value, label]) => ({ value, label })));
 
 const columns: PrimaryTableCol<RechargeRecord>[] = [
-  { colKey: 'payment_no', title: '支付单号', minWidth: 190 },
+  { colKey: 'payment_no', title: '支付单号', minWidth: 190, ellipsis: true },
   { colKey: 'user', title: '用户', minWidth: 180 },
   { colKey: 'payment', title: '支付记录', minWidth: 220 },
-  { colKey: 'amount', title: '金额', width: 120 },
-  { colKey: 'paid', title: '到账', width: 120 },
+  { colKey: 'amount', title: '金额', width: 120, align: 'right' },
+  { colKey: 'paid', title: '到账', width: 120, align: 'right' },
   { colKey: 'status', title: '状态', width: 110 },
   { colKey: 'createdAt', title: '创建时间', width: 170 },
   { colKey: 'paidAt', title: '支付时间', width: 170 },
@@ -353,5 +357,14 @@ function toRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 }
 
+// 列表页开启 keep-alive 后，从详情返回时刷新数据；首次激活跳过（onMounted 已加载）
+let skipFirstActivate = true;
 onMounted(() => loadList());
+onActivated(() => {
+  if (skipFirstActivate) {
+    skipFirstActivate = false;
+    return;
+  }
+  loadList();
+});
 </script>

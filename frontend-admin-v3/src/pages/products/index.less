@@ -194,7 +194,7 @@
 
 .mobile-catalog-title strong {
   color: var(--td-text-color-primary);
-  font-size: 15px;
+  font-size: var(--td-font-size-size-4, 16px);
   font-weight: 600;
 }
 
@@ -707,7 +707,7 @@
 .category-panel-title strong {
   overflow: hidden;
   color: var(--td-text-color-primary);
-  font-size: 15px;
+  font-size: var(--td-font-size-size-4, 16px);
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1608,7 +1608,7 @@
   gap: 8px;
   min-height: 50px;
   border-bottom: 1px solid var(--td-component-border);
-  padding: 8px 10px;
+  padding: var(--td-comp-margin-s) var(--td-comp-margin-m);
 }
 
 .supplier-card__head div {
@@ -1636,7 +1636,7 @@
   display: grid;
   grid-template-columns: 1fr;
   margin: 0;
-  padding: 7px 10px 8px;
+  padding: var(--td-comp-margin-s) var(--td-comp-margin-m);
 }
 
 .supplier-card dl div {
@@ -1673,15 +1673,15 @@
 }
 
 .supplier-card__field-value--success {
-  color: var(--td-success-color, #12B76A);
+  color: var(--caiwu-text-success);
 }
 
 .supplier-card__field-value--warning {
-  color: var(--td-warning-color, #F59E0B);
+  color: var(--caiwu-text-warning);
 }
 
 .supplier-card__field-value--danger {
-  color: var(--td-error-color, #F04438);
+  color: var(--caiwu-text-danger);
 }
 
 .supplier-card__empty {
@@ -1698,7 +1698,7 @@
   flex-wrap: wrap;
   gap: 8px;
   border-top: 1px solid var(--td-component-border);
-  padding: 8px 10px;
+  padding: var(--td-comp-margin-s) var(--td-comp-margin-m);
 }
 
 .supplier-card__actions .t-button {
@@ -2063,14 +2063,14 @@ button.supplier-tree-node__content {
   border-radius: var(--td-radius-medium);
   padding: var(--td-comp-paddingTB-s) var(--td-comp-paddingLR-m);
   background: var(--td-success-color-light);
-  color: var(--td-success-color);
+  color: var(--caiwu-text-success);
 }
 
 .supplier-batch-skipped {
   margin: var(--td-comp-margin-s) 0 0;
   padding-left: var(--td-comp-margin-m);
   font-size: var(--td-font-body-small);
-  color: var(--td-warning-color);
+  color: var(--caiwu-text-warning);
 }
 
 @media (width <= 1024px) {

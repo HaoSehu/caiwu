@@ -107,6 +107,19 @@
   color: var(--td-error-color);
 }
 
+// 仅供读屏软件播报的文本
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .field-control {
   min-width: 0;
 }
@@ -149,7 +162,7 @@
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  gap: var(--td-comp-margin-m);
   margin-top: 14px;
 }
 
@@ -196,7 +209,7 @@
 .slides-section {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--td-comp-margin-m);
 }
 
 .slides-section + .slides-section {
@@ -479,7 +492,7 @@
 .feature-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--td-comp-margin-m);
 }
 
 .feature-card {
@@ -591,7 +604,7 @@
   min-width: 0;
   overflow: hidden;
   color: var(--td-text-color-primary);
-  font-size: 13px;
+  font-size: var(--td-font-size-size-2, 13px);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -599,13 +612,13 @@
 .cover-image-selector__placeholder {
   flex: 1;
   color: var(--td-text-color-placeholder);
-  font-size: 13px;
+  font-size: var(--td-font-size-size-2, 13px);
 }
 
 .cover-drawer-toolbar {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--td-comp-margin-m);
   margin-bottom: 16px;
 }
 
@@ -617,7 +630,7 @@
 .cover-drawer-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 12px;
+  gap: var(--td-comp-margin-m);
 }
 
 .cover-drawer-card {
