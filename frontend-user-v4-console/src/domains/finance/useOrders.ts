@@ -1,14 +1,13 @@
 import { ORDER_STATUS_MAP, ORDER_TYPE_MAP, toSelectOptions } from '@caiwu/shared/statusConfig';
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
-import { onMounted, reactive, ref, shallowRef } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { ref, shallowRef } from 'vue';
 
 import clientApi from '@/api/client';
-import type { ClientFinanceListParams, OrderListSummary, OrderRecord } from '@/types/client';
+import type { OrderRecord } from '@/types/client';
 import { getErrorMessage } from '@/utils/error';
 import { formatMoney } from '@/utils/format';
 
-import { resolveQuickDateRange } from './dateFilters';
+import { useRecordList } from './useRecords';
 
 export const ORDER_STATUS_OPTIONS = toSelectOptions(ORDER_STATUS_MAP, false);
 
@@ -23,147 +22,25 @@ export function orderProductDisplay(row: Pick<OrderRecord, 'product_full_path' |
   return String(row?.product_full_path || row?.product_name || '').trim() || '--';
 }
 
-export function useOrderList(options: { pageSize?: number } = {}) {
-  const route = useRoute();
-  const router = useRouter();
-  const loading = ref(false);
-  const summaryLoading = ref(false);
+export function useOrderList() {
   const canceling = ref(false);
-  const list = shallowRef<OrderRecord[]>([]);
-  const total = ref(0);
-  const summary = shallowRef<OrderListSummary>({});
-  const loadError = ref(false);
-  const loadErrorText = ref('');
-  const filters = reactive({
-    page: 1,
-    page_size: Number(options.pageSize || 10),
-    keyword: '',
-    status: '' as string | number,
-    type: '',
-    start_date: '',
-    end_date: '',
-    quickFilter: '' as string,
+  const {
+    loading,
+    list,
+    total,
+    filters,
+    hasRows,
+    loadError,
+    loadErrorText,
+    loadList,
+    handleSearch,
+    handlePageSizeChange,
+    applyQuickFilter,
+    dateRange,
+  } = useRecordList<OrderRecord>({
+    fetcher: (params) => clientApi.orders(params),
+    errorMessage: '订单列表加载失败',
   });
-
-  // 筛选与页码同步到 URL，刷新/回退不丢状态
-  restoreFiltersFromQuery();
-
-  function restoreFiltersFromQuery() {
-    const query = route.query;
-    const page = Number(query.page);
-    if (Number.isFinite(page) && page > 0) filters.page = page;
-    const pageSize = Number(query.page_size);
-    if (Number.isFinite(pageSize) && [10, 20, 50].includes(pageSize)) filters.page_size = pageSize;
-    if (typeof query.keyword === 'string') filters.keyword = query.keyword;
-    if (typeof query.status === 'string' && query.status !== '') {
-      const status = Number(query.status);
-      if (Number.isFinite(status)) filters.status = status;
-    }
-    if (typeof query.type === 'string') filters.type = query.type;
-    if (typeof query.quick === 'string' && query.quick) {
-      filters.quickFilter = query.quick;
-      if (query.quick === 'pending' && filters.status === '') filters.status = 0;
-      const range = resolveQuickDateRange(query.quick);
-      filters.start_date = range.start_date || '';
-      filters.end_date = range.end_date || '';
-    }
-  }
-
-  function syncFiltersToQuery() {
-    const next: Record<string, string> = {};
-    if (filters.page > 1) next.page = String(filters.page);
-    if (filters.page_size !== Number(options.pageSize || 10)) next.page_size = String(filters.page_size);
-    if (filters.keyword?.trim()) next.keyword = filters.keyword.trim();
-    if (filters.status !== '' && filters.status !== null && filters.status !== undefined)
-      next.status = String(filters.status);
-    if (filters.type) next.type = filters.type;
-    if (filters.quickFilter) next.quick = filters.quickFilter;
-
-    const current = route.query;
-    const currentKeys = Object.keys(current);
-    const changed =
-      currentKeys.length !== Object.keys(next).length ||
-      currentKeys.some((key) => String(current[key] ?? '') !== next[key]);
-    if (!changed) return;
-    void router.replace({ query: next });
-  }
-
-  function buildParams() {
-    const params: ClientFinanceListParams = {
-      page: filters.page,
-      page_size: filters.page_size,
-    };
-    if (filters.keyword?.trim()) params.keyword = filters.keyword.trim();
-    if (filters.status !== '' && filters.status !== null && filters.status !== undefined)
-      params.status = filters.status;
-    if (filters.type?.trim()) params.type = filters.type.trim();
-    if (filters.start_date) params.start_date = filters.start_date;
-    if (filters.end_date) params.end_date = filters.end_date;
-    return params;
-  }
-
-  async function loadSummary() {
-    summaryLoading.value = true;
-    try {
-      const res = await clientApi.orderSummary();
-      summary.value = res.data || {};
-    } catch {
-      summary.value = {};
-    } finally {
-      summaryLoading.value = false;
-    }
-  }
-
-  async function loadList() {
-    loading.value = true;
-    loadError.value = false;
-    try {
-      const res = await clientApi.orders(buildParams());
-      const payload = res.data;
-      list.value = payload && !Array.isArray(payload) && Array.isArray(payload.list) ? payload.list : [];
-      total.value = payload && !Array.isArray(payload) ? Number(payload.total || 0) : 0;
-      syncFiltersToQuery();
-    } catch (error: unknown) {
-      loadError.value = true;
-      loadErrorText.value = getErrorMessage(error, '订单列表加载失败');
-      list.value = [];
-      total.value = 0;
-      MessagePlugin.error(loadErrorText.value);
-    } finally {
-      loading.value = false;
-    }
-  }
-
-  async function loadData() {
-    await Promise.allSettled([loadSummary(), loadList()]);
-  }
-
-  function handleSearch() {
-    filters.page = 1;
-    void loadData();
-  }
-
-  function handlePageSizeChange() {
-    filters.page = 1;
-    void loadList();
-  }
-
-  function applyQuickFilter(key: string) {
-    filters.quickFilter = key;
-    filters.page = 1;
-    filters.status = '';
-    filters.type = '';
-    filters.start_date = '';
-    filters.end_date = '';
-
-    if (key === 'pending') {
-      filters.status = 0;
-    }
-    const range = resolveQuickDateRange(key);
-    filters.start_date = range.start_date || '';
-    filters.end_date = range.end_date || '';
-    void loadData();
-  }
 
   function cancelOrder(row: OrderRecord) {
     const dialog = DialogPlugin.confirm({
@@ -178,7 +55,7 @@ export function useOrderList(options: { pageSize?: number } = {}) {
         try {
           await clientApi.cancelOrder(row.id);
           MessagePlugin.success('订单已取消');
-          await loadData();
+          await loadList();
           dialog.hide();
         } catch (error: unknown) {
           MessagePlugin.error(getErrorMessage(error, '取消订单失败'));
@@ -190,26 +67,20 @@ export function useOrderList(options: { pageSize?: number } = {}) {
     });
   }
 
-  onMounted(() => {
-    void loadData();
-  });
-
   return {
     loading,
-    summaryLoading,
     canceling,
     list,
     total,
-    summary,
     filters,
+    hasRows,
     loadError,
     loadErrorText,
     loadList,
-    loadData,
-    loadSummary,
     handleSearch,
     handlePageSizeChange,
     applyQuickFilter,
+    dateRange,
     cancelOrder,
   };
 }

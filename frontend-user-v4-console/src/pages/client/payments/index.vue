@@ -1,29 +1,13 @@
 <template>
-  <section class="record-page">
-    <div class="quick-filter-tags">
-      <t-tag
-        v-for="item in quickFilters"
-        :key="item.key"
-        :variant="filters.quickFilter === item.key ? 'outline' : 'light'"
-        :theme="filters.quickFilter === item.key ? 'primary' : 'default'"
-        class="quick-filter-tag"
-        role="button"
-        tabindex="0"
-        :aria-pressed="filters.quickFilter === item.key"
-        @click="applyQuickFilter(item.key)"
-        @keydown.enter.prevent="applyQuickFilter(item.key)"
-        @keydown.space.prevent="applyQuickFilter(item.key)"
-      >
-        {{ item.label }}
-      </t-tag>
-    </div>
+  <section class="record-page client-payments">
+    <record-quick-filters v-model="filters.quickFilter" @change="applyQuickFilter" />
 
     <t-card class="record-card" :bordered="false">
       <div class="record-toolbar">
         <t-input
           v-model="filters.keyword"
           clearable
-          placeholder="搜索商家订单号或第三方订单号"
+          placeholder="搜索支付单号或第三方单号"
           @enter="handleSearch"
           @clear="handleSearch"
         >
@@ -35,6 +19,7 @@
         <t-select v-model="filters.type" clearable placeholder="全部渠道" @change="handleSearch">
           <t-option v-for="item in PAYMENT_GATEWAY_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
         </t-select>
+        <t-date-range-picker v-model="dateRange" class="record-toolbar__range" clearable value-type="YYYY-MM-DD" />
       </div>
     </t-card>
 
@@ -44,7 +29,7 @@
         :empty="!loading && !loadError && !hasRows"
         :error="!loading && loadError"
         :error-text="loadErrorText"
-        description="暂无第三方支付记录"
+        description="暂无充值记录"
         @retry="loadList"
       >
         <template #empty-action>
@@ -112,34 +97,43 @@
   </section>
 </template>
 <script setup lang="ts">
-import { PAYMENT_STATUS_MAP } from '@shared/statusConfig';
+import { PAYMENT_STATUS_MAP } from '@caiwu/shared/statusConfig';
 import DataState from '@shared/user-v3/components/DataState.vue';
 import StatusTag from '@shared/user-v3/components/StatusTag.vue';
 import { SearchIcon } from 'tdesign-icons-vue-next';
 import type { PrimaryTableCol } from 'tdesign-vue-next';
 import { useRouter } from 'vue-router';
 
+import clientApi from '@/api/client';
 import {
   formatMoney,
   PAYMENT_GATEWAY_OPTIONS,
   PAYMENT_STATUS_OPTIONS,
-  recordApi,
   useRecordList,
 } from '@/domains/finance/useRecords';
+import RecordQuickFilters from '@/pages/client/components/RecordQuickFilters.vue';
 import type { PaymentRecord } from '@/types/client';
 import { formatDateTime } from '@/utils/format';
 
 const router = useRouter();
 
-const { loading, list, total, filters, hasRows, loadError, loadErrorText, loadList, handleSearch, handlePageSizeChange, applyQuickFilter } =
-  useRecordList(recordApi.payments, '第三方支付记录加载失败');
-
-const quickFilters = [
-  { key: '', label: '全部' },
-  { key: 'week', label: '最近7天' },
-  { key: 'month', label: '本月' },
-  { key: 'pending', label: '待支付' },
-];
+const {
+  loading,
+  list,
+  total,
+  filters,
+  hasRows,
+  loadError,
+  loadErrorText,
+  loadList,
+  handleSearch,
+  handlePageSizeChange,
+  applyQuickFilter,
+  dateRange,
+} = useRecordList<PaymentRecord>({
+  fetcher: (params) => clientApi.payments(params),
+  errorMessage: '充值记录加载失败',
+});
 
 function goToDetail(row: PaymentRecord) {
   router.push(`/client/payments/${row.id}`);

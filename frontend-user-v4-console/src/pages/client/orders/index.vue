@@ -1,23 +1,7 @@
 <template>
   <section class="record-page client-orders">
     <!-- 快捷筛选标签 -->
-    <div class="quick-filter-tags">
-      <t-tag
-        v-for="item in quickFilters"
-        :key="item.key"
-        :variant="filters.quickFilter === item.key ? 'outline' : 'light'"
-        :theme="filters.quickFilter === item.key ? 'primary' : 'default'"
-        class="quick-filter-tag"
-        role="button"
-        tabindex="0"
-        :aria-pressed="filters.quickFilter === item.key"
-        @click="applyQuickFilter(item.key)"
-        @keydown.enter.prevent="applyQuickFilter(item.key)"
-        @keydown.space.prevent="applyQuickFilter(item.key)"
-      >
-        {{ item.label }}
-      </t-tag>
-    </div>
+    <record-quick-filters v-model="filters.quickFilter" @change="applyQuickFilter" />
 
     <t-card class="record-card" :bordered="false">
       <div class="record-toolbar">
@@ -40,13 +24,15 @@
         <t-select v-model="filters.type" clearable placeholder="全部类型" @change="handleSearch">
           <t-option v-for="item in ORDER_TYPE_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
         </t-select>
+
+        <t-date-range-picker v-model="dateRange" class="record-toolbar__range" clearable value-type="YYYY-MM-DD" />
       </div>
     </t-card>
 
     <section class="record-list-card">
       <data-state
         :loading="loading"
-        :empty="!loading && !loadError && !list.length"
+        :empty="!loading && !loadError && !hasRows"
         :error="!loading && loadError"
         :error-text="loadErrorText"
         description="暂无订单记录"
@@ -126,7 +112,7 @@
             tabindex="0"
             :aria-label="`查看订单 ${row.order_no || row.id} 详情`"
             @click="router.push(`/client/orders/${row.id}`)"
-            @keydown.enter.prevent="router.push(`/client/orders/${row.id}`)"
+            @keydown.enter.self.prevent="router.push(`/client/orders/${row.id}`)"
           >
             <div class="record-mobile-card__head">
               <strong>{{ row.order_no || '--' }}</strong>
@@ -203,6 +189,7 @@ import {
   orderProductDisplay,
   useOrderList,
 } from '@/domains/finance/useOrders';
+import RecordQuickFilters from '@/pages/client/components/RecordQuickFilters.vue';
 import { formatDateTime } from '@/utils/format';
 
 const router = useRouter();
@@ -213,21 +200,16 @@ const {
   list,
   total,
   filters,
+  hasRows,
   loadError,
   loadErrorText,
   loadList,
   handleSearch,
   handlePageSizeChange,
   applyQuickFilter,
+  dateRange,
   cancelOrder,
 } = useOrderList();
-
-const quickFilters = [
-  { key: '', label: '全部' },
-  { key: 'week', label: '最近7天' },
-  { key: 'month', label: '本月' },
-  { key: 'pending', label: '待支付' },
-];
 
 const columns: PrimaryTableCol[] = [
   { colKey: 'order', title: '订单号', minWidth: '12rem' },

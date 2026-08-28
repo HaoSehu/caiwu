@@ -1,23 +1,7 @@
 <template>
   <section class="record-page client-invoices">
     <!-- 快捷筛选标签 -->
-    <div class="quick-filter-tags">
-      <t-tag
-        v-for="item in quickFilters"
-        :key="item.key"
-        :variant="filters.quickFilter === item.key ? 'outline' : 'light'"
-        :theme="filters.quickFilter === item.key ? 'primary' : 'default'"
-        class="quick-filter-tag"
-        role="button"
-        tabindex="0"
-        :aria-pressed="filters.quickFilter === item.key"
-        @click="applyQuickFilter(item.key)"
-        @keydown.enter.prevent="applyQuickFilter(item.key)"
-        @keydown.space.prevent="applyQuickFilter(item.key)"
-      >
-        {{ item.label }}
-      </t-tag>
-    </div>
+    <record-quick-filters v-model="filters.quickFilter" @change="applyQuickFilter" />
 
     <t-card class="record-card" :bordered="false">
       <div class="record-toolbar">
@@ -37,22 +21,18 @@
           <t-option v-for="item in INVOICE_STATUS_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
         </t-select>
 
-        <t-select
-          v-if="showTypeSelector"
-          v-model="filters.type"
-          clearable
-          placeholder="全部类型"
-          @change="handleSearch"
-        >
+        <t-select v-model="filters.type" clearable placeholder="全部类型" @change="handleSearch">
           <t-option v-for="item in INVOICE_TYPE_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
         </t-select>
+
+        <t-date-range-picker v-model="dateRange" class="record-toolbar__range" clearable value-type="YYYY-MM-DD" />
       </div>
     </t-card>
 
     <section class="record-list-card">
       <data-state
         :loading="loading"
-        :empty="!loading && !loadError && !list.length"
+        :empty="!loading && !loadError && !hasRows"
         :error="!loading && loadError"
         :error-text="loadErrorText"
         description="暂无账单记录"
@@ -130,7 +110,16 @@
         </t-table>
 
         <div class="record-mobile-list">
-          <article v-for="row in list" :key="row.id" class="record-mobile-card">
+          <article
+            v-for="row in list"
+            :key="row.id"
+            class="record-mobile-card"
+            role="link"
+            tabindex="0"
+            :aria-label="`查看账单 ${resolveInvoiceNo(row)} 详情`"
+            @click="goToDetail(row)"
+            @keydown.enter.self.prevent="goToDetail(row)"
+          >
             <div class="record-mobile-card__head">
               <strong>{{ resolveInvoiceNo(row) }}</strong>
               <status-tag :status-map="INVOICE_STATUS_MAP" :status="Number(row.status)" />
@@ -149,13 +138,13 @@
             </div>
 
             <div class="record-mobile-card__actions">
-              <t-button size="small" theme="primary" variant="text" @click="goToDetail(row)">查看</t-button>
+              <t-button size="small" theme="primary" variant="text" @click.stop="goToDetail(row)">查看</t-button>
               <t-button
                 v-if="isPayableInvoice(row)"
                 size="small"
                 theme="primary"
                 variant="outline"
-                @click="goToPay(row)"
+                @click.stop="goToPay(row)"
               >
                 去支付
               </t-button>
@@ -194,6 +183,7 @@ import {
   resolveInvoiceNo,
   useInvoiceList,
 } from '@/domains/finance/useInvoices';
+import RecordQuickFilters from '@/pages/client/components/RecordQuickFilters.vue';
 import type { InvoiceRecord } from '@/types/client';
 import { formatDateTime } from '@/utils/format';
 
@@ -204,22 +194,16 @@ const {
   list,
   total,
   filters,
+  hasRows,
   loadError,
   loadErrorText,
   loadList,
   handleSearch,
   handlePageSizeChange,
   applyQuickFilter,
+  dateRange,
   goToPay,
-  showTypeSelector,
 } = useInvoiceList();
-
-const quickFilters = [
-  { key: '', label: '全部' },
-  { key: 'week', label: '最近7天' },
-  { key: 'month', label: '本月' },
-  { key: 'pending', label: '待支付' },
-];
 
 function goToDetail(row: InvoiceRecord) {
   router.push(`/client/invoices/${row.id}`);

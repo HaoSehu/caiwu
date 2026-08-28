@@ -24,11 +24,9 @@ import type {
   InvoiceAlipayStatusPayload,
   InvoiceBalancePaymentResult,
   InvoiceCreatePayload,
-  InvoiceListSummary,
   InvoiceRecord,
   MonitorBatchPayload,
   NatForwardingPayload,
-  OrderListSummary,
   OrderRecord,
   PagedList,
   PaymentRecord,
@@ -340,8 +338,6 @@ const clientApi = {
 
   invoices: (params?: ClientFinanceListParams) =>
     getEnvelope<PagedList<InvoiceRecord>>('/v2/client/invoices', { params }),
-  invoicesSummary: (params?: ClientFinanceListParams) =>
-    getEnvelope<InvoiceListSummary>('/v2/client/invoices/summary', { params }),
   createInvoice: (data: Record<string, unknown>, config?: Record<string, unknown>) =>
     postEnvelope<InvoiceCreatePayload>('/v2/client/invoices', data, config),
   invoiceDetail: (id: number | string) => v2InvoiceDetail(id),
@@ -358,12 +354,9 @@ const clientApi = {
 
   payments: (params?: ClientFinanceListParams) =>
     getEnvelope<PagedList<PaymentRecord>>('/v2/client/payments', { params }),
-  paymentsSummary: (params?: ClientFinanceListParams) => request.get('/v2/client/payments/summary', { params }),
   paymentDetail: (id: number | string) => getEnvelope<PaymentRecord>(`/v2/client/payments/${id}`),
 
   orders: (params?: ClientFinanceListParams) => getEnvelope<PagedList<OrderRecord>>('/v2/client/orders', { params }),
-  orderSummary: (params?: ClientFinanceListParams) =>
-    getEnvelope<OrderListSummary>('/v2/client/orders/summary', { params }),
   orderDetail: (id: number | string) => getEnvelope<OrderRecord>(`/v2/client/orders/${id}`),
   cancelOrder: (id: number | string) => postEnvelope<Record<string, unknown>>(`/v2/client/orders/${id}/cancellations`),
 

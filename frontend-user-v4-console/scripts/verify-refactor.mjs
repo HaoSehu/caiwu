@@ -18,6 +18,8 @@ const expectedRoutes = [
   '/client/services/:id',
   '/client/invoices',
   '/client/invoices/:id',
+  '/client/orders',
+  '/client/orders/:id',
   '/client/catalog',
   '/client/recharge',
   '/client/payments',

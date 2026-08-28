@@ -1,14 +1,12 @@
-import { getStatusLabel, INVOICE_STATUS_MAP, INVOICE_TYPE_MAP, toSelectOptions } from '@shared/statusConfig';
+import { INVOICE_STATUS_MAP, INVOICE_TYPE_MAP, toSelectOptions } from '@caiwu/shared/statusConfig';
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
-import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import clientApi from '@/api/client';
 import { useUserStore } from '@/store';
 import type {
-  ClientFinanceListParams,
   InvoiceAlipayPaymentPayload,
-  InvoiceListSummary,
   InvoicePaymentMethod,
   InvoicePaymentSecurity,
   InvoiceRecord,
@@ -16,7 +14,7 @@ import type {
 import { getErrorMessage } from '@/utils/error';
 import { formatMoney } from '@/utils/format';
 
-import { resolveQuickDateRange } from './dateFilters';
+import { useRecordList } from './useRecords';
 
 export type PayMethodKey = string;
 
@@ -66,14 +64,6 @@ function hasProductBinding(row: InvoiceRecord | null | undefined) {
   return Number(row?.product?.id || row?.product_id || 0) > 0;
 }
 
-function normalizeTypeFilter(value: unknown) {
-  const rawTypes = Array.isArray(value) ? value : String(value || '').split(',');
-  return rawTypes
-    .map((item) => normalizeText(item))
-    .filter(Boolean)
-    .join(',');
-}
-
 export { formatMoney };
 
 export function normalizeMoney(value: unknown) {
@@ -101,39 +91,8 @@ export function resolveInvoiceTitle(row: InvoiceRecord | null | undefined) {
   );
 }
 
-export function resolveInvoiceSubtitle(row: InvoiceRecord | null | undefined) {
-  const title = resolveInvoiceTitle(row);
-  const combinedDisplayName = normalizeText(row?.combined_display_name);
-  const productDisplayName = normalizeText(row?.product_display_name);
-
-  if (hasProductBinding(row)) {
-    return pickText(
-      combinedDisplayName !== title ? combinedDisplayName : '',
-      productDisplayName !== title ? productDisplayName : '',
-      resolveSummaryField(row, 'subheadline'),
-      resolveSummaryField(row, 'remark'),
-      row?.type_label,
-    );
-  }
-
-  return pickText(
-    row?.product_spec_display,
-    resolveSummaryField(row, 'subheadline'),
-    resolveSummaryField(row, 'remark'),
-    row?.type_label,
-  );
-}
-
 export function resolveInvoiceNo(row: InvoiceRecord | null | undefined) {
   return normalizeText(row?.invoice_no) || `#${row?.id || 0}`;
-}
-
-export function resolveInvoiceStatusLabel(rowOrStatus: InvoiceRecord | number | string | null | undefined) {
-  if (rowOrStatus && typeof rowOrStatus === 'object') {
-    return getStatusLabel(INVOICE_STATUS_MAP, Number(rowOrStatus.status));
-  }
-
-  return getStatusLabel(INVOICE_STATUS_MAP, Number(rowOrStatus));
 }
 
 export function isPayableInvoice(row: InvoiceRecord | null | undefined) {
@@ -152,164 +111,26 @@ function payMethodOptionKey(method: InvoicePaymentMethod | null | undefined) {
   return normalizeText(method?.key);
 }
 
-function resolveListPayload(response: unknown) {
-  const payload = (
-    response as { data?: InvoiceRecord[] | { list?: InvoiceRecord[]; total?: number } } | null | undefined
-  )?.data;
-  return {
-    list: payload && !Array.isArray(payload) && Array.isArray(payload.list) ? payload.list : [],
-    total: payload && !Array.isArray(payload) ? Number(payload.total || 0) : 0,
-  };
-}
-
-export function useInvoiceList(options: { fixedTypes?: unknown; pageSize?: number } = {}) {
+export function useInvoiceList() {
   const router = useRouter();
-  const route = useRoute();
-  const loading = ref(false);
-  const summaryLoading = ref(false);
   const canceling = ref(false);
-  const list = shallowRef<InvoiceRecord[]>([]);
-  const total = ref(0);
-  const summary = shallowRef<InvoiceListSummary>({});
-  const loadError = ref(false);
-  const loadErrorText = ref('');
-  const filters = reactive({
-    page: 1,
-    page_size: Number(options.pageSize || 10),
-    keyword: '',
-    status: '' as string | number,
-    type: '',
-    start_date: '',
-    end_date: '',
-    quickFilter: '' as string,
+  const {
+    loading,
+    list,
+    total,
+    filters,
+    hasRows,
+    loadError,
+    loadErrorText,
+    loadList,
+    handleSearch,
+    handlePageSizeChange,
+    applyQuickFilter,
+    dateRange,
+  } = useRecordList<InvoiceRecord>({
+    fetcher: (params) => clientApi.invoices(params),
+    errorMessage: '账单列表加载失败',
   });
-
-  const showTypeSelector = computed(() => !normalizeTypeFilter(options.fixedTypes));
-
-  // 筛选与页码同步到 URL，刷新/回退不丢状态
-  restoreFiltersFromQuery();
-
-  function restoreFiltersFromQuery() {
-    const query = route.query;
-    const page = Number(query.page);
-    if (Number.isFinite(page) && page > 0) filters.page = page;
-    const pageSize = Number(query.page_size);
-    if (Number.isFinite(pageSize) && [10, 20, 50].includes(pageSize)) filters.page_size = pageSize;
-    if (typeof query.keyword === 'string') filters.keyword = query.keyword;
-    if (typeof query.status === 'string' && query.status !== '') {
-      const status = Number(query.status);
-      if (Number.isFinite(status)) filters.status = status;
-    }
-    if (typeof query.type === 'string') filters.type = query.type;
-    if (typeof query.quick === 'string' && query.quick) {
-      filters.quickFilter = query.quick;
-      if (query.quick === 'pending' && filters.status === '') filters.status = 0;
-      const range = resolveQuickDateRange(query.quick);
-      filters.start_date = range.start_date || '';
-      filters.end_date = range.end_date || '';
-    }
-  }
-
-  function syncFiltersToQuery() {
-    const next: Record<string, string> = {};
-    if (filters.page > 1) next.page = String(filters.page);
-    if (filters.page_size !== Number(options.pageSize || 10)) next.page_size = String(filters.page_size);
-    if (filters.keyword?.trim()) next.keyword = filters.keyword.trim();
-    if (filters.status !== '' && filters.status !== null && filters.status !== undefined)
-      next.status = String(filters.status);
-    if (filters.type) next.type = filters.type;
-    if (filters.quickFilter) next.quick = filters.quickFilter;
-
-    const current = route.query;
-    const currentKeys = Object.keys(current).filter((key) => key !== 'detail');
-    const changed =
-      currentKeys.length !== Object.keys(next).length ||
-      currentKeys.some((key) => String(current[key] ?? '') !== next[key]);
-    if (!changed) return;
-    void router.replace({ query: next });
-  }
-
-  function buildParams() {
-    const fixedTypes = normalizeTypeFilter(options.fixedTypes);
-    const params: ClientFinanceListParams = {
-      page: filters.page,
-      page_size: filters.page_size,
-    };
-    if (normalizeText(filters.keyword)) params.keyword = normalizeText(filters.keyword);
-    if (filters.status !== '' && filters.status !== null && filters.status !== undefined)
-      params.status = filters.status;
-    if (fixedTypes) {
-      params.type = fixedTypes;
-    } else if (normalizeText(filters.type)) {
-      params.type = normalizeText(filters.type);
-    }
-    if (filters.start_date) params.start_date = filters.start_date;
-    if (filters.end_date) params.end_date = filters.end_date;
-    return params;
-  }
-
-  async function loadSummary() {
-    summaryLoading.value = true;
-    try {
-      const res = await clientApi.invoicesSummary(buildParams());
-      summary.value = res.data || {};
-    } catch {
-      summary.value = {};
-    } finally {
-      summaryLoading.value = false;
-    }
-  }
-
-  async function loadList() {
-    loading.value = true;
-    loadError.value = false;
-    try {
-      const res = await clientApi.invoices(buildParams());
-      const payload = resolveListPayload(res);
-      list.value = payload.list;
-      total.value = payload.total;
-      syncFiltersToQuery();
-    } catch (error: unknown) {
-      loadError.value = true;
-      loadErrorText.value = getErrorMessage(error, '账单列表加载失败');
-      list.value = [];
-      total.value = 0;
-      MessagePlugin.error(loadErrorText.value);
-    } finally {
-      loading.value = false;
-    }
-  }
-
-  async function loadData() {
-    await Promise.allSettled([loadSummary(), loadList()]);
-  }
-
-  function handleSearch() {
-    filters.page = 1;
-    void loadData();
-  }
-
-  function handlePageSizeChange() {
-    filters.page = 1;
-    void loadList();
-  }
-
-  function applyQuickFilter(key: string) {
-    filters.quickFilter = key;
-    filters.page = 1;
-    filters.status = '';
-    filters.type = '';
-    filters.start_date = '';
-    filters.end_date = '';
-
-    if (key === 'pending') {
-      filters.status = 0;
-    }
-    const range = resolveQuickDateRange(key);
-    filters.start_date = range.start_date || '';
-    filters.end_date = range.end_date || '';
-    void loadData();
-  }
 
   function goToPay(row: InvoiceRecord) {
     router.push(`/client/invoices/${row.id}/pay`);
@@ -328,7 +149,7 @@ export function useInvoiceList(options: { fixedTypes?: unknown; pageSize?: numbe
         try {
           await clientApi.cancelInvoice(row.id);
           MessagePlugin.success('账单已取消');
-          await loadData();
+          await loadList();
           dialog.hide();
         } catch (error: unknown) {
           MessagePlugin.error(getErrorMessage(error, '取消账单失败'));
@@ -340,28 +161,20 @@ export function useInvoiceList(options: { fixedTypes?: unknown; pageSize?: numbe
     });
   }
 
-  onMounted(() => {
-    void loadData();
-  });
-
   return {
-    router,
     loading,
-    summaryLoading,
     canceling,
     list,
     total,
-    summary,
     filters,
+    hasRows,
     loadError,
     loadErrorText,
-    showTypeSelector,
     loadList,
-    loadData,
-    loadSummary,
     handleSearch,
     handlePageSizeChange,
     applyQuickFilter,
+    dateRange,
     goToPay,
     cancelInvoice,
   };

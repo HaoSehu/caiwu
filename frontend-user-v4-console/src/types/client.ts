@@ -1105,17 +1105,6 @@ export interface InvoiceOrderInfo {
   [key: string]: unknown;
 }
 
-export interface InvoiceListSummary {
-  total_count?: number;
-  unpaid_count?: number;
-  unpaid_amount?: number | string;
-  paid_count?: number;
-  paid_amount?: number | string;
-  paid_total?: number | string;
-  total_amount?: number | string;
-  [key: string]: unknown;
-}
-
 export interface InvoiceBalancePaymentResult {
   invoice?: InvoiceRecord | null;
   [key: string]: unknown;
@@ -1247,19 +1236,6 @@ export interface OrderPaymentInfo {
   amount?: number | string;
   status?: number | string;
   paid_at?: string;
-  [key: string]: unknown;
-}
-
-export interface OrderListSummary {
-  total?: number;
-  pending?: number;
-  paid?: number;
-  processing?: number;
-  completed?: number;
-  cancelled?: number;
-  refunded?: number;
-  unpaid_amount?: number | string;
-  month_amount?: number | string;
   [key: string]: unknown;
 }
 
