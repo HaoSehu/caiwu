@@ -97,9 +97,14 @@ const expanded = ref<MenuValue[]>([]);
 const getExpanded = () => {
   const path = getActive();
   const result = findExpandedByMenu(menu as MenuRoute[], path) || fallbackExpanded(path);
-
-  expanded.value = menuAutoCollapsed.value ? result : unionMenuValues(result, expanded.value);
+  const merged = menuAutoCollapsed.value ? result : unionMenuValues(result, expanded.value);
+  // 移动端抽屉一级分组默认全展开：高频入口保持“汉堡 → 点页面”两步可达
+  expanded.value = isMobile.value ? unionMenuValues(merged, allTopLevelPaths()) : merged;
 };
+
+function allTopLevelPaths(): MenuValue[] {
+  return (menu as MenuRoute[]).map((item) => String(item.path));
+}
 
 watch(
   () => active.value,

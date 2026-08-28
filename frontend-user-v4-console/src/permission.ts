@@ -5,6 +5,7 @@ import { MessagePlugin } from 'tdesign-vue-next';
 
 import { getClientToken } from '@/app/runtime/session';
 import { useSiteBrandingStore } from '@/app/stores/siteBranding';
+import { toUserMessage } from '@caiwu/shared/runtime';
 import router from '@/router';
 import { getPermissionStore, useUserStore } from '@/store';
 
@@ -80,6 +81,7 @@ router.beforeEach(async (to, _from, next) => {
       } catch {
         fetchingUser = false;
         userStore.clearLocalSession();
+        MessagePlugin.warning('登录状态已失效，请重新登录');
         next({
           path: '/client/login',
           query: { redirect: to.fullPath },
@@ -105,9 +107,9 @@ router.onError((error, to) => {
     return;
   }
 
-  const message = String(error?.message || '');
-  if (!dynamicImportErrorPattern.test(message)) {
-    MessagePlugin.error(message || '页面加载失败');
+  if (!dynamicImportErrorPattern.test(String(error?.message || ''))) {
+    const rawMessage = error instanceof Error ? error.message : '';
+    MessagePlugin.error(toUserMessage(rawMessage, '页面加载失败，请稍后重试'));
     return;
   }
 

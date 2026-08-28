@@ -123,7 +123,7 @@
         /></t-form-item>
         <t-form-item label="验证码">
           <div class="bind-code-row">
-            <t-input v-model="resetForm.code" placeholder="请输入 6 位验证码" maxlength="6" />
+            <t-input v-model="resetForm.code" placeholder="请输入 6 位验证码" maxlength="6" inputmode="numeric" />
             <t-button variant="outline" :disabled="resetCountdown > 0" @click="sendResetCode">
               {{ resetCountdown > 0 ? `${resetCountdown}s` : '发送验证码' }}
             </t-button>
@@ -151,7 +151,7 @@
         <div class="reset-single-tip">为确认是本人操作，请先验证当前绑定的手机号 {{ profileForm.phone }}</div>
         <t-form-item label="验证码">
           <div class="bind-code-row">
-            <t-input v-model="phoneForm.oldCode" placeholder="请输入 6 位验证码" maxlength="6" />
+            <t-input v-model="phoneForm.oldCode" placeholder="请输入 6 位验证码" maxlength="6" inputmode="numeric" />
             <t-button variant="outline" :disabled="phoneOldCountdown > 0" @click="sendPhoneOldVerificationCode">
               {{ phoneOldCountdown > 0 ? `${phoneOldCountdown}s` : '发送验证码' }}
             </t-button>
@@ -159,10 +159,12 @@
         </t-form-item>
       </t-form>
       <t-form v-else label-align="top">
-        <t-form-item label="新手机号"><t-input v-model="phoneForm.phone" placeholder="请输入新手机号" /></t-form-item>
+        <t-form-item label="新手机号"
+          ><t-input v-model="phoneForm.phone" type="tel" inputmode="numeric" maxlength="11" placeholder="请输入新手机号"
+        /></t-form-item>
         <t-form-item label="验证码">
           <div class="bind-code-row">
-            <t-input v-model="phoneForm.code" placeholder="请输入 6 位验证码" maxlength="6" />
+            <t-input v-model="phoneForm.code" placeholder="请输入 6 位验证码" maxlength="6" inputmode="numeric" />
             <t-button variant="outline" :disabled="phoneCountdown > 0" @click="sendPhoneVerificationCode">
               {{ phoneCountdown > 0 ? `${phoneCountdown}s` : '发送验证码' }}
             </t-button>

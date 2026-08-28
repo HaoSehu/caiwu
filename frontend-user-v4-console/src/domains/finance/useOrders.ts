@@ -1,6 +1,7 @@
 import { ORDER_STATUS_MAP, ORDER_TYPE_MAP, toSelectOptions } from '@caiwu/shared/statusConfig';
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import { onMounted, reactive, ref, shallowRef } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 
 import clientApi from '@/api/client';
 import type { ClientFinanceListParams, OrderListSummary, OrderRecord } from '@/types/client';
@@ -23,12 +24,16 @@ export function orderProductDisplay(row: Pick<OrderRecord, 'product_full_path' |
 }
 
 export function useOrderList(options: { pageSize?: number } = {}) {
+  const route = useRoute();
+  const router = useRouter();
   const loading = ref(false);
   const summaryLoading = ref(false);
   const canceling = ref(false);
   const list = shallowRef<OrderRecord[]>([]);
   const total = ref(0);
   const summary = shallowRef<OrderListSummary>({});
+  const loadError = ref(false);
+  const loadErrorText = ref('');
   const filters = reactive({
     page: 1,
     page_size: Number(options.pageSize || 10),
@@ -39,6 +44,49 @@ export function useOrderList(options: { pageSize?: number } = {}) {
     end_date: '',
     quickFilter: '' as string,
   });
+
+  // 筛选与页码同步到 URL，刷新/回退不丢状态
+  restoreFiltersFromQuery();
+
+  function restoreFiltersFromQuery() {
+    const query = route.query;
+    const page = Number(query.page);
+    if (Number.isFinite(page) && page > 0) filters.page = page;
+    const pageSize = Number(query.page_size);
+    if (Number.isFinite(pageSize) && [10, 20, 50].includes(pageSize)) filters.page_size = pageSize;
+    if (typeof query.keyword === 'string') filters.keyword = query.keyword;
+    if (typeof query.status === 'string' && query.status !== '') {
+      const status = Number(query.status);
+      if (Number.isFinite(status)) filters.status = status;
+    }
+    if (typeof query.type === 'string') filters.type = query.type;
+    if (typeof query.quick === 'string' && query.quick) {
+      filters.quickFilter = query.quick;
+      if (query.quick === 'pending' && filters.status === '') filters.status = 0;
+      const range = resolveQuickDateRange(query.quick);
+      filters.start_date = range.start_date || '';
+      filters.end_date = range.end_date || '';
+    }
+  }
+
+  function syncFiltersToQuery() {
+    const next: Record<string, string> = {};
+    if (filters.page > 1) next.page = String(filters.page);
+    if (filters.page_size !== Number(options.pageSize || 10)) next.page_size = String(filters.page_size);
+    if (filters.keyword?.trim()) next.keyword = filters.keyword.trim();
+    if (filters.status !== '' && filters.status !== null && filters.status !== undefined)
+      next.status = String(filters.status);
+    if (filters.type) next.type = filters.type;
+    if (filters.quickFilter) next.quick = filters.quickFilter;
+
+    const current = route.query;
+    const currentKeys = Object.keys(current);
+    const changed =
+      currentKeys.length !== Object.keys(next).length ||
+      currentKeys.some((key) => String(current[key] ?? '') !== next[key]);
+    if (!changed) return;
+    void router.replace({ query: next });
+  }
 
   function buildParams() {
     const params: ClientFinanceListParams = {
@@ -68,13 +116,19 @@ export function useOrderList(options: { pageSize?: number } = {}) {
 
   async function loadList() {
     loading.value = true;
+    loadError.value = false;
     try {
       const res = await clientApi.orders(buildParams());
       const payload = res.data;
       list.value = payload && !Array.isArray(payload) && Array.isArray(payload.list) ? payload.list : [];
       total.value = payload && !Array.isArray(payload) ? Number(payload.total || 0) : 0;
+      syncFiltersToQuery();
     } catch (error: unknown) {
-      MessagePlugin.error(getErrorMessage(error, '订单列表加载失败'));
+      loadError.value = true;
+      loadErrorText.value = getErrorMessage(error, '订单列表加载失败');
+      list.value = [];
+      total.value = 0;
+      MessagePlugin.error(loadErrorText.value);
     } finally {
       loading.value = false;
     }
@@ -114,7 +168,7 @@ export function useOrderList(options: { pageSize?: number } = {}) {
   function cancelOrder(row: OrderRecord) {
     const dialog = DialogPlugin.confirm({
       header: '取消订单',
-      body: '确定取消该订单？取消后不可恢复。\n关联的账单也将被取消，使用的优惠券将退回账户。\n如果是新产品购买，库存将释放。',
+      body: '确定取消该订单？取消后不可恢复，关联账单将一并取消，使用的优惠券会退回账户；新产品购买的库存将被释放。',
       confirmBtn: '确认取消',
       cancelBtn: '再想想',
       theme: 'warning',
@@ -148,6 +202,8 @@ export function useOrderList(options: { pageSize?: number } = {}) {
     total,
     summary,
     filters,
+    loadError,
+    loadErrorText,
     loadList,
     loadData,
     loadSummary,
@@ -181,7 +237,7 @@ export function useOrderDetail() {
     const row = detail.value;
     const dialog = DialogPlugin.confirm({
       header: '取消订单',
-      body: '确定取消该订单？取消后不可恢复。\n关联的账单也将被取消，使用的优惠券将退回账户。\n如果是新产品购买，库存将释放。',
+      body: '确定取消该订单？取消后不可恢复，关联账单将一并取消，使用的优惠券会退回账户；新产品购买的库存将被释放。',
       confirmBtn: '确认取消',
       cancelBtn: '再想想',
       theme: 'warning',

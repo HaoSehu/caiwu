@@ -8,7 +8,12 @@
         :variant="filters.quickFilter === item.key ? 'outline' : 'light'"
         :theme="filters.quickFilter === item.key ? 'primary' : 'default'"
         class="quick-filter-tag"
+        role="button"
+        tabindex="0"
+        :aria-pressed="filters.quickFilter === item.key"
         @click="applyQuickFilter(item.key)"
+        @keydown.enter.prevent="applyQuickFilter(item.key)"
+        @keydown.space.prevent="applyQuickFilter(item.key)"
       >
         {{ item.label }}
       </t-tag>
@@ -45,11 +50,21 @@
     </t-card>
 
     <section class="record-list-card">
-      <data-state :loading="loading" :empty="!list.length" description="暂无账单记录">
+      <data-state
+        :loading="loading"
+        :empty="!loading && !loadError && !list.length"
+        :error="!loading && loadError"
+        :error-text="loadErrorText"
+        description="暂无账单记录"
+        @retry="loadList"
+      >
+        <template #empty-action>
+          <t-button theme="primary" @click="router.push('/client/catalog')">去产品目录选购</t-button>
+        </template>
         <t-table class="record-table" row-key="id" :data="list" :columns="columns" :pagination="null" hover>
           <template #invoice="{ row }">
             <div class="stack-cell">
-              <strong>{{ resolveInvoiceNo(row) }}</strong>
+              <strong :title="resolveInvoiceNo(row)">{{ resolveInvoiceNo(row) }}</strong>
               <span>{{ row.type_label || '--' }}</span>
             </div>
           </template>
@@ -123,14 +138,14 @@
 
             <div class="stack-cell">
               <strong>{{ row.type_label || '--' }}</strong>
-              <span>账单金额：¥{{ formatMoney(row.amount) }}</span>
-              <span>已付金额：¥{{ formatMoney(row.paid_amount) }}</span>
+              <span class="stack-money">账单金额：¥{{ formatMoney(row.amount) }}</span>
+              <span class="stack-money">已付金额：¥{{ formatMoney(row.paid_amount) }}</span>
             </div>
 
             <div class="record-mobile-card__meta">
               <span>订单：{{ invoiceOrderNo(row) }}</span>
               <span>充值：{{ rechargePaymentNo(row) }}</span>
-              <span>{{ row.created_at || '--' }}</span>
+              <span>{{ formatDateTime(row.created_at) }}</span>
             </div>
 
             <div class="record-mobile-card__actions">
@@ -180,6 +195,7 @@ import {
   useInvoiceList,
 } from '@/domains/finance/useInvoices';
 import type { InvoiceRecord } from '@/types/client';
+import { formatDateTime } from '@/utils/format';
 
 const router = useRouter();
 
@@ -188,6 +204,8 @@ const {
   list,
   total,
   filters,
+  loadError,
+  loadErrorText,
   loadList,
   handleSearch,
   handlePageSizeChange,
@@ -221,8 +239,8 @@ function goToPayment(row: InvoiceRecord) {
 
 const columns: PrimaryTableCol[] = [
   { colKey: 'invoice', title: '账单号', minWidth: '12rem' },
-  { colKey: 'amount', title: '账单金额', width: '9rem' },
-  { colKey: 'paid', title: '已付金额', width: '9rem' },
+  { colKey: 'amount', title: '账单金额', width: '9rem', align: 'right' },
+  { colKey: 'paid', title: '已付金额', width: '9rem', align: 'right' },
   { colKey: 'related_refs', title: '关联单据', minWidth: '14rem' },
   { colKey: 'status', title: '状态', width: '8rem' },
   { colKey: 'created_at', title: '创建时间', minWidth: '12rem' },
@@ -246,22 +264,11 @@ function rechargePaymentNo(row: InvoiceRecord) {
 <style scoped lang="less">
 @import '../record-page.less';
 
-.quick-filter-tags {
-  display: flex;
-  gap: var(--td-comp-margin-s);
-  margin-bottom: var(--td-comp-margin-m);
-  flex-wrap: wrap;
-}
-
-.quick-filter-tag {
-  cursor: pointer;
-  user-select: none;
-}
-
 .invoice-money {
   color: var(--td-text-color-primary);
   font: var(--td-font-body-medium);
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .related-ref-line {

@@ -286,7 +286,7 @@ export default [
       {
         path: 'balance-logs',
         name: 'ClientBalanceLogsDeprecated',
-        redirect: '/result/404',
+        redirect: '/client/invoices',
         meta: { title: title('余额流水'), requireAuth: true, hidden: true },
       },
       {

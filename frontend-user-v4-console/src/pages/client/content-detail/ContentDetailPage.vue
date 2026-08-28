@@ -11,7 +11,14 @@
     <div class="reader-layout">
       <main class="reader-main">
         <t-card class="reader-card" :bordered="false">
-          <data-state :loading="loading" :empty="!currentArticle" :description="config.emptyText">
+          <data-state
+            :loading="loading"
+            :error="!loading && Boolean(detailLoadError)"
+            :error-text="detailLoadError"
+            :empty="!loading && !detailLoadError && !currentArticle"
+            :description="config.emptyText"
+            @retry="syncPage"
+          >
             <article id="article-top" class="reader-article">
               <header class="reader-header">
                 <h1>{{ currentArticle?.title || config.detailTitle }}</h1>
@@ -77,6 +84,7 @@ const {
   loading,
   categories,
   currentArticle,
+  detailLoadError,
   currentCategoryId,
   tocItems,
   contentRef,
@@ -86,6 +94,7 @@ const {
   currentPublisher,
   currentPublishTime,
   articleContentHtml,
+  syncPage,
   goCategoryList,
   scrollToAnchor,
 } = useContentDetail(props.contentType);

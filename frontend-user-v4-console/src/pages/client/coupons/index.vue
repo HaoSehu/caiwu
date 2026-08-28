@@ -28,7 +28,17 @@
 
     <template v-if="activeTab === 'owned'">
       <div class="coupon-list-shell">
-        <data-state :loading="ownedState.loading" :empty="!ownedState.list.length" description="你还没有优惠券">
+        <data-state
+          :loading="ownedState.loading"
+          :empty="!ownedState.loading && !ownedState.error && !ownedState.list.length"
+          :error="!ownedState.loading && Boolean(ownedState.error)"
+          :error-text="ownedState.error"
+          description="你还没有优惠券"
+          @retry="loadList('owned')"
+        >
+          <template #empty-action>
+            <t-button theme="primary" @click="switchTab('plaza')">去券广场领取</t-button>
+          </template>
           <div class="coupon-grid">
             <article v-for="item in ownedState.list" :key="item.id" class="coupon-item">
               <button class="coupon-item__detail" type="button" @click="openCouponDetail(item)">详情</button>
@@ -76,7 +86,14 @@
 
     <template v-else>
       <div class="coupon-list-shell">
-        <data-state :loading="plazaState.loading" :empty="!plazaState.list.length" description="当前暂无可领取的优惠券">
+        <data-state
+          :loading="plazaState.loading"
+          :empty="!plazaState.loading && !plazaState.error && !plazaState.list.length"
+          :error="!plazaState.loading && Boolean(plazaState.error)"
+          :error-text="plazaState.error"
+          description="当前暂无可领取的优惠券"
+          @retry="loadList('plaza')"
+        >
           <div class="coupon-grid">
             <article v-for="item in plazaState.list" :key="item.id" class="coupon-item">
               <button class="coupon-item__detail" type="button" @click="openCouponDetail(item)">详情</button>
@@ -203,6 +220,7 @@ const {
   handleSearch,
   handlePageChange,
   handlePageSizeChange,
+  loadList,
   switchTab,
   openCouponDetail,
   claimCoupon,

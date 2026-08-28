@@ -6,7 +6,7 @@ import {
 } from '@shared/statusConfig';
 import { MessagePlugin } from 'tdesign-vue-next';
 import { computed, onMounted, reactive, ref, shallowRef } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 
 import clientApi from '@/api/client';
 import type { ClientFinanceListParams, PaymentRecord } from '@/types/client';
@@ -18,7 +18,6 @@ import { resolveQuickDateRange } from './dateFilters';
 type AnyRecord = Record<string, unknown>;
 type RecordListItem = PaymentRecord;
 type Fetcher = (params?: ClientFinanceListParams) => Promise<{ data: { list: RecordListItem[]; total: number } }>;
-type DetailFetcher = (row: RecordListItem) => Promise<{ data: RecordListItem }>;
 
 export const PAYMENT_STATUS_OPTIONS = toSelectOptions(PAYMENT_STATUS_MAP, false);
 
@@ -264,14 +263,14 @@ function resolveListPayload(response: unknown) {
   };
 }
 
-export function useRecordList(fetcher: Fetcher, errorMessage: string, options: { detailFetcher?: DetailFetcher } = {}) {
+export function useRecordList(fetcher: Fetcher, errorMessage: string) {
+  const route = useRoute();
   const router = useRouter();
   const loading = ref(false);
-  const detailLoading = ref(false);
   const list = shallowRef<RecordListItem[]>([]);
   const total = ref(0);
-  const detailVisible = ref(false);
-  const currentRow = shallowRef<RecordListItem | null>(null);
+  const loadError = ref(false);
+  const loadErrorText = ref('');
   const filters = reactive({
     page: 1,
     page_size: 10,
@@ -284,6 +283,49 @@ export function useRecordList(fetcher: Fetcher, errorMessage: string, options: {
   });
 
   const hasRows = computed(() => list.value.length > 0);
+
+  // 筛选与页码同步到 URL，刷新/回退不丢状态
+  restoreFiltersFromQuery();
+
+  function restoreFiltersFromQuery() {
+    const query = route.query;
+    const page = Number(query.page);
+    if (Number.isFinite(page) && page > 0) filters.page = page;
+    const pageSize = Number(query.page_size);
+    if (Number.isFinite(pageSize) && [10, 20, 50].includes(pageSize)) filters.page_size = pageSize;
+    if (typeof query.keyword === 'string') filters.keyword = query.keyword;
+    if (typeof query.status === 'string' && query.status !== '') {
+      const status = Number(query.status);
+      if (Number.isFinite(status)) filters.status = status;
+    }
+    if (typeof query.type === 'string') filters.type = query.type;
+    if (typeof query.quick === 'string' && query.quick) {
+      filters.quickFilter = query.quick;
+      if (query.quick === 'pending' && filters.status === '') filters.status = 0;
+      const range = resolveQuickDateRange(query.quick);
+      filters.start_date = range.start_date || '';
+      filters.end_date = range.end_date || '';
+    }
+  }
+
+  function syncFiltersToQuery() {
+    const next: Record<string, string> = {};
+    if (filters.page > 1) next.page = String(filters.page);
+    if (filters.page_size !== 10) next.page_size = String(filters.page_size);
+    if (filters.keyword?.trim()) next.keyword = filters.keyword.trim();
+    if (filters.status !== '' && filters.status !== null && filters.status !== undefined)
+      next.status = String(filters.status);
+    if (filters.type) next.type = filters.type;
+    if (filters.quickFilter) next.quick = filters.quickFilter;
+
+    const current = route.query;
+    const currentKeys = Object.keys(current);
+    const changed =
+      currentKeys.length !== Object.keys(next).length ||
+      currentKeys.some((key) => String(current[key] ?? '') !== next[key]);
+    if (!changed) return;
+    void router.replace({ query: next });
+  }
 
   function buildParams(): ClientFinanceListParams {
     return compactParams({
@@ -299,13 +341,19 @@ export function useRecordList(fetcher: Fetcher, errorMessage: string, options: {
 
   async function loadList() {
     loading.value = true;
+    loadError.value = false;
     try {
       const response = await fetcher(buildParams());
       const payload = resolveListPayload(response);
       list.value = payload.list;
       total.value = payload.total;
+      syncFiltersToQuery();
     } catch (error: unknown) {
-      MessagePlugin.error(getErrorMessage(error, errorMessage));
+      loadError.value = true;
+      loadErrorText.value = getErrorMessage(error, errorMessage);
+      list.value = [];
+      total.value = 0;
+      MessagePlugin.error(loadErrorText.value);
     } finally {
       loading.value = false;
     }
@@ -338,34 +386,6 @@ export function useRecordList(fetcher: Fetcher, errorMessage: string, options: {
     void loadList();
   }
 
-  function goToInvoice(row: RecordListItem) {
-    const invoiceId = Number(row?.invoice_id || 0);
-    if (invoiceId > 0) {
-      router.push({ path: '/client/invoices', query: { detail: String(invoiceId) } });
-    }
-  }
-
-  async function openDetail(row: RecordListItem) {
-    currentRow.value = row;
-    detailVisible.value = true;
-    if (!options.detailFetcher) return;
-
-    detailLoading.value = true;
-    try {
-      const response = await options.detailFetcher(row);
-      currentRow.value = response.data || row;
-    } catch (error: unknown) {
-      MessagePlugin.error(getErrorMessage(error, '详情加载失败'));
-    } finally {
-      detailLoading.value = false;
-    }
-  }
-
-  function closeDetail() {
-    detailVisible.value = false;
-    currentRow.value = null;
-  }
-
   onMounted(() => {
     void loadList();
   });
@@ -373,20 +393,16 @@ export function useRecordList(fetcher: Fetcher, errorMessage: string, options: {
   return {
     router,
     loading,
-    detailLoading,
     list,
     total,
-    detailVisible,
-    currentRow,
     filters,
     hasRows,
+    loadError,
+    loadErrorText,
     loadList,
     handleSearch,
     handlePageSizeChange,
     applyQuickFilter,
-    goToInvoice,
-    openDetail,
-    closeDetail,
   };
 }
 

@@ -313,7 +313,7 @@
 }
 
 #app .t-table th {
-  background: #f6f8fb;
+  background: #f8fafc;
   color: var(--td-text-color-secondary);
   font-weight: 600;
 }
@@ -593,7 +593,7 @@
   height: 42px;
   padding: 10px 18px;
   background: var(--td-bg-color-container) !important;
-  border-bottom: 1px solid #d8e1ee;
+  border-bottom: 1px solid var(--td-component-stroke);
 }
 
 #app .record-page .record-table th,
@@ -601,7 +601,7 @@
 #app .client-services .service-table-card th,
 #app .client-tickets .ticket-table-shell th,
 #app .referral-page .t-table th {
-  color: #7b8494;
+  color: var(--td-text-color-secondary);
   font: var(--td-font-body-small);
   font-weight: 400;
 }
@@ -642,7 +642,7 @@
   min-width: 0;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 767.98px) {
   #app .page-tabs-toolbar .t-tabs__nav-scroll {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
@@ -675,7 +675,7 @@
   border: 0;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 767.98px) {
   #app .t-layout.t-layout--with-sider > .t-layout__sider {
     width: 0;
     flex: 0 0 0;
@@ -742,7 +742,7 @@
   #app .t-dialog__ctx .t-dialog__position.t-dialog--top {
     align-items: flex-end;
     min-height: 100%;
-    padding: 12px;
+    padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
   }
 
   #app .t-dialog__wrap {
@@ -783,7 +783,7 @@
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
-    padding: 12px 16px 16px;
+    padding: 12px 16px calc(16px + env(safe-area-inset-bottom));
     border-top: 1px solid var(--td-component-stroke);
     background: var(--td-bg-color-container);
     text-align: initial;
@@ -824,7 +824,7 @@
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
-    padding: 12px 16px 16px;
+    padding: 12px 16px calc(16px + env(safe-area-inset-bottom));
     border-top: 1px solid var(--td-component-stroke);
     background: var(--td-bg-color-container);
     text-align: initial;
@@ -900,7 +900,7 @@
   gap: var(--td-comp-margin-l);
 }
 
-@media (max-width: 768px) {
+@media (max-width: 767.98px) {
   #app .tdesign-starter-content-layout {
     padding: 12px;
   }
@@ -913,5 +913,46 @@
   #app .tdesign-starter-content-layout > div > [class*=' client-'],
   #app .tdesign-starter-content-layout > div > .record-page {
     padding: 0;
+  }
+}
+
+/* 浅底状态标签文字改用深色阶，满足 WCAG AA（变量随主题模式切换，dark 下为浅色阶同样达标） */
+#app .t-tag--success.t-tag--light,
+#app .t-tag--success.t-tag--light-outline {
+  color: var(--td-success-color-9);
+}
+
+#app .t-tag--warning.t-tag--light,
+#app .t-tag--warning.t-tag--light-outline {
+  color: var(--td-warning-color-10);
+}
+
+#app .t-tag--danger.t-tag--light,
+#app .t-tag--danger.t-tag--light-outline {
+  color: var(--td-error-color-8);
+}
+
+/* 移动端触控热区基线：全部按钮与方形图标按钮最小 44px */
+@media (max-width: 767.98px) {
+  #app .t-button {
+    min-height: 44px;
+  }
+
+  #app .t-button--shape-square {
+    min-width: 44px;
+    width: 44px;
+    min-height: 44px;
+  }
+}
+
+/* 系统级减少动态效果偏好：停用循环动画与过渡 */
+@media (prefers-reduced-motion: reduce) {
+  #app *,
+  #app *::before,
+  #app *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

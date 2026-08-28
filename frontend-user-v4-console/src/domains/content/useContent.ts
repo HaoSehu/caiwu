@@ -146,6 +146,7 @@ export function useContentList(contentType: ContentType) {
   const pageSize = 10;
   const total = ref(0);
   const activeCategoryId = ref(0);
+  const loadError = ref('');
 
   const heroKeywords = computed(() => {
     const names = categories.value
@@ -191,13 +192,17 @@ export function useContentList(contentType: ContentType) {
 
   async function syncPage() {
     loading.value = true;
+    loadError.value = '';
     try {
       keyword.value = parseQueryString(route.query.keyword);
       page.value = parseQueryNumber(route.query.page, 1);
       activeCategoryId.value = parseQueryNumber(route.query.category, 0);
       await Promise.all([loadOverview(), loadList(), loadSidebarContent()]);
     } catch (error: unknown) {
-      MessagePlugin.error(getErrorMessage(error, `${config.pageTitle}加载失败`));
+      loadError.value = getErrorMessage(error, `${config.pageTitle}加载失败`);
+      articleList.value = [];
+      total.value = 0;
+      MessagePlugin.error(loadError.value);
     } finally {
       loading.value = false;
     }
@@ -264,8 +269,10 @@ export function useContentList(contentType: ContentType) {
     pageSize,
     total,
     activeCategoryId,
+    loadError,
     heroKeywords,
     currentCategoryLabel,
+    syncPage,
     selectCategory,
     updatePage,
     submitSearch,
@@ -281,6 +288,7 @@ export function useContentDetail(contentType: ContentType) {
   const loading = ref(false);
   const categories = ref<ContentCategoryRecord[]>([]);
   const currentArticle = ref<ContentDetailPayload | null>(null);
+  const detailLoadError = ref('');
   const currentCategoryId = ref<number | null>(null);
   const tocItems = ref<TocItem[]>([{ id: 'article-top', label: '全文', level: 1 }]);
   const contentRef = ref<HTMLElement | null>(null);
@@ -336,10 +344,16 @@ export function useContentDetail(contentType: ContentType) {
 
   async function syncPage() {
     loading.value = true;
+    detailLoadError.value = '';
     try {
       await Promise.all([loadOverview(), loadArticleDetail(route.params.id)]);
+      if (!currentArticle.value) {
+        detailLoadError.value = '内容不存在或已被删除';
+      }
     } catch (error: unknown) {
-      MessagePlugin.error(getErrorMessage(error, `${config.detailTitle}加载失败`));
+      currentArticle.value = null;
+      detailLoadError.value = getErrorMessage(error, `${config.detailTitle}加载失败`);
+      MessagePlugin.error(detailLoadError.value);
     } finally {
       loading.value = false;
     }
@@ -403,6 +417,7 @@ export function useContentDetail(contentType: ContentType) {
     loading,
     categories,
     currentArticle,
+    detailLoadError,
     currentCategoryId,
     tocItems,
     contentRef,
@@ -412,6 +427,7 @@ export function useContentDetail(contentType: ContentType) {
     currentPublisher,
     currentPublishTime,
     articleContentHtml,
+    syncPage,
     goCategoryList,
     scrollToAnchor,
   };

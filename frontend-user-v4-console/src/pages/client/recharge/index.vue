@@ -10,7 +10,7 @@
 
             <section class="mobile-balance-card">
               <span class="mobile-balance-card__label">当前余额</span>
-              <strong class="mobile-balance-card__value">{{ mobileBalanceText }}</strong>
+              <strong class="mobile-balance-card__value">{{ balanceText }}</strong>
             </section>
 
             <section class="recharge-mobile__section">
@@ -22,6 +22,7 @@
                   type="button"
                   class="mobile-select-card mobile-select-card--amount"
                   :class="{ 'is-active': !mobileCustomSelected && activePreset === item }"
+                  :aria-pressed="!mobileCustomSelected && activePreset === item"
                   @click="handleMobilePresetSelect(item)"
                 >
                   <span class="mobile-select-card__value">¥{{ item }}</span>
@@ -31,6 +32,7 @@
                   type="button"
                   class="mobile-select-card mobile-select-card--amount"
                   :class="{ 'is-active': mobileCustomSelected }"
+                  :aria-pressed="mobileCustomSelected"
                   @click="activateMobileCustomAmount"
                 >
                   <span class="mobile-select-card__value">自定义</span>
@@ -87,7 +89,7 @@
               v-else
               class="recharge-empty-payment"
               theme="warning"
-              :message="paymentGatewaysLoading ? '支付方式加载中' : '暂无可用支付方式，请联系管理员开启支付渠道'"
+              :message="paymentGatewaysLoading ? '支付方式加载中' : '暂无可用支付方式，请通过工单联系我们开通'"
             />
 
             <div class="mobile-agreement">
@@ -104,7 +106,7 @@
               class="mobile-submit-button"
               :loading="submitting"
               :disabled="!mobileAgreementChecked || !hasPaymentGateways || paymentGatewaysLoading"
-              @click="handleCreateOrder(true)"
+              @click="handleMobileSubmit"
             >
               {{ mobileSubmitText }}
             </t-button>
@@ -133,6 +135,7 @@
 
         <template v-else>
           <div class="panel-main">
+            <p class="desktop-balance-line">当前余额<strong>{{ balanceText }}</strong></p>
             <div class="amount-presets">
               <t-button
                 v-for="item in RECHARGE_PRESET_AMOUNTS"
@@ -194,7 +197,7 @@
               v-else
               class="recharge-empty-payment"
               theme="warning"
-              :message="paymentGatewaysLoading ? '支付方式加载中' : '暂无可用支付方式，请联系管理员开启支付渠道'"
+              :message="paymentGatewaysLoading ? '支付方式加载中' : '暂无可用支付方式，请通过工单联系我们开通'"
             />
           </div>
 
@@ -260,7 +263,7 @@ const QrcodeVue = defineAsyncComponent(() => import('qrcode.vue'));
 
 import { useMediaQuery } from '@/composables/useMediaQuery';
 
-const isMobileScreen = useMediaQuery('(max-width: 48rem)');
+const isMobileScreen = useMediaQuery('(max-width: 47.98rem)');
 const mobileCustomMode = ref(false);
 const mobileAgreementChecked = ref(true);
 
@@ -301,9 +304,9 @@ const mobilePayHelperText = computed(() => {
   return '若未能自动打开支付宝，请复制支付链接后在手机浏览器中继续支付。';
 });
 
-const mobileBalanceText = computed(() => {
+const balanceText = computed(() => {
   if (rechargePaid.value) {
-    return `¥${rechargeSummary.cashBalance || formatMoney(userStore.info?.cash_balance || 0)}`;
+    return `¥${formatMoney(rechargeSummary.cashBalance || userStore.info?.cash_balance || 0)}`;
   }
 
   const storeBalance = userStore.info?.cash_balance;
@@ -311,12 +314,27 @@ const mobileBalanceText = computed(() => {
     return `¥${formatMoney(storeBalance)}`;
   }
 
-  return `¥${rechargeSummary.cashBalance || '0.00'}`;
+  return `¥${formatMoney(rechargeSummary.cashBalance || 0)}`;
 });
 
 function handleMobilePresetSelect(value: number) {
   mobileCustomMode.value = false;
   selectPreset(value);
+}
+
+function handleMobileSubmit() {
+  if (submitting.value) return;
+  const gatewayName = selectedPaymentGateway.value?.name || selectedPaymentGateway.value?.label || '在线支付';
+  const dialog = DialogPlugin.confirm({
+    header: '确认充值',
+    body: `确认通过 ${gatewayName} 充值 ¥${amountText.value}？`,
+    confirmBtn: '确认支付',
+    cancelBtn: '再想想',
+    onConfirm: () => {
+      dialog.destroy();
+      void handleCreateOrder(true);
+    },
+  });
 }
 
 function activateMobileCustomAmount() {
@@ -386,6 +404,18 @@ onMounted(() => {
   min-height: 21rem;
 }
 
+.desktop-balance-line {
+  margin: 0;
+  color: var(--td-text-color-secondary);
+  font: var(--td-font-body-small);
+
+  strong {
+    margin-left: var(--td-comp-margin-xxs);
+    color: var(--td-text-color-primary);
+    font-weight: 600;
+  }
+}
+
 .panel-main {
   display: flex;
   flex-direction: column;
@@ -434,8 +464,8 @@ onMounted(() => {
   font: var(--td-font-body-small);
 
   strong {
-    color: var(--td-warning-color);
-    font: var(--td-font-body-large);
+    color: var(--td-text-color-primary);
+    font: var(--td-font-title-large);
     font-weight: 700;
   }
 }
@@ -462,7 +492,7 @@ onMounted(() => {
   h1 {
     margin: 0;
     color: var(--td-text-color-primary);
-    font-size: 2rem;
+    font: var(--td-font-headline-medium);
     font-weight: 700;
     line-height: 1.2;
   }
@@ -520,9 +550,9 @@ onMounted(() => {
   border: thin solid var(--td-border-color);
   border-radius: var(--td-radius-medium);
   transition:
-    border-color var(--td-anim-duration-base) var(--td-anim-time-fn-easing),
-    background-color var(--td-anim-duration-base) var(--td-anim-time-fn-easing),
-    box-shadow var(--td-anim-duration-base) var(--td-anim-time-fn-easing);
+    border-color @anim-duration-base @anim-time-fn-easing,
+    background-color @anim-duration-base @anim-time-fn-easing,
+    box-shadow @anim-duration-base @anim-time-fn-easing;
 
   &:hover,
   &:focus-visible {
@@ -698,9 +728,9 @@ onMounted(() => {
   border-radius: var(--td-radius-medium);
   box-shadow: var(--td-shadow-2);
   transition:
-    border-color var(--td-anim-duration-base) var(--td-anim-time-fn-easing),
-    box-shadow var(--td-anim-duration-base) var(--td-anim-time-fn-easing),
-    transform var(--td-anim-duration-base) var(--td-anim-time-fn-easing);
+    border-color @anim-duration-base @anim-time-fn-easing,
+    box-shadow @anim-duration-base @anim-time-fn-easing,
+    transform @anim-duration-base @anim-time-fn-easing;
 
   &.is-ready {
     border-color: var(--td-brand-color);
@@ -719,8 +749,8 @@ onMounted(() => {
   width: 100%;
   height: 100%;
   transition:
-    opacity var(--td-anim-duration-base) var(--td-anim-time-fn-easing),
-    transform var(--td-anim-duration-base) var(--td-anim-time-fn-easing);
+    opacity @anim-duration-base @anim-time-fn-easing,
+    transform @anim-duration-base @anim-time-fn-easing;
 
   &.is-muted {
     opacity: 0.12;
@@ -838,8 +868,8 @@ onMounted(() => {
 .payment-success-enter-active,
 .payment-success-leave-active {
   transition:
-    opacity var(--td-anim-duration-base) var(--td-anim-time-fn-easing),
-    transform var(--td-anim-duration-base) var(--td-anim-time-fn-easing);
+    opacity @anim-duration-base @anim-time-fn-easing,
+    transform @anim-duration-base @anim-time-fn-easing;
 }
 
 .payment-success-enter-from,
@@ -869,16 +899,8 @@ onMounted(() => {
 }
 
 @media (width <= 30rem) {
-  .recharge-stage :deep(.t-card__body) {
-    padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-m);
-  }
-
   .recharge-mobile {
     gap: var(--td-comp-margin-m);
-  }
-
-  .recharge-mobile__hero h1 {
-    font-size: 1.75rem;
   }
 }
 

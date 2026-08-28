@@ -1,9 +1,12 @@
 const CHECKOUT_STORAGE_KEY = 'website_pending_checkout';
+// 待建单 payload 有效期：超时后视为过期，避免旧会话 payload 被再次自动建单
+const CHECKOUT_TTL_MS = 30 * 60 * 1000;
 
 export interface PendingWebsiteCheckout {
   source?: string;
   idempotencyKey?: string;
   orderPayload?: Record<string, unknown>;
+  savedAt?: number;
   [key: string]: unknown;
 }
 
@@ -54,7 +57,8 @@ export function savePendingWebsiteCheckout(payload: PendingWebsiteCheckout) {
   if (!canUseSessionStorage()) {
     return;
   }
-  window.sessionStorage.setItem(CHECKOUT_STORAGE_KEY, JSON.stringify(payload || {}));
+  const withTimestamp = { savedAt: Date.now(), ...(payload || {}) };
+  window.sessionStorage.setItem(CHECKOUT_STORAGE_KEY, JSON.stringify(withTimestamp));
 }
 
 export function getPendingWebsiteCheckout(): PendingWebsiteCheckout | null {
@@ -68,7 +72,12 @@ export function getPendingWebsiteCheckout(): PendingWebsiteCheckout | null {
   }
 
   try {
-    return JSON.parse(raw) as PendingWebsiteCheckout;
+    const parsed = JSON.parse(raw) as PendingWebsiteCheckout;
+    if (typeof parsed.savedAt === 'number' && Date.now() - parsed.savedAt > CHECKOUT_TTL_MS) {
+      window.sessionStorage.removeItem(CHECKOUT_STORAGE_KEY);
+      return null;
+    }
+    return parsed;
   } catch {
     return null;
   }

@@ -372,7 +372,7 @@ export function useServiceCenter() {
 
   function openInvoiceDetail(id: number) {
     if (!id) return;
-    router.push({ path: '/client/invoices', query: { detail: String(id) } });
+    router.push(`/client/invoices/${id}`);
   }
 
   async function loadRenewPreview(serviceId: number) {
@@ -486,10 +486,14 @@ export function useServiceCenter() {
     }
   }
 
+  async function loadData() {
+    await Promise.all([loadOverview(), loadList()]);
+  }
+
   onMounted(async () => {
     restoreViewMode();
     hydrateFiltersFromRoute();
-    await Promise.all([loadOverview(), loadList()]);
+    await loadData();
   });
 
   return {
@@ -499,6 +503,7 @@ export function useServiceCenter() {
     total,
     overview,
     filters,
+    error,
     viewMode,
     viewModeOptions,
     renewVisible,
@@ -518,6 +523,7 @@ export function useServiceCenter() {
     availableRenewCoupons,
     loadOverview,
     loadList,
+    loadData,
     handleSearch,
     handlePageSizeChange,
     pickCategory,

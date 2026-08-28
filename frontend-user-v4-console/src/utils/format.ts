@@ -5,11 +5,12 @@ import { MessagePlugin } from 'tdesign-vue-next';
  *
  * 收敛自各 domain 内重复定义的 formatMoney，行为保持一致：
  * - 非有限数字 → '0.00'
- * - 其余 → 保留两位小数
+ * - 其余 → 千分位分组 + 两位小数
  */
 export function formatMoney(value: unknown): string {
   const amount = Number(value ?? 0);
-  return Number.isFinite(amount) ? amount.toFixed(2) : '0.00';
+  if (!Number.isFinite(amount)) return '0.00';
+  return amount.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 const pad = (num: number) => String(num).padStart(2, '0');

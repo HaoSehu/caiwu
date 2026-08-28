@@ -32,6 +32,17 @@
     white-space: nowrap;
   }
 
+  // 金额永远不省略截断（资损信息），长数值换行展示
+  .stack-money {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    color: var(--td-text-color-primary);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
   strong {
     color: var(--td-text-color-primary);
     font: var(--td-font-body-medium);
@@ -42,6 +53,21 @@
     color: var(--td-text-color-secondary);
     font: var(--td-font-body-small);
   }
+}
+
+.quick-filter-tags {
+  display: flex;
+  gap: var(--td-comp-margin-s);
+  margin-bottom: var(--td-comp-margin-m);
+  flex-wrap: wrap;
+}
+
+.quick-filter-tag {
+  min-height: 2.75rem;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
 }
 
 .record-pagination {
@@ -61,10 +87,17 @@
   padding: 0.875rem 0.875rem 0.75rem;
   overflow: hidden;
   color: var(--td-text-color-primary);
+  cursor: pointer;
   background: var(--td-bg-color-container);
   border: 0.0625rem solid var(--td-border-color);
   border-radius: var(--td-radius-medium);
   box-shadow: var(--td-shadow-1);
+  transition: border-color @anim-duration-base @anim-time-fn-easing;
+
+  &:active {
+    background: var(--td-bg-color-secondarycontainer);
+    border-color: var(--td-brand-color);
+  }
 }
 
 .record-mobile-card__head,
@@ -248,11 +281,8 @@
 
 }
 
-@media (max-width: @screen-sm-rem) {
-  .record-page {
-    padding: var(--td-comp-paddingTB-l) var(--td-comp-paddingLR-l);
-  }
-
+@media (max-width: @screen-sm-max) {
+  // 页面根边距由布局层统一供给，此处不再叠加，避免平板竖屏区间出现双重边距
   .record-card :deep(.t-card__body) {
     padding: var(--td-comp-paddingTB-l) var(--td-comp-paddingLR-l);
   }

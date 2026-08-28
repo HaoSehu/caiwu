@@ -47,7 +47,10 @@
                       :key="item.id"
                       class="inbox-item"
                       :class="{ 'inbox-item--unread': !item.read }"
+                      role="button"
+                      tabindex="0"
                       @click="handleInboxItemClick(item)"
+                      @keydown.enter.prevent="handleInboxItemClick(item)"
                     >
                       <div class="inbox-item__top">
                         <t-tag size="small" variant="light" :theme="resolveTagTheme(item.type)">{{
@@ -61,7 +64,15 @@
                   </div>
                   <div v-else class="inbox-panel__empty">暂无消息</div>
                 </t-loading>
-                <div class="inbox-panel__foot" @click="handleNav('/client/notices')">查看全部</div>
+                <div
+                  class="inbox-panel__foot"
+                  role="button"
+                  tabindex="0"
+                  @click="handleNav('/client/notices')"
+                  @keydown.enter.prevent="handleNav('/client/notices')"
+                >
+                  查看全部
+                </div>
               </div>
             </template>
             <t-badge :count="inboxUnread" :offset="[-2, 2]" size="small">
@@ -72,6 +83,9 @@
           </t-popup>
           <t-dropdown :min-column-width="160" trigger="click">
             <template #dropdown>
+              <t-dropdown-item class="operations-dropdown-container-item" @click="handleOpenWebsite">
+                <browse-icon />返回官网
+              </t-dropdown-item>
               <t-dropdown-item class="operations-dropdown-container-item" @click="handleNav('/client/profile')">
                 <user-circle-icon />个人资料
               </t-dropdown-item>
@@ -97,7 +111,7 @@
   </div>
 </template>
 <script setup lang="ts">
-import { ChevronDownIcon, NotificationIcon, PoweroffIcon, UserCircleIcon, WalletIcon } from 'tdesign-icons-vue-next';
+import { BrowseIcon, ChevronDownIcon, NotificationIcon, PoweroffIcon, UserCircleIcon, WalletIcon } from 'tdesign-icons-vue-next';
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import type { PropType } from 'vue';
 import { computed, onMounted, ref } from 'vue';
@@ -206,6 +220,17 @@ const changeCollapsed = () => {
 const handleNav = (url: string) => {
   inboxVisible.value = false;
   router.push(url);
+};
+
+// 返回官网：站后台配置了官网地址则新窗口打开，否则走 public-redirect 的 /products 兜底
+const handleOpenWebsite = () => {
+  inboxVisible.value = false;
+  const siteUrl = String(siteBranding.frontendUrl || '').trim();
+  if (/^https?:\/\//i.test(siteUrl)) {
+    window.open(siteUrl, '_blank', 'noopener,noreferrer');
+    return;
+  }
+  handleNav('/products');
 };
 
 const inboxVisible = ref(false);

@@ -57,7 +57,14 @@
               >全部标记已读 ({{ unreadCount }})</t-button
             >
           </template>
-          <data-state :loading="loading" :empty="!articleList.length" :description="config.emptyText">
+          <data-state
+            :loading="loading"
+            :error="!loading && Boolean(loadError)"
+            :error-text="loadError"
+            :empty="!loading && !loadError && !articleList.length"
+            :description="config.emptyText"
+            @retry="syncPage"
+          >
             <article v-for="item in articleList" :key="item.id" class="article-row">
               <div class="article-row__head">
                 <router-link class="article-row__title" :to="buildDetailRoute(item)">{{ item.title }}</router-link>
@@ -132,8 +139,10 @@ const {
   pageSize,
   total,
   activeCategoryId,
+  loadError,
   heroKeywords,
   currentCategoryLabel,
+  syncPage,
   selectCategory,
   updatePage,
   submitSearch,

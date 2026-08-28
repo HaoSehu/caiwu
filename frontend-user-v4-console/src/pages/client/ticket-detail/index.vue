@@ -8,7 +8,17 @@
       </t-button>
     </div>
 
-    <loading-state :loading="loading" text="正在加载工单详情">
+    <data-state
+      :loading="loading"
+      :error="!loading && Boolean(detailLoadError)"
+      :error-text="detailLoadError"
+      :empty="!loading && !detailLoadError && !detail"
+      description="工单不存在或已被删除"
+      @retry="loadDetail"
+    >
+      <template #empty-action>
+        <t-button theme="primary" @click="goBack">返回工单列表</t-button>
+      </template>
       <template v-if="detail">
         <div class="ticket-detail-shell">
           <aside class="ticket-meta-card">
@@ -95,7 +105,7 @@
                         class="message-attachment"
                         @click="previewAttachment(attachment)"
                       >
-                        <img :src="attachment.url" alt="附件" />
+                        <img :src="attachment.url" alt="附件" loading="lazy" decoding="async" />
                       </button>
                     </div>
                   </div>
@@ -129,7 +139,7 @@
                           class="message-attachment"
                           @click="previewAttachment(attachment)"
                         >
-                          <img :src="attachment.url" alt="附件" />
+                          <img :src="attachment.url" alt="附件" loading="lazy" decoding="async" />
                         </button>
                       </div>
                     </template>
@@ -158,7 +168,7 @@
                     class="reply-attachment"
                     @click="previewAttachment(file)"
                   >
-                    <img :src="file.url || file.path" alt="附件" />
+                    <img :src="file.url || file.path" alt="附件" loading="lazy" decoding="async" />
                     <span @click.stop="removeReplyAttachment(index)">移除</span>
                   </button>
                 </div>
@@ -191,8 +201,7 @@
           </section>
         </div>
       </template>
-      <t-empty v-else description="工单不存在" />
-    </loading-state>
+    </data-state>
 
     <t-dialog
       v-model:visible="previewVisible"
@@ -204,9 +213,8 @@
   </section>
 </template>
 <script setup lang="ts">
-import LoadingState from '@shared/user-v3/components/LoadingState.vue';
+import DataState from '@shared/user-v3/components/DataState.vue';
 import { AddIcon } from 'tdesign-icons-vue-next';
-import { onMounted } from 'vue';
 
 import {
   formatTicketTime,
@@ -226,6 +234,7 @@ const {
   recalling,
   replyUploading,
   detail,
+  detailLoadError,
   replyContent,
   replyAttachments,
   previewVisible,
@@ -255,10 +264,6 @@ async function handleReplyUpload(event: Event) {
   }
   input.value = '';
 }
-
-onMounted(() => {
-  void loadDetail();
-});
 </script>
 <style scoped lang="less">
 .ticket-detail-page {

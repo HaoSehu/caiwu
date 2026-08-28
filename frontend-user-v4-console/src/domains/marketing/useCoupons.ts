@@ -17,6 +17,7 @@ function createTabState() {
     pageSize: 10,
     keyword: '',
     status: '',
+    error: '',
   });
 }
 
@@ -111,6 +112,7 @@ export function useCoupons() {
     const state = getState(tab);
     const requestMethod = tab === 'plaza' ? clientApi.publicCoupons : clientApi.coupons;
     state.loading = true;
+    state.error = '';
     try {
       const response = await requestMethod({
         page: state.page,
@@ -122,7 +124,10 @@ export function useCoupons() {
       state.list = payload.list;
       state.total = payload.total;
     } catch (error: unknown) {
-      MessagePlugin.error(getErrorMessage(error, tab === 'plaza' ? '优惠券广场加载失败' : '优惠券列表加载失败'));
+      state.error = getErrorMessage(error, tab === 'plaza' ? '优惠券广场加载失败' : '优惠券列表加载失败');
+      state.list = [];
+      state.total = 0;
+      MessagePlugin.error(state.error);
     } finally {
       state.loading = false;
     }

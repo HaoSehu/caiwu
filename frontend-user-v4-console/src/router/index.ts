@@ -15,6 +15,12 @@ const defaultRouterList: Array<RouteRecordRaw> = [
     path: '/login',
     redirect: '/client/login',
   },
+  {
+    path: '/:pathMatch(.*)*',
+    name: '404Page',
+    component: () => import('@/pages/result/404/index.vue'),
+    meta: { title: { zh_CN: '页面不存在', en_US: 'Not Found' }, robots: 'noindex,nofollow' },
+  },
 ];
 // 存放固定路由
 export const homepageRouterList: Array<RouteRecordRaw> = mapModuleRouterList(homepageModules);
@@ -85,12 +91,10 @@ export const getActive = (maxLevel = 3): string => {
 const router = createRouter({
   history: createWebHistory(env === 'site' ? '/starter/vue-next/' : import.meta.env.VITE_BASE_URL),
   routes: allRoutes,
+  // 主滚动容器是布局内部 .tdesign-starter-layout，回顶由 layouts/index.vue 统一处理；
+  // 此处仅做窗口级瞬时归位，避免与容器回顶形成双重平滑滚动
   scrollBehavior() {
-    return {
-      el: '#app',
-      top: 0,
-      behavior: 'smooth',
-    };
+    return { top: 0 };
   },
 });
 

@@ -1,6 +1,6 @@
 import { getStatusLabel, SERVICE_STATUS_MAP } from '@shared/statusConfig';
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
-import { computed, reactive, ref, shallowRef } from 'vue';
+import { computed, onMounted, reactive, ref, shallowRef, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import clientApi from '@/api/client';
@@ -140,6 +140,8 @@ export function useTicketList() {
   const uploading = ref(false);
   const list = ref<TicketRecord[]>([]);
   const total = ref(0);
+  const loadError = ref(false);
+  const loadErrorText = ref('');
   const serviceOptions = ref<ServiceOption[]>([]);
   const uploadFiles = ref<TicketImageUploadPayload[]>([]);
   const previewVisible = ref(false);
@@ -176,6 +178,7 @@ export function useTicketList() {
 
   async function loadTickets() {
     loading.value = true;
+    loadError.value = false;
     try {
       const res = await clientApi.tickets({
         page: filters.page,
@@ -187,7 +190,11 @@ export function useTicketList() {
       list.value = normalizeList(payload);
       total.value = Number(payload?.total || list.value.length || 0);
     } catch (error: unknown) {
-      MessagePlugin.error(getErrorMessage(error, '工单列表加载失败'));
+      loadError.value = true;
+      loadErrorText.value = getErrorMessage(error, '工单列表加载失败');
+      list.value = [];
+      total.value = 0;
+      MessagePlugin.error(loadErrorText.value);
     } finally {
       loading.value = false;
     }
@@ -257,7 +264,11 @@ export function useTicketList() {
 
   async function submitTicket() {
     if (!createForm.subject.trim()) {
-      MessagePlugin.warning('请输入工单标题');
+      MessagePlugin.warning('请填写工单标题');
+      return false;
+    }
+    if (!createForm.content.trim()) {
+      MessagePlugin.warning('请填写问题描述');
       return false;
     }
 
@@ -291,6 +302,8 @@ export function useTicketList() {
   return {
     router,
     loading,
+    loadError,
+    loadErrorText,
     creating,
     serviceLoading,
     createVisible,
@@ -327,6 +340,7 @@ export function useTicketDetail() {
   const recalling = ref(false);
   const replyUploading = ref(false);
   const detail = shallowRef<TicketRecord | null>(null);
+  const detailLoadError = ref('');
   const replyContent = ref('');
   const replyAttachments = ref<TicketImageUploadPayload[]>([]);
   const previewVisible = ref(false);
@@ -364,13 +378,17 @@ export function useTicketDetail() {
     }
 
     loading.value = true;
+    detailLoadError.value = '';
     try {
       const res = await clientApi.ticketDetail(ticketId.value);
       detail.value = res.data || null;
-      if (!detail.value) await router.replace('/client/tickets');
+      if (!detail.value) {
+        detailLoadError.value = '工单不存在或已被删除';
+      }
     } catch (error: unknown) {
-      MessagePlugin.error(getErrorMessage(error, '工单详情加载失败'));
-      await router.replace('/client/tickets');
+      detail.value = null;
+      detailLoadError.value = getErrorMessage(error, '工单详情加载失败');
+      MessagePlugin.error(detailLoadError.value);
     } finally {
       loading.value = false;
     }
@@ -483,6 +501,17 @@ export function useTicketDetail() {
     router.push('/client/tickets');
   }
 
+  // 详情组件被 tickets/:id 与 ticket-conversations/:id 两个路由复用，同组件互跳需按 id 重新拉取
+  watch(ticketId, (nextId, prevId) => {
+    if (nextId && nextId !== prevId) {
+      void loadDetail();
+    }
+  });
+
+  onMounted(() => {
+    void loadDetail();
+  });
+
   return {
     router,
     loading,
@@ -491,6 +520,7 @@ export function useTicketDetail() {
     recalling,
     replyUploading,
     detail,
+    detailLoadError,
     replyContent,
     replyAttachments,
     previewVisible,

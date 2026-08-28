@@ -23,7 +23,17 @@
     </t-card>
 
     <section class="ticket-list-card">
-      <data-state :loading="loading" :empty="!list.length" description="暂无工单记录">
+      <data-state
+        :loading="loading"
+        :empty="!loading && !loadError && !list.length"
+        :error="!loading && loadError"
+        :error-text="loadErrorText"
+        description="暂无工单记录"
+        @retry="loadTickets"
+      >
+        <template #empty-action>
+          <t-button theme="primary" @click="openCreateDialog">提交工单</t-button>
+        </template>
         <div class="ticket-table-shell">
           <t-table row-key="id" :data="list" :columns="columns" :pagination="null" hover>
             <template #subject="{ row }">
@@ -191,6 +201,8 @@ const {
   list,
   total,
   filters,
+  loadError,
+  loadErrorText,
   createForm,
   serviceSelectOptions,
   uploadFiles,

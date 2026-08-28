@@ -52,7 +52,17 @@
     </t-card>
 
     <section class="service-list-section">
-      <data-state :loading="loading" :empty="!list.length" description="当前还没有任何服务实例">
+      <data-state
+        :loading="loading"
+        :empty="!loading && !error && !list.length"
+        :error="!loading && Boolean(error)"
+        :error-text="error || ''"
+        description="当前还没有任何服务实例"
+        @retry="loadData"
+      >
+        <template #empty-action>
+          <t-button theme="primary" @click="router.push('/client/catalog')">去产品目录选购</t-button>
+        </template>
         <template #default>
           <div v-if="viewMode === 'grid'" class="service-card-grid">
             <article v-for="item in list" :key="item.id" class="service-row-card">
@@ -361,6 +371,7 @@ const {
   list,
   total,
   filters,
+  error,
   viewMode,
   renewVisible,
   renewPreviewLoading,
@@ -376,6 +387,7 @@ const {
   selectedRenewAmount,
   availableRenewCoupons,
   loadList,
+  loadData,
   handleSearch,
   handlePageSizeChange,
   setViewMode,
@@ -466,7 +478,7 @@ function actionOptions(item: Record<string, any>) {
 .service-row-card {
   position: relative;
   width: 100%;
-  aspect-ratio: 389 / 187;
+  min-height: 11.5rem;
   padding: 1rem 1.125rem 0.875rem;
   border: 0.0625rem solid var(--td-component-stroke);
   border-radius: var(--td-radius-large);
@@ -480,6 +492,11 @@ function actionOptions(item: Record<string, any>) {
   &:hover {
     border-color: var(--td-brand-color-focus);
     box-shadow: var(--td-shadow-2);
+  }
+
+  &:active {
+    border-color: var(--td-brand-color);
+    box-shadow: var(--td-shadow-1);
   }
 }
 
@@ -654,9 +671,9 @@ function actionOptions(item: Record<string, any>) {
   align-items: center;
   min-height: 1.25rem;
   padding: 0 0.4375rem;
-  border-radius: 62.4375rem;
+  border-radius: var(--td-radius-small);
   background: var(--td-bg-color-component);
-  color: var(--td-text-color-placeholder);
+  color: var(--td-text-color-secondary);
   font-size: 0.6875rem;
   font-weight: 600;
 }
@@ -690,8 +707,8 @@ function actionOptions(item: Record<string, any>) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.125rem;
-  height: 1.125rem;
+  width: 1.5rem;
+  height: 1.5rem;
   border-radius: 0.5rem;
   color: var(--td-text-color-secondary);
   font-size: 0.8125rem;
@@ -760,7 +777,7 @@ function actionOptions(item: Record<string, any>) {
   font-size: 0.75rem;
 
   &.warning {
-    color: var(--td-warning-color);
+    color: var(--td-warning-color-9);
     font-weight: 600;
   }
 }
@@ -788,14 +805,14 @@ function actionOptions(item: Record<string, any>) {
 }
 
 .service-ip-label {
-  color: var(--td-text-color-placeholder);
+  color: var(--td-text-color-secondary);
   font-size: 0.6875rem;
 }
 
 .service-ip-button {
   display: inline-flex;
   align-items: center;
-  min-height: 1.75rem;
+  min-height: 2rem;
   padding: 0;
   border: none;
   background: transparent;
@@ -993,9 +1010,14 @@ function actionOptions(item: Record<string, any>) {
   .service-action-console,
   .service-action-more {
     min-width: 3rem;
-    height: 1.75rem;
-    padding: 0 0.5625rem;
+    height: 2.75rem;
+    padding: 0 0.75rem;
     font-size: 0.6875rem;
+  }
+
+  .service-remark-trigger {
+    width: 2.75rem;
+    height: 2.75rem;
   }
 
   .service-spec-line {
@@ -1018,7 +1040,7 @@ function actionOptions(item: Record<string, any>) {
   }
 
   .service-ip-label {
-    font-size: 0.625rem;
+    font-size: 0.75rem;
   }
 
   .service-pagination {

@@ -171,9 +171,8 @@ export function useInvoiceList(options: { fixedTypes?: unknown; pageSize?: numbe
   const list = shallowRef<InvoiceRecord[]>([]);
   const total = ref(0);
   const summary = shallowRef<InvoiceListSummary>({});
-  const detailVisible = ref(false);
-  const routeDetailId = ref(0);
-  const currentRow = shallowRef<InvoiceRecord | null>(null);
+  const loadError = ref(false);
+  const loadErrorText = ref('');
   const filters = reactive({
     page: 1,
     page_size: Number(options.pageSize || 10),
@@ -186,6 +185,49 @@ export function useInvoiceList(options: { fixedTypes?: unknown; pageSize?: numbe
   });
 
   const showTypeSelector = computed(() => !normalizeTypeFilter(options.fixedTypes));
+
+  // 筛选与页码同步到 URL，刷新/回退不丢状态
+  restoreFiltersFromQuery();
+
+  function restoreFiltersFromQuery() {
+    const query = route.query;
+    const page = Number(query.page);
+    if (Number.isFinite(page) && page > 0) filters.page = page;
+    const pageSize = Number(query.page_size);
+    if (Number.isFinite(pageSize) && [10, 20, 50].includes(pageSize)) filters.page_size = pageSize;
+    if (typeof query.keyword === 'string') filters.keyword = query.keyword;
+    if (typeof query.status === 'string' && query.status !== '') {
+      const status = Number(query.status);
+      if (Number.isFinite(status)) filters.status = status;
+    }
+    if (typeof query.type === 'string') filters.type = query.type;
+    if (typeof query.quick === 'string' && query.quick) {
+      filters.quickFilter = query.quick;
+      if (query.quick === 'pending' && filters.status === '') filters.status = 0;
+      const range = resolveQuickDateRange(query.quick);
+      filters.start_date = range.start_date || '';
+      filters.end_date = range.end_date || '';
+    }
+  }
+
+  function syncFiltersToQuery() {
+    const next: Record<string, string> = {};
+    if (filters.page > 1) next.page = String(filters.page);
+    if (filters.page_size !== Number(options.pageSize || 10)) next.page_size = String(filters.page_size);
+    if (filters.keyword?.trim()) next.keyword = filters.keyword.trim();
+    if (filters.status !== '' && filters.status !== null && filters.status !== undefined)
+      next.status = String(filters.status);
+    if (filters.type) next.type = filters.type;
+    if (filters.quickFilter) next.quick = filters.quickFilter;
+
+    const current = route.query;
+    const currentKeys = Object.keys(current).filter((key) => key !== 'detail');
+    const changed =
+      currentKeys.length !== Object.keys(next).length ||
+      currentKeys.some((key) => String(current[key] ?? '') !== next[key]);
+    if (!changed) return;
+    void router.replace({ query: next });
+  }
 
   function buildParams() {
     const fixedTypes = normalizeTypeFilter(options.fixedTypes);
@@ -220,13 +262,19 @@ export function useInvoiceList(options: { fixedTypes?: unknown; pageSize?: numbe
 
   async function loadList() {
     loading.value = true;
+    loadError.value = false;
     try {
       const res = await clientApi.invoices(buildParams());
       const payload = resolveListPayload(res);
       list.value = payload.list;
       total.value = payload.total;
+      syncFiltersToQuery();
     } catch (error: unknown) {
-      MessagePlugin.error(getErrorMessage(error, '账单列表加载失败'));
+      loadError.value = true;
+      loadErrorText.value = getErrorMessage(error, '账单列表加载失败');
+      list.value = [];
+      total.value = 0;
+      MessagePlugin.error(loadErrorText.value);
     } finally {
       loading.value = false;
     }
@@ -263,57 +311,14 @@ export function useInvoiceList(options: { fixedTypes?: unknown; pageSize?: numbe
     void loadData();
   }
 
-  function normalizeInvoiceId(value: unknown) {
-    const raw = Array.isArray(value) ? value[0] : value;
-    const id = Number(raw || 0);
-    return Number.isFinite(id) && id > 0 ? id : 0;
-  }
-
-  async function openDetailById(invoiceId: number) {
-    if (!invoiceId) return;
-    routeDetailId.value = invoiceId;
-    try {
-      const res = await clientApi.invoiceDetail(invoiceId);
-      if (routeDetailId.value !== invoiceId) return;
-      currentRow.value = res.data || null;
-      detailVisible.value = Boolean(currentRow.value);
-    } catch (error: unknown) {
-      MessagePlugin.error(getErrorMessage(error, '账单详情加载失败'));
-    }
-  }
-
-  function openDetail(row: InvoiceRecord) {
-    currentRow.value = row;
-    detailVisible.value = true;
-    const invoiceId = normalizeInvoiceId(row?.id);
-    if (invoiceId) {
-      void router.replace({
-        path: '/client/invoices',
-        query: { ...route.query, detail: String(invoiceId) },
-      });
-    }
-  }
-
-  function closeDetail() {
-    detailVisible.value = false;
-    currentRow.value = null;
-    routeDetailId.value = 0;
-    if (route.query.detail !== undefined) {
-      const nextQuery = { ...route.query };
-      delete nextQuery.detail;
-      void router.replace({ path: '/client/invoices', query: nextQuery });
-    }
-  }
-
   function goToPay(row: InvoiceRecord) {
-    detailVisible.value = false;
     router.push(`/client/invoices/${row.id}/pay`);
   }
 
   function cancelInvoice(row: InvoiceRecord) {
     const dialog = DialogPlugin.confirm({
       header: '取消账单',
-      body: '确定取消该账单？取消后不可恢复。\n使用的优惠券将退回账户。\n如果是新产品购买，库存将释放。',
+      body: '确定取消该账单？取消后不可恢复，使用的优惠券会退回账户；新产品购买的库存将被释放。',
       confirmBtn: '确认取消',
       cancelBtn: '再想想',
       theme: 'warning',
@@ -323,7 +328,6 @@ export function useInvoiceList(options: { fixedTypes?: unknown; pageSize?: numbe
         try {
           await clientApi.cancelInvoice(row.id);
           MessagePlugin.success('账单已取消');
-          closeDetail();
           await loadData();
           dialog.hide();
         } catch (error: unknown) {
@@ -340,24 +344,6 @@ export function useInvoiceList(options: { fixedTypes?: unknown; pageSize?: numbe
     void loadData();
   });
 
-  watch(
-    () => route.query.detail,
-    (value) => {
-      const invoiceId = normalizeInvoiceId(value);
-      if (invoiceId) {
-        void openDetailById(invoiceId);
-        return;
-      }
-
-      if (routeDetailId.value) {
-        detailVisible.value = false;
-        currentRow.value = null;
-        routeDetailId.value = 0;
-      }
-    },
-    { immediate: true },
-  );
-
   return {
     router,
     loading,
@@ -367,8 +353,8 @@ export function useInvoiceList(options: { fixedTypes?: unknown; pageSize?: numbe
     total,
     summary,
     filters,
-    detailVisible,
-    currentRow,
+    loadError,
+    loadErrorText,
     showTypeSelector,
     loadList,
     loadData,
@@ -376,8 +362,6 @@ export function useInvoiceList(options: { fixedTypes?: unknown; pageSize?: numbe
     handleSearch,
     handlePageSizeChange,
     applyQuickFilter,
-    openDetail,
-    closeDetail,
     goToPay,
     cancelInvoice,
   };
@@ -460,6 +444,78 @@ export function useInvoiceDetail() {
     }
   }
 
+  const ALIPAY_POLL_STORAGE_PREFIX = 'client-invoice-alipay-poll:';
+
+  // 轮询凭证持久化：跳转第三方支付中断返回后可恢复轮询与二维码，避免重复生成支付单
+  function persistPollCredentials() {
+    if (!invoiceId.value || !alipayPaymentNo.value || !alipayPollToken.value) return;
+    try {
+      window.sessionStorage.setItem(
+        ALIPAY_POLL_STORAGE_PREFIX + invoiceId.value,
+        JSON.stringify({
+          payment_no: alipayPaymentNo.value,
+          poll_token: alipayPollToken.value,
+          gateway: alipayGateway.value,
+          qr_code: alipayQrCode.value,
+        }),
+      );
+    } catch {
+      // sessionStorage 不可用时静默降级，仅失去中断恢复能力
+    }
+  }
+
+  function clearPersistedPoll() {
+    if (!invoiceId.value) return;
+    try {
+      window.sessionStorage.removeItem(ALIPAY_POLL_STORAGE_PREFIX + invoiceId.value);
+    } catch {
+      // 忽略存储异常
+    }
+  }
+
+  function readPersistedPoll() {
+    if (!invoiceId.value) return null;
+    try {
+      const raw = window.sessionStorage.getItem(ALIPAY_POLL_STORAGE_PREFIX + invoiceId.value);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as {
+        payment_no?: string;
+        poll_token?: string;
+        gateway?: string;
+        qr_code?: string;
+      };
+      if (!parsed.payment_no || !parsed.poll_token) return null;
+      return parsed;
+    } catch {
+      return null;
+    }
+  }
+
+  function startPolling() {
+    clearPollingTimer();
+    pollTimer.value = window.setInterval(() => {
+      if (!polling.value && alipayPollingReady.value) {
+        void pollAlipayStatus(true);
+      }
+    }, 5000);
+  }
+
+  function restoreAlipayPolling() {
+    if (!detail.value || !isPayableInvoice(detail.value)) return;
+    const persisted = readPersistedPoll();
+    if (!persisted) return;
+    alipayPaymentNo.value = persisted.payment_no;
+    alipayPollToken.value = persisted.poll_token;
+    alipayGateway.value = persisted.gateway || alipayGateway.value;
+    // 同时还原二维码与弹窗，返回后可直接继续扫码支付
+    if (persisted.qr_code) {
+      alipayQrCode.value = persisted.qr_code;
+      alipayDialogVisible.value = true;
+    }
+    startPolling();
+    MessagePlugin.info('检测到未完成的在线支付，正在自动刷新支付状态');
+  }
+
   function resetPaymentPayload() {
     alipayDialogVisible.value = false;
     alipayQrCode.value = '';
@@ -468,6 +524,7 @@ export function useInvoiceDetail() {
     alipayGateway.value = '';
     appliedDeductionAmount.value = '0.00';
     alipayAmount.value = formatMoney(payableAmount.value);
+    clearPersistedPoll();
     clearPollingTimer();
   }
 
@@ -512,6 +569,7 @@ export function useInvoiceDetail() {
       data.amount || estimatedAlipayAmountText.value || detail.value?.payable_amount || '0.00',
     );
     alipayDialogVisible.value = Boolean(alipayQrCode.value);
+    persistPollCredentials();
   }
 
   async function loadDetail() {
@@ -524,9 +582,9 @@ export function useInvoiceDetail() {
       syncPayMethod();
       if (detail.value && !isPayableInvoice(detail.value)) {
         resetPaymentPayload();
+        MessagePlugin.info('该账单当前无需支付');
         await router.replace({
           path: '/client/invoices',
-          query: { detail: String(invoiceId.value) },
         });
         return;
       }
@@ -650,12 +708,7 @@ export function useInvoiceDetail() {
 
       if (alipayQrCode.value) {
         MessagePlugin.success(`${selectedPayMethodName.value}二维码已生成`);
-        clearPollingTimer();
-        pollTimer.value = window.setInterval(() => {
-          if (!polling.value && alipayPollingReady.value) {
-            void pollAlipayStatus(true);
-          }
-        }, 5000);
+        startPolling();
       }
     } catch (error: unknown) {
       MessagePlugin.error(getErrorMessage(error, `生成${selectedPayMethodName.value}二维码失败`));
@@ -715,8 +768,9 @@ export function useInvoiceDetail() {
     },
   );
 
-  onMounted(() => {
-    void loadDetail();
+  onMounted(async () => {
+    await loadDetail();
+    restoreAlipayPolling();
   });
 
   onBeforeUnmount(() => {

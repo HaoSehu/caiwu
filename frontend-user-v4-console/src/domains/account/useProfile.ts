@@ -217,6 +217,10 @@ export function useProfile() {
       MessagePlugin.warning('请输入新密码');
       return;
     }
+    if (resetForm.password.length < 6) {
+      MessagePlugin.warning('新密码至少 6 位');
+      return;
+    }
     if (resetForm.password !== resetForm.confirmPassword) {
       MessagePlugin.warning('两次密码输入不一致');
       return;
@@ -516,6 +520,10 @@ export function useProfile() {
   async function changePassword() {
     if (!passwordForm.oldPassword || !passwordForm.newPassword) {
       MessagePlugin.warning('请填写完整密码信息');
+      return;
+    }
+    if (passwordForm.newPassword.length < 6) {
+      MessagePlugin.warning('新密码至少 6 位');
       return;
     }
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {

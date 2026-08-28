@@ -672,6 +672,23 @@ const quickLinks = [
   { label: '推广大使', path: '/client/referral', icon: GiftIcon },
 ];
 
+// 分页穷尽拉取：图表聚合依赖全量数据，单页截断会导致金额少算（上限防失控）
+async function fetchAllPagedList<T>(
+  fetcher: (params: { page: number; page_size: number }) => Promise<{ data: { list?: T[] } | T[] | null | undefined }>,
+  extraParams: Record<string, unknown> = {},
+  maxPages = 20,
+): Promise<T[]> {
+  const pageSize = 200;
+  const rows: T[] = [];
+  for (let page = 1; page <= maxPages; page += 1) {
+    const res = await fetcher({ page, page_size: pageSize, ...extraParams });
+    const list = resolvePagedList(res.data);
+    rows.push(...list);
+    if (list.length < pageSize) break;
+  }
+  return rows;
+}
+
 async function loadDashboard() {
   loading.value = true;
   const currentYear = new Date().getFullYear();
@@ -738,29 +755,33 @@ async function loadDashboard() {
     // 这些数据不阻塞首屏显示，提升感知速度
     async function loadSecondaryData() {
       try {
-        const [helpRes, _unreadRes, balanceLogsRes, paidInvoicesRes] = await Promise.allSettled([
+        const [helpRes, _unreadRes, balanceLogsRows, paidInvoicesRows] = await Promise.allSettled([
           clientApi.helpArticles({ page: 1, page_size: 10 }),
           fetchUnreadCount(true),
-          clientApi.balanceLogs({ ...last7DaysRange(), page_size: 200 }),
-          clientApi.invoices({
-            page: 1,
-            page_size: 100,
-            status: 1,
-            start_date: `${currentYear}-01-01`,
-            end_date: `${currentYear}-12-31`,
-          }),
+          fetchAllPagedList<BalanceLog>((params) => clientApi.balanceLogs({ ...last7DaysRange(), ...params }), {}, 10),
+          fetchAllPagedList<InvoiceRecord>(
+            (params) =>
+              clientApi.invoices({
+                status: 1,
+                start_date: `${currentYear}-01-01`,
+                end_date: `${currentYear}-12-31`,
+                ...params,
+              }),
+            {},
+            20,
+          ),
         ]);
 
         if (helpRes.status === 'fulfilled') {
           recentHelpArticles.value = resolvePagedList(helpRes.value.data);
         }
-        if (balanceLogsRes.status === 'fulfilled') {
-          balanceLogsDaily.value = resolvePagedList(balanceLogsRes.value.data);
+        if (balanceLogsRows.status === 'fulfilled') {
+          balanceLogsDaily.value = balanceLogsRows.value;
           balanceLogsLoaded.value = true;
         }
 
-        if (paidInvoicesRes.status === 'fulfilled') {
-          paidInvoices.value = resolvePagedList(paidInvoicesRes.value.data);
+        if (paidInvoicesRows.status === 'fulfilled') {
+          paidInvoices.value = paidInvoicesRows.value;
           invoicesLoaded.value = true;
         }
       } catch (error) {
@@ -883,7 +904,7 @@ onMounted(() => {
   }
 
   &.is-warning {
-    color: var(--td-warning-color);
+    color: var(--td-warning-color-9);
   }
 }
 
@@ -906,13 +927,18 @@ onMounted(() => {
   cursor: pointer;
   text-decoration: none;
   transition:
-    border-color var(--td-anim-duration-base) var(--td-anim-time-fn-easing),
-    background-color var(--td-anim-duration-base) var(--td-anim-time-fn-easing),
-    color var(--td-anim-duration-base) var(--td-anim-time-fn-easing);
+    border-color @anim-duration-base @anim-time-fn-easing,
+    background-color @anim-duration-base @anim-time-fn-easing,
+    color @anim-duration-base @anim-time-fn-easing;
 
   &:focus-visible {
     outline: var(--td-size-1) solid var(--td-brand-color);
     outline-offset: calc(var(--td-size-1) * 0.5);
+  }
+
+  &:active {
+    background: var(--td-bg-color-secondarycontainer);
+    border-color: var(--td-brand-color);
   }
 }
 
@@ -1053,7 +1079,7 @@ onMounted(() => {
 .bar-chart__label {
   position: absolute;
   bottom: calc(var(--td-comp-margin-l) * -1);
-  color: var(--td-text-color-placeholder);
+  color: var(--td-text-color-secondary);
   font: var(--td-font-body-small);
 }
 
@@ -1178,7 +1204,7 @@ onMounted(() => {
   font: var(--td-font-title-small);
 
   &.is-alert {
-    color: var(--td-error-color);
+    color: var(--td-error-color-8);
   }
 }
 

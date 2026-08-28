@@ -8,7 +8,12 @@
         :variant="filters.quickFilter === item.key ? 'outline' : 'light'"
         :theme="filters.quickFilter === item.key ? 'primary' : 'default'"
         class="quick-filter-tag"
+        role="button"
+        tabindex="0"
+        :aria-pressed="filters.quickFilter === item.key"
         @click="applyQuickFilter(item.key)"
+        @keydown.enter.prevent="applyQuickFilter(item.key)"
+        @keydown.space.prevent="applyQuickFilter(item.key)"
       >
         {{ item.label }}
       </t-tag>
@@ -39,11 +44,21 @@
     </t-card>
 
     <section class="record-list-card">
-      <data-state :loading="loading" :empty="!list.length" description="暂无订单记录">
+      <data-state
+        :loading="loading"
+        :empty="!loading && !loadError && !list.length"
+        :error="!loading && loadError"
+        :error-text="loadErrorText"
+        description="暂无订单记录"
+        @retry="loadList"
+      >
+        <template #empty-action>
+          <t-button theme="primary" @click="router.push('/client/catalog')">去产品目录选购</t-button>
+        </template>
         <t-table class="record-table" row-key="id" :data="list" :columns="columns" :pagination="null" hover>
           <template #order="{ row }">
             <div class="stack-cell">
-              <strong>{{ row.order_no || '--' }}</strong>
+              <strong :title="row.order_no">{{ row.order_no || '--' }}</strong>
               <span>{{ row.type_label || '--' }}</span>
             </div>
           </template>
@@ -73,7 +88,7 @@
             </div>
             <span v-else>--</span>
           </template>
-          <template #created_at="{ row }">{{ row.created_at || '--' }}</template>
+          <template #created_at="{ row }">{{ formatDateTime(row.created_at) }}</template>
           <template #operation="{ row }">
             <t-space>
               <t-button size="small" theme="primary" variant="text" @click="router.push(`/client/orders/${row.id}`)">
@@ -107,7 +122,11 @@
             v-for="row in list"
             :key="row.id"
             class="record-mobile-card"
+            role="link"
+            tabindex="0"
+            :aria-label="`查看订单 ${row.order_no || row.id} 详情`"
             @click="router.push(`/client/orders/${row.id}`)"
+            @keydown.enter.prevent="router.push(`/client/orders/${row.id}`)"
           >
             <div class="record-mobile-card__head">
               <strong>{{ row.order_no || '--' }}</strong>
@@ -116,11 +135,11 @@
             <div class="stack-cell">
               <strong>{{ orderProductDisplay(row) }}</strong>
               <span>{{ row.type_label || '--' }}</span>
-              <span>¥{{ formatMoney(row.amount) }}</span>
+              <span class="stack-money">¥{{ formatMoney(row.amount) }}</span>
             </div>
             <div class="record-mobile-card__meta">
               <span v-if="row.invoice">账单: {{ row.invoice.invoice_no || '--' }}</span>
-              <span>{{ row.created_at || '--' }}</span>
+              <span>{{ formatDateTime(row.created_at) }}</span>
             </div>
             <div class="record-mobile-card__actions">
               <t-button
@@ -184,6 +203,7 @@ import {
   orderProductDisplay,
   useOrderList,
 } from '@/domains/finance/useOrders';
+import { formatDateTime } from '@/utils/format';
 
 const router = useRouter();
 
@@ -193,6 +213,8 @@ const {
   list,
   total,
   filters,
+  loadError,
+  loadErrorText,
   loadList,
   handleSearch,
   handlePageSizeChange,
@@ -210,7 +232,7 @@ const quickFilters = [
 const columns: PrimaryTableCol[] = [
   { colKey: 'order', title: '订单号', minWidth: '12rem' },
   { colKey: 'product', title: '产品/服务', minWidth: '12rem' },
-  { colKey: 'amount', title: '金额', width: '9rem' },
+  { colKey: 'amount', title: '金额', width: '9rem', align: 'right' },
   { colKey: 'status', title: '状态', width: '8rem' },
   { colKey: 'invoice_ref', title: '关联账单', minWidth: '12rem' },
   { colKey: 'created_at', title: '创建时间', minWidth: '12rem' },
@@ -220,21 +242,10 @@ const columns: PrimaryTableCol[] = [
 <style scoped lang="less">
 @import '../record-page.less';
 
-.quick-filter-tags {
-  display: flex;
-  gap: var(--td-comp-margin-s);
-  margin-bottom: var(--td-comp-margin-m);
-  flex-wrap: wrap;
-}
-
-.quick-filter-tag {
-  cursor: pointer;
-  user-select: none;
-}
-
 .order-money {
   color: var(--td-text-color-primary);
   font: var(--td-font-body-medium);
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 </style>
