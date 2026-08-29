@@ -169,6 +169,15 @@ export function flattenSnapshot(
     }
   }
 
+  // 确保“合计金额 / total_amount”始终排在最后
+  result.sort((a, b) => {
+    const isTotalA = a.label === '合计金额' || a.label.includes('合计金额');
+    const isTotalB = b.label === '合计金额' || b.label.includes('合计金额');
+    if (isTotalA && !isTotalB) return 1;
+    if (!isTotalA && isTotalB) return -1;
+    return 0;
+  });
+
   return result;
 }
 
@@ -233,14 +242,6 @@ function formatSnapshotValue(value: unknown, key = ''): string {
   if (key === 'memory' && /^\d+(?:\.\d+)?$/.test(raw)) return `${raw} MB`;
   if (['ip_num', 'ipv6_num', 'quantity'].includes(key) && /^\d+(?:\.\d+)?$/.test(raw)) return `${raw} 个`;
   return raw;
-}
-
-export function resolveOrderTagTheme(status: unknown) {
-  const value = Number(status);
-  if (value === 1 || value === 3) return 'success';
-  if (value === 0 || value === 2) return 'warning';
-  if (value === 4) return 'default';
-  return 'danger';
 }
 
 export function resolvePaymentStatusLabel(status: unknown) {

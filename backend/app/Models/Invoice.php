@@ -236,11 +236,6 @@ class Invoice extends Model
         return $query->where('status', 0);
     }
 
-    public function scopeOverdue($query)
-    {
-        return $query->where('status', 3);
-    }
-
     public function syncInvoiceItemProjection(): void
     {
         if (! $this->exists || ! Schema::hasTable('invoice_items')) {

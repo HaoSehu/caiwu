@@ -65,7 +65,7 @@ class OrderService
             $lockedOrder->setRelation('invoice', $invoice);
             if ($invoice instanceof Invoice) {
                 throw_if(
-                    ! in_array((int) $invoice->status, [InvoiceStatus::UNPAID, InvoiceStatus::OVERDUE, InvoiceStatus::CANCELLED], true),
+                    ! in_array((int) $invoice->status, [InvoiceStatus::UNPAID, InvoiceStatus::CANCELLED], true),
                     new BusinessException('当前账单状态不支持取消订单')
                 );
 
@@ -90,7 +90,7 @@ class OrderService
                     $callbackRaw['trace_id'] = (string) ($context['trace_id'] ?? '');
 
                     $pendingPayment->forceFill([
-                        'status' => PaymentStatus::FAILED,
+                        'status' => PaymentStatus::CANCELLED,
                         'callback_raw' => $callbackRaw,
                     ])->save();
                     $this->paymentService->syncProjection($pendingPayment);
@@ -169,7 +169,7 @@ class OrderService
 
         if (
             $freshOrder->invoice instanceof Invoice
-            && ! in_array((int) $freshOrder->invoice->status, [InvoiceStatus::UNPAID, InvoiceStatus::OVERDUE, InvoiceStatus::CANCELLED], true)
+            && ! in_array((int) $freshOrder->invoice->status, [InvoiceStatus::UNPAID, InvoiceStatus::CANCELLED], true)
         ) {
             return $freshOrder;
         }
@@ -291,7 +291,7 @@ class OrderService
         throw_if(! $invoice instanceof Invoice, new BusinessException('订单未关联账单，无法修改支付状态'));
         throw_if((int) $order->status !== OrderStatus::PENDING, new BusinessException('仅待支付订单支持手动设为已支付'));
         throw_if(
-            ! in_array((int) $invoice->status, [InvoiceStatus::UNPAID, InvoiceStatus::OVERDUE], true),
+            ! in_array((int) $invoice->status, [InvoiceStatus::UNPAID], true),
             new BusinessException('当前账单状态不支持手动设为已支付')
         );
 
@@ -312,12 +312,23 @@ class OrderService
         throw_if(abs($requestedAmount - $payableAmount) > 0.00001, new BusinessException('当前仅支持按账单应付金额全额入账'));
 
         DB::transaction(function () use ($order, $invoice, $paidAt, $paidAmount, $payableAmount, $paymentGateway, $tradeNo, $remark, $context) {
+            $traceId = (string) ($context['trace_id'] ?? '');
             Payment::query()
                 ->where('invoice_id', $invoice->id)
                 ->where('status', PaymentStatus::PENDING)
-                ->update([
-                    'status' => PaymentStatus::FAILED,
-                ]);
+                ->lockForUpdate()
+                ->get()
+                ->each(function (Payment $payment) use ($traceId): void {
+                    $callbackRaw = (array) ($payment->callback_raw ?? []);
+                    $callbackRaw['closed_reason'] = 'order_paid_manually';
+                    $callbackRaw['trace_id'] = $traceId;
+
+                    $payment->forceFill([
+                        'status' => PaymentStatus::CANCELLED,
+                        'callback_raw' => $callbackRaw,
+                    ])->save();
+                    $this->paymentService->syncProjection($payment);
+                });
 
             // 补一条 manual Payment 审计记录，保留 trade_no 与入账信息，
             // 供 markUnpaidManually 回退判定与财务对账追溯。
@@ -430,13 +441,15 @@ class OrderService
         $remark = trim((string) ($payload['remark'] ?? ''));
 
         DB::transaction(function () use ($order, $invoice, $manualSuccessPayments) {
-            $payments = $manualSuccessPayments->get();
-            $manualSuccessPayments->update([
-                'status' => PaymentStatus::FAILED,
-                'paid_at' => null,
-            ]);
-            foreach ($payments as $payment) {
-                $payment->refresh();
+            foreach ($manualSuccessPayments->get() as $payment) {
+                $callbackRaw = (array) ($payment->callback_raw ?? []);
+                $callbackRaw['closed_reason'] = 'manual_payment_reversed';
+
+                $payment->forceFill([
+                    'status' => PaymentStatus::CANCELLED,
+                    'paid_at' => null,
+                    'callback_raw' => $callbackRaw,
+                ])->save();
                 $this->paymentService->syncProjection($payment);
             }
 

@@ -59,7 +59,6 @@ class SettingsSeeder
             'invoice_unpaid_reminder_enabled' => '1',
             'invoice_unpaid_before_due_days' => '3',
             'invoice_overdue_reminder_days' => '3',
-            'invoice_overdue_after_days' => '7',
             'ticket_auto_close_enabled' => '1',
             'ticket_auto_close_after_hours' => '72',
             'ticket_auto_close_schedule_mode' => 'daily',

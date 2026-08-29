@@ -35,7 +35,6 @@ class BillingAutomationService
             'renew_orders_created' => $this->createRenewOrders($config),
             'invoice_pre_due_sent' => $this->sendInvoiceBeforeDueReminders($config),
             'invoice_overdue_sent' => $this->sendInvoiceOverdueReminders($config),
-            'invoices_marked_overdue' => $this->markInvoicesOverdue($config),
         ];
 
         // 续费履约补偿：检查已支付但 fulfillment_pending 未清除的账单
@@ -424,7 +423,7 @@ class BillingAutomationService
 
         $invoices = Invoice::query()
             ->with(['user:id,email,nickname', 'order.product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires'])
-            ->whereIn('status', [InvoiceStatus::UNPAID, InvoiceStatus::OVERDUE])
+            ->where('status', InvoiceStatus::UNPAID)
             ->whereNotNull('due_date')
             ->get();
 
@@ -473,22 +472,6 @@ class BillingAutomationService
         }
 
         return $count;
-    }
-
-    // ─── 未付款账单标为逾期 ───────────────────────────────────────────────────
-
-    private function markInvoicesOverdue(array $config): int
-    {
-        $graceDays = $config['invoice_overdue_after_days'];
-
-        // due_date 当天不算逾期，需要严格晚于 due_date（加上宽限天数）才标记
-        $threshold = now()->subDays($graceDays)->toDateString();
-
-        return Invoice::query()
-            ->where('status', InvoiceStatus::UNPAID)
-            ->whereNotNull('due_date')
-            ->where('due_date', '<', $threshold)   // 严格小于，避免到期当天被误标
-            ->update(['status' => InvoiceStatus::OVERDUE]);
     }
 
     // ─── 公共邮件发送 ──────────────────────────────────────────────────────────

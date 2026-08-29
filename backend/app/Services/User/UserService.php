@@ -308,7 +308,7 @@ class UserService
 
         $unpaidInvoiceCount = Invoice::query()
             ->where('user_id', (int) $user->id)
-            ->whereIn('status', [InvoiceStatus::UNPAID, InvoiceStatus::OVERDUE])
+            ->where('status', InvoiceStatus::UNPAID)
             ->count();
         throw_if($unpaidInvoiceCount > 0, new BusinessException('该用户存在未付账单，请先处理账单后再删除'));
 
@@ -1107,7 +1107,6 @@ class UserService
     {
         return match ($status) {
             PaymentStatus::SUCCESS => '已支付',
-            PaymentStatus::FAILED => '失败',
             PaymentStatus::REFUNDED => '已退款',
             PaymentStatus::CANCELLED => '已取消',
             default => '未支付',

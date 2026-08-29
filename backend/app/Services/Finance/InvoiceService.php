@@ -344,7 +344,7 @@ class InvoiceService
             ])->values()->all(),
             'items' => $this->buildInvoiceItems($invoice, $scene),
             'logs' => $this->buildInvoiceLogs($invoice, $scene),
-            'can_cancel' => in_array((int) $invoice->status, [InvoiceStatus::UNPAID, InvoiceStatus::OVERDUE], true),
+            'can_cancel' => in_array((int) $invoice->status, [InvoiceStatus::UNPAID], true),
         ];
     }
 
@@ -440,6 +440,8 @@ class InvoiceService
             'scene' => $scene,
             'amount' => number_format((float) $invoice->amount, 2, '.', ''),
             'discount' => number_format((float) ($invoice->discount ?? 0), 2, '.', ''),
+            'member_discount_amount' => number_format((float) ($invoice->member_discount_amount ?? 0), 2, '.', ''),
+            'member_discount_snapshot' => (array) ($invoice->member_discount_snapshot ?? []),
             'paid_amount' => number_format((float) ($invoice->paid_amount ?? 0), 2, '.', ''),
             'payable_amount' => number_format(max((float) $invoice->amount - (float) ($invoice->paid_amount ?? 0), 0), 2, '.', ''),
             'status' => (int) $displayStatus['status'],
@@ -451,6 +453,9 @@ class InvoiceService
             'paid_at' => $invoice->paid_at?->format('Y-m-d H:i:s'),
             'created_at' => $invoice->created_at?->format('Y-m-d H:i:s'),
             'updated_at' => $invoice->updated_at?->format('Y-m-d H:i:s'),
+            'config_snapshot' => (array) ($invoice->config_snapshot ?? ($invoice->order?->config_snapshot ?? [])),
+            'config_pricing_snapshot' => (array) ($invoice->config_pricing_snapshot ?? ($invoice->order?->config_pricing_snapshot ?? [])),
+            'coupon_snapshot' => (array) ($invoice->coupon_snapshot ?? []),
             'payment_summary' => $paymentSummary,
             'payments' => $this->thirdPartyPayments($invoice->payments)->map(fn ($p) => [
                 'id' => (int) $p->id,
@@ -991,7 +996,6 @@ class InvoiceService
     {
         return match ($status) {
             PaymentStatus::SUCCESS => '已支付',
-            PaymentStatus::FAILED => '失败',
             PaymentStatus::REFUNDED => '已退款',
             PaymentStatus::CANCELLED => '已取消',
             default => '未支付',
@@ -1158,7 +1162,7 @@ class InvoiceService
                 ->findOrFail((int) $invoice->id);
 
             throw_if(
-                ! in_array((int) $lockedInvoice->status, [InvoiceStatus::UNPAID, InvoiceStatus::OVERDUE], true),
+                ! in_array((int) $lockedInvoice->status, [InvoiceStatus::UNPAID], true),
                 new BusinessException('当前账单状态不支持手动入账')
             );
 
@@ -1177,7 +1181,7 @@ class InvoiceService
                     $callbackRaw['trace_id'] = $traceId !== '' ? $traceId : (string) ($payment->trace_id ?? '');
 
                     $payment->forceFill([
-                        'status' => PaymentStatus::FAILED,
+                        'status' => PaymentStatus::CANCELLED,
                         'callback_raw' => $callbackRaw,
                     ])->save();
                     app(PaymentService::class)->syncProjection($payment);

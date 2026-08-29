@@ -114,7 +114,7 @@
             <div v-if="paymentNo || rechargePaid" class="mobile-payment-meta">
               <div class="meta-row">
                 <span>支付状态</span>
-                <strong>{{ rechargePaid ? '充值成功' : '待支付' }}</strong>
+                <strong>{{ rechargePaid ? '已支付' : '待支付' }}</strong>
               </div>
               <div class="meta-row">
                 <span>商家订单号</span>

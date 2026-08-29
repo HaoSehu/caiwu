@@ -6,6 +6,7 @@ namespace App\Services\Finance;
 
 use App\Constants\InvoiceStatus;
 use App\Constants\InvoiceType;
+use App\Constants\PaymentStatus;
 use App\Models\Invoice;
 use App\Models\Product;
 use Carbon\CarbonImmutable;
@@ -77,7 +78,7 @@ class InvoiceV2QueryService
     {
         if (($filters['status'] ?? null) === InvoiceStatus::REFUNDED) {
             $query->where(function (Builder $builder): void {
-                $builder->whereHas('payments', fn (Builder $paymentQuery): Builder => $paymentQuery->where('status', 3))
+                $builder->whereHas('payments', fn (Builder $paymentQuery): Builder => $paymentQuery->where('status', PaymentStatus::REFUNDED))
                     ->orWhere('status', InvoiceStatus::REFUNDED);
             });
         } elseif (array_key_exists('status', $filters) && $filters['status'] !== null && $filters['status'] !== '') {

@@ -3001,12 +3001,6 @@ parameters:
 			path: app/Services/Finance/CheckoutService.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Invoice\:\:\$overdue\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Finance/ClientInvoicePaymentWorkflowService.php
-
-		-
 			message: '#^Access to an undefined property App\\Models\\Invoice\:\:\$paid\.$#'
 			identifier: property.notFound
 			count: 1
@@ -3052,12 +3046,6 @@ parameters:
 			message: '#^Using nullsafe property access "\?\-\>config_options" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 2
-			path: app/Services/Finance/ClientInvoicePaymentWorkflowService.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>overdue" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
 			path: app/Services/Finance/ClientInvoicePaymentWorkflowService.php
 
 		-
@@ -3783,12 +3771,6 @@ parameters:
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$user_id\.$#'
 			identifier: property.notFound
-			count: 1
-			path: app/Services/Finance/PaymentService.php
-
-		-
-			message: '#^Method App\\Services\\Finance\\PaymentService\:\:markExpiredInvoicePaymentFailed\(\) is unused\.$#'
-			identifier: method.unused
 			count: 1
 			path: app/Services/Finance/PaymentService.php
 

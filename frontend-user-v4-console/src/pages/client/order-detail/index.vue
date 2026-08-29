@@ -337,6 +337,7 @@ onMounted(() => {
 .detail-kv-item {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: var(--td-comp-margin-xxs);
 
   span {

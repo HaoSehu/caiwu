@@ -34,6 +34,10 @@ class ClientInvoiceDetailResource extends AdminInvoiceSummaryResource
                 'product_display_name' => (string) ($invoice['product_display_name'] ?? ''),
                 'combined_display_name' => (string) ($invoice['combined_display_name'] ?? ''),
                 'product_full_path' => (string) ($invoice['product_full_path'] ?? ''),
+                'member_discount_amount' => (string) ($invoice['member_discount_amount'] ?? '0.00'),
+                'member_discount_snapshot' => is_array($invoice['member_discount_snapshot'] ?? null)
+                    ? $invoice['member_discount_snapshot']
+                    : null,
                 'summary' => $this->summary($invoice['summary'] ?? null),
             ],
             'financial' => [

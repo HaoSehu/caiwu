@@ -23,7 +23,8 @@ class CheckoutSecurityService
 
     private const ORDER_FINGERPRINT_TTL_SECONDS = 180;
 
-    private const PAYMENT_SESSION_TTL_SECONDS = 300;
+    // 开发测试期间临时放宽为 1 年，避免支付会话频繁过期；上线前恢复 300
+    private const PAYMENT_SESSION_TTL_SECONDS = 31536000;
 
     /**
      * 所有 checkout 临时数据使用 volatile store（Redis DB 2），与业务缓存隔离。
@@ -279,7 +280,7 @@ class CheckoutSecurityService
     public function issueInvoicePaymentSession(Invoice $invoice, int $userId): array
     {
         $payableAmount = $this->resolveInvoicePayableAmount($invoice);
-        if (! in_array((int) $invoice->status, [InvoiceStatus::UNPAID, InvoiceStatus::OVERDUE], true)) {
+        if ((int) $invoice->status !== InvoiceStatus::UNPAID) {
             return [
                 'session_token' => '',
                 'expires_at' => null,

@@ -2174,7 +2174,7 @@ function isCancelableInvoice(row: Row) {
   const orderId = Number(row?.order?.id || row?.order_id || 0);
   const orderStatus = Number(row?.order?.status ?? 0);
   const invoiceStatus = Number(row?.status ?? -1);
-  return orderId > 0 && orderStatus === 0 && [0, 3].includes(invoiceStatus);
+  return orderId > 0 && orderStatus === 0 && [0].includes(invoiceStatus);
 }
 
 function handleCancelInvoice(row: Row) {

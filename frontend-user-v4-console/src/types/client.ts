@@ -1079,6 +1079,9 @@ export interface InvoiceRecord {
   combined_display_name?: string;
   product_display_name?: string;
   product_spec_display?: string;
+  product_full_path?: string;
+  member_discount_amount?: number | string;
+  member_discount_snapshot?: Record<string, unknown> | null;
   payment_no?: string;
   coupon_code?: string;
   payment_summary?: PaymentSummary | null;

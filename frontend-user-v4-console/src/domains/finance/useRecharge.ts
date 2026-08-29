@@ -120,7 +120,7 @@ export function useRecharge() {
     return paymentPayload.value ? '刷新支付二维码' : `生成${selectedPaymentGatewayName.value}二维码`;
   });
   const qrCodeTitle = computed(() => {
-    if (rechargePaid.value) return '充值成功，余额已刷新';
+    if (rechargePaid.value) return '已支付，余额已刷新';
     return qrCodeValue.value ? `请使用${selectedPaymentGatewayName.value}扫码支付` : '支付二维码待生成';
   });
   const qrCodeSubtitle = computed(() => {

@@ -78,7 +78,7 @@ class PaymentService
                     ->findOrFail($user->id);
 
                 throw_if(
-                    ! in_array((int) $lockedInvoice->status, [InvoiceStatus::UNPAID, InvoiceStatus::OVERDUE], true),
+                    ! in_array((int) $lockedInvoice->status, [InvoiceStatus::UNPAID], true),
                     new BusinessException('账单状态异常，无法支付')
                 );
 
@@ -631,7 +631,7 @@ class PaymentService
                     ->findOrFail($invoice->id);
 
                 throw_if(
-                    ! in_array((int) $lockedInvoice->status, [InvoiceStatus::UNPAID, InvoiceStatus::OVERDUE], true),
+                    ! in_array((int) $lockedInvoice->status, [InvoiceStatus::UNPAID], true),
                     new BusinessException('账单状态异常，无法支付')
                 );
 
@@ -808,7 +808,7 @@ class PaymentService
                     ->findOrFail($user->id);
 
                 throw_if(
-                    ! in_array((int) $lockedInvoice->status, [InvoiceStatus::UNPAID, InvoiceStatus::OVERDUE], true),
+                    ! in_array((int) $lockedInvoice->status, [InvoiceStatus::UNPAID], true),
                     new BusinessException('账单状态异常，无法支付')
                 );
 
@@ -1086,7 +1086,7 @@ class PaymentService
                     }
 
                     throw_if(
-                        ! in_array((int) $invoice->status, [InvoiceStatus::UNPAID, InvoiceStatus::OVERDUE], true),
+                        ! in_array((int) $invoice->status, [InvoiceStatus::UNPAID], true),
                         new BusinessException('账单状态异常，无法处理支付回调')
                     );
 
@@ -1292,7 +1292,7 @@ class PaymentService
                         return ['dispatch' => false, 'invoice' => $invoice, 'payment_no' => (string) $lockedPayment->payment_no];
                     }
 
-                    // 已取消账单 → 标记 FAILED
+                    // 已取消账单 → 关闭支付并转余额
                     if ((int) $invoice->status === InvoiceStatus::CANCELLED) {
                         $this->restoreReservedMixBalance($lockedPayment, [
                             'closed_reason' => 'cancelled_invoice_captured',
@@ -1325,7 +1325,7 @@ class PaymentService
 
                     // 正常未支付 → 完成入账
                     throw_if(
-                        ! in_array((int) $invoice->status, [InvoiceStatus::UNPAID, InvoiceStatus::OVERDUE], true),
+                        ! in_array((int) $invoice->status, [InvoiceStatus::UNPAID], true),
                         new BusinessException('账单状态异常，无法处理支付')
                     );
 
@@ -1626,7 +1626,7 @@ class PaymentService
 
                 throw_if((int) $lockedInvoice->user_id !== (int) $lockedUser->id, new BusinessException('账单与用户不匹配'));
                 throw_if(
-                    ! in_array((int) $lockedInvoice->status, [InvoiceStatus::PAID, InvoiceStatus::PARTIALLY_REFUNDED], true),
+                    ! in_array((int) $lockedInvoice->status, [InvoiceStatus::PAID], true),
                     new BusinessException('当前账单状态不支持退款')
                 );
 
@@ -1759,13 +1759,6 @@ class PaymentService
                     $this->referralService->reverseRewardForRefundedInvoice(
                         $lockedInvoice,
                         $refundTraceId !== '' ? "refund:{$refundTraceId}" : "refund:invoice:{$lockedInvoice->id}",
-                    );
-                } else {
-                    $this->markInvoicePartiallyRefunded(
-                        $lockedInvoice,
-                        $refundMethod,
-                        $this->completedRefundAmount($lockedInvoice),
-                        $context,
                     );
                 }
 
@@ -2292,35 +2285,11 @@ class PaymentService
             $callbackRaw['closed_reason'] = $reason;
 
             $pendingPayment->forceFill([
-                'status' => PaymentStatus::FAILED,
+                'status' => PaymentStatus::CANCELLED,
                 'callback_raw' => $callbackRaw,
             ])->save();
             $this->syncProjection($pendingPayment);
         }
-    }
-
-    private function markExpiredInvoicePaymentFailed(Invoice $invoice, Payment $payment, string $tradeNo, array $raw): void
-    {
-        if (! $this->restoreReservedMixBalance($payment, [
-            'closed_reason' => 'payment_window_expired',
-            'suppress_logs' => true,
-        ])) {
-            $payment->forceFill([
-                'trade_no' => $tradeNo,
-                'status' => PaymentStatus::FAILED,
-                'callback_raw' => array_merge($raw, [
-                    'payment_window_expired' => true,
-                    'ignored_business_update' => true,
-                ]),
-            ])->save();
-            $this->syncProjection($payment);
-        }
-
-        $invoice->forceFill(['status' => InvoiceStatus::CANCELLED])->save();
-        $this->cancelLinkedPendingOrderForInvoice($invoice);
-        $this->couponService->releaseInvoiceCoupon($invoice);
-        $this->restoreStockForCancelledInvoice($invoice);
-        $this->closeOtherPendingPayments($invoice, (int) $payment->id, 'payment_window_expired', true);
     }
 
     private function cancelExpiredInvoiceAfterCapturedPayment(Invoice $invoice, Payment $payment): void
@@ -2476,7 +2445,7 @@ class PaymentService
             $callbackRaw['closed_reason'] = $reason;
 
             $pendingPayment->forceFill([
-                'status' => PaymentStatus::FAILED,
+                'status' => PaymentStatus::CANCELLED,
                 'callback_raw' => $callbackRaw,
             ])->save();
             $this->syncProjection($pendingPayment);
@@ -2757,7 +2726,7 @@ class PaymentService
                 'callback_raw' => $callbackRaw,
             ];
             if ($markPaymentFailed) {
-                $paymentPayload['status'] = PaymentStatus::FAILED;
+                $paymentPayload['status'] = PaymentStatus::CANCELLED;
             }
 
             $lockedPayment->forceFill($paymentPayload)->save();
@@ -3012,22 +2981,6 @@ class PaymentService
         } elseif ($traceId !== '' && SchemaMetadataCache::hasColumn('invoices', 'trace_id')) {
             $payload['trace_id'] = $traceId;
         }
-
-        $invoice->forceFill($payload)->save();
-    }
-
-    private function markInvoicePartiallyRefunded(
-        Invoice $invoice,
-        string $refundMethod,
-        float $refundAmount,
-        array $context = [],
-    ): void {
-        $payload = [
-            'status' => InvoiceStatus::PARTIALLY_REFUNDED,
-            'refund_amount' => number_format(round($refundAmount, 2), 2, '.', ''),
-            'refund_method' => trim($refundMethod) !== '' ? trim($refundMethod) : 'balance',
-            'refund_trace_id' => trim((string) ($context['trace_id'] ?? '')) ?: null,
-        ];
 
         $invoice->forceFill($payload)->save();
     }

@@ -111,14 +111,13 @@ export const INVOICE_TYPE_MAP = {
 };
 
 // ===================== 账单/发票状态 =====================
+// 4 态：待支付 / 已支付 / 已取消 / 已退款，与订单同构。
 
 export const INVOICE_STATUS = {
   UNPAID: 0, // 待支付
   PAID: 1, // 已支付
-  CANCELLED: 2, // 已取消
-  OVERDUE: 3, // 已逾期
+  CANCELLED: 4, // 已取消
   REFUNDED: 5, // 已退款
-  PARTIALLY_REFUNDED: 6, // 部分退款
 };
 
 export const INVOICE_STATUS_MAP = {
@@ -132,7 +131,7 @@ export const INVOICE_STATUS_MAP = {
     label: "已支付",
     color: STATUS_COLORS.blue,
     tagType: "primary",
-    icon: "Select",
+    icon: "CreditCard",
   },
   [INVOICE_STATUS.CANCELLED]: {
     label: "已取消",
@@ -140,34 +139,22 @@ export const INVOICE_STATUS_MAP = {
     tagType: "info",
     icon: "CircleClose",
   },
-  [INVOICE_STATUS.OVERDUE]: {
-    label: "已逾期",
-    color: STATUS_COLORS.danger,
-    tagType: "danger",
-    icon: "WarningFilled",
-  },
   [INVOICE_STATUS.REFUNDED]: {
     label: "已退款",
     color: STATUS_COLORS.danger,
     tagType: "danger",
     icon: "RefreshLeft",
   },
-  [INVOICE_STATUS.PARTIALLY_REFUNDED]: {
-    label: "部分退款",
-    color: STATUS_COLORS.warning,
-    tagType: "warning",
-    icon: "RefreshLeft",
-  },
 };
 
 // ===================== 第三方支付状态 =====================
+// 4 态：待支付 / 已支付 / 已取消 / 已退款，与订单同构。
 
 export const PAYMENT_STATUS = {
   PENDING: 0, // 待支付
-  PAID: 1, // 成功
-  FAILED: 2, // 失败
-  REFUNDED: 3, // 已退款
+  SUCCESS: 1, // 已支付
   CANCELLED: 4, // 已取消
+  REFUNDED: 5, // 已退款
 };
 
 export const PAYMENT_STATUS_MAP = {
@@ -177,16 +164,16 @@ export const PAYMENT_STATUS_MAP = {
     tagType: "warning",
     icon: "Clock",
   },
-  [PAYMENT_STATUS.PAID]: {
-    label: "成功",
+  [PAYMENT_STATUS.SUCCESS]: {
+    label: "已支付",
     color: STATUS_COLORS.blue,
     tagType: "primary",
-    icon: "Select",
+    icon: "CreditCard",
   },
-  [PAYMENT_STATUS.FAILED]: {
-    label: "失败",
-    color: STATUS_COLORS.danger,
-    tagType: "danger",
+  [PAYMENT_STATUS.CANCELLED]: {
+    label: "已取消",
+    color: STATUS_COLORS.info,
+    tagType: "info",
     icon: "CircleClose",
   },
   [PAYMENT_STATUS.REFUNDED]: {
@@ -194,12 +181,6 @@ export const PAYMENT_STATUS_MAP = {
     color: STATUS_COLORS.danger,
     tagType: "danger",
     icon: "RefreshLeft",
-  },
-  [PAYMENT_STATUS.CANCELLED]: {
-    label: "已取消",
-    color: STATUS_COLORS.info,
-    tagType: "info",
-    icon: "CircleClose",
   },
 };
 

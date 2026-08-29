@@ -75,7 +75,7 @@
                 </div>
               </div>
             </template>
-            <t-badge :count="inboxUnread" :offset="[-2, 2]" size="small">
+            <t-badge :count="inboxUnread" :offset="[4, 4]" size="small">
               <t-button theme="default" shape="square" variant="text" title="站内信">
                 <template #icon><notification-icon /></template>
               </t-button>

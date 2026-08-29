@@ -36,10 +36,9 @@ class ClientInvoicePaymentWorkflowService
             ->selectRaw('COUNT(*) AS total')
             ->selectRaw('SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS unpaid', [InvoiceStatus::UNPAID])
             ->selectRaw('SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS paid', [InvoiceStatus::PAID])
-            ->selectRaw('SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS overdue', [InvoiceStatus::OVERDUE])
             ->selectRaw(
-                'COALESCE(SUM(CASE WHEN status IN (?,?) THEN amount - COALESCE(paid_amount,0) ELSE 0 END), 0) AS unpaid_amount',
-                [InvoiceStatus::UNPAID, InvoiceStatus::OVERDUE]
+                'COALESCE(SUM(CASE WHEN status = ? THEN amount - COALESCE(paid_amount,0) ELSE 0 END), 0) AS unpaid_amount',
+                [InvoiceStatus::UNPAID]
             )
             ->first();
 
@@ -47,7 +46,6 @@ class ClientInvoicePaymentWorkflowService
             'total' => (int) ($row?->total ?? 0),
             'unpaid' => (int) ($row?->unpaid ?? 0),
             'paid' => (int) ($row?->paid ?? 0),
-            'overdue' => (int) ($row?->overdue ?? 0),
             'unpaid_amount' => number_format((float) ($row?->unpaid_amount ?? 0), 2, '.', ''),
         ];
     }
@@ -284,7 +282,7 @@ class ClientInvoicePaymentWorkflowService
         $payableAmount = (string) ($detail['payable_amount'] ?? number_format($this->payableAmount($invoice), 2, '.', ''));
         $paymentSecurity = $this->checkoutSecurity->issueInvoicePaymentSession($invoice, (int) $invoice->user_id);
         $sessionToken = (string) ($paymentSecurity['session_token'] ?? '');
-        $canCancel = in_array((int) $invoice->status, [InvoiceStatus::UNPAID, InvoiceStatus::OVERDUE], true);
+        $canCancel = in_array((int) $invoice->status, [InvoiceStatus::UNPAID], true);
 
         $configSnapshot = VersionedJson::withoutMeta(is_array($invoice->config_snapshot) ? $invoice->config_snapshot : []) ?? [];
         $configPricingSnapshot = is_array($invoice->config_pricing_snapshot) && $invoice->config_pricing_snapshot !== []

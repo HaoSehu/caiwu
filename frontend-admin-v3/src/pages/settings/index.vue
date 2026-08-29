@@ -650,7 +650,6 @@ const configs: Record<Exclude<SettingsTab, 'site_hero'>, SettingsConfig> = {
             pattern: /^\d+(,\d+)*$/,
             patternMessage: '请使用英文逗号分隔天数，例如 1,3,5',
           },
-          { key: 'invoice_overdue_after_days', label: '逾期标记天数', type: 'number', default: 0, min: 0, max: 365 },
           {
             key: 'billing_maintenance_schedule_mode',
             label: '任务执行周期',

@@ -134,52 +134,67 @@
           <aside class="invoice-summary-column">
             <t-card class="invoice-summary-card" :bordered="false">
               <template #title>账单摘要</template>
-              <div class="summary-total">
-                <span>本次应付</span>
-                <strong>¥{{ formatMoney(detail.payable_amount) }}</strong>
+              <div class="summary-hero">
+                <div class="summary-hero__header">
+                  <span class="summary-hero__label">本次应付</span>
+                  <div class="summary-hero__price">
+                    <span class="currency">¥</span>
+                    <span class="amount">{{ formatMoney(detail.payable_amount) }}</span>
+                  </div>
+                </div>
+                <div v-if="sessionExpiresAt" class="summary-session">
+                  <span class="summary-session__label">
+                    <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" class="summary-session__icon">
+                      <circle cx="8" cy="8" r="6.25" stroke="currentColor" stroke-width="1.25"/>
+                      <path d="M8 4.5V8L10.5 9.5" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/>
+                    </svg>
+                    截止 {{ formattedSessionExpiresAt }}
+                  </span>
+                  <span class="summary-session__countdown" :class="{ 'is-expired': sessionExpired }">
+                    {{ sessionCountdownText }}
+                  </span>
+                </div>
               </div>
-              <div v-if="sessionExpiresAt" class="summary-session">
-                <t-tag variant="outline" theme="primary">会话截止 {{ formattedSessionExpiresAt }}</t-tag>
-                <span class="summary-session__countdown" :class="{ 'is-expired': sessionExpired }">
-                  {{ sessionCountdownText }}
-                </span>
-              </div>
+
               <div class="summary-list">
-                <div>
-                  <span>账单号</span>
-                  <strong>{{ resolveInvoiceNo(detail) }}</strong>
+                <div class="summary-item">
+                  <span class="summary-item__label">账单号</span>
+                  <strong class="summary-item__value font-mono">{{ resolveInvoiceNo(detail) }}</strong>
                 </div>
-                <div>
-                  <span>账单类型</span>
-                  <strong>{{ detail.type_label || '--' }}</strong>
+                <div class="summary-item">
+                  <span class="summary-item__label">账单类型</span>
+                  <strong class="summary-item__value">{{ detail.type_label || '--' }}</strong>
                 </div>
-                <div class="summary-status-row">
-                  <span>状态</span>
+                <div class="summary-item summary-status-row">
+                  <span class="summary-item__label">状态</span>
                   <status-tag
                     class="summary-status-tag"
                     :status-map="INVOICE_STATUS_MAP"
                     :status="Number(detail.status)"
                   />
                 </div>
-                <div>
-                  <span>账单金额</span>
-                  <strong>¥{{ formatMoney(detail.amount) }}</strong>
+
+                <div class="summary-divider"></div>
+
+                <div v-if="hasPriceDiscount" class="summary-item summary-discount-row">
+                  <span class="summary-item__label">原价</span>
+                  <strong class="summary-item__value">¥{{ originalAmountText }}</strong>
                 </div>
-                <div>
-                  <span>优惠金额</span>
-                  <strong>¥{{ formatMoney(detail.discount) }}</strong>
+                <div class="summary-item">
+                  <span class="summary-item__label">账单金额</span>
+                  <strong class="summary-item__value">¥{{ formatMoney(detail.amount) }}</strong>
                 </div>
-                <div>
-                  <span>已支付</span>
-                  <strong>¥{{ formatMoney(detail.paid_amount) }}</strong>
+                <div v-if="memberDiscountAmount > 0" class="summary-item summary-discount-row">
+                  <span class="summary-item__label">会员折扣{{ memberDiscountLevelName ? `（${memberDiscountLevelName}）` : '' }}</span>
+                  <strong class="summary-item__value">-¥{{ formatMoney(memberDiscountAmount) }}</strong>
                 </div>
-                <div>
-                  <span>创建时间</span>
-                  <strong>{{ detail.created_at || '--' }}</strong>
+                <div v-if="couponDiscountAmount > 0" class="summary-item summary-discount-row">
+                  <span class="summary-item__label">优惠金额</span>
+                  <strong class="summary-item__value">-¥{{ formatMoney(couponDiscountAmount) }}</strong>
                 </div>
-                <div>
-                  <span>截止时间</span>
-                  <strong>{{ detail.due_date || '--' }}</strong>
+                <div class="summary-item">
+                  <span class="summary-item__label">已支付</span>
+                  <strong class="summary-item__value">¥{{ formatMoney(detail.paid_amount) }}</strong>
                 </div>
               </div>
             </t-card>
@@ -243,7 +258,7 @@
                   :disabled="!canPay"
                   @click="handlePayByBalance"
                 >
-                  确认余额支付
+                  支付
                 </t-button>
                 <t-button
                   v-else-if="selectedPayMethod && selectedPayMethod !== 'free'"
@@ -255,7 +270,7 @@
                 >
                   {{
                     allowBalanceDeduction && balanceAmount >= payableAmount
-                      ? '使用余额完成支付'
+                      ? '支付'
                       : `生成${selectedPayMethodName}二维码`
                   }}
                 </t-button>
@@ -365,6 +380,18 @@ const isRenewInvoiceView = computed(() => isRenewInvoice(detail.value));
 const renewInfoItemsView = computed(() => renewInfoItems(detail.value));
 const pricingItemsView = computed(() => pricingItems(detail.value));
 const productPathView = computed(() => productPath(detail.value));
+const memberDiscountAmount = computed(() => Math.max(0, Number(detail.value?.member_discount_amount || 0)));
+const couponDiscountAmount = computed(() => Math.max(0, Number(detail.value?.discount || 0)));
+const memberDiscountLevelName = computed(() => {
+  const snapshot = detail.value?.member_discount_snapshot;
+  return snapshot && typeof snapshot === 'object'
+    ? String((snapshot as Record<string, unknown>).member_level_name || '')
+    : '';
+});
+const hasPriceDiscount = computed(() => memberDiscountAmount.value > 0 || couponDiscountAmount.value > 0);
+const originalAmountText = computed(() =>
+  formatMoney(Number(detail.value?.amount || 0) + memberDiscountAmount.value + couponDiscountAmount.value),
+);
 const formattedSessionExpiresAt = computed(() =>
   formatSessionExpiresAt(sessionExpiresTime.value, sessionExpiresAt.value),
 );
@@ -824,18 +851,18 @@ onBeforeUnmount(() => {
 
 .pay-method-list {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: var(--td-comp-margin-s);
 }
 
 .pay-method-card {
   position: relative;
   display: flex;
-  gap: var(--td-comp-margin-s);
+  gap: var(--td-comp-margin-m);
   align-items: center;
   justify-content: flex-start;
   min-height: 4.25rem;
-  padding: var(--td-comp-paddingTB-s) var(--td-comp-paddingLR-m);
+  padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-l);
   color: var(--td-text-color-primary);
   cursor: pointer;
   background: var(--td-bg-color-container);
@@ -873,6 +900,7 @@ onBeforeUnmount(() => {
 
 .pay-method-card__icon {
   display: inline-flex;
+  flex-shrink: 0;
   align-items: center;
   justify-content: center;
   width: 2.5rem;
@@ -889,7 +917,9 @@ onBeforeUnmount(() => {
 
 .pay-method-card__text {
   display: grid;
+  flex: 1;
   min-width: 0;
+  padding-right: 1.5rem;
   text-align: left;
 
   strong,
@@ -915,12 +945,13 @@ onBeforeUnmount(() => {
 
 .pay-method-card__check {
   position: absolute;
-  right: var(--td-comp-paddingLR-s);
-  bottom: var(--td-comp-paddingTB-s);
+  top: 50%;
+  right: var(--td-comp-paddingLR-m);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   color: var(--td-brand-color);
+  transform: translateY(-50%);
 
   > span {
     width: 0.625rem;
@@ -985,10 +1016,11 @@ onBeforeUnmount(() => {
   display: flex;
   flex-wrap: wrap;
   gap: var(--td-comp-margin-s);
-  margin-top: var(--td-comp-margin-l);
+  margin-top: var(--td-comp-margin-m);
 
   :deep(.t-button) {
-    min-width: 8rem;
+    flex: 1;
+    min-width: 0;
   }
 }
 
@@ -1324,85 +1356,137 @@ onBeforeUnmount(() => {
   }
 }
 
-.summary-total {
+.summary-hero {
+  padding-bottom: var(--td-comp-margin-m);
+  border-bottom: 1px dashed var(--td-border-color);
+  margin-bottom: var(--td-comp-margin-m);
+}
+
+.summary-hero__header {
   display: flex;
-  align-items: flex-end;
+  align-items: baseline;
   justify-content: space-between;
   gap: var(--td-comp-margin-m);
-  padding: var(--td-comp-paddingTB-s) 0 var(--td-comp-paddingTB-m);
-  border-bottom: thin solid var(--td-border-color);
+}
 
-  span {
-    color: var(--td-text-color-secondary);
-    font: var(--td-font-body-small);
+.summary-hero__label {
+  color: var(--td-text-color-secondary);
+  font: var(--td-font-body-medium);
+  font-weight: 500;
+}
+
+.summary-hero__price {
+  display: inline-flex;
+  align-items: baseline;
+  color: var(--td-brand-color);
+  font-weight: 700;
+
+  .currency {
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin-right: 0.125rem;
   }
 
-  strong {
-    color: var(--td-brand-color);
-    font-size: 1.5rem;
-    font-weight: 700;
-    line-height: 1.15;
+  .amount {
+    font-size: 1.75rem;
+    line-height: 1;
+    font-family: var(--td-font-family-number, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
+    letter-spacing: -0.02em;
   }
 }
 
 .summary-session {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--td-comp-margin-xs);
   align-items: center;
-  margin: var(--td-comp-margin-s) 0 var(--td-comp-margin-m);
+  justify-content: space-between;
+  gap: var(--td-comp-margin-xs);
+  margin-top: var(--td-comp-margin-s);
+  padding: 0.375rem 0.625rem;
+  background: var(--td-bg-color-component);
+  border: thin solid var(--td-border-color);
+  border-radius: var(--td-radius-small);
+}
 
-  :deep(.t-tag) {
-    max-width: 100%;
-    height: auto;
-    min-height: 1.5rem;
-    white-space: normal;
+.summary-session__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--td-text-color-secondary);
+  font-size: 0.75rem;
+  line-height: 1.2;
+
+  .summary-session__icon {
+    width: 0.875rem;
+    height: 0.875rem;
+    flex-shrink: 0;
   }
 }
 
 .summary-session__countdown {
   display: inline-flex;
   align-items: center;
-  min-height: 1.5rem;
-  padding: 0 0.5rem;
+  padding: 0.125rem 0.375rem;
   color: var(--td-warning-color);
-  font: var(--td-font-body-small);
+  font-size: 0.75rem;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   background: var(--td-warning-color-light);
-  border: thin solid var(--td-warning-color-3);
+  border: thin solid var(--td-warning-color-2, var(--td-warning-color-light));
   border-radius: var(--td-radius-small);
+  white-space: nowrap;
 
   &.is-expired {
     color: var(--td-error-color);
     background: var(--td-error-color-light);
-    border-color: var(--td-error-color-3);
+    border-color: var(--td-error-color-2, var(--td-error-color-light));
   }
 }
 
 .summary-list {
-  display: grid;
-  gap: var(--td-comp-margin-s);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
 
-  div {
-    display: grid;
-    grid-template-columns: 5rem minmax(0, 1fr);
-    gap: var(--td-comp-margin-m);
-    align-items: center;
-    min-height: 2rem;
+.summary-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--td-comp-margin-m);
+  min-height: 1.75rem;
+}
+
+.summary-item__label {
+  color: var(--td-text-color-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  flex-shrink: 0;
+}
+
+.summary-item__value {
+  color: var(--td-text-color-primary);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  text-align: right;
+  overflow-wrap: anywhere;
+
+  &.font-mono {
+    font-variant-numeric: tabular-nums;
+    font-family: var(--td-font-family-number, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
   }
+}
 
-  span {
-    color: var(--td-text-color-secondary);
-    font: var(--td-font-body-small);
-  }
+.summary-divider {
+  height: 1px;
+  background: var(--td-border-color);
+  opacity: 0.6;
+  margin: 0.25rem 0;
+}
 
-  strong {
-    color: var(--td-text-color-primary);
-    font: var(--td-font-body-medium);
-    font-weight: 500;
-    text-align: right;
-    overflow-wrap: anywhere;
+.summary-discount-row {
+  .summary-item__value {
+    color: var(--td-success-color);
+    font-weight: 600;
   }
 }
 
@@ -1418,7 +1502,6 @@ onBeforeUnmount(() => {
   font-weight: 600;
   line-height: 1;
   text-align: center;
-  border-radius: 62.4375rem;
 }
 
 .dialog-qrcode {

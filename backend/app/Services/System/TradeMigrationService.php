@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Services\System;
 
+use App\Constants\InvoiceStatus;
+use App\Constants\PaymentStatus;
 use App\Support\Money;
 use Illuminate\Support\Facades\DB;
 
@@ -252,7 +254,14 @@ class TradeMigrationService
      */
     public function buildInvoicePayload(array $legacyInvoice, ?array $legacyOrder, ?int $targetServiceInstanceId): array
     {
-        $status = (int) ($legacyInvoice['status'] ?? 0);
+        // 遗留账单状态为旧 6 态（0未付 1已付 2已取消 3逾期 5已退款 6部分退款），归并到新 4 态：2/3→4、6→1
+        // 遗留 status=4 为历史跳号，若出现则经 default 透传为已取消，取消时间取 updated_at/created_at 兜底
+        $legacyStatus = (int) ($legacyInvoice['status'] ?? 0);
+        $status = match (true) {
+            in_array($legacyStatus, [2, 3], true) => InvoiceStatus::CANCELLED,
+            $legacyStatus === 6 => InvoiceStatus::PAID,
+            default => $legacyStatus,
+        };
         $orderProductId = isset($legacyOrder['product_id']) && (int) ($legacyOrder['product_id'] ?? 0) > 0
             ? (int) $legacyOrder['product_id']
             : null;
@@ -287,7 +296,7 @@ class TradeMigrationService
             'quantity' => max(1, (int) ($legacyInvoice['quantity'] ?? 1)),
             'due_at' => $this->normalizeDateStringToTimestamp($legacyInvoice['due_date'] ?? null),
             'paid_at' => $this->normalizeDateTimeString($legacyInvoice['paid_at'] ?? null),
-            'cancelled_at' => $status === 2 ? ($this->normalizeDateTimeString($legacyInvoice['updated_at'] ?? null) ?? $this->normalizeDateTimeString($legacyInvoice['created_at'] ?? null)) : null,
+            'cancelled_at' => $status === InvoiceStatus::CANCELLED ? ($this->normalizeDateTimeString($legacyInvoice['updated_at'] ?? null) ?? $this->normalizeDateTimeString($legacyInvoice['created_at'] ?? null)) : null,
             'product_snapshot_json' => $this->encodeJson($snapshot),
             'pricing_snapshot_json' => $this->encodeSnapshotValue($legacyInvoice['config_pricing_snapshot'] ?? ($legacyOrder['config_pricing_snapshot'] ?? null)),
             'config_snapshot_json' => $this->encodeSnapshotValue($legacyInvoice['config_snapshot'] ?? ($legacyOrder['config_snapshot'] ?? null)),
@@ -309,6 +318,13 @@ class TradeMigrationService
     public function buildPaymentPayload(array $legacyPayment): array
     {
         $callbackSummary = $this->decodeJsonArray($legacyPayment['callback_raw'] ?? null);
+        // 遗留支付状态为旧 5 态（0待支付 1成功 2失败 3已退款 4已取消），归并到新 4 态：2→4、3→5
+        $legacyStatus = (int) ($legacyPayment['status'] ?? 0);
+        $status = match (true) {
+            $legacyStatus === 2 => PaymentStatus::CANCELLED,
+            $legacyStatus === 3 => PaymentStatus::REFUNDED,
+            default => $legacyStatus,
+        };
 
         return [
             'id' => (int) ($legacyPayment['id'] ?? 0),
@@ -319,9 +335,9 @@ class TradeMigrationService
             'gateway_trade_no' => $this->normalizeNullableString($legacyPayment['trade_no'] ?? null),
             'amount' => Money::format($legacyPayment['amount'] ?? null),
             'currency' => 'CNY',
-            'status' => (int) ($legacyPayment['status'] ?? 0),
+            'status' => $status,
             'paid_at' => $this->normalizeDateTimeString($legacyPayment['paid_at'] ?? null),
-            'refunded_at' => (int) ($legacyPayment['status'] ?? 0) === 3
+            'refunded_at' => $status === PaymentStatus::REFUNDED
                 ? $this->normalizeDateTimeString($callbackSummary['refunded_at'] ?? ($legacyPayment['updated_at'] ?? null))
                 : null,
             'callback_summary_json' => $this->encodeJson($callbackSummary),

@@ -273,7 +273,7 @@ class CheckoutService
             $lockedInvoice = Invoice::query()->lockForUpdate()->findOrFail($invoice->id);
 
             throw_if(
-                ! in_array((int) $lockedInvoice->status, [InvoiceStatus::UNPAID, InvoiceStatus::OVERDUE], true),
+                ! in_array((int) $lockedInvoice->status, [InvoiceStatus::UNPAID], true),
                 new BusinessException('当前账单状态不支持取消')
             );
 
@@ -297,7 +297,7 @@ class CheckoutService
                 $callbackRaw['trace_id'] = (string) ($context['trace_id'] ?? '');
 
                 $pending->forceFill([
-                    'status' => PaymentStatus::FAILED,
+                    'status' => PaymentStatus::CANCELLED,
                     'callback_raw' => $callbackRaw,
                 ])->save();
                 $this->paymentService->syncProjection($pending);
@@ -355,7 +355,7 @@ class CheckoutService
     {
         $freshInvoice = $invoice->fresh() ?? $invoice;
 
-        if (! in_array((int) $freshInvoice->status, [InvoiceStatus::UNPAID, InvoiceStatus::OVERDUE], true)) {
+        if (! in_array((int) $freshInvoice->status, [InvoiceStatus::UNPAID], true)) {
             return $freshInvoice;
         }
 
@@ -375,7 +375,7 @@ class CheckoutService
         $threshold = now()->subSeconds(CheckoutSecurityService::paymentSessionTtlSeconds());
         $invoices = Invoice::query()
             ->where('user_id', $userId)
-            ->whereIn('status', [InvoiceStatus::UNPAID, InvoiceStatus::OVERDUE])
+            ->where('status', InvoiceStatus::UNPAID)
             ->where('created_at', '<=', $threshold)
             ->get();
 

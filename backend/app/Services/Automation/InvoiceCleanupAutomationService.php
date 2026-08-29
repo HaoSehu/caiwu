@@ -58,7 +58,7 @@ class InvoiceCleanupAutomationService
 
         $invoices = Invoice::query()
             ->with(['product'])
-            ->whereIn('status', [InvoiceStatus::UNPAID, InvoiceStatus::OVERDUE])
+            ->where('status', InvoiceStatus::UNPAID)
             ->where('created_at', '<=', $threshold)
             ->get();
 

@@ -512,9 +512,9 @@
   background: currentColor;
 }
 
-/* 二级终端菜单选中：灰色背景（排除子菜单父级） */
+/* 二级终端菜单选中：蓝色字体 + 灰色背景（排除子菜单父级） */
 #app .t-default-menu .t-menu__sub .t-menu__item.t-is-active:not(.t-is-opened) {
-  color: var(--td-text-color-primary);
+  color: var(--td-brand-color);
   background: var(--td-bg-color-page);
 }
 

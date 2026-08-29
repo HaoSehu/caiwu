@@ -250,10 +250,6 @@
           </div>
         </template>
       </data-state>
-
-      <div v-if="!loading && !list.length" class="service-empty-action">
-        <t-button theme="primary" @click="router.push('/products')">去选购产品</t-button>
-      </div>
     </section>
 
     <div v-if="total > 0" class="service-pagination">

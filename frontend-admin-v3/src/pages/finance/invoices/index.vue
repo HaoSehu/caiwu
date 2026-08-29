@@ -245,7 +245,7 @@ function hasPermission(permission: string) {
 
 function canCancel(row: InvoiceRecord) {
   const status = Number(row.status ?? -1);
-  return hasPermission(AdminPermissions.INVOICE_MANAGE) && [0, 3].includes(status);
+  return hasPermission(AdminPermissions.INVOICE_MANAGE) && [0].includes(status);
 }
 
 function confirmCancel(row: InvoiceRecord, fromDrawer = false) {

@@ -97,7 +97,7 @@ export function resolveInvoiceNo(row: InvoiceRecord | null | undefined) {
 
 export function isPayableInvoice(row: InvoiceRecord | null | undefined) {
   const status = Number(row?.status);
-  return status === 0 || status === 3;
+  return status === 0;
 }
 
 function coercePayMethodKey(value: unknown): PayMethodKey {

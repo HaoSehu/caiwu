@@ -134,7 +134,7 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
                 key: 'billing-maintenance',
                 title: '账单自动化维护',
                 category: '账单提醒',
-                description: '处理续费提醒、自动生成账单、账单到期提醒和逾期标记。',
+                description: '处理续费提醒、自动生成账单、账单到期提醒与逾期催付。',
                 triggers: [ScheduleRule::automation(
                     (string) ($automation['billing_maintenance_schedule_mode'] ?? AutomationScheduleExpression::MODE_HOURLY),
                     (string) ($automation['billing_maintenance_schedule_time'] ?? '00:00:00'),

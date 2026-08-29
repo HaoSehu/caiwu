@@ -13,6 +13,7 @@ use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\Product;
+use App\Models\Refund;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Services\ProductCatalog\ProductFullPathResolver;
 use App\Support\AdminPrivacy;
@@ -152,6 +153,8 @@ class AdminFinanceQueryService
                 DB::raw('SUM(COALESCE(quantity, 1)) as quantity_total'),
             ])
             ->where('status', InvoiceStatus::PAID)
+            // 部分退款账单保持 PAID（状态收敛后不再有部分退款态），有已完成退款的账单不计入产品收入
+            ->whereDoesntHave('refunds', fn ($query) => $query->where('status', Refund::STATUS_COMPLETED))
             ->whereDoesntHave('payments', fn ($query) => $query
                 ->whereGatewayKeyIn(PaymentGatewayCode::thirdPartyGateways())
                 ->where('status', PaymentStatus::REFUNDED))
@@ -596,7 +599,6 @@ class AdminFinanceQueryService
             InvoiceStatus::UNPAID => '待支付',
             InvoiceStatus::PAID => '已支付',
             InvoiceStatus::CANCELLED => '已取消',
-            InvoiceStatus::OVERDUE => '已逾期',
             InvoiceStatus::REFUNDED => '已退款',
             default => (string) $status,
         };
@@ -607,7 +609,6 @@ class AdminFinanceQueryService
         return match ($status) {
             PaymentStatus::PENDING => '待支付',
             PaymentStatus::SUCCESS => '已支付',
-            PaymentStatus::FAILED => '已失败',
             PaymentStatus::REFUNDED => '已退款',
             PaymentStatus::CANCELLED => '已取消',
             default => (string) $status,

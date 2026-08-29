@@ -488,8 +488,7 @@ class ZjmfBillingRestoreService
     {
         return match (trim($status)) {
             'Paid' => InvoiceStatus::PAID,
-            'Cancelled', 'Refunded' => InvoiceStatus::CANCELLED,
-            'Overdue', 'Collections' => InvoiceStatus::OVERDUE,
+            'Cancelled', 'Refunded', 'Overdue', 'Collections' => InvoiceStatus::CANCELLED,
             default => InvoiceStatus::UNPAID,
         };
     }
