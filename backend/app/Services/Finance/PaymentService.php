@@ -642,6 +642,7 @@ class PaymentService
                     ->where('invoice_id', $lockedInvoice->id)
                     ->whereGatewayKey($gateway)
                     ->where('status', PaymentStatus::PENDING)
+                    ->where('amount', number_format($amount, 2, '.', ''))
                     ->latest('id')
                     ->first();
 
@@ -684,94 +685,6 @@ class PaymentService
             (float) $payment->amount,
             $subject,
             $this->resolveInvoicePaymentTimeoutExpress($lockedInvoice),
-            $context
-        );
-
-        return [
-            'payment_no' => $payment->payment_no,
-            'qr_code' => $result['qr_code'],
-            'amount' => number_format((float) $payment->amount, 2, '.', ''),
-        ];
-    }
-
-    /**
-     * 第三方网关支付（通用入口，支持 Order）
-     */
-    public function payOrderByGateway(Order $order, User $user, string $gateway, array $context = []): array
-    {
-        $resolvedGateway = $this->resolveGateway($gateway);
-
-        throw_if(! $resolvedGateway->isEnabled(), new BusinessException(
-            PaymentGatewayCode::label($gateway).'支付未启用'
-        ));
-
-        $traceId = $this->resolveTraceId($context, "{$gateway}:order:{$order->id}");
-        $lockKey = "lock:pay:{$gateway}:order:{$order->id}";
-
-        $payload = $this->withLock($lockKey, 20, function () use ($order, $user, $traceId, $gateway) {
-            return DB::transaction(function () use ($order, $user, $traceId, $gateway) {
-                $lockedOrder = Order::query()
-                    ->lockForUpdate()
-                    ->with('invoice')
-                    ->findOrFail($order->id);
-
-                throw_if(
-                    (int) $lockedOrder->status !== OrderStatus::PENDING,
-                    new BusinessException('当前订单状态不支持支付')
-                );
-
-                $amount = $this->resolveOrderPayableAmount($lockedOrder);
-                throw_if($amount <= 0, new BusinessException('当前订单无需支付'));
-
-                $payment = Payment::query()
-                    ->where('order_id', $lockedOrder->id)
-                    ->whereGatewayKey($gateway)
-                    ->where('status', PaymentStatus::PENDING)
-                    ->latest('id')
-                    ->first();
-
-                if (! $payment) {
-                    $payment = Payment::query()->create($this->paymentCreatePayload([
-                        'payment_no' => Payment::generatePaymentNo(),
-                        'user_id' => $user->id,
-                        'order_id' => (int) $lockedOrder->id,
-                        'invoice_id' => (int) ($lockedOrder->invoice?->id ?? 0) ?: null,
-                        'gateway' => $gateway,
-                        'amount' => $amount,
-                        'status' => PaymentStatus::PENDING,
-                        'trace_id' => $traceId,
-                        'callback_raw' => [
-                            'source' => "{$gateway}_precreate",
-                            'trace_id' => $traceId,
-                        ],
-                    ]));
-                    $this->syncProjection($payment);
-                } else {
-                    $this->ensurePaymentGatewayAudit($payment, $gateway, $traceId);
-                }
-
-                return [
-                    'order' => $lockedOrder,
-                    'payment' => $payment,
-                ];
-            });
-        }, '支付二维码生成中，请稍后重试');
-
-        /** @var Order $lockedOrder */
-        $lockedOrder = $payload['order'];
-        /** @var Payment $payment */
-        $payment = $payload['payment'];
-
-        $subject = config('app.name', 'IDC').' - 订单 '.$lockedOrder->order_no;
-        $timeoutExpress = $lockedOrder->invoice instanceof Invoice
-            ? $this->resolveInvoicePaymentTimeoutExpress($lockedOrder->invoice)
-            : $this->resolveOrderPaymentTimeoutExpress($lockedOrder);
-        $result = $this->precreateGatewayPayment(
-            $gateway,
-            $payment->payment_no,
-            (float) $payment->amount,
-            $subject,
-            $timeoutExpress,
             $context
         );
 
@@ -953,7 +866,7 @@ class PaymentService
         }
 
         // 商户号校验（支付宝: app_id, 微信: mch_id, 易支付: pid）
-        // 缺字段不得跳过：网关未配置商户号时各实现自身放行，配置了就必须匹配
+        // 缺字段不得跳过：网关未配置商户号时回调直接拒绝，配置了就必须匹配
         $merchantId = $params['app_id'] ?? $params['mch_id'] ?? $params['pid'] ?? '';
         if (! $resolvedGateway->matchesMerchantId($merchantId)) {
             Log::warning("[{$gatewayLabel}回调] 商户号不匹配", [
@@ -1468,7 +1381,8 @@ class PaymentService
                     ];
                 }
 
-                $refundableAmount = $this->resolveBalanceRefundableAmount($invoice, $payment);
+                // 原路退款与「退回余额」同口径：扣除已完成退款，防止两条退款通道叠加超额退款
+                $refundableAmount = $this->remainingRefundableAmount($invoice, $payment);
                 $refundAmount = round((float) ($payload['amount'] ?? $refundableAmount), 2);
                 throw_if(
                     $refundAmount <= 0,
@@ -1549,6 +1463,26 @@ class PaymentService
                     ];
                 }
 
+                if ($lockedOrder->invoice instanceof Invoice) {
+                    // 落地终检：快照校验后、网关退款期间若发生并发退款，剩余可退额可能已不足。
+                    // 此时网关侧退款已执行，throw 回滚前必须写日志留痕，否则账实不符且无对账线索。
+                    $remainingRefundable = $this->remainingRefundableAmount($lockedOrder->invoice, $payment);
+                    if ((float) $snapshot['refund_amount'] - $remainingRefundable > 0.00001) {
+                        Log::error("[{$gatewayLabel}退款] 网关退款已执行但账单剩余可退金额不足，本次落地已回滚，请人工对账", [
+                            'order_id' => (int) $lockedOrder->id,
+                            'invoice_id' => (int) $lockedOrder->invoice->id,
+                            'payment_id' => (int) $payment->id,
+                            'payment_no' => (string) $payment->payment_no,
+                            'trade_no' => (string) ($payment->trade_no ?? ''),
+                            'out_request_no' => (string) $snapshot['out_request_no'],
+                            'gateway_refund_amount' => (float) $snapshot['refund_amount'],
+                            'remaining_refundable' => $remainingRefundable,
+                        ]);
+
+                        throw new BusinessException('账单剩余可退金额已不足，请刷新后重新发起退款');
+                    }
+                }
+
                 $refundRecord = [
                     'out_request_no' => (string) $snapshot['out_request_no'],
                     'refund_amount' => number_format((float) $snapshot['refund_amount'], 2, '.', ''),
@@ -1612,7 +1546,7 @@ class PaymentService
      */
     public function refundInvoiceToBalance(User $user, Invoice $invoice, array $payload = [], array $context = []): array
     {
-        $lockKey = "lock:refund:balance:invoice:{$invoice->id}";
+        $lockKey = "lock:refund:invoice:{$invoice->id}";
 
         return $this->withLock($lockKey, 40, function () use ($user, $invoice, $payload, $context) {
             return DB::transaction(function () use ($user, $invoice, $payload, $context) {
@@ -2458,6 +2392,7 @@ class PaymentService
             max(
                 (float) ($order->amount ?? 0)
                 - (float) ($order->discount ?? 0)
+                - (float) ($order->member_discount_amount ?? 0)
                 - (float) ($order->paid_amount ?? 0),
                 0
             ),
@@ -2527,7 +2462,7 @@ class PaymentService
 
         $remainingSeconds = $this->paymentDeadline($payment)->diffInSeconds(CarbonImmutable::now(), true);
 
-        return max(1, (int) ceil($remainingSeconds / 60)).'m';
+        return $this->formatGatewayTimeoutExpress($remainingSeconds);
     }
 
     private function isPaymentWindowExpired(Payment $payment): bool
@@ -2545,26 +2480,14 @@ class PaymentService
         return $base->addSeconds(CheckoutSecurityService::paymentSessionTtlSeconds());
     }
 
-    private function resolveOrderPaymentTimeoutExpress(Order $order): string
+    /**
+     * 支付宝 timeout_express 允许 1m~15d，钳制到网关上限避免预下单被拒。
+     */
+    private function formatGatewayTimeoutExpress(float $remainingSeconds): string
     {
-        throw_if(
-            $this->orderPaymentDeadline($order)->lessThanOrEqualTo(CarbonImmutable::now()),
-            new BusinessException('支付时间已过期，请重新发起支付')
-        );
+        $minutes = (int) ceil($remainingSeconds / 60);
 
-        $remainingSeconds = $this->orderPaymentDeadline($order)->diffInSeconds(CarbonImmutable::now(), true);
-
-        return max(1, (int) ceil($remainingSeconds / 60)).'m';
-    }
-
-    private function orderPaymentDeadline(Order $order): CarbonImmutable
-    {
-        $createdAt = $order->created_at;
-        $base = $createdAt instanceof \DateTimeInterface
-            ? CarbonImmutable::instance($createdAt)
-            : ($createdAt ? CarbonImmutable::parse((string) $createdAt) : CarbonImmutable::now());
-
-        return $base->addSeconds(CheckoutSecurityService::paymentSessionTtlSeconds());
+        return max(1, min($minutes, 21600)).'m';
     }
 
     private function resolveInvoicePaymentTimeoutExpress(Invoice $invoice): string
@@ -2573,7 +2496,7 @@ class PaymentService
 
         throw_if($this->invoicePaymentWindowExpired($invoice), new BusinessException('账单支付时间已过期，请重新创建账单'));
 
-        return max(1, (int) ceil($remainingSeconds / 60)).'m';
+        return $this->formatGatewayTimeoutExpress($remainingSeconds);
     }
 
     private function invoicePaymentWindowExpired(Invoice $invoice): bool

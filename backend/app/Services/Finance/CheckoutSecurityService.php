@@ -23,8 +23,7 @@ class CheckoutSecurityService
 
     private const ORDER_FINGERPRINT_TTL_SECONDS = 180;
 
-    // 开发测试期间临时放宽为 1 年，避免支付会话频繁过期；上线前恢复 300
-    private const PAYMENT_SESSION_TTL_SECONDS = 31536000;
+    private const PAYMENT_SESSION_TTL_SECONDS = 300;
 
     /**
      * 所有 checkout 临时数据使用 volatile store（Redis DB 2），与业务缓存隔离。
@@ -58,6 +57,7 @@ class CheckoutSecurityService
             'discount_amount' => Money::format($quotePayload['discount_amount'] ?? 0),
             'member_discount_amount' => Money::format($quotePayload['member_discount_amount'] ?? 0),
             'user_coupon_id' => (int) ($quotePayload['coupon']['user_coupon_id'] ?? $quotePayload['user_coupon_id'] ?? 0),
+            'user_id' => max((int) ($context['user_id'] ?? 0), 0),
             'request_id' => trim((string) ($context['request_id'] ?? '')),
             'ip_address' => trim((string) ($context['ip_address'] ?? '')),
             'issued_at' => $now->toIso8601String(),
@@ -80,6 +80,7 @@ class CheckoutSecurityService
         string $amount,
         ?int $couponId = null,
         ?string $memberDiscountAmount = null,
+        int $userId = 0,
     ): array {
         $payload = $this->volatileStore()->get($this->quoteCacheKey($token));
 
@@ -113,6 +114,13 @@ class CheckoutSecurityService
         throw_if(
             $tokenMemberDiscountAmount !== Money::format((float) ($memberDiscountAmount ?? 0)),
             new BusinessException('会员折扣已变更，请刷新页面后重试', 40305)
+        );
+
+        // 报价令牌绑定签发用户：登录态签发的令牌不可跨用户复用；游客报价（user_id=0）仍受金额与配置绑定约束
+        $tokenUserId = (int) ($payload['user_id'] ?? 0);
+        throw_if(
+            $tokenUserId > 0 && $tokenUserId !== $userId,
+            new BusinessException('报价凭证与当前用户不一致，请重新获取报价')
         );
 
         return $payload;
@@ -332,8 +340,10 @@ class CheckoutSecurityService
         return $payload;
     }
 
-    public function issueInvoicePaymentPollToken(Payment $payment, Invoice $invoice, int $userId, string $clientIp = ''): array
+    public function issueInvoicePaymentPollToken(Payment $payment, Invoice $invoice, int $userId, string $clientIp): array
     {
+        throw_if(trim($clientIp) === '', new BusinessException('无法获取客户端网络信息，请刷新页面重试'));
+
         $now = CarbonImmutable::now();
         $expiresAt = $this->paymentSessionExpiresAt($invoice);
         $token = $this->generateToken('inv_poll');
@@ -355,8 +365,10 @@ class CheckoutSecurityService
         ];
     }
 
-    public function issuePaymentPollToken(Payment $payment, Order $order, int $userId, string $clientIp = ''): array
+    public function issuePaymentPollToken(Payment $payment, Order $order, int $userId, string $clientIp): array
     {
+        throw_if(trim($clientIp) === '', new BusinessException('无法获取客户端网络信息，请刷新页面重试'));
+
         $order->loadMissing('invoice');
         if ($order->invoice instanceof Invoice) {
             return $this->issueInvoicePaymentPollToken($payment, $order->invoice, $userId, $clientIp);
@@ -424,8 +436,10 @@ class CheckoutSecurityService
         return $payload;
     }
 
-    public function issueRechargePollToken(Payment $payment, int $userId, string $clientIp = ''): array
+    public function issueRechargePollToken(Payment $payment, int $userId, string $clientIp): array
     {
+        throw_if(trim($clientIp) === '', new BusinessException('无法获取客户端网络信息，请刷新页面重试'));
+
         $now = CarbonImmutable::now();
         $expiresAt = $this->paymentRecordExpiresAt($payment);
         $token = $this->generateToken('recharge_poll');
@@ -585,9 +599,9 @@ class CheckoutSecurityService
     {
         $storedHash = (string) ($payload['client_ip_hash'] ?? '');
 
-        // 如果存储时未绑定 IP（历史令牌），则跳过校验
+        // 签发时未绑定 IP 的令牌直接判为不通过，避免空 IP 签发后任意来源可轮询
         if ($storedHash === '') {
-            return true;
+            return false;
         }
 
         // 如果当前请求无 IP，则校验失败

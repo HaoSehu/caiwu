@@ -3577,6 +3577,18 @@ parameters:
 			path: app/Services/Finance/InvoiceService.php
 
 		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$config_pricing_snapshot\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Services/Finance/InvoiceService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$config_snapshot\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Services/Finance/InvoiceService.php
+
+		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$display_product_name\.$#'
 			identifier: property.notFound
 			count: 4
@@ -3715,6 +3727,18 @@ parameters:
 			path: app/Services/Finance/InvoiceService.php
 
 		-
+			message: '#^Using nullsafe property access "\?\-\>config_pricing_snapshot" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Services/Finance/InvoiceService.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>config_snapshot" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Services/Finance/InvoiceService.php
+
+		-
 			message: '#^Using nullsafe property access "\?\-\>display_product_name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 4
@@ -3813,7 +3837,7 @@ parameters:
 		-
 			message: '#^Ternary operator condition is always false\.$#'
 			identifier: ternary.alwaysFalse
-			count: 3
+			count: 2
 			path: app/Services/Finance/PaymentService.php
 
 		-
@@ -3825,7 +3849,7 @@ parameters:
 		-
 			message: '#^Using nullsafe property access "\?\-\>id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
-			count: 9
+			count: 8
 			path: app/Services/Finance/PaymentService.php
 
 		-

@@ -9,6 +9,7 @@ use App\Constants\OrderStatus;
 use App\Constants\OrderType;
 use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
+use App\Exceptions\BusinessException;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Payment;
@@ -310,8 +311,28 @@ class AdminFinanceQueryService
         return $rows;
     }
 
+    /**
+     * 仪表盘按日聚合的合法表/列组合。SQL 标识符无法参数绑定，
+     * 调用方传入值必须命中白名单后才允许拼进 selectRaw/groupByRaw。
+     */
+    private const DAILY_COUNT_SOURCES = [
+        'users.created_at' => ['table' => 'users', 'column' => 'created_at'],
+        'orders.created_at' => ['table' => 'orders', 'column' => 'created_at'],
+        'orders.updated_at' => ['table' => 'orders', 'column' => 'updated_at'],
+        'tickets.created_at' => ['table' => 'tickets', 'column' => 'created_at'],
+        'ticket_replies.created_at' => ['table' => 'ticket_replies', 'column' => 'created_at'],
+    ];
+
     private function countsByDay(string $table, string $column, CarbonImmutable $start, CarbonImmutable $end, array $conditions = []): array
     {
+        $sourceKey = $table.'.'.$column;
+        throw_if(
+            ! isset(self::DAILY_COUNT_SOURCES[$sourceKey])
+            || self::DAILY_COUNT_SOURCES[$sourceKey]['table'] !== $table
+            || self::DAILY_COUNT_SOURCES[$sourceKey]['column'] !== $column,
+            new BusinessException('非法的统计维度：'.$sourceKey)
+        );
+
         $query = DB::table($table)
             ->selectRaw("DATE({$column}) as day, COUNT(*) as total")
             ->whereBetween($column, [$start, $end]);

@@ -144,7 +144,7 @@ class LocalProductSimulateCommand extends Command
         $quote = $checkout->quote($this->product, 'monthly', [], 1);
         $token = $security->issueQuoteToken($this->product->id, 'monthly', [], array_merge($quote, [
             'subtotal_amount' => $quote['total_amount'],
-        ]));
+        ]), ['user_id' => (int) $this->user->id]);
 
         $invoice = $checkout->create((int) $this->user->id, [
             'product_id' => (int) $this->product->id,
