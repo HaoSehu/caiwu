@@ -93,7 +93,8 @@ class ServiceVncService
                 Cache::store('redis_volatile')->put(CacheKey::vncToken($token), array_merge($tokenPayload, [
                     'service_id' => $serviceId,
                     'allowed_origin' => $this->resolveAllowedVncOrigin(),
-                    'single_use' => ($context['actor_type'] ?? 'client') !== 'admin',
+                    // 兑换端点免登录，token 一律单次消费；管理员刷新页面重新取链接即可
+                    'single_use' => true,
                     'token_scope' => 'public',
                 ]), now()->addSeconds(self::VNC_TOKEN_TTL_SECONDS));
 

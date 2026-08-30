@@ -50,6 +50,10 @@ router.beforeEach(async (to, from, next) => {
           } catch {
             redirect = to.path;
           }
+          // 仅接受站内绝对路径，拒绝 //evil.com 协议相对形态
+          if (!redirect.startsWith('/') || redirect.startsWith('//')) {
+            redirect = to.path;
+          }
           next(to.path === redirect ? { ...to, replace: true } : { path: redirect, query: to.query });
         }
         return;

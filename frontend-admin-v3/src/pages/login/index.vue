@@ -43,7 +43,7 @@ import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { hasPermissionInList } from '@/constants/permissions';
-import { useUserStore, getPermissionStore } from '@/store';
+import { getPermissionStore, useUserStore } from '@/store';
 
 const router = useRouter();
 const userStore = useUserStore();
@@ -105,7 +105,7 @@ async function handleLogin() {
       try {
         const decoded = decodeURIComponent(redirect);
         // redirect 目标若不在当前角色权限内，回退到首个可访问页面，避免落入 403
-        if (decoded.startsWith('/') && canAccessPath(decoded)) {
+        if (decoded.startsWith('/') && !decoded.startsWith('//') && canAccessPath(decoded)) {
           router.push(decoded);
         } else {
           router.push(fallbackPath);

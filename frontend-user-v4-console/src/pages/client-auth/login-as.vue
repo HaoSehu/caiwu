@@ -54,7 +54,10 @@ let messageTimer: number | null = null;
 
 const redirectPath = computed(() => {
   const redirect = route.query.redirect;
-  return typeof redirect === 'string' && redirect.startsWith('/') ? redirect : '/client/dashboard';
+  // 仅接受站内绝对路径，拒绝 //evil.com 协议相对形态
+  return typeof redirect === 'string' && redirect.startsWith('/') && !redirect.startsWith('//')
+    ? redirect
+    : '/client/dashboard';
 });
 
 const resultTitle = computed(() => {

@@ -515,14 +515,6 @@
     return new URLSearchParams(location.search).get(name) || def
   }
 
-  function readStorageValue(storage, key) {
-    try {
-      return storage?.getItem?.(key) || ''
-    } catch {
-      return ''
-    }
-  }
-
   function readCookieValue(name) {
     try {
       const prefix = `${encodeURIComponent(name)}=`
@@ -535,16 +527,6 @@
     } catch {}
 
     return ''
-  }
-
-  // 读取 storage 前的属性访问本身就可能因跨域 iframe 限制抛出 SecurityError，
-  // 因此统一在 getter 外层包裹 try/catch，任何异常都静默跳过当前候选。
-  function safeResolveStorage(getter) {
-    try {
-      return getter()
-    } catch {
-      return null
-    }
   }
 
   function getAuthToken() {
@@ -650,8 +632,6 @@
     return creds
   }
 
-  const VNC_CREDENTIAL_STORAGE_PREFIX = 'caiwu:vnc-credentials:'
-
   function normalizeVncCredentialsPayload(payload) {
     if (!payload || typeof payload !== 'object') return null
 
@@ -674,35 +654,42 @@
     return { ...params, ...normalized }
   }
 
-  function readAndForgetStoredVncCredentials(token) {
-    const key = `${VNC_CREDENTIAL_STORAGE_PREFIX}${String(token || '').trim()}`
-    if (key === VNC_CREDENTIAL_STORAGE_PREFIX) return null
+  // 凭据经 URL fragment（#vnc_auth=<base64url>）随链接进入查看器页面：
+  // fragment 不会发送到服务器，读取后立即 replaceState 清除，不再落 sessionStorage。
+  // 另在内存保留最近一次成功凭据，供重连/renew 时兜底（不落任何 storage）。
+  let cachedVncCredentials = null
 
-    const candidates = [
-      () => window.sessionStorage,
-      () => (window.parent && window.parent !== window ? window.parent.sessionStorage : null),
-      () => (window.opener ? window.opener.sessionStorage : null),
-    ]
-
-    for (const getStorage of candidates) {
-      const storage = safeResolveStorage(getStorage)
-      const raw = readStorageValue(storage, key)
-      if (!raw) continue
-
-      try { storage?.removeItem?.(key) } catch {}
-
-      try {
-        const parsed = JSON.parse(raw)
-        const credentials = normalizeVncCredentialsPayload(parsed)
-        if (credentials) return credentials
-      } catch {}
+  function decodeVncCredentialsFragment(encoded) {
+    try {
+      let normalized = String(encoded || '').replace(/-/g, '+').replace(/_/g, '/')
+      while (normalized.length % 4) normalized += '='
+      const bytes = Uint8Array.from(atob(normalized), (ch) => ch.charCodeAt(0))
+      return normalizeVncCredentialsPayload(JSON.parse(new TextDecoder().decode(bytes)))
+    } catch {
+      return null
     }
-
-    return null
   }
 
-  function withStoredVncCredentials(publicToken, params, fallbackCredentials = null) {
-    return mergeVncCredentials(params, fallbackCredentials || readAndForgetStoredVncCredentials(publicToken))
+  function readAndClearFragmentCredentials() {
+    const rawHash = String(location.hash || '')
+    if (rawHash.length < 2) return null
+
+    const encoded = String(new URLSearchParams(rawHash.replace(/^#/, '')).get('vnc_auth') || '').trim()
+    if (!encoded) return null
+
+    const credentials = decodeVncCredentialsFragment(encoded)
+    // 无论解析成败都清掉 fragment，避免凭据停留在地址栏与当前历史条目中
+    try { history.replaceState(null, '', location.pathname + location.search) } catch {}
+
+    return credentials
+  }
+
+  function withFragmentVncCredentials(params, fallbackCredentials = null) {
+    const credentials = fallbackCredentials || readAndClearFragmentCredentials() || cachedVncCredentials
+    const normalized = normalizeVncCredentialsPayload(credentials)
+    if (normalized) cachedVncCredentials = normalized
+
+    return mergeVncCredentials(params, normalized)
   }
 
   async function renewParamsByServiceId(serviceId) {
@@ -717,6 +704,8 @@
       throw new Error('未获取到新的 VNC 链接')
     }
     const freshCredentials = normalizeVncCredentialsPayload(data.vnc_credentials)
+    // renew 会 replaceState 换掉当前 URL，先读走 fragment 中的凭据作为兜底
+    const fragmentCredentials = readAndClearFragmentCredentials()
 
     const freshLocation = new URL(freshUrl, location.origin)
     freshLocation.searchParams.set('service_id', String(id))
@@ -731,11 +720,11 @@
     const freshRelayPath = freshLocation.searchParams.get('relay_path')
     if (freshToken) {
       const relaySession = await readJson(`/api/v2/client/vnc-tokens/${encodeURIComponent(freshToken)}`, {}, '新的 VNC 链接已失效')
-      return withStoredVncCredentials(freshToken, {
+      return withFragmentVncCredentials({
         token: freshToken,
         ...relaySession,
         relay_path: freshRelayPath || relaySession.relay_path || '',
-      }, freshCredentials)
+      }, freshCredentials || fragmentCredentials)
     }
 
     return mergeVncCredentials({
@@ -746,7 +735,7 @@
       encrypt: freshLocation.searchParams.get('encrypt') || (location.protocol === 'https:' ? '1' : '0'),
       username: freshLocation.searchParams.get('username') || '',
       target: freshLocation.searchParams.get('target') || '',
-    }, freshCredentials)
+    }, freshCredentials || fragmentCredentials)
   }
 
   async function resolveParams() {
@@ -756,7 +745,7 @@
     if (token) {
       try {
         const relaySession = await readJson(`/api/v2/client/vnc-tokens/${encodeURIComponent(token)}`, {}, 'VNC 链接已失效，请重新获取')
-        return withStoredVncCredentials(token, {
+        return withFragmentVncCredentials({
           token,
           ...relaySession,
           relay_path: relayPath || relaySession.relay_path || '',

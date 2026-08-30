@@ -4,7 +4,7 @@ import { ref } from 'vue';
 import clientApi from '@/api/client';
 import type { ServiceVncCredentials } from '@/types/client';
 
-import { resolveErrorMessage, VNC_CREDENTIAL_STORAGE_PREFIX } from './useConsoleCore';
+import { resolveErrorMessage } from './useConsoleCore';
 
 export interface UseConsoleVncOptions {
   serviceId: { value: number };
@@ -29,12 +29,13 @@ export function useConsoleVnc(options: UseConsoleVncOptions) {
     }
   }
 
-  function extractVncLaunchToken(rawUrl: unknown): string {
-    try {
-      return new URL(String(rawUrl || ''), window.location.origin).searchParams.get('token') || '';
-    } catch {
-      return '';
-    }
+  function encodeVncCredentials(credentials: ServiceVncCredentials): string {
+    const bytes = new TextEncoder().encode(JSON.stringify(credentials));
+    let binary = '';
+    bytes.forEach((byte) => {
+      binary += String.fromCharCode(byte);
+    });
+    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   }
 
   function normalizeVncCredentials(payload: unknown): ServiceVncCredentials | null {
@@ -52,30 +53,26 @@ export function useConsoleVnc(options: UseConsoleVncOptions) {
     return Object.keys(credentials).length > 0 ? credentials : null;
   }
 
-  function storeVncCredentialsForUrl(rawUrl: string, payload: unknown, targetWindow: Window | null = window) {
-    const token = extractVncLaunchToken(rawUrl);
+  // 凭据经 URL fragment 随链接进入 noVNC 查看器页面（fragment 不发服务器），
+  // 查看器读取后立即清除，不写 sessionStorage，避免会话级滞留被 XSS 读取。
+  function attachVncCredentialsToFragment(rawUrl: string, payload: unknown): string {
     const credentials = normalizeVncCredentials(payload);
-    if (!token || !credentials) return;
+    if (!credentials) return rawUrl;
 
     try {
-      targetWindow?.sessionStorage?.setItem?.(
-        `${VNC_CREDENTIAL_STORAGE_PREFIX}${token}`,
-        JSON.stringify({ ...credentials, service_id: serviceId.value, saved_at: Date.now() }),
-      );
+      const target = new URL(rawUrl, window.location.origin);
+      target.hash = `vnc_auth=${encodeVncCredentials(credentials)}`;
+      return target.toString();
     } catch {
-      // sessionStorage can be unavailable in restricted or cross-origin windows.
+      return rawUrl;
     }
   }
 
-  async function requestVncUrl(targetWindow: Window | null = null): Promise<string> {
+  async function requestVncUrl(): Promise<string> {
     const res = await clientApi.serviceVnc(serviceId.value, { silentError: true });
     const url = String(res.data?.url || '').trim();
     if (!url) throw new Error('未获取到可用的 VNC 地址');
-    const decoratedUrl = decorateVncUrl(url);
-    const credentials = res.data?.vnc_credentials;
-    storeVncCredentialsForUrl(decoratedUrl, credentials);
-    if (targetWindow) storeVncCredentialsForUrl(decoratedUrl, credentials, targetWindow);
-    return decoratedUrl;
+    return attachVncCredentialsToFragment(decorateVncUrl(url), res.data?.vnc_credentials);
   }
 
   async function handleOpenVnc(mode: 'embed' | 'window' = 'embed') {
@@ -91,7 +88,7 @@ export function useConsoleVnc(options: UseConsoleVncOptions) {
 
     actionLoading.value = true;
     try {
-      const url = await requestVncUrl(popup);
+      const url = await requestVncUrl();
       activeTab.value = 'vnc';
       if (mode === 'window' && popup) {
         popup.location.replace(url);

@@ -1,11 +1,11 @@
 import 'nprogress/nprogress.css';
 
+import { toUserMessage } from '@caiwu/shared/runtime';
 import NProgress from 'nprogress';
 import { MessagePlugin } from 'tdesign-vue-next';
 
 import { getClientToken } from '@/app/runtime/session';
 import { useSiteBrandingStore } from '@/app/stores/siteBranding';
-import { toUserMessage } from '@caiwu/shared/runtime';
 import router from '@/router';
 import { getPermissionStore, useUserStore } from '@/store';
 
@@ -18,7 +18,8 @@ NProgress.configure({ showSpinner: false });
 
 function resolveRedirectPath(raw: unknown, fallback = '/client/dashboard') {
   const redirect = typeof raw === 'string' ? redirectURIComponentSafe(raw) : '';
-  return redirect.startsWith('/') ? redirect : fallback;
+  // 仅接受站内绝对路径，拒绝 //evil.com 协议相对形态
+  return redirect.startsWith('/') && !redirect.startsWith('//') ? redirect : fallback;
 }
 
 function redirectURIComponentSafe(value: string) {

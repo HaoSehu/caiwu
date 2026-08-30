@@ -119,9 +119,53 @@ function isSafeUrl(value, tagName, attrName) {
   }
 }
 
-function cleanAttribute(element, attr) {
+// style 属性受控放行（仅 options.allowStyleAttr 时启用）：
+// 任一声明含脚本/绑定/固定定位向量，或 url() 指向非 http(s)/data:image，
+// 即整条丢弃（style 值内 url() 可含分号，逐声明拆分不可靠），宁可损失排版不留风险。
+function sanitizeStyleValue(value) {
+  // 浏览器把 CSS 注释当空白，先剥离再检测，防 expression/*x*/( 等拼接变体绕过
+  const raw = String(value || "").replace(/\/\*[\s\S]*?\*\//g, "");
+  if (
+    /expression\s*\(|behaviou?r\s*:|-moz-binding|javascript\s*:|@import|position\s*:\s*fixed/i.test(
+      raw,
+    )
+  ) {
+    return "";
+  }
+
+  const urlMatches = raw.matchAll(/url\(\s*(['"]?)([^'")]+)\1\s*\)/gi);
+  for (const match of urlMatches) {
+    if (!/^(https?:|data:image\/)/i.test(match[2].trim())) {
+      return "";
+    }
+  }
+
+  return raw.trim();
+}
+
+function cleanAttribute(element, attr, options) {
   const tagName = element.tagName.toLowerCase();
   const attrName = attr.name.toLowerCase();
+
+  if (attrName === "style" && options.allowStyleAttr) {
+    const cleanedStyle = sanitizeStyleValue(attr.value);
+    if (cleanedStyle) {
+      element.setAttribute("style", cleanedStyle);
+    } else {
+      element.removeAttribute(attr.name);
+    }
+    return;
+  }
+
+  // 仅 options.allowDataImage 时放行 img 的 data:image 内嵌图（日志邮件预览路径，与 CSP img-src data: 对齐）
+  if (
+    tagName === "img" &&
+    attrName === "src" &&
+    options.allowDataImage &&
+    /^data:image\//i.test(String(attr.value).trim())
+  ) {
+    return;
+  }
 
   if (attrName.startsWith("on") || !ALLOWED_ATTRS.has(attrName)) {
     element.removeAttribute(attr.name);
@@ -173,7 +217,7 @@ function cleanAttribute(element, attr) {
   }
 }
 
-function sanitizeElement(element, imageAltFallback) {
+function sanitizeElement(element, imageAltFallback, options) {
   const tagName = element.tagName.toLowerCase();
 
   if (DROP_TAGS.has(tagName)) {
@@ -182,13 +226,13 @@ function sanitizeElement(element, imageAltFallback) {
   }
 
   if (!ALLOWED_TAGS.has(tagName)) {
-    walk(element, imageAltFallback);
+    walk(element, imageAltFallback, options);
     element.replaceWith(...Array.from(element.childNodes));
     return;
   }
 
   for (const attr of Array.from(element.attributes)) {
-    cleanAttribute(element, attr);
+    cleanAttribute(element, attr, options);
   }
 
   if (tagName === "a") {
@@ -213,12 +257,12 @@ function sanitizeElement(element, imageAltFallback) {
   }
 }
 
-function walk(node, imageAltFallback) {
+function walk(node, imageAltFallback, options) {
   for (const child of Array.from(node.childNodes)) {
     if (child.nodeType === Node.ELEMENT_NODE) {
-      sanitizeElement(child, imageAltFallback);
+      sanitizeElement(child, imageAltFallback, options);
       if (child.parentNode) {
-        walk(child, imageAltFallback);
+        walk(child, imageAltFallback, options);
       }
     } else if (child.nodeType !== Node.TEXT_NODE) {
       child.remove();
@@ -246,7 +290,7 @@ export function sanitizeRenderedHtml(html, options = {}) {
     String(options.imageAltFallback || "image").trim() || "image";
   const document = new DOMParser().parseFromString(source, "text/html");
 
-  walk(document.body, imageAltFallback);
+  walk(document.body, imageAltFallback, options);
 
   return document.body.innerHTML;
 }

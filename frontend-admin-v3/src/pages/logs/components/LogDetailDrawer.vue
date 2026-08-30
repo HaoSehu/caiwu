@@ -15,14 +15,8 @@
       </div>
       <div v-for="item in detailBlocks" :key="item.label" class="detail-block">
         <h3>{{ item.label }}</h3>
-        <!-- 脚本执行防线：sandbox 未开放 allow-scripts，邮件正文脚本无法运行 -->
-        <iframe
-          v-if="item.html"
-          class="mail-preview-frame"
-          :srcdoc="item.value"
-          sandbox="allow-same-origin"
-          title="邮件正文预览"
-        />
+        <!-- 脚本执行防线：sandbox 未开放 allow-scripts 且无 allow-same-origin，邮件正文脚本无法运行、无法触达父域 -->
+        <iframe v-if="item.html" class="mail-preview-frame" :srcdoc="item.value" sandbox="" title="邮件正文预览" />
         <pre v-else class="json-block">{{ item.value }}</pre>
       </div>
       <div class="detail-drawer-actions">
@@ -35,11 +29,11 @@
   </t-drawer>
 </template>
 <script setup lang="ts">
+import { sanitizeRenderedHtml } from '@shared/htmlSanitizer';
 import { ChevronLeftIcon } from 'tdesign-icons-vue-next';
 import { computed } from 'vue';
 
 import { fieldValue, formatDateTime } from '@/utils/format';
-import { sanitizeRenderedHtml } from '@shared/htmlSanitizer';
 
 type LogTab = 'runtime' | 'admin-logins' | 'api' | 'sms' | 'email' | 'tasks' | 'gateway';
 type RecordRow = Record<string, unknown>;
@@ -300,35 +294,32 @@ function buildContentPreviewDoc(value: unknown) {
   }
   if (/<!doctype\s+html|<html\b|<body\b/i.test(normalized)) return sanitizeHtmlDoc(normalized);
   if (/<[a-z][a-z0-9]*(?:\s|>)/i.test(normalized)) {
-    const sanitized = sanitizeRenderedHtml(normalized, { imageAltFallback: '图片' });
+    const sanitized = sanitizeRenderedHtml(normalized, {
+      imageAltFallback: '图片',
+      allowStyleAttr: true,
+      allowDataImage: true,
+    });
     return `<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:;"><style>body{margin:0;padding:24px;background:#f5f7fa;font-family:Arial,sans-serif;color:#1f2329}.mail-preview{max-width:680px;margin:0 auto;padding:24px;border:1px solid #dce7ff;border-radius: var(--td-radius-extraLarge, 12px);background:#fff}</style></head><body><div class="mail-preview">${sanitized}</div></body></html>`;
   }
   return `<!doctype html><html lang="zh-CN"><body style="margin:0;padding:24px;font-family:Arial,sans-serif;background:#f8fafc;color:#1f2329;"><pre style="margin:0;white-space:pre-wrap;line-height:1.75;">${escapeHtml(normalized)}</pre></body></html>`;
 }
 
 /**
- * 消毒完整 HTML 文档：注入 CSP 兜底，并移除脚本/外嵌与事件属性。
- * 脚本执行第一道防线是 iframe sandbox（无 allow-scripts），CSP 为第二道；
- * 片段场景由 shared/htmlSanitizer 的 sanitizeRenderedHtml 统一处理。
+ * 消毒完整 HTML 文档：解析后仅保留 body 内容，走 shared/htmlSanitizer 节点级清洗
+ * （allowStyleAttr 保邮件排版），重新包固定 CSP 壳；iframe sandbox 为第一道防线。
  */
 function sanitizeHtmlDoc(doc: string): string {
   const csp =
     '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; img-src data:;">';
-  const cleaned = doc
-    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
-    .replace(/<iframe\b[^>]*>[\s\S]*?<\/iframe>/gi, '')
-    .replace(/<object\b[^>]*>[\s\S]*?<\/object>/gi, '')
-    .replace(/<embed\b[^>]*>/gi, '')
-    .replace(/<link\b[^>]*>/gi, '')
-    .replace(/\son\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
-    .replace(/javascript\s*:/gi, '');
-  if (/<head\b/i.test(cleaned)) {
-    return cleaned.replace(/<head\b[^>]*>/i, `$&${csp}`);
-  }
-  if (/<html\b/i.test(cleaned)) {
-    return cleaned.replace(/<html\b[^>]*>/i, `$&<head>${csp}</head>`);
-  }
-  return `<!doctype html><html lang="zh-CN"><head>${csp}</head><body>${cleaned}</body></html>`;
+  const parsed = new DOMParser().parseFromString(doc, 'text/html');
+  const bodyHtml = parsed.body
+    ? sanitizeRenderedHtml(parsed.body.innerHTML, {
+        imageAltFallback: '图片',
+        allowStyleAttr: true,
+        allowDataImage: true,
+      })
+    : '';
+  return `<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8">${csp}</head><body style="margin:0;">${bodyHtml}</body></html>`;
 }
 
 function escapeHtml(value: string) {
