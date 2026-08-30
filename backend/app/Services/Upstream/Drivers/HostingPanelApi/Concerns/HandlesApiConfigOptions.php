@@ -6,12 +6,37 @@ namespace App\Services\Upstream\Drivers\HostingPanelApi\Concerns;
 
 use App\Exceptions\BusinessException;
 use App\Models\Supplier;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 trait HandlesApiConfigOptions
 {
-    public function getProductConfigTemplate(Supplier $supplier, int $productId): array
+    // 配置项模板缓存：目录 + /v1/productsconfig + 前台回退最多 3 次串行上游调用，
+    // 用户购买路径每次拉取代价过高；配置项变更频率低，10 分钟陈旧度可接受。
+    // 同步、管理端等需要实时数据的调用方传 bypassCache = true。
+    private const PRODUCT_CONFIG_TEMPLATE_CACHE_TTL_SECONDS = 600;
+
+    public function getProductConfigTemplate(Supplier $supplier, int $productId, bool $bypassCache = false): array
+    {
+        $cacheKey = 'upstream:hosting_panel_api:config_template:'.$supplier->id.':'.$productId;
+        $store = Cache::store('redis_volatile');
+
+        if (! $bypassCache) {
+            $cached = $store->get($cacheKey);
+            if (is_array($cached)) {
+                return $cached;
+            }
+        }
+
+        $template = $this->resolveProductConfigTemplate($supplier, $productId);
+
+        $store->put($cacheKey, $template, now()->addSeconds(self::PRODUCT_CONFIG_TEMPLATE_CACHE_TTL_SECONDS));
+
+        return $template;
+    }
+
+    private function resolveProductConfigTemplate(Supplier $supplier, int $productId): array
     {
         $catalog = $this->getProductCatalog($supplier);
         $product = collect($catalog['products'] ?? [])->first(

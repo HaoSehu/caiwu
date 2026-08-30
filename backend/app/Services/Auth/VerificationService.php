@@ -20,10 +20,10 @@ use App\Services\Verification\Data\VerificationScanUrlResult;
 use App\Services\Verification\Data\VerificationStatusResult;
 use App\Services\Verification\VerificationDriverManager;
 use App\Support\PublicUrl;
+use App\Support\SchemaMetadataCache;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Schema;
 
 class VerificationService
 {
@@ -166,26 +166,31 @@ class VerificationService
 
     public function queryStatus(string $certifyId): array
     {
-        $maxRetries = 3;
-
-        for ($attempt = 0; $attempt < $maxRetries; $attempt++) {
-            $result = $this->getAliyunAuthStatus($certifyId);
-
-            if ($result->status !== self::RESULT_STATUS_NETWORK_ERROR) {
-                return $result->toArray();
-            }
-
-            if ($attempt < $maxRetries - 1) {
-                usleep(200_000);
-            }
+        // 前端每 1 秒轮询认证状态：按 certify_id 做服务端微缓存，把高频轮询收敛为
+        // 对第三方的低频查询；pending 结果缓存 3 秒、终态成功缓存 60 秒（成功状态
+        // 已由 syncUserStatus 落库，延长缓存只是减少无意义的重复上游查询）。
+        // 网络错误不缓存，且不再做请求内 3 次重试 + usleep——轮询本身就是重试机制，
+        // 立即返回网络错误状态由前端下一轮轮询兜底，避免第三方抖动时单请求挂起 90 秒。
+        $cacheKey = 'verification:status:'.hash('sha256', $certifyId);
+        $cached = Cache::get($cacheKey);
+        if (is_array($cached)) {
+            return $cached;
         }
 
-        // 重试耗尽仍网络失败：返回网络错误状态（3），syncUserStatus 会保留原认证状态，
-        // 避免把上游暂时不可用误判为“认证失败”并写库。
-        return [
-            'status' => self::RESULT_STATUS_NETWORK_ERROR,
-            'msg' => '网络请求失败，请刷新页面重试',
-        ];
+        $result = $this->getAliyunAuthStatus($certifyId);
+
+        if ($result->status === self::RESULT_STATUS_NETWORK_ERROR) {
+            return [
+                'status' => self::RESULT_STATUS_NETWORK_ERROR,
+                'msg' => '网络请求失败，请刷新页面重试',
+            ];
+        }
+
+        $payload = $result->toArray();
+        $ttlSeconds = (int) ($payload['status'] ?? null) === self::RESULT_STATUS_SUCCESS ? 60 : 3;
+        Cache::put($cacheKey, $payload, now()->addSeconds($ttlSeconds));
+
+        return $payload;
     }
 
     public function syncUserStatus(User $user, array $result, ?string $certifyId = null): User
@@ -480,7 +485,7 @@ class VerificationService
         }
 
         try {
-            return $this->verificationHistoryTableAvailable = Schema::hasTable('verification_histories');
+            return $this->verificationHistoryTableAvailable = SchemaMetadataCache::hasTable('verification_histories');
         } catch (\Throwable $exception) {
             $this->verificationHistoryTableAvailable = false;
 
@@ -553,7 +558,7 @@ class VerificationService
 
     private function activeVerificationPlugin(): ?IntegrationPlugin
     {
-        if (! Schema::hasTable('integration_plugins')) {
+        if (! SchemaMetadataCache::hasTable('integration_plugins')) {
             return null;
         }
 

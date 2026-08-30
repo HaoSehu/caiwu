@@ -15,11 +15,11 @@ use App\Services\Automation\Heartbeat\Rules\EveryTicks;
 use App\Services\Automation\Heartbeat\ScheduleTaskRunRepository;
 use App\Services\System\SettingService;
 use App\Support\AutomationScheduleExpression;
+use App\Support\SchemaMetadataCache;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Pagination\LengthAwarePaginator as ConcreteLengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Schema;
 use Throwable;
 
 class ScheduleTaskService
@@ -299,7 +299,7 @@ class ScheduleTaskService
             return $runs;
         }
 
-        if (! Schema::hasTable('schedule_run_logs')) {
+        if (! SchemaMetadataCache::hasTable('schedule_run_logs')) {
             return [];
         }
 
@@ -323,7 +323,7 @@ class ScheduleTaskService
 
     private function latestLegacyLogForTask(string $taskName, string $taskKey): ?array
     {
-        if (! Schema::hasTable('schedule_run_logs')) {
+        if (! SchemaMetadataCache::hasTable('schedule_run_logs')) {
             return null;
         }
 
@@ -394,7 +394,7 @@ class ScheduleTaskService
         }
 
         try {
-            return Schema::connection($connection)->hasTable($table);
+            return SchemaMetadataCache::hasTable($table, $connection);
         } catch (Throwable) {
             return false;
         }

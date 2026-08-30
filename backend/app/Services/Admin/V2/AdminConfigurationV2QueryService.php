@@ -26,9 +26,9 @@ use App\Services\Upstream\Contracts\ProvidesConsoleCatalog;
 use App\Services\Upstream\Contracts\ProvidesRenewal;
 use App\Services\Upstream\ProviderRegistry;
 use App\Services\Upstream\ProviderResolver;
+use App\Support\SchemaMetadataCache;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class AdminConfigurationV2QueryService
@@ -178,7 +178,7 @@ class AdminConfigurationV2QueryService
     public function suppliers(array $filters, int $pageSize): array
     {
         $query = Supplier::query();
-        if (Schema::hasTable('supplier_plugin_bindings')) {
+        if (SchemaMetadataCache::hasTable('supplier_plugin_bindings')) {
             $query->with('pluginBindings');
         }
 
@@ -377,7 +377,8 @@ class AdminConfigurationV2QueryService
         $runtimeSupplier = $this->supplierWithRuntimeCredentials($supplier);
         $provider = app(ProviderResolver::class)->resolveForSupplier($runtimeSupplier);
         $catalogCapability = $provider->require(ProvidesConsoleCatalog::class, '当前供应商暂不支持拉取商品配置');
-        $template = $catalogCapability->getProductConfigTemplate($runtimeSupplier, $productId);
+        // 管理端拉取配置模板需要实时数据，绕过用户购买路径的 10 分钟缓存。
+        $template = $catalogCapability->getProductConfigTemplate($runtimeSupplier, $productId, true);
 
         return [
             'supplier_id' => (int) $supplier->id,
@@ -771,7 +772,7 @@ class AdminConfigurationV2QueryService
 
         $bindingProducts = collect();
         $bindingIds = $this->supplierPluginBindingIds((int) $supplier->id);
-        if (Schema::hasTable('product_upstream_bindings') && Schema::hasTable('supplier_plugin_bindings')) {
+        if (SchemaMetadataCache::hasTable('product_upstream_bindings') && SchemaMetadataCache::hasTable('supplier_plugin_bindings')) {
             if ($normalizedIds !== [] && $bindingIds !== []) {
                 $bindingProducts = Product::withTrashed()
                     ->with(['productGroup.secondProductGroup.firstProductGroup'])
@@ -813,7 +814,7 @@ class AdminConfigurationV2QueryService
      */
     private function supplierPluginBindingIds(int $supplierId, bool $lockForUpdate = false): array
     {
-        if ($supplierId <= 0 || ! Schema::hasTable('supplier_plugin_bindings')) {
+        if ($supplierId <= 0 || ! SchemaMetadataCache::hasTable('supplier_plugin_bindings')) {
             return [];
         }
 
@@ -839,7 +840,7 @@ class AdminConfigurationV2QueryService
     {
         $productIds = collect();
 
-        if ($bindingIds !== [] && Schema::hasTable('product_upstream_bindings')) {
+        if ($bindingIds !== [] && SchemaMetadataCache::hasTable('product_upstream_bindings')) {
             $productIds = $productIds->merge(
                 DB::table('product_upstream_bindings')
                     ->whereIn('supplier_plugin_binding_id', $bindingIds)
@@ -859,7 +860,7 @@ class AdminConfigurationV2QueryService
      */
     private function countBoundServices(array $bindingIds): int
     {
-        if ($bindingIds === [] || ! Schema::hasTable('service_upstream_bindings')) {
+        if ($bindingIds === [] || ! SchemaMetadataCache::hasTable('service_upstream_bindings')) {
             return 0;
         }
 
@@ -871,7 +872,7 @@ class AdminConfigurationV2QueryService
 
     private function countBoundServiceInstances(int $supplierId): int
     {
-        if (! Schema::hasTable('service_instances') || ! Schema::hasColumn('service_instances', 'supplier_id')) {
+        if (! SchemaMetadataCache::hasTable('service_instances') || ! SchemaMetadataCache::hasColumn('service_instances', 'supplier_id')) {
             return 0;
         }
 
@@ -882,7 +883,7 @@ class AdminConfigurationV2QueryService
 
     private function recordSupplierConnectionCheck(Supplier $supplier, string $status, ?string $error = null): void
     {
-        if (! Schema::hasTable('supplier_plugin_bindings')) {
+        if (! SchemaMetadataCache::hasTable('supplier_plugin_bindings')) {
             return;
         }
 

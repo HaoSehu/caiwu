@@ -25,6 +25,7 @@ use App\Services\System\OperationLogService;
 use App\Services\User\AccountService;
 use App\Support\AdminPrivacy;
 use App\Support\PublicUrl;
+use App\Support\SchemaMetadataCache;
 use App\Support\TextSanitizer;
 use Carbon\CarbonInterface;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -35,7 +36,6 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class ReferralService
@@ -1924,7 +1924,7 @@ class ReferralService
             return $resolved;
         }
 
-        $resolved = Schema::hasTable('user_referrals');
+        $resolved = SchemaMetadataCache::hasTable('user_referrals');
 
         return $resolved;
     }

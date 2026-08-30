@@ -8,6 +8,7 @@ use App\Models\FirstProductGroup;
 use App\Models\Product;
 use App\Models\SecondProductGroup;
 use App\Models\ThirdProductGroup;
+use App\Support\SchemaMetadataCache;
 use Illuminate\Support\Facades\Schema;
 
 class ProductTypeService
@@ -33,7 +34,7 @@ class ProductTypeService
         $firstGroups = $hasFirstProductGroups
             ? FirstProductGroup::query()->whereIn('code', $values)->get()->keyBy('code')
             : collect();
-        $usageMap = Schema::hasTable('products') && $hasProductHierarchy
+        $usageMap = SchemaMetadataCache::hasTable('products') && $hasProductHierarchy
             ? Product::query()
                 ->join('third_product_groups', 'third_product_groups.id', '=', 'products.product_group_id')
                 ->join('second_product_groups', 'second_product_groups.id', '=', 'third_product_groups.second_product_group_id')
@@ -100,7 +101,7 @@ class ProductTypeService
 
     private function hierarchySourceExists(string $name): bool
     {
-        return Schema::hasTable($name) || Schema::hasView($name);
+        return SchemaMetadataCache::hasTable($name) || Schema::hasView($name);
     }
 
     public function create(string $label, ?string $icon = null, ?string $productType = null): array

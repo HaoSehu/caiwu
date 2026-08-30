@@ -162,7 +162,9 @@ class PaymentService
                         FinanceLedgerEventType::INVOICE_PAYMENT,
                         -$amount,
                         $balanceAfter,
-                        (int) $lockedOrder->id,
+                        // 台账 source_type 固定为 invoice，这里必须挂账单 ID：
+                        // 订单/账单自增序列独立，挂订单 ID 会让台账反查到无关账单。
+                        $lockedOrder->invoice instanceof Invoice ? (int) $lockedOrder->invoice->id : null,
                         '支付订单 '.(string) $lockedOrder->order_no,
                         [
                             'trace_id' => $traceId,
@@ -1095,7 +1097,15 @@ class PaymentService
         }
 
         $gateway = $payment->gatewayKey();
-        $result = $this->queryGatewayPayment($gateway, $payment->payment_no);
+
+        // 支付页前端按秒轮询：按网关+支付单号做 3 秒服务端微缓存，把轮询 QPS 收敛为
+        // 对网关的低频主动查询；支付成功通常伴随回调入账，3 秒延迟对体验无感。
+        $queryCacheKey = 'payment:gateway:query:'.$gateway.':'.hash('sha256', (string) $payment->payment_no);
+        $result = Cache::get($queryCacheKey);
+        if (! is_array($result)) {
+            $result = $this->queryGatewayPayment($gateway, $payment->payment_no);
+            Cache::put($queryCacheKey, $result, now()->addSeconds(3));
+        }
 
         if (in_array($result['trade_status'], ['TRADE_SUCCESS', 'TRADE_FINISHED', 'SUCCESS'], true)) {
             // 主动查询确认已支付，直接走入账流程（不经过签名验证）
@@ -1989,17 +1999,6 @@ class PaymentService
         $this->clearFulfillmentPending($order->invoice);
     }
 
-    public function processPaidInvoiceAdminNotifyById(int $invoiceId): void
-    {
-        $invoice = Invoice::query()->find($invoiceId);
-
-        if (! $invoice instanceof Invoice || (int) $invoice->status !== InvoiceStatus::PAID) {
-            return;
-        }
-
-        $this->adminOrderNotificationService->notifyInvoicePaidAfterResponse($invoice);
-    }
-
     public function processPaidInvoiceCouponSyncById(int $invoiceId): void
     {
         $invoice = Invoice::query()->find($invoiceId);
@@ -2719,24 +2718,13 @@ class PaymentService
 
     private function invoiceHasBalancePayment(Invoice $invoice): bool
     {
+        // 台账 INVOICE_PAYMENT 行的 source_id 统一为账单 ID（历史错挂订单 ID 的
+        // 存量已由订正迁移 2026_08_31_000001 归位），此处只需精确匹配账单本身。
         return AccountTransaction::query()
             ->where('user_id', (int) $invoice->user_id)
             ->where('event_type', FinanceLedgerEventType::INVOICE_PAYMENT)
-            ->where(function ($query) use ($invoice): void {
-                $query->where(function ($sourceQuery) use ($invoice): void {
-                    $sourceQuery
-                        ->where('source_type', 'invoice')
-                        ->where('source_id', (int) $invoice->id);
-                });
-
-                if ((int) ($invoice->order_id ?? 0) > 0) {
-                    $query->orWhere(function ($sourceQuery) use ($invoice): void {
-                        $sourceQuery
-                            ->where('source_type', 'invoice')
-                            ->where('source_id', (int) $invoice->order_id);
-                    });
-                }
-            })
+            ->where('source_type', 'invoice')
+            ->where('source_id', (int) $invoice->id)
             ->exists();
     }
 

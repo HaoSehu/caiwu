@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use App\Models\AdminUser;
 use App\Models\User;
 use App\Services\System\OperationLogService;
+use App\Support\AuditParamRedactor;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -111,7 +112,8 @@ class LogOperation
 
             $shouldPersistAudit = $this->shouldPersistAccessAudit($request, $statusCode, (string) $detail['module']);
             if ($shouldPersistAudit) {
-                $detail['params'] = $request->all();
+                // 密码/验证码/令牌不是应进审计的展示要素，落库前剔除（含失败尝试）。
+                $detail['params'] = AuditParamRedactor::redact($request->all(), (string) $detail['module']);
             }
 
             if ($exception !== null) {
@@ -120,15 +122,22 @@ class LogOperation
             }
 
             if ($shouldPersistAudit) {
-                $this->operationLogService->write(
-                    userId: $user?->id ? (int) $user->id : null,
-                    userType: $this->resolveUserType($user),
-                    action: $request->method().' '.$request->path(),
-                    module: $this->resolveModule($request),
-                    targetId: null,
-                    detail: $detail,
-                    ipAddress: $request->ip(),
-                );
+                // 审计落库延迟到响应发送之后执行：所有写请求此前都在响应返回前
+                // 串行等待一次 activity_logs INSERT（含参数序列化与递归截断），
+                // 高峰期直接计入接口 RT 并拖累审计表写入吞吐。defer 由框架保证
+                // 在响应发送后、进程结束前执行，失败仅记日志不影响主流程。
+                $operationLogService = $this->operationLogService;
+                defer(function () use ($operationLogService, $user, $request, $detail): void {
+                    $operationLogService->write(
+                        userId: $user?->id ? (int) $user->id : null,
+                        userType: $this->resolveUserType($user),
+                        action: $request->method().' '.$request->path(),
+                        module: $this->resolveModule($request),
+                        targetId: null,
+                        detail: $detail,
+                        ipAddress: $request->ip(),
+                    );
+                });
 
                 return;
             }

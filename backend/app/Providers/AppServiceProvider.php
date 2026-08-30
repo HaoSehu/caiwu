@@ -15,7 +15,6 @@ use Illuminate\Http\Request;
 use Illuminate\Queue\Events\JobTimedOut;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\RateLimiter;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Sanctum\PersonalAccessToken;
 use Laravel\Sanctum\Sanctum;
@@ -52,6 +51,10 @@ class AppServiceProvider extends ServiceProvider
         // 公开询价接口按 IP 收敛阈值：默认 throttle:60,1 不足以限制竞品批量抓取价格。
         RateLimiter::for('product-quote', fn (Request $request) => Limit::perMinute(10)->by('product-quote:'.$request->ip()));
 
+        // api 组全局限流兜底：细粒度限流（登录、询价等）之外，防止公开端点被滥用时绕过缓存直击 DB。
+        // 按 IP 计数；throttle 中间件在 auth 之前执行，此处不依赖登录态。
+        RateLimiter::for('api', fn (Request $request) => Limit::perMinute(120)->by('api:'.$request->ip()));
+
         // 心跳任务超时被杀时，Worker 在 SIGKILL 前同步派发 JobTimedOut；
         // 监听器把运行台账收敛为 retrying/failed，避免队列重试被状态 CAS 永久拒绝。
         Event::listen(JobTimedOut::class, HeartbeatTaskTimedOutListener::class);
@@ -83,14 +86,11 @@ class AppServiceProvider extends ServiceProvider
 
     /**
      * 从数据库 settings 表加载管理员设置的站点名称，覆盖 config('app.name')。
-     * settings 表不存在时（首次迁移前）静默跳过。
+     * Setting::getGroupRawValues 内部已有表存在性检查与进程内缓存（首迁移前静默返回空），
+     * 这里不再预查 information_schema，避免每个请求固定多付一次元数据查询。
      */
     private function loadSiteNameFromSettings(): void
     {
-        if (! Schema::hasTable('settings')) {
-            return;
-        }
-
         $siteName = trim((string) Setting::getValue('basic', 'site_name', ''));
         if ($siteName === '') {
             return;

@@ -9,9 +9,9 @@ use App\Services\Integrations\Plugins\PluginBindingResolver;
 use App\Services\Integrations\Plugins\SupplierPluginCardRenderer;
 use App\Services\Upstream\ProviderRegistry;
 use App\Support\AdminPrivacy;
+use App\Support\SchemaMetadataCache;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
-use Illuminate\Support\Facades\Schema;
 
 /** @mixin Supplier */
 class AdminSupplierResource extends JsonResource
@@ -70,7 +70,7 @@ class AdminSupplierResource extends JsonResource
      */
     private function upstreamBindingPayload(array $binding): ?array
     {
-        if (! Schema::hasTable('supplier_plugin_bindings') || $binding === []) {
+        if (! SchemaMetadataCache::hasTable('supplier_plugin_bindings') || $binding === []) {
             return null;
         }
 

@@ -18,10 +18,10 @@ use App\Services\Sms\SmsDriverManager;
 use App\Services\Upstream\ProviderRegistry;
 use App\Services\Upstream\ProviderResolver;
 use App\Services\Verification\VerificationDriverManager;
+use App\Support\SchemaMetadataCache;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Schema;
 
 class PluginInstaller
 {
@@ -60,6 +60,8 @@ class PluginInstaller
         });
 
         $this->forgetDomainRuntime($manifest->domain);
+        // 插件表可能刚由迁移创建（首次安装），清空进程内元数据缓存避免同进程读到过期结果。
+        SchemaMetadataCache::flush();
 
         return $plugin;
     }
@@ -165,7 +167,7 @@ class PluginInstaller
                     'status' => IntegrationPlugin::STATUS_DISABLED,
                 ])->save();
 
-                if (Schema::hasTable('integration_plugin_bindings')) {
+                if (SchemaMetadataCache::hasTable('integration_plugin_bindings')) {
                     DB::table('integration_plugin_bindings')
                         ->where('plugin_id', (int) $plugin->id)
                         ->update([
@@ -377,7 +379,7 @@ class PluginInstaller
         }
 
         try {
-            if (! Schema::hasTable('integration_plugins')) {
+            if (! SchemaMetadataCache::hasTable('integration_plugins')) {
                 return $keys;
             }
 
@@ -456,7 +458,7 @@ class PluginInstaller
      */
     private function syncDriverBinding(IntegrationPlugin $plugin, PluginManifest $manifest, bool $enabled): void
     {
-        if (! Schema::hasTable('integration_plugin_bindings')) {
+        if (! SchemaMetadataCache::hasTable('integration_plugin_bindings')) {
             return;
         }
 

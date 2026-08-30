@@ -111,6 +111,13 @@ class CheckoutService
                     }
                 }
 
+                // 上游实时库存校验必须在 DB 事务外完成：strict 模式下该方法同步调用上游 HTTP
+                // （最长占用上游超时预算），放回事务内会在持有 products 行锁与幂等锁期间等待上游，
+                // 上游抖动时同商品所有结账互斥堆积，放大为锁等待与连接池耗尽。事务内保留本地校验，
+                // 预检与下单之间的竞态由 StockReservation 预扣与履约侧幂等兜底。
+                $precheckedProduct = Product::query()->findOrFail($productId);
+                $this->productCatalogService->assertProductCanBeProvisioned($precheckedProduct, $quantity);
+
                 return DB::transaction(function () use (
                     $userId,
                     $productId,
@@ -125,7 +132,6 @@ class CheckoutService
                     $product = Product::query()->lockForUpdate()->findOrFail($productId);
                     throw_if($product->status !== 1, new BusinessException('产品已下架'));
                     $product->loadMissing('supplier');
-                    $this->productCatalogService->assertProductCanBeProvisioned($product, $quantity);
                     $this->assertPurchaseRequires($product, $userId);
 
                     $normalizedConfig = $this->normalizeConfig($product, $rawConfig);

@@ -14,13 +14,13 @@ use App\Services\Integrations\Plugins\ServiceUpstreamBindingWriter;
 use App\Services\Integrations\Support\ProviderErrorMapper;
 use App\Services\Upstream\Contracts\ProvidesStatusSync;
 use App\Services\Upstream\ProviderResolver;
+use App\Support\SchemaMetadataCache;
 use App\Support\ServiceHostname;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Schema;
 
 class ServiceStatusSyncService
 {
@@ -730,7 +730,7 @@ class ServiceStatusSyncService
 
     private function applySyncableUpstreamBindingScope($query, ?string $providerKey = null, array $excludedProviderKeys = []): void
     {
-        if (! Schema::hasTable('service_upstream_bindings')) {
+        if (! SchemaMetadataCache::hasTable('service_upstream_bindings')) {
             $query->whereRaw('0 = 1');
 
             return;

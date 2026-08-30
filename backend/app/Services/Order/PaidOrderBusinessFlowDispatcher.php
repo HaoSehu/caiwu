@@ -5,18 +5,21 @@ namespace App\Services\Order;
 use App\Jobs\ProcessPaidOrderFulfillmentJob;
 use App\Jobs\ProcessPaidOrderReferralRewardJob;
 use App\Models\Invoice;
-use App\Models\Order;
+use App\Support\SchemaMetadataCache;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Schema;
 use Predis\Client;
 
 class PaidOrderBusinessFlowDispatcher
 {
-    /** 支付后同步履约的订单类型：立即开通，失败回退队列兜底 */
-    private const SYNCHRONOUS_FULFILLMENT_TYPES = ['new', 'renew'];
-
     private ?bool $databaseQueueReady = null;
 
+    /**
+     * 支付入账后的履约统一走队列派发：此前 new/renew 在支付回调 HTTP 请求内
+     * dispatchSync 同步执行完整上游开通链（多次串行上游调用），回调响应时长被
+     * 上游绑架，网关判定超时后阶梯重发形成回调风暴。异步化后由队列消费履约，
+     * 前端通过服务状态轮询呈现开通进度；队列不可用时回退 afterResponse 兜底，
+     * 审计与资金入账仍在本调用内同步完成，不受影响。
+     */
     public function dispatchPaidInvoice(Invoice $invoice, ?string $traceId = null): void
     {
         $orderId = (int) ($invoice->order?->id ?? 0);
@@ -26,12 +29,6 @@ class PaidOrderBusinessFlowDispatcher
         }
 
         $shouldDispatchReferralReward = $this->shouldDispatchReferralReward($invoice);
-
-        if ($this->shouldSynchronouslyFulfill($invoice)) {
-            $this->dispatchFulfillmentSynchronously($orderId, $invoice, $traceId, $shouldDispatchReferralReward);
-
-            return;
-        }
 
         if (app()->runningInConsole()) {
             if ($this->shouldUseQueue()) {
@@ -73,65 +70,9 @@ class PaidOrderBusinessFlowDispatcher
         ProcessPaidOrderFulfillmentJob::dispatchAfterResponse($orderId);
     }
 
-    private function dispatchFulfillmentSynchronously(
-        int $orderId,
-        Invoice $invoice,
-        ?string $traceId,
-        bool $shouldDispatchReferralReward,
-    ): void {
-        if ($shouldDispatchReferralReward) {
-            ProcessPaidOrderReferralRewardJob::dispatch($orderId, $traceId);
-        }
-
-        try {
-            ProcessPaidOrderFulfillmentJob::dispatchSync($orderId);
-
-            return;
-        } catch (\Throwable $exception) {
-            Log::warning('[支付后业务流] 同步履约失败，回退队列等待重试', [
-                'order_id' => $orderId,
-                'invoice_id' => (int) $invoice->id,
-                'message' => $exception->getMessage(),
-                'exception' => $exception::class,
-            ]);
-        }
-
-        $this->dispatchFulfillmentViaQueueOrFallback($orderId);
-    }
-
-    private function dispatchFulfillmentViaQueueOrFallback(int $orderId): void
-    {
-        if ($this->shouldUseQueue()) {
-            ProcessPaidOrderFulfillmentJob::dispatch($orderId);
-
-            return;
-        }
-
-        $this->logFallbackDispatch($orderId);
-
-        if (app()->runningInConsole()) {
-            ProcessPaidOrderFulfillmentJob::dispatchSync($orderId);
-
-            return;
-        }
-
-        ProcessPaidOrderFulfillmentJob::dispatchAfterResponse($orderId);
-    }
-
     private function shouldDispatchReferralReward(Invoice $invoice): bool
     {
         return in_array((string) ($invoice->order?->type ?? $invoice->type ?? ''), ['new', 'renew'], true);
-    }
-
-    private function shouldSynchronouslyFulfill(Invoice $invoice): bool
-    {
-        $order = $invoice->order;
-
-        $type = $order instanceof Order
-            ? (string) $order->getAttribute('type')
-            : (string) $invoice->getAttribute('type');
-
-        return in_array($type, self::SYNCHRONOUS_FULFILLMENT_TYPES, true);
     }
 
     private function shouldUseQueue(): bool
@@ -162,7 +103,7 @@ class PaidOrderBusinessFlowDispatcher
         $table = (string) config('queue.connections.database.table', 'jobs');
 
         try {
-            $this->databaseQueueReady = $table !== '' && Schema::hasTable($table);
+            $this->databaseQueueReady = $table !== '' && SchemaMetadataCache::hasTable($table);
         } catch (\Throwable $exception) {
             Log::warning('[支付后业务流] 检查队列表失败，回退为 afterResponse', [
                 'table' => $table,

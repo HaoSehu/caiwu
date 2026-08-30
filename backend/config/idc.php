@@ -60,7 +60,10 @@ return [
         'jwt_cache_store' => env('HOSTING_PANEL_API_JWT_CACHE_STORE', 'redis'),
         'dns_resolver_timeout' => (int) env('HOSTING_PANEL_API_DNS_TIMEOUT', 3),
         'connect_timeout' => (int) env('HOSTING_PANEL_API_CONNECT_TIMEOUT', 15),
-        'timeout' => 900,
+        // 单次上游请求总超时（连接+响应）。此前硬编码 900 秒：上游挂起时单个 PHP-FPM worker
+        // 最长阻塞 15 分钟，并发即耗尽 worker 池。默认 60 秒覆盖重操作（如开通提交），
+        // 上游确有超长同步接口时可通过 HOSTING_PANEL_API_TIMEOUT 按环境放宽。
+        'timeout' => (int) env('HOSTING_PANEL_API_TIMEOUT', 60),
     ],
 
     // 短信配置

@@ -22,10 +22,10 @@ use App\Services\ProductCatalog\InstanceSpecCatalogService;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Support\Money;
 use App\Support\ProductGroupHierarchyFields;
+use App\Support\SchemaMetadataCache;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class CouponService
@@ -236,7 +236,7 @@ class CouponService
             throw_if($deleted !== 1, new BusinessException('优惠券删除失败'));
 
             $campaignId = (int) ($lockedCoupon->coupon_campaign_id ?? 0);
-            if ($campaignId > 0 && Schema::hasTable('coupon_campaigns')) {
+            if ($campaignId > 0 && SchemaMetadataCache::hasTable('coupon_campaigns')) {
                 $nextLastCouponId = Coupon::query()
                     ->where('coupon_campaign_id', $campaignId)
                     ->max('id');
@@ -1888,7 +1888,7 @@ class CouponService
             return $resolved;
         }
 
-        $resolved = Schema::hasTable('user_coupons');
+        $resolved = SchemaMetadataCache::hasTable('user_coupons');
 
         return $resolved;
     }
@@ -1901,7 +1901,7 @@ class CouponService
             return $resolved;
         }
 
-        $resolved = Schema::hasTable('coupons');
+        $resolved = SchemaMetadataCache::hasTable('coupons');
 
         return $resolved;
     }

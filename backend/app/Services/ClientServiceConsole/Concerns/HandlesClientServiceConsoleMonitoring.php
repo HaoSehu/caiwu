@@ -9,10 +9,10 @@ use App\Models\Supplier;
 use App\Models\User;
 use App\Services\Integrations\Plugins\PluginBindingResolver;
 use App\Support\Money;
+use App\Support\SchemaMetadataCache;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Schema;
 
 trait HandlesClientServiceConsoleMonitoring
 {
@@ -1374,7 +1374,7 @@ trait HandlesClientServiceConsoleMonitoring
     private function hasMonitorSupplierBindingTable(): bool
     {
         try {
-            return Schema::hasTable('supplier_plugin_bindings');
+            return SchemaMetadataCache::hasTable('supplier_plugin_bindings');
         } catch (\Throwable) {
             return false;
         }

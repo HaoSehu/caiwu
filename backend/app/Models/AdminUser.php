@@ -3,13 +3,13 @@
 namespace App\Models;
 
 use App\Support\AdminPermissions;
+use App\Support\SchemaMetadataCache;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
-use Illuminate\Support\Facades\Schema;
 use Laravel\Sanctum\HasApiTokens;
 
 class AdminUser extends Authenticatable
@@ -178,7 +178,7 @@ class AdminUser extends Authenticatable
     private static function adminUserRolesTableAvailable(): bool
     {
         if (self::$adminUserRolesTableAvailable === null) {
-            self::$adminUserRolesTableAvailable = Schema::hasTable('admin_user_roles');
+            self::$adminUserRolesTableAvailable = SchemaMetadataCache::hasTable('admin_user_roles');
         }
 
         return self::$adminUserRolesTableAvailable;

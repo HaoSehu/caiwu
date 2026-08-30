@@ -12,6 +12,7 @@ use App\Constants\PaymentStatus;
 use App\Constants\ServiceStatus;
 use App\Exceptions\BusinessException;
 use App\Http\Resources\Finance\FinanceLedgerResource;
+use App\Jobs\SendTemplateEmailJob;
 use App\Models\ActivityLog;
 use App\Models\Invoice;
 use App\Models\MemberLevel;
@@ -36,11 +37,11 @@ use App\Services\System\OperationLogService;
 use App\Services\System\SettingService;
 use App\Services\User\Concerns\HandlesAdminUserServices;
 use App\Support\AccountIdentifier;
+use App\Support\SchemaMetadataCache;
 use App\Support\TextSanitizer;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 
 class UserService
 {
@@ -52,7 +53,6 @@ class UserService
         private InvoiceService $invoiceService,
         private PaymentService $paymentService,
         private FinanceLedgerQueryService $financeLedgerQueryService,
-        private NotificationService $notificationService,
         private OperationLogService $operationLogService,
         private ProvisionService $provisionService,
         private ServiceStatusSyncService $serviceStatusSyncService,
@@ -223,7 +223,7 @@ class UserService
 
         DB::transaction(function () use ($user, $targetLevel): void {
             // 双写 users 与 user_referrals（若存在），保证投影表与主表一致
-            if (Schema::hasTable('user_referrals')) {
+            if (SchemaMetadataCache::hasTable('user_referrals')) {
                 UserReferral::query()->updateOrCreate(
                     ['user_id' => $user->id],
                     ['member_level_id' => $targetLevel?->id]
@@ -525,7 +525,9 @@ class UserService
             ? NotificationService::TEMPLATE_PAYMENT_SUCCESS
             : NotificationService::TEMPLATE_CLIENT_ORDER_PENDING;
 
-        $this->notificationService->sendTemplateEmail((string) $user->email, $templateCode, [
+        // 补发账单邮件走队列：SMTP 往返（可配超时）不应阻塞管理端请求；
+        // 载荷已在本地组装完成，任务内只做模板渲染与发送，失败由队列重试兜底。
+        SendTemplateEmailJob::dispatch((string) $user->email, $templateCode, [
             'site_name' => (string) config('idc.site_name', config('app.name', '创欧云')),
             'display_name' => (string) $user->display_name,
             'notice_title' => $isPaidInvoice ? '账单支付确认' : '账单支付提醒',
@@ -884,7 +886,7 @@ class UserService
 
     private function buildUserSmsLogQuery(string $phone): ?Builder
     {
-        if (! Schema::hasTable('message_logs')) {
+        if (! SchemaMetadataCache::hasTable('message_logs')) {
             return null;
         }
 
@@ -896,7 +898,7 @@ class UserService
 
     private function buildUserEmailLogQuery(string $email): ?Builder
     {
-        if (! Schema::hasTable('message_logs')) {
+        if (! SchemaMetadataCache::hasTable('message_logs')) {
             return null;
         }
 

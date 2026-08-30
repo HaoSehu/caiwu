@@ -24,7 +24,7 @@ return new class extends Migration
             ->havingRaw('COUNT(*) > 1')
             ->pluck('invoice_id');
 
-        throw_if($duplicates->isNotEmpty(), new \RuntimeException(
+        throw_if($duplicates->isNotEmpty(), new RuntimeException(
             'referral_rewards 存在重复 invoice_id（'.implode(',', $duplicates->all()).'），需先人工合并奖励记录再加唯一索引'
         ));
 

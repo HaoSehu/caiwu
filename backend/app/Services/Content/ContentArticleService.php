@@ -41,7 +41,10 @@ class ContentArticleService
                 'contentCategory',
                 'creator:id,username,nickname',
                 'updater:id,username,nickname',
-            ]);
+            ])
+            // 列表不回传整篇 content（长 TEXT 每行全量传输拖慢列表页）：
+            // 摘要兜底用 400 字符的 SQL 端预览即可，详情接口仍取完整 content。
+            ->selectRaw('content_articles.*, SUBSTRING(content_articles.content, 1, 400) AS content_preview');
 
         if (! empty($filters['content_type'])) {
             $query->where('content_type', (string) $filters['content_type']);
@@ -62,11 +65,12 @@ class ContentArticleService
 
         if (! empty($filters['keyword'])) {
             $keyword = trim((string) $filters['keyword']);
+            // 关键词只搜 title/summary/slug/分类名：content 是长 TEXT，
+            // `LIKE '%kw%'` 必然全表扫描，拖垮管理端列表页。
             $query->where(function ($builder) use ($keyword) {
                 $builder
                     ->where('title', 'like', "%{$keyword}%")
                     ->orWhere('summary', 'like', "%{$keyword}%")
-                    ->orWhere('content', 'like', "%{$keyword}%")
                     ->orWhere('slug', 'like', "%{$keyword}%")
                     ->orWhereHas('contentCategory', fn ($query) => $query->where('name', 'like', "%{$keyword}%"));
             });

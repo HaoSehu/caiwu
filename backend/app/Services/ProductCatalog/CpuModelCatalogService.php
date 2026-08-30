@@ -6,8 +6,8 @@ use App\Exceptions\BusinessException;
 use App\Models\Product;
 use App\Models\Setting;
 use App\Support\CacheKey;
+use App\Support\SchemaMetadataCache;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class CpuModelCatalogService
@@ -321,7 +321,7 @@ class CpuModelCatalogService
             return $this->emptyBindingDisplayPayload($fallback);
         }
 
-        if (! Schema::hasTable('products')) {
+        if (! SchemaMetadataCache::hasTable('products')) {
             return $this->emptyBindingDisplayPayload($fallback);
         }
 

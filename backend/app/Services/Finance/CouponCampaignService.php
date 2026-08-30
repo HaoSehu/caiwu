@@ -10,13 +10,13 @@ use App\Models\AutomationLog;
 use App\Models\Coupon;
 use App\Models\CouponCampaign;
 use App\Support\Money;
+use App\Support\SchemaMetadataCache;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Pagination\LengthAwarePaginator as SimpleLengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class CouponCampaignService
@@ -46,7 +46,7 @@ class CouponCampaignService
 
     public function adminSummary(array $filters = []): array
     {
-        if (! Schema::hasTable('coupon_campaigns')) {
+        if (! SchemaMetadataCache::hasTable('coupon_campaigns')) {
             return [
                 'total' => 0,
                 'active' => 0,
@@ -63,7 +63,7 @@ class CouponCampaignService
             'total' => (clone $query)->count(),
             'active' => (clone $query)->where('status', CouponStatus::ACTIVE)->count(),
             'disabled' => (clone $query)->where('status', CouponStatus::DISABLED)->count(),
-            'generated_today' => Schema::hasTable('coupons')
+            'generated_today' => SchemaMetadataCache::hasTable('coupons')
                 ? (int) Coupon::query()
                     ->whereNotNull('coupon_campaign_id')
                     ->whereBetween('created_at', [$todayStart, $todayEnd])
@@ -74,7 +74,7 @@ class CouponCampaignService
 
     public function adminList(array $filters = [], int $perPage = 20): LengthAwarePaginator
     {
-        if (! Schema::hasTable('coupon_campaigns')) {
+        if (! SchemaMetadataCache::hasTable('coupon_campaigns')) {
             return new SimpleLengthAwarePaginator([], 0, $perPage, 1);
         }
 

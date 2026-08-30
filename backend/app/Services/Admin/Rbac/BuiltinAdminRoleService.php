@@ -5,15 +5,15 @@ declare(strict_types=1);
 namespace App\Services\Admin\Rbac;
 
 use App\Support\AdminPermissions;
+use App\Support\SchemaMetadataCache;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 
 class BuiltinAdminRoleService
 {
     public function sync(): void
     {
-        if (! Schema::hasTable('roles')) {
+        if (! SchemaMetadataCache::hasTable('roles')) {
             return;
         }
 

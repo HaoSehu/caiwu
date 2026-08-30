@@ -158,7 +158,7 @@ class AlipayClient
         $params = $this->buildRequestParams('alipay.trade.precreate', $bizContent);
 
         try {
-            $result = $this->request($params);
+            $result = $this->request($params, false);
         } catch (BusinessException $exception) {
             app(GatewayLogService::class)->recordFailure(
                 gateway: PaymentGatewayCode::ALIPAY,
@@ -263,7 +263,7 @@ class AlipayClient
         $params = $this->buildRequestParams('alipay.trade.refund', $bizContent);
 
         try {
-            $result = $this->request($params);
+            $result = $this->request($params, false);
         } catch (BusinessException $exception) {
             app(GatewayLogService::class)->recordFailure(
                 gateway: PaymentGatewayCode::ALIPAY,
@@ -349,14 +349,17 @@ class AlipayClient
 
     /**
      * 发送请求到支付宝网关，自动处理 GBK→UTF-8 转码
+     *
+     * @param  bool  $retryOnFailure  是否对连接失败自动重试 1 次；precreate/refund 等写请求传 false，
+     *                                连接异常时无法确认网关是否已受理，重试有重复提交风险
      */
-    private function request(array $params): array
+    private function request(array $params, bool $retryOnFailure = true): array
     {
         // charset 必须放在 URL 查询字符串中，否则支付宝按 GBK 解码 POST body 导致中文签名不一致
         $url = $this->gateway.'?charset='.$this->charset;
 
         try {
-            $response = $this->buildHttpClient()->post($url, $params);
+            $response = $this->buildHttpClient($retryOnFailure)->post($url, $params);
         } catch (ConnectionException $exception) {
             Log::error('[支付宝当面付] 网关请求失败', [
                 'gateway' => $this->gateway,

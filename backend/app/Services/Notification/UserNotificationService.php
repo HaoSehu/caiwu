@@ -4,8 +4,8 @@ namespace App\Services\Notification;
 
 use App\Models\User;
 use App\Models\UserNotification;
+use App\Support\SchemaMetadataCache;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Schema;
 
 /**
  * 站内信（个性化通知）写入服务。
@@ -112,7 +112,7 @@ class UserNotificationService
     {
         if ($this->tableReady === null) {
             try {
-                $this->tableReady = Schema::hasTable('user_notifications');
+                $this->tableReady = SchemaMetadataCache::hasTable('user_notifications');
             } catch (\Throwable) {
                 $this->tableReady = false;
             }

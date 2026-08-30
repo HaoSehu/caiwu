@@ -411,9 +411,11 @@ class YiPayClient
     private function request(string $method, string $url, array $payload): array
     {
         try {
+            // GET（订单查询）无副作用可安全重试；POST（precreate/refund）连接异常时
+            // 无法确认网关是否已受理，重试有重复提交风险，不自动重试。
             $response = $method === 'get'
                 ? $this->buildHttpClient()->get($url, $payload)
-                : $this->buildHttpClient()->post($url, $payload);
+                : $this->buildHttpClient(false)->post($url, $payload);
         } catch (ConnectionException $exception) {
             Log::error('[易支付] 网关请求失败', [
                 'url' => $url,

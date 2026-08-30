@@ -9,22 +9,22 @@ use App\Models\FirstProductGroup;
 use App\Models\Product;
 use App\Models\SecondProductGroup;
 use App\Models\ThirdProductGroup;
+use App\Support\SchemaMetadataCache;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class ProductGroupHierarchyService
 {
     public function tablesReady(): bool
     {
-        return Schema::hasTable('first_product_groups')
-            && Schema::hasTable('second_product_groups')
-            && Schema::hasTable('third_product_groups');
+        return SchemaMetadataCache::hasTable('first_product_groups')
+            && SchemaMetadataCache::hasTable('second_product_groups')
+            && SchemaMetadataCache::hasTable('third_product_groups');
     }
 
     public function productColumnsReady(): bool
     {
-        return Schema::hasTable('products') && Schema::hasColumn('products', 'product_group_id');
+        return SchemaMetadataCache::hasTable('products') && SchemaMetadataCache::hasColumn('products', 'product_group_id');
     }
 
     public function syncProductTypes(): array

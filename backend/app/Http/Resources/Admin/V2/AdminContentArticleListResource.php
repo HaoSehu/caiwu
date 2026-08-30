@@ -71,7 +71,10 @@ class AdminContentArticleListResource extends JsonResource
             return (string) $article->summary;
         }
 
-        $plainText = preg_replace('/\s+/u', ' ', strip_tags(Str::markdown((string) $article->content)));
+        // 列表查询已用 SUBSTRING 预览替代整篇 content（见 ContentArticleService::adminList），
+        // 详情接口等未提供 content_preview 的场景回退完整字段。
+        $rawContent = (string) ($article->content_preview ?? $article->content ?? '');
+        $plainText = preg_replace('/\s+/u', ' ', strip_tags(Str::markdown($rawContent)));
 
         return Str::limit((string) $plainText, 120, '...');
     }

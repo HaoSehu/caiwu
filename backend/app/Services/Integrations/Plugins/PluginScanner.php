@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace App\Services\Integrations\Plugins;
 
 use App\Exceptions\BusinessException;
+use App\Support\SchemaMetadataCache;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Schema;
 
 class PluginScanner
 {
@@ -24,6 +24,17 @@ class PluginScanner
      * @var array<string, array{manifest: PluginManifest, path: string, mtime: int}>
      */
     private array $manifestCache = [];
+
+    /**
+     * 清单哈希校验结果缓存，键为 `domain:slug:mtime:recorded_hash`。
+     * requireManifest 会在框架 boot、插件动作执行、绑定解析中被反复触发，
+     * 每次都读清单文件算 sha256 + 查一次 manifest_hash 的成本随调用频次线性放大；
+     * 键携带 mtime 与库内记录值，文件被改动或管理员重新安装（记录值变化）后自动失效，
+     * 不削弱篡改检测语义。静态属性在队列 worker 中跨任务存活，与 mtime 失效策略配合。
+     *
+     * @var array<string, true>
+     */
+    private static array $manifestHashVerified = [];
 
     public function __construct(
         private readonly Filesystem $files,
@@ -160,7 +171,7 @@ class PluginScanner
     private function assertManifestHash(string $domain, string $slug, PluginManifest $manifest): void
     {
         try {
-            if (! Schema::hasTable('integration_plugins') || ! Schema::hasColumn('integration_plugins', 'manifest_hash')) {
+            if (! SchemaMetadataCache::hasTable('integration_plugins') || ! SchemaMetadataCache::hasColumn('integration_plugins', 'manifest_hash')) {
                 return;
             }
 
@@ -169,6 +180,17 @@ class PluginScanner
                 ->where('slug', $slug)
                 ->value('manifest_hash');
             if ($recorded === null) {
+                return;
+            }
+
+            $sourcePath = $this->manifestSourcePath($manifest);
+            $mtime = false;
+            if ($sourcePath !== null) {
+                clearstatcache(true, $sourcePath);
+                $mtime = @filemtime($sourcePath);
+            }
+            $verifiedKey = $domain.':'.$slug.':'.($mtime === false ? '0' : (string) $mtime).':'.(string) $recorded;
+            if (isset(self::$manifestHashVerified[$verifiedKey])) {
                 return;
             }
 
@@ -181,6 +203,8 @@ class PluginScanner
                     'current_hash' => $current,
                 ]);
             }
+
+            self::$manifestHashVerified[$verifiedKey] = true;
         } catch (\Throwable $exception) {
             Log::debug('[plugins] 插件清单哈希比对失败，已跳过', [
                 'domain' => $domain,

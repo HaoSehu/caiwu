@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace App\Services\User;
 
+use App\Support\SchemaMetadataCache;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
-use Illuminate\Support\Facades\Schema;
 
 /**
  * user_accounts 账户真源巡检与回填工具。
@@ -125,7 +125,7 @@ class UserAccountProjectionService
     private function ensureTablesExist(): void
     {
         foreach (['users', 'user_accounts'] as $table) {
-            if (! Schema::hasTable($table)) {
+            if (! SchemaMetadataCache::hasTable($table)) {
                 throw new \RuntimeException("缺少数据表：{$table}");
             }
         }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Auth;
 
 use App\Exceptions\BusinessException;
+use App\Jobs\SendAccountSecurityAlertJob;
 use App\Jobs\SendClientLoginEmailAlertJob;
 use App\Jobs\SendClientLoginFailureEmailAlertJob;
 use App\Models\AdminUser;
@@ -1047,13 +1048,13 @@ class AuthService
         ?string $userAgent
     ): void {
         try {
-            $this->notificationService->sendPasswordChangedEmailAlertToAddress(
-                $email,
-                $displayName,
-                $changedAt,
-                $ip,
-                $userAgent
-            );
+            SendAccountSecurityAlertJob::dispatch(SendAccountSecurityAlertJob::ALERT_PASSWORD_CHANGED, [
+                'email' => $email,
+                'display_name' => $displayName,
+                'changed_at' => $changedAt,
+                'ip' => $ip,
+                'user_agent' => $userAgent,
+            ]);
         } catch (\Throwable $exception) {
             Log::warning('发送密码变更提醒失败', [
                 'email' => $email,
@@ -1073,15 +1074,15 @@ class AuthService
         ?string $userAgent
     ): void {
         try {
-            $this->notificationService->sendPhoneChangedEmailAlertToAddress(
-                $email,
-                $displayName,
-                $oldPhone,
-                $newPhone,
-                $changedAt,
-                $ip,
-                $userAgent
-            );
+            SendAccountSecurityAlertJob::dispatch(SendAccountSecurityAlertJob::ALERT_PHONE_CHANGED, [
+                'email' => $email,
+                'display_name' => $displayName,
+                'old_phone' => $oldPhone,
+                'new_phone' => $newPhone,
+                'changed_at' => $changedAt,
+                'ip' => $ip,
+                'user_agent' => $userAgent,
+            ]);
         } catch (\Throwable $exception) {
             Log::warning('发送手机号变更提醒失败', [
                 'email' => $email,
@@ -1100,14 +1101,14 @@ class AuthService
         ?string $userAgent
     ): void {
         try {
-            $this->notificationService->sendEmailChangedEmailAlertToAddress(
-                $oldEmail,
-                $newEmail,
-                $displayName,
-                $changedAt,
-                $ip,
-                $userAgent
-            );
+            SendAccountSecurityAlertJob::dispatch(SendAccountSecurityAlertJob::ALERT_EMAIL_CHANGED, [
+                'old_email' => $oldEmail,
+                'new_email' => $newEmail,
+                'display_name' => $displayName,
+                'changed_at' => $changedAt,
+                'ip' => $ip,
+                'user_agent' => $userAgent,
+            ]);
         } catch (\Throwable $exception) {
             Log::warning('发送邮箱变更提醒失败', [
                 'old_email' => $oldEmail,

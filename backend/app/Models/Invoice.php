@@ -7,6 +7,7 @@ use App\Models\Concerns\HandlesProductSnapshot;
 use App\Models\Concerns\NormalizesTraceId;
 use App\Support\Money;
 use App\Support\OrderInvoiceNoGenerator;
+use App\Support\SchemaMetadataCache;
 use App\Support\VersionedJson;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
@@ -14,7 +15,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 
 /**
  * @property float $member_discount_amount 会员等级×营销组折扣减免金额
@@ -238,7 +238,7 @@ class Invoice extends Model
 
     public function syncInvoiceItemProjection(): void
     {
-        if (! $this->exists || ! Schema::hasTable('invoice_items')) {
+        if (! $this->exists || ! SchemaMetadataCache::hasTable('invoice_items')) {
             return;
         }
 

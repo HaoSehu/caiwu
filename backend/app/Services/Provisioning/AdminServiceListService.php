@@ -10,11 +10,11 @@ use App\Models\Product;
 use App\Models\Service;
 use App\Services\Integrations\Plugins\PluginBindingResolver;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
+use App\Support\SchemaMetadataCache;
 use App\Support\ServiceHostname;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 
 class AdminServiceListService
 {
@@ -308,7 +308,7 @@ class AdminServiceListService
             ->limit(500)
             ->pluck('service_id'));
 
-        if (Schema::hasTable('service_runtime_snapshots')) {
+        if (SchemaMetadataCache::hasTable('service_runtime_snapshots')) {
             $ids = $ids->merge(DB::table('service_runtime_snapshots')
                 ->where(function ($query) use ($likeKeyword): void {
                     $query->where('status_key', 'like', $likeKeyword)
@@ -321,7 +321,7 @@ class AdminServiceListService
                 ->pluck('service_id'));
         }
 
-        if (Schema::hasTable('service_connection_snapshots')) {
+        if (SchemaMetadataCache::hasTable('service_connection_snapshots')) {
             $ids = $ids->merge(DB::table('service_connection_snapshots')
                 ->where(function ($query) use ($likeKeyword): void {
                     $query->where('hostname', 'like', $likeKeyword)

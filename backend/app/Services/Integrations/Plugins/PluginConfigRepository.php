@@ -8,10 +8,10 @@ use App\Exceptions\BusinessException;
 use App\Models\AdminUser;
 use App\Models\IntegrationPlugin;
 use App\Models\IntegrationPluginConfig;
+use App\Support\SchemaMetadataCache;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Schema;
 
 class PluginConfigRepository
 {
@@ -37,7 +37,7 @@ class PluginConfigRepository
 
     public function resolvedConfigByDomainAndSlug(string $domain, string $slug): array
     {
-        if (! Schema::hasTable('integration_plugins')) {
+        if (! SchemaMetadataCache::hasTable('integration_plugins')) {
             return [];
         }
 

@@ -53,6 +53,10 @@ return Application::configure(basePath: dirname(__DIR__))
             ]
         );
 
+        // api 组全局限流兜底（限流器定义在 AppServiceProvider，120 次/分钟按 IP），
+        // 防止公开端点被滥用时绕过端点级缓存直击应用与 DB；细粒度限流仍按路由保留。
+        $middleware->throttleApi();
+
         $middleware->redirectGuestsTo(function (Request $request) {
             if ($request->is('api/*') || $request->expectsJson()) {
                 return null;
@@ -157,6 +161,13 @@ return Application::configure(basePath: dirname(__DIR__))
         // 使用 config() 而非 env()，确保 config:cache 后仍能正确检测。
         if (config('app.env') === 'production' && config('app.debug') === true) {
             throw new RuntimeException('APP_DEBUG must be false in production.');
+        }
+
+        // 生产环境禁止 sync 队列：sync 会在 HTTP 请求进程内直接执行 Job，
+        // 支付回调里的履约兜底 Job 会退化为同步上游开通调用并拖死 worker，
+        // 且 QueueDrainService 只认 database 队列，静默 skipped 不会有任何报错。
+        if (config('app.env') === 'production' && config('queue.default') === 'sync') {
+            throw new RuntimeException('生产环境 QUEUE_CONNECTION 禁止使用 sync。');
         }
 
         // 生产环境禁止 single 日志通道：single 不做轮转，日志文件会无限增长；

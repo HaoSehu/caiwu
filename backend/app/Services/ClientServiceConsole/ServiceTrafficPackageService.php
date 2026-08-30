@@ -26,10 +26,10 @@ use App\Services\Upstream\Contracts\ProvidesConsoleCatalog;
 use App\Services\Upstream\ProviderResolver;
 use App\Support\Money;
 use App\Support\OrderInvoiceNoGenerator;
+use App\Support\SchemaMetadataCache;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Schema;
 
 class ServiceTrafficPackageService
 {
@@ -1487,7 +1487,7 @@ class ServiceTrafficPackageService
     private function trafficPackageAttemptRequestMeta(Order $order, string $mode, array $configOption, int $flowPacketId): array
     {
         $traceId = trim((string) ($order->trace_id ?? ''));
-        if ($traceId === '' && (int) $order->id > 0 && Schema::hasColumn('orders', 'trace_id')) {
+        if ($traceId === '' && (int) $order->id > 0 && SchemaMetadataCache::hasColumn('orders', 'trace_id')) {
             $traceId = trim((string) DB::table('orders')->where('id', (int) $order->id)->value('trace_id'));
         }
 
@@ -1506,7 +1506,7 @@ class ServiceTrafficPackageService
     private function hasProductBindingTables(): bool
     {
         try {
-            return Schema::hasTable('product_upstream_bindings') && Schema::hasTable('supplier_plugin_bindings');
+            return SchemaMetadataCache::hasTable('product_upstream_bindings') && SchemaMetadataCache::hasTable('supplier_plugin_bindings');
         } catch (\Throwable) {
             return false;
         }

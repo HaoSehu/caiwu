@@ -21,6 +21,14 @@ use Illuminate\Support\Facades\DB;
  */
 class InboxService
 {
+    /**
+     * 公告项按用户缓存（实例级）：/feed 与 unreadCount 在同一请求内会重复拉取
+     * 公告列表与已读记录，缓存后每请求只查一次。公告表量级小，内存聚合保留。
+     *
+     * @var array<int, Collection<int,array<string,mixed>>>
+     */
+    private array $noticeItemsCache = [];
+
     public function __construct(
         private UserNotificationService $userNotificationService,
     ) {}
@@ -61,11 +69,15 @@ class InboxService
     /**
      * 完整列表：可选只看未读，分页返回。
      *
+     * 公告侧只在未读时可见（量小，全量内存排序）；个性化通知是持续增长的热表，
+     * 分页与计数必须下推 SQL：个性化侧取 offset+pageSize 上限后与公告按时间归并出当前页，
+     * total 用个性化 SQL count + 可见公告数，避免每页全表载入。
+     *
      * @return array{list: array<int,array<string,mixed>>, total: int}
      */
     public function list(int $userId, bool $unreadOnly = false, int $page = 1, int $pageSize = 15): array
     {
-        $notices = $this->mapNotices($this->visibleNoticeItems($userId));
+        $notices = $this->mapNotices($this->visibleNoticeItems($userId))->values();
 
         $personalQuery = UserNotification::query()->where('user_id', $userId);
         if ($unreadOnly) {
@@ -73,18 +85,18 @@ class InboxService
         } else {
             $personalQuery->where(fn ($q) => $q->whereNull('read_at')->orWhere('read_at', '>=', now()->subDays(7)));
         }
-        $personal = $this->mapPersonal($personalQuery->orderByDesc('created_at')->get());
 
-        $merged = $notices->merge($personal);
-        if ($unreadOnly) {
-            $merged = $merged->where('read', false);
-        }
+        $personalTotal = (int) (clone $personalQuery)->count();
+        $windowSize = max(0, ($page - 1) * $pageSize) + $pageSize;
+        $personal = $this->mapPersonal(
+            $personalQuery->orderByDesc('created_at')->limit($windowSize)->get()
+        );
 
-        $sorted = $merged->sortByDesc('sort_at')->values();
-        $total = $sorted->count();
+        $merged = $notices->merge($personal)->sortByDesc('sort_at')->values();
+        $total = $personalTotal + $notices->count();
         $offset = max(0, ($page - 1) * $pageSize);
 
-        $items = $sorted
+        $items = $merged
             ->slice($offset, $pageSize)
             ->map(fn (array $item) => $this->stripSortKey($item))
             ->values()
@@ -103,6 +115,8 @@ class InboxService
     {
         $this->markAllNoticesRead($userId);
         $this->userNotificationService->markAllRead($userId);
+        // 已读状态变化后，同请求内后续聚合必须基于新数据。
+        $this->noticeItemsCache = [];
     }
 
     // ─── 公告部分 ───────────────────────────────────────────────────────────
@@ -119,6 +133,10 @@ class InboxService
      */
     private function noticeItems(int $userId): Collection
     {
+        if (array_key_exists($userId, $this->noticeItemsCache)) {
+            return $this->noticeItemsCache[$userId];
+        }
+
         $notices = ContentArticle::query()
             ->ofType(ContentArticle::TYPE_NOTICE)
             ->published()
@@ -127,7 +145,7 @@ class InboxService
             ->get();
 
         if ($notices->isEmpty()) {
-            return collect();
+            return $this->noticeItemsCache[$userId] = collect();
         }
 
         $reads = NoticeRead::query()
@@ -135,7 +153,7 @@ class InboxService
             ->whereIn('article_id', $notices->pluck('id'))
             ->pluck('read_at', 'article_id');
 
-        return $notices->map(function (ContentArticle $notice) use ($reads) {
+        $items = $notices->map(function (ContentArticle $notice) use ($reads) {
             $readAt = $reads->get($notice->id);
             $isRead = $readAt !== null
                 && ! ($notice->require_reread_at && $readAt < $notice->require_reread_at);
@@ -151,6 +169,8 @@ class InboxService
                 'sort_at' => $sortAt instanceof Carbon ? $sortAt : ($sortAt ? Carbon::parse($sortAt) : now()),
             ];
         });
+
+        return $this->noticeItemsCache[$userId] = $items;
     }
 
     /**

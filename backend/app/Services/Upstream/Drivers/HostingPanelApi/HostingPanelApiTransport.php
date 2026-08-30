@@ -35,7 +35,12 @@ class HostingPanelApiTransport extends UpstreamJwtSessionManager implements Prov
 {
     use HandlesApiConfigOptions, HandlesCatalogNormalization;
 
-    private const DNS_CACHE_TTL_SECONDS = 300;
+    // 与上游相关定时任务的 15 分钟心跳槽对齐；命中缓存期间不产生任何 DNS 开销。
+    private const DNS_CACHE_TTL_SECONDS = 900;
+
+    // 解析失败负缓存：解析故障（域名失效、本地 resolver 异常）时避免每个上游请求都重付
+    // "spawn 子进程 + dns_get_record + gethostbynamel" 三级串行兜底的等待成本。
+    private const DNS_NEGATIVE_CACHE_TTL_SECONDS = 60;
 
     private const DEFAULT_DNS_RESOLVER_TIMEOUT_SECONDS = 3;
 
@@ -1052,7 +1057,20 @@ class HostingPanelApiTransport extends UpstreamJwtSessionManager implements Prov
             return $cached;
         }
 
-        $addresses = $this->lookupHostAddresses($host);
+        $negativeCacheKey = $cacheKey.':failed';
+        if (Cache::get($negativeCacheKey) === true) {
+            // 负缓存命中：短时间内直接按解析失败处理，不再重付完整解析链的等待成本。
+            throw new BusinessException('无法解析供应商接口域名', 42200);
+        }
+
+        try {
+            $addresses = $this->lookupHostAddresses($host);
+        } catch (BusinessException $exception) {
+            Cache::put($negativeCacheKey, true, now()->addSeconds(self::DNS_NEGATIVE_CACHE_TTL_SECONDS));
+
+            throw $exception;
+        }
+
         Cache::put($cacheKey, $addresses, now()->addSeconds(self::DNS_CACHE_TTL_SECONDS));
 
         return $addresses;

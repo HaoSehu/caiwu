@@ -7,6 +7,7 @@ use App\Constants\OrderStatus;
 use App\Constants\OrderType;
 use App\Constants\ServiceStatus;
 use App\Exceptions\BusinessException;
+use App\Jobs\SendTemplateEmailJob;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Product;
@@ -81,7 +82,6 @@ class ServiceRenewService
         private CouponService $couponService,
         private OperationLogService $operationLogService,
         private SettingService $settingService,
-        private NotificationService $notificationService,
         private ?PluginBindingResolver $bindingResolver = null,
         private ?MemberGroupDiscountService $memberGroupDiscountService = null,
     ) {}
@@ -1902,7 +1902,7 @@ class ServiceRenewService
         }
 
         try {
-            $this->notificationService->sendTemplateEmail($email, NotificationService::TEMPLATE_SERVICE_RESTORED, [
+            SendTemplateEmailJob::dispatch($email, NotificationService::TEMPLATE_SERVICE_RESTORED, [
                 'display_name' => (string) ($service->user?->display_name ?? '客户'),
                 'service_name' => (string) $service->name,
                 'expires_at' => $service->expires_at?->format('Y-m-d H:i:s') ?? '-',

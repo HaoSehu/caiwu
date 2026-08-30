@@ -5,14 +5,14 @@ declare(strict_types=1);
 namespace App\Services\User;
 
 use App\Models\AdminUser;
+use App\Support\SchemaMetadataCache;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 
 class AdminRoleBridgeService
 {
     public function syncPrimaryRole(AdminUser $admin, ?int $roleId = null): void
     {
-        if (! $admin->exists || ! Schema::hasTable('admin_user_roles')) {
+        if (! $admin->exists || ! SchemaMetadataCache::hasTable('admin_user_roles')) {
             return;
         }
 

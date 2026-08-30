@@ -10,22 +10,28 @@ use Illuminate\Support\Facades\Http;
 /**
  * 支付网关客户端的 HTTP 出站构建样板。
  *
- * 各网关客户端对上游网关的出站请求统一为「表单编码 + 15 秒超时 + 失败重试 1 次
- * （间隔 200ms）」，只有 TLS 校验选项随各家配置不同（易支付固定校验、支付宝
- * 受 ssl_verify/ca_bundle 控制）。超时与重试数值不得随意调整：它们是对外承诺的
+ * 各网关客户端对上游网关的出站请求统一为「表单编码 + 15 秒超时」，查询类请求
+ * 额外失败重试 1 次（间隔 200ms）。超时与重试数值不得随意调整：它们是对外承诺的
  * 出站请求预算，与各网关历史行为一一对应。
+ *
+ * 有副作用的写请求（precreate/refund 等 POST）默认不带重试：连接异常时无法确认
+ * 请求是否已到达网关，重试存在重复提交风险；查询类请求无副作用，保留重试以
+ * 吸收瞬时网络抖动。
  */
 trait BuildsGatewayHttpClient
 {
     /**
      * 构建访问支付网关的 HTTP 客户端。
+     *
+     * @param  bool  $retryOnFailure  是否对连接失败自动重试 1 次；写请求传 false
      */
-    private function buildHttpClient(): PendingRequest
+    private function buildHttpClient(bool $retryOnFailure = true): PendingRequest
     {
-        return Http::asForm()
+        $client = Http::asForm()
             ->withOptions(['verify' => $this->httpClientVerifyOption()])
-            ->timeout(15)
-            ->retry(1, 200);
+            ->timeout(15);
+
+        return $retryOnFailure ? $client->retry(1, 200) : $client;
     }
 
     /**

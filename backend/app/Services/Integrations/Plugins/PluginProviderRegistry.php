@@ -6,11 +6,11 @@ namespace App\Services\Integrations\Plugins;
 
 use App\Exceptions\BusinessException;
 use App\Models\IntegrationPlugin;
+use App\Support\SchemaMetadataCache;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\ServiceProvider;
 
 class PluginProviderRegistry
@@ -29,7 +29,7 @@ class PluginProviderRegistry
     public function bootEnabledProviders(): void
     {
         try {
-            if (! Schema::hasTable('integration_plugins')) {
+            if (! SchemaMetadataCache::hasTable('integration_plugins')) {
                 return;
             }
 

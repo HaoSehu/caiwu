@@ -8,9 +8,9 @@ use App\Exceptions\BusinessException;
 use App\Models\AdminUser;
 use App\Models\Role;
 use App\Support\AdminPermissions;
+use App\Support\SchemaMetadataCache;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class AdminRoleService
@@ -216,7 +216,7 @@ class AdminRoleService
     private function assignedAdminCount(Role $role): int
     {
         $primaryCount = (int) $role->adminUsers()->count();
-        if (! Schema::hasTable('admin_user_roles')) {
+        if (! SchemaMetadataCache::hasTable('admin_user_roles')) {
             return $primaryCount;
         }
 

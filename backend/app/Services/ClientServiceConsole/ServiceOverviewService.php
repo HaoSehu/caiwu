@@ -11,9 +11,9 @@ use App\Models\SecondProductGroup;
 use App\Models\Service;
 use App\Models\ThirdProductGroup;
 use App\Models\User;
+use App\Support\SchemaMetadataCache;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Schema;
 
 /**
  * 服务概览/列表子服务
@@ -162,7 +162,7 @@ class ServiceOverviewService
     private function hasConnectionSnapshotTable(): bool
     {
         try {
-            return Schema::hasTable('service_connection_snapshots');
+            return SchemaMetadataCache::hasTable('service_connection_snapshots');
         } catch (\Throwable) {
             return false;
         }

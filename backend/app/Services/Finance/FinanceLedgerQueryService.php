@@ -196,6 +196,8 @@ class FinanceLedgerQueryService
     private function buildSummaryCacheKey(array $filters): string
     {
         $userId = (int) ($filters['user_id'] ?? 0);
+        // 指纹必须覆盖 summary 聚合消费的全部过滤字段（user_id 在键前缀），
+        // 否则 30s TTL 内不同筛选会共享同一份汇总金额。
         $fingerprint = md5((string) json_encode([
             'tab' => $filters['tab'] ?? null,
             'event_type' => $filters['event_type'] ?? null,
@@ -203,6 +205,10 @@ class FinanceLedgerQueryService
             'direction' => $filters['direction'] ?? null,
             'start_date' => $filters['start_date'] ?? '',
             'end_date' => $filters['end_date'] ?? '',
+            'service_id' => $filters['service_id'] ?? null,
+            'invoice_no' => $filters['invoice_no'] ?? '',
+            'payment_no' => $filters['payment_no'] ?? '',
+            'keyword' => $filters['keyword'] ?? '',
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
 
         return 'finance:ledger:summary:'.$userId.':'.$fingerprint;
@@ -311,44 +317,69 @@ class FinanceLedgerQueryService
 
         if (isset($filters['status']) && $filters['status'] !== '' && $filters['status'] !== null) {
             $status = (int) $filters['status'];
+            // 关联子查询代替 pluck 全表拉取：台账过滤此前把整张 invoices/payments 的
+            // 匹配 id 拉入 PHP 再 whereIn，行数增长后内存与查询包体积同步放大，且
+            // whereIn 大列表会让 MySQL range 优化失效。子查询命中
+            // account_transactions(source_type, source_id) 关联索引与源表主键。
             $query->where(function (Builder $builder) use ($status) {
-                $matchingInvoiceIds = Invoice::query()->where('status', $status)->pluck('id');
-                $matchingPaymentIds = Payment::query()->where('status', $status)->pluck('id');
-
-                $builder->where(function (Builder $inner) use ($matchingInvoiceIds) {
-                    $inner->where('source_type', 'invoice')->whereIn('source_id', $matchingInvoiceIds);
-                })->orWhere(function (Builder $inner) use ($matchingPaymentIds) {
-                    $inner->where('source_type', 'payment')->whereIn('source_id', $matchingPaymentIds);
+                $builder->where(function (Builder $inner) use ($status) {
+                    $inner->where('source_type', 'invoice')
+                        ->whereExists(fn ($q) => $q->selectRaw(1)
+                            ->from('invoices')
+                            ->whereColumn('invoices.id', 'account_transactions.source_id')
+                            ->where('invoices.status', $status));
+                })->orWhere(function (Builder $inner) use ($status) {
+                    $inner->where('source_type', 'payment')
+                        ->whereExists(fn ($q) => $q->selectRaw(1)
+                            ->from('payments')
+                            ->whereColumn('payments.id', 'account_transactions.source_id')
+                            ->where('payments.status', $status));
                 });
             });
         }
 
         if (! empty($filters['invoice_no'])) {
-            $invoiceIds = Invoice::query()
-                ->where('invoice_no', 'like', '%'.trim((string) $filters['invoice_no']).'%')
-                ->pluck('id');
-            $paymentIds = Payment::query()->whereIn('invoice_id', $invoiceIds)->pluck('id');
-
-            $query->where(function (Builder $builder) use ($invoiceIds, $paymentIds) {
-                $builder->where(function (Builder $inner) use ($invoiceIds) {
-                    $inner->where('source_type', 'invoice')->whereIn('source_id', $invoiceIds);
-                })->orWhere(function (Builder $inner) use ($paymentIds) {
-                    $inner->where('source_type', 'payment')->whereIn('source_id', $paymentIds);
+            $keyword = trim((string) $filters['invoice_no']);
+            $query->where(function (Builder $builder) use ($keyword) {
+                $builder->where(function (Builder $inner) use ($keyword) {
+                    $inner->where('source_type', 'invoice')
+                        ->whereExists(fn ($q) => $q->selectRaw(1)
+                            ->from('invoices')
+                            ->whereColumn('invoices.id', 'account_transactions.source_id')
+                            ->where('invoices.invoice_no', 'like', '%'.$keyword.'%'));
+                })->orWhere(function (Builder $inner) use ($keyword) {
+                    // 支付单归属匹配账单：payments.invoice_id ∈ invoices(invoice_no like)
+                    $inner->where('source_type', 'payment')
+                        ->whereExists(fn ($q) => $q->selectRaw(1)
+                            ->from('payments')
+                            ->whereColumn('payments.id', 'account_transactions.source_id')
+                            ->whereExists(fn ($pi) => $pi->selectRaw(1)
+                                ->from('invoices')
+                                ->whereColumn('invoices.id', 'payments.invoice_id')
+                                ->where('invoices.invoice_no', 'like', '%'.$keyword.'%')));
                 });
             });
         }
 
         if (! empty($filters['payment_no'])) {
-            $paymentIds = Payment::query()
-                ->where('payment_no', 'like', '%'.trim((string) $filters['payment_no']).'%')
-                ->pluck('id');
-            $invoiceIds = Payment::query()->whereIn('id', $paymentIds)->whereNotNull('invoice_id')->pluck('invoice_id');
-
-            $query->where(function (Builder $builder) use ($paymentIds, $invoiceIds) {
-                $builder->where(function (Builder $inner) use ($paymentIds) {
-                    $inner->where('source_type', 'payment')->whereIn('source_id', $paymentIds);
-                })->orWhere(function (Builder $inner) use ($invoiceIds) {
-                    $inner->where('source_type', 'invoice')->whereIn('source_id', $invoiceIds);
+            $keyword = trim((string) $filters['payment_no']);
+            $query->where(function (Builder $builder) use ($keyword) {
+                $builder->where(function (Builder $inner) use ($keyword) {
+                    $inner->where('source_type', 'payment')
+                        ->whereExists(fn ($q) => $q->selectRaw(1)
+                            ->from('payments')
+                            ->whereColumn('payments.id', 'account_transactions.source_id')
+                            ->where('payments.payment_no', 'like', '%'.$keyword.'%'));
+                })->orWhere(function (Builder $inner) use ($keyword) {
+                    // 支付单号命中时，其关联账单也纳入结果：invoices.id ∈ payments(payment_no like).invoice_id
+                    $inner->where('source_type', 'invoice')
+                        ->whereExists(fn ($q) => $q->selectRaw(1)
+                            ->from('invoices')
+                            ->whereColumn('invoices.id', 'account_transactions.source_id')
+                            ->whereExists(fn ($pi) => $pi->selectRaw(1)
+                                ->from('payments')
+                                ->whereColumn('payments.invoice_id', 'invoices.id')
+                                ->where('payments.payment_no', 'like', '%'.$keyword.'%')));
                 });
             });
         }
@@ -360,24 +391,33 @@ class FinanceLedgerQueryService
             if (ctype_digit($keyword)) {
                 $query->where('user_id', (int) $keyword);
             } else {
-                $invoiceIds = Invoice::query()
-                    ->where('invoice_no', 'like', '%'.$keyword.'%')
-                    ->pluck('id');
-                $paymentIdsFromInvoice = Payment::query()->whereIn('invoice_id', $invoiceIds)->pluck('id');
-
-                $paymentIds = Payment::query()
-                    ->where('payment_no', 'like', '%'.$keyword.'%')
-                    ->pluck('id');
-                $invoiceIdsFromPayment = Payment::query()->whereIn('id', $paymentIds)->whereNotNull('invoice_id')->pluck('invoice_id');
-
-                $allInvoiceIds = $invoiceIds->merge($invoiceIdsFromPayment)->unique();
-                $allPaymentIds = $paymentIds->merge($paymentIdsFromInvoice)->unique();
-
-                $query->where(function (Builder $builder) use ($allInvoiceIds, $allPaymentIds) {
-                    $builder->where(function (Builder $inner) use ($allInvoiceIds) {
-                        $inner->where('source_type', 'invoice')->whereIn('source_id', $allInvoiceIds);
-                    })->orWhere(function (Builder $inner) use ($allPaymentIds) {
-                        $inner->where('source_type', 'payment')->whereIn('source_id', $allPaymentIds);
+                // 单号关键词双向匹配：账单号命中其账单与关联支付单；
+                // 支付单号命中其支付单与关联账单。
+                $query->where(function (Builder $builder) use ($keyword) {
+                    $builder->where(function (Builder $inner) use ($keyword) {
+                        $inner->where('source_type', 'invoice')
+                            ->whereExists(fn ($q) => $q->selectRaw(1)
+                                ->from('invoices')
+                                ->whereColumn('invoices.id', 'account_transactions.source_id')
+                                ->where(function (Builder $invoiceMatch) use ($keyword) {
+                                    $invoiceMatch->where('invoices.invoice_no', 'like', '%'.$keyword.'%')
+                                        ->orWhereExists(fn ($pi) => $pi->selectRaw(1)
+                                            ->from('payments')
+                                            ->whereColumn('payments.invoice_id', 'invoices.id')
+                                            ->where('payments.payment_no', 'like', '%'.$keyword.'%'));
+                                }));
+                    })->orWhere(function (Builder $inner) use ($keyword) {
+                        $inner->where('source_type', 'payment')
+                            ->whereExists(fn ($q) => $q->selectRaw(1)
+                                ->from('payments')
+                                ->whereColumn('payments.id', 'account_transactions.source_id')
+                                ->where(function (Builder $paymentMatch) use ($keyword) {
+                                    $paymentMatch->where('payments.payment_no', 'like', '%'.$keyword.'%')
+                                        ->orWhereExists(fn ($iv) => $iv->selectRaw(1)
+                                            ->from('invoices')
+                                            ->whereColumn('invoices.id', 'payments.invoice_id')
+                                            ->where('invoices.invoice_no', 'like', '%'.$keyword.'%'));
+                                }));
                     });
                 });
             }
@@ -390,22 +430,36 @@ class FinanceLedgerQueryService
             return;
         }
 
-        $invoiceIds = Invoice::query()
-            ->where('service_id', $serviceId)
-            ->pluck('id');
-        $orderInvoiceIds = Invoice::query()
-            ->whereHas('order', fn (Builder $builder) => $builder->where('service_id', $serviceId))
-            ->pluck('id');
-        $invoiceIds = $invoiceIds->merge($orderInvoiceIds)->unique()->values();
-        $paymentIds = Payment::query()
-            ->whereIn('invoice_id', $invoiceIds)
-            ->pluck('id');
-
-        $query->where(function (Builder $builder) use ($invoiceIds, $paymentIds) {
-            $builder->where(function (Builder $inner) use ($invoiceIds) {
-                $inner->where('source_type', 'invoice')->whereIn('source_id', $invoiceIds);
-            })->orWhere(function (Builder $inner) use ($paymentIds) {
-                $inner->where('source_type', 'payment')->whereIn('source_id', $paymentIds);
+        // 关联子查询版：账单命中 = 自身 service_id 命中或关联订单 service_id 命中；
+        // 支付单命中 = 关联账单命中（同样两层判断）。
+        $query->where(function (Builder $builder) use ($serviceId) {
+            $builder->where(function (Builder $inner) use ($serviceId) {
+                $inner->where('source_type', 'invoice')
+                    ->whereExists(fn ($q) => $q->selectRaw(1)
+                        ->from('invoices')
+                        ->whereColumn('invoices.id', 'account_transactions.source_id')
+                        ->where(function (Builder $invoiceMatch) use ($serviceId) {
+                            $invoiceMatch->where('invoices.service_id', $serviceId)
+                                ->orWhereExists(fn ($oi) => $oi->selectRaw(1)
+                                    ->from('orders')
+                                    ->whereColumn('orders.id', 'invoices.order_id')
+                                    ->where('orders.service_id', $serviceId));
+                        }));
+            })->orWhere(function (Builder $inner) use ($serviceId) {
+                $inner->where('source_type', 'payment')
+                    ->whereExists(fn ($q) => $q->selectRaw(1)
+                        ->from('payments')
+                        ->whereColumn('payments.id', 'account_transactions.source_id')
+                        ->whereExists(fn ($iv) => $iv->selectRaw(1)
+                            ->from('invoices')
+                            ->whereColumn('invoices.id', 'payments.invoice_id')
+                            ->where(function (Builder $invoiceMatch) use ($serviceId) {
+                                $invoiceMatch->where('invoices.service_id', $serviceId)
+                                    ->orWhereExists(fn ($oi) => $oi->selectRaw(1)
+                                        ->from('orders')
+                                        ->whereColumn('orders.id', 'invoices.order_id')
+                                        ->where('orders.service_id', $serviceId));
+                            })));
             });
         });
     }

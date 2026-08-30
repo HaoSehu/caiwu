@@ -21,6 +21,7 @@ use App\Services\System\UploadedAssetReferenceService;
 use App\Support\AdminPermissions;
 use App\Support\AdminPrivacy;
 use App\Support\PublicUrl;
+use App\Support\SchemaMetadataCache;
 use App\Support\SecureAsset;
 use App\Support\ServiceHostname;
 use App\Support\TextSanitizer;
@@ -32,7 +33,6 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Predis\Client;
 
@@ -46,7 +46,7 @@ class TicketService
 
     private static function tableExists(string $table): bool
     {
-        return self::$tableExistsCache[$table] ??= Schema::hasTable($table);
+        return self::$tableExistsCache[$table] ??= SchemaMetadataCache::hasTable($table);
     }
 
     public const DEPARTMENTS = ['sales', 'support', 'billing', 'abuse'];
@@ -588,7 +588,7 @@ class TicketService
     {
         $privacy = AdminPrivacy::current();
         $columns = ['id', 'username', 'nickname', 'role_id'];
-        $hasEmailColumn = Schema::hasColumn('admin_users', 'email');
+        $hasEmailColumn = SchemaMetadataCache::hasColumn('admin_users', 'email');
 
         if ($hasEmailColumn) {
             $columns[] = 'email';
@@ -940,7 +940,7 @@ class TicketService
         $table = (string) config('queue.connections.database.table', 'jobs');
 
         try {
-            $this->databaseQueueReady = $table !== '' && Schema::hasTable($table);
+            $this->databaseQueueReady = $table !== '' && SchemaMetadataCache::hasTable($table);
         } catch (\Throwable $exception) {
             Log::warning('[工单通知] 检查队列表失败，回退为 afterResponse/同步执行', [
                 'table' => $table,

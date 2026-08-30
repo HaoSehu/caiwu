@@ -10,10 +10,10 @@ use App\Models\MemberLevelGroupDiscount;
 use App\Models\User;
 use App\Models\UserReferral;
 use App\Support\CacheKey;
+use App\Support\SchemaMetadataCache;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 
 /**
  * 会员等级管理：等级为纯手工配置的身份档位（名称/折扣矩阵/启停），
@@ -69,7 +69,7 @@ class MemberLevelService
     public function delete(MemberLevel $level): void
     {
         throw_if(
-            Schema::hasTable('user_referrals')
+            SchemaMetadataCache::hasTable('user_referrals')
                 ? UserReferral::query()->where('member_level_id', $level->id)->exists()
                 : User::query()->where('member_level_id', $level->id)->exists(),
             new BusinessException('当前等级下仍有用户，无法删除'),

@@ -4,17 +4,27 @@ namespace App\Services\System;
 
 use App\Models\NotificationTemplate;
 use App\Support\EmailTemplateCatalog;
+use App\Support\SchemaMetadataCache;
 use App\Support\SmsTemplateCatalog;
-use Illuminate\Support\Facades\Schema;
 
 class NotificationTemplateService
 {
+    /**
+     * 模板查询结果缓存，键为 `channel:code`，未命中模板存 false。
+     * sendTemplateEmail 每次发信会连续调用 find + isEnabled，多收件人循环下
+     * 同一模板被反复查询；按实例缓存后每请求每模板只查一次。队列 worker 中
+     * 实例随进程存活（--stop-when-empty 生命周期 ≤50s），模板编辑的可见延迟有限。
+     *
+     * @var array<string, array<string, mixed>|false>
+     */
+    private array $templateCache = [];
+
     /**
      * @return array<int, array<string, mixed>>
      */
     public function list(?string $channel = null): array
     {
-        if (! Schema::hasTable('notification_templates')) {
+        if (! SchemaMetadataCache::hasTable('notification_templates')) {
             return [];
         }
 
@@ -44,16 +54,28 @@ class NotificationTemplateService
             return null;
         }
 
-        if (Schema::hasTable('notification_templates')) {
+        $cacheKey = $channel.':'.$code;
+        if (array_key_exists($cacheKey, $this->templateCache)) {
+            $cached = $this->templateCache[$cacheKey];
+
+            return is_array($cached) ? $cached : null;
+        }
+
+        if (SchemaMetadataCache::hasTable('notification_templates')) {
             $template = NotificationTemplate::query()
                 ->where('channel', $channel)
                 ->where('code', $code)
                 ->first();
 
             if ($template instanceof NotificationTemplate) {
-                return $this->formatModel($template);
+                $formatted = $this->formatModel($template);
+                $this->templateCache[$cacheKey] = $formatted;
+
+                return $formatted;
             }
         }
+
+        $this->templateCache[$cacheKey] = false;
 
         return null;
     }
@@ -66,20 +88,18 @@ class NotificationTemplateService
             return true;
         }
 
-        if (! Schema::hasTable('notification_templates')) {
+        if (! SchemaMetadataCache::hasTable('notification_templates')) {
             return true;
         }
 
-        $template = NotificationTemplate::query()
-            ->where('channel', $channel)
-            ->where('code', $code)
-            ->first(['id', 'is_enabled']);
+        // 复用 find 的缓存结果，避免每次发信对同一模板查两次。
+        $template = $this->find($channel, $code);
 
-        if (! $template instanceof NotificationTemplate) {
+        if ($template === null) {
             return true;
         }
 
-        return (bool) $template->is_enabled;
+        return (bool) ($template['is_enabled'] ?? true);
     }
 
     /**
@@ -154,7 +174,7 @@ class NotificationTemplateService
             return true;
         }
 
-        if (! Schema::hasTable('notification_templates')) {
+        if (! SchemaMetadataCache::hasTable('notification_templates')) {
             return false;
         }
 

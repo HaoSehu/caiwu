@@ -21,10 +21,10 @@ use App\Services\System\OperationLogService;
 use App\Services\System\SettingService;
 use App\Support\Money;
 use App\Support\ProductProvisionHostname;
+use App\Support\SchemaMetadataCache;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 
 class ProductAdminService
 {
@@ -690,7 +690,7 @@ class ProductAdminService
     private function applyAdminProductFilters(Builder $query, array $filters): Builder
     {
         $lifecycleStatus = $this->normalizeLifecycleStatus($filters['lifecycle_status'] ?? null);
-        $hasProductUpstreamBindings = Schema::hasTable('product_upstream_bindings');
+        $hasProductUpstreamBindings = SchemaMetadataCache::hasTable('product_upstream_bindings');
         $productType = trim((string) ($filters['product_type'] ?? $filters['type'] ?? ''));
         $firstGroupCode = trim((string) ($filters['first_product_group_code'] ?? ''));
 

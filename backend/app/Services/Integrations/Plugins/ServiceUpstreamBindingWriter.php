@@ -7,9 +7,9 @@ namespace App\Services\Integrations\Plugins;
 use App\Models\Product;
 use App\Models\Service;
 use App\Models\Supplier;
+use App\Support\SchemaMetadataCache;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 
 class ServiceUpstreamBindingWriter
 {
@@ -154,7 +154,7 @@ class ServiceUpstreamBindingWriter
      */
     private function bindingContext(Service $service, ?Product $product, array $provisionData, ?int $bindingId): array
     {
-        if ($bindingId !== null && Schema::hasTable('service_upstream_bindings')) {
+        if ($bindingId !== null && SchemaMetadataCache::hasTable('service_upstream_bindings')) {
             $binding = DB::table('service_upstream_bindings')->where('id', $bindingId)->first(['plugin_id', 'provider_key']);
             if ($binding !== null) {
                 return [
@@ -181,7 +181,7 @@ class ServiceUpstreamBindingWriter
         array $provisionData,
         array $runtimeSnapshot
     ): void {
-        if (! Schema::hasTable('service_runtime_snapshots')) {
+        if (! SchemaMetadataCache::hasTable('service_runtime_snapshots')) {
             return;
         }
 
@@ -212,7 +212,7 @@ class ServiceUpstreamBindingWriter
         array $provisionData,
         array $connectionSnapshot
     ): void {
-        if (! Schema::hasTable('service_connection_snapshots')) {
+        if (! SchemaMetadataCache::hasTable('service_connection_snapshots')) {
             return;
         }
 
@@ -287,7 +287,7 @@ class ServiceUpstreamBindingWriter
             return $bindingId;
         }
 
-        if (! Schema::hasTable('product_upstream_bindings')) {
+        if (! SchemaMetadataCache::hasTable('product_upstream_bindings')) {
             return null;
         }
 
@@ -310,7 +310,7 @@ class ServiceUpstreamBindingWriter
         string $providerKey,
         ?int $productBindingId
     ): ?int {
-        if ($productBindingId !== null && Schema::hasTable('product_upstream_bindings')) {
+        if ($productBindingId !== null && SchemaMetadataCache::hasTable('product_upstream_bindings')) {
             $productBinding = DB::table('product_upstream_bindings')
                 ->where('id', $productBindingId)
                 ->first(['supplier_plugin_binding_id']);
@@ -328,7 +328,7 @@ class ServiceUpstreamBindingWriter
             }
         }
 
-        if (! Schema::hasTable('supplier_plugin_bindings')) {
+        if (! SchemaMetadataCache::hasTable('supplier_plugin_bindings')) {
             return null;
         }
 
@@ -374,7 +374,7 @@ class ServiceUpstreamBindingWriter
 
     private function pluginIdForProvider(string $providerKey): ?int
     {
-        if ($providerKey === '' || ! Schema::hasTable('integration_plugins')) {
+        if ($providerKey === '' || ! SchemaMetadataCache::hasTable('integration_plugins')) {
             return null;
         }
 
@@ -527,7 +527,7 @@ class ServiceUpstreamBindingWriter
     private function hasTables(array $tables): bool
     {
         foreach ($tables as $table) {
-            if (! Schema::hasTable($table)) {
+            if (! SchemaMetadataCache::hasTable($table)) {
                 return false;
             }
         }

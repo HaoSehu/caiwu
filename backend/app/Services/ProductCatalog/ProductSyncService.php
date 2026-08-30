@@ -9,6 +9,7 @@ use App\Constants\OrderType;
 use App\Constants\ProductType;
 use App\Constants\ServiceStatus;
 use App\Exceptions\BusinessException;
+use App\Jobs\RefreshSiteProductStockJob;
 use App\Models\FirstProductGroup;
 use App\Models\Order;
 use App\Models\Product;
@@ -22,13 +23,13 @@ use App\Services\Upstream\Contracts\ProvidesConsoleCatalog;
 use App\Services\Upstream\ProviderResolver;
 use App\Support\CacheKey;
 use App\Support\ProductGroupHierarchyFields;
+use App\Support\SchemaMetadataCache;
 use App\Support\TextSanitizer;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class ProductSyncService
@@ -47,6 +48,10 @@ class ProductSyncService
     // 前台实时库存外层缓存：基于 redis_volatile，未命中时才会去上游实时拉取，
     // 提高 TTL 减少每次进 /products 都命中冷缓存、重复打上游的窗口。
     private const SITE_STOCK_CACHE_TTL_SECONDS = 30;
+
+    // 陈旧值兜底窗口：新鲜值过期后先回陈旧值再后台刷新（stale-while-revalidate），
+    // 上游故障时站点最多展示 10 分钟前的库存，而不是同步挂 30-60 秒。
+    private const SITE_STOCK_STALE_TTL_SECONDS = 600;
 
     private const SITE_STOCK_MISS_CACHE_TTL_SECONDS = 20;
 
@@ -706,23 +711,58 @@ class ProductSyncService
 
     public function siteProductStock(int $productId): ?array
     {
+        $store = Cache::store('redis_volatile');
         $cacheKey = CacheKey::siteProductStock($productId);
-        $cached = Cache::store('redis_volatile')->get($cacheKey);
+        $staleKey = $cacheKey.':stale';
+
+        $cached = $store->get($cacheKey);
 
         if ($cached !== null) {
             return $cached === false ? null : $cached;
         }
 
+        $stale = $store->get($staleKey);
+        if ($stale !== null) {
+            // stale-while-revalidate：先回陈旧值，后台 Job 刷新，避免缓存过期瞬间的
+            // 站点请求同步等待上游 HTTP（最长占满上游超时预算）；派发失败时退回同步刷新。
+            try {
+                RefreshSiteProductStockJob::dispatch($productId);
+            } catch (\Throwable) {
+                $this->refreshSiteProductStock($productId);
+            }
+
+            return $stale === false ? null : $stale;
+        }
+
+        $this->refreshSiteProductStock($productId);
+
+        $cached = $store->get($cacheKey);
+
+        return $cached === false ? null : $cached;
+    }
+
+    /**
+     * 拉取上游实时库存并写入新鲜/陈旧双缓存键；商品不存在时写 miss 标记并清陈旧值。
+     */
+    public function refreshSiteProductStock(int $productId): void
+    {
+        $store = Cache::store('redis_volatile');
+        $cacheKey = CacheKey::siteProductStock($productId);
+        $staleKey = $cacheKey.':stale';
+
         $product = $this->findSaleProductForStock($productId);
 
         if (! $product instanceof Product) {
-            Cache::store('redis_volatile')->put(
+            $store->put(
                 $cacheKey,
                 false,
                 now()->addSeconds(self::SITE_STOCK_MISS_CACHE_TTL_SECONDS)
             );
+            // 商品已下架/删除：陈旧值 10 分钟窗口内每次命中都会重复派发刷新 Job，
+            // 直接清掉，后续请求只走 miss（20 秒）与同步刷新路径。
+            $store->forget($staleKey);
 
-            return null;
+            return;
         }
 
         $product = $this->applyLiveStockToProduct($product->loadMissing('supplier'));
@@ -732,13 +772,8 @@ class ProductSyncService
             'stock' => (int) ($product->live_stock ?? $product->stock),
         ];
 
-        Cache::store('redis_volatile')->put(
-            $cacheKey,
-            $result,
-            now()->addSeconds(self::SITE_STOCK_CACHE_TTL_SECONDS)
-        );
-
-        return $result;
+        $store->put($cacheKey, $result, now()->addSeconds(self::SITE_STOCK_CACHE_TTL_SECONDS));
+        $store->put($staleKey, $result, now()->addSeconds(self::SITE_STOCK_STALE_TTL_SECONDS));
     }
 
     public function assertProductCanBeProvisioned(Product $product, int $requiredQuantity = 1): void
@@ -1322,7 +1357,8 @@ class ProductSyncService
         }
 
         try {
-            $template = $this->resolveCatalogCapability($supplier)->getProductConfigTemplate($supplier, $supplierProductId);
+            // 同步流程需要实时配置项，绕过用户购买路径的 10 分钟缓存。
+            $template = $this->resolveCatalogCapability($supplier)->getProductConfigTemplate($supplier, $supplierProductId, true);
             $configOptions = $this->normalizeImportedConfigOptions($template['config_options'] ?? []);
 
             return $configOptions !== [] ? $configOptions : $fallback;
@@ -1933,7 +1969,7 @@ class ProductSyncService
 
     private function applyHasUpstreamProductBindingScope(Builder $query, ?string $providerKey = null): void
     {
-        if (Schema::hasTable('product_upstream_bindings')) {
+        if (SchemaMetadataCache::hasTable('product_upstream_bindings')) {
             $normalizedProviderKey = trim((string) $providerKey);
 
             $query->whereExists(function ($subQuery) use ($normalizedProviderKey): void {
@@ -1963,7 +1999,7 @@ class ProductSyncService
             ->values()
             ->all();
 
-        if ($normalizedIds !== [] && Schema::hasTable('product_upstream_bindings') && Schema::hasTable('supplier_plugin_bindings')) {
+        if ($normalizedIds !== [] && SchemaMetadataCache::hasTable('product_upstream_bindings') && SchemaMetadataCache::hasTable('supplier_plugin_bindings')) {
             return Product::withTrashed()
                 ->with(['productGroup.secondProductGroup.firstProductGroup'])
                 ->select('products.*', 'pub.upstream_product_id as binding_upstream_product_id')

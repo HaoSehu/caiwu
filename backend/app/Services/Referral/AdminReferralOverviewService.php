@@ -8,7 +8,7 @@ use App\Models\User;
 use App\Models\UserAccount;
 use App\Models\UserReferral;
 use App\Support\AdminPrivacy;
-use Illuminate\Support\Facades\Schema;
+use App\Support\SchemaMetadataCache;
 
 class AdminReferralOverviewService
 {
@@ -131,7 +131,7 @@ class AdminReferralOverviewService
             return $this->usersReferrerColumnAvailable;
         }
 
-        $this->usersReferrerColumnAvailable = Schema::hasColumn('users', 'referrer_user_id');
+        $this->usersReferrerColumnAvailable = SchemaMetadataCache::hasColumn('users', 'referrer_user_id');
 
         return $this->usersReferrerColumnAvailable;
     }
@@ -142,7 +142,7 @@ class AdminReferralOverviewService
             return $this->userReferralsTableAvailable;
         }
 
-        $this->userReferralsTableAvailable = Schema::hasTable('user_referrals');
+        $this->userReferralsTableAvailable = SchemaMetadataCache::hasTable('user_referrals');
 
         return $this->userReferralsTableAvailable;
     }

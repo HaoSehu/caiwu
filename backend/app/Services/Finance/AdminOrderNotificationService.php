@@ -7,6 +7,8 @@ namespace App\Services\Finance;
 use App\Constants\InvoiceStatus;
 use App\Constants\OrderStatus;
 use App\Constants\PaymentGatewayCode;
+use App\Jobs\SendAdminOrderNotificationJob;
+use App\Jobs\SendPaidInvoiceAdminNotificationJob;
 use App\Models\AdminUser;
 use App\Models\AutomationLog;
 use App\Models\Invoice;
@@ -29,14 +31,19 @@ class AdminOrderNotificationService
 
     public function notifyOrderCreatedAfterResponse(Order $order): void
     {
-        $this->scheduleNotificationAfterResponse((int) $order->id, 'created');
+        SendAdminOrderNotificationJob::dispatch((int) $order->id, 'created');
     }
 
     public function notifyOrderPaidAfterResponse(Order $order): void
     {
-        $this->scheduleNotificationAfterResponse((int) $order->id, 'paid');
+        SendAdminOrderNotificationJob::dispatch((int) $order->id, 'paid');
     }
 
+    /**
+     * 入口：把管理员付款通知派发到队列。此前走 terminating 回调在同一 FPM worker 内
+     * 串行向全部管理员 SMTP 发信，邮件多或 SMTP 慢时 worker 被占满；失败由 Job 重试兜底。
+     * 实际发送逻辑见 notifyInvoicePaidNow（由 SendPaidInvoiceAdminNotificationJob 调用）。
+     */
     public function notifyInvoicePaidAfterResponse(Invoice $invoice): void
     {
         $invoiceId = (int) $invoice->id;
@@ -44,15 +51,15 @@ class AdminOrderNotificationService
             return;
         }
 
-        if (app()->runningInConsole()) {
-            $this->dispatchInvoiceNotificationNow($invoiceId);
+        SendPaidInvoiceAdminNotificationJob::dispatch($invoiceId);
+    }
 
-            return;
-        }
-
-        app()->terminating(function () use ($invoiceId): void {
-            $this->dispatchInvoiceNotificationNow($invoiceId);
-        });
+    /**
+     * 队列任务的实际执行体：加载账单并逐个管理员发送付款通知。
+     */
+    public function notifyInvoicePaidNow(int $invoiceId): void
+    {
+        $this->dispatchInvoiceNotificationNow($invoiceId);
     }
 
     public function notifyOrderCreated(Order $order): void
@@ -395,24 +402,10 @@ class AdminOrderNotificationService
             ]));
     }
 
-    private function scheduleNotificationAfterResponse(int $orderId, string $event): void
-    {
-        if ($orderId <= 0) {
-            return;
-        }
-
-        if (app()->runningInConsole()) {
-            $this->dispatchNotificationNow($orderId, $event);
-
-            return;
-        }
-
-        app()->terminating(function () use ($orderId, $event): void {
-            $this->dispatchNotificationNow($orderId, $event);
-        });
-    }
-
-    private function dispatchNotificationNow(int $orderId, string $event): void
+    /**
+     * 队列任务的实际执行体：按事件类型分发订单创建/支付通知。
+     */
+    public function notifyOrderEventNow(int $orderId, string $event): void
     {
         $order = Order::query()->find($orderId);
 

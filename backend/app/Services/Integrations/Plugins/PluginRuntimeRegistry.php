@@ -18,9 +18,9 @@ use App\Services\Sms\Contracts\SmsDriver;
 use App\Services\Upstream\Contracts\UpstreamDriver;
 use App\Services\Verification\Contracts\VerificationDriver;
 use App\Support\PayloadLimiter;
+use App\Support\SchemaMetadataCache;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class PluginRuntimeRegistry
@@ -55,7 +55,7 @@ class PluginRuntimeRegistry
             throw new BusinessException('插件或执行动作不能为空', 42200);
         }
 
-        if (! Schema::hasTable('integration_plugins')) {
+        if (! SchemaMetadataCache::hasTable('integration_plugins')) {
             throw new BusinessException('插件系统尚未初始化', 42200);
         }
 
@@ -159,7 +159,7 @@ class PluginRuntimeRegistry
         string $traceId,
         ?\Throwable $exception = null,
     ): void {
-        if (! Schema::hasTable('integration_plugin_runtime_logs')) {
+        if (! SchemaMetadataCache::hasTable('integration_plugin_runtime_logs')) {
             return;
         }
 
@@ -384,7 +384,7 @@ class PluginRuntimeRegistry
     {
         $resolvedDomain = PluginDomain::assertValid($domain);
 
-        if (! Schema::hasTable('integration_plugins')) {
+        if (! SchemaMetadataCache::hasTable('integration_plugins')) {
             return [];
         }
 

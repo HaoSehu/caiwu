@@ -10,6 +10,7 @@ use App\Constants\OrderType;
 use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
 use App\Exceptions\BusinessException;
+use App\Jobs\SendTemplateEmailJob;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Payment;
@@ -37,7 +38,6 @@ class OrderService
         private CouponService $couponService,
         private CheckoutSecurityService $checkoutSecurityService,
         private OperationLogService $operationLogService,
-        private NotificationService $notificationService,
     ) {}
 
     /**
@@ -573,7 +573,7 @@ class OrderService
         }
 
         try {
-            $this->notificationService->sendTemplateEmail($email, NotificationService::TEMPLATE_MANUAL_PAYMENT_CONFIRM, [
+            SendTemplateEmailJob::dispatch($email, NotificationService::TEMPLATE_MANUAL_PAYMENT_CONFIRM, [
                 'invoice_no' => $invoiceNo,
                 'order_no' => (string) $order->order_no,
                 'paid_amount' => number_format((float) ($order->paid_amount ?? 0), 2, '.', ''),

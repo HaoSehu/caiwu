@@ -10,10 +10,10 @@ use App\Models\Service;
 use App\Models\Supplier;
 use App\Models\SupplierPluginBinding;
 use App\Services\Upstream\ProviderRegistry;
+use App\Support\SchemaMetadataCache;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 
 class PluginBindingResolver
 {
@@ -597,7 +597,7 @@ class PluginBindingResolver
     private function hasTable(string $table): bool
     {
         try {
-            return Schema::hasTable($table);
+            return SchemaMetadataCache::hasTable($table);
         } catch (\Throwable) {
             return false;
         }
