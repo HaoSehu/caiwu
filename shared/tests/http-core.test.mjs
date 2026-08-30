@@ -10,7 +10,7 @@ import {
   createRequestId,
   buildSafeRequestKey,
   serializeKeyPart,
-  isRetryableNetworkError,
+  isRetryableError,
   resolveSafeRetryLimit,
   resolveSafeRetryDelay,
 } from '../runtime/http/core.ts'
@@ -77,37 +77,37 @@ assert.equal(typeof resolveSafeRetryLimit(), 'number', '默认值应为数字')
   assert.ok(delay2 >= delay1, '第二次重试延迟不应小于第一次')
 }
 
-// 8. isRetryableNetworkError — 取消的请求不重试
+// 8. isRetryableError — 取消的请求不重试
 {
-  assert.equal(isRetryableNetworkError({ code: 'ERR_CANCELED' }), false, '取消的请求不应重试')
-  assert.equal(isRetryableNetworkError({ name: 'CanceledError' }), false, 'CanceledError 不应重试')
+  assert.equal(isRetryableError({ code: 'ERR_CANCELED' }), false, '取消的请求不应重试')
+  assert.equal(isRetryableError({ name: 'CanceledError' }), false, 'CanceledError 不应重试')
 }
 
-// 9. isRetryableNetworkError — 可重试状态码
+// 9. isRetryableError — 可重试状态码
 {
   for (const code of [408, 425, 429, 500, 502, 503, 504]) {
-    assert.equal(isRetryableNetworkError({ response: { status: code } }), true, `${code} 应可重试`)
+    assert.equal(isRetryableError({ response: { status: code } }), true, `${code} 应可重试`)
   }
 }
 
-// 10. isRetryableNetworkError — 不可重试状态码
+// 10. isRetryableError — 不可重试状态码
 {
-  assert.equal(isRetryableNetworkError({ response: { status: 400 } }), false, '400 不应重试')
-  assert.equal(isRetryableNetworkError({ response: { status: 404 } }), false, '404 不应重试')
+  assert.equal(isRetryableError({ response: { status: 400 } }), false, '400 不应重试')
+  assert.equal(isRetryableError({ response: { status: 404 } }), false, '404 不应重试')
 }
 
-// 11. isRetryableNetworkError — 网络错误应可重试
+// 11. isRetryableError — 无响应的网络错误不应重试
 {
-  assert.equal(isRetryableNetworkError({ code: 'ECONNABORTED' }), true, 'ECONNABORTED 应可重试')
-  assert.equal(isRetryableNetworkError({ code: 'ETIMEDOUT' }), true, 'ETIMEDOUT 应可重试')
-  assert.equal(isRetryableNetworkError({ code: 'ERR_NETWORK' }), true, 'ERR_NETWORK 应可重试')
+  assert.equal(isRetryableError({ code: 'ECONNABORTED' }), false, '超时（无响应）不应重试')
+  assert.equal(isRetryableError({ code: 'ETIMEDOUT' }), false, 'ETIMEDOUT（无响应）不应重试')
+  assert.equal(isRetryableError({ code: 'ERR_NETWORK' }), false, 'ERR_NETWORK（CORS/断网）不应重试')
 }
 
-// 12. isRetryableNetworkError — timeout/network 关键字
+// 12. isRetryableError — 无响应的消息类错误不应重试
 {
-  assert.equal(isRetryableNetworkError({ message: 'request timeout' }), true, 'timeout 消息应可重试')
-  assert.equal(isRetryableNetworkError({ message: 'network error occurred' }), true, 'network error 消息应可重试')
-  assert.equal(isRetryableNetworkError({ message: 'Failed to fetch' }), true, 'Failed to fetch 应可重试')
+  assert.equal(isRetryableError({ message: 'request timeout' }), false, 'timeout 消息（无响应）不应重试')
+  assert.equal(isRetryableError({ message: 'network error occurred' }), false, 'network error 消息不应重试')
+  assert.equal(isRetryableError({ message: 'Failed to fetch' }), false, 'Failed to fetch 不应重试')
 }
 
 // 13. buildSafeRequestKey 考虑 responseType

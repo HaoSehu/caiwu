@@ -81,6 +81,7 @@ export function useVerification() {
 
   let pollingTimer: number | null = null;
   let expiryTimer: number | null = null;
+  let pollFailureCount = 0;
   const closingSession = ref(false);
 
   const isVerified = computed(() => Number(form.is_verified || 0) === 1 || Number(form.verification_status || 0) === 2);
@@ -278,6 +279,7 @@ export function useVerification() {
 
   function startPolling() {
     stopPolling();
+    pollFailureCount = 0;
     // 回跳/查询场景可能没有二维码 URL，只要会话存在且对话框打开即持续轮询结果。
     if (!showVerificationDialog.value || !certifyId.value || isVerificationQrExpired.value) return;
     pollingTimer = window.setInterval(() => {
@@ -291,6 +293,7 @@ export function useVerification() {
     checkingStatus.value = true;
     try {
       const res = await clientAuthApi.verificationStatus({ certify_id: certifyId.value });
+      pollFailureCount = 0;
       const payload = res.data || {};
       verificationMessage.value = String(payload.msg || payload.message || '');
       if (Number(payload.status) === 1) {
@@ -308,6 +311,15 @@ export function useVerification() {
       }
     } catch (error: unknown) {
       if (!silent) MessagePlugin.error(resolveMessage(error, '查询失败'));
+      // 轮询请求连续失败达到阈值即熔断，避免断网/CORS 期间无限重试与弹窗。
+      if (pollingTimer !== null) {
+        pollFailureCount += 1;
+        if (pollFailureCount >= 3) {
+          stopPolling();
+          pollFailureCount = 0;
+          MessagePlugin.warning('网络异常，已停止自动查询，请稍后重试');
+        }
+      }
     } finally {
       checkingStatus.value = false;
     }

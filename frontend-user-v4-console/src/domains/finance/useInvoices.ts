@@ -200,6 +200,7 @@ export function useInvoiceDetail() {
   const appliedDeductionAmount = ref('0.00');
   const alipayAmount = ref('0.00');
   const pollTimer = ref<number | null>(null);
+  let pollFailureCount = 0;
 
   const invoiceId = computed(() => Number(route.params.id || 0));
   const payMethods = computed<InvoicePaymentMethod[]>(() =>
@@ -306,6 +307,7 @@ export function useInvoiceDetail() {
 
   function startPolling() {
     clearPollingTimer();
+    pollFailureCount = 0;
     pollTimer.value = window.setInterval(() => {
       if (!polling.value && alipayPollingReady.value) {
         void pollAlipayStatus(true);
@@ -540,6 +542,7 @@ export function useInvoiceDetail() {
         poll_token: alipayPollToken.value,
         ...(alipayGateway.value ? { gateway: alipayGateway.value } : {}),
       });
+      pollFailureCount = 0;
       const payload = res.data || {};
       if (payload.paid) {
         clearPollingTimer();
@@ -553,6 +556,15 @@ export function useInvoiceDetail() {
       }
     } catch (error: unknown) {
       MessagePlugin.error(getErrorMessage(error, '查询支付状态失败'));
+      // 轮询请求连续失败达到阈值即熔断，避免断网/CORS 期间无限重试与弹窗。
+      if (pollTimer.value !== null) {
+        pollFailureCount += 1;
+        if (pollFailureCount >= 3) {
+          clearPollingTimer();
+          pollFailureCount = 0;
+          MessagePlugin.warning('网络异常，已停止自动查询，请稍后重试');
+        }
+      }
     } finally {
       polling.value = false;
     }

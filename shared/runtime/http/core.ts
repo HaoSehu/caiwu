@@ -8,11 +8,6 @@ import { getNetworkProfile, waitFor } from "../networkHints.ts";
 const SAFE_METHODS = new Set(["get", "head", "options"]);
 const WRITE_METHODS = new Set(["post", "put", "patch", "delete"]);
 const RETRYABLE_STATUS_CODES = new Set([408, 425, 429, 500, 502, 503, 504]);
-const RETRIABLE_ERROR_CODES = new Set([
-  "ECONNABORTED",
-  "ETIMEDOUT",
-  "ERR_NETWORK",
-]);
 
 const pendingSafeRequests = new Map<string, Promise<AxiosResponse>>();
 
@@ -91,33 +86,14 @@ export function resolveSafeRetryDelay(error: any, attempt: number) {
   return Math.min(baseDelay * 2 ** Math.max(0, attempt - 1) + jitter, 2500);
 }
 
-export function isRetryableNetworkError(error: any) {
-  if (
-    axios.isCancel(error) ||
-    error?.code === "ERR_CANCELED" ||
-    error?.name === "CanceledError"
-  ) {
+// 无响应错误（CORS/断网/超时/连接被拒）在浏览器中属确定性失败，重试无收益，立即报错；
+// 仅服务器有响应且状态码可重试时才允许重试。
+export function isRetryableError(error: any) {
+  if (!error?.response) {
     return false;
   }
 
-  if (typeof navigator !== "undefined" && navigator.onLine === false) {
-    return false;
-  }
-
-  if (error?.response) {
-    return RETRYABLE_STATUS_CODES.has(Number(error.response.status || 0));
-  }
-
-  if (RETRIABLE_ERROR_CODES.has(String(error?.code || ""))) {
-    return true;
-  }
-
-  const message = String(error?.message || "").toLowerCase();
-  return (
-    message.includes("timeout") ||
-    message.includes("network error") ||
-    message.includes("failed to fetch")
-  );
+  return RETRYABLE_STATUS_CODES.has(Number(error.response.status || 0));
 }
 
 export function attachSafeRequestDedupe(
@@ -164,7 +140,7 @@ export async function retrySafeRequest(
     throw error;
   }
 
-  if (config.signal?.aborted || !isRetryableNetworkError(error)) {
+  if (config.signal?.aborted || !isRetryableError(error)) {
     throw error;
   }
 

@@ -169,8 +169,9 @@ const transform: AxiosTransform = {
     const isIdempotent = method === 'get' || method === 'head';
     if (!isIdempotent) return Promise.reject(error);
 
-    const retryableStatuses = [408, 429, 500, 502, 503, 504];
-    const isRetryableStatus = status === undefined || retryableStatuses.includes(status);
+    // 与 shared RETRYABLE_STATUS_CODES 保持一致；无响应错误（CORS/断网/超时）属确定性失败，重试无收益，立即报错。
+    const retryableStatuses = [408, 425, 429, 500, 502, 503, 504];
+    const isRetryableStatus = typeof status === 'number' && retryableStatuses.includes(status);
     if (!isRetryableStatus) return Promise.reject(error);
 
     config.retryCount = config.retryCount || 0;

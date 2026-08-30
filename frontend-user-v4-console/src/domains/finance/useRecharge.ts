@@ -100,6 +100,7 @@ export function useRecharge() {
   });
 
   let pollingTimer: number | null = null;
+  let pollFailureCount = 0;
 
   const activePreset = computed(() => (RECHARGE_PRESET_AMOUNTS.includes(inputAmount.value) ? inputAmount.value : null));
   const amountText = computed(() => formatMoney(inputAmount.value).replace(/\.00$/, ''));
@@ -226,6 +227,7 @@ export function useRecharge() {
     polling.value = true;
     try {
       const response = await clientApi.rechargeStatus(pollPaymentNo, { poll_token: pollToken });
+      pollFailureCount = 0;
       const payload = response.data || {};
       if (payload.paid) {
         rechargePaid.value = true;
@@ -247,6 +249,15 @@ export function useRecharge() {
       }
     } catch (error: unknown) {
       MessagePlugin.error(getErrorMessage(error, '查询充值状态失败'));
+      // 轮询请求连续失败达到阈值即熔断，避免断网/CORS 期间无限重试与弹窗。
+      if (pollingTimer !== null) {
+        pollFailureCount += 1;
+        if (pollFailureCount >= 3) {
+          clearPollingTimer();
+          pollFailureCount = 0;
+          MessagePlugin.warning('网络异常，已停止自动查询，请稍后重试');
+        }
+      }
     } finally {
       polling.value = false;
     }
@@ -254,6 +265,7 @@ export function useRecharge() {
 
   function startAutoPolling(interval = 2000) {
     clearPollingTimer();
+    pollFailureCount = 0;
     if (!paymentPayload.value?.payment_no || !paymentPayload.value?.poll_token) return;
 
     void pollRechargeStatus({ silentPending: true });

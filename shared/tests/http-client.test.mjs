@@ -224,4 +224,59 @@ assert.equal(toUserMessage(undefined, '自定义回退'), '自定义回退')
   assert.equal(seen[1].headers.Authorization, 'Bearer token-123')
 }
 
+// 无响应错误（CORS/断网/超时）：属确定性失败，safe GET 不重试，仅请求一次
+{
+  const seen = []
+  const errors = []
+  const client = createHttpClient({
+    baseURL: 'https://api.example.test/api',
+    showError: (message) => errors.push(message),
+  })
+  client.defaults.adapter = (config) => {
+    seen.push(config.url)
+    return Promise.reject(
+      Object.assign(new Error('Network Error'), {
+        config,
+        code: 'ERR_NETWORK',
+        isAxiosError: true,
+      })
+    )
+  }
+  await assert.rejects(client.get('/anything'), (err) => err.message === '网络异常')
+  assert.equal(seen.length, 1, '无响应错误不应重试')
+  assert.deepEqual(errors, ['网络异常'])
+}
+
+// 可重试状态码：safe GET 自动重试 1 次后成功
+{
+  let attempts = 0
+  const client = createHttpClient({
+    baseURL: 'https://api.example.test/api',
+    showError: () => {},
+  })
+  client.defaults.adapter = (config) => {
+    attempts += 1
+    if (attempts === 1) {
+      return Promise.reject(
+        Object.assign(new Error('Request failed'), {
+          config,
+          response: { status: 503, headers: {}, config, data: null },
+          isAxiosError: true,
+        })
+      )
+    }
+    return Promise.resolve({
+      data: { code: 0, message: 'ok', data: null },
+      status: 200,
+      statusText: '200',
+      headers: {},
+      config,
+      request: {},
+    })
+  }
+  const res = await client.get('/anything')
+  assert.equal(attempts, 2, '503 应重试一次')
+  assert.equal(res.code, 0)
+}
+
 console.log('http client tests passed')
