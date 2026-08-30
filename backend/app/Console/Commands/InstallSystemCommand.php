@@ -23,13 +23,15 @@ class InstallSystemCommand extends Command
     {
         $username = trim((string) env('INSTALL_ADMIN_USERNAME', 'cerbo'));
         $password = (string) env('INSTALL_ADMIN_PASSWORD', '');
+        $generatedPassword = false;
         if (config('app.env') === 'production' && ($password === '' || strlen($password) < 12 || in_array($password, ['password', '123456789012'], true))) {
             $this->error('生产环境必须通过 INSTALL_ADMIN_PASSWORD 配置至少 12 位非默认密码');
 
             return self::FAILURE;
         }
         if ($password === '') {
-            $password = 'cerbo-install-'.bin2hex(random_bytes(8));
+            $password = bin2hex(random_bytes(12));
+            $generatedPassword = true;
         }
         try {
             $database->verify(config('database.connections.mysql'));
@@ -58,6 +60,12 @@ class InstallSystemCommand extends Command
                 DB::table('admin_user_roles')->upsert([['admin_user_id' => $admin->id, 'role_id' => $roleId]], ['admin_user_id', 'role_id'], []);
             }
             $this->info('系统安装完成');
+            if ($generatedPassword && $isNewAdmin) {
+                $this->warn("已生成一次性管理员密码：{$password}（仅本次显示，请立即记录）");
+            }
+            if (! $isNewAdmin && ! $generatedPassword) {
+                $this->warn('管理员已存在，本次未修改其密码；如需重置请使用员工管理功能');
+            }
 
             return self::SUCCESS;
         } catch (\Throwable $e) {

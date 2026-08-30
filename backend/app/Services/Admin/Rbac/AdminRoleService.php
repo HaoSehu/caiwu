@@ -101,11 +101,12 @@ class AdminRoleService
         });
     }
 
-    public function copy(Role $role): Role
+    public function copy(Role $role, ?AdminUser $operator = null): Role
     {
         $baseName = $this->normalizeName($role->name.'_copy');
         $name = $this->uniqueRoleName($baseName);
         $permissions = $role->resolvedPermissions();
+        $this->assertPermissionsGrantable($permissions, $operator);
 
         return DB::transaction(function () use ($role, $name, $permissions): Role {
             $newRole = Role::query()->create([
@@ -153,20 +154,42 @@ class AdminRoleService
             throw new BusinessException('包含无效权限码：'.implode(', ', $invalid));
         }
 
-        // 通配符权限只能由超级管理员授予，否则持 role.manage 即可自造超级角色再挂到自己身上
-        if (
-            $operator !== null
-            && in_array(AdminPermissions::ALL, $normalized, true)
-            && ! in_array(AdminPermissions::ALL, $operator->resolvedPermissions(), true)
-        ) {
-            throw new BusinessException('只有超级管理员可以授予全部权限', 40300, 403);
-        }
+        $this->assertPermissionsGrantable($normalized, $operator);
 
         if (in_array(AdminPermissions::ALL, $normalized, true)) {
             return [AdminPermissions::ALL];
         }
 
         return $normalized;
+    }
+
+    /**
+     * 通配符权限只能由超级管理员授予，否则持 role.manage 即可自造超级角色再挂到自己身上；
+     * 非超管操作者只能授予自身已持有的权限子集，堵住逐步增补敏感权限的自我扩权路径。
+     */
+    private function assertPermissionsGrantable(array $normalized, ?AdminUser $operator): void
+    {
+        if ($operator === null) {
+            return;
+        }
+
+        $operatorPermissions = $operator->resolvedPermissions();
+
+        if (
+            in_array(AdminPermissions::ALL, $normalized, true)
+            && ! in_array(AdminPermissions::ALL, $operatorPermissions, true)
+        ) {
+            throw new BusinessException('只有超级管理员可以授予全部权限', 40300, 403);
+        }
+
+        if (in_array(AdminPermissions::ALL, $operatorPermissions, true)) {
+            return;
+        }
+
+        $excessive = array_values(array_diff($normalized, $operatorPermissions));
+        if ($excessive !== []) {
+            throw new BusinessException('不能授予自身未持有的权限：'.implode(', ', $excessive), 40300, 403);
+        }
     }
 
     private function normalizeName(mixed $value): string

@@ -294,16 +294,29 @@ class AdminStaffService
 
     /**
      * 超级管理员角色只能由超级管理员指派，否则持 staff.manage 即可一步拿到全部权限。
+     * 非超管操作者只能指派自身权限子集内的角色，防止把高权限角色挂到自己或同伙身上。
      * 普通职能角色仍可由 staff.manage 指派，保持委派管理模型不变。
      */
     private function ensureAssignableRole(int $roleId, AdminUser $operator): void
     {
-        if (in_array(AdminPermissions::ALL, $operator->resolvedPermissions(), true)) {
+        $operatorPermissions = $operator->resolvedPermissions();
+        if (in_array(AdminPermissions::ALL, $operatorPermissions, true)) {
             return;
         }
 
-        if ($this->roleHasAllPermission($roleId)) {
+        $role = Role::query()->find($roleId);
+        if ($role === null) {
+            return;
+        }
+
+        $rolePermissions = $role->resolvedPermissions();
+        if (in_array(AdminPermissions::ALL, $rolePermissions, true)) {
             throw new BusinessException('只有超级管理员可以指派超级管理员角色', 40300, 403);
+        }
+
+        $excessive = array_values(array_diff($rolePermissions, $operatorPermissions));
+        if ($excessive !== []) {
+            throw new BusinessException('不能指派包含自身未持有权限的角色', 40300, 403);
         }
     }
 
