@@ -100,6 +100,14 @@ export function isPayableInvoice(row: InvoiceRecord | null | undefined) {
   return status === 0;
 }
 
+/** 非待支付账单的引导文案：按 4 态值域（0 待支付/1 已支付/4 已取消/5 已退款）给出准确提示，避免一律提示"无需支付"。 */
+export function resolveNonPayableInvoiceMessage(status: number): string {
+  if (status === 1) return '该账单已支付，无需再次支付';
+  if (status === 4) return '该账单已取消，无法支付';
+  if (status === 5) return '该账单已退款，无法支付';
+  return '该账单当前状态不支持支付';
+}
+
 function coercePayMethodKey(value: unknown): PayMethodKey {
   return String(value || '').trim();
 }
@@ -397,7 +405,7 @@ export function useInvoiceDetail() {
       syncPayMethod();
       if (detail.value && !isPayableInvoice(detail.value)) {
         resetPaymentPayload();
-        MessagePlugin.info('该账单当前无需支付');
+        MessagePlugin.info(resolveNonPayableInvoiceMessage(Number(detail.value.status)));
         await router.replace({
           path: '/client/invoices',
         });

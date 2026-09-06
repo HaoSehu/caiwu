@@ -96,7 +96,8 @@ class ServiceBillingController extends Controller
             $id,
             (string) $data['billing_cycle'],
             (int) ($data['user_coupon_id'] ?? 0),
-            RequestContext::forClient($request)
+            RequestContext::forClient($request),
+            true
         ));
 
         return $this->success($this->invoicePayload($invoice), '续费账单创建成功');
@@ -166,6 +167,7 @@ class ServiceBillingController extends Controller
             'id' => (int) $invoice->id,
             'invoice_no' => (string) $invoice->invoice_no,
             'service_id' => (int) ($invoice->service_id ?? 0),
+            'status' => (int) $invoice->status,
         ];
     }
 }

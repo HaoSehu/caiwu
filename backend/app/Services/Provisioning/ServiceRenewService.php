@@ -213,7 +213,11 @@ class ServiceRenewService
         ];
     }
 
-    public function createRenewInvoiceForUser(User $user, int $serviceId, string $billingCycle, int $userCouponId = 0, array $context = []): Invoice
+    /**
+     * @param  bool  $rejectBlockingPaidInvoice  手动续费路径为 true：命中"已支付但履约未完成"账单时拒绝复用并抛异常，
+     *                                           避免把用户送去已支付账单的支付页得到"无需支付"死胡同；自动路径保持复用防双扣。
+     */
+    public function createRenewInvoiceForUser(User $user, int $serviceId, string $billingCycle, int $userCouponId = 0, array $context = [], bool $rejectBlockingPaidInvoice = false): Invoice
     {
         $service = $this->findUserService($user, $serviceId);
         $service = $this->healServiceProductMapping($service);
@@ -235,6 +239,23 @@ class ServiceRenewService
 
         $blockingPaidInvoice = $this->findBlockingPaidRenewInvoice($user, $service, $cycle, $userCouponId);
         if ($blockingPaidInvoice instanceof Invoice) {
+            if ($rejectBlockingPaidInvoice) {
+                $this->operationLogService->writeServiceConsoleLog($service, 'service.console.renew.invoice.create', [
+                    'category' => 'renew',
+                    'summary' => '拒绝重复创建续费账单（已支付处理中）',
+                    'billing_cycle' => $cycle,
+                    'billing_cycle_label' => $this->resolveBillingCycleLabel($cycle),
+                    'amount' => number_format((float) $blockingPaidInvoice->amount, 2, '.', ''),
+                    'invoice_id' => (int) $blockingPaidInvoice->id,
+                    'invoice_no' => (string) $blockingPaidInvoice->invoice_no,
+                    'reused_invoice' => false,
+                    'paid_unfulfilled' => true,
+                    'blocked_paid_invoice' => true,
+                ], $context);
+
+                throw new BusinessException('该周期已有一笔正在处理的续费（已支付），请勿重复支付，稍后可在服务控制台查看处理结果');
+            }
+
             $blockingPaidInvoice->loadMissing(['product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires', 'service']);
             $this->operationLogService->writeServiceConsoleLog($service, 'service.console.renew.invoice.create', [
                 'category' => 'renew',

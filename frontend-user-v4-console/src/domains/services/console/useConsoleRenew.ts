@@ -78,9 +78,20 @@ export function useConsoleRenew(options: UseConsoleRenewOptions) {
         user_coupon_id: renewForm.user_coupon_id || undefined,
       });
       const invoiceId = Number(res.data?.id || 0);
+      const invoiceStatus = Number(res.data?.status ?? 0);
       renewVisible.value = false;
-      MessagePlugin.success('续费账单已创建，正在跳转支付');
-      router.push(invoiceId > 0 ? `/client/invoices/${invoiceId}/pay` : '/client/invoices');
+      if (invoiceId > 0 && invoiceStatus === 0) {
+        MessagePlugin.success('续费账单已创建，正在跳转支付');
+        router.push(`/client/invoices/${invoiceId}/pay`);
+        return;
+      }
+      // 后端对"已支付处理中"的续费已直接拒绝；这里兜底处理非待支付账单，避免跳进支付页空转。
+      MessagePlugin.info(
+        invoiceStatus === 1
+          ? '该周期已有一笔处理中的续费（已支付），请勿重复支付，可稍后刷新查看'
+          : '续费账单已创建，可在账单列表中查看',
+      );
+      router.push('/client/invoices');
     } catch (error: unknown) {
       MessagePlugin.error(resolveErrorMessage(error, '创建续费账单失败'));
     } finally {

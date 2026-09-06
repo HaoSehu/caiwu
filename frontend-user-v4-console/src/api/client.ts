@@ -268,7 +268,7 @@ const clientApi = {
   serviceRenewPreview: (id: number | string, params?: QueryParams) =>
     getEnvelope<ServiceRenewPreview>(`/v2/client/services/${id}/renewals`, { params }),
   createRenewOrder: (id: number | string, data: Record<string, unknown>) =>
-    postEnvelope<{ id?: number }>(`/v2/client/services/${id}/renewals`, data),
+    postEnvelope<{ id?: number; status?: number; service_id?: number }>(`/v2/client/services/${id}/renewals`, data),
   updateAutoRenew: (id: number | string, data: Record<string, unknown>) =>
     request.put(`/v2/client/services/${id}/renewals/auto`, data),
   servicePower: (id: number | string, data: Record<string, unknown>) =>
