@@ -78,3 +78,51 @@ test("390 视口移动轮播圆点可点击切换", async ({ page }) => {
   await expect(second).toHaveClass(/is-active/);
   await expect(dots.first()).not.toHaveClass(/is-active/);
 });
+
+test("小视口(等效高缩放)下结算条作为覆盖层钉在费用栏底部保持可点", async ({
+  page,
+}) => {
+  // 等价于浏览器 120% 缩放后的 CSS 视口：费用栏高度被 100dvh 钳制，
+  // 明细区超高时旧实现把购买按钮折叠进栏内滚动区，必须滚到底才露出。
+  // 修复后明细独立成滚动层，结算条(合计+购买)是它的覆盖层，滚动不位移。
+  await page.setViewportSize({ width: 1280, height: 520 });
+  await page.goto("/products", { waitUntil: "domcontentloaded" });
+
+  const buyBtn = page.locator(".shop-cost .buy-btn");
+  const costTotal = page.locator(".shop-cost .cost-total");
+  const scrollLayer = page.locator(".shop-cost-scroll");
+  await expect(buyBtn).toBeVisible({ timeout: 15_000 });
+
+  // 场景成立：明细滚动层确实进入内部溢出态
+  const metrics = await scrollLayer.evaluate((el) => ({
+    scrollHeight: el.scrollHeight,
+    clientHeight: el.clientHeight,
+  }));
+  expect(metrics.scrollHeight).toBeGreaterThan(metrics.clientHeight);
+
+  // 不滚动明细层，按钮与合计行也必须完整落在视口内
+  await expect(buyBtn).toBeInViewport();
+  await expect(costTotal).toBeInViewport();
+
+  // 几何中心命中测试：命中结果必须是按钮自身（未被遮挡或折叠）
+  const hitTestButton = () =>
+    page.evaluate(() => {
+      const btn = document.querySelector(
+        ".shop-cost .buy-btn",
+      ) as HTMLElement;
+      if (!btn) return "missing";
+      const rect = btn.getBoundingClientRect();
+      const el = document.elementFromPoint(
+        rect.left + rect.width / 2,
+        rect.top + rect.height / 2,
+      );
+      return el && (el === btn || btn.contains(el)) ? "btn" : "other";
+    });
+
+  // 明细层滚到底：覆盖层不随之位移，按钮保持可见可点
+  await scrollLayer.evaluate((el) => {
+    el.scrollTop = el.scrollHeight;
+  });
+  await expect(buyBtn).toBeInViewport();
+  expect(await hitTestButton()).toBe("btn");
+});

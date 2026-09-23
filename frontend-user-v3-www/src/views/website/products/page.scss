@@ -1191,11 +1191,30 @@
   top: 64px;
   height: calc(100vh - 64px);
   height: calc(100dvh - 64px);
-  overflow-y: auto;
-  padding: 18px 16px 24px;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   gap: 0;
+}
+
+// 明细滚动层：仅此层参与内部滚动，高度受面板高度钳制
+.shop-cost-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 18px 16px 4px;
+  display: flex;
+  flex-direction: column;
+}
+
+// 优先层：结算条游离于滚动层之外并覆盖其上，
+// 明细滚到结算条下方时被整层白底盖住，任何缩放/内容长度下按钮都在面板内
+.shop-cost-foot {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  padding: 0 16px 16px;
+  background: #fff;
 }
 
 .cost-header {

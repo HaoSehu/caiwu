@@ -948,6 +948,7 @@
 
       <!-- 右侧费用摘要 -->
       <aside class="shop-cost" v-if="selectedProduct">
+        <div class="shop-cost-scroll">
         <div class="cost-header">
           <span class="cost-title">配置费用</span>
           <span class="stock-badge" :class="stockClass">{{ stockLabel }}</span>
@@ -1084,7 +1085,9 @@
             }}
           </div>
         </div>
+        </div>
 
+        <div class="shop-cost-foot">
         <div class="cost-divider"></div>
 
         <div
@@ -1126,6 +1129,7 @@
             soldOut ? "已售罄" : submitting ? "提交中..." : "立即购买"
           }}</span>
         </button>
+        </div>
       </aside>
     </div>
 
