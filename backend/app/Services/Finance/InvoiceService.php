@@ -4,6 +4,7 @@ namespace App\Services\Finance;
 
 use App\Constants\InvoiceStatus;
 use App\Constants\InvoiceType;
+use App\Constants\ManualPaymentGateway;
 use App\Constants\OrderStatus;
 use App\Constants\OrderType;
 use App\Constants\PaymentGatewayCode;
@@ -46,7 +47,11 @@ class InvoiceService
             'coupon_id' => $order->coupon_id,
             'user_coupon_id' => $order->user_coupon_id,
             'coupon_code' => $order->coupon_code,
-            'type' => $order->type === OrderType::RENEW ? InvoiceType::RENEW : 'normal',
+            'type' => match ((string) $order->type) {
+                OrderType::RENEW => InvoiceType::RENEW,
+                OrderType::UPGRADE => InvoiceType::UPGRADE,
+                default => 'normal',
+            },
             'amount' => max((float) $order->amount - (float) ($order->discount ?? 0) - (float) ($order->member_discount_amount ?? 0), 0),
             'discount' => $order->discount ?? 0,
             'member_discount_amount' => (float) ($order->member_discount_amount ?? 0),
@@ -1149,6 +1154,10 @@ class InvoiceService
             : now();
         $requestedAmount = round((float) ($payload['amount'] ?? $invoice->amount), 2);
         $paymentGateway = trim((string) ($payload['payment_gateway'] ?? 'manual')) ?: 'manual';
+        throw_if(
+            ! in_array($paymentGateway, array_merge(ManualPaymentGateway::values(), ['manual']), true),
+            new BusinessException('不支持的支付方式')
+        );
         $tradeNo = trim((string) ($payload['trade_no'] ?? ''));
         $sendEmail = (bool) ($payload['send_email'] ?? false);
         $remark = trim((string) ($payload['remark'] ?? ''));
@@ -1241,7 +1250,7 @@ class InvoiceService
                 'invoice_no' => (string) $updatedInvoice->invoice_no,
                 'paid_amount' => number_format((float) $updatedInvoice->paid_amount, 2, '.', ''),
                 'paid_at' => $paidAt->format('Y-m-d H:i:s'),
-                'payment_gateway' => trim((string) ($payload['payment_gateway'] ?? 'manual')) ?: 'manual',
+                'payment_gateway' => $paymentGateway,
                 'trade_no' => trim((string) ($payload['trade_no'] ?? '')),
                 'send_email' => $sendEmail,
                 'sync_business_flow' => $syncBusinessFlow,

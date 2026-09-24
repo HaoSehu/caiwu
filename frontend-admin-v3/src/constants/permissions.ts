@@ -11,9 +11,12 @@ export const AdminPermissions = {
   ORDER_LIST: 'order.list',
   ORDER_DETAIL: 'order.detail',
   ORDER_MANAGE: 'order.manage',
+  // 专用权限码：订单/账单补录属资金写入，默认不下发任何内置角色（与后端 AdminPermissions 保持一致）
+  ORDER_MANUAL_ENTRY: 'order.manual_entry',
   INVOICE_LIST: 'invoice.list',
   INVOICE_DETAIL: 'invoice.detail',
   INVOICE_MANAGE: 'invoice.manage',
+  INVOICE_MANUAL_ENTRY: 'invoice.manual_entry',
   TICKET_LIST: 'ticket.list',
   TICKET_REPLY: 'ticket.reply',
   TICKET_MANAGE: 'ticket.manage',

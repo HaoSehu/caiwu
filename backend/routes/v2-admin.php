@@ -82,6 +82,15 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
         Route::post('/users/{user}/invoices/{invoice}/refunds', [UserController::class, 'refundInvoice']);
     });
 
+    // 补录为资金写入入口，用默认不下发的专用权限码把关，与 invoice.manage/order.manage 隔离。
+    Route::middleware(['permission:'.AdminPermissions::INVOICE_MANUAL_ENTRY])->group(function (): void {
+        Route::post('/users/{user}/manual-invoices', [UserController::class, 'storeManualInvoice']);
+    });
+
+    Route::middleware(['permission:'.AdminPermissions::ORDER_MANUAL_ENTRY])->group(function (): void {
+        Route::post('/users/{user}/manual-orders', [UserController::class, 'storeManualOrder']);
+    });
+
     Route::middleware(['permission:'.AdminPermissions::FINANCE_REPORT])->group(function (): void {
         Route::get('/finance/new-customer-daily-summary', [FinanceMenuController::class, 'newCustomerDailySummary']);
         Route::get('/finance/product-income-summary', [FinanceMenuController::class, 'productIncomeSummary']);
@@ -96,7 +105,8 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
         Route::get('/users/{user}/services', [UserServiceController::class, 'index']);
         Route::get('/users/{user}/invoices', [UserController::class, 'invoices']);
         Route::get('/users/{user}/invoices/{invoice}', [UserController::class, 'invoiceDetail']);
-        Route::get('/users/{user}/balance-logs', [UserController::class, 'balanceLogs']);
+        Route::get('/users/{user}/orders', [UserController::class, 'orders']);
+        Route::get('/users/{user}/recharge-records', [UserController::class, 'rechargeRecords']);
         Route::get('/users/{user}/tickets', [UserController::class, 'tickets']);
         Route::get('/users/{user}/operation-logs', [UserController::class, 'operationLogs']);
         Route::get('/users/{user}/sms-logs', [UserController::class, 'smsLogs']);

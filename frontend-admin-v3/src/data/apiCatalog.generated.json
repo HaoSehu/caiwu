@@ -1,7 +1,7 @@
 {
     "meta": {
-        "generatedAt": "2026-08-27 03:24:21",
-        "total": 362,
+        "generatedAt": "2026-09-23 23:10:16",
+        "total": 365,
         "baseURL": "/api/v2",
         "dataSource": "php artisan route:list --json v2-only",
         "scopeLabels": {
@@ -21,13 +21,13 @@
             "permission": "登录 + 权限"
         },
         "scopeCounts": {
-            "admin": 216,
+            "admin": 219,
             "client": 127,
             "site": 18,
             "system": 1
         },
         "accessCounts": {
-            "public": 362
+            "public": 365
         },
         "moduleCount": 77
     },
@@ -4311,29 +4311,6 @@
             "sourceFiles": []
         },
         {
-            "id": "GET:/api/v2/admin/users/{user}/balance-logs",
-            "scope": "admin",
-            "scopeLabel": "管理端",
-            "module": "users",
-            "moduleLabel": "用户",
-            "method": "GET",
-            "methods": [
-                "GET"
-            ],
-            "callPath": "/admin/users/{user}/balance-logs",
-            "backendPath": "/api/v2/admin/users/{user}/balance-logs",
-            "normalizedPath": "/admin/users/{param}/balance-logs",
-            "access": "public",
-            "accessLabel": "公开",
-            "permission": "",
-            "throttle": "",
-            "guards": [],
-            "handler": "App\\Http\\Controllers\\Admin\\V2\\UserController@balanceLogs",
-            "sourceApps": [],
-            "sourceAppLabels": [],
-            "sourceFiles": []
-        },
-        {
             "id": "GET:/api/v2/admin/users/{user}/email-logs",
             "scope": "admin",
             "scopeLabel": "管理端",
@@ -4449,6 +4426,52 @@
             "sourceFiles": []
         },
         {
+            "id": "POST:/api/v2/admin/users/{user}/manual-invoices",
+            "scope": "admin",
+            "scopeLabel": "管理端",
+            "module": "users",
+            "moduleLabel": "用户",
+            "method": "POST",
+            "methods": [
+                "POST"
+            ],
+            "callPath": "/admin/users/{user}/manual-invoices",
+            "backendPath": "/api/v2/admin/users/{user}/manual-invoices",
+            "normalizedPath": "/admin/users/{param}/manual-invoices",
+            "access": "public",
+            "accessLabel": "公开",
+            "permission": "",
+            "throttle": "",
+            "guards": [],
+            "handler": "App\\Http\\Controllers\\Admin\\V2\\UserController@storeManualInvoice",
+            "sourceApps": [],
+            "sourceAppLabels": [],
+            "sourceFiles": []
+        },
+        {
+            "id": "POST:/api/v2/admin/users/{user}/manual-orders",
+            "scope": "admin",
+            "scopeLabel": "管理端",
+            "module": "users",
+            "moduleLabel": "用户",
+            "method": "POST",
+            "methods": [
+                "POST"
+            ],
+            "callPath": "/admin/users/{user}/manual-orders",
+            "backendPath": "/api/v2/admin/users/{user}/manual-orders",
+            "normalizedPath": "/admin/users/{param}/manual-orders",
+            "access": "public",
+            "accessLabel": "公开",
+            "permission": "",
+            "throttle": "",
+            "guards": [],
+            "handler": "App\\Http\\Controllers\\Admin\\V2\\UserController@storeManualOrder",
+            "sourceApps": [],
+            "sourceAppLabels": [],
+            "sourceFiles": []
+        },
+        {
             "id": "PATCH:/api/v2/admin/users/{user}/member-level",
             "scope": "admin",
             "scopeLabel": "管理端",
@@ -4495,6 +4518,29 @@
             "sourceFiles": []
         },
         {
+            "id": "GET:/api/v2/admin/users/{user}/orders",
+            "scope": "admin",
+            "scopeLabel": "管理端",
+            "module": "users",
+            "moduleLabel": "用户",
+            "method": "GET",
+            "methods": [
+                "GET"
+            ],
+            "callPath": "/admin/users/{user}/orders",
+            "backendPath": "/api/v2/admin/users/{user}/orders",
+            "normalizedPath": "/admin/users/{param}/orders",
+            "access": "public",
+            "accessLabel": "公开",
+            "permission": "",
+            "throttle": "",
+            "guards": [],
+            "handler": "App\\Http\\Controllers\\Admin\\V2\\UserController@orders",
+            "sourceApps": [],
+            "sourceAppLabels": [],
+            "sourceFiles": []
+        },
+        {
             "id": "PATCH:/api/v2/admin/users/{user}/promotion-ambassador",
             "scope": "admin",
             "scopeLabel": "管理端",
@@ -4513,6 +4559,29 @@
             "throttle": "",
             "guards": [],
             "handler": "App\\Http\\Controllers\\Admin\\V2\\UserController@adjustPromotionAmbassador",
+            "sourceApps": [],
+            "sourceAppLabels": [],
+            "sourceFiles": []
+        },
+        {
+            "id": "GET:/api/v2/admin/users/{user}/recharge-records",
+            "scope": "admin",
+            "scopeLabel": "管理端",
+            "module": "users",
+            "moduleLabel": "用户",
+            "method": "GET",
+            "methods": [
+                "GET"
+            ],
+            "callPath": "/admin/users/{user}/recharge-records",
+            "backendPath": "/api/v2/admin/users/{user}/recharge-records",
+            "normalizedPath": "/admin/users/{param}/recharge-records",
+            "access": "public",
+            "accessLabel": "公开",
+            "permission": "",
+            "throttle": "",
+            "guards": [],
+            "handler": "App\\Http\\Controllers\\Admin\\V2\\UserController@rechargeRecords",
             "sourceApps": [],
             "sourceAppLabels": [],
             "sourceFiles": []

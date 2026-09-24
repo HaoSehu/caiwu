@@ -161,7 +161,7 @@ class AdminFinanceQueryService
                 ->where('status', PaymentStatus::REFUNDED))
             ->whereNotNull('product_id')
             ->whereBetween('paid_at', [$start, $end])
-            ->whereIn('type', ['new', 'normal', 'renew'])
+            ->whereIn('type', ['new', 'normal', 'renew', 'upgrade'])
             ->groupBy('product_id', 'type')
             ->get();
 
@@ -174,7 +174,8 @@ class AdminFinanceQueryService
         foreach ($rows as $row) {
             $productId = (int) $row->product_id;
             $type = (string) $row->type;
-            $bucket = in_array($type, ['new', 'normal'], true) ? 'new' : 'renew';
+            // 附加配置属新增购买力（非续期），归入 new 桶，避免 upgrade 投影修复后收入掉数
+            $bucket = in_array($type, ['new', 'normal', 'upgrade'], true) ? 'new' : 'renew';
 
             if (! isset($grouped[$productId])) {
                 $product = $products->get($productId);

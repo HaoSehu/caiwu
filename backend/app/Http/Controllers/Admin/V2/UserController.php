@@ -9,10 +9,11 @@ use App\Http\Requests\Admin\V2\User\AdjustMemberLevelRequest;
 use App\Http\Requests\Admin\V2\User\AdjustPromotionAmbassadorRequest;
 use App\Http\Requests\Admin\V2\User\DeleteUserRequest;
 use App\Http\Requests\Admin\V2\User\ListOsOptionsRequest;
-use App\Http\Requests\Admin\V2\User\ListUserBalanceLogsRequest;
 use App\Http\Requests\Admin\V2\User\ListUserInvoicesRequest;
 use App\Http\Requests\Admin\V2\User\ListUserNotificationLogsRequest;
 use App\Http\Requests\Admin\V2\User\ListUserOperationLogsRequest;
+use App\Http\Requests\Admin\V2\User\ListUserOrdersRequest;
+use App\Http\Requests\Admin\V2\User\ListUserRechargeRecordsRequest;
 use App\Http\Requests\Admin\V2\User\ListUsersRequest;
 use App\Http\Requests\Admin\V2\User\ListUserTicketsRequest;
 use App\Http\Requests\Admin\V2\User\LoginAsUserRequest;
@@ -23,24 +24,29 @@ use App\Http\Requests\Admin\V2\User\ServicePasswordResetActionRequest;
 use App\Http\Requests\Admin\V2\User\ServicePowerActionRequest;
 use App\Http\Requests\Admin\V2\User\ShowUserInvoiceRequest;
 use App\Http\Requests\Admin\V2\User\ShowUserRequest;
+use App\Http\Requests\Admin\V2\User\StoreManualInvoiceRequest;
+use App\Http\Requests\Admin\V2\User\StoreManualOrderRequest;
 use App\Http\Requests\Admin\V2\User\StoreUserRequest;
 use App\Http\Requests\Admin\V2\User\UpdateUserRequest;
 use App\Http\Requests\Admin\V2\User\UpdateUserStatusRequest;
 use App\Http\Resources\Admin\V2\AdminActionResultResource;
 use App\Http\Resources\Admin\V2\AdminInvoiceSummaryResource;
 use App\Http\Resources\Admin\V2\AdminLoginAsResource;
+use App\Http\Resources\Admin\V2\AdminOrderSummaryResource;
 use App\Http\Resources\Admin\V2\AdminOsOptionsResource;
 use App\Http\Resources\Admin\V2\AdminUserDetailResource;
 use App\Http\Resources\Admin\V2\AdminUserInvoiceDetailResource;
 use App\Http\Resources\Admin\V2\AdminUserListItemResource;
 use App\Http\Resources\Admin\V2\AdminUserNotificationLogResource;
 use App\Http\Resources\Admin\V2\AdminUserOperationLogResource;
+use App\Http\Resources\Admin\V2\AdminUserRechargeRecordResource;
 use App\Http\Resources\Admin\V2\AdminUserTicketResource;
-use App\Http\Resources\Finance\FinanceLedgerResource;
 use App\Models\AdminUser;
 use App\Models\User;
+use App\Services\Admin\V2\AdminManualEntryV2Service;
 use App\Services\Admin\V2\AdminUserActionV2Service;
 use App\Services\Auth\AuthService;
+use App\Services\Finance\OrderV2QueryService;
 use App\Services\Finance\PaymentService;
 use App\Services\User\UserService;
 use Illuminate\Http\JsonResponse;
@@ -50,6 +56,8 @@ class UserController extends Controller
 {
     public function __construct(
         private readonly AdminUserActionV2Service $actions,
+        private readonly AdminManualEntryV2Service $manualEntries,
+        private readonly OrderV2QueryService $orderQueries,
         private readonly UserService $users,
         private readonly AuthService $auth,
         private readonly PaymentService $payments,
@@ -164,6 +172,8 @@ class UserController extends Controller
                 'operator_id' => (int) ($request->user()?->id ?? 0),
                 'operator_name' => (string) ($request->user()?->username ?? $request->user()?->name ?? $request->user()?->email ?? 'admin'),
                 'trace_id' => (string) $request->header('X-Request-Id', ''),
+                'ip_address' => (string) $request->ip(),
+                'idempotency_key' => trim((string) ($payload['idempotency_key'] ?? '')),
             ],
         );
 
@@ -243,18 +253,58 @@ class UserController extends Controller
         );
     }
 
+    public function orders(ListUserOrdersRequest $request, User $user): JsonResponse
+    {
+        $filters = $request->filters();
+        // 详情页口径：用户由路由绑定锁定，禁止透传其他 user_id。
+        $filters['user_id'] = (int) $user->id;
+        $filters['page_size'] = $request->perPage();
+
+        return $this->paginate(
+            $this->orderQueries->paginateAdminOrders($filters),
+            AdminOrderSummaryResource::class,
+        );
+    }
+
+    public function rechargeRecords(ListUserRechargeRecordsRequest $request, User $user): JsonResponse
+    {
+        return $this->paginate(
+            $this->users->rechargeRecords($user, $request->filters(), $request->perPage()),
+            AdminUserRechargeRecordResource::class,
+        );
+    }
+
+    public function storeManualInvoice(StoreManualInvoiceRequest $request, User $user): JsonResponse
+    {
+        $actor = $this->resolveAdminActor($request);
+
+        $result = $this->manualEntries->createManualInvoice($user, $request->payload(), [
+            'operator_id' => $actor['id'],
+            'operator_name' => $actor['name'],
+            'trace_id' => (string) $request->header('X-Request-Id', ''),
+            'ip_address' => (string) $request->ip(),
+        ]);
+
+        return $this->success(AdminActionResultResource::make($result)->resolve(), (string) $result['message']);
+    }
+
+    public function storeManualOrder(StoreManualOrderRequest $request, User $user): JsonResponse
+    {
+        $actor = $this->resolveAdminActor($request);
+
+        $result = $this->manualEntries->createManualOrder($user, $request->payload(), [
+            'operator_id' => $actor['id'],
+            'operator_name' => $actor['name'],
+            'trace_id' => (string) $request->header('X-Request-Id', ''),
+            'ip_address' => (string) $request->ip(),
+        ]);
+
+        return $this->success(AdminActionResultResource::make($result)->resolve(), (string) $result['message']);
+    }
+
     public function invoiceDetail(ShowUserInvoiceRequest $request, User $user, int $invoice): JsonResponse
     {
         return $this->success(AdminUserInvoiceDetailResource::make($this->users->invoiceDetail($user, $invoice))->resolve());
-    }
-
-    public function balanceLogs(ListUserBalanceLogsRequest $request, User $user): JsonResponse
-    {
-        $result = $this->users->balanceLogs($user, $request->filters(), $request->perPage());
-
-        return $this->paginate($result['paginator'], $result['resource_class'] ?? FinanceLedgerResource::class, [
-            'summary' => $result['summary'] ?? [],
-        ]);
     }
 
     public function tickets(ListUserTicketsRequest $request, User $user): JsonResponse

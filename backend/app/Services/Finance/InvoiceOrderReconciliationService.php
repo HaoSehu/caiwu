@@ -490,7 +490,11 @@ class InvoiceOrderReconciliationService
             'coupon_id' => $order->coupon_id ?? null,
             'user_coupon_id' => $order->user_coupon_id ?? null,
             'coupon_code' => $order->coupon_code ?? null,
-            'type' => $order->type === 'renew' ? 'renew' : 'normal',
+            'type' => match ((string) $order->type) {
+                'renew' => 'renew',
+                'upgrade' => 'upgrade',
+                default => 'normal',
+            },
             'amount' => number_format($invoiceAmount, 2, '.', ''),
             'discount' => number_format((float) ($order->discount ?? 0), 2, '.', ''),
             'paid_amount' => $paidAmount,

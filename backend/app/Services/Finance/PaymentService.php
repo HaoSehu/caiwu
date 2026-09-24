@@ -31,6 +31,7 @@ use App\Services\Order\PaidOrderBusinessFlowDispatcher;
 use App\Services\Provisioning\ProvisionService;
 use App\Services\Provisioning\ServiceRenewService;
 use App\Services\Referral\ReferralService;
+use App\Services\System\OperationLogService;
 use App\Services\User\AccountService;
 use App\Support\SchemaMetadataCache;
 use App\Support\StockReservation;
@@ -213,71 +214,107 @@ class PaymentService
 
     /**
      * 资金调整（管理员手动，正数增加、负数扣减）
+     * context.idempotency_key：可选幂等键，同一键 10 分钟内仅入账一次（防双击/网络重试双入账）。
      */
     public function adjustBalance(User $user, float $amount, string $remark = '管理员手动调整', array $context = []): array
     {
         throw_if($amount == 0, new BusinessException('调整金额不能为 0'));
 
-        return DB::transaction(function () use ($user, $amount, $remark, $context): array {
-            $lockedUser = User::query()->lockForUpdate()->findOrFail($user->id);
-            $currentBalance = $this->getUserBalance($lockedUser);
-            $newBalance = $currentBalance + $amount;
-
-            throw_if($newBalance < 0, new BusinessException(
-                '扣减后余额不足，当前余额 ¥'.number_format($currentBalance, 2).'，扣减 ¥'.number_format(abs($amount), 2)
-            ));
-
-            $balanceAfter = $this->setUserBalance($lockedUser, $newBalance);
-
-            $eventType = $amount > 0
-                ? FinanceLedgerEventType::MANUAL_RECHARGE
-                : FinanceLedgerEventType::MANUAL_DEDUCTION;
-            $transaction = $this->createBalanceLog(
-                (int) $lockedUser->id,
-                $eventType,
-                $amount,
-                $balanceAfter,
-                (int) $lockedUser->id,
-                $remark,
-                [
-                    'operator' => trim((string) ($context['operator_name'] ?? '')),
-                    'trace_id' => trim((string) ($context['trace_id'] ?? '')),
-                ]
-            );
-
-            $operatorName = trim((string) ($context['operator_name'] ?? $context['operator'] ?? ''));
-            $invoice = $amount > 0
-                ? $this->invoiceService->createForRecharge($lockedUser, abs($amount), null, $remark, trim((string) ($context['trace_id'] ?? '')))
-                : $this->invoiceService->createForDeduction($lockedUser, abs($amount), $remark, trim((string) ($context['trace_id'] ?? '')));
-
-            $invoice->forceFill([
-                'remark' => $remark,
-                'operator' => $operatorName !== '' ? $operatorName : null,
-            ])->save();
-
-            $rechargeRecord = null;
-            if ($amount > 0) {
-                $rechargeRecord = $this->financeDocuments()->recordRecharge(
-                    $invoice,
-                    null,
-                    $transaction,
-                    'admin_recharge',
-                    [
-                        'record_remark' => '管理员手工充值',
-                        'operator_type' => (string) ($context['operator_type'] ?? 'admin'),
-                        'operator_id' => $context['operator_id'] ?? null,
-                        'operator_name' => $operatorName,
-                        'trace_id' => (string) ($context['trace_id'] ?? ''),
+        $idempotencyKey = trim((string) ($context['idempotency_key'] ?? ''));
+        $lockKey = '';
+        if ($idempotencyKey !== '') {
+            $lockKey = 'lock:admin:balance-adjust:'.$user->id.':'.md5($idempotencyKey);
+            if (! Cache::add($lockKey, 1, 600)) {
+                // 幂等命中留痕：区分“已入账重放”与“误重试”，不动资金
+                app(OperationLogService::class)->write(
+                    userId: ((int) ($context['operator_id'] ?? 0)) ?: null,
+                    userType: 'admin',
+                    action: 'balance.adjust.duplicate_blocked',
+                    module: 'finance',
+                    targetId: (int) $user->id,
+                    detail: [
+                        'user_id' => (int) $user->id,
+                        'idempotency_key' => $idempotencyKey,
+                        'amount' => number_format($amount, 2, '.', ''),
+                        'operator_name' => trim((string) ($context['operator_name'] ?? '')),
+                        'trace_id' => trim((string) ($context['trace_id'] ?? '')),
                     ],
+                    ipAddress: (string) ($context['ip_address'] ?? '') ?: null,
                 );
+
+                throw new BusinessException('相同充值请求已提交，请勿重复操作');
+            }
+        }
+
+        try {
+            return DB::transaction(function () use ($user, $amount, $remark, $context): array {
+                $lockedUser = User::query()->lockForUpdate()->findOrFail($user->id);
+                $currentBalance = $this->getUserBalance($lockedUser);
+                $newBalance = $currentBalance + $amount;
+
+                throw_if($newBalance < 0, new BusinessException(
+                    '扣减后余额不足，当前余额 ¥'.number_format($currentBalance, 2).'，扣减 ¥'.number_format(abs($amount), 2)
+                ));
+
+                $balanceAfter = $this->setUserBalance($lockedUser, $newBalance);
+
+                $eventType = $amount > 0
+                    ? FinanceLedgerEventType::MANUAL_RECHARGE
+                    : FinanceLedgerEventType::MANUAL_DEDUCTION;
+                $transaction = $this->createBalanceLog(
+                    (int) $lockedUser->id,
+                    $eventType,
+                    $amount,
+                    $balanceAfter,
+                    (int) $lockedUser->id,
+                    $remark,
+                    [
+                        'operator' => trim((string) ($context['operator_name'] ?? '')),
+                        'trace_id' => trim((string) ($context['trace_id'] ?? '')),
+                    ]
+                );
+
+                $operatorName = trim((string) ($context['operator_name'] ?? $context['operator'] ?? ''));
+                $invoice = $amount > 0
+                    ? $this->invoiceService->createForRecharge($lockedUser, abs($amount), null, $remark, trim((string) ($context['trace_id'] ?? '')))
+                    : $this->invoiceService->createForDeduction($lockedUser, abs($amount), $remark, trim((string) ($context['trace_id'] ?? '')));
+
+                $invoice->forceFill([
+                    'remark' => $remark,
+                    'operator' => $operatorName !== '' ? $operatorName : null,
+                ])->save();
+
+                $rechargeRecord = null;
+                if ($amount > 0) {
+                    $rechargeRecord = $this->financeDocuments()->recordRecharge(
+                        $invoice,
+                        null,
+                        $transaction,
+                        'admin_recharge',
+                        [
+                            'record_remark' => '管理员手工充值',
+                            'operator_type' => (string) ($context['operator_type'] ?? 'admin'),
+                            'operator_id' => $context['operator_id'] ?? null,
+                            'operator_name' => $operatorName,
+                            'trace_id' => (string) ($context['trace_id'] ?? ''),
+                        ],
+                    );
+                }
+
+                return [
+                    'invoice' => $invoice->fresh(),
+                    'transaction' => $transaction,
+                    'recharge_record' => $rechargeRecord,
+                ];
+            });
+        } catch (\Throwable $exception) {
+            // 入账失败释放幂等占位，允许修正后重试；成功则保留占位拦截同键重放。
+            if ($lockKey !== '') {
+                Cache::forget($lockKey);
             }
 
-            return [
-                'invoice' => $invoice->fresh(),
-                'transaction' => $transaction,
-                'recharge_record' => $rechargeRecord,
-            ];
-        });
+            throw $exception;
+        }
     }
 
     /**

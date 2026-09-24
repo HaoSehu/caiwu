@@ -9,8 +9,9 @@ class RechargeUserRequest extends AdminFormRequest
     public function rules(): array
     {
         return [
-            'amount' => ['required', 'numeric', 'not_in:0', 'min:-999999', 'max:999999'],
+            'amount' => ['required', 'numeric', 'not_in:0', 'min:-999999', 'max:999999', 'regex:/^-?\d{1,6}(?:\.\d{1,2})?$/'],
             'remark' => ['required', 'string', 'max:200'],
+            'idempotency_key' => ['nullable', 'string', 'max:64'],
             ...$this->allPaginationRules(),
         ];
     }
@@ -28,6 +29,7 @@ class RechargeUserRequest extends AdminFormRequest
         return $this->safe()->only([
             'amount',
             'remark',
+            'idempotency_key',
         ]);
     }
 }

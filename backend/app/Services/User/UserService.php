@@ -11,7 +11,6 @@ use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
 use App\Constants\ServiceStatus;
 use App\Exceptions\BusinessException;
-use App\Http\Resources\Finance\FinanceLedgerResource;
 use App\Jobs\SendTemplateEmailJob;
 use App\Models\ActivityLog;
 use App\Models\Invoice;
@@ -19,6 +18,7 @@ use App\Models\MemberLevel;
 use App\Models\MessageLog;
 use App\Models\Payment;
 use App\Models\PromotionAmbassador;
+use App\Models\RechargeRecord;
 use App\Models\ReferralReward;
 use App\Models\ReferralWithdrawal;
 use App\Models\Service;
@@ -487,21 +487,23 @@ class UserService
         return $this->invoiceService->adminDetail($invoiceId);
     }
 
-    public function manualInvoiceEntry(User $user, int $invoiceId, array $data, array $context = []): array
+    /**
+     * 用户充值记录：recharge_record 净额流水（含手工充值入账与退款冲抵负数行）。
+     *
+     * @param  array<string, mixed>  $filters
+     */
+    public function rechargeRecords(User $user, array $filters, int $perPage = 20)
     {
-        $invoice = $this->findUserInvoice($user, $invoiceId);
+        $query = RechargeRecord::query()
+            ->with(['invoice:id,invoice_no'])
+            ->where('user_id', (int) $user->id);
 
-        $this->invoiceService->markPaidManually($invoice, [
-            'amount' => $data['amount'],
-            'paid_at' => $data['paid_at'],
-            'payment_gateway' => $data['payment_gateway'] ?? 'manual',
-            'trade_no' => $data['trade_no'] ?? '',
-            'send_email' => (bool) ($data['send_email'] ?? false),
-            'remark' => $data['remark'] ?? '',
-            'sync_business_flow' => (bool) ($data['sync_business_flow'] ?? false),
-        ], $context);
+        $direction = trim((string) ($filters['direction'] ?? ''));
+        if ($direction !== '') {
+            $query->where('direction', $direction);
+        }
 
-        return $this->invoiceDetail($user, $invoiceId);
+        return $query->orderByDesc('id')->paginate($perPage);
     }
 
     public function sendInvoiceEmail(User $user, int $invoiceId, array $context = []): array
@@ -683,27 +685,6 @@ class UserService
     }
 
     /**
-     * 用户余额变动记录
-     */
-    public function balanceLogs(User $user, array $filters, int $perPage = 20): array
-    {
-        $normalizedFilters = $this->normalizeBalanceLogFiltersToLedger($filters);
-        $paginator = $this->financeLedgerQueryService->paginatorForUser($user, $normalizedFilters, $perPage);
-        $summary = $this->financeLedgerQueryService->summaryForClient($user, $normalizedFilters);
-
-        return [
-            'paginator' => $paginator,
-            'resource_class' => FinanceLedgerResource::class,
-            'summary' => [
-                'total_income' => (float) ($summary['total_in'] ?? 0),
-                'total_expense' => (float) ($summary['total_out'] ?? 0),
-                'cash_balance' => (float) $user->balance,
-                'total_count' => (int) ($summary['total_count'] ?? 0),
-            ],
-        ];
-    }
-
-    /**
      * 用户工单列表
      */
     public function tickets(User $user, array $filters, int $perPage = 20): array
@@ -832,28 +813,6 @@ class UserService
         return $query
             ->orderByDesc('created_at')
             ->paginate($perPage);
-    }
-
-    private function normalizeBalanceLogFiltersToLedger(array $filters): array
-    {
-        $eventType = trim((string) ($filters['event_type'] ?? ''));
-
-        return array_filter([
-            'tab' => match ($eventType) {
-                'recharge', 'manual_recharge' => 'recharge',
-                'consume', 'refund', 'invoice_payment', 'invoice_refund' => 'invoices',
-                'adjust', 'admin_deduct', 'manual_deduction', 'system_adjustment' => 'adjustment',
-                default => 'balance',
-            },
-            'event_type' => match ($eventType) {
-                'consume' => 'invoice_payment',
-                'refund' => 'invoice_refund',
-                'adjust' => 'system_adjustment',
-                'admin_deduct' => 'manual_deduction',
-                'referral_withdraw_approved' => 'referral_credit_cash',
-                default => $eventType !== '' ? $eventType : null,
-            },
-        ], static fn ($value) => $value !== null && $value !== '');
     }
 
     private function assertUniquePhone(?string $phone, ?int $ignoreUserId = null): void

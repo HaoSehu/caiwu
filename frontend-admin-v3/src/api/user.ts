@@ -51,6 +51,48 @@ export interface UserCreatePayload {
 export interface UserRechargePayload {
   amount: number;
   remark: string;
+  /** 幂等键：同一补录请求 10 分钟内仅入账一次（打开对话框时生成，防双击/重试双入账） */
+  idempotency_key?: string;
+}
+
+/** 补录线下收款方式（与后端 ManualPaymentGateway 枚举一致）：仅审计记录，Payment.gateway 固定 manual */
+export type ManualPaymentGateway = 'cash' | 'bank_transfer' | 'alipay' | 'wechat' | 'other';
+
+export interface UserManualInvoicePayload {
+  amount: number;
+  paid_at?: string;
+  trade_no?: string;
+  payment_gateway: ManualPaymentGateway;
+  remark: string;
+}
+
+export interface UserManualOrderPayload {
+  service_id: number;
+  type: 'renew' | 'upgrade';
+  amount: number;
+  billing_cycle?: string;
+  paid_at?: string;
+  trade_no?: string;
+  payment_gateway: ManualPaymentGateway;
+  remark: string;
+}
+
+export interface UserRechargeRecord {
+  id: number;
+  record_no: string;
+  scene: string;
+  entry_type: string;
+  direction: 'in' | 'out' | string;
+  amount: string;
+  currency: string;
+  remark: string;
+  operator_name: string;
+  invoice_id: number | null;
+  invoice_no: string;
+  order_id: number | null;
+  payment_id: number | null;
+  trace_id: string;
+  created_at: string;
 }
 
 export interface UserUpdatePayload {
@@ -152,7 +194,10 @@ export const userApi = {
   adjustMemberLevel: (id: number | string, memberLevelId: number | null) =>
     request.patch({ url: `/v2/admin/users/${id}/member-level`, data: { member_level_id: memberLevelId } }),
   adjustPromotionAmbassador: (id: number | string, promotionAmbassadorId: number | null) =>
-    request.patch({ url: `/v2/admin/users/${id}/promotion-ambassador`, data: { promotion_ambassador_id: promotionAmbassadorId } }),
+    request.patch({
+      url: `/v2/admin/users/${id}/promotion-ambassador`,
+      data: { promotion_ambassador_id: promotionAmbassadorId },
+    }),
   recharge: (id: number | string, data: UserRechargePayload) =>
     request.post({ url: `/v2/admin/users/${id}/recharges`, data }),
   loginAs: (id: number | string) =>
@@ -174,21 +219,24 @@ export const userApi = {
       url: `/v2/admin/users/${id}/invoices`,
       params,
     }),
+  orders: (id: number | string, params: PageParams) =>
+    request.get<{ list?: Record<string, unknown>[]; total?: number; page?: number; page_size?: number }>({
+      url: `/v2/admin/users/${id}/orders`,
+      params,
+    }),
+  rechargeRecords: (id: number | string, params: PageParams) =>
+    request.get<{ list?: UserRechargeRecord[]; total?: number; page?: number; page_size?: number }>({
+      url: `/v2/admin/users/${id}/recharge-records`,
+      params,
+    }),
+  storeManualInvoice: (id: number | string, data: UserManualInvoicePayload) =>
+    request.post<{ message?: string }>({ url: `/v2/admin/users/${id}/manual-invoices`, data }),
+  storeManualOrder: (id: number | string, data: UserManualOrderPayload) =>
+    request.post<{ message?: string }>({ url: `/v2/admin/users/${id}/manual-orders`, data }),
   invoiceDetail: (id: number | string, invoiceId: number | string) =>
     request.get<Record<string, unknown>>({ url: `/v2/admin/users/${id}/invoices/${invoiceId}` }),
   refundInvoice: (id: number | string, invoiceId: number | string, data: RefundPayload) =>
     request.post({ url: `/v2/admin/users/${id}/invoices/${invoiceId}/refunds`, data }),
-  balanceLogs: (id: number | string, params: PageParams) =>
-    request.get<{
-      list?: Record<string, unknown>[];
-      total?: number;
-      page?: number;
-      page_size?: number;
-      summary?: unknown;
-    }>({
-      url: `/v2/admin/users/${id}/balance-logs`,
-      params,
-    }),
   tickets: (id: number | string, params: PageParams) =>
     request.get<{
       list?: Record<string, unknown>[];

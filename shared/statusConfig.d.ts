@@ -35,6 +35,7 @@ export const ORDER_STATUS_MAP: StatusMap
 export const ORDER_STATUS_FILTER_OPTIONS: Array<{ label: string, value: string | number }>
 export const INVOICE_STATUS_MAP: StatusMap
 export const PAYMENT_STATUS_MAP: StatusMap
+export const MANUAL_PAYMENT_METHOD_MAP: StatusMap
 export const SERVICE_STATUS_MAP: StatusMap
 export const TICKET_STATUS_MAP: StatusMap
 export const NOTIFY_STATUS_MAP: StatusMap

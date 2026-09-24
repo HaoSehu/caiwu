@@ -26,6 +26,9 @@ class AdminPermissions
 
     public const ORDER_DETAIL = 'order.detail';
 
+    // 专用权限码：订单补录属资金写入，默认不下发任何内置角色，避免随 order.manage 静默提权
+    public const ORDER_MANUAL_ENTRY = 'order.manual_entry';
+
     // 预留权限码：管理端订单暂无写操作路由（仅 index/show），保留以维持 impliedPermissions 下发 order.list/order.detail
     public const ORDER_MANAGE = 'order.manage';
 
@@ -34,6 +37,9 @@ class AdminPermissions
     public const INVOICE_DETAIL = 'invoice.detail';
 
     public const INVOICE_MANAGE = 'invoice.manage';
+
+    // 专用权限码：账单补录属资金写入，默认不下发任何内置角色，避免随 invoice.manage 静默提权
+    public const INVOICE_MANUAL_ENTRY = 'invoice.manual_entry';
 
     public const TICKET_LIST = 'ticket.list';
 

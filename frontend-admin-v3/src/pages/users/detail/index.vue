@@ -43,7 +43,8 @@
         <t-tab-panel value="referral" label="推荐信息" />
         <t-tab-panel value="services" label="产品/服务" />
         <t-tab-panel value="invoices" label="账单" />
-        <t-tab-panel value="balance" label="资金流水" />
+        <t-tab-panel value="orders" label="订单" />
+        <t-tab-panel value="recharges" label="充值记录" />
         <t-tab-panel value="tickets" label="工单" />
         <t-tab-panel value="logs" label="操作日志" />
         <t-tab-panel value="notices" label="通知记录" />
@@ -200,6 +201,7 @@
               :value="option.value"
             />
           </t-select>
+          <t-button v-if="canManualInvoice" theme="primary" @click="openManualInvoiceDialog">补录账单</t-button>
         </div>
         <div class="table-scroll">
           <t-table
@@ -233,31 +235,6 @@
                 >
               </div>
             </template>
-          </t-table>
-        </div>
-      </section>
-
-      <section v-else-if="activeTab === 'balance'" class="user-detail-section">
-        <div class="table-scroll">
-          <t-table
-            row-key="ledger_id"
-            :data="balance.list"
-            :columns="balanceColumns"
-            :loading="balance.loading"
-            :pagination="paginationOf(balance)"
-            table-layout="fixed"
-            @page-change="handleBalancePageChange"
-          >
-            <template #balanceTime="{ row }">{{ formatDateTime(row.occurred_at || row.created_at) }}</template>
-            <template #balanceType="{ row }">
-              <t-tag :theme="balanceTheme(row.event_type)" variant="light">{{
-                balanceTypeLabel(row.event_type)
-              }}</t-tag>
-            </template>
-            <template #balanceChange="{ row }">
-              <span :class="amountClass(row.change_amount)">{{ signedMoney(row.change_amount) }}</span>
-            </template>
-            <template #balanceAfter="{ row }">{{ formatMoney(row.balance_after) }}</template>
           </t-table>
         </div>
       </section>
@@ -322,7 +299,7 @@
         </div>
       </section>
 
-      <section v-else class="user-detail-section">
+      <section v-else-if="activeTab === 'notices'" class="user-detail-section">
         <div class="detail-toolbar compact">
           <t-radio-group v-model="notices.channel" variant="default-filled" @change="reloadNotices">
             <t-radio-button value="email">邮件</t-radio-button>
@@ -350,6 +327,22 @@
           </t-table>
         </div>
       </section>
+
+      <!-- 订单/充值记录 tab：首次激活挂载后常驻（v-show），避免来回切换丢失已加载数据 -->
+      <orders-tab
+        v-if="loadedTabs.orders"
+        v-show="activeTab === 'orders'"
+        ref="ordersTabRef"
+        :user-id="userId"
+        @changed="handleOrdersChanged"
+      />
+      <recharges-tab
+        v-if="loadedTabs.recharges"
+        v-show="activeTab === 'recharges'"
+        ref="rechargesTabRef"
+        :user-id="userId"
+        @recharge="openRechargeDialog()"
+      />
     </t-card>
 
     <t-dialog
@@ -404,9 +397,7 @@
             <t-tag v-if="user.promotion_ambassador_id" theme="success" variant="light">已指派</t-tag>
             <t-tag v-else variant="light">未指派</t-tag>
           </div>
-          <div class="member-level-edit-tip">
-            推广大使决定邀请返利比例；未指派时按系统设置的全局返利比例计算。
-          </div>
+          <div class="member-level-edit-tip">推广大使决定邀请返利比例；未指派时按系统设置的全局返利比例计算。</div>
         </t-form-item>
       </t-form>
     </t-dialog>
@@ -949,6 +940,56 @@
         </t-form-item>
       </t-form>
     </t-dialog>
+
+    <t-dialog
+      v-model:visible="manualInvoiceVisible"
+      header="补录账单"
+      width="560px"
+      :confirm-btn="{ content: '确认补录', loading: manualInvoiceSubmitting }"
+      @cancel="manualInvoiceVisible = false"
+      @confirm="handleManualInvoiceSubmit"
+    >
+      <t-alert
+        theme="info"
+        message="补录用于登记系统外收付款，仅生成手工账单与支付记录，不改变用户余额、不产生资金流水。"
+      />
+      <t-form ref="manualInvoiceFormRef" :data="manualInvoiceForm" :rules="manualInvoiceRules" label-align="top">
+        <t-form-item label="金额" name="amount">
+          <t-input-number
+            v-model="manualInvoiceForm.amount"
+            :min="0.01"
+            :max="999999"
+            :decimal-places="2"
+            style="width: 100%"
+          />
+        </t-form-item>
+        <t-form-item label="付款时间">
+          <t-date-picker
+            v-model="manualInvoiceForm.paid_at"
+            enable-time-picker
+            clearable
+            placeholder="默认当前时间"
+            style="width: 100%"
+          />
+        </t-form-item>
+        <t-form-item label="支付方式" name="payment_gateway">
+          <t-select v-model="manualInvoiceForm.payment_gateway" placeholder="登记系统外收款渠道">
+            <t-option
+              v-for="option in paymentMethodOptions"
+              :key="option.value"
+              :label="option.label"
+              :value="option.value"
+            />
+          </t-select>
+        </t-form-item>
+        <t-form-item label="交易号">
+          <t-input v-model="manualInvoiceForm.trade_no" clearable placeholder="线下收款凭证号（选填，同用户内查重）" />
+        </t-form-item>
+        <t-form-item label="备注" name="remark">
+          <t-textarea v-model="manualInvoiceForm.remark" :maxlength="200" placeholder="请填写补录原因" />
+        </t-form-item>
+      </t-form>
+    </t-dialog>
   </div>
 </template>
 <script setup lang="ts">
@@ -956,6 +997,7 @@ import './index.less';
 
 import {
   INVOICE_STATUS_MAP,
+  MANUAL_PAYMENT_METHOD_MAP,
   SERVICE_STATUS_MAP,
   toLabelMap,
   toSelectOptions,
@@ -972,7 +1014,7 @@ import { adminApi } from '@/api/admin';
 import type { ProductRecord } from '@/api/product';
 import { productApi } from '@/api/product';
 import { supplierApi } from '@/api/supplier';
-import type { AdminUser, PageParams } from '@/api/user';
+import type { AdminUser, ManualPaymentGateway, PageParams } from '@/api/user';
 import { userApi } from '@/api/user';
 import ProductBindingTreeSelect from '@/components/product-binding-tree-select/index.vue';
 import { AdminPermissions } from '@/constants/permissions';
@@ -981,7 +1023,10 @@ import { phoneRule, required } from '@/utils/formRules';
 import { hasAdminPermission } from '@/utils/permission';
 import { errorMessage } from '@/utils/userMessage';
 
-type TabName = 'basic' | 'referral' | 'services' | 'invoices' | 'balance' | 'tickets' | 'logs' | 'notices';
+import OrdersTab from './components/OrdersTab.vue';
+import RechargesTab from './components/RechargesTab.vue';
+
+type TabName = 'basic' | 'referral' | 'services' | 'invoices' | 'orders' | 'recharges' | 'tickets' | 'logs' | 'notices';
 type Row = Record<string, any>;
 
 interface PageState {
@@ -1008,7 +1053,8 @@ const VALID_DETAIL_TABS: TabName[] = [
   'referral',
   'services',
   'invoices',
-  'balance',
+  'orders',
+  'recharges',
   'tickets',
   'logs',
   'notices',
@@ -1017,6 +1063,10 @@ const initialTab = route.query.tab as string;
 const activeTab = ref<TabName>(
   initialTab && VALID_DETAIL_TABS.includes(initialTab as TabName) ? (initialTab as TabName) : 'basic',
 );
+// 已下线的 tab（如 balance）经旧链接进入时回退基本信息并清掉残留 query，避免地址栏与视图不一致
+if (initialTab && !VALID_DETAIL_TABS.includes(initialTab as TabName)) {
+  router.replace({ query: { ...route.query, tab: undefined } });
+}
 const loadedTabs = reactive<Record<string, boolean>>({});
 const user = ref<AdminUser>({ id: 0, status: 1 });
 const stats = ref<Record<string, number | string>>({});
@@ -1065,6 +1115,24 @@ const noteForm = ref('');
 const memberLevelOptions = ref<Array<{ label: string; value: number }>>([]);
 const promotionAmbassadorOptions = ref<Array<{ label: string; value: number }>>([]);
 const rechargeForm = reactive({ email: '', type: 'increase', amount: 0, remark: '' });
+// 充值幂等键：打开对话框时生成，提交复用；成功后由 openRechargeDialog 重新生成
+const rechargeIdempotencyKey = ref('');
+const manualInvoiceVisible = ref(false);
+const manualInvoiceSubmitting = ref(false);
+const manualInvoiceFormRef = ref<FormInstanceFunctions>();
+const manualInvoiceForm = reactive({
+  amount: 0,
+  paid_at: '',
+  trade_no: '',
+  payment_gateway: 'bank_transfer' as ManualPaymentGateway,
+  remark: '',
+});
+const manualInvoiceRules: Record<string, FormRule[]> = {
+  amount: [required('请输入补录金额')],
+  payment_gateway: [required('请选择支付方式')],
+  remark: [required('请填写补录原因')],
+};
+const paymentMethodOptions = toSelectOptions(MANUAL_PAYMENT_METHOD_MAP, false);
 const addServiceForm = reactive({
   product_id: undefined as number | undefined,
   billing_cycle: '',
@@ -1105,6 +1173,9 @@ const invoiceDrawer = reactive({
 });
 const canLoginAs = computed(() => hasAdminPermission(AdminPermissions.USER_LOGIN_AS));
 const canRecharge = computed(() => hasAdminPermission(AdminPermissions.USER_RECHARGE));
+const canManualInvoice = computed(() => hasAdminPermission(AdminPermissions.INVOICE_MANUAL_ENTRY));
+const ordersTabRef = ref<InstanceType<typeof OrdersTab>>();
+const rechargesTabRef = ref<InstanceType<typeof RechargesTab>>();
 const LOGIN_AS_READY_EVENT = 'caiwu:login-as-ready';
 const LOGIN_AS_CODE_EVENT = 'caiwu:login-as-code';
 const LOGIN_AS_READY_TIMEOUT_MS = 10000;
@@ -1138,7 +1209,6 @@ const invoices = reactive<PageState>({
   pageSize: 10,
   filters: { status: '', type: '' },
 });
-const balance = reactive<PageState>({ loading: false, list: [], total: 0, page: 1, pageSize: 10, filters: {} });
 const tickets = reactive<PageState>({ loading: false, list: [], total: 0, page: 1, pageSize: 10, filters: {} });
 const logs = reactive<PageState>({
   loading: false,
@@ -1201,6 +1271,7 @@ const invoiceTypeOptions = [
   { label: '续费', value: 'renew' },
   { label: '充值', value: 'recharge' },
   { label: '扣款', value: 'deduction' },
+  { label: '附加配置', value: 'upgrade' },
   { label: '推荐奖励', value: 'referral_credit' },
   { label: '手工', value: 'manual' },
 ];
@@ -1231,14 +1302,6 @@ const invoiceColumns: PrimaryTableCol<TableRowData>[] = [
   { title: '状态', colKey: 'invoiceStatus', width: 120 },
   { title: '账单类型', colKey: 'invoiceType', width: 140 },
   { title: '操作', colKey: 'invoiceOperation', width: 140 },
-];
-const balanceColumns: PrimaryTableCol<TableRowData>[] = [
-  { title: '时间', colKey: 'balanceTime', width: 180 },
-  { title: '类型', colKey: 'balanceType', width: 140 },
-  { title: '变动金额', colKey: 'balanceChange', width: 140 },
-  { title: '变动后余额', colKey: 'balanceAfter', width: 140 },
-  { title: '备注', colKey: 'remark', width: 220 },
-  { title: '操作人', colKey: 'operator', width: 140 },
 ];
 const ticketColumns: PrimaryTableCol<TableRowData>[] = [
   { title: 'ID', colKey: 'id', width: 80 },
@@ -1423,7 +1486,9 @@ function handleTabChange(value: string | number) {
   router.replace({ query: { ...route.query, tab: activeTab.value === 'basic' ? undefined : activeTab.value } });
   if (activeTab.value === 'services' && !loadedTabs.services) loadServices();
   if (activeTab.value === 'invoices' && !loadedTabs.invoices) loadInvoices();
-  if (activeTab.value === 'balance' && !loadedTabs.balance) loadBalance();
+  // 订单/充值记录 tab 由子组件 onMounted 自加载，这里只负责标记首次挂载
+  if (activeTab.value === 'orders' && !loadedTabs.orders) loadedTabs.orders = true;
+  if (activeTab.value === 'recharges' && !loadedTabs.recharges) loadedTabs.recharges = true;
   if (activeTab.value === 'tickets' && !loadedTabs.tickets) loadTickets();
   if (activeTab.value === 'logs' && !loadedTabs.logs) loadLogs();
   if (activeTab.value === 'notices' && !loadedTabs.notices) loadNotices();
@@ -1452,9 +1517,6 @@ function loadServices() {
 }
 function loadInvoices() {
   return loadPageState(invoices, (params) => userApi.invoices(userId.value, params), 'invoices');
-}
-function loadBalance() {
-  return loadPageState(balance, (params) => userApi.balanceLogs(userId.value, params), 'balance');
 }
 function loadTickets() {
   return loadPageState(tickets, (params) => userApi.tickets(userId.value, params), 'tickets');
@@ -1493,9 +1555,6 @@ function handleServicesPageChange(pageInfo: PageInfo) {
 }
 function handleInvoicesPageChange(pageInfo: PageInfo) {
   handlePageChange(invoices, loadInvoices, pageInfo);
-}
-function handleBalancePageChange(pageInfo: PageInfo) {
-  handlePageChange(balance, loadBalance, pageInfo);
 }
 function handleTicketsPageChange(pageInfo: PageInfo) {
   handlePageChange(tickets, loadTickets, pageInfo);
@@ -1590,11 +1649,19 @@ async function handleSave() {
   }
 }
 
+function newIdempotencyKey() {
+  rechargeIdempotencyKey.value =
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `rc-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 function openRechargeDialog() {
   rechargeForm.email = user.value.email || user.value.phone || '-';
   rechargeForm.type = 'increase';
   rechargeForm.amount = 0;
   rechargeForm.remark = '';
+  newIdempotencyKey();
   rechargeVisible.value = true;
 }
 
@@ -1604,14 +1671,58 @@ async function handleRecharge() {
   rechargeLoading.value = true;
   try {
     const amount = rechargeForm.type === 'decrease' ? -rechargeForm.amount : rechargeForm.amount;
-    await userApi.recharge(userId.value, { amount, remark: rechargeForm.remark });
+    await userApi.recharge(userId.value, {
+      amount,
+      remark: rechargeForm.remark,
+      idempotency_key: rechargeIdempotencyKey.value,
+    });
     MessagePlugin.success(rechargeForm.type === 'decrease' ? '扣减成功' : '增加成功');
     rechargeVisible.value = false;
     await loadDetail();
-    if (loadedTabs.balance) await loadBalance();
+    rechargesTabRef.value?.reload();
+  } catch (error) {
+    MessagePlugin.error(errorMessage(error, '资金操作失败'));
   } finally {
     rechargeLoading.value = false;
   }
+}
+
+function openManualInvoiceDialog() {
+  manualInvoiceForm.amount = 0;
+  manualInvoiceForm.paid_at = '';
+  manualInvoiceForm.trade_no = '';
+  manualInvoiceForm.payment_gateway = 'bank_transfer';
+  manualInvoiceForm.remark = '';
+  manualInvoiceVisible.value = true;
+}
+
+async function handleManualInvoiceSubmit() {
+  const result = await manualInvoiceFormRef.value?.validate?.();
+  if (!isValidationPass(result)) return;
+  manualInvoiceSubmitting.value = true;
+  try {
+    await userApi.storeManualInvoice(userId.value, {
+      amount: manualInvoiceForm.amount,
+      ...(manualInvoiceForm.paid_at ? { paid_at: manualInvoiceForm.paid_at } : {}),
+      ...(manualInvoiceForm.trade_no.trim() ? { trade_no: manualInvoiceForm.trade_no.trim() } : {}),
+      payment_gateway: manualInvoiceForm.payment_gateway,
+      remark: manualInvoiceForm.remark,
+    });
+    MessagePlugin.success('补录账单成功');
+    manualInvoiceVisible.value = false;
+    await loadDetail();
+    if (loadedTabs.invoices) await loadInvoices();
+  } catch (error) {
+    MessagePlugin.error(errorMessage(error, '补录账单失败'));
+  } finally {
+    manualInvoiceSubmitting.value = false;
+  }
+}
+
+async function handleOrdersChanged() {
+  // 补录订单会派生已支付账单：联动刷新账单 tab 与顶部统计（总消费）
+  await loadDetail();
+  if (loadedTabs.invoices) await loadInvoices();
 }
 
 async function openAddServiceDialog() {
@@ -1713,12 +1824,7 @@ async function handleSubmitAddService() {
     });
     MessagePlugin.success('实例已创建');
     addServiceVisible.value = false;
-    await Promise.all([
-      loadServices(),
-      loadDetail(),
-      ...(loadedTabs.invoices ? [loadInvoices()] : []),
-      ...(loadedTabs.balance ? [loadBalance()] : []),
-    ]);
+    await Promise.all([loadServices(), loadDetail(), ...(loadedTabs.invoices ? [loadInvoices()] : [])]);
   } catch (error) {
     MessagePlugin.error(errorMessage(error, '添加实例失败'));
   } finally {
@@ -2474,40 +2580,6 @@ function invoiceStatusTheme(status: unknown): 'default' | 'success' | 'warning' 
   if (value === 'success' || value === 'warning' || value === 'danger') return value;
   return 'default';
 }
-function balanceTypeLabel(type: unknown) {
-  const labels: Record<string, string> = {
-    recharge: '充值',
-    consume: '消费',
-    invoice_payment: '账单支付',
-    refund: '退款',
-    invoice_refund: '账单退款',
-    adjust: '调整',
-    admin_deduct: '管理员扣款',
-    manual_deduction: '手动扣款',
-    manual_recharge: '手动充值',
-    referral_withdraw_approved: '奖励转余额',
-    referral_credit_cash: '奖励转余额',
-  };
-  return labels[String(type)] || fieldValue(type);
-}
-function balanceTheme(type: unknown): 'default' | 'success' | 'warning' | 'danger' {
-  const value = String(type || '').toLowerCase();
-  if (
-    [
-      'recharge',
-      'refund',
-      'invoice_refund',
-      'manual_recharge',
-      'referral_credit_cash',
-      'referral_withdraw_approved',
-    ].includes(value)
-  ) {
-    return 'success';
-  }
-  if (['admin_deduct', 'deduct', 'manual_deduction', 'invoice_payment', 'consume'].includes(value)) return 'danger';
-  if (['payment', 'pay'].includes(value)) return 'warning';
-  return 'default';
-}
 function priorityLabel(priority: unknown) {
   return (
     (
@@ -2544,16 +2616,6 @@ function noticeTheme(status: unknown): 'default' | 'success' | 'warning' | 'dang
   if (status === 'failed') return 'danger';
   if (status === 'pending') return 'warning';
   return 'default';
-}
-function amountClass(value: unknown) {
-  const number = toNumber(value);
-  if (number > 0) return 'amount-up';
-  if (number < 0) return 'amount-down';
-  return '';
-}
-function signedMoney(value: unknown) {
-  const number = toNumber(value);
-  return `${number > 0 ? '+' : ''}${formatMoney(number)}`;
 }
 function toNumber(value: unknown) {
   const number = Number.parseFloat(String(value ?? 0));

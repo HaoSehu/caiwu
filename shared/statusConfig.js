@@ -184,6 +184,18 @@ export const PAYMENT_STATUS_MAP = {
   },
 };
 
+// ===================== 补录线下收款方式 =====================
+// 管理员补录账单/订单时登记系统外收款渠道；仅作审计记录：
+// Payment.gateway 固定为 manual，此值写入 Payment.callback_raw.payment_gateway，不影响对账口径。
+
+export const MANUAL_PAYMENT_METHOD_MAP = {
+  bank_transfer: { label: "银行转账" },
+  cash: { label: "现金" },
+  alipay: { label: "支付宝" },
+  wechat: { label: "微信" },
+  other: { label: "其他" },
+};
+
 // ===================== 服务/产品实例状态 =====================
 
 export const SERVICE_STATUS = {

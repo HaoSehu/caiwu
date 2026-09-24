@@ -113,6 +113,11 @@ class OrderV2QueryService
      */
     private function applyFilters(Builder $query, array $filters): void
     {
+        $userId = (int) ($filters['user_id'] ?? 0);
+        if ($userId > 0) {
+            $query->where('user_id', $userId);
+        }
+
         $type = trim((string) ($filters['type'] ?? ''));
         if ($type !== '') {
             $query->where('type', $type);
