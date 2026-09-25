@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Http\Requests\Admin\V2\User;
 
 use App\Constants\ManualPaymentGateway;
+use App\Constants\OrderType;
 use App\Http\Requests\Admin\V2\Common\AdminFormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreManualOrderRequest extends AdminFormRequest
 {
@@ -13,7 +15,7 @@ class StoreManualOrderRequest extends AdminFormRequest
     {
         return [
             'service_id' => ['required', 'integer', 'min:1'],
-            'type' => ['required', 'string', 'in:renew,upgrade'],
+            'type' => ['required', 'string', Rule::in(OrderType::values())],
             'amount' => ['required', 'numeric', 'min:0.01', 'max:999999', 'regex:/^\d{1,6}(?:\.\d{1,2})?$/'],
             'billing_cycle' => ['nullable', 'string', 'max:32'],
             'paid_at' => ['nullable', 'date', 'before_or_equal:now'],
@@ -27,7 +29,7 @@ class StoreManualOrderRequest extends AdminFormRequest
     public function messages(): array
     {
         return [
-            'type.in' => '补录订单仅支持续费/附加配置',
+            'type.in' => '补录订单仅支持新购/续费/附加配置',
             'amount.regex' => '金额最多保留两位小数',
             'payment_gateway.in' => '请选择合法的支付方式',
             'remark.required' => '请填写补录备注',

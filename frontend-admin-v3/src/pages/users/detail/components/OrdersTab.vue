@@ -42,7 +42,7 @@
     >
       <t-alert
         theme="info"
-        message="补录用于登记系统外收款的续费/附加配置费用，仅生成已支付订单与账单记录，不会变更实例状态与到期时间。"
+        message="补录用于登记系统外收款的新购/续费/附加配置费用，仅生成已支付订单与账单记录，不会变更实例状态与到期时间。"
       />
       <t-form ref="formRef" :data="form" :rules="rules" label-align="top" class="dialog-form">
         <t-form-item label="服务实例" name="service_id">
@@ -57,6 +57,7 @@
         </t-form-item>
         <t-form-item label="订单类型" name="type">
           <t-radio-group v-model="form.type">
+            <t-radio value="new">新购</t-radio>
             <t-radio value="renew">续费</t-radio>
             <t-radio value="upgrade">附加配置</t-radio>
           </t-radio-group>
@@ -178,7 +179,7 @@ const serviceOptions = ref<Array<{ id: number; label: string }>>([]);
 const formRef = ref<FormInstanceFunctions>();
 const form = reactive({
   service_id: undefined as number | undefined,
-  type: 'renew' as 'renew' | 'upgrade',
+  type: 'renew' as 'new' | 'renew' | 'upgrade',
   amount: 0,
   billing_cycle: '',
   payment_gateway: 'bank_transfer' as ManualPaymentGateway,
@@ -234,10 +235,13 @@ async function loadServiceOptions() {
   servicesLoading.value = true;
   try {
     const response = await userApi.services(props.userId, { page: 1, page_size: 100 });
-    serviceOptions.value = (response.list || []).map((service: Row) => ({
-      id: Number(service.id),
-      label: String(service.name || service.domain || `实例 #${service.id}`),
-    }));
+    serviceOptions.value = (response.list || []).map((service: Row) => {
+      const name = String(service.name || service.domain || '');
+      return {
+        id: Number(service.id),
+        label: name ? `${name}（#${service.id}）` : `实例 #${service.id}`,
+      };
+    });
     if (Number(response.total || 0) > serviceOptions.value.length) {
       MessagePlugin.warning('该用户实例较多，仅展示前 100 个，可通过搜索定位后再补录');
     }

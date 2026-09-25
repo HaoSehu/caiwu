@@ -116,7 +116,7 @@ class AdminManualEntryV2Service
     }
 
     /**
-     * 补录订单（仅续费/附加配置）：订单+账单双写并直接入账；固定不触发开通/续期业务流转。
+     * 补录订单（新购/续费/附加配置）：订单+账单双写并直接入账；固定不触发开通/续期业务流转。
      * 同实例经命名锁串行化，事务内复查待支付订单与 trade_no，消除并发补录双记窗口。
      *
      * @param  array<string, mixed>  $payload
@@ -127,8 +127,8 @@ class AdminManualEntryV2Service
     {
         $type = (string) ($payload['type'] ?? '');
         throw_if(
-            ! in_array($type, [OrderType::RENEW, OrderType::UPGRADE], true),
-            new BusinessException('补录订单仅支持续费/附加配置')
+            ! in_array($type, OrderType::values(), true),
+            new BusinessException('补录订单仅支持新购/续费/附加配置')
         );
 
         $amount = round((float) $payload['amount'], 2);
@@ -166,6 +166,8 @@ class AdminManualEntryV2Service
                     : (string) ($service->billing_cycle ?? ''),
                 'quantity' => 1,
                 'status' => OrderStatus::PENDING,
+                // 与「添加实例」建单同款标记：管理员手工挂账订单，豁免支付会话清理，且新购补录永不触发上游开通。
+                'config_snapshot' => ['admin_manual' => true],
                 'remark' => $remark,
                 'operator' => (string) ($context['operator_name'] ?? ''),
                 'trace_id' => (string) ($context['trace_id'] ?? ''),

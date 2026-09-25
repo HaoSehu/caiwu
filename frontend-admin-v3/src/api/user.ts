@@ -68,7 +68,7 @@ export interface UserManualInvoicePayload {
 
 export interface UserManualOrderPayload {
   service_id: number;
-  type: 'renew' | 'upgrade';
+  type: 'new' | 'renew' | 'upgrade';
   amount: number;
   billing_cycle?: string;
   paid_at?: string;

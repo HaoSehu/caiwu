@@ -1322,6 +1322,7 @@ const invoiceTypeOptions = [
   { label: '充值', value: 'recharge' },
   { label: '扣款', value: 'deduction' },
   { label: '附加配置', value: 'upgrade' },
+  { label: '退款', value: 'refund' },
   { label: '推荐奖励', value: 'referral_credit' },
   { label: '手工', value: 'manual' },
 ];
@@ -2654,8 +2655,9 @@ function invoiceTypeLabel(type: unknown) {
         recharge: '充值',
         deduction: '扣款',
         referral_credit: '推荐奖励',
+        refund: '退款',
         manual: '手工',
-        upgrade: '升降级账单',
+        upgrade: '附加配置',
       } as Record<string, string>
     )[String(type)] || '-'
   );

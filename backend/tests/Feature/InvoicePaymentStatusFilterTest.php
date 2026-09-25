@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Constants\InvoiceStatus;
+use App\Constants\InvoiceType;
 use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
 use App\Exceptions\BusinessException;
+use App\Models\AdminUser;
 use App\Models\Invoice;
 use App\Models\Payment;
+use App\Models\Role;
 use App\Models\User;
 use App\Services\Finance\AdminFinanceQueryService;
 use App\Services\Finance\CheckoutService;
@@ -17,6 +20,7 @@ use App\Services\Finance\ClientInvoicePaymentWorkflowService;
 use App\Services\Finance\InvoiceV2QueryService;
 use App\Services\Finance\PaymentService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 /**
@@ -152,6 +156,51 @@ class InvoicePaymentStatusFilterTest extends TestCase
         return (string) $user->email;
     }
 
+    public function test_user_invoice_type_filter_accepts_detail_page_options(): void
+    {
+        Sanctum::actingAs($this->makeAdmin());
+        $user = $this->makeUser('type-filter');
+        $refund = $this->makeInvoice($user, InvoiceStatus::PAID, InvoiceType::REFUND);
+
+        // 用户详情页账单类型选项必须全部被请求校验放行，否则前端选中即 422。
+        $options = [
+            'new',
+            'renew',
+            InvoiceType::RECHARGE,
+            InvoiceType::DEDUCTION,
+            InvoiceType::UPGRADE,
+            InvoiceType::REFUND,
+            InvoiceType::REFERRAL_CREDIT,
+            InvoiceType::MANUAL,
+        ];
+
+        foreach ($options as $type) {
+            $this->getJson("/api/v2/admin/users/{$user->id}/invoices?type={$type}")->assertOk();
+        }
+
+        $this->getJson("/api/v2/admin/users/{$user->id}/invoices?type=".InvoiceType::REFUND)
+            ->assertOk()
+            ->assertJsonPath('data.total', 1)
+            ->assertJsonPath('data.list.0.invoice_no', (string) $refund->invoice_no);
+    }
+
+    private function makeAdmin(array $permissions = ['user.detail']): AdminUser
+    {
+        $role = Role::query()->create([
+            'name' => 'role_'.uniqid(),
+            'label' => '账单筛选测试角色',
+            'permissions' => $permissions,
+        ]);
+
+        return AdminUser::query()->create([
+            'username' => 'admin_'.uniqid(),
+            'password' => 'secret123',
+            'nickname' => '管理员',
+            'status' => 1,
+            'role_id' => $role->id,
+        ]);
+    }
+
     private function makeUser(string $prefix): User
     {
         return User::query()->create([
@@ -162,12 +211,12 @@ class InvoicePaymentStatusFilterTest extends TestCase
         ]);
     }
 
-    private function makeInvoice(User $user, int $status): Invoice
+    private function makeInvoice(User $user, int $status, string $type = 'new'): Invoice
     {
         return Invoice::query()->create([
             'invoice_no' => 'IV'.date('YmdHis').mt_rand(100000, 999999),
             'user_id' => $user->id,
-            'type' => 'new',
+            'type' => $type,
             'amount' => 100.00,
             'paid_amount' => $status === InvoiceStatus::UNPAID ? 0 : 100.00,
             'status' => $status,
