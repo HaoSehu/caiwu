@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Client\V2;
 
+use App\Constants\InvoiceStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Client\V2\Invoice\ListInvoicesRequest;
 use App\Http\Requests\Client\V2\Invoice\ShowInvoiceRequest;
@@ -64,7 +65,8 @@ class InvoiceController extends Controller
     {
         $payableAmount = (float) ($payload['payable_amount'] ?? max((float) $invoice->amount - (float) ($invoice->paid_amount ?? 0), 0));
         $security = $this->checkoutSecurityService->issueInvoicePaymentSession($invoice, (int) $invoice->user_id);
-        $canCancel = in_array((int) $invoice->status, [0, 3], true);
+        // 仅待支付账单可取消/可发起支付（历史值 3 为已收敛死值，统一用常量引用）
+        $canCancel = in_array((int) $invoice->status, [InvoiceStatus::UNPAID], true);
 
         return array_merge($payload, [
             'pay_methods' => $this->availableInvoicePayMethods($payableAmount),

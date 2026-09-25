@@ -200,7 +200,7 @@ class InvoiceService
             'product.productGroup.secondProductGroup.firstProductGroup:id,code,name',
             'service:id,name,status,expires_at',
             'payments.callbacks:payment_id,callback_type,payload_json',
-            'items',
+            // 列表路径不加载仅详情使用的 items（buildInvoiceItems 只在详情路径调用）
         ]);
 
         if (! empty($filters['invoice_no'])) {
@@ -495,7 +495,7 @@ class InvoiceService
             'product:id,product_type,service_type_code,product_group_id,remark,purchase_requires',
             'service:id,name,status,expires_at',
             'payments',
-            'items',
+            // 列表路径不加载仅详情使用的 items
         ]);
 
         return $this->transformAdminInvoiceListItem($invoice);

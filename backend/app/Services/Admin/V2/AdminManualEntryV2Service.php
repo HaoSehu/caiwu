@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Admin\V2;
 
+use App\Constants\InvoiceStatus;
 use App\Constants\InvoiceType;
 use App\Constants\OrderStatus;
 use App\Constants\OrderType;
@@ -25,13 +26,20 @@ use Illuminate\Support\Facades\DB;
  */
 class AdminManualEntryV2Service
 {
+    /**
+     * 空交易号补录没有业务唯一键可查重：短窗内的同内容重复提交按双击/重试拦截。
+     * 窗口取 120s 已覆盖双击与网络超时重试；更久的重复提交由管理员人工把关。
+     */
+    private const EMPTY_TRADE_NO_DUPLICATE_WINDOW_SECONDS = 120;
+
     public function __construct(
         private readonly InvoiceService $invoices,
     ) {}
 
     /**
      * 补录账单（无订单关联的纯记账）。
-     * 同用户同交易号经命名锁串行化（与 rechargeByGateway 同构），事务内复查 trade_no 消除并发双写窗口。
+     * 同用户同交易号经命名锁串行化（与 rechargeByGateway 同构），事务内复查 trade_no 消除并发双写窗口；
+     * 空交易号时以补录内容指纹做命名锁 + 短窗查重，对齐防双击/重试重复入账。
      *
      * @param  array<string, mixed>  $payload
      * @param  array<string, mixed>  $context
@@ -44,9 +52,11 @@ class AdminManualEntryV2Service
 
         $remark = trim((string) ($payload['remark'] ?? ''));
         $tradeNo = trim((string) ($payload['trade_no'] ?? ''));
+        $paymentGateway = trim((string) ($payload['payment_gateway'] ?? '')) ?: 'manual';
 
-        $entry = fn (): array => DB::transaction(function () use ($user, $payload, $amount, $remark, $tradeNo, $context): array {
+        $entry = fn (): array => DB::transaction(function () use ($user, $payload, $amount, $remark, $tradeNo, $paymentGateway, $context): array {
             $this->assertTradeNoAvailable((int) $user->id, $tradeNo);
+            $this->assertNotDuplicatedManualEntry((int) $user->id, $amount, $remark, $tradeNo);
 
             $created = $this->invoices->createDirect([
                 'user_id' => (int) $user->id,
@@ -59,7 +69,7 @@ class AdminManualEntryV2Service
             $invoice = $this->invoices->markPaidManually($created, [
                 'amount' => $amount,
                 'paid_at' => $payload['paid_at'] ?? null,
-                'payment_gateway' => trim((string) ($payload['payment_gateway'] ?? '')) ?: 'manual',
+                'payment_gateway' => $paymentGateway,
                 'trade_no' => $tradeNo,
                 'remark' => $remark,
                 'sync_business_flow' => false,
@@ -82,7 +92,20 @@ class AdminManualEntryV2Service
         });
 
         if ($tradeNo === '') {
-            return $entry();
+            // 空交易号无业务唯一键：以「用户+金额+支付方式+备注」内容指纹做命名锁，
+            // 双击/网络重试在锁内串行化，第二次进入事务后由短窗查重拦截。
+            $fingerprint = md5((string) json_encode([
+                'user_id' => (int) $user->id,
+                'amount' => $amount,
+                'payment_gateway' => $paymentGateway,
+                'remark' => $remark,
+            ], JSON_UNESCAPED_UNICODE));
+
+            try {
+                return Cache::lock('lock:admin:manual-trade:'.((int) $user->id).':'.$fingerprint, 10)->block(3, $entry);
+            } catch (LockTimeoutException) {
+                throw new BusinessException('相同内容的补录正在处理中，请稍候重试');
+            }
         }
 
         try {
@@ -129,6 +152,7 @@ class AdminManualEntryV2Service
             throw_if($pendingExists, new BusinessException('该实例存在待支付订单，请先处理后再补录'));
 
             $this->assertTradeNoAvailable((int) $user->id, $tradeNo);
+            $this->assertNotDuplicatedManualOrder($service, $type, $amount, $remark, $tradeNo);
 
             $created = Order::create([
                 'order_no' => Order::generateOrderNo(),
@@ -197,5 +221,63 @@ class AdminManualEntryV2Service
             ->where('trade_no', $tradeNo)
             ->exists();
         throw_if($exists, new BusinessException('该交易号已存在于该用户的其他支付记录中，请核实后重新填写'));
+    }
+
+    /**
+     * 空交易号的账单补录按「用户+金额+备注」短窗查重，拦截双击/重试重复入账；
+     * 有交易号时由 assertTradeNoAvailable 按业务唯一键把关，此处直接放行。
+     */
+    private function assertNotDuplicatedManualEntry(int $userId, float $amount, string $remark, string $tradeNo): void
+    {
+        if ($tradeNo !== '') {
+            return;
+        }
+
+        $duplicateQuery = Invoice::query()
+            ->where('user_id', $userId)
+            ->where('type', InvoiceType::MANUAL)
+            ->where('status', InvoiceStatus::PAID)
+            ->where('amount', $amount);
+
+        if ($remark !== '') {
+            $duplicateQuery->where('remark', $remark);
+        } else {
+            $duplicateQuery->whereNull('remark');
+        }
+
+        $hasDuplicate = $duplicateQuery
+            ->where('created_at', '>=', now()->subSeconds(self::EMPTY_TRADE_NO_DUPLICATE_WINDOW_SECONDS))
+            ->exists();
+
+        throw_if($hasDuplicate, new BusinessException('相同内容的补录刚刚已入账，请勿重复提交；如确需再次补录请修改备注或稍后再试'));
+    }
+
+    /**
+     * 空交易号的订单补录按「实例+类型+金额+备注」短窗查重：首次补录后订单已转
+     * 已支付，pendingExists 不再拦截，重复提交会重复入账，这里补齐同窗防护。
+     */
+    private function assertNotDuplicatedManualOrder(Service $service, string $type, float $amount, string $remark, string $tradeNo): void
+    {
+        if ($tradeNo !== '') {
+            return;
+        }
+
+        $duplicateQuery = Order::query()
+            ->where('service_id', (int) $service->id)
+            ->where('type', $type)
+            ->where('status', OrderStatus::PAID)
+            ->where('amount', $amount);
+
+        if ($remark !== '') {
+            $duplicateQuery->where('remark', $remark);
+        } else {
+            $duplicateQuery->whereNull('remark');
+        }
+
+        $hasDuplicate = $duplicateQuery
+            ->where('created_at', '>=', now()->subSeconds(self::EMPTY_TRADE_NO_DUPLICATE_WINDOW_SECONDS))
+            ->exists();
+
+        throw_if($hasDuplicate, new BusinessException('该实例相同内容的补录刚刚已完成，请勿重复提交；如确需再次补录请修改备注或稍后再试'));
     }
 }

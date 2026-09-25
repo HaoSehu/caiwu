@@ -22,6 +22,24 @@ class PluginBindingResolver
      */
     private array $productBindingCache = [];
 
+    /**
+     * 服务绑定/快照的行级缓存：只由 preloadServiceProjections() 显式批量填充，
+     * 单行读取只读不写——避免状态同步等"写快照后再读投影"的路径命中旧数据。
+     *
+     * @var array<int, object|null>
+     */
+    private array $serviceBindingCache = [];
+
+    /**
+     * @var array<int, object|null>
+     */
+    private array $runtimeSnapshotRowCache = [];
+
+    /**
+     * @var array<int, object|null>
+     */
+    private array $connectionSnapshotRowCache = [];
+
     public function providerKeyForSupplier(Supplier $supplier): ?string
     {
         $binding = $this->supplierBindingForSupplier($supplier);
@@ -79,13 +97,6 @@ class PluginBindingResolver
         $productId = (int) (($binding->product_id ?? 0) ?: 0);
 
         return $productId > 0 ? $productId : null;
-    }
-
-    public function productForService(Service $service): ?Product
-    {
-        $productId = $this->productIdForService($service);
-
-        return $productId === null ? null : Product::query()->with('supplier')->find($productId);
     }
 
     public function upstreamProductIdForService(Service $service): ?string
@@ -227,6 +238,22 @@ class PluginBindingResolver
     }
 
     /**
+     * legacy services.provision_data 与插件投影的合并单一入口：
+     * 投影为空时原样回退 legacy，否则投影键覆盖 legacy 同名键。
+     * （原 ServiceStatusSyncService / AdminServiceListService / HandlesAdminUserServices
+     * 三处逐字重复的私有实现收敛于此，E1-21。）
+     *
+     * @return array<string, mixed>
+     */
+    public function serviceProvisionData(Service $service, bool $includeSecrets = false): array
+    {
+        $legacy = is_array($service->provision_data ?? null) ? $service->provision_data : [];
+        $projection = $this->serviceProvisionProjection($service, $includeSecrets);
+
+        return $projection === [] ? $legacy : array_replace($legacy, $projection);
+    }
+
+    /**
      * Build a provision-data-like projection from the normalized service binding
      * tables. This lets runtime code prefer the new schema while older call sites
      * are migrated away from services.provision_data one by one.
@@ -272,6 +299,130 @@ class PluginBindingResolver
         }
 
         return array_filter($projection, static fn (mixed $value): bool => $value !== null && $value !== '');
+    }
+
+    /**
+     * 列表路径批量预载：对整页 serviceId 一次往返取绑定/运行快照/连接快照三张表，
+     * 写入行级缓存；后续逐行投影组装全部命中缓存（查询数从每行 3 条降为每页 3 条）。
+     * 只填充缓存、不改变单行投影的取数优先级与组装逻辑，输出与逐行查询完全一致。
+     */
+    public function preloadServiceProjections(iterable $serviceIds): void
+    {
+        $ids = collect($serviceIds)
+            ->map(static fn (mixed $id): int => (int) $id)
+            ->filter(static fn (int $id): bool => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($ids === []) {
+            return;
+        }
+
+        if ($this->hasTable('service_upstream_bindings')) {
+            $rows = DB::table('service_upstream_bindings as sub')
+                ->leftJoin('supplier_plugin_bindings as spb', 'spb.id', '=', 'sub.supplier_plugin_binding_id')
+                ->leftJoin('product_upstream_bindings as pub', 'pub.id', '=', 'sub.product_upstream_binding_id')
+                ->leftJoin('supplier_plugin_bindings as pub_spb', 'pub_spb.id', '=', 'pub.supplier_plugin_binding_id')
+                ->whereIn('sub.service_id', $ids)
+                ->orderByDesc('sub.id')
+                ->get([
+                    'sub.service_id',
+                    'sub.id',
+                    'sub.provider_key',
+                    'sub.upstream_service_id',
+                    'sub.product_upstream_binding_id',
+                    'sub.supplier_plugin_binding_id',
+                    'sub.plugin_id',
+                    'sub.upstream_account_id',
+                    'sub.runtime_snapshot_json',
+                    'sub.connection_snapshot_json',
+                    'sub.status_snapshot',
+                    'sub.last_synced_at',
+                    'sub.last_sync_error',
+                    DB::raw('COALESCE(spb.supplier_id, pub_spb.supplier_id) as supplier_id'),
+                    'pub.product_id',
+                    'pub.upstream_product_id',
+                ]);
+
+            foreach ($this->firstRowPerService($rows) as $serviceId => $row) {
+                $this->serviceBindingCache[$serviceId] = $row;
+            }
+            // 无绑定行的服务也要缓存空结果，避免逐行 transform 时的重复空查询
+            foreach ($ids as $serviceId) {
+                $this->serviceBindingCache[$serviceId] ??= null;
+            }
+        }
+
+        if ($this->hasTable('service_runtime_snapshots')) {
+            $rows = DB::table('service_runtime_snapshots')
+                ->whereIn('service_id', $ids)
+                ->orderByDesc('id')
+                ->get([
+                    'service_id',
+                    'provider_key',
+                    'status_key',
+                    'status_text',
+                    'resource_json',
+                    'metrics_json',
+                    'snapshot_json',
+                    'synced_at',
+                ]);
+
+            foreach ($this->firstRowPerService($rows) as $serviceId => $row) {
+                $this->runtimeSnapshotRowCache[$serviceId] = $row;
+            }
+            // 无快照行的服务同样缓存空结果
+            foreach ($ids as $serviceId) {
+                $this->runtimeSnapshotRowCache[$serviceId] ??= null;
+            }
+        }
+
+        if ($this->hasTable('service_connection_snapshots')) {
+            $rows = DB::table('service_connection_snapshots')
+                ->whereIn('service_id', $ids)
+                ->where('connection_type', 'default')
+                ->orderByDesc('id')
+                ->get([
+                    'service_id',
+                    'provider_key',
+                    'hostname',
+                    'ip_address',
+                    'port',
+                    'connection_json',
+                    'secret_json',
+                    'checked_at',
+                ]);
+
+            foreach ($this->firstRowPerService($rows) as $serviceId => $row) {
+                $this->connectionSnapshotRowCache[$serviceId] = $row;
+            }
+            // 无快照行的服务同样缓存空结果
+            foreach ($ids as $serviceId) {
+                $this->connectionSnapshotRowCache[$serviceId] ??= null;
+            }
+        }
+    }
+
+    /**
+     * 全局倒序排列的行集合按 service_id 分组取首行——与单行查询
+     * where(service_id)->orderByDesc(id)->first() 取到的行完全一致。
+     *
+     * @param  iterable<int, object>  $rows
+     * @return array<int, object>
+     */
+    private function firstRowPerService(iterable $rows): array
+    {
+        $first = [];
+
+        foreach ($rows as $row) {
+            $serviceId = (int) ($row->service_id ?? 0);
+            if ($serviceId > 0 && ! array_key_exists($serviceId, $first)) {
+                $first[$serviceId] = $row;
+            }
+        }
+
+        return $first;
     }
 
     private function supplierBinding(int $supplierId): ?object
@@ -398,6 +549,11 @@ class PluginBindingResolver
             return null;
         }
 
+        // 批量预载后命中缓存；单行路径不写缓存，保证"写快照后读投影"不受污染
+        if (array_key_exists($serviceId, $this->serviceBindingCache)) {
+            return $this->serviceBindingCache[$serviceId];
+        }
+
         return DB::table('service_upstream_bindings as sub')
             ->leftJoin('supplier_plugin_bindings as spb', 'spb.id', '=', 'sub.supplier_plugin_binding_id')
             ->leftJoin('product_upstream_bindings as pub', 'pub.id', '=', 'sub.product_upstream_binding_id')
@@ -432,18 +588,7 @@ class PluginBindingResolver
             return [];
         }
 
-        $snapshot = DB::table('service_runtime_snapshots')
-            ->where('service_id', $serviceId)
-            ->orderByDesc('id')
-            ->first([
-                'provider_key',
-                'status_key',
-                'status_text',
-                'resource_json',
-                'metrics_json',
-                'snapshot_json',
-                'synced_at',
-            ]);
+        $snapshot = $this->serviceRuntimeSnapshotRow($serviceId);
 
         if ($snapshot === null) {
             return [];
@@ -464,6 +609,29 @@ class PluginBindingResolver
     }
 
     /**
+     * 运行快照原始行：优先命中批量预载写入的行级缓存，未命中时单行查询（不写缓存）。
+     */
+    private function serviceRuntimeSnapshotRow(int $serviceId): ?object
+    {
+        if (array_key_exists($serviceId, $this->runtimeSnapshotRowCache)) {
+            return $this->runtimeSnapshotRowCache[$serviceId];
+        }
+
+        return DB::table('service_runtime_snapshots')
+            ->where('service_id', $serviceId)
+            ->orderByDesc('id')
+            ->first([
+                'provider_key',
+                'status_key',
+                'status_text',
+                'resource_json',
+                'metrics_json',
+                'snapshot_json',
+                'synced_at',
+            ]);
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function serviceConnectionSnapshot(int $serviceId, bool $includeSecrets = false): array
@@ -472,19 +640,7 @@ class PluginBindingResolver
             return [];
         }
 
-        $snapshot = DB::table('service_connection_snapshots')
-            ->where('service_id', $serviceId)
-            ->where('connection_type', 'default')
-            ->orderByDesc('id')
-            ->first([
-                'provider_key',
-                'hostname',
-                'ip_address',
-                'port',
-                'connection_json',
-                'secret_json',
-                'checked_at',
-            ]);
+        $snapshot = $this->serviceConnectionSnapshotRow($serviceId);
 
         if ($snapshot === null) {
             return [];
@@ -508,6 +664,31 @@ class PluginBindingResolver
         }
 
         return array_filter($connection, static fn (mixed $value): bool => $value !== null && $value !== '');
+    }
+
+    /**
+     * 连接快照原始行：优先命中批量预载写入的行级缓存，未命中时单行查询（不写缓存）。
+     * 秘钥解密仍延迟到组装阶段，按调用方 includeSecrets 决定，缓存行可复用于两种口径。
+     */
+    private function serviceConnectionSnapshotRow(int $serviceId): ?object
+    {
+        if (array_key_exists($serviceId, $this->connectionSnapshotRowCache)) {
+            return $this->connectionSnapshotRowCache[$serviceId];
+        }
+
+        return DB::table('service_connection_snapshots')
+            ->where('service_id', $serviceId)
+            ->where('connection_type', 'default')
+            ->orderByDesc('id')
+            ->first([
+                'provider_key',
+                'hostname',
+                'ip_address',
+                'port',
+                'connection_json',
+                'secret_json',
+                'checked_at',
+            ]);
     }
 
     /**

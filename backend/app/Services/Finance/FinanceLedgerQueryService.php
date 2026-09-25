@@ -145,10 +145,9 @@ class FinanceLedgerQueryService
             $invoiceQuery->where('user_id', (int) $filters['user_id']);
         }
         $this->applyDateFilter($invoiceQuery, $filters);
-        $invoiceSummary = $invoiceQuery
+        // 未付口径统一走 InvoiceUnpaidAggregate（此前此处用 IN (0, 3)，3 为已收敛死值）
+        $invoiceSummary = InvoiceUnpaidAggregate::applyUnpaidSelects($invoiceQuery)
             ->selectRaw('COUNT(*) as total_invoices')
-            ->selectRaw('COALESCE(SUM(CASE WHEN status IN (0, 3) THEN amount - COALESCE(paid_amount, 0) ELSE 0 END), 0) as unpaid_amount')
-            ->selectRaw('COALESCE(SUM(CASE WHEN status IN (0, 3) THEN 1 ELSE 0 END), 0) as unpaid_count')
             ->first();
 
         $recharge30Days = (clone $baseQuery)
@@ -517,6 +516,18 @@ class FinanceLedgerQueryService
                 ->values()
                 ->all();
 
+            $paymentMap = Payment::query()
+                ->whereIn('id', array_unique($paymentIds))
+                ->get()
+                ->keyBy('id');
+
+            // 支付来源流水（充值流水全部属于此类）的关联账单一并并入预取集合，
+            // 一次 whereIn 建好 map；否则循环内逐条 find() 会退化成每条流水 4 次查询的 N+1。
+            $invoiceIds = array_merge(
+                $invoiceIds,
+                $paymentMap->pluck('invoice_id')->filter()->map(fn ($id) => (int) $id)->all()
+            );
+
             $invoiceMap = Invoice::query()
                 ->with([
                     'payments' => fn ($relation) => $relation->orderByDesc('id'),
@@ -532,11 +543,6 @@ class FinanceLedgerQueryService
                 })
                 ->keyBy('id');
 
-            $paymentMap = Payment::query()
-                ->whereIn('id', array_unique($paymentIds))
-                ->get()
-                ->keyBy('id');
-
             foreach ($items as $item) {
                 $invoice = null;
                 $payment = null;
@@ -547,13 +553,6 @@ class FinanceLedgerQueryService
                 } elseif ((string) ($item->source_type ?? '') === 'payment') {
                     $payment = $paymentMap->get((int) ($item->source_id ?? 0));
                     $invoice = $payment?->invoice_id ? $invoiceMap->get((int) $payment->invoice_id) : null;
-                    if (! $invoice && $payment?->invoice_id) {
-                        $invoice = Invoice::query()->with([
-                            'payments' => fn ($relation) => $relation->orderByDesc('id'),
-                            'service:id,name,domain,status,expires_at,provision_data',
-                            'order:id,order_no,type,service_id,billing_cycle,quantity,remark,operator,trace_id,product_spec_snapshot',
-                        ])->find((int) $payment->invoice_id);
-                    }
                 }
 
                 $item->setRelation('invoice', $invoice);

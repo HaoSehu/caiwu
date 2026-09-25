@@ -1,5 +1,6 @@
 <?php
 
+use App\Constants\PaymentGatewayCode;
 use App\Http\Controllers\Client\V2\ActionController;
 use App\Http\Controllers\Client\V2\AuthController;
 use App\Http\Controllers\Client\V2\ContentController;
@@ -40,7 +41,9 @@ Route::get('/verification/scan', [VerificationController::class, 'scan']);
 // 又能挡住脚本化高频刷回调造成的写放大。
 Route::post('/payment/alipay/notify', [PaymentCallbackController::class, 'alipayNotify'])
     ->middleware(['throttle:60,1,client-payment-alipay-notify', 'verify.alipay.callback']);
+// 网关别名（ali_pay/alipay_f2f 等）不属第三方网关编码，直接 404，避免进入未认证处理链路。
 Route::match(['GET', 'POST'], '/payment/notify/{gateway}', [PaymentCallbackController::class, 'notify'])
+    ->whereIn('gateway', PaymentGatewayCode::thirdPartyGateways())
     ->middleware(['throttle:60,1,client-payment-notify', 'verify.payment.callback']);
 Route::get('/vnc-tokens/{token}', [ServiceConsoleController::class, 'vncToken'])->middleware('throttle:30,1,client-vnc-token');
 

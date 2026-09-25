@@ -22,6 +22,9 @@ class PaymentCallbackController extends Controller
     public function notify(string $gateway, Request $request)
     {
         $gateway = trim($gateway);
+        // 与验签中间件同口径归一化网关别名（ali_pay/alipay_f2f → alipay、yi_pay → yipay），
+        // 避免处理失败后再用未注册的别名解析网关，异常逃出控制器变成 500。
+        $gateway = PaymentGatewayCode::normalize($gateway);
 
         Log::info("[{$gateway}回调] 收到通知", [
             'gateway' => $gateway,
@@ -39,8 +42,19 @@ class PaymentCallbackController extends Controller
             $success = false;
         }
 
-        return $this->paymentGatewayManager->gateway($gateway)
-            ->buildNotifyResponse($success);
+        try {
+            return $this->paymentGatewayManager->gateway($gateway)
+                ->buildNotifyResponse($success);
+        } catch (\Throwable $exception) {
+            // 未注册网关等异常时按网关约定返回常量 fail 文本，保证该公开端点不产生 500
+            Log::warning("[{$gateway}回调] 构建回调响应失败，已按 fail 响应", [
+                'gateway' => $gateway,
+                'message' => $exception->getMessage(),
+                'exception' => $exception::class,
+            ]);
+
+            return response('fail', 200)->header('Content-Type', 'text/plain');
+        }
     }
 
     /**

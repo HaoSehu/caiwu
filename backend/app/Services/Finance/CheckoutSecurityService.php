@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Services\Finance;
 
 use App\Constants\InvoiceStatus;
-use App\Constants\OrderStatus;
 use App\Exceptions\BusinessException;
 use App\Models\Invoice;
 use App\Models\Order;
@@ -150,19 +149,6 @@ class CheckoutSecurityService
         $this->volatileStore()->put($this->invoiceFingerprintCacheKey($userId, $fingerprint), $invoiceId, $fingerprintExpiresAt);
     }
 
-    public function rememberCreatedOrder(
-        int $userId,
-        string $idempotencyKey,
-        string $fingerprint,
-        int $orderId,
-    ): void {
-        $idempotencyExpiresAt = CarbonImmutable::now()->addSeconds(self::ORDER_IDEMPOTENCY_TTL_SECONDS);
-        $fingerprintExpiresAt = CarbonImmutable::now()->addSeconds(self::ORDER_FINGERPRINT_TTL_SECONDS);
-
-        $this->volatileStore()->put($this->orderIdempotencyCacheKey($userId, $idempotencyKey), $orderId, $idempotencyExpiresAt);
-        $this->volatileStore()->put($this->orderFingerprintCacheKey($userId, $fingerprint), $orderId, $fingerprintExpiresAt);
-    }
-
     public function resolveIdempotentInvoiceId(int $userId, string $idempotencyKey): ?int
     {
         $invoiceId = (int) $this->volatileStore()->get($this->invoiceIdempotencyCacheKey($userId, $idempotencyKey), 0);
@@ -170,25 +156,11 @@ class CheckoutSecurityService
         return $invoiceId > 0 ? $invoiceId : null;
     }
 
-    public function resolveIdempotentOrderId(int $userId, string $idempotencyKey): ?int
-    {
-        $orderId = (int) $this->volatileStore()->get($this->orderIdempotencyCacheKey($userId, $idempotencyKey), 0);
-
-        return $orderId > 0 ? $orderId : null;
-    }
-
     public function resolveFingerprintInvoiceId(int $userId, string $fingerprint): ?int
     {
         $invoiceId = (int) $this->volatileStore()->get($this->invoiceFingerprintCacheKey($userId, $fingerprint), 0);
 
         return $invoiceId > 0 ? $invoiceId : null;
-    }
-
-    public function resolveFingerprintOrderId(int $userId, string $fingerprint): ?int
-    {
-        $orderId = (int) $this->volatileStore()->get($this->orderFingerprintCacheKey($userId, $fingerprint), 0);
-
-        return $orderId > 0 ? $orderId : null;
     }
 
     public static function paymentSessionTtlSeconds(): int
@@ -219,70 +191,6 @@ class CheckoutSecurityService
     public function isPaymentSessionExpired(Invoice|Order $record): bool
     {
         return $this->paymentSessionExpiresAt($record)->lessThanOrEqualTo(CarbonImmutable::now());
-    }
-
-    public function issuePaymentSession(Order $order, int $userId): array
-    {
-        if (! in_array((int) $order->status, [OrderStatus::PENDING], true)) {
-            return [
-                'session_token' => '',
-                'expires_at' => null,
-            ];
-        }
-
-        $order->loadMissing('invoice');
-        if ($order->invoice instanceof Invoice) {
-            return $this->issueInvoicePaymentSession($order->invoice, $userId);
-        }
-
-        $now = CarbonImmutable::now();
-        $expiresAt = $this->paymentSessionExpiresAt($order);
-        if ($expiresAt->lessThanOrEqualTo($now)) {
-            return [
-                'session_token' => '',
-                'expires_at' => $expiresAt->toIso8601String(),
-            ];
-        }
-        $token = $this->generateToken('ord_session');
-
-        $this->volatileStore()->put($this->orderPaymentSessionCacheKey($token), [
-            'order_id' => (int) $order->id,
-            'user_id' => $userId,
-            'order_status' => (int) $order->status,
-            'payable_amount' => Money::format($order->paid_amount ?? 0),
-            'issued_at' => $now->toIso8601String(),
-            'expires_at' => $expiresAt->toIso8601String(),
-        ], $expiresAt);
-
-        return [
-            'session_token' => $token,
-            'expires_at' => $expiresAt->toIso8601String(),
-        ];
-    }
-
-    public function assertPaymentSessionToken(string $token, Order $order, int $userId): array
-    {
-        $order->loadMissing('invoice');
-        if ($order->invoice instanceof Invoice) {
-            return $this->assertInvoicePaymentSessionToken($token, $order->invoice, $userId);
-        }
-
-        $this->assertPaymentSessionWindowOpen($order);
-
-        $payload = $this->volatileStore()->get($this->orderPaymentSessionCacheKey($token));
-
-        throw_if(! is_array($payload), new BusinessException('支付会话已失效，请刷新页面后重试'));
-
-        $currentPayableAmount = Money::format($order->paid_amount ?? 0);
-
-        throw_if(
-            (int) ($payload['order_id'] ?? 0) !== (int) $order->id
-            || (int) ($payload['user_id'] ?? 0) !== $userId
-            || (string) ($payload['payable_amount'] ?? '') !== $currentPayableAmount,
-            new BusinessException('支付会话校验失败，请刷新页面后重试')
-        );
-
-        return $payload;
     }
 
     public function issueInvoicePaymentSession(Invoice $invoice, int $userId): array
@@ -365,36 +273,6 @@ class CheckoutSecurityService
         ];
     }
 
-    public function issuePaymentPollToken(Payment $payment, Order $order, int $userId, string $clientIp): array
-    {
-        throw_if(trim($clientIp) === '', new BusinessException('无法获取客户端网络信息，请刷新页面重试'));
-
-        $order->loadMissing('invoice');
-        if ($order->invoice instanceof Invoice) {
-            return $this->issueInvoicePaymentPollToken($payment, $order->invoice, $userId, $clientIp);
-        }
-
-        $now = CarbonImmutable::now();
-        $expiresAt = $this->paymentSessionExpiresAt($order);
-        $token = $this->generateToken('ord_poll');
-
-        $this->volatileStore()->put($this->orderPaymentPollCacheKey($token), [
-            'payment_id' => (int) $payment->id,
-            'payment_no' => (string) $payment->payment_no,
-            'order_id' => (int) $order->id,
-            'user_id' => $userId,
-            'gateway' => $payment->gatewayKey(),
-            'client_ip_hash' => $this->hashClientIp($clientIp),
-            'issued_at' => $now->toIso8601String(),
-            'expires_at' => $expiresAt->toIso8601String(),
-        ], $expiresAt);
-
-        return [
-            'poll_token' => $token,
-            'poll_expires_at' => $expiresAt->toIso8601String(),
-        ];
-    }
-
     public function assertInvoicePaymentPollToken(string $token, Payment $payment, Invoice $invoice, int $userId, string $clientIp = ''): array
     {
         $payload = $this->volatileStore()->get($this->invoicePaymentPollCacheKey($token));
@@ -405,29 +283,6 @@ class CheckoutSecurityService
             (int) ($payload['payment_id'] ?? 0) !== (int) $payment->id
             || (string) ($payload['payment_no'] ?? '') !== (string) $payment->payment_no
             || (int) ($payload['invoice_id'] ?? 0) !== (int) $invoice->id
-            || (int) ($payload['user_id'] ?? 0) !== $userId
-            || ! $this->verifyClientIp($payload, $clientIp),
-            new BusinessException('支付轮询凭证校验失败，请重新获取二维码')
-        );
-
-        return $payload;
-    }
-
-    public function assertPaymentPollToken(string $token, Payment $payment, Order $order, int $userId, string $clientIp = ''): array
-    {
-        $order->loadMissing('invoice');
-        if ($order->invoice instanceof Invoice) {
-            return $this->assertInvoicePaymentPollToken($token, $payment, $order->invoice, $userId, $clientIp);
-        }
-
-        $payload = $this->volatileStore()->get($this->orderPaymentPollCacheKey($token));
-
-        throw_if(! is_array($payload), new BusinessException('支付轮询凭证已失效，请重新获取二维码'));
-
-        throw_if(
-            (int) ($payload['payment_id'] ?? 0) !== (int) $payment->id
-            || (string) ($payload['payment_no'] ?? '') !== (string) $payment->payment_no
-            || (int) ($payload['order_id'] ?? 0) !== (int) $order->id
             || (int) ($payload['user_id'] ?? 0) !== $userId
             || ! $this->verifyClientIp($payload, $clientIp),
             new BusinessException('支付轮询凭证校验失败，请重新获取二维码')
@@ -492,16 +347,6 @@ class CheckoutSecurityService
         return 'checkout:invoice:fingerprint:'.$userId.':'.$fingerprint;
     }
 
-    private function orderIdempotencyCacheKey(int $userId, string $idempotencyKey): string
-    {
-        return 'checkout:order:idempotency:'.$userId.':'.sha1($idempotencyKey);
-    }
-
-    private function orderFingerprintCacheKey(int $userId, string $fingerprint): string
-    {
-        return 'checkout:order:fingerprint:'.$userId.':'.$fingerprint;
-    }
-
     private function rechargePollCacheKey(string $token): string
     {
         return 'checkout:recharge:poll:'.$token;
@@ -512,19 +357,9 @@ class CheckoutSecurityService
         return 'checkout:invoice:session:'.$token;
     }
 
-    private function orderPaymentSessionCacheKey(string $token): string
-    {
-        return 'checkout:order:session:'.$token;
-    }
-
     private function invoicePaymentPollCacheKey(string $token): string
     {
         return 'checkout:invoice:poll:'.$token;
-    }
-
-    private function orderPaymentPollCacheKey(string $token): string
-    {
-        return 'checkout:order:poll:'.$token;
     }
 
     private function generateToken(string $prefix): string

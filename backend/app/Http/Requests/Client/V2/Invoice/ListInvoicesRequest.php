@@ -18,6 +18,24 @@ class ListInvoicesRequest extends FormRequest
         return true;
     }
 
+    /**
+     * HTTP 查询串带来的 status 是字符串（如 ?status=5），统一转型为 int，
+     * 保证下游与 InvoiceStatus::REFUNDED 的严格比较成立，否则「已退款」筛选恒假。
+     * 非数字入参不转型，交由 rules 的 integer 校验拒绝（422），避免静默归 0 变成「待支付」筛选。
+     */
+    protected function prepareForValidation(): void
+    {
+        $status = $this->input('status');
+
+        if ($status === null || $status === '') {
+            return;
+        }
+
+        if (is_numeric($status)) {
+            $this->merge(['status' => (int) $status]);
+        }
+    }
+
     public function rules(): array
     {
         return [

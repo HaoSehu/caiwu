@@ -55,6 +55,7 @@ class PaymentService
         private AdminOrderNotificationService $adminOrderNotificationService,
         private CouponService $couponService,
         private InvoiceService $invoiceService,
+        private CheckoutSecurityService $checkoutSecurityService,
         private ?AccountService $accountService = null,
         private ?PaymentGatewayBindingResolver $paymentGatewayBindingResolver = null,
         private ?FinanceDocumentService $financeDocumentService = null,
@@ -528,7 +529,7 @@ class PaymentService
                 return $lockedPayment;
             }
 
-            if (! $this->isPaymentWindowExpired($lockedPayment)) {
+            if ($this->checkoutSecurityService->paymentRecordExpiresAt($lockedPayment)->lessThanOrEqualTo(CarbonImmutable::now())) {
                 return $lockedPayment;
             }
 
@@ -549,26 +550,26 @@ class PaymentService
         });
     }
 
-    public function cancelExpiredPendingRechargesForUser(?int $userId = null, array $context = []): int
+    public function cancelExpiredPendingRechargesForUser(int $userId, array $context = []): int
     {
         $threshold = now()->subSeconds(CheckoutSecurityService::paymentSessionTtlSeconds());
-        $query = Payment::query()
-            ->whereNull('invoice_id')
-            ->where('status', PaymentStatus::PENDING)
-            ->where('created_at', '<=', $threshold);
-
-        if ($userId !== null && $userId > 0) {
-            $query->where('user_id', $userId);
-        }
-
         $count = 0;
 
-        foreach ($query->get() as $payment) {
-            $updated = $this->cancelExpiredPendingRecharge($payment, $context);
-            if ((int) $updated->status === PaymentStatus::CANCELLED) {
-                $count++;
-            }
-        }
+        // 与订单侧清理（OrderService::cancelExpiredPendingOrdersForUser）一致按主键分批，
+        // 避免积压场景（调度停摆、批量异常单）一次性把全部过期充值单装载进内存。
+        Payment::query()
+            ->where('user_id', $userId)
+            ->whereNull('invoice_id')
+            ->where('status', PaymentStatus::PENDING)
+            ->where('created_at', '<=', $threshold)
+            ->chunkById(100, function ($payments) use (&$count, $context): void {
+                foreach ($payments as $payment) {
+                    $updated = $this->cancelExpiredPendingRecharge($payment, $context);
+                    if ((int) $updated->status === PaymentStatus::CANCELLED) {
+                        $count++;
+                    }
+                }
+            });
 
         return $count;
     }
@@ -622,7 +623,8 @@ class PaymentService
                     (float) $lockedPayment->amount,
                     $balanceAfter,
                     (int) $lockedPayment->id,
-                    '支付宝充值 '.(string) $lockedPayment->payment_no,
+                    // 充值单可属任意第三方网关，备注使用中性文案，不硬编码具体渠道
+                    '账户充值 '.(string) $lockedPayment->payment_no,
                     [
                         'trace_id' => (string) ($lockedPayment->trace_id ?? ''),
                     ]
@@ -1018,7 +1020,7 @@ class PaymentService
                         return ['dispatch' => false, 'invoice' => $invoice, 'payment_no' => (string) $lockedPayment->payment_no];
                     }
 
-                    if ($this->invoicePaymentWindowExpired($invoice)) {
+                    if ($this->checkoutSecurityService->isPaymentSessionExpired($invoice)) {
                         $this->restoreReservedMixBalance($lockedPayment, [
                             'closed_reason' => 'payment_window_expired_captured',
                             'mark_payment_failed' => false,
@@ -1265,7 +1267,7 @@ class PaymentService
                         return ['dispatch' => false, 'invoice' => $invoice, 'payment_no' => (string) $lockedPayment->payment_no];
                     }
 
-                    if ($this->invoicePaymentWindowExpired($invoice)) {
+                    if ($this->checkoutSecurityService->isPaymentSessionExpired($invoice)) {
                         $this->restoreReservedMixBalance($lockedPayment, [
                             'closed_reason' => 'payment_window_expired_captured',
                             'mark_payment_failed' => false,
@@ -2314,6 +2316,11 @@ class PaymentService
         string $reason,
     ): void {
         $payment->refresh();
+        // 幂等闸：该支付单已转入余额过则跳过，防止重复回调/并发轮询把同一笔网关款重复入账。
+        if ((bool) data_get((array) ($payment->callback_raw ?? []), 'credited_to_balance', false)) {
+            return;
+        }
+
         $amount = round((float) $payment->amount, 2);
         if ($amount <= 0) {
             return;
@@ -2494,26 +2501,14 @@ class PaymentService
 
     private function resolvePaymentTimeoutExpress(Payment $payment): string
     {
-        throw_if($this->isPaymentWindowExpired($payment), new BusinessException('支付时间已过期，请重新发起支付'));
+        // 支付窗口 TTL 统一收敛到 CheckoutSecurityService，避免下单/回调两侧口径漂移
+        $deadline = $this->checkoutSecurityService->paymentRecordExpiresAt($payment);
 
-        $remainingSeconds = $this->paymentDeadline($payment)->diffInSeconds(CarbonImmutable::now(), true);
+        throw_if($deadline->lessThanOrEqualTo(CarbonImmutable::now()), new BusinessException('支付时间已过期，请重新发起支付'));
+
+        $remainingSeconds = $deadline->diffInSeconds(CarbonImmutable::now(), true);
 
         return $this->formatGatewayTimeoutExpress($remainingSeconds);
-    }
-
-    private function isPaymentWindowExpired(Payment $payment): bool
-    {
-        return $this->paymentDeadline($payment)->lessThanOrEqualTo(CarbonImmutable::now());
-    }
-
-    private function paymentDeadline(Payment $payment): CarbonImmutable
-    {
-        $createdAt = $payment->created_at;
-        $base = $createdAt instanceof \DateTimeInterface
-            ? CarbonImmutable::instance($createdAt)
-            : ($createdAt ? CarbonImmutable::parse((string) $createdAt) : CarbonImmutable::now());
-
-        return $base->addSeconds(CheckoutSecurityService::paymentSessionTtlSeconds());
     }
 
     /**
@@ -2528,26 +2523,14 @@ class PaymentService
 
     private function resolveInvoicePaymentTimeoutExpress(Invoice $invoice): string
     {
-        $remainingSeconds = $this->invoicePaymentDeadline($invoice)->diffInSeconds(CarbonImmutable::now(), true);
+        // 支付窗口 TTL 统一收敛到 CheckoutSecurityService，避免下单/回调两侧口径漂移
+        $deadline = $this->checkoutSecurityService->paymentSessionExpiresAt($invoice);
 
-        throw_if($this->invoicePaymentWindowExpired($invoice), new BusinessException('账单支付时间已过期，请重新创建账单'));
+        throw_if($deadline->lessThanOrEqualTo(CarbonImmutable::now()), new BusinessException('账单支付时间已过期，请重新创建账单'));
+
+        $remainingSeconds = $deadline->diffInSeconds(CarbonImmutable::now(), true);
 
         return $this->formatGatewayTimeoutExpress($remainingSeconds);
-    }
-
-    private function invoicePaymentWindowExpired(Invoice $invoice): bool
-    {
-        return $this->invoicePaymentDeadline($invoice)->lessThanOrEqualTo(CarbonImmutable::now());
-    }
-
-    private function invoicePaymentDeadline(Invoice $invoice): CarbonImmutable
-    {
-        $createdAt = $invoice->created_at;
-        $base = $createdAt instanceof \DateTimeInterface
-            ? CarbonImmutable::instance($createdAt)
-            : ($createdAt ? CarbonImmutable::parse((string) $createdAt) : CarbonImmutable::now());
-
-        return $base->addSeconds(CheckoutSecurityService::paymentSessionTtlSeconds());
     }
 
     private function queryGatewayPayment(string $gateway, string $outTradeNo): array
@@ -2615,6 +2598,13 @@ class PaymentService
             }
 
             $balanceAmount = $this->resolveMixBalanceAmount($lockedPayment);
+            // 幂等闸：预扣余额已退回过的支付单不再重复退回。
+            // 回调/轮询路径（mark_payment_failed=false）退回后支付单仍保持 PENDING，
+            // 若仅靠「金额>0 且 PENDING」放行，重复回调或并发轮询会把预扣余额退两次。
+            if ((bool) data_get((array) ($lockedPayment->callback_raw ?? []), 'balance_restored', false)) {
+                return false;
+            }
+
             if ($balanceAmount <= 0 || (int) $lockedPayment->status !== PaymentStatus::PENDING) {
                 return false;
             }
@@ -2931,6 +2921,10 @@ class PaymentService
         }
 
         $invoice->forceFill($payload)->save();
+
+        // 退款成功后与取消路径（CheckoutService/OrderService）保持同一口径：
+        // 重算优惠券用量与状态，无有效已付账单时把用户券回落为可复用。方法本身幂等。
+        $this->couponService->syncInvoiceCouponUsage($invoice);
     }
 
     private function createBalanceLog(
@@ -3026,10 +3020,10 @@ class PaymentService
         }
     }
 
-    public function syncProjection(Payment $payment): Payment
+    public function syncProjection(Payment $payment): void
     {
         if (! SchemaMetadataCache::hasTable('payment_callbacks')) {
-            return $payment->fresh() ?? $payment;
+            return;
         }
 
         $callbackRaw = $this->resolvePaymentRawCallback($payment, true);
@@ -3056,7 +3050,7 @@ class PaymentService
             }
         }
 
-        return $payment->fresh(['callbacks']) ?? $payment;
+        // 投影同步为纯写操作，全部调用方均语句调用不消费返回值，不再 fresh 触发额外查询
     }
 
     private function recordPaymentCallback(

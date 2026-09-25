@@ -4,12 +4,9 @@ namespace App\Services\Finance;
 
 use App\Http\Resources\Finance\FinanceLedgerResource;
 use App\Models\User;
-use Illuminate\Support\Facades\Cache;
 
 class ClientFinanceQueryService
 {
-    private const SUMMARY_CACHE_TTL_SECONDS = 120; // 2分钟：余额统计需要一定实时性
-
     public function __construct(
         private readonly FinanceLedgerQueryService $financeLedgerQueryService,
     ) {}
@@ -39,16 +36,10 @@ class ClientFinanceQueryService
 
     public function balanceLogSummary(User $user, array $filters): array
     {
-        $cacheKey = 'client_finance:balance_summary:'.$user->id.':'.$this->cacheFingerprint($filters);
-
-        return Cache::remember($cacheKey, now()->addSeconds(self::SUMMARY_CACHE_TTL_SECONDS), function () use ($user, $filters) {
-            return $this->financeLedgerQueryService->summaryForClient($user, $this->normalizeLedgerFilters($filters));
-        });
-    }
-
-    private function cacheFingerprint(array $filters): string
-    {
-        return md5((string) json_encode($filters, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        // 直接透传内层 summary：其 30s 缓存命中时会重读用户余额（cash_balance 不入缓存载荷），
+        // 与 /finance/ledger/summary 保持同一口径。此前的 120s 外层整包缓存会把余额冻住，
+        // 造成充值后两分钟内两个汇总端点余额不一致。
+        return $this->financeLedgerQueryService->summaryForClient($user, $this->normalizeLedgerFilters($filters));
     }
 
     private function normalizeLedgerFilters(array $filters): array

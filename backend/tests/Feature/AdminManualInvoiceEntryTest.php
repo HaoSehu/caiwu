@@ -115,6 +115,64 @@ class AdminManualInvoiceEntryTest extends TestCase
         ], $this->context());
     }
 
+    /**
+     * 空交易号的补录没有业务唯一键：同内容重复提交（双击/网络重试）在短窗内必须被拦截，
+     * 只允许产生一笔已付账单。
+     */
+    public function test_duplicate_submission_without_trade_no_rejected_within_window(): void
+    {
+        $user = $this->makeUser();
+        $payload = [
+            'amount' => '66.00',
+            'payment_gateway' => 'alipay',
+            'remark' => '双击防护校验',
+        ];
+
+        $first = $this->service()->createManualInvoice($user, $payload, $this->context());
+        $this->assertSame('completed', $first['status']);
+
+        try {
+            $this->service()->createManualInvoice($user, $payload, $this->context());
+            $this->fail('Expected BusinessException for duplicated manual entry without trade_no');
+        } catch (BusinessException) {
+            $this->addToAssertionCount(1);
+        }
+
+        $this->assertSame(
+            1,
+            Invoice::query()
+                ->where('user_id', (int) $user->id)
+                ->where('type', InvoiceType::MANUAL)
+                ->count()
+        );
+    }
+
+    public function test_same_amount_with_different_remark_is_allowed_without_trade_no(): void
+    {
+        $user = $this->makeUser();
+
+        $this->service()->createManualInvoice($user, [
+            'amount' => '66.00',
+            'payment_gateway' => 'alipay',
+            'remark' => '第一笔内容',
+        ], $this->context());
+
+        $second = $this->service()->createManualInvoice($user, [
+            'amount' => '66.00',
+            'payment_gateway' => 'alipay',
+            'remark' => '第二笔不同备注',
+        ], $this->context());
+
+        $this->assertSame('completed', $second['status']);
+        $this->assertSame(
+            2,
+            Invoice::query()
+                ->where('user_id', (int) $user->id)
+                ->where('type', InvoiceType::MANUAL)
+                ->count()
+        );
+    }
+
     public function test_non_positive_amount_rejected(): void
     {
         $this->expectException(BusinessException::class);

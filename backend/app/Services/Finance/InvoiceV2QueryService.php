@@ -41,7 +41,7 @@ class InvoiceV2QueryService
     public function paginateClientInvoices(int $userId, array $filters): LengthAwarePaginator
     {
         $query = Invoice::query()
-            ->with($this->invoiceRelations())
+            ->with($this->invoiceListRelations())
             ->where('user_id', $userId)
             ->orderByDesc('id');
 
@@ -58,7 +58,7 @@ class InvoiceV2QueryService
     public function findClientInvoice(int $userId, int $id): Invoice
     {
         return Invoice::query()
-            ->with($this->invoiceRelations())
+            ->with($this->invoiceDetailRelations())
             ->where('user_id', $userId)
             ->findOrFail($id);
     }
@@ -76,13 +76,17 @@ class InvoiceV2QueryService
      */
     private function applyClientFilters(Builder $query, array $filters): void
     {
-        if (($filters['status'] ?? null) === InvoiceStatus::REFUNDED) {
+        // status 可能是 HTTP 查询串原样透传的字符串（直调 service 或未走
+        // Request 转型时），必须转 int 再与常量严格比较，否则「已退款」筛选
+        // 的支付退款分支永远走不到（D1A-02）。
+        $statusFilter = $filters['status'] ?? null;
+        if ($statusFilter !== null && $statusFilter !== '' && (int) $statusFilter === InvoiceStatus::REFUNDED) {
             $query->where(function (Builder $builder): void {
                 $builder->whereHas('payments', fn (Builder $paymentQuery): Builder => $paymentQuery->where('status', PaymentStatus::REFUNDED))
                     ->orWhere('status', InvoiceStatus::REFUNDED);
             });
-        } elseif (array_key_exists('status', $filters) && $filters['status'] !== null && $filters['status'] !== '') {
-            $query->where('status', (int) $filters['status']);
+        } elseif ($statusFilter !== null && $statusFilter !== '') {
+            $query->where('status', (int) $statusFilter);
         }
 
         $types = $this->normalizeInvoiceTypeFilters((string) ($filters['type'] ?? ''));
@@ -172,9 +176,24 @@ class InvoiceV2QueryService
     }
 
     /**
+     * 列表关系集：不加载仅详情使用的 items（buildInvoiceItems 只在详情路径调用）。
+     *
      * @return array<int, string>
      */
-    private function invoiceRelations(): array
+    private function invoiceListRelations(): array
+    {
+        return array_values(array_filter(
+            $this->invoiceDetailRelations(),
+            static fn (string $relation): bool => $relation !== 'items'
+        ));
+    }
+
+    /**
+     * 详情关系集。
+     *
+     * @return array<int, string>
+     */
+    private function invoiceDetailRelations(): array
     {
         $productColumns = implode(',', $this->productProjectionColumns());
 

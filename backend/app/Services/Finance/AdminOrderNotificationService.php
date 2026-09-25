@@ -7,7 +7,6 @@ namespace App\Services\Finance;
 use App\Constants\InvoiceStatus;
 use App\Constants\OrderStatus;
 use App\Constants\PaymentGatewayCode;
-use App\Jobs\SendAdminOrderNotificationJob;
 use App\Jobs\SendPaidInvoiceAdminNotificationJob;
 use App\Models\AdminUser;
 use App\Models\AutomationLog;
@@ -28,16 +27,6 @@ class AdminOrderNotificationService
         private NotificationService $notificationService,
         private ?ProductFullPathResolver $productFullPathResolver = null,
     ) {}
-
-    public function notifyOrderCreatedAfterResponse(Order $order): void
-    {
-        SendAdminOrderNotificationJob::dispatch((int) $order->id, 'created');
-    }
-
-    public function notifyOrderPaidAfterResponse(Order $order): void
-    {
-        SendAdminOrderNotificationJob::dispatch((int) $order->id, 'paid');
-    }
 
     /**
      * 入口：把管理员付款通知派发到队列。此前走 terminating 回调在同一 FPM worker 内

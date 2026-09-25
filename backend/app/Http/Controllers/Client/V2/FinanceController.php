@@ -14,7 +14,7 @@ class FinanceController extends Controller
     ) {}
 
     /**
-     * 浣欓鍙樺姩璁板綍
+     * 余额变动记录
      */
     public function balanceLogs(ListBalanceLogsRequest $request)
     {

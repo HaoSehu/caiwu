@@ -31,15 +31,13 @@ class ClientInvoicePaymentWorkflowService
     {
         $this->checkout->cancelExpiredUnpaidInvoicesForUser((int) $user->id, $expiredContext);
 
-        $row = Invoice::query()
-            ->where('user_id', $user->id)
+        // 未付口径统一走 InvoiceUnpaidAggregate；计数列沿用历史别名 unpaid 以保持响应契约
+        $row = InvoiceUnpaidAggregate::applyUnpaidSelects(
+            Invoice::query()->where('user_id', $user->id),
+            'unpaid'
+        )
             ->selectRaw('COUNT(*) AS total')
-            ->selectRaw('SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS unpaid', [InvoiceStatus::UNPAID])
             ->selectRaw('SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS paid', [InvoiceStatus::PAID])
-            ->selectRaw(
-                'COALESCE(SUM(CASE WHEN status = ? THEN amount - COALESCE(paid_amount,0) ELSE 0 END), 0) AS unpaid_amount',
-                [InvoiceStatus::UNPAID]
-            )
             ->first();
 
         return [

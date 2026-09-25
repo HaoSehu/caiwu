@@ -9,6 +9,7 @@ use App\Constants\InvoiceType;
 use App\Constants\OrderStatus;
 use App\Constants\OrderType;
 use App\Constants\PaymentStatus;
+use App\Constants\ProductType;
 use App\Exceptions\BusinessException;
 use App\Models\Invoice;
 use App\Models\Order;
@@ -131,6 +132,16 @@ class CheckoutService
                 ) {
                     $product = Product::query()->lockForUpdate()->findOrFail($productId);
                     throw_if($product->status !== 1, new BusinessException('产品已下架'));
+                    // 分组可见性复核：与前台报价（SiteProductQuoteService::saleProductQuery 的
+                    // withVisibleProductGroupPath）同口径。隐藏分组内的商品即使 status=1，
+                    // 持有效报价令牌（过期前签发或直接伪造）也不允许结账。
+                    throw_if(
+                        ! Product::query()
+                            ->whereKey($product->getKey())
+                            ->withVisibleProductGroupPath(ProductType::visibleValues())
+                            ->exists(),
+                        new BusinessException('商品所在分组已隐藏，暂不可购买')
+                    );
                     $product->loadMissing('supplier');
                     $this->assertPurchaseRequires($product, $userId);
 
@@ -380,20 +391,22 @@ class CheckoutService
     public function cancelExpiredUnpaidInvoicesForUser(int $userId, array $context = []): int
     {
         $threshold = now()->subSeconds(CheckoutSecurityService::paymentSessionTtlSeconds());
-        $invoices = Invoice::query()
+        $count = 0;
+
+        // 与订单侧清理（OrderService::cancelExpiredPendingOrdersForUser）一致按主键分批，
+        // 避免积压场景（调度停摆、支付窗口调整）一次性把全部过期账单装载进内存。
+        Invoice::query()
             ->where('user_id', $userId)
             ->where('status', InvoiceStatus::UNPAID)
             ->where('created_at', '<=', $threshold)
-            ->get();
-
-        $count = 0;
-
-        foreach ($invoices as $invoice) {
-            $updated = $this->cancelExpiredUnpaidInvoice($invoice, $context);
-            if ((int) $updated->status === InvoiceStatus::CANCELLED) {
-                $count++;
-            }
-        }
+            ->chunkById(100, function ($invoices) use (&$count, $context): void {
+                foreach ($invoices as $invoice) {
+                    $updated = $this->cancelExpiredUnpaidInvoice($invoice, $context);
+                    if ((int) $updated->status === InvoiceStatus::CANCELLED) {
+                        $count++;
+                    }
+                }
+            });
 
         return $count;
     }

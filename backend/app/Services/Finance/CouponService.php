@@ -105,7 +105,8 @@ class CouponService
         }
 
         $paginator = $this->buildAdminCouponQuery($filters)
-            ->with(['userCoupons:id,coupon_id,user_id,receive_type,last_used_at', 'couponCampaign:id,name'])
+            // D1B-03：列表页不再全量加载 userCoupons 关系，user_ids 由 resolveGrantUserIdsMapByCouponIds 按需单列批量获取
+            ->with(['couponCampaign:id,name'])
             ->withCount([
                 'orders',
                 'userCoupons',
@@ -121,10 +122,13 @@ class CouponService
 
         $items = collect($paginator->items());
         $productNameMap = $this->resolveProductNameMapFromCoupons($items);
+        $grantUserIdsMap = $this->resolveGrantUserIdsMapByCouponIds(
+            $items->map(fn (Coupon $coupon) => (int) $coupon->id)->all()
+        );
 
         $paginator->setCollection(
             $items
-                ->map(fn (Coupon $coupon) => $this->transformCouponForAdmin($coupon, $productNameMap))
+                ->map(fn (Coupon $coupon) => $this->transformCouponForAdmin($coupon, $productNameMap, $grantUserIdsMap))
                 ->values()
         );
 
@@ -174,12 +178,15 @@ class CouponService
             $lockedCoupon->save();
 
             if (($lockedCoupon->distribution_type ?? 'public') === 'private') {
-                $this->grantCouponToUsers(
-                    $lockedCoupon,
-                    $this->normalizeUserIds((array) ($payload['user_ids'] ?? [])),
-                    $context,
-                    true
-                );
+                // D5B-01：部分更新语义——未提交 user_ids 时保持现有发放对象不变，仅显式提交时才重新发放
+                if (array_key_exists('user_ids', $payload)) {
+                    $this->grantCouponToUsers(
+                        $lockedCoupon,
+                        $this->normalizeUserIds((array) ($payload['user_ids'] ?? [])),
+                        $context,
+                        true
+                    );
+                }
             }
 
             return $this->loadCouponForAdmin($lockedCoupon->fresh());
@@ -723,65 +730,6 @@ class CouponService
         $this->syncInvoiceCouponUsage($invoice);
     }
 
-    /**
-     * @deprecated Use syncInvoiceCouponUsage() with the related invoice instead.
-     */
-    public function releaseOrderCoupon(Order $order): void
-    {
-        $order->loadMissing('invoice');
-        if ($order->invoice instanceof Invoice) {
-            $this->syncInvoiceCouponUsage($order->invoice);
-        }
-    }
-
-    /**
-     * @deprecated Use syncInvoiceCouponUsage() with the related invoice instead.
-     */
-    public function syncOrderCouponUsage(Order $order): void
-    {
-        $order->loadMissing('invoice');
-        if ($order->invoice instanceof Invoice) {
-            $this->syncInvoiceCouponUsage($order->invoice);
-
-            return;
-        }
-
-        $couponId = (int) ($order->coupon_id ?? 0);
-        $userCouponId = (int) ($order->user_coupon_id ?? 0);
-        if ($couponId <= 0 || $userCouponId <= 0) {
-            return;
-        }
-
-        $usedCount = Order::query()
-            ->where('coupon_id', $couponId)
-            ->whereIn('status', [OrderStatus::PAID, OrderStatus::REFUNDED])
-            ->count();
-
-        Coupon::query()
-            ->where('id', $couponId)
-            ->update([
-                'used_count' => $usedCount,
-            ]);
-
-        $currentOrderUsed = in_array((int) ($order->status ?? 0), [OrderStatus::PAID, OrderStatus::REFUNDED], true);
-        UserCoupon::query()
-            ->where('id', $userCouponId)
-            ->update([
-                'last_used_at' => $currentOrderUsed ? ($order->paid_at ?? now()) : null,
-            ]);
-    }
-
-    /**
-     * @deprecated Use syncInvoiceCouponUsageAfterResponse() with the related invoice instead.
-     */
-    public function syncOrderCouponUsageAfterResponse(Order $order): void
-    {
-        $order->loadMissing('invoice');
-        if ($order->invoice instanceof Invoice) {
-            $this->syncInvoiceCouponUsageAfterResponse($order->invoice);
-        }
-    }
-
     public function syncInvoiceCouponUsageAfterResponse(Invoice $invoice): void
     {
         $invoiceId = (int) $invoice->id;
@@ -1233,7 +1181,7 @@ class CouponService
         return 'SELECT COUNT(*) FROM user_coupons WHERE user_coupons.coupon_id = coupons.id';
     }
 
-    private function transformCouponForAdmin(Coupon $coupon, array $productNameMap): array
+    private function transformCouponForAdmin(Coupon $coupon, array $productNameMap, ?array $grantUserIdsMap = null): array
     {
         $productIds = $this->normalizeProductIds((array) ($coupon->product_ids ?? []));
         $rawBillingCycles = (array) ($coupon->billing_cycles ?? []);
@@ -1279,11 +1227,9 @@ class CouponService
             'per_user_limit' => $coupon->per_user_limit ? (int) $coupon->per_user_limit : null,
             'used_count' => (int) ($coupon->used_count ?? 0),
             'recipient_count' => (int) ($coupon->user_coupons_count ?? 0),
-            'user_ids' => collect($coupon->userCoupons ?? [])
-                ->filter(fn (UserCoupon $userCoupon) => (string) ($userCoupon->receive_type ?? '') === 'grant')
-                ->map(fn (UserCoupon $userCoupon) => (int) $userCoupon->user_id)
-                ->values()
-                ->all(),
+            'user_ids' => $grantUserIdsMap !== null
+                ? ($grantUserIdsMap[(int) $coupon->id] ?? [])
+                : $this->resolveGrantUserIdsForCoupon($coupon),
             'remaining_stock' => $coupon->total_usage_limit
                 ? max((int) $coupon->total_usage_limit - (int) ($coupon->user_coupons_count ?? 0), 0)
                 : null,
@@ -1309,12 +1255,49 @@ class CouponService
         ];
     }
 
+    /**
+     * D1B-03：列表页按券批量单列获取「发放型」user_coupons 的 user_id，替代全量加载 userCoupons 关系。
+     *
+     * @param  array<int, int>  $couponIds
+     * @return array<int, array<int, int>> coupon_id => user_id 列表
+     */
+    private function resolveGrantUserIdsMapByCouponIds(array $couponIds): array
+    {
+        if ($couponIds === []) {
+            return [];
+        }
+
+        return UserCoupon::query()
+            ->whereIn('coupon_id', $couponIds)
+            ->where('receive_type', 'grant')
+            ->get(['coupon_id', 'user_id'])
+            ->groupBy('coupon_id')
+            ->map(fn ($rows) => $rows->map(fn ($row) => (int) $row->user_id)->values()->all())
+            ->all();
+    }
+
+    /**
+     * D1B-03：单券场景按需单列获取发放用户 id，避免全量加载 userCoupons 关系。
+     *
+     * @return array<int, int>
+     */
+    private function resolveGrantUserIdsForCoupon(Coupon $coupon): array
+    {
+        return UserCoupon::query()
+            ->where('coupon_id', (int) $coupon->id)
+            ->where('receive_type', 'grant')
+            ->pluck('user_id')
+            ->map(fn ($userId) => (int) $userId)
+            ->all();
+    }
+
     private function loadCouponForAdmin(?Coupon $coupon): Coupon
     {
         throw_if(! $coupon, new BusinessException('优惠券不存在或已删除'));
 
         return $coupon
-            ->loadMissing(['userCoupons:id,coupon_id,user_id,receive_type,last_used_at', 'couponCampaign:id,name'])
+            // D1B-03：详情不再全量加载 userCoupons 关系，user_ids 由 resolveGrantUserIdsForCoupon 按需单列获取
+            ->loadMissing(['couponCampaign:id,name'])
             ->loadCount([
                 'orders',
                 'userCoupons',
@@ -1997,7 +1980,11 @@ class CouponService
         $lockedFields = $coupon ? $this->resolveCouponLockedFields($coupon) : [];
         $lockedFieldSet = array_flip($lockedFields);
 
-        // For locked fields, fall back to existing coupon values when not provided
+        // D5B-01：更新路径（$coupon 非空）按「部分更新」语义处理——非必填字段未提交时保持原值，
+        // 用 array_key_exists 区分「未提交」与「显式提交空值」，禁止未提交字段静默写默认值；
+        // 创建路径（$coupon 为空）保持全量默认值语义。
+        $isUpdate = $coupon !== null;
+
         $discountType = trim((string) ($payload['discount_type'] ?? ''));
         if ($discountType === '' && isset($lockedFieldSet['discount_type']) && $coupon) {
             $discountType = (string) ($coupon->discount_type ?? '');
@@ -2024,18 +2011,22 @@ class CouponService
             $discountValue = round((float) ($coupon->discount_value ?? 0), 2);
         }
 
-        $minAmount = round((float) ($payload['min_amount'] ?? 0), 2);
-        if ($minAmount <= 0 && isset($lockedFieldSet['min_amount']) && $coupon) {
-            $minAmount = round((float) ($coupon->min_amount ?? 0), 2);
-        }
+        $minAmount = $isUpdate && ! array_key_exists('min_amount', $payload)
+            ? $coupon->min_amount
+            : round((float) ($payload['min_amount'] ?? 0), 2);
 
-        $maxDiscountAmount = $payload['max_discount_amount'] ?? null;
-        if (($maxDiscountAmount === null || $maxDiscountAmount === '') && isset($lockedFieldSet['max_discount_amount']) && $coupon) {
-            $maxDiscountAmount = $coupon->max_discount_amount;
-        }
+        $maxDiscountAmount = $isUpdate && ! array_key_exists('max_discount_amount', $payload)
+            ? $coupon->max_discount_amount
+            : ($payload['max_discount_amount'] ?? null);
 
-        $startsAt = $this->normalizeDateTimeValue($payload['starts_at'] ?? null);
-        $expiresAt = $this->normalizeDateTimeValue($payload['expires_at'] ?? null);
+        $startsAt = $isUpdate && ! array_key_exists('starts_at', $payload)
+            ? $coupon->starts_at
+            : $this->normalizeDateTimeValue($payload['starts_at'] ?? null);
+
+        $expiresAt = $isUpdate && ! array_key_exists('expires_at', $payload)
+            ? $coupon->expires_at
+            : $this->normalizeDateTimeValue($payload['expires_at'] ?? null);
+
         $providedCode = trim((string) ($payload['code'] ?? ''));
         $code = $providedCode !== '' ? $providedCode : ($coupon?->code ?: $this->generateInternalCouponCode());
 
@@ -2065,25 +2056,46 @@ class CouponService
             $maxDiscountAmount = null;
         }
 
-        $billingCycles = isset($lockedFieldSet['billing_cycles']) && $coupon && ! isset($payload['billing_cycles'])
+        $billingCycles = $isUpdate && ! array_key_exists('billing_cycles', $payload)
             ? $this->normalizeBillingCycles((array) ($coupon->billing_cycles ?? []))
             : $this->normalizeBillingCycles((array) ($payload['billing_cycles'] ?? []));
 
-        $productIds = isset($lockedFieldSet['product_ids']) && $coupon && ! isset($payload['product_ids'])
+        $productIds = $isUpdate && ! array_key_exists('product_ids', $payload)
             ? $this->normalizeProductIds((array) ($coupon->product_ids ?? []))
             : $this->normalizeProductIds((array) ($payload['product_ids'] ?? []));
 
-        $firstOrderOnly = isset($lockedFieldSet['first_order_only']) && $coupon && ! isset($payload['first_order_only'])
+        $firstOrderOnly = $isUpdate && ! array_key_exists('first_order_only', $payload)
             ? (bool) $coupon->first_order_only
             : (bool) ($payload['first_order_only'] ?? false);
 
+        $totalUsageLimit = $isUpdate && ! array_key_exists('total_usage_limit', $payload)
+            ? $coupon->total_usage_limit
+            : $this->normalizePositiveInteger($payload['total_usage_limit'] ?? null);
+
+        $perUserLimit = $isUpdate && ! array_key_exists('per_user_limit', $payload)
+            ? $coupon->per_user_limit
+            : $this->normalizePositiveInteger($payload['per_user_limit'] ?? null);
+
+        $status = $isUpdate && ! array_key_exists('status', $payload)
+            ? (int) $coupon->status
+            : (int) ($payload['status'] ?? CouponStatus::ACTIVE);
+
+        $sortOrder = $isUpdate && ! array_key_exists('sort_order', $payload)
+            ? (int) ($coupon->sort_order ?? 0)
+            : max((int) ($payload['sort_order'] ?? 0), 0);
+
         return [
-            'coupon_campaign_id' => isset($payload['coupon_campaign_id']) && (int) $payload['coupon_campaign_id'] > 0
-                ? (int) $payload['coupon_campaign_id']
-                : null,
+            // D5B-01：活动生成的券不允许经更新接口改绑或脱钩活动，更新路径始终保留原值
+            'coupon_campaign_id' => $isUpdate
+                ? $coupon->coupon_campaign_id
+                : (isset($payload['coupon_campaign_id']) && (int) $payload['coupon_campaign_id'] > 0
+                    ? (int) $payload['coupon_campaign_id']
+                    : null),
             'name' => trim((string) ($payload['name'] ?? '')),
             'code' => $code,
-            'description' => trim((string) ($payload['description'] ?? '')) ?: null,
+            'description' => $isUpdate && ! array_key_exists('description', $payload)
+                ? $coupon->description
+                : (trim((string) ($payload['description'] ?? '')) ?: null),
             'distribution_type' => $distributionType,
             'discount_scope' => $discountScope,
             'discount_type' => $discountType,
@@ -2093,13 +2105,15 @@ class CouponService
             'billing_cycles' => $billingCycles,
             'product_ids' => $productIds,
             'first_order_only' => $firstOrderOnly,
-            'total_usage_limit' => $this->normalizePositiveInteger($payload['total_usage_limit'] ?? null),
-            'per_user_limit' => $this->normalizePositiveInteger($payload['per_user_limit'] ?? null),
-            'status' => (int) ($payload['status'] ?? CouponStatus::ACTIVE),
-            'sort_order' => max((int) ($payload['sort_order'] ?? 0), 0),
+            'total_usage_limit' => $totalUsageLimit,
+            'per_user_limit' => $perUserLimit,
+            'status' => $status,
+            'sort_order' => $sortOrder,
             'starts_at' => $startsAt,
             'expires_at' => $expiresAt,
-            'remark' => trim((string) ($payload['remark'] ?? '')) ?: null,
+            'remark' => $isUpdate && ! array_key_exists('remark', $payload)
+                ? $coupon->remark
+                : (trim((string) ($payload['remark'] ?? '')) ?: null),
             'operator' => (string) ($context['operator'] ?? ''),
             'trace_id' => (string) ($context['trace_id'] ?? ''),
         ];

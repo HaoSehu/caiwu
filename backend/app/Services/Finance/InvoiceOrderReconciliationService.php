@@ -325,6 +325,8 @@ class InvoiceOrderReconciliationService
             $invoicePaid && $orderStatus === OrderStatus::REFUNDED => 'sync_invoice_status_from_refunded_order',
             $invoicePaid && $orderStatus === OrderStatus::CANCELLED => 'sync_invoice_status_from_cancelled_order',
             $invoicePaid => 'sync_order_status_from_paid_invoice',
+            // 退款/取消账单的资金已退回或已作废，不能按订单侧已付自动回填，只进人工审查
+            in_array((int) $pair->invoice_status, [InvoiceStatus::REFUNDED, InvoiceStatus::CANCELLED], true) => 'manual_review',
             default => 'sync_invoice_status_from_paid_order',
         };
 
@@ -449,6 +451,13 @@ class InvoiceOrderReconciliationService
             return 1;
         }
 
+        // 已退款/已取消账单不能按「订单已付」自动回填已支付：退款场景资金已退回用户，
+        // 回填会造成已退款账单复活且与退款记录双重入账；取消场景同理，一律只进人工审查报告。
+        if (in_array((int) $pair->invoice_status, [InvoiceStatus::REFUNDED, InvoiceStatus::CANCELLED], true)) {
+            return 0;
+        }
+
+        // 剩余组合为「订单已付 + 账单待支付」，按订单侧金额回填账单入账信息。
         DB::table('invoices')
             ->where('id', (int) $pair->invoice_id)
             ->update($this->filterColumns('invoices', [

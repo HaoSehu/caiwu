@@ -9,7 +9,8 @@ class ListUserInvoicesRequest extends AdminFormRequest
     public function rules(): array
     {
         return array_merge($this->paginationRules(), [
-            'status' => ['nullable', 'in:0,1,2,3,5'],
+            // 账单状态域已收敛为 0 待支付/1 已支付/4 已取消/5 已退款，历史值 2/3 已迁移，不再放行
+            'status' => ['nullable', 'in:0,1,5'],
             'type' => ['nullable', 'in:normal,renew,manual,upgrade'],
         ], $this->legacyPaginationRules());
     }
