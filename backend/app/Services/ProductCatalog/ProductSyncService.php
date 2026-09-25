@@ -368,9 +368,11 @@ class ProductSyncService
             fn (Product $product) => $forceAll || $this->productNeedsUpstreamFinalize($product, $syncConfigOptions)
         );
 
-        foreach ($eligibleProducts->groupBy(fn (Product $product) => (int) ($this->resolveProductSupplier($product)?->id ?? 0)) as $supplierProducts) {
+        $supplierMap = $this->resolveProductSupplierMap($eligibleProducts);
+
+        foreach ($eligibleProducts->groupBy(fn (Product $product) => (int) ($supplierMap[(int) $product->id]?->id ?? 0)) as $supplierProducts) {
             $firstProduct = $supplierProducts->first();
-            $supplier = $firstProduct instanceof Product ? $this->resolveProductSupplier($firstProduct) : null;
+            $supplier = $firstProduct instanceof Product ? ($supplierMap[(int) $firstProduct->id] ?? null) : null;
 
             if (! $supplier instanceof Supplier) {
                 foreach ($supplierProducts as $product) {
@@ -494,9 +496,11 @@ class ProductSyncService
 
         $hasChanges = false;
 
-        foreach ($products->groupBy(fn (Product $product) => (int) ($this->resolveProductSupplier($product)?->id ?? 0)) as $supplierProducts) {
+        $supplierMap = $this->resolveProductSupplierMap($products);
+
+        foreach ($products->groupBy(fn (Product $product) => (int) ($supplierMap[(int) $product->id]?->id ?? 0)) as $supplierProducts) {
             $firstProduct = $supplierProducts->first();
-            $supplier = $firstProduct instanceof Product ? $this->resolveProductSupplier($firstProduct) : null;
+            $supplier = $firstProduct instanceof Product ? ($supplierMap[(int) $firstProduct->id] ?? null) : null;
 
             if (! $supplier instanceof Supplier) {
                 $summary['skipped_products'] += $supplierProducts->count();
@@ -615,9 +619,11 @@ class ProductSyncService
 
         $hasChanges = false;
 
-        foreach ($products->groupBy(fn (Product $product) => (int) ($this->resolveProductSupplier($product)?->id ?? 0)) as $supplierProducts) {
+        $supplierMap = $this->resolveProductSupplierMap($products);
+
+        foreach ($products->groupBy(fn (Product $product) => (int) ($supplierMap[(int) $product->id]?->id ?? 0)) as $supplierProducts) {
             $firstProduct = $supplierProducts->first();
-            $supplier = $firstProduct instanceof Product ? $this->resolveProductSupplier($firstProduct) : null;
+            $supplier = $firstProduct instanceof Product ? ($supplierMap[(int) $firstProduct->id] ?? null) : null;
 
             if (! $supplier instanceof Supplier) {
                 $summary['skipped_products'] += $supplierProducts->count();
@@ -811,17 +817,20 @@ class ProductSyncService
         );
 
         $liveStockMap = [];
-        $upstreamProducts = $products->filter(function (Product $product) {
-            $supplier = $this->resolveProductSupplier($product);
+        // 同一集合的 filter、groupBy 与组首会连续三次解析供应商，先按商品 ID 记忆化一次
+        $supplierMap = $this->resolveProductSupplierMap($products);
+
+        $upstreamProducts = $products->filter(function (Product $product) use ($supplierMap) {
+            $supplier = $supplierMap[(int) $product->id] ?? null;
 
             return $this->resolveProductUpstreamProductId($product) > 0
                 && $supplier instanceof Supplier
                 && $this->providerResolver->resolveForSupplier($supplier)->supports(ProvidesConsoleCatalog::class);
         });
 
-        foreach ($upstreamProducts->groupBy(fn (Product $product) => (int) ($this->resolveProductSupplier($product)?->id ?? 0)) as $supplierProducts) {
+        foreach ($upstreamProducts->groupBy(fn (Product $product) => (int) ($supplierMap[(int) $product->id]?->id ?? 0)) as $supplierProducts) {
             $firstProduct = $supplierProducts->first();
-            $supplier = $firstProduct instanceof Product ? $this->resolveProductSupplier($firstProduct) : null;
+            $supplier = $firstProduct instanceof Product ? ($supplierMap[(int) $firstProduct->id] ?? null) : null;
 
             if (! $supplier instanceof Supplier) {
                 continue;
@@ -2024,6 +2033,26 @@ class ProductSyncService
         }
 
         return null;
+    }
+
+    /**
+     * 逐商品解析供应商并按商品 ID 记忆化：分组/过滤闭包与组首都复用同一份映射，
+     * 避免同一商品在单次任务里重复触发 Supplier::find 与供应商绑定查询（含解密）。
+     *
+     * @param  Collection<int, Product>  $products
+     * @return array<int, ?Supplier>
+     */
+    private function resolveProductSupplierMap(Collection $products): array
+    {
+        $supplierMap = [];
+        foreach ($products as $product) {
+            $productId = (int) $product->id;
+            if (! array_key_exists($productId, $supplierMap)) {
+                $supplierMap[$productId] = $this->resolveProductSupplier($product);
+            }
+        }
+
+        return $supplierMap;
     }
 
     private function resolveProductUpstreamProductId(Product $product): int

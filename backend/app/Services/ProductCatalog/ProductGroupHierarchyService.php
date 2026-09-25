@@ -131,6 +131,36 @@ class ProductGroupHierarchyService
         return $this->ensureFirstProductGroup($code);
     }
 
+    /**
+     * 只读检查：类型清单对应的一级分组是否在库中缺失。
+     * 供读接口做「首次缺失时初始化」判定，避免每次 GET 都执行 syncProductTypes
+     * 把人工设置的一级分组 name/is_visible/sort_order 回滚成类型清单值。
+     */
+    public function hasMissingFirstProductGroupsForTypes(): bool
+    {
+        if (! $this->tablesReady()) {
+            return false;
+        }
+
+        $codes = [];
+        foreach (ProductType::items() as $item) {
+            $code = trim((string) ($item['value'] ?? ''));
+            if ($code !== '') {
+                $codes[$code] = true;
+            }
+        }
+
+        if ($codes === []) {
+            return false;
+        }
+
+        // 按 code 去重计数：防止某个 code 存在重复行时把另一 code 的缺失掩盖掉
+        return FirstProductGroup::query()
+            ->whereIn('code', array_keys($codes))
+            ->distinct('code')
+            ->count('code') !== count($codes);
+    }
+
     private function ensureFirstProductGroup(string $code, ?array $item = null, int $sortOrder = 0): ?FirstProductGroup
     {
         if (! $this->tablesReady()) {

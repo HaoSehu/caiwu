@@ -7,7 +7,6 @@ namespace App\Services\Auth;
 use App\Exceptions\BusinessException;
 use App\Models\User;
 use App\Support\AccountIdentifier;
-use Illuminate\Support\Facades\Hash;
 
 class ClientLoginFlowService
 {
@@ -84,7 +83,9 @@ class ClientLoginFlowService
 
         $this->assertLoginNotLocked($account, $ip);
 
-        if (! Hash::check($password, (string) $user->password)) {
+        // 密码二次确认统一走 AuthService::verifyClientPassword（D5A-01）：
+        // 旧哈希（ZJMF ###md5）用户必须经 LegacyPasswordVerifier 校验，否则登录可用但改绑必失败。
+        if (! $this->authService->verifyClientPassword($password, (string) $user->password)) {
             $this->loginRiskControlService->recordFailedAttempt($account, $ip);
 
             throw new BusinessException('登录密码错误', 42200, 422);

@@ -791,7 +791,13 @@ class ProductDisplayNameResolver
         }
 
         $productId = (int) $product->id;
-        if ($productId > 0 && Product::optionalSelectColumns(['custom_display_name']) !== []) {
+        // 兜底单查仅在该列未被 select 进模型属性时才有意义：
+        // 列已在 $rawAttributes 中（含显式 NULL）时查询结果恒为 NULL，纯属浪费一次往返。
+        if (
+            $productId > 0
+            && ! array_key_exists('custom_display_name', $rawAttributes)
+            && Product::optionalSelectColumns(['custom_display_name']) !== []
+        ) {
             if (! array_key_exists($productId, $this->customDisplayNameCache)) {
                 $this->customDisplayNameCache[$productId] = trim((string) Product::query()
                     ->whereKey($productId)

@@ -208,7 +208,9 @@ class Product extends Model
         }
 
         try {
-            $display = (new ProductDisplayNameResolver)->resolveForProduct($this);
+            // 复用容器单例（AppServiceProvider 已注册）：new 会绕过进程内缓存，
+            // 每次读取都重建解析器并重新扫描整份实例规格目录。
+            $display = app(ProductDisplayNameResolver::class)->resolveForProduct($this);
 
             return trim((string) ($display['product_display_name'] ?? ''));
         } catch (\Throwable) {
@@ -420,39 +422,6 @@ class Product extends Model
         $columns = array_map('strtolower', DB::connection($connectionName)->getSchemaBuilder()->getColumnListing('products'));
 
         return self::$productColumnsCache[$connectionName] = $columns;
-    }
-
-    public static function buildIdcMirrorPayload(self $product, ?string $slug = null): array
-    {
-        $connection = $product->getConnection();
-        $schema = $connection->getSchemaBuilder();
-        $payload = [];
-
-        $encodeJson = static fn (array $value): string => json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        $setIfColumnExists = static function (string $column, mixed $value) use (&$payload, $schema): void {
-            if ($schema->hasColumn('products', $column)) {
-                $payload[$column] = $value;
-            }
-        };
-
-        $setIfColumnExists('product_type', (string) ($product->product_type ?: 'other'));
-        $setIfColumnExists('console_template', $product->console_template);
-        $setIfColumnExists('product_group_id', (int) ($product->product_group_id ?? 0) ?: null);
-        $setIfColumnExists('custom_display_name', $product->custom_display_name);
-        $setIfColumnExists('remark', $product->remark);
-        $setIfColumnExists('pricing', $encodeJson((array) ($product->pricing ?? [])));
-        $setIfColumnExists('setup_fee', number_format((float) ($product->setup_fee ?? 0), 2, '.', ''));
-        $setIfColumnExists('config_options', $encodeJson((array) ($product->config_options ?? [])));
-        $setIfColumnExists('purchase_requires', $encodeJson((array) ($product->purchase_requires ?? [])));
-        $setIfColumnExists('stock', (int) ($product->stock ?? -1));
-        $setIfColumnExists('status', (int) ($product->status ?? 1));
-        $setIfColumnExists('sort_order', (int) ($product->sort_order ?? 0));
-        $setIfColumnExists('auto_setup', (int) ($product->auto_setup ?? 0));
-        $setIfColumnExists('deleted_at', null);
-        $setIfColumnExists('created_at', $product->created_at ?? now());
-        $setIfColumnExists('updated_at', $product->updated_at ?? now());
-
-        return $payload;
     }
 
     /**

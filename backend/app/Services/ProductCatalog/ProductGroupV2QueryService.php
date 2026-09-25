@@ -261,9 +261,12 @@ class ProductGroupV2QueryService
             ->onSale()
             ->when(
                 $level === 2,
+                // 与 resolveVisibleThirdProductGroup / catalog 报价路径保持同一判定：
+                // 隐藏的三级分组下的在售商品不得通过 level=2 列表暴露，否则前台展示的商品点进去无法下单。
                 fn (Builder $query) => $query->whereIn('product_group_id', ThirdProductGroup::query()
                     ->select('id')
-                    ->where('second_product_group_id', $groupId)),
+                    ->where('second_product_group_id', $groupId)
+                    ->where('is_visible', 1)),
                 fn (Builder $query) => $query->inCurrentProductGroup($groupId),
             )
             ->with([

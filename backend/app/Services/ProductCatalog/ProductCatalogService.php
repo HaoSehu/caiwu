@@ -45,19 +45,9 @@ class ProductCatalogService
         return $this->categoryService->adminCategoryTree($productType);
     }
 
-    public function groupOptions(?string $productType = null): array
-    {
-        return $this->categoryService->categoryOptions($productType);
-    }
-
     public function categoryOptions(?string $productType = null): array
     {
         return $this->categoryService->categoryOptions($productType);
-    }
-
-    public function createGroup(array $data): array
-    {
-        return $this->categoryService->createCategory($data);
     }
 
     public function createCategory(array $data): array
@@ -65,19 +55,9 @@ class ProductCatalogService
         return $this->categoryService->createCategory($data);
     }
 
-    public function updateGroup(int $groupId, array $data): array
-    {
-        return $this->categoryService->updateCategory($groupId, $data);
-    }
-
     public function updateCategory(int $groupId, array $data): array
     {
         return $this->categoryService->updateCategory($groupId, $data);
-    }
-
-    public function deleteGroup(int $groupId, int $level): void
-    {
-        $this->categoryService->deleteCategory($groupId, $level);
     }
 
     public function deleteCategory(int $groupId, int $level): void
@@ -85,24 +65,9 @@ class ProductCatalogService
         $this->categoryService->deleteCategory($groupId, $level);
     }
 
-    public function reorderAdminGroups(int $level, ?int $parentId, array $groupIds): array
-    {
-        return $this->categoryService->reorderAdminCategories($level, $parentId, $groupIds);
-    }
-
     public function reorderAdminCategories(int $level, ?int $parentId, array $groupIds): array
     {
         return $this->categoryService->reorderAdminCategories($level, $parentId, $groupIds);
-    }
-
-    public function moveAdminGroup(
-        int $level,
-        int $groupId,
-        ?int $targetParentId,
-        ?int $referenceGroupId,
-        string $position = 'append',
-    ): array {
-        return $this->categoryService->moveAdminCategory($level, $groupId, $targetParentId, $referenceGroupId, $position);
     }
 
     public function moveAdminCategory(
@@ -261,17 +226,7 @@ class ProductCatalogService
         return $this->siteService->siteRootGroups($productType);
     }
 
-    public function siteRootCategories(?string $productType = null): array
-    {
-        return $this->siteService->siteRootGroups($productType);
-    }
-
     public function siteChildGroups(int $groupId): array
-    {
-        return $this->siteService->siteChildGroups($groupId);
-    }
-
-    public function siteChildCategories(int $groupId): array
     {
         return $this->siteService->siteChildGroups($groupId);
     }
@@ -281,19 +236,9 @@ class ProductCatalogService
         return $this->siteService->siteGroupCatalog($groupId);
     }
 
-    public function siteCategoryCatalog(int $groupId): array
-    {
-        return $this->siteService->siteGroupCatalog($groupId);
-    }
-
     public function siteProductsByGroupIds(array $groupIds): array
     {
         return $this->siteService->siteProductsByGroupIds($groupIds);
-    }
-
-    public function siteProductDetail(int $productId): ?array
-    {
-        return $this->siteService->siteProductDetail($productId);
     }
 
     public function siteCatalog(): Collection

@@ -552,7 +552,9 @@ class AuthService
             $displayName = (string) $lockedUser->display_name;
             $alertEnabled = (bool) ($lockedUser->password_change_alert ?? true);
 
-            if (! Hash::check($oldPassword, (string) $lockedUser->password)) {
+            // 原密码校验统一走 verifyPassword（含 LegacyPasswordVerifier 兼容旧哈希）：
+            // ZJMF 迁移用户（###md5）登录可用，改密也必须能用原密码通过（D5A-01）。
+            if (! $this->verifyPassword($oldPassword, (string) $lockedUser->password)) {
                 throw new BusinessException('原密码错误', 42200, 422);
             }
 
@@ -840,6 +842,16 @@ class AuthService
         }
 
         return Hash::check($plaintext, $stored);
+    }
+
+    /**
+     * 客户端敏感操作的登录密码二次确认入口（D5A-01）：
+     * 供改密、提现账户改绑等路径复用，保证旧哈希（ZJMF ###md5）用户
+     * 与登录路径一样经 LegacyPasswordVerifier 校验，而不是直接 Hash::check。
+     */
+    public function verifyClientPassword(string $plaintext, string $stored): bool
+    {
+        return $this->verifyPassword($plaintext, $stored);
     }
 
     private function finishClientLoginAfterResponse(

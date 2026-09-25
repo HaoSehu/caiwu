@@ -218,7 +218,13 @@ class ProductCategoryService
                 $group->delete();
             } else {
                 $group = $this->findThirdGroup($groupId);
-                throw_if($group->products()->exists(), new BusinessException('请先迁移或删除该分类下的商品'));
+                // 外键 ON DELETE RESTRICT 对软删商品同样生效，预检必须包含软删记录，
+                // 否则界面不可见的软删商品会让物理 DELETE 撞外键被兜底渲染成 500。
+                $hasProducts = Product::query()
+                    ->withTrashed()
+                    ->inCurrentProductGroup((int) $group->id)
+                    ->exists();
+                throw_if($hasProducts, new BusinessException('请先迁移或彻底删除该分类下的商品（含已删除商品）'));
                 $group->delete();
             }
         });
@@ -629,6 +635,9 @@ class ProductCategoryService
             ->findOrFail($id);
     }
 
+    // 分类显隐级联只同步分组可见性：前台可见性由「分组路径可见 × 商品自身 status」共同决定，
+    // 这里不得批量改写商品 status——否则取消隐藏会把管理员此前单独下架的商品静默重新上架，
+    // 且被覆盖的原始状态无处回滚。
     private function cascadeVisibility(int $level, int $groupId, int $isVisible): void
     {
         if ($level === 1) {
@@ -636,19 +645,15 @@ class ProductCategoryService
             ThirdProductGroup::query()
                 ->whereIn('second_product_group_id', SecondProductGroup::query()->select('id')->where('first_product_group_id', $groupId))
                 ->update(['is_visible' => $isVisible]);
-            Product::query()->inFirstProductGroup($groupId)->update(['status' => $isVisible]);
 
             return;
         }
 
         if ($level === 2) {
             ThirdProductGroup::query()->where('second_product_group_id', $groupId)->update(['is_visible' => $isVisible]);
-            Product::query()->inSecondProductGroup($groupId)->update(['status' => $isVisible]);
 
             return;
         }
-
-        Product::query()->inCurrentProductGroup($groupId)->update(['status' => $isVisible]);
     }
 
     private function resequenceGroupIds(int $level, array $sortMap): void

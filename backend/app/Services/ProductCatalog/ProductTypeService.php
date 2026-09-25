@@ -22,7 +22,12 @@ class ProductTypeService
 
     public function list(): array
     {
-        $this->hierarchyService->syncProductTypes();
+        // 读接口不承担全量同步写库副作用：syncProductTypes 会用类型清单覆盖一级分组的
+        // name/sort_order/is_visible（不在清单里的分组还被置为不可见），导致管理端在分组页
+        // 做的人工设置被下一次 GET 回滚。这里只在一级分组缺失（首次初始化场景）时才同步。
+        if ($this->hierarchyService->hasMissingFirstProductGroupsForTypes()) {
+            $this->hierarchyService->syncProductTypes();
+        }
 
         $items = ProductType::items();
         $values = array_values(array_map(fn (array $item): string => (string) $item['value'], $items));

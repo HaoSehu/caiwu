@@ -24,6 +24,7 @@ use App\Support\ProductProvisionHostname;
 use App\Support\SchemaMetadataCache;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 
 class ProductAdminService
@@ -289,6 +290,16 @@ class ProductAdminService
             $prepared = $this->prepareProductPayload(array_replace($data, [
                 'id' => (int) $product->id,
             ]));
+
+            // purchase_requires 承载 upstream_default_config / upstream_split 等客户端无法提交的同步态键：
+            // 请求整体未提交时保留原值；提交时白名单键以本次归一化结果为准、其余键沿用原值，
+            // 避免任意一次 PUT 静默清空开通默认配置与拆分变体来源。
+            $prepared['base']['purchase_requires'] = $this->mergePurchaseRequiresForUpdate(
+                $product,
+                $prepared['base']['purchase_requires'],
+                array_key_exists('purchase_requires', $data)
+            );
+
             Product::withoutEvents(fn () => $product->update($prepared['base']));
             $product->refresh()->loadMissing('supplier');
             $this->upstreamBindingWriter()->syncProductBinding(
@@ -484,6 +495,9 @@ class ProductAdminService
         ];
 
         DB::transaction(function () use ($productIds, $products, &$result): void {
+            // 变体循环前一次性构建既有拆分商品索引，避免每个 variant 全量拉一次三级分组商品
+            $splitCandidateIndex = $this->buildSplitCandidateIndex($products);
+
             foreach ($productIds as $productId) {
                 /** @var Product $source */
                 $source = $products->get($productId);
@@ -508,7 +522,7 @@ class ProductAdminService
                     $existing = $sourceVariantKey !== ''
                         && $sourceVariantKey === (string) ($variant['variant_key'] ?? '')
                         ? $source
-                        : $this->findExistingSplitProduct($source, (string) $variant['variant_key']);
+                        : $this->findExistingSplitProduct($source, (string) $variant['variant_key'], $splitCandidateIndex);
 
                     if ($existing instanceof Product) {
                         Product::withoutEvents(fn () => $existing->forceFill($payload)->save());
@@ -578,6 +592,9 @@ class ProductAdminService
         $previewCount = 0;
         $skippedCount = 0;
 
+        // 变体循环前一次性构建既有拆分商品索引，避免每个 variant 全量拉一次三级分组商品
+        $splitCandidateIndex = $this->buildSplitCandidateIndex($products);
+
         foreach ($productIds as $productId) {
             /** @var Product $source */
             $source = $products->get($productId);
@@ -605,7 +622,7 @@ class ProductAdminService
                 $existing = $sourceVariantKey !== ''
                     && $sourceVariantKey === (string) ($variant['variant_key'] ?? '')
                     ? $source
-                    : $this->findExistingSplitProduct($source, (string) $variant['variant_key']);
+                    : $this->findExistingSplitProduct($source, (string) $variant['variant_key'], $splitCandidateIndex);
                 $previewVariants[] = [
                     'product_id' => $existing instanceof Product ? (int) $existing->id : null,
                     'display_name' => (string) ($this->resolveProductDisplayNameResolver()->resolveForProduct(
@@ -736,6 +753,9 @@ class ProductAdminService
     }
 
     /**
+     * 显示名由解析器在 PHP 侧拼装（含跨字段拼接与数字归一化），无法等价下推到 SQL，
+     * 因此这里按 id 分批载入避免整表（含 JSON 列）一次性驻留内存；匹配语义保持不变。
+     *
      * @return array<int, int>
      */
     private function resolveDisplayNameMatchedProductIds(string $keyword, string $lifecycleStatus = 'active'): array
@@ -745,18 +765,27 @@ class ProductAdminService
             return [];
         }
 
-        return $this->applyLifecycleScope(Product::query(), $lifecycleStatus)
+        $matchedProductIds = [];
+        $this->applyLifecycleScope(Product::query(), $lifecycleStatus)
             ->select(['id', 'product_type', 'purchase_requires', 'config_options'])
-            ->get()
-            ->filter(function (Product $product) use ($keyword): bool {
-                $displayName = trim((string) ($this->resolveProductDisplayNameResolver()->resolveForProduct($product)['product_display_name'] ?? ''));
+            ->orderBy('id')
+            ->chunkById(500, function (Collection $products) use ($keyword, &$matchedProductIds): void {
+                $products
+                    ->filter(fn (Product $product): bool => $this->productDisplayNameContains($product, $keyword))
+                    ->pluck('id')
+                    ->each(static function ($productId) use (&$matchedProductIds): void {
+                        $matchedProductIds[] = (int) $productId;
+                    });
+            });
 
-                return $displayName !== '' && mb_stripos($displayName, $keyword) !== false;
-            })
-            ->pluck('id')
-            ->map(fn ($id) => (int) $id)
-            ->values()
-            ->all();
+        return $matchedProductIds;
+    }
+
+    private function productDisplayNameContains(Product $product, string $keyword): bool
+    {
+        $displayName = trim((string) ($this->resolveProductDisplayNameResolver()->resolveForProduct($product)['product_display_name'] ?? ''));
+
+        return $displayName !== '' && mb_stripos($displayName, $keyword) !== false;
     }
 
     private function applyLifecycleScope(Builder $query, string $lifecycleStatus): Builder
@@ -886,24 +915,58 @@ class ProductAdminService
         ];
     }
 
-    private function findExistingSplitProduct(Product $source, string $variantKey): ?Product
+    /**
+     * 一次性把涉及的三级分组下的候选商品按「分组 × 源商品 × 变体键」建索引，
+     * 供变体循环内查找既有拆分商品复用，避免每个 variant 全量拉一次分组商品再在 PHP 里过滤 JSON。
+     *
+     * @param  Collection<int, Product>  $sources
+     * @return array<int, array<int, array<string, Product>>>
+     */
+    private function buildSplitCandidateIndex(Collection $sources): array
     {
-        $candidates = Product::query()
-            ->inCurrentProductGroup((int) ($source->product_group_id ?? 0))
-            ->where('id', '!=', (int) $source->id)
-            ->get();
+        $groupIds = $sources
+            ->map(fn (Product $product): int => (int) ($product->product_group_id ?? 0))
+            ->filter(fn (int $groupId): bool => $groupId > 0)
+            ->unique()
+            ->values()
+            ->all();
 
-        foreach ($candidates as $candidate) {
-            $split = (array) (($candidate->purchase_requires ?? [])['upstream_split'] ?? []);
-            if (
-                (int) ($split['source_product_id'] ?? 0) === (int) $source->id
-                && (string) ($split['variant_key'] ?? '') === $variantKey
-            ) {
-                return $candidate;
-            }
+        if ($groupIds === []) {
+            return [];
         }
 
-        return null;
+        $index = [];
+        Product::query()
+            ->whereIn('product_group_id', $groupIds)
+            ->select(['id', 'product_group_id', 'purchase_requires'])
+            ->get()
+            ->each(function (Product $candidate) use (&$index): void {
+                $split = (array) (($candidate->purchase_requires ?? [])['upstream_split'] ?? []);
+                $sourceProductId = (int) ($split['source_product_id'] ?? 0);
+                $variantKey = (string) ($split['variant_key'] ?? '');
+                if ($sourceProductId <= 0 || $variantKey === '') {
+                    return;
+                }
+
+                $groupId = (int) ($candidate->product_group_id ?? 0);
+                $index[$groupId][$sourceProductId][$variantKey] = $candidate;
+            });
+
+        return $index;
+    }
+
+    /**
+     * 从预构建的候选索引中查找源商品对应变体的既有拆分商品（排除源商品自身）。
+     *
+     * @param  array<int, array<int, array<string, Product>>>  $candidateIndex
+     */
+    private function findExistingSplitProduct(Product $source, string $variantKey, array $candidateIndex): ?Product
+    {
+        $sourceId = (int) $source->id;
+        $groupId = (int) ($source->product_group_id ?? 0);
+        $candidate = $candidateIndex[$groupId][$sourceId][$variantKey] ?? null;
+
+        return $candidate instanceof Product && (int) $candidate->id !== $sourceId ? $candidate : null;
     }
 
     private function syncSplitProductBinding(Product $source, Product $target): void
@@ -1693,6 +1756,28 @@ class ProductAdminService
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    /**
+     * 更新商品时合并 purchase_requires：请求未整体提交该键时原样保留旧值；
+     * 提交时白名单键以本次归一化结果为准，require_verification/require_phone/provision_hostname
+     * 之外的键（upstream_default_config / upstream_split 等同步态键）继续沿用旧值。
+     */
+    private function mergePurchaseRequiresForUpdate(Product $product, array $normalized, bool $submitted): array
+    {
+        $original = is_array($product->purchase_requires ?? null) ? $product->purchase_requires : [];
+
+        if (! $submitted) {
+            return $original;
+        }
+
+        $nonWhitelistKeys = array_diff_key($original, array_fill_keys([
+            'require_verification',
+            'require_phone',
+            'provision_hostname',
+        ], true));
+
+        return array_replace($nonWhitelistKeys, $normalized);
     }
 
     private function normalizePurchaseRequires(mixed $requires): array
