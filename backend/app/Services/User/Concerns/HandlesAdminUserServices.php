@@ -33,6 +33,11 @@ use Illuminate\Support\Facades\Log;
 trait HandlesAdminUserServices
 {
     /**
+     * 请求内复用的绑定解析器实例（trait 属性，宿主类未定义同名属性）。
+     */
+    private ?PluginBindingResolver $bindingResolver = null;
+
+    /**
      * 用户服务列表
      */
     public function services(User $user, array $filters, int $perPage = 20)
@@ -99,7 +104,7 @@ trait HandlesAdminUserServices
             ->where('user_id', $user->id)
             ->findOrFail($serviceId);
 
-        $currentProvisionData = $this->serviceProvisionData($service);
+        $currentProvisionData = $this->bindingResolver()->serviceProvisionData($service);
         $previousCustomHostname = ServiceHostname::custom($currentProvisionData);
         $previousAmount = round((float) ($service->amount ?? 0), 2);
         $previousSupplierId = $this->resolveServiceSupplierId($service, $currentProvisionData);
@@ -420,7 +425,7 @@ trait HandlesAdminUserServices
                     }
                 }
 
-                $latestProvisionData = $this->serviceProvisionData($service);
+                $latestProvisionData = $this->bindingResolver()->serviceProvisionData($service);
                 $this->operationLogService->writeServiceConsoleLog($service, 'service.console.meta.update', [
                     'category' => 'service',
                     'summary' => '管理员更新实例业务信息',
@@ -792,7 +797,7 @@ trait HandlesAdminUserServices
             app(ServiceUpstreamBindingWriter::class)->syncServiceState(
                 $service,
                 $service->product,
-                $this->serviceProvisionData($service, includeSecrets: true)
+                $this->bindingResolver()->serviceProvisionData($service, includeSecrets: true)
             );
         }
 
@@ -861,7 +866,7 @@ trait HandlesAdminUserServices
         $product = $service->product;
         throw_if(! $product, new BusinessException('服务未关联商品，暂不支持重新提交上游开通'));
 
-        $currentProvisionData = $this->serviceProvisionData($service);
+        $currentProvisionData = $this->bindingResolver()->serviceProvisionData($service);
         $provisionError = trim((string) ($currentProvisionData['provision_error'] ?? ''));
 
         throw_if($provisionError === '', new BusinessException('当前服务不存在上游开通失败记录，无需重新提交'));
@@ -1151,15 +1156,8 @@ trait HandlesAdminUserServices
 
     private function bindingResolver(): PluginBindingResolver
     {
-        return app(PluginBindingResolver::class);
-    }
-
-    private function serviceProvisionData(Service $service, bool $includeSecrets = false): array
-    {
-        $legacy = is_array($service->provision_data ?? null) ? $service->provision_data : [];
-        $projection = $this->bindingResolver()->serviceProvisionProjection($service, $includeSecrets);
-
-        return $projection === [] ? $legacy : array_replace($legacy, $projection);
+        // 请求内复用同一实例：绑定解析可命中批量预载写入的行级缓存
+        return $this->bindingResolver ??= app(PluginBindingResolver::class);
     }
 
     private function resolveManualServiceExpiresAt(mixed $expiresAt, string $billingCycle, int $status): ?Carbon

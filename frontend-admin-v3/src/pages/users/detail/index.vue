@@ -23,15 +23,7 @@
     <div class="user-detail-stats">
       <t-card v-for="item in statCards" :key="item.key" :bordered="false">
         <div class="user-stat-card">
-          <div class="user-stat-card__label">
-            <span>{{ item.label }}</span>
-            <edit-icon
-              v-if="item.key === 'cash_balance' && canRecharge"
-              class="balance-action-icon"
-              :class="{ 'is-disabled': !user.id }"
-              @click="user.id && openRechargeDialog()"
-            />
-          </div>
+          <div class="user-stat-card__label">{{ item.label }}</div>
           <strong :class="`is-${item.tone}`">{{ item.value }}</strong>
         </div>
       </t-card>
@@ -543,124 +535,182 @@
       </t-form>
     </t-dialog>
 
-    <t-drawer v-model:visible="serviceDrawer.visible" size="620px" header="服务控制台" @close="closeServiceDrawer">
-      <t-loading :loading="serviceDrawer.loading" size="small">
-        <t-descriptions :column="1" bordered>
-          <t-descriptions-item label="服务名称">{{
-            fieldValue(serviceDrawer.detail.name || serviceDrawer.detail.domain)
-          }}</t-descriptions-item>
-          <t-descriptions-item label="状态">{{ serviceStatusLabel(serviceDrawer.detail.status) }}</t-descriptions-item>
-          <t-descriptions-item label="计费周期">{{
-            fieldValue(serviceDrawer.detail.billing_cycle_label)
-          }}</t-descriptions-item>
-          <t-descriptions-item label="金额">{{ formatMoney(serviceDrawer.detail.amount) }}</t-descriptions-item>
-          <t-descriptions-item label="账单号">{{
-            fieldValue(serviceDrawer.detail.invoice?.invoice_no || serviceDrawer.detail.order?.invoice_no)
-          }}</t-descriptions-item>
-          <t-descriptions-item label="上游"
-            >{{ fieldValue(serviceDrawer.detail.upstream?.provider_key)
-            }}<template v-if="serviceDrawer.detail.upstream?.host_id">
-              / host #{{ serviceDrawer.detail.upstream.host_id }}</template
-            ></t-descriptions-item
-          >
-          <t-descriptions-item label="公网 IP">{{
-            fieldValue(serviceDrawer.detail.connection?.dedicated_ip || serviceDrawer.detail.upstream?.dedicated_ip)
-          }}</t-descriptions-item>
-          <t-descriptions-item label="登录账号">{{
-            fieldValue(serviceDrawer.detail.connection?.username)
-          }}</t-descriptions-item>
-          <t-descriptions-item label="登录端口">{{
-            fieldValue(serviceDrawer.detail.connection?.port)
-          }}</t-descriptions-item>
-          <t-descriptions-item label="运行状态">
-            <template v-if="serviceDrawer.detail.runtime?.power_label || serviceDrawer.detail.runtime?.description">
-              {{ fieldValue(serviceDrawer.detail.runtime?.power_label || serviceDrawer.detail.runtime?.description) }}
-            </template>
-            <t-tooltip v-else content="上游暂未返回实例的电源状态">
-              <t-tag theme="warning" variant="light">未获取到运行状态</t-tag>
-            </t-tooltip>
-          </t-descriptions-item>
-          <t-descriptions-item label="到期时间">{{
-            formatDateTime(serviceDrawer.detail.expires_at)
-          }}</t-descriptions-item>
-        </t-descriptions>
-        <div v-if="serviceDrawer.detail.upstream?.remote_error" class="drawer-alert">
-          <t-alert theme="warning" :message="serviceDrawer.detail.upstream.remote_error" />
-        </div>
-        <div v-if="serviceSpecs.length" class="spec-grid">
-          <div v-for="item in serviceSpecs" :key="item.label" class="spec-chip">
-            <span>{{ item.label }}</span>
-            <strong>{{ item.value }}</strong>
-          </div>
-        </div>
-        <div class="drawer-actions">
-          <t-button
-            v-if="canPowerOn"
-            theme="success"
-            size="small"
-            :loading="serviceDrawer.actionLoading === 'power:on'"
-            @click="handleServicePower('on')"
-            >开机</t-button
-          >
-          <t-button
-            v-if="canPowerOff"
-            theme="danger"
-            variant="outline"
-            size="small"
-            :loading="serviceDrawer.actionLoading === 'power:off'"
-            @click="handleServicePower('off')"
-            >关机</t-button
-          >
-          <t-button
-            v-if="canReboot"
-            theme="warning"
-            variant="outline"
-            size="small"
-            :loading="serviceDrawer.actionLoading === 'power:reboot'"
-            @click="handleServicePower('reboot')"
-            >重启</t-button
-          >
-          <t-button
-            theme="default"
-            size="small"
-            :loading="serviceDrawer.actionLoading === 'remote-status'"
-            @click="handleRefreshConsoleRemoteStatus"
-            >刷新远程</t-button
-          >
-          <t-button
-            theme="default"
-            size="small"
-            :disabled="!serviceActions.password_reset"
-            :loading="serviceDrawer.actionLoading === 'reset-password'"
-            @click="openResetPasswordDialog"
-            >重置密码</t-button
-          >
-          <t-button theme="default" size="small" @click="openServiceUpstreamDialog">上游绑定</t-button>
-          <t-button theme="default" size="small" @click="openServicePricingDialog">调价</t-button>
-          <t-button theme="default" size="small" @click="openServiceNameDialog">改名称</t-button>
-          <t-button
-            theme="default"
-            size="small"
-            :disabled="!serviceActions.manual_provision"
-            :loading="serviceDrawer.actionLoading === 'manual-provision'"
-            @click="openManualProvisionDialog"
-            >手动开通</t-button
-          >
-          <t-button
-            v-if="canRefundService"
-            theme="danger"
-            size="small"
-            :loading="serviceDrawer.actionLoading === 'refund'"
-            @click="openServiceRefundDialog"
-            >退款</t-button
-          >
-          <t-tag v-else-if="isServiceRefunded" theme="danger" variant="light">已退款</t-tag>
-        </div>
-        <div class="drawer-close-actions">
-          <t-button variant="outline" @click="closeServiceDrawer">
+    <t-drawer
+      v-model:visible="serviceDrawer.visible"
+      size="680px"
+      :footer="false"
+      @close="closeServiceDrawer"
+    >
+      <template #header>
+        <div class="drawer-header">
+          <t-button variant="text" size="small" class="drawer-header__back" @click="closeServiceDrawer">
             <template #icon><chevron-left-icon /></template>
             返回
           </t-button>
+          <span class="drawer-header__title">服务控制台</span>
+        </div>
+      </template>
+      <t-loading :loading="serviceDrawer.loading" size="small">
+        <div class="service-console">
+          <section class="console-hero">
+            <div class="console-hero__main">
+              <strong>{{ serviceConsoleTitle }}</strong>
+              <p v-if="serviceConsolePath">{{ serviceConsolePath }}</p>
+            </div>
+            <div class="console-hero__tags">
+              <t-tag :theme="serviceStatusTheme(serviceDrawer.detail.status)" variant="light">
+                {{ serviceStatusLabel(serviceDrawer.detail.status) }}
+              </t-tag>
+              <t-tag v-if="serviceRuntimeLabel" :theme="serviceRuntimeTheme" variant="light">
+                {{ serviceRuntimeLabel }}
+              </t-tag>
+              <t-tooltip v-else content="上游暂未返回实例的电源状态">
+                <t-tag theme="warning" variant="light">运行状态未知</t-tag>
+              </t-tooltip>
+            </div>
+          </section>
+
+          <div class="console-metrics">
+            <div class="console-metric">
+              <span>金额</span>
+              <strong>{{ formatMoney(serviceDrawer.detail.amount) }}</strong>
+            </div>
+            <div class="console-metric">
+              <span>计费周期</span>
+              <strong>{{ fieldValue(serviceDrawer.detail.billing_cycle_label) }}</strong>
+            </div>
+            <div class="console-metric">
+              <span>到期时间</span>
+              <strong>{{ formatDateTime(serviceDrawer.detail.expires_at) }}</strong>
+            </div>
+          </div>
+
+          <div v-if="serviceDrawer.detail.upstream?.remote_error" class="drawer-alert">
+            <t-alert theme="warning" :message="serviceDrawer.detail.upstream.remote_error" />
+          </div>
+
+          <section class="console-section">
+            <h4 class="console-section__title">实例操作</h4>
+            <div class="console-actions">
+              <t-button
+                v-if="canPowerOn"
+                theme="success"
+                size="small"
+                :loading="serviceDrawer.actionLoading === 'power:on'"
+                @click="handleServicePower('on')"
+                >开机</t-button
+              >
+              <t-button
+                v-if="canPowerOff"
+                theme="danger"
+                variant="outline"
+                size="small"
+                :loading="serviceDrawer.actionLoading === 'power:off'"
+                @click="handleServicePower('off')"
+                >关机</t-button
+              >
+              <t-button
+                v-if="canReboot"
+                theme="warning"
+                variant="outline"
+                size="small"
+                :loading="serviceDrawer.actionLoading === 'power:reboot'"
+                @click="handleServicePower('reboot')"
+                >重启</t-button
+              >
+              <t-button
+                theme="default"
+                size="small"
+                :loading="serviceDrawer.actionLoading === 'remote-status'"
+                @click="handleRefreshConsoleRemoteStatus"
+                >刷新远程</t-button
+              >
+              <t-button
+                theme="default"
+                size="small"
+                :disabled="!serviceActions.password_reset"
+                :loading="serviceDrawer.actionLoading === 'reset-password'"
+                @click="openResetPasswordDialog"
+                >重置密码</t-button
+              >
+              <t-button theme="default" size="small" @click="openServiceUpstreamDialog">上游绑定</t-button>
+              <t-button theme="default" size="small" @click="openServicePricingDialog">调价</t-button>
+              <t-button theme="default" size="small" @click="openServiceNameDialog">改名称</t-button>
+              <t-button
+                theme="default"
+                size="small"
+                :disabled="!serviceActions.manual_provision"
+                :loading="serviceDrawer.actionLoading === 'manual-provision'"
+                @click="openManualProvisionDialog"
+                >手动开通</t-button
+              >
+              <t-button
+                v-if="canRefundService"
+                theme="danger"
+                size="small"
+                :loading="serviceDrawer.actionLoading === 'refund'"
+                @click="openServiceRefundDialog"
+                >退款</t-button
+              >
+              <t-tag v-else-if="isServiceRefunded" theme="danger" variant="light">已退款</t-tag>
+            </div>
+          </section>
+
+          <section class="console-section">
+            <h4 class="console-section__title">连接信息</h4>
+            <div class="console-field-grid">
+              <div class="console-field">
+                <span>公网 IP</span>
+                <strong>{{
+                  fieldValue(
+                    serviceDrawer.detail.connection?.dedicated_ip || serviceDrawer.detail.upstream?.dedicated_ip,
+                  )
+                }}</strong>
+              </div>
+              <div class="console-field">
+                <span>登录账号</span>
+                <strong>{{ fieldValue(serviceDrawer.detail.connection?.username) }}</strong>
+              </div>
+              <div class="console-field">
+                <span>登录端口</span>
+                <strong>{{ serviceConnectionPort }}</strong>
+              </div>
+              <div v-if="serviceDrawer.detail.connection?.internal_ip" class="console-field">
+                <span>内网 IP</span>
+                <strong>{{ fieldValue(serviceDrawer.detail.connection.internal_ip) }}</strong>
+              </div>
+            </div>
+          </section>
+
+          <section v-if="serviceSpecs.length" class="console-section">
+            <h4 class="console-section__title">规格参数</h4>
+            <div class="console-field-grid console-field-grid--compact">
+              <div v-for="item in serviceSpecs" :key="item.label" class="console-field console-field--plain">
+                <span>{{ item.label }}</span>
+                <strong>{{ item.value }}</strong>
+              </div>
+            </div>
+          </section>
+
+          <section class="console-section">
+            <h4 class="console-section__title">订单与上游</h4>
+            <div class="console-field-grid">
+              <div class="console-field">
+                <span>账单号</span>
+                <strong>{{
+                  fieldValue(serviceDrawer.detail.invoice?.invoice_no || serviceDrawer.detail.order?.invoice_no)
+                }}</strong>
+              </div>
+              <div class="console-field">
+                <span>上游</span>
+                <strong>{{ serviceUpstreamText }}</strong>
+              </div>
+              <div class="console-field">
+                <span>创建时间</span>
+                <strong>{{ formatDateTime(serviceDrawer.detail.created_at) }}</strong>
+              </div>
+            </div>
+          </section>
         </div>
       </t-loading>
     </t-drawer>
@@ -1003,7 +1053,7 @@ import {
   toSelectOptions,
   toTagTypeMap,
 } from '@shared/statusConfig';
-import { ChevronLeftIcon, EditIcon, SearchIcon } from 'tdesign-icons-vue-next';
+import { ChevronLeftIcon, SearchIcon } from 'tdesign-icons-vue-next';
 import type { FormInstanceFunctions, FormRule, PageInfo, PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
@@ -1333,12 +1383,47 @@ const recentReferrals = computed(() =>
 const addServiceBillingOptions = computed(() => resolveBillingOptions(addServiceProductDetail.value));
 const addServiceOsFlatOptions = computed(() => flattenOptionTree(addServiceOsOptions.value));
 const serviceActions = computed(() => serviceDrawer.detail.actions || {});
+// 快照元数据（_schema_*、商品分组路径）对管理员无展示价值，只保留真实规格字段
+const serviceSpecHiddenLabels = ['product_full_path', 'product_path_segments'];
 const serviceSpecs = computed(() =>
-  (Array.isArray(serviceDrawer.detail.specs) ? serviceDrawer.detail.specs : []).map((item: Row) => ({
-    label: item.label || item.name || '-',
-    value: item.value || '-',
-  })),
+  (Array.isArray(serviceDrawer.detail.specs) ? serviceDrawer.detail.specs : [])
+    .filter((item: Row) => {
+      const label = String(item.label || item.name || item.key || '');
+      return (
+        label !== '' &&
+        !label.startsWith('_') &&
+        !label.endsWith('_product_group_name') &&
+        !serviceSpecHiddenLabels.includes(label)
+      );
+    })
+    .map((item: Row) => ({
+      label: item.label || item.name || '-',
+      value: item.value || '-',
+    })),
 );
+const serviceConsoleTitle = computed(() => fieldValue(serviceDrawer.detail.name || serviceDrawer.detail.domain));
+const serviceConsolePath = computed(() =>
+  String(serviceDrawer.detail.product_full_path || serviceDrawer.detail.product?.display_name || '').trim(),
+);
+const serviceUpstreamText = computed(() => {
+  const providerKey = String(serviceDrawer.detail.upstream?.provider_key || '').trim();
+  const hostId = serviceDrawer.detail.upstream?.host_id;
+  if (!providerKey && !hostId) return '-';
+  return hostId ? `${providerKey || '未登记上游'} / host #${hostId}` : providerKey;
+});
+const serviceRuntimeLabel = computed(() =>
+  String(serviceDrawer.detail.runtime?.power_label || serviceDrawer.detail.runtime?.description || '').trim(),
+);
+const serviceConnectionPort = computed(() => {
+  const port = Number(serviceDrawer.detail.connection?.port || 0);
+  return port > 0 ? String(port) : '-';
+});
+const serviceRuntimeTheme = computed<'default' | 'success' | 'warning'>(() => {
+  const state = String(serviceDrawer.detail.runtime?.power_state || '').toLowerCase();
+  if (state === 'running') return 'success';
+  if (['stopped', 'stop', 'shutdown'].includes(state)) return 'default';
+  return 'warning';
+});
 const canPowerOn = computed(() => {
   const available = serviceActions.value.available || [];
   return (

@@ -15,9 +15,11 @@ use App\Services\Integrations\Plugins\ServiceUpstreamBindingWriter;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Services\System\SettingService;
 use App\Services\Upstream\Contracts\ProvidesConsoleRuntime;
+use App\Services\Upstream\ProviderRegistry;
 use App\Services\Upstream\ProviderResolver;
 use App\Support\Money;
 use App\Support\ServiceHostname;
+use App\Support\ServiceListPresentation;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
@@ -88,11 +90,31 @@ class ServiceTransformService
         private readonly ?ProductDisplayNameResolver $productDisplayNameResolver = null,
     ) {}
 
+    /**
+     * 请求内复用的绑定解析器实例：列表批量预载后，行内多次绑定解析命中同一份行级缓存。
+     */
+    private ?PluginBindingResolver $bindingResolver = null;
+
+    /**
+     * 与绑定解析器共享实例的 Provider 解析器（避免其内部 new 出第二个解析器绕过缓存）。
+     */
+    private ?ProviderResolver $providerResolver = null;
+
+    /**
+     * 列表路径批量预载服务绑定与快照行：每页 3 次往返替代每行约 10 次（D4B-01）。
+     */
+    public function preloadServiceProvisions(iterable $services): void
+    {
+        $this->bindingResolver()->preloadServiceProjections(
+            collect($services)->map(static fn (mixed $service): int => (int) $service->id)
+        );
+    }
+
     // ── List item transform ────────────────────────────────────────────────
 
     public function transformListItem(Service $service): array
     {
-        $provisionData = $this->serviceProvisionData($service);
+        $provisionData = $this->bindingResolver()->serviceProvisionData($service);
         $displayDomain = ServiceHostname::resolveDisplayDomain($service, $provisionData);
         $service->loadMissing([
             'product.productGroup.secondProductGroup.firstProductGroup',
@@ -107,13 +129,13 @@ class ServiceTransformService
         $productConfigOptions = is_array($service->product?->config_options ?? null)
             ? $service->product->config_options
             : [];
-        $productDisplayName = $this->resolveProductDisplayName($service);
+        $productDisplayName = ServiceListPresentation::productDisplayName($service, $this->productDisplayNameResolver);
 
         return [
             'id' => $service->id,
             'name' => $service->name,
             'product_display_name' => $productDisplayName,
-            'product_full_path' => $this->resolveServiceProductPath($service, $productDisplayName),
+            'product_full_path' => ServiceListPresentation::serviceProductPath($service, $productDisplayName),
             'domain' => $displayDomain,
             'custom_hostname' => ServiceHostname::custom($provisionData),
             'has_custom_hostname' => ServiceHostname::hasCustom($provisionData),
@@ -164,7 +186,7 @@ class ServiceTransformService
 
     public function transformDetail(Service $service, ?array $remoteState = null, string $remoteError = ''): array
     {
-        $provisionData = $this->serviceProvisionData($service, includeSecrets: true);
+        $provisionData = $this->bindingResolver()->serviceProvisionData($service, includeSecrets: true);
         $cachedConnection = $this->readCachedConnection($provisionData);
         $host = (array) ($remoteState['host'] ?? []);
         $runtime = (array) ($remoteState['runtime'] ?? []);
@@ -194,14 +216,14 @@ class ServiceTransformService
         $renewPricingConfig = $service->resolveRenewPricingConfig($productPricing);
         $trafficPayload = $this->buildTrafficPayload($host, $provisionData);
         $trafficPackageEnabled = $this->canExposeTrafficPackage($service, $trafficPayload);
-        $productDisplayName = $this->resolveProductDisplayName($service);
+        $productDisplayName = ServiceListPresentation::productDisplayName($service, $this->productDisplayNameResolver);
         $instanceName = ServiceHostname::resolveInstanceName($service, $provisionData, $host);
 
         return [
             'id' => $service->id,
             'name' => $instanceName !== '' ? $instanceName : ($service->name ?? ''),
             'product_display_name' => $productDisplayName,
-            'product_full_path' => $this->resolveServiceProductPath($service, $productDisplayName),
+            'product_full_path' => ServiceListPresentation::serviceProductPath($service, $productDisplayName),
             'combined_display_name' => $this->resolveCombinedDisplayName($service),
             'domain' => $displayDomain,
             'status' => (int) $service->status,
@@ -378,11 +400,11 @@ class ServiceTransformService
 
     public function canManageService(Service $service): bool
     {
-        $provisionData = $this->serviceProvisionData($service);
+        $provisionData = $this->bindingResolver()->serviceProvisionData($service);
         $supplierId = $this->resolveManagedSupplierId($service, $provisionData);
         $hostId = $this->resolveUpstreamHostId($service, $provisionData);
 
-        return app(ProviderResolver::class)->resolveForService($service)->supports(ProvidesConsoleRuntime::class)
+        return $this->providerResolver()->resolveForService($service)->supports(ProvidesConsoleRuntime::class)
             && $hostId > 0
             && $supplierId > 0;
     }
@@ -402,7 +424,7 @@ class ServiceTransformService
             return false;
         }
 
-        $provisionData = $this->serviceProvisionData($service);
+        $provisionData = $this->bindingResolver()->serviceProvisionData($service);
         $normalizedUpstreamStatus = strtolower(trim($upstreamStatus !== ''
             ? $upstreamStatus
             : (string) ($provisionData['upstream_status'] ?? '')));
@@ -422,7 +444,7 @@ class ServiceTransformService
 
     public function canManualProvisionService(Service $service): bool
     {
-        $provisionData = $this->serviceProvisionData($service);
+        $provisionData = $this->bindingResolver()->serviceProvisionData($service);
         $provisionError = trim((string) ($provisionData['provision_error'] ?? ''));
 
         return $provisionError !== ''
@@ -447,7 +469,7 @@ class ServiceTransformService
             return false;
         }
 
-        $provisionData = $this->serviceProvisionData($service);
+        $provisionData = $this->bindingResolver()->serviceProvisionData($service);
         $normalizedUpstreamStatus = strtolower(trim($upstreamStatus !== ''
             ? $upstreamStatus
             : (string) ($provisionData['upstream_status'] ?? '')));
@@ -499,7 +521,7 @@ class ServiceTransformService
 
     public function cacheSubmittedPasswordForService(Service $service, string $password): void
     {
-        $provisionData = $this->serviceProvisionData($service, includeSecrets: true);
+        $provisionData = $this->bindingResolver()->serviceProvisionData($service, includeSecrets: true);
         $cachedConnection = $this->readCachedConnection($provisionData);
         $connection = [
             'hostname' => ServiceHostname::resolveConnectionHostname($service, $provisionData, $cachedConnection),
@@ -1000,15 +1022,12 @@ class ServiceTransformService
 
     private function bindingResolver(): PluginBindingResolver
     {
-        return app(PluginBindingResolver::class);
+        return $this->bindingResolver ??= app(PluginBindingResolver::class);
     }
 
-    private function serviceProvisionData(Service $service, bool $includeSecrets = false): array
+    private function providerResolver(): ProviderResolver
     {
-        $legacy = (array) ($service->provision_data ?? []);
-        $projection = $this->bindingResolver()->serviceProvisionProjection($service, $includeSecrets);
-
-        return $projection === [] ? $legacy : array_replace($legacy, $projection);
+        return $this->providerResolver ??= new ProviderResolver(app(ProviderRegistry::class), $this->bindingResolver());
     }
 
     private function resolveProductSupplier(Product $product): ?Supplier
@@ -1278,7 +1297,24 @@ class ServiceTransformService
 
     private function shouldSkipSpecField(string $field): bool
     {
-        return in_array($field, ['hostname', 'password', 'os_group', 'os_sub_id', 'data_disk', 'network_type'], true);
+        // 订单快照元数据（_schema_* 与商品路径/分组名）不是实例规格
+        if (str_starts_with($field, '_')) {
+            return true;
+        }
+
+        return in_array($field, [
+            'hostname',
+            'password',
+            'os_group',
+            'os_sub_id',
+            'data_disk',
+            'network_type',
+            'product_full_path',
+            'product_path_segments',
+            'first_product_group_name',
+            'second_product_group_name',
+            'third_product_group_name',
+        ], true);
     }
 
     private function normalizeSpecField(string $field, string $label = ''): string
@@ -1548,50 +1584,6 @@ class ServiceTransformService
     private function trimTrafficNumber(float $value): string
     {
         return Money::trimZero(number_format($value, 2, '.', ''));
-    }
-
-    private function resolveServiceProductPath(Service $service, string $productDisplayName): string
-    {
-        $service->loadMissing([
-            'product.productGroup.secondProductGroup.firstProductGroup',
-        ]);
-        $leafGroup = $service->product?->productGroup;
-        $rootGroup = $this->resolverService->resolveServiceRootGroup($service);
-        $clean = [];
-        foreach ([
-            trim((string) ($rootGroup?->name ?? '')),
-            trim((string) ($leafGroup?->secondProductGroup?->name ?? '')),
-            trim((string) ($leafGroup?->name ?? '')),
-            trim((string) $productDisplayName),
-        ] as $segment) {
-            $segment = trim((string) $segment);
-            if ($segment === '' || in_array($segment, $clean, true)) {
-                continue;
-            }
-            $clean[] = $segment;
-        }
-
-        return $clean !== [] ? implode('/', $clean) : $productDisplayName;
-    }
-
-    private function resolveProductDisplayName(Service $service): string
-    {
-        $orderDisplayName = trim((string) ($service->order?->display_product_name ?? ''));
-        if ($orderDisplayName !== '' && $orderDisplayName !== '未配置规格') {
-            return $orderDisplayName;
-        }
-
-        if ($service->product instanceof Product) {
-            $resolver = $this->productDisplayNameResolver ?? new ProductDisplayNameResolver;
-            $resolved = $resolver->resolveForProduct(
-                $service->product,
-                (array) ($service->order?->config_snapshot ?? [])
-            );
-
-            return trim((string) ($resolved['product_display_name'] ?? ''));
-        }
-
-        return '';
     }
 
     private function resolveCombinedDisplayName(Service $service): string

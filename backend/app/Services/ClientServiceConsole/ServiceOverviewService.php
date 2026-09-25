@@ -17,13 +17,11 @@ use Illuminate\Support\Facades\Cache;
 
 /**
  * 服务概览/列表子服务
- * 负责：paginateForUser、groupedOverviewForUser、summaryForUser 及其内部辅助方法
+ * 负责：paginateForUser、groupedOverviewForUser 及其内部辅助方法
  */
 class ServiceOverviewService
 {
     private const GROUPED_OVERVIEW_CACHE_TTL_SECONDS = 120; // 2分钟：服务概览需要一定实时性
-
-    private const SUMMARY_CACHE_TTL_SECONDS = 120; // 2分钟：与概览保持一致
 
     private const STATUS_SCOPE_ACTIVE_PENDING = 'active_pending';
 
@@ -131,6 +129,9 @@ class ServiceOverviewService
 
         $paginator = $query->orderByDesc('id')->paginate($pageSize);
 
+        // 列表路径批量预载绑定与快照：每页 3 次往返替代每行约 10 次绑定解析（D4B-01），行输出不变
+        $this->transformService->preloadServiceProvisions($paginator->items());
+
         return [
             'list' => collect($paginator->items())
                 ->map(fn (Service $service) => $this->transformService->transformListItem($service))
@@ -150,15 +151,6 @@ class ServiceOverviewService
         );
     }
 
-    public function summaryForUser(User $user): array
-    {
-        return Cache::remember(
-            $this->buildSummaryCacheKey((int) $user->id),
-            now()->addSeconds(self::SUMMARY_CACHE_TTL_SECONDS),
-            fn () => $this->buildSummary($user)
-        );
-    }
-
     private function hasConnectionSnapshotTable(): bool
     {
         try {
@@ -171,11 +163,6 @@ class ServiceOverviewService
     public function forgetGroupedOverviewCache(int $userId): void
     {
         Cache::forget($this->buildGroupedOverviewCacheKey($userId));
-    }
-
-    public function forgetSummaryCache(int $userId): void
-    {
-        Cache::forget($this->buildSummaryCacheKey($userId));
     }
 
     // ── Private build methods ───────────────────────────────────────────────
@@ -275,26 +262,6 @@ class ServiceOverviewService
             'category_total' => count($list),
             'list' => $list,
             'catalog_types' => $catalogTypes,
-        ];
-    }
-
-    private function buildSummary(User $user): array
-    {
-        $counts = Service::where('user_id', $user->id)
-            ->selectRaw('status, COUNT(*) as cnt')
-            ->groupBy('status')
-            ->pluck('cnt', 'status')
-            ->all();
-
-        $total = array_sum($counts);
-        $active = (int) ($counts[ServiceStatus::ACTIVE] ?? 0);
-        $pending = (int) ($counts[ServiceStatus::PENDING] ?? 0) + (int) ($counts[ServiceStatus::SUSPENDED] ?? 0);
-
-        return [
-            'total' => $total,
-            'active' => $active,
-            'pending' => $pending,
-            'other' => $total - $active - $pending,
         ];
     }
 
@@ -448,10 +415,5 @@ class ServiceOverviewService
     private function buildGroupedOverviewCacheKey(int $userId): string
     {
         return 'client_service_console:grouped_overview:'.$userId;
-    }
-
-    private function buildSummaryCacheKey(int $userId): string
-    {
-        return 'client_service_console:summary:'.$userId;
     }
 }

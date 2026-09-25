@@ -6,12 +6,12 @@ namespace App\Services\Provisioning;
 
 use App\Constants\ServiceStatus;
 use App\Models\Invoice;
-use App\Models\Product;
 use App\Models\Service;
 use App\Services\Integrations\Plugins\PluginBindingResolver;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Support\SchemaMetadataCache;
 use App\Support\ServiceHostname;
+use App\Support\ServiceListPresentation;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
@@ -73,6 +73,11 @@ class AdminServiceListService
 
         $paginator = $query->orderByDesc('id')->paginate($pageSize, ['*'], 'page', $page);
 
+        // 列表路径批量预载绑定与快照：每页 3 次往返替代每行 3 次（D3B-02），逐行投影输出不变
+        $this->bindingResolver()->preloadServiceProjections(
+            collect($paginator->items())->map(static fn (Service $service): int => (int) $service->id)
+        );
+
         return [
             'list' => collect($paginator->items())
                 ->map(fn (Service $service) => $this->transform($service))
@@ -86,13 +91,14 @@ class AdminServiceListService
 
     private function transform(Service $service): array
     {
-        $provisionData = $this->serviceProvisionData($service, includeSecrets: true);
+        $provisionData = $this->bindingResolver()->serviceProvisionData($service, includeSecrets: true);
         $connection = $this->resolveConnection($provisionData);
         $hostIps = $this->resolveHostIps($provisionData, $connection);
         $statusLabels = ServiceStatus::$labels ?? [];
         $invoice = $this->resolvePrimaryInvoice($service);
         $order = $invoice ? null : $service->order;
-        $productDisplayName = $this->resolveProductDisplayName($service);
+        // D3B-01：产品名/路径与客户端控制台共用单一口径（ServiceListPresentation）
+        $productDisplayName = ServiceListPresentation::productDisplayName($service, $this->productDisplayNameResolver);
 
         return [
             'id' => $service->id,
@@ -100,7 +106,7 @@ class AdminServiceListService
             'instance_id' => (int) $service->id,
             'name' => (string) $service->name,
             'product_display_name' => $productDisplayName,
-            'product_full_path' => $this->resolveServiceProductPath($service, $productDisplayName),
+            'product_full_path' => ServiceListPresentation::serviceProductPath($service, $productDisplayName),
             'domain' => ServiceHostname::resolveDisplayDomain($service, $provisionData),
             'requested_hostname' => (string) ($provisionData['requested_host'] ?? ''),
             'custom_hostname' => ServiceHostname::custom($provisionData),
@@ -111,7 +117,8 @@ class AdminServiceListService
             'amount' => number_format((float) $service->amount, 2, '.', ''),
             'expires_at' => $service->expires_at?->format('Y-m-d H:i:s'),
             'created_at' => $service->created_at?->format('Y-m-d H:i:s'),
-            'auto_renew' => (bool) $service->auto_renew,
+            // D3B-01：与客户端契约统一为 int（原管理端为 bool，已分叉）
+            'auto_renew' => (int) $service->auto_renew,
             'upstream_host_id' => (int) (($provisionData['upstream_host_id'] ?? 0) ?: 0),
             'upstream_host_id_text' => (string) ($provisionData['upstream_host_id'] ?? ''),
             'upstream_host_ids' => $this->normalizeStringList($provisionData['upstream_host_ids'] ?? []),
@@ -354,63 +361,6 @@ class AdminServiceListService
         }
 
         return is_array($decoded) ? $decoded : [];
-    }
-
-    private function resolveServiceProductPath(Service $service, string $productDisplayName): string
-    {
-        $leafGroup = $service->product?->productGroup;
-        $clean = [];
-        foreach ([
-            trim((string) ($leafGroup?->secondProductGroup?->firstProductGroup?->name ?? '')),
-            trim((string) ($leafGroup?->secondProductGroup?->name ?? '')),
-            trim((string) ($leafGroup?->name ?? '')),
-            trim((string) $productDisplayName),
-        ] as $segment) {
-            $segment = trim((string) $segment);
-            if ($segment === '' || in_array($segment, $clean, true)) {
-                continue;
-            }
-            $clean[] = $segment;
-        }
-
-        return $clean !== [] ? implode('/', $clean) : $productDisplayName;
-    }
-
-    private function resolveProductDisplayName(Service $service): string
-    {
-        $invoiceDisplayName = trim((string) ($this->resolvePrimaryInvoice($service)?->product_spec_snapshot ?? ''));
-        if ($invoiceDisplayName !== '') {
-            return $invoiceDisplayName;
-        }
-
-        $orderDisplayName = trim((string) ($service->order?->display_product_name ?? ''));
-        if ($orderDisplayName !== '' && $orderDisplayName !== '未配置规格') {
-            return $orderDisplayName;
-        }
-
-        if ($service->product instanceof Product) {
-            $resolved = $this->resolveProductDisplayNameResolver()->resolveForProduct(
-                $service->product,
-                (array) ($service->order?->config_snapshot ?? [])
-            );
-
-            return trim((string) ($resolved['product_display_name'] ?? ''));
-        }
-
-        return '';
-    }
-
-    private function resolveProductDisplayNameResolver(): ProductDisplayNameResolver
-    {
-        return $this->productDisplayNameResolver ?? new ProductDisplayNameResolver;
-    }
-
-    private function serviceProvisionData(Service $service, bool $includeSecrets = false): array
-    {
-        $legacy = is_array($service->provision_data ?? null) ? $service->provision_data : [];
-        $projection = $this->bindingResolver()->serviceProvisionProjection($service, $includeSecrets);
-
-        return $projection === [] ? $legacy : array_replace($legacy, $projection);
     }
 
     private function bindingResolver(): PluginBindingResolver

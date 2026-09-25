@@ -94,7 +94,8 @@ class ServiceUpgradeService
 
         $quote = $this->quoteForUser($user, $serviceId, $selection);
         $quotePayload = is_array($quote['quote'] ?? null) ? $quote['quote'] : [];
-        $amount = number_format((float) ($quotePayload['amount_total'] ?? 0), 2, '.', '');
+        // 金额下限守卫（D4A-02）：上游缺价或报价 <= 0 时显式报错，禁止生成 0 元账单免费履约
+        $amount = number_format($this->resolveUpstreamQuoteAmount($quotePayload), 2, '.', '');
         $productId = (int) $quote['product_id'];
         $billingCycle = (string) $quote['billing_cycle'];
         $promoCode = trim((string) ($selection['promo_code'] ?? ''));
@@ -484,6 +485,34 @@ class ServiceUpgradeService
         return (int) ($provisionData['last_upgrade_order_id'] ?? 0) === (int) $order->id
             && filled($provisionData['last_upgraded_at'] ?? null)
             && blank($provisionData['upgrade_error'] ?? null);
+    }
+
+    /**
+     * 解析上游升降级报价金额：多候选键兜底（amount_total 并非全上游通用），
+     * 无有效金额或金额 <= 0 时抛错，禁止生成 0 元账单（D4A-02，口径与续费一致）。
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    private function resolveUpstreamQuoteAmount(array $payload): float
+    {
+        $candidates = [
+            $payload['amount_total'] ?? null,
+            $payload['total'] ?? null,
+            $payload['subtotal'] ?? null,
+        ];
+
+        foreach ($candidates as $candidate) {
+            if ($candidate === null || $candidate === '' || ! is_numeric($candidate)) {
+                continue;
+            }
+
+            $amount = round((float) $candidate, 2);
+            throw_if($amount <= 0, new BusinessException('升降级报价金额无效，暂无法创建账单', 42200));
+
+            return $amount;
+        }
+
+        throw new BusinessException('上游未返回有效的升降级报价，无法创建账单', 42200);
     }
 
     private function serviceBindingWriter(): ServiceUpstreamBindingWriter

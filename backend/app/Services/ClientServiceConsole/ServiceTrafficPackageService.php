@@ -542,6 +542,8 @@ class ServiceTrafficPackageService
         $context = $this->loadTrafficPackageContext($service);
         $selectionMeta = $this->resolveTrafficSelection($context['packages'], $context['host'], $selection);
         $payableAmount = round((float) ($selectionMeta['price'] ?? 0), 2);
+        // 金额下限守卫（D4A-02）：0 元档位显式报错，禁止生成 0 元账单免费履约
+        throw_if($payableAmount <= 0, new BusinessException('流量包价格无效，暂无法购买', 42200));
         $mode = (string) ($context['mode'] ?? 'upgradeconfig');
 
         return [
@@ -1131,6 +1133,12 @@ class ServiceTrafficPackageService
                     return null;
                 }
 
+                // 金额下限守卫（D4A-02）：目录漏配价格或价格为 0 的档位不可售，避免 0 元账单
+                $price = round((float) ($item['price'] ?? 0), 2);
+                if ($price <= 0) {
+                    return null;
+                }
+
                 $configoption = $this->resolveTrafficConfigOptionPayload($option, $targetValue);
                 if ($configoption === []) {
                     return null;
@@ -1146,7 +1154,7 @@ class ServiceTrafficPackageService
                     'target_value' => $targetValue,
                     'target_label' => $label,
                     'label' => $label,
-                    'price' => (string) ($item['price'] ?? '0.00'),
+                    'price' => number_format($price, 2, '.', ''),
                     'sort_order' => max((int) ($item['sort_order'] ?? 0), 0),
                     'configoption' => $configoption,
                 ];
@@ -1183,6 +1191,12 @@ class ServiceTrafficPackageService
                     return null;
                 }
 
+                // 金额下限守卫（D4A-02）：目录漏配价格或价格为 0 的档位不可售，避免 0 元账单
+                $price = round((float) ($item['price'] ?? 0), 2);
+                if ($price <= 0) {
+                    return null;
+                }
+
                 $matched = $flowPacketMap[$targetValue] ?? null;
                 if (! is_array($matched)) {
                     return null;
@@ -1198,7 +1212,7 @@ class ServiceTrafficPackageService
                     'target_value' => $targetValue,
                     'target_label' => $label,
                     'label' => $label,
-                    'price' => (string) ($item['price'] ?? '0.00'),
+                    'price' => number_format($price, 2, '.', ''),
                     'sort_order' => max((int) ($item['sort_order'] ?? 0), 0),
                     'configoption' => [],
                     'flow_packet_id' => (int) ($matched['flow_packet_id'] ?? 0),

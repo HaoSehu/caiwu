@@ -32,6 +32,20 @@ class DatabaseStatusService
 
     private const OPTIMIZE_COOLDOWN_SECONDS = 30 * 60;
 
+    /**
+     * 整库备份排除的运行日志表（E2-06）：这些表随运行无限增长（合计数百万行，
+     * 如 activity_logs 超 110 万行），不属于业务恢复所需数据；排除后单次备份
+     * 不再拖入全量日志，其余业务表的结构与数据导出行为保持不变。
+     */
+    private const BACKUP_EXCLUDED_LOG_TABLES = [
+        'activity_logs',
+        'integration_plugin_runtime_logs',
+        'gateway_logs',
+        'operation_logs',
+        'schedule_run_logs',
+        'schedule_task_runs',
+    ];
+
     public function __construct(
         private readonly DatabaseEngineeringService $engineering,
         private readonly OperationLogService $operationLogs,
@@ -235,6 +249,7 @@ class DatabaseStatusService
             '--events',
             '--default-character-set=utf8mb4',
             '--result-file='.$absolutePath,
+            ...$this->backupIgnoreTableOptions($database),
             $database,
         ];
 
@@ -329,6 +344,20 @@ class DatabaseStatusService
     private function backupDirectory(): string
     {
         return storage_path('app/private/'.self::BACKUP_SUBDIR);
+    }
+
+    /**
+     * mysqldump 的 --ignore-table 选项：每张排除日志表一个参数，
+     * 供测试以单元级断言验证参数构造，无需真实执行备份。
+     *
+     * @return list<string>
+     */
+    private function backupIgnoreTableOptions(string $database): array
+    {
+        return array_map(
+            static fn (string $table): string => '--ignore-table='.$database.'.'.$table,
+            self::BACKUP_EXCLUDED_LOG_TABLES
+        );
     }
 
     private function resolveMysqldumpBinary(): string

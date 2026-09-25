@@ -71,11 +71,6 @@ class ClientServiceConsoleService
         return $this->overviewService->groupedOverviewForUser($user);
     }
 
-    public function summaryForUser(User $user): array
-    {
-        return $this->overviewService->summaryForUser($user);
-    }
-
     // ══════════════════════════════════════════════════════════════════════
     // 详情 / 配置 / 备注 / 操作日志
     // ══════════════════════════════════════════════════════════════════════

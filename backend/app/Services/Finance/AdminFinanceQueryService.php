@@ -37,6 +37,9 @@ class AdminFinanceQueryService
     public function paginateOrders(array $filters, int $perPage = 20, ?string $forcedType = null): LengthAwarePaginator
     {
         $query = Order::query()
+            // 列表显式投影（D1B-05）：只取转换与产品路径解析真实消费的列，
+            // config_pricing_snapshot/coupon_snapshot/service_snapshot 在列表路径无消费者，不再整列读取。
+            ->select($this->orderListProjectionColumns())
             ->with([
                 'user:id,email,nickname,phone',
                 'invoice:id,invoice_no,order_id,type,status,amount,paid_amount,paid_at,due_date,created_at',
@@ -70,13 +73,29 @@ class AdminFinanceQueryService
     public function paginateRecharges(array $filters, int $perPage = 20): LengthAwarePaginator
     {
         $query = Payment::query()
+            // 显式投影（D1B-06）：去掉 callback_raw 等未被列表消费的大列（整份网关原始回调 JSON），
+            // gatewayProjectionColumns 统一追加 gateway_key 以保证 gatewayKey() 可用。
+            ->select(Payment::gatewayProjectionColumns([
+                'id',
+                'user_id',
+                'invoice_id',
+                'order_id',
+                'payment_no',
+                'trade_no',
+                'amount',
+                'status',
+                'paid_at',
+                'trace_id',
+                'created_at',
+            ]))
             ->with([
                 'user:id,email,nickname,phone',
                 'invoice:id,invoice_no,order_id,user_id,type,status,amount,paid_amount,paid_at,due_date,created_at',
                 'invoice.order:id,order_no,type,status',
                 'order:id,order_no,type,status',
-            ])
-            ->whereGatewayKey(PaymentGatewayCode::ALIPAY);
+            ]);
+        // 默认全渠道：充值单可属任意第三方网关（支付宝/易支付/微信/Stripe），
+        // 此前硬编码 ALIPAY 导致其他渠道充值在管理端「充值记录」不可见（D1A-05）。
 
         if (isset($filters['status']) && $filters['status'] !== '') {
             $query->where('status', (int) $filters['status']);
@@ -224,6 +243,9 @@ class AdminFinanceQueryService
     public function paginateUpgradeOrders(array $filters, int $perPage = 20): LengthAwarePaginator
     {
         $query = Order::query()
+            // 与续费列表同款投影，另保留 config_pricing_snapshot：
+            // 附加配置列表真实消费 meta.kind/target_label/mode（resolveUpgradeKind 与列表标签）。
+            ->select($this->orderListProjectionColumns(withPricingSnapshot: true))
             ->with([
                 'user:id,email,nickname,phone',
                 'invoice:id,invoice_no,order_id,type,status,amount,paid_amount,paid_at,due_date,created_at',
@@ -259,6 +281,46 @@ class AdminFinanceQueryService
         );
 
         return $paginator;
+    }
+
+    /**
+     * 管理端订单列表的显式列投影（D1B-05，范式同 OrderV2QueryService::paginateAdminOrders）：
+     * 覆盖 transformOrder 消费的展示列、user/product/service 关系外键，
+     * 以及 ProductFullPathResolver 解析产品名/路径必需的 config_snapshot、
+     * product_spec_snapshot、product_type_snapshot（config_snapshot 被真实消费，不属于丢弃快照）。
+     *
+     * @return list<string>
+     */
+    private function orderListProjectionColumns(bool $withPricingSnapshot = false): array
+    {
+        $columns = [
+            'id',
+            'order_no',
+            'user_id',
+            'product_id',
+            'service_id',
+            'type',
+            'status',
+            'amount',
+            'discount',
+            'paid_amount',
+            'billing_cycle',
+            'quantity',
+            'trace_id',
+            'product_type_snapshot',
+            'product_spec_snapshot',
+            'config_snapshot',
+            'paid_at',
+            'created_at',
+            'updated_at',
+        ];
+
+        if ($withPricingSnapshot) {
+            // 附加配置列表消费 config_pricing_snapshot->meta（kind/target_label/mode）。
+            $columns[] = 'config_pricing_snapshot';
+        }
+
+        return $columns;
     }
 
     /**
@@ -408,60 +470,6 @@ class AdminFinanceQueryService
         }
 
         $query->where($column, '<=', CarbonImmutable::parse($end)->endOfDay());
-    }
-
-    public function getOrderDetail(int $id): array
-    {
-        $order = Order::query()
-            ->with([
-                'user:id,email,nickname,phone',
-                'invoice:id,invoice_no,order_id,type,status,amount,paid_amount,paid_at,due_date,created_at,trace_id,refund_trace_id',
-                'invoice.payments' => fn ($query) => $query->select(Payment::gatewayProjectionColumns([
-                    'id',
-                    'invoice_id',
-                    'payment_no',
-                    'plugin_id',
-                    'trade_no',
-                    'amount',
-                    'status',
-                    'paid_at',
-                    'trace_id',
-                ])),
-                'product:id,product_type,service_type_code,product_group_id,remark,config_options,purchase_requires',
-                'product.productGroup:id,second_product_group_id,name',
-                'product.productGroup.secondProductGroup:id,first_product_group_id,name',
-                'product.productGroup.secondProductGroup.firstProductGroup:id,code,name',
-                'service:id,name,domain,status,expires_at',
-                'coupon:id,code,name,type,value',
-            ])
-            ->findOrFail($id);
-
-        $data = $this->transformOrder($order);
-        $data['coupon'] = $order->coupon ? [
-            'id' => (int) $order->coupon->id,
-            'code' => (string) $order->coupon->code,
-            'name' => (string) ($order->coupon->name ?? ''),
-            'type' => (string) ($order->coupon->type ?? ''),
-            'value' => (string) ($order->coupon->value ?? ''),
-        ] : null;
-        $data['coupon_code'] = (string) ($order->coupon_code ?? '');
-        $data['coupon_snapshot'] = (array) ($order->coupon_snapshot ?? []);
-        $data['remark'] = (string) ($order->remark ?? '');
-        $data['payments'] = $order->invoice?->payments
-            ?->filter(fn (Payment $payment) => $payment->isThirdPartyGateway())
-            ?->map(fn ($payment) => [
-                'id' => (int) $payment->id,
-                'payment_no' => (string) $payment->payment_no,
-                'gateway' => $payment->gatewayKey(),
-                'gateway_key' => $payment->gatewayKey(),
-                'trade_no' => (string) ($payment->trade_no ?? ''),
-                'amount' => $this->money($payment->amount),
-                'status' => (int) $payment->status,
-                'paid_at' => $payment->paid_at?->format('Y-m-d H:i:s'),
-                'trace_id' => (string) ($payment->trace_id ?? ''),
-            ])?->values()?->toArray() ?? [];
-
-        return $data;
     }
 
     private function transformOrder(Order $order): array
@@ -642,9 +650,8 @@ class AdminFinanceQueryService
         return match ($gateway) {
             // 「支付宝」是本列表的历史展示口径，与集中 LABELS 的「支付宝支付」不同，保留本地文案。
             PaymentGatewayCode::ALIPAY => '支付宝',
-            // 与 LABELS 一致的词条走集中定义。
-            PaymentGatewayCode::YIPAY => PaymentGatewayCode::label(PaymentGatewayCode::YIPAY),
-            default => $gateway !== '' ? $gateway : '-',
+            // 其余渠道（含易支付/微信/Stripe）统一走集中 LABELS；全渠道放开后新网关无需在此登记。
+            default => $gateway !== '' ? PaymentGatewayCode::label($gateway) : '-',
         };
     }
 
