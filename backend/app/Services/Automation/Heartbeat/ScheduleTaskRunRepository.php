@@ -435,22 +435,6 @@ class ScheduleTaskRunRepository
             ]) === 1;
     }
 
-    /**
-     * 兼容旧调用方：未明确声明最终失败时，运行中的记录进入 retrying。
-     * 新的 Job/调度链路应使用 markTerminalFailed()。
-     */
-    public function markFailed(?int $runId, string $message, ?int $durationMs, bool $terminal = false): bool
-    {
-        if (! $terminal && $runId !== null && $runId > 0) {
-            $status = ScheduleTaskRun::query()->whereKey($runId)->value('status');
-            if ($status === ScheduleTaskRun::STATUS_RUNNING) {
-                return $this->markRetrying($runId, $message, $durationMs ?? 0);
-            }
-        }
-
-        return $this->markTerminalFailed($runId, $message, $durationMs);
-    }
-
     public function markTerminalFailed(?int $runId, string $message, ?int $durationMs): bool
     {
         if ($runId === null || $runId <= 0) {

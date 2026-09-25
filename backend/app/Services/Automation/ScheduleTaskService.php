@@ -10,7 +10,6 @@ use App\Services\Automation\Heartbeat\HeartbeatTaskRegistry;
 use App\Services\Automation\Heartbeat\Providers\LegacyScheduleHookTaskProvider;
 use App\Services\Automation\Heartbeat\Providers\PluginScheduledTaskProvider;
 use App\Services\Automation\Heartbeat\Rules\CronRule;
-use App\Services\Automation\Heartbeat\Rules\DailyTick;
 use App\Services\Automation\Heartbeat\Rules\EveryTicks;
 use App\Services\Automation\Heartbeat\ScheduleTaskRunRepository;
 use App\Services\System\SettingService;
@@ -154,8 +153,6 @@ class ScheduleTaskService
                 $parts[] = $minutes === 15 ? '15分钟' : "{$minutes}分钟";
             } elseif ($rule instanceof CronRule) {
                 $parts[] = 'cron '.$rule->describe();
-            } elseif ($rule instanceof DailyTick) {
-                $parts[] = '每日第 '.$rule->index().' 个心跳';
             } else {
                 $parts[] = $rule->describe();
             }

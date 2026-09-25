@@ -44,6 +44,10 @@ class HostingPanelApiTransport extends UpstreamJwtSessionManager implements Prov
 
     private const DEFAULT_DNS_RESOLVER_TIMEOUT_SECONDS = 3;
 
+    // 配置项归一化使用的映射常量已随 6 个归一化方法收敛到
+    // UpstreamConfigOptionNormalizer（D3B-04）；此处的 CONFIG_OPTION_FIELD_MAP
+    // 仅供 :821 升级配置项解析使用。
+
     private const CONFIG_OPTION_FIELD_MAP = [
         1 => null,
         2 => null,
@@ -65,29 +69,6 @@ class HostingPanelApiTransport extends UpstreamJwtSessionManager implements Prov
         18 => 'bw',
         19 => 'system_disk_size',
         20 => null,
-    ];
-
-    private const RANGE_OPTION_TYPES = [4, 7, 9, 11, 14, 15, 16, 17, 18, 19];
-
-    private const CONFIG_PRICING_CYCLE_MAP = [
-        'hour' => 'hour',
-        'day' => 'day',
-        'ontrial' => 'ontrial',
-        'monthly' => 'monthly',
-        'quarterly' => 'quarterly',
-        'semiannually' => 'semiannually',
-        'annually' => 'annually',
-        'biennially' => 'biennially',
-        'triennially' => 'triennially',
-        'fourly' => 'fourly',
-        'fively' => 'fively',
-        'sixly' => 'sixly',
-        'sevenly' => 'sevenly',
-        'eightly' => 'eightly',
-        'ninely' => 'ninely',
-        'tenly' => 'tenly',
-        'onetime' => 'one_time',
-        'one_time' => 'one_time',
     ];
 
     private array $serviceConfig;

@@ -37,11 +37,6 @@ final class ResolvedProvider
         return $key !== '' ? $key : '未配置接口';
     }
 
-    public function isResolved(): bool
-    {
-        return $this->driver instanceof UpstreamDriver;
-    }
-
     /**
      * 返回当前已解析 provider 的能力接口列表。
      *

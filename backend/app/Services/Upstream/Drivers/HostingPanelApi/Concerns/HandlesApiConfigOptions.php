@@ -6,9 +6,9 @@ namespace App\Services\Upstream\Drivers\HostingPanelApi\Concerns;
 
 use App\Exceptions\BusinessException;
 use App\Models\Supplier;
+use App\Services\Upstream\Support\UpstreamConfigOptionNormalizer;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 
 trait HandlesApiConfigOptions
 {
@@ -278,199 +278,36 @@ trait HandlesApiConfigOptions
             ->all();
     }
 
+    // ── 配置项归一化：实现收敛到 UpstreamConfigOptionNormalizer（D3B-04），
+    //    平台驱动与 zjmf_finance 插件共用同一实现，保留私有方法签名以兼容宿主类调用。 ──
+
     private function normalizeRemoteConfigOptions(array $configOptions): array
     {
-        return collect($configOptions)
-            ->filter(fn ($item) => is_array($item))
-            ->values()
-            ->map(function (array $item, int $index) {
-                $type = (int) ($item['option_type'] ?? 0);
-                $name = trim((string) ($item['option_name'] ?? $item['name'] ?? ''));
-                $nameParts = explode('|', $name, 2);
-                $displayName = trim((string) (count($nameParts) > 1 ? $nameParts[1] : $name));
-                $field = $this->resolveConfigOptionField(
-                    $item,
-                    self::CONFIG_OPTION_FIELD_MAP[$type] ?? null,
-                    count($nameParts) > 1 ? trim($nameParts[0]) : '',
-                    $displayName
-                );
-                $subOptions = $this->normalizeRemoteConfigSubOptions($item['sub'] ?? [], $type);
-                $sortOrder = (int) ($item['sort_order'] ?? $item['order'] ?? ($index + 1));
-                $optionId = (int) ($item['id'] ?? $item['config_id'] ?? 0);
-                $isRange = in_array($type, self::RANGE_OPTION_TYPES, true);
-
-                return array_merge($item, [
-                    'id' => $optionId,
-                    'config_id' => $optionId,
-                    'field' => $field,
-                    'name' => $displayName !== '' ? $displayName : $name,
-                    'option_name' => $name,
-                    'required' => (int) ($item['required'] ?? 0),
-                    'hidden' => (int) ($item['hidden'] ?? 0),
-                    'order' => $sortOrder,
-                    'sort_order' => $sortOrder,
-                    'allow_upgrade' => (int) ($item['allow_upgrade'] ?? $item['upgrade'] ?? 0),
-                    'allow_promo_code' => array_key_exists('allow_promo_code', $item)
-                        ? (int) $item['allow_promo_code']
-                        : 1,
-                    'qty_minimum' => $isRange ? (int) ($item['qty_minimum'] ?? 0) : 0,
-                    'qty_maximum' => $isRange ? (int) ($item['qty_maximum'] ?? 0) : 0,
-                    'qty_stage' => max(1, (int) ($item['qty_stage'] ?? 1)),
-                    'unit' => (string) ($item['unit'] ?? ''),
-                    'parameter' => trim((string) ($item['parameter'] ?? $this->buildRemoteConfigOptionParameter($subOptions, $type))),
-                    'sub' => $subOptions,
-                ]);
-            })
-            ->all();
+        return UpstreamConfigOptionNormalizer::normalizeRemoteConfigOptions($configOptions);
     }
 
     private function normalizeRemoteConfigSubOptions(mixed $subOptions, int $optionType): array
     {
-        if (! is_array($subOptions)) {
-            return [];
-        }
-
-        return collect($subOptions)
-            ->filter(fn ($sub) => is_array($sub))
-            ->values()
-            ->map(function (array $sub, int $index) use ($optionType) {
-                $rawOptionName = trim((string) ($sub['option_name'] ?? $sub['version'] ?? ''));
-                [$optionValue, $optionLabel, $versionLabel] = $this->parseRemoteSubOptionName(
-                    $rawOptionName,
-                    $optionType,
-                    trim((string) ($sub['option_name_first'] ?? $sub['id'] ?? ''))
-                );
-                $pricing = $this->normalizeRemoteSubPricing($sub['pricing'] ?? $sub['pricings'] ?? []);
-                $subId = (int) ($sub['id'] ?? 0);
-                $configId = (int) ($sub['config_id'] ?? $sub['configid'] ?? 0);
-
-                return array_merge($sub, [
-                    'id' => $subId,
-                    'config_id' => $configId,
-                    'configid' => $configId > 0 ? $configId : ($sub['configid'] ?? null),
-                    'option_name' => $optionLabel !== '' ? $optionLabel : ($optionValue !== '' ? $optionValue : $rawOptionName),
-                    'option_name_first' => $optionValue !== '' ? $optionValue : trim((string) ($sub['option_name_first'] ?? $subId)),
-                    'version' => $versionLabel !== '' ? $versionLabel : ($optionLabel !== '' ? $optionLabel : $rawOptionName),
-                    'hidden' => (int) ($sub['hidden'] ?? 0),
-                    'sort_order' => (int) ($sub['sort_order'] ?? $sub['order'] ?? $index),
-                    'qty_minimum' => (int) ($sub['qty_minimum'] ?? 0),
-                    'qty_maximum' => (int) ($sub['qty_maximum'] ?? 0),
-                    'pricing' => $pricing,
-                ]);
-            })
-            ->all();
+        return UpstreamConfigOptionNormalizer::normalizeRemoteConfigSubOptions($subOptions, $optionType);
     }
 
     private function parseRemoteSubOptionName(string $rawOptionName, int $optionType, string $fallbackValue = ''): array
     {
-        $rawOptionName = trim($rawOptionName);
-        [$firstPart, $secondPart] = array_pad(explode('|', $rawOptionName, 2), 2, '');
-
-        $optionValue = trim($firstPart) !== '' ? trim($firstPart) : trim($fallbackValue);
-        $rawLabel = trim($secondPart) !== '' ? trim($secondPart) : $rawOptionName;
-        $rawLabel = $rawLabel !== '' ? $rawLabel : $optionValue;
-
-        if ($optionType === 5) {
-            return [$optionValue, $rawLabel, $rawLabel];
-        }
-
-        $displayLabel = $rawLabel;
-        if (str_contains($rawLabel, '^')) {
-            $segments = array_values(array_filter(array_map('trim', explode('^', $rawLabel))));
-            $displayLabel = end($segments) ?: $rawLabel;
-        }
-
-        return [$optionValue, $displayLabel, $displayLabel];
+        return UpstreamConfigOptionNormalizer::parseRemoteSubOptionName($rawOptionName, $optionType, $fallbackValue);
     }
 
     private function normalizeRemoteSubPricing(mixed $pricing): array
     {
-        if (! is_array($pricing)) {
-            return [];
-        }
-
-        $pricingData = isset($pricing[0]) && is_array($pricing[0])
-            ? (array) $pricing[0]
-            : $pricing;
-
-        $normalized = [];
-        foreach (self::CONFIG_PRICING_CYCLE_MAP as $sourceKey => $targetKey) {
-            if (! array_key_exists($sourceKey, $pricingData) || $pricingData[$sourceKey] === '' || $pricingData[$sourceKey] === null) {
-                continue;
-            }
-
-            if (! is_numeric($pricingData[$sourceKey])) {
-                continue;
-            }
-
-            $normalized[$targetKey] = number_format((float) $pricingData[$sourceKey], 2, '.', '');
-        }
-
-        if (isset($normalized['one_time']) && ! isset($normalized['onetime'])) {
-            $normalized['onetime'] = $normalized['one_time'];
-        }
-
-        return $normalized;
+        return UpstreamConfigOptionNormalizer::normalizeRemoteSubPricing($pricing);
     }
 
     private function buildRemoteConfigOptionParameter(array $subOptions, int $optionType): string
     {
-        if (in_array($optionType, self::RANGE_OPTION_TYPES, true)) {
-            return '';
-        }
-
-        return collect($subOptions)
-            ->filter(fn ($sub) => is_array($sub) && (int) ($sub['hidden'] ?? 0) !== 1)
-            ->map(function (array $sub) {
-                $value = trim((string) ($sub['option_name_first'] ?? $sub['id'] ?? ''));
-                $label = trim((string) ($sub['version'] ?? $sub['option_name'] ?? $value));
-
-                return $value !== '' ? "{$value}|{$label}" : '';
-            })
-            ->filter()
-            ->implode(',');
+        return UpstreamConfigOptionNormalizer::buildRemoteConfigOptionParameter($subOptions, $optionType);
     }
 
     private function resolveConfigOptionField(array $item, ?string $mappedField, string $nameField, string $displayName): string
     {
-        $explicitField = trim($nameField);
-        if ($explicitField !== '') {
-            return $explicitField;
-        }
-
-        $normalizedDisplayName = trim($displayName);
-        $lowerDisplayName = Str::lower($normalizedDisplayName);
-
-        if (str_contains($lowerDisplayName, 'ipv6')) {
-            return 'ipv6_num';
-        }
-
-        if (str_contains($lowerDisplayName, 'ipv4')) {
-            return 'ip_num';
-        }
-
-        if (str_contains($normalizedDisplayName, '数据盘')) {
-            return 'data_disk_size';
-        }
-
-        if (str_contains($normalizedDisplayName, '系统盘')) {
-            return 'system_disk_size';
-        }
-
-        if (str_contains($normalizedDisplayName, '下行带宽')) {
-            return 'in_bw';
-        }
-
-        if (str_contains($normalizedDisplayName, '上行带宽')) {
-            return 'out_bw';
-        }
-
-        if ($mappedField !== null && trim($mappedField) !== '') {
-            return trim($mappedField);
-        }
-
-        $slug = Str::slug($normalizedDisplayName, '_');
-
-        return $slug !== '' ? $slug : $normalizedDisplayName;
+        return UpstreamConfigOptionNormalizer::resolveConfigOptionField($item, $mappedField, $nameField, $displayName);
     }
 }

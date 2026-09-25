@@ -631,7 +631,7 @@ class ServiceStatusSyncService
     private function syncServiceSnapshot(Service $service, array $host, array $runtime = []): void
     {
         $now = now()->format('Y-m-d H:i:s');
-        $currentProvisionData = $this->serviceProvisionData($service, includeSecrets: true);
+        $currentProvisionData = $this->bindingResolver()->serviceProvisionData($service, includeSecrets: true);
         $cachedConnection = $this->readCachedConnection($currentProvisionData);
         $normalizedHostStatus = strtolower(trim((string) ($host['domainstatus'] ?? '')));
         $resolvedUpstreamStatus = $this->resolveServiceStatusFromUpstream((string) ($host['domainstatus'] ?? ''));
@@ -684,7 +684,7 @@ class ServiceStatusSyncService
     private function markSyncFailure(Service $service, string $message): void
     {
         try {
-            $provisionData = $this->serviceProvisionData($service);
+            $provisionData = $this->bindingResolver()->serviceProvisionData($service);
             $provisionData['last_status_sync_attempt_at'] = now()->format('Y-m-d H:i:s');
             $provisionData['status_sync_error'] = mb_substr(trim($message), 0, 200);
 
@@ -768,14 +768,6 @@ class ServiceStatusSyncService
     private function bindingWriter(): ServiceUpstreamBindingWriter
     {
         return $this->bindingWriter ??= app(ServiceUpstreamBindingWriter::class);
-    }
-
-    private function serviceProvisionData(Service $service, bool $includeSecrets = false): array
-    {
-        $legacy = is_array($service->provision_data ?? null) ? $service->provision_data : [];
-        $projection = $this->bindingResolver()->serviceProvisionProjection($service, $includeSecrets);
-
-        return $projection === [] ? $legacy : array_replace($legacy, $projection);
     }
 
     private function readCachedConnection(array $provisionData): array

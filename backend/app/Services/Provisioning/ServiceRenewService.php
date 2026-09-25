@@ -828,13 +828,13 @@ class ServiceRenewService
         $billingCycle = (string) ($invoice->billing_cycle ?? $service->billing_cycle);
 
         // 尝试上游续费
+        $hostId = $this->resolveUpstreamHostId($service);
         if ($this->supportsUpstreamRenew($service, $effectiveProduct)) {
             $boundSupplier = $this->pluginBindingResolver()->supplierForService($service)
                 ?? ($effectiveProduct instanceof Product
                     ? $this->pluginBindingResolver()->supplierForProduct($effectiveProduct)
                     : null);
             $supplier = $this->supplierWithRuntimeCredentials($boundSupplier);
-            $hostId = $this->resolveUpstreamHostId($service);
 
             if ($supplier instanceof Supplier && $hostId > 0) {
                 $existingProvisionData = $this->serviceProvisionData($service);
@@ -876,6 +876,9 @@ class ServiceRenewService
                         $renewRecoveryContext = is_array($renewResult['recovery_context'] ?? null)
                             ? $renewResult['recovery_context']
                             : [];
+                        // D3A-02：kanghostx 等无账单型上游的续费动作即"恢复访问"，上游不产生账单号，
+                        // 插件在结果中显式声明 renew_completed_without_invoice 表示上游续费已完成。
+                        $renewCompletedWithoutInvoice = (bool) ($renewResult['renew_completed_without_invoice'] ?? false);
 
                         // 尽力对账：上游实扣金额与本地应收不一致时记 warning（不阻断续费）。
                         $this->reconcileRenewUpstreamAmount($invoice, $renewResult);
@@ -897,6 +900,8 @@ class ServiceRenewService
                         ]);
                     } else {
                         $renewRecoveryContext = [];
+                        // 走通用 renewHost+fund 链路的上游必须返回真实账单号，不允许无账单型结果
+                        $renewCompletedWithoutInvoice = false;
                         $jwt = $renewal->login($supplier);
                         $renewResponse = $renewal->renewHost($supplier, $hostId, $billingCycle);
                         $this->assertUpstreamSuccess($renewResponse, [200], '提交上游续费', $this->resolveProviderKeyForService($service, $effectiveProduct));
@@ -940,7 +945,13 @@ class ServiceRenewService
                         }
                     }
 
-                    throw_if($upstreamInvoiceId <= 0, new BusinessException('上游未返回续费账单 ID'));
+                    // D3A-02：无账单型上游（renew_completed_without_invoice）上游续费已实际完成，
+                    // 不再因 upstream_invoice_id=0 命中硬校验而把成功续费记为失败、中止同账单重试；
+                    // 其余上游仍强制要求返回真实上游账单号。
+                    throw_if(
+                        $upstreamInvoiceId <= 0 && ! $renewCompletedWithoutInvoice,
+                        new BusinessException('上游未返回续费账单 ID')
+                    );
 
                     throw_if(
                         ! $paymentCompleted,
@@ -1146,9 +1157,15 @@ class ServiceRenewService
                     return $service->fresh(['product.supplier']) ?? $service;
                 }
             }
+
+            // D3A-01：供应商支持上游续费（即服务确有上游实例）但供应商绑定缺失时，
+            // 显式失败并提示补绑定，禁止静默降级为纯本地续费——
+            // 本地顺延到期而上游主机不续费，会造成"上游到期停机、本地仍显示已开通"的资金与资源状态背离，
+            // 且同源服务会被状态同步永久漏掉。履约标记保持 pending，补全绑定后由履约补偿任务自动重试。
+            throw new BusinessException('服务缺少上游供应商绑定，已中止本次续费履约，请先补全上游绑定后重试');
         }
 
-        // 不支持上游续费或条件不满足时，走本地续费
+        // 供应商不支持上游续费能力（无 ProvidesRenewal 契约）时，走本地续费
         return $this->completeLocalRenewByInvoice($service, $invoice, $billingCycle);
     }
 
@@ -1792,7 +1809,17 @@ class ServiceRenewService
 
     private function resolveUpstreamHostId(Service $service): int
     {
-        return (int) (($this->pluginBindingResolver()->upstreamServiceIdForService($service) ?? '') ?: 0);
+        $boundHostId = (int) (($this->pluginBindingResolver()->upstreamServiceIdForService($service) ?? '') ?: 0);
+        if ($boundHostId > 0) {
+            return $boundHostId;
+        }
+
+        // D3A-01：绑定投影与 provision_data 口径不一致时，绑定缺失的服务会被误判为"无上游实例"
+        // 而静默降级为纯本地续费。此处与 ServiceUpstreamBindingWriter::syncServiceState 同口径，
+        // 增加 provision_data['upstream_host_id'] 兜底，保证绑定缺失的服务仍按上游服务续费。
+        $provisionData = $this->serviceProvisionData($service);
+
+        return (int) ($provisionData['upstream_host_id'] ?? 0);
     }
 
     private function resolveProviderKeyForService(Service $service, ?Product $product = null): string

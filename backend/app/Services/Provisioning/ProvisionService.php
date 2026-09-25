@@ -454,20 +454,43 @@ class ProvisionService
                     ];
                 }
             } catch (\Throwable $e) {
-                // 回查失败（404/鉴权过期等）不阻断，继续走正常开通流程
-                Log::warning('[幂等回查] 上游 host 查询失败，继续正常开通', [
+                // W4-#3：本地已持有上游实例标识而回查失败（404/鉴权过期/网络异常等）时，
+                // 无法确认上游是否已经开通成功；继续走清空购物车→加购→checkout 会重复开通
+                // 并二次扣供应商余额。此处阻断本次开通并转人工队列——异常由
+                // submitUpstreamProvision 落 provision_error（待处理标记），不再静默放行。
+                Log::warning('[幂等回查] 上游 host 查询失败，已阻断本次开通并转人工核实', [
                     'order_id' => $order->id,
+                    'service_id' => (int) $existingService->id,
                     'upstream_host_id' => $existingHostId,
                     'error' => $e->getMessage(),
+                    'exception' => $e::class,
                 ]);
+
+                throw new BusinessException(sprintf(
+                    '上游实例标识 %s 回查失败，已暂停自动开通，请人工核实上游实例状态后再重试',
+                    (string) $existingHostValue
+                ));
             }
+
+            // 非 200 响应同样无法确认上游实例状态，与回查异常同口径阻断，防止重复开通
+            Log::warning('[幂等回查] 上游 host 查询返回非 200，已阻断本次开通并转人工核实', [
+                'order_id' => $order->id,
+                'service_id' => (int) $existingService->id,
+                'upstream_host_id' => $existingHostId,
+                'response_status' => (int) ($detailResponse['status'] ?? 0),
+            ]);
+
+            throw new BusinessException(sprintf(
+                '上游实例标识 %s 回查未确认（非 200 响应），已暂停自动开通，请人工核实上游实例状态后再重试',
+                (string) $existingHostValue
+            ));
         }
 
         $cartLockKey = $this->supplierCartLockKey($supplier);
 
         $startedAt = microtime(true);
 
-        return Cache::lock($cartLockKey, $this->supplierCartLockTtl())->block(10, function () use ($order, $product, $supplier, $startedAt, $provisioning) {
+        return Cache::lock($cartLockKey, $this->supplierCartLockTtl())->block(10, function () use ($order, $product, $supplier, $startedAt, $provisioning, $service) {
             $latency = [
                 'cart_lock_wait_ms' => 0,
                 'login_ms' => 0,
@@ -484,6 +507,8 @@ class ProvisionService
             $requestedHost = '';
             $invoiceId = 0;
             $hostId = 0;
+            // checkout 前失败的异常会携带尚未赋值的 $hostIds 进入部分成功持久化，需预定义
+            $hostIds = [];
             $errorMessage = '';
             $errorClass = '';
             $jwt = null;
@@ -574,6 +599,11 @@ class ProvisionService
                 $errorMessage = $exception->getMessage();
                 $errorClass = $exception::class;
 
+                // D3A-03：checkout/fund 之后失败属于"部分成功"——上游已建账单、可能已扣供应商
+                // 余额并创建实例，但标识此前仅存于闭包内存。立即把已获得的上游账单/实例标识
+                // 持久化到 provision_data，让重试守卫与幂等回查能看到，防止重复下单二次扣款。
+                $this->persistPartialUpstreamProvisionIdentifiers($service, $invoiceId, $hostIds, (int) $order->id);
+
                 throw $exception;
             } finally {
                 $clearStartedAt = microtime(true);
@@ -613,6 +643,70 @@ class ProvisionService
                 }
             }
         });
+    }
+
+    /**
+     * D3A-03：内置驱动开通"部分成功"时持久化上游账单/实例标识。
+     *
+     * checkout/fund 已在上游产生账单（并扣供应商余额）、可能已创建实例，但此前这些标识仅存于
+     * 闭包内存，失败路径只写 provision_error，导致重试守卫因 upstream_invoice_id=0 放行而
+     * 重复下单。此处把已获得的标识立即落到 provision_data：
+     * - 有账单无实例（invoice_id>0 且 host_ids 为空）：assertNoUnresolvedUpstreamProvisionInvoice
+     *   会拦截重新下单，转人工核实上游账单；
+     * - 已取得实例标识：重试走幂等回查（resolveReusableServiceUpstreamServiceId 的 provision_data
+     *   兜底口径），上游已存在则直接复用，不存在则阻断转人工。
+     *
+     * 直接写在传入的 Service 实例上，保证 submitUpstreamProvision 失败路径的
+     * provision_data 合并（serviceProvisionData）能看到这些标识，不会被旧内存值覆盖。
+     */
+    private function persistPartialUpstreamProvisionIdentifiers(?Service $service, int $invoiceId, array $hostIds, int $orderId): void
+    {
+        if (! $service instanceof Service || ($invoiceId <= 0 && $hostIds === [])) {
+            return;
+        }
+
+        try {
+            $latest = $service->fresh() ?? $service;
+            $provisionData = $this->serviceProvisionData($latest);
+            $payload = [
+                'last_provision_attempt_at' => now()->format('Y-m-d H:i:s'),
+            ];
+
+            if ($invoiceId > 0 && (int) ($provisionData['upstream_invoice_id'] ?? 0) <= 0) {
+                $payload['upstream_invoice_id'] = $invoiceId;
+            }
+
+            if ($hostIds !== []) {
+                $existingHostIds = is_array($provisionData['upstream_host_ids'] ?? null)
+                    ? array_map(intval(...), (array) $provisionData['upstream_host_ids'])
+                    : [];
+                $payload['upstream_host_ids'] = array_values(array_unique(array_merge($existingHostIds, array_map(intval(...), $hostIds))));
+
+                if ((int) ($provisionData['upstream_host_id'] ?? 0) <= 0) {
+                    $payload['upstream_host_id'] = (int) $hostIds[0];
+                }
+            }
+
+            $service->forceFill([
+                'provision_data' => array_merge($provisionData, $payload),
+            ])->save();
+
+            Log::warning('[自动开通] 上游开通部分成功，已落库上游账单/实例标识，重试需先按标识回查幂等', [
+                'order_id' => $orderId,
+                'service_id' => (int) $service->id,
+                'upstream_invoice_id' => $invoiceId,
+                'upstream_host_ids' => $hostIds,
+            ]);
+        } catch (\Throwable $persistException) {
+            // 落库失败时保留原始开通异常向上抛，仅记录风险日志供人工核实
+            Log::error('[自动开通] 上游开通部分成功的标识落库失败，存在重复下单风险，请人工核实上游账单', [
+                'order_id' => $orderId,
+                'upstream_invoice_id' => $invoiceId,
+                'upstream_host_ids' => $hostIds,
+                'message' => $persistException->getMessage(),
+                'exception' => $persistException::class,
+            ]);
+        }
     }
 
     private function buildUpstreamCartPayload(Order $order): array
@@ -1432,11 +1526,12 @@ class ProvisionService
             return $bindingHostId;
         }
 
-        if ((int) ($service->status ?? 0) !== ServiceStatus::ACTIVE) {
-            return null;
-        }
+        // D3A-03：与 assertNoUnresolvedUpstreamProvisionInvoice 保持同一口径——
+        // 绑定缺失时回退 provision_data['upstream_host_id']（部分成功时已持久化的上游标识），
+        // 保证这类服务在重试时先按标识回查上游幂等，而不是跳过回查直接重走购物车造成重复开通。
+        $provisionData = $this->serviceProvisionData($service);
 
-        return null;
+        return $this->nonBlank($provisionData['upstream_host_id'] ?? null);
     }
 
     private function upstreamServiceIdPayloadValue(string $upstreamServiceId): int|string
