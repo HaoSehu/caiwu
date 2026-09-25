@@ -43,32 +43,6 @@ class ActivityLogService
         ]);
     }
 
-    public function logForUser(
-        int $userId,
-        string $module,
-        string $action,
-        string $description,
-        ?string $subjectType = null,
-        ?int $subjectId = null,
-        array $context = [],
-    ): void {
-        $user = User::query()->find($userId);
-        $actorName = $user ? trim((string) ($user->nickname ?: $user->email ?: '')) : '';
-
-        $this->record([
-            'actor_type' => 'client',
-            'actor_id' => $userId,
-            'actor_name' => $actorName,
-            'module' => $module,
-            'action' => $action,
-            'description' => $description,
-            'subject_type' => $subjectType,
-            'subject_id' => $subjectId,
-            'context' => $context !== [] ? $context : null,
-            'ip_address' => request()?->ip(),
-        ]);
-    }
-
     public function logSystem(
         string $module,
         string $action,

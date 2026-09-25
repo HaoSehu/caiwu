@@ -315,11 +315,6 @@ class User extends Authenticatable
         return $this->hasMany(ReferralReward::class, 'referrer_user_id');
     }
 
-    public function referredRewards(): HasMany
-    {
-        return $this->hasMany(ReferralReward::class, 'referred_user_id');
-    }
-
     public function referralWithdrawals(): HasMany
     {
         return $this->hasMany(ReferralWithdrawal::class);

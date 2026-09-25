@@ -192,19 +192,6 @@ class IdentityMigrationService
         return $this->targetCount($table) > 0;
     }
 
-    public function targetTableExists(string $table): bool
-    {
-        $databaseName = (string) DB::connection($this->targetConnection)->getDatabaseName();
-        $rows = DB::connection($this->targetConnection)->select(
-            'SELECT COUNT(*) AS cnt
-             FROM information_schema.tables
-             WHERE table_schema = ? AND table_name = ?',
-            [$databaseName, $table]
-        );
-
-        return (int) ($rows[0]->cnt ?? 0) > 0;
-    }
-
     /**
      * @param  list<string>|null  $columns
      * @return array<int, object>

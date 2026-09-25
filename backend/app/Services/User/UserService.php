@@ -11,7 +11,6 @@ use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
 use App\Constants\ServiceStatus;
 use App\Exceptions\BusinessException;
-use App\Jobs\SendTemplateEmailJob;
 use App\Models\ActivityLog;
 use App\Models\Invoice;
 use App\Models\MemberLevel;
@@ -32,7 +31,6 @@ use App\Services\Finance\InvoiceService;
 use App\Services\Finance\PaymentService;
 use App\Services\Provisioning\ProvisionService;
 use App\Services\Referral\ReferralService;
-use App\Services\System\NotificationService;
 use App\Services\System\OperationLogService;
 use App\Services\System\SettingService;
 use App\Services\User\Concerns\HandlesAdminUserServices;
@@ -504,67 +502,6 @@ class UserService
         }
 
         return $query->orderByDesc('id')->paginate($perPage);
-    }
-
-    public function sendInvoiceEmail(User $user, int $invoiceId, array $context = []): array
-    {
-        $invoice = $this->findUserInvoice($user, $invoiceId);
-        $invoice->loadMissing([
-            'order.product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
-            'payments.callbacks',
-            'items',
-        ]);
-
-        throw_if(trim((string) $user->email) === '', new BusinessException('用户未绑定邮箱，无法发送账单邮件'));
-
-        $thirdPartyPayments = $invoice->payments
-            ->filter(fn (Payment $payment) => $payment->isThirdPartyGateway())
-            ->values();
-        $latestPayment = $thirdPartyPayments->first(fn (Payment $payment) => (int) $payment->status === PaymentStatus::SUCCESS)
-            ?? $thirdPartyPayments->first();
-        $isPaidInvoice = (int) $invoice->status === InvoiceStatus::PAID;
-        $templateCode = $isPaidInvoice
-            ? NotificationService::TEMPLATE_PAYMENT_SUCCESS
-            : NotificationService::TEMPLATE_CLIENT_ORDER_PENDING;
-
-        // 补发账单邮件走队列：SMTP 往返（可配超时）不应阻塞管理端请求；
-        // 载荷已在本地组装完成，任务内只做模板渲染与发送，失败由队列重试兜底。
-        SendTemplateEmailJob::dispatch((string) $user->email, $templateCode, [
-            'site_name' => (string) config('idc.site_name', config('app.name', '创欧云')),
-            'display_name' => (string) $user->display_name,
-            'notice_title' => $isPaidInvoice ? '账单支付确认' : '账单支付提醒',
-            'invoice_no' => (string) $invoice->invoice_no,
-            'order_no' => (string) ($invoice->order?->order_no ?? ''),
-            'product_name' => (string) ($invoice->order?->display_product_name ?? ''),
-            'amount' => number_format((float) $invoice->amount, 2, '.', ''),
-            'paid_amount' => number_format((float) ($latestPayment?->amount ?? $invoice->amount), 2, '.', ''),
-            'status_label' => (string) (InvoiceStatus::$labels[$invoice->status] ?? (string) $invoice->status),
-            'due_at' => $invoice->due_date ? ($invoice->due_date?->format('Y-m-d H:i:s') ?? $invoice->due_date?->format('Y-m-d')) : '',
-            'paid_at' => $invoice->paid_at ? $invoice->paid_at->format('Y-m-d H:i:s') : '',
-            'payment_method' => $latestPayment ? $this->resolvePaymentGatewayLabel($latestPayment->gatewayKey()) : '',
-            'trade_no' => (string) ($latestPayment?->trade_no ?? ''),
-            'notice_message' => $isPaidInvoice
-                ? '该账单已支付完成，如有疑问请联系管理员。'
-                : '该账单当前仍待支付，请尽快完成付款。',
-        ]);
-
-        $this->operationLogService->write(
-            userId: ((int) ($context['operator_id'] ?? 0)) ?: null,
-            userType: 'admin',
-            action: 'invoice.email.sent',
-            module: 'order',
-            targetId: (int) ($invoice->order_id ?: 0) ?: null,
-            detail: [
-                'invoice_id' => $invoice->id,
-                'invoice_no' => $invoice->invoice_no,
-                'user_id' => $user->id,
-                'user_email' => $user->email,
-                'operator_name' => (string) ($context['operator_name'] ?? ''),
-            ],
-            ipAddress: (string) ($context['ip_address'] ?? ''),
-        );
-
-        return $this->invoiceDetail($user, $invoiceId);
     }
 
     public function refundInvoice(User $user, int $invoiceId, array $data, array $context = []): array

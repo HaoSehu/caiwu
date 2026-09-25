@@ -41,11 +41,6 @@ class ServiceUpstreamBinding extends Model
         return $this->belongsTo(Service::class, 'service_id');
     }
 
-    public function productUpstreamBinding(): BelongsTo
-    {
-        return $this->belongsTo(ProductUpstreamBinding::class, 'product_upstream_binding_id');
-    }
-
     public function supplierPluginBinding(): BelongsTo
     {
         return $this->belongsTo(SupplierPluginBinding::class, 'supplier_plugin_binding_id');

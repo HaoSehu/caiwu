@@ -254,49 +254,6 @@ class ScheduleRunLogService
         ];
     }
 
-    public function getHealthOverview(): array
-    {
-        $tasks = ScheduleRunLog::query()
-            ->selectRaw('task_name, MAX(finished_at) as last_run_at, COUNT(*) as total_runs')
-            ->selectRaw('SUM(CASE WHEN status = \'failed\' THEN 1 ELSE 0 END) as failed_count')
-            ->selectRaw('AVG(duration_ms) as avg_duration_ms')
-            ->where('created_at', '>=', now()->subDay())
-            ->groupBy('task_name')
-            ->get();
-
-        return $tasks->map(function ($task) {
-            $lastRun = $task->last_run_at ? Carbon::parse($task->last_run_at) : null;
-            $minutesSinceLastRun = $lastRun ? (int) $lastRun->diffInMinutes(now()) : null;
-
-            return [
-                'task_name' => $task->task_name,
-                'last_run_at' => $lastRun?->toDateTimeString(),
-                'minutes_since_last_run' => $minutesSinceLastRun,
-                'health' => $this->evaluateHealth($minutesSinceLastRun),
-                'total_runs_24h' => (int) $task->total_runs,
-                'failed_count_24h' => (int) $task->failed_count,
-                'avg_duration_ms' => (int) round($task->avg_duration_ms),
-            ];
-        })->all();
-    }
-
-    private function evaluateHealth(?int $minutesSinceLastRun): string
-    {
-        if ($minutesSinceLastRun === null) {
-            return 'unknown';
-        }
-
-        if ($minutesSinceLastRun <= 30) {
-            return 'healthy';
-        }
-
-        if ($minutesSinceLastRun <= 120) {
-            return 'warning';
-        }
-
-        return 'critical';
-    }
-
     /**
      * cron summary 只在 schedule_run_logs 缺失时作为活动镜像 fallback 展示。
      * 复用统一的 PayloadLimiter::limit：叶子先限宽，整体编码超限时降级为

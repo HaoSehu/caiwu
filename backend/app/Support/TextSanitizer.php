@@ -14,16 +14,6 @@ class TextSanitizer
         return self::finalize($normalized, $preserveNewLines);
     }
 
-    public static function cleanHtml(?string $value, bool $preserveNewLines = false): string
-    {
-        $normalized = html_entity_decode((string) $value, ENT_QUOTES | ENT_HTML5, 'UTF-8');
-        $normalized = preg_replace('/<br\s*\/?>/iu', "\n", $normalized) ?? $normalized;
-        $normalized = preg_replace('/<\/(p|div|li|tr|ul|ol|h[1-6])>/iu', "\n", $normalized) ?? $normalized;
-        $normalized = strip_tags($normalized);
-
-        return self::finalize($normalized, $preserveNewLines);
-    }
-
     /**
      * 带省略号的定长截断：字符数不超过 $limit 时原样返回；
      * 超出时取前 $limit 个字符并追加 '...'。
@@ -42,13 +32,6 @@ class TextSanitizer
     public static function nullable(?string $value, bool $preserveNewLines = false): ?string
     {
         $cleaned = self::clean($value, $preserveNewLines);
-
-        return $cleaned !== '' ? $cleaned : null;
-    }
-
-    public static function nullableHtml(?string $value, bool $preserveNewLines = false): ?string
-    {
-        $cleaned = self::cleanHtml($value, $preserveNewLines);
 
         return $cleaned !== '' ? $cleaned : null;
     }

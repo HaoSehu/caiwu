@@ -9,7 +9,6 @@ use App\Models\Concerns\NormalizesTraceId;
 use App\Support\OrderInvoiceNoGenerator;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class RechargeRecord extends Model
 {
@@ -77,23 +76,8 @@ class RechargeRecord extends Model
         return $this->belongsTo(Payment::class);
     }
 
-    public function accountTransaction(): BelongsTo
-    {
-        return $this->belongsTo(AccountTransaction::class);
-    }
-
     public function refund(): BelongsTo
     {
         return $this->belongsTo(Refund::class);
-    }
-
-    public function originRechargeRecord(): BelongsTo
-    {
-        return $this->belongsTo(self::class, 'origin_recharge_record_id');
-    }
-
-    public function offsetRecords(): HasMany
-    {
-        return $this->hasMany(self::class, 'origin_recharge_record_id');
     }
 }

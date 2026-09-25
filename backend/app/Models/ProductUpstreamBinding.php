@@ -6,7 +6,6 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ProductUpstreamBinding extends Model
 {
@@ -51,10 +50,5 @@ class ProductUpstreamBinding extends Model
     public function plugin(): BelongsTo
     {
         return $this->belongsTo(IntegrationPlugin::class, 'plugin_id');
-    }
-
-    public function serviceBindings(): HasMany
-    {
-        return $this->hasMany(ServiceUpstreamBinding::class, 'product_upstream_binding_id');
     }
 }

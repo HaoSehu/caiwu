@@ -761,35 +761,6 @@ class ReferralService
         return '';
     }
 
-    public function adminAccountLogs(array $filters, int $perPage = 20): LengthAwarePaginator
-    {
-        $query = AccountTransaction::query()
-            ->with([
-                'user:id,email,phone,nickname,real_name,verification_status,is_verified',
-            ])
-            ->whereIn('event_type', self::ACCOUNT_LOG_EVENT_TYPES);
-
-        if (! empty($filters['event_type'])) {
-            $query->where('event_type', (string) $filters['event_type']);
-        }
-
-        if (! empty($filters['keyword'])) {
-            $keyword = trim((string) $filters['keyword']);
-            $matchedUserIds = $this->resolveAdminReferralUserIdsByKeyword($keyword);
-
-            $query->where(function (Builder $builder) use ($keyword, $matchedUserIds) {
-                $builder
-                    ->where('remark', 'like', "%{$keyword}%")
-                    ->when($matchedUserIds !== [], fn (Builder $query) => $query->orWhereIn('user_id', $matchedUserIds));
-            });
-        }
-
-        return $query
-            ->orderByDesc('created_at')
-            ->orderByDesc('id')
-            ->paginate($perPage);
-    }
-
     public function adminWithdrawalList(array $filters, int $perPage = 20): LengthAwarePaginator
     {
         $query = ReferralWithdrawal::query()
@@ -1370,11 +1341,6 @@ class ReferralService
         $settingValue = Setting::getValue('referral', 'enabled', '1');
 
         return (int) $settingValue === 1;
-    }
-
-    public function registerPathByCode(string $referralCode): string
-    {
-        return '/client/register?ref='.$referralCode;
     }
 
     public function releaseMaturedRewards(?User $targetUser = null): int

@@ -250,13 +250,6 @@ class SettingService
         return mb_substr($value, 0, 63);
     }
 
-    public function sanitizeHostnameFragment(string $value): string
-    {
-        $value = $this->normalizeHostname($value, true);
-
-        return trim($value, '-');
-    }
-
     public function sanitizeHostnamePrefix(string $value): string
     {
         $value = preg_replace('/[^a-zA-Z]+/', '', trim($value)) ?? '';
@@ -434,28 +427,6 @@ class SettingService
         }
 
         return array_values(array_unique($ids));
-    }
-
-    public function saveTrafficPackageCatalog(array $items): void
-    {
-        $normalized = collect($items)
-            ->filter(fn ($item) => is_array($item))
-            ->map(fn (array $item) => $this->normalizeTrafficPackageCatalogItem($item))
-            ->filter(fn (array $item) => (int) $item['category_id'] > 0 && (int) $item['target_value'] > 0)
-            ->sortBy([
-                ['product_type', 'asc'],
-                ['category_id', 'asc'],
-                ['sort_order', 'asc'],
-                ['target_value', 'asc'],
-            ])
-            ->values()
-            ->all();
-
-        Setting::setValue(
-            'traffic_package_catalog',
-            'items',
-            json_encode($normalized, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
-        );
     }
 
     private function getString(string $group, string $key, string $default = ''): string

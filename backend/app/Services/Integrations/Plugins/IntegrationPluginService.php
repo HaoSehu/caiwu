@@ -192,30 +192,6 @@ class IntegrationPluginService
         return $result;
     }
 
-    /**
-     * 检测已安装插件中哪些文件目录已丢失。
-     * 返回 'domain/slug' => true 的映射，供列表接口附加 manifest_missing 标志。
-     *
-     * @return array<string, bool>
-     */
-    public function detectMissingManifests(): array
-    {
-        if (! SchemaMetadataCache::hasTable('integration_plugins')) {
-            return [];
-        }
-
-        $missing = [];
-
-        IntegrationPlugin::query()->get()->each(function (IntegrationPlugin $plugin) use (&$missing): void {
-            $manifest = $this->scanner->find((string) $plugin->domain, (string) $plugin->slug);
-            if (! $manifest instanceof PluginManifest) {
-                $missing["{$plugin->domain}/{$plugin->slug}"] = true;
-            }
-        });
-
-        return $missing;
-    }
-
     public function healthCheck(IntegrationPlugin $plugin): array
     {
         if (! SchemaMetadataCache::hasTable('integration_plugins')) {

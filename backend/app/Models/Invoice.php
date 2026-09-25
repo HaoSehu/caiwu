@@ -90,11 +90,6 @@ class Invoice extends Model
         return $this->belongsTo(self::class, 'origin_invoice_id');
     }
 
-    public function refundInvoices(): HasMany
-    {
-        return $this->hasMany(self::class, 'origin_invoice_id');
-    }
-
     public function rechargeRecords(): HasMany
     {
         return $this->hasMany(RechargeRecord::class);

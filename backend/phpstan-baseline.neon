@@ -937,12 +937,6 @@ parameters:
 			path: app/Http/Resources/Finance/FinanceLedgerResource.php
 
 		-
-			message: '#^Using nullsafe property access "\?\-\>label" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Http/Resources/Product/SupplierResource.php
-
-		-
 			message: '#^Offset ''cpu_display'' on array\{product_display_name\: string, product_spec_display\: string, custom_display_name\: string, cpu_memory_display\: string, cpu_memory_slug_display\: string, combined_display_name\: string, instance_spec_text\: string, cpu_display\: string, \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
 			count: 1
@@ -977,36 +971,6 @@ parameters:
 			identifier: property.notFound
 			count: 2
 			path: app/Http/Resources/Ticket/V2/TicketListItemResource.php
-
-		-
-			message: '#^Cannot call method format\(\) on string\.$#'
-			identifier: method.nonObject
-			count: 1
-			path: app/Http/Resources/User/UserResource.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>admin_note" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Http/Resources/User/UserResource.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>company" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Http/Resources/User/UserResource.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>nickname" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Http/Resources/User/UserResource.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>qq" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Http/Resources/User/UserResource.php
 
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$label\.$#'
@@ -1235,12 +1199,6 @@ parameters:
 			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Models/ReferralWithdrawal.php
-
-		-
-			message: '#^Cannot call method isPast\(\) on string\.$#'
-			identifier: method.nonObject
-			count: 1
-			path: app/Models/Service.php
 
 		-
 			message: '#^Unsafe usage of new static\(\)\.$#'
@@ -1801,12 +1759,6 @@ parameters:
 			path: app/Services/Automation/Heartbeat/ScheduleTickRepository.php
 
 		-
-			message: '#^Property App\\Services\\Automation\\OrderCleanupAutomationService\:\:\$settingService is never read, only written\.$#'
-			identifier: property.onlyWritten
-			count: 1
-			path: app/Services/Automation/OrderCleanupAutomationService.php
-
-		-
 			message: '#^Cannot call method toDateTimeString\(\) on string\.$#'
 			identifier: method.nonObject
 			count: 2
@@ -2337,19 +2289,13 @@ parameters:
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$config_snapshot\.$#'
 			identifier: property.notFound
-			count: 2
+			count: 1
 			path: app/Services/ClientServiceConsole/ServiceTransformService.php
 
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$console_template\.$#'
 			identifier: property.notFound
 			count: 4
-			path: app/Services/ClientServiceConsole/ServiceTransformService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$display_product_name\.$#'
-			identifier: property.notFound
-			count: 1
 			path: app/Services/ClientServiceConsole/ServiceTransformService.php
 
 		-
@@ -2397,7 +2343,7 @@ parameters:
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$productGroup\.$#'
 			identifier: property.notFound
-			count: 7
+			count: 6
 			path: app/Services/ClientServiceConsole/ServiceTransformService.php
 
 		-
@@ -2491,12 +2437,6 @@ parameters:
 			path: app/Services/ClientServiceConsole/ServiceTransformService.php
 
 		-
-			message: '#^Offset ''product_display_name'' on array\{product_display_name\: string, product_spec_display\: string, custom_display_name\: string, cpu_memory_display\: string, cpu_memory_slug_display\: string, combined_display_name\: string, instance_spec_text\: string, cpu_display\: string, \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'
-			identifier: nullCoalesce.offset
-			count: 1
-			path: app/Services/ClientServiceConsole/ServiceTransformService.php
-
-		-
 			message: '#^Offset ''summary'' on array\{\} on left side of \?\? does not exist\.$#'
 			identifier: nullCoalesce.offset
 			count: 1
@@ -2511,19 +2451,13 @@ parameters:
 		-
 			message: '#^Using nullsafe property access "\?\-\>config_snapshot" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
-			count: 2
+			count: 1
 			path: app/Services/ClientServiceConsole/ServiceTransformService.php
 
 		-
 			message: '#^Using nullsafe property access "\?\-\>description" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 3
-			path: app/Services/ClientServiceConsole/ServiceTransformService.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>display_product_name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
 			path: app/Services/ClientServiceConsole/ServiceTransformService.php
 
 		-
@@ -2541,7 +2475,7 @@ parameters:
 		-
 			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
-			count: 11
+			count: 8
 			path: app/Services/ClientServiceConsole/ServiceTransformService.php
 
 		-
@@ -2757,12 +2691,6 @@ parameters:
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$amount\.$#'
 			identifier: property.notFound
-			count: 2
-			path: app/Services/Finance/AdminFinanceQueryService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$code\.$#'
-			identifier: property.notFound
 			count: 1
 			path: app/Services/Finance/AdminFinanceQueryService.php
 
@@ -2781,7 +2709,7 @@ parameters:
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
 			identifier: property.notFound
-			count: 7
+			count: 5
 			path: app/Services/Finance/AdminFinanceQueryService.php
 
 		-
@@ -2811,12 +2739,6 @@ parameters:
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$paid_at\.$#'
 			identifier: property.notFound
-			count: 2
-			path: app/Services/Finance/AdminFinanceQueryService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$payment_no\.$#'
-			identifier: property.notFound
 			count: 1
 			path: app/Services/Finance/AdminFinanceQueryService.php
 
@@ -2835,7 +2757,7 @@ parameters:
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$status\.$#'
 			identifier: property.notFound
-			count: 4
+			count: 3
 			path: app/Services/Finance/AdminFinanceQueryService.php
 
 		-
@@ -2848,12 +2770,6 @@ parameters:
 			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<Illuminate\\Database\\Eloquent\\Model\>\:\:whereGatewayKeyIn\(\)\.$#'
 			identifier: method.notFound
 			count: 1
-			path: app/Services/Finance/AdminFinanceQueryService.php
-
-		-
-			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:gatewayKey\(\)\.$#'
-			identifier: method.notFound
-			count: 2
 			path: app/Services/Finance/AdminFinanceQueryService.php
 
 		-
@@ -2877,18 +2793,6 @@ parameters:
 		-
 			message: '#^Offset ''product_spec_display'' on \*NEVER\* on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
-			count: 1
-			path: app/Services/Finance/AdminFinanceQueryService.php
-
-		-
-			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:map\(\) contains unresolvable type\.$#'
-			identifier: argument.unresolvableType
-			count: 1
-			path: app/Services/Finance/AdminFinanceQueryService.php
-
-		-
-			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:filter\(\) expects \(callable\(Illuminate\\Database\\Eloquent\\Model, int\)\: bool\)\|null, Closure\(App\\Models\\Payment\)\: bool given\.$#'
-			identifier: argument.type
 			count: 1
 			path: app/Services/Finance/AdminFinanceQueryService.php
 
@@ -3835,12 +3739,6 @@ parameters:
 			path: app/Services/Finance/PaymentService.php
 
 		-
-			message: '#^Ternary operator condition is always false\.$#'
-			identifier: ternary.alwaysFalse
-			count: 2
-			path: app/Services/Finance/PaymentService.php
-
-		-
 			message: '#^Using nullsafe property access "\?\-\>display_product_name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
@@ -4369,18 +4267,6 @@ parameters:
 			path: app/Services/ProductCatalog/ProductAdminService.php
 
 		-
-			message: '#^Constant App\\Services\\ProductCatalog\\ProductAdminService\:\:SITE_PRODUCT_DETAIL_CACHE_KEY is unused\.$#'
-			identifier: classConstant.unused
-			count: 1
-			path: app/Services/ProductCatalog/ProductAdminService.php
-
-		-
-			message: '#^Constant App\\Services\\ProductCatalog\\ProductAdminService\:\:SITE_PRODUCT_DETAIL_CACHE_TTL_SECONDS is unused\.$#'
-			identifier: classConstant.unused
-			count: 1
-			path: app/Services/ProductCatalog/ProductAdminService.php
-
-		-
 			message: '#^Constant App\\Services\\ProductCatalog\\ProductAdminService\:\:SITE_PRODUCT_STOCK_CACHE_KEY is unused\.$#'
 			identifier: classConstant.unused
 			count: 1
@@ -4520,18 +4406,6 @@ parameters:
 
 		-
 			message: '#^Constant App\\Services\\ProductCatalog\\ProductCategoryService\:\:SITE_PRODUCTS_CACHE_TTL_SECONDS is unused\.$#'
-			identifier: classConstant.unused
-			count: 1
-			path: app/Services/ProductCatalog/ProductCategoryService.php
-
-		-
-			message: '#^Constant App\\Services\\ProductCatalog\\ProductCategoryService\:\:SITE_PRODUCT_DETAIL_CACHE_KEY is unused\.$#'
-			identifier: classConstant.unused
-			count: 1
-			path: app/Services/ProductCatalog/ProductCategoryService.php
-
-		-
-			message: '#^Constant App\\Services\\ProductCatalog\\ProductCategoryService\:\:SITE_PRODUCT_DETAIL_CACHE_TTL_SECONDS is unused\.$#'
 			identifier: classConstant.unused
 			count: 1
 			path: app/Services/ProductCatalog/ProductCategoryService.php
@@ -4699,12 +4573,6 @@ parameters:
 			path: app/Services/ProductCatalog/ProductSiteService.php
 
 		-
-			message: '#^Method App\\Services\\ProductCatalog\\ProductSiteService\:\:findSaleProductForDetail\(\) should return App\\Models\\Product\|null but returns Illuminate\\Database\\Eloquent\\Model\|null\.$#'
-			identifier: return.type
-			count: 1
-			path: app/Services/ProductCatalog/ProductSiteService.php
-
-		-
 			message: '#^Method App\\Services\\ProductCatalog\\ProductSiteService\:\:siteCatalog\(\) should return Illuminate\\Database\\Eloquent\\Collection but returns Illuminate\\Support\\Collection\<\(int\|string\), mixed\>\.$#'
 			identifier: return.type
 			count: 1
@@ -4713,37 +4581,37 @@ parameters:
 		-
 			message: '#^Offset ''combined_display…'' on array\{product_display_name\: string, product_spec_display\: string, custom_display_name\: string, cpu_memory_display\: string, cpu_memory_slug_display\: string, combined_display_name\: string, instance_spec_text\: string, cpu_display\: string, \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
-			count: 3
+			count: 1
 			path: app/Services/ProductCatalog/ProductSiteService.php
 
 		-
 			message: '#^Offset ''cpu_display'' on array\{product_display_name\: string, product_spec_display\: string, custom_display_name\: string, cpu_memory_display\: string, cpu_memory_slug_display\: string, combined_display_name\: string, instance_spec_text\: string, cpu_display\: string, \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
-			count: 2
+			count: 1
 			path: app/Services/ProductCatalog/ProductSiteService.php
 
 		-
 			message: '#^Offset ''cpu_memory_display'' on array\{product_display_name\: string, product_spec_display\: string, custom_display_name\: string, cpu_memory_display\: string, cpu_memory_slug_display\: string, combined_display_name\: string, instance_spec_text\: string, cpu_display\: string, \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
-			count: 2
+			count: 1
 			path: app/Services/ProductCatalog/ProductSiteService.php
 
 		-
 			message: '#^Offset ''instance_spec_text'' on array\{product_display_name\: string, product_spec_display\: string, custom_display_name\: string, cpu_memory_display\: string, cpu_memory_slug_display\: string, combined_display_name\: string, instance_spec_text\: string, cpu_display\: string, \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
-			count: 3
+			count: 1
 			path: app/Services/ProductCatalog/ProductSiteService.php
 
 		-
 			message: '#^Offset ''memory_display'' on array\{product_display_name\: string, product_spec_display\: string, custom_display_name\: string, cpu_memory_display\: string, cpu_memory_slug_display\: string, combined_display_name\: string, instance_spec_text\: string, cpu_display\: string, \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
-			count: 2
+			count: 1
 			path: app/Services/ProductCatalog/ProductSiteService.php
 
 		-
 			message: '#^Offset ''product_display_name'' on array\{product_display_name\: string, product_spec_display\: string, custom_display_name\: string, cpu_memory_display\: string, cpu_memory_slug_display\: string, combined_display_name\: string, instance_spec_text\: string, cpu_display\: string, \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
-			count: 3
+			count: 1
 			path: app/Services/ProductCatalog/ProductSiteService.php
 
 		-
@@ -4766,12 +4634,6 @@ parameters:
 
 		-
 			message: '#^Using nullsafe property access "\?\-\>code" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 2
-			path: app/Services/ProductCatalog/ProductSiteService.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>description" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 2
 			path: app/Services/ProductCatalog/ProductSiteService.php
@@ -4820,18 +4682,6 @@ parameters:
 
 		-
 			message: '#^Constant App\\Services\\ProductCatalog\\ProductSyncService\:\:SITE_PRODUCTS_CACHE_TTL_SECONDS is unused\.$#'
-			identifier: classConstant.unused
-			count: 1
-			path: app/Services/ProductCatalog/ProductSyncService.php
-
-		-
-			message: '#^Constant App\\Services\\ProductCatalog\\ProductSyncService\:\:SITE_PRODUCT_DETAIL_CACHE_KEY is unused\.$#'
-			identifier: classConstant.unused
-			count: 1
-			path: app/Services/ProductCatalog/ProductSyncService.php
-
-		-
-			message: '#^Constant App\\Services\\ProductCatalog\\ProductSyncService\:\:SITE_PRODUCT_DETAIL_CACHE_TTL_SECONDS is unused\.$#'
 			identifier: classConstant.unused
 			count: 1
 			path: app/Services/ProductCatalog/ProductSyncService.php
@@ -4951,18 +4801,6 @@ parameters:
 			path: app/Services/ProductCatalog/ProductSyncService.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$config_snapshot\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Provisioning/AdminServiceListService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$display_product_name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Provisioning/AdminServiceListService.php
-
-		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$email\.$#'
 			identifier: property.notFound
 			count: 1
@@ -4999,12 +4837,6 @@ parameters:
 			path: app/Services/Provisioning/AdminServiceListService.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$productGroup\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Provisioning/AdminServiceListService.php
-
-		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$product_type\.$#'
 			identifier: property.notFound
 			count: 1
@@ -5035,12 +4867,6 @@ parameters:
 			path: app/Services/Provisioning/AdminServiceListService.php
 
 		-
-			message: '#^Offset ''product_display_name'' on array\{product_display_name\: string, product_spec_display\: string, custom_display_name\: string, cpu_memory_display\: string, cpu_memory_slug_display\: string, combined_display_name\: string, instance_spec_text\: string, cpu_display\: string, \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'
-			identifier: nullCoalesce.offset
-			count: 1
-			path: app/Services/Provisioning/AdminServiceListService.php
-
-		-
 			message: '#^Static property App\\Constants\\ServiceStatus\:\:\$labels \(array\) on left side of \?\? is not nullable\.$#'
 			identifier: nullCoalesce.property
 			count: 1
@@ -5049,18 +4875,6 @@ parameters:
 		-
 			message: '#^Strict comparison using \!\=\= between mixed and null will always evaluate to true\.$#'
 			identifier: notIdentical.alwaysTrue
-			count: 1
-			path: app/Services/Provisioning/AdminServiceListService.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>config_snapshot" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Services/Provisioning/AdminServiceListService.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>display_product_name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Services/Provisioning/AdminServiceListService.php
 
@@ -5085,7 +4899,7 @@ parameters:
 		-
 			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
-			count: 4
+			count: 1
 			path: app/Services/Provisioning/AdminServiceListService.php
 
 		-
@@ -5102,12 +4916,6 @@ parameters:
 
 		-
 			message: '#^Using nullsafe property access "\?\-\>phone" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Services/Provisioning/AdminServiceListService.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>product_spec_snapshot" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Services/Provisioning/AdminServiceListService.php
@@ -5859,7 +5667,7 @@ parameters:
 		-
 			message: '#^Using nullsafe method call on non\-nullable type Illuminate\\Http\\Request\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
-			count: 3
+			count: 2
 			path: app/Services/System/ActivityLogService.php
 
 		-
@@ -6577,30 +6385,6 @@ parameters:
 			path: app/Services/System/OperationLogService.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\ScheduleRunLog\:\:\$avg_duration_ms\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/System/ScheduleRunLogService.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\ScheduleRunLog\:\:\$failed_count\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/System/ScheduleRunLogService.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\ScheduleRunLog\:\:\$last_run_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/System/ScheduleRunLogService.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\ScheduleRunLog\:\:\$total_runs\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/System/ScheduleRunLogService.php
-
-		-
 			message: '#^Offset ''id'' on non\-empty\-array\<string, mixed\> on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
 			count: 1
@@ -6811,12 +6595,6 @@ parameters:
 			path: app/Services/Ticket/TicketService.php
 
 		-
-			message: '#^Instanceof between App\\Services\\Upstream\\Drivers\\HostingPanelApi\\HostingPanelApiTransport and ''App\\\\Services\\\\Upstream\\\\Contracts\\\\ProvidesConsoleAccess''\|''App\\\\Services\\\\Upstream\\\\Contracts\\\\ProvidesConsoleCatalog''\|''App\\\\Services\\\\Upstream\\\\Contracts\\\\ProvidesConsoleNetwork''\|''App\\\\Services\\\\Upstream\\\\Contracts\\\\ProvidesConsoleRuntime''\|''App\\\\Services\\\\Upstream\\\\Contracts\\\\ProvidesConsoleSecurity''\|''App\\\\Services\\\\Upstream\\\\Contracts\\\\ProvidesProvisioning''\|''App\\\\Services\\\\Upstream\\\\Contracts\\\\ProvidesRenewal''\|''App\\\\Services\\\\Upstream\\\\Contracts\\\\ProvidesScheduledAuthRefresh''\|''App\\\\Services\\\\Upstream\\\\Contracts\\\\ProvidesStatusSync'' will always evaluate to true\.$#'
-			identifier: instanceof.alwaysTrue
-			count: 1
-			path: app/Services/Upstream/Drivers/HostingPanelApi/HostingPanelApiDriver.php
-
-		-
 			message: '#^Access to an undefined property App\\Models\\Supplier\:\:\$api_key\.$#'
 			identifier: property.notFound
 			count: 1
@@ -6862,7 +6640,7 @@ parameters:
 			message: '#^Offset ''onetime'' on array\{hour\?\: numeric\-string, day\?\: numeric\-string, ontrial\?\: numeric\-string, monthly\?\: numeric\-string, quarterly\?\: numeric\-string, semiannually\?\: numeric\-string, annually\?\: numeric\-string, biennially\?\: numeric\-string, \.\.\.\} in isset\(\) does not exist\.$#'
 			identifier: isset.offset
 			count: 1
-			path: app/Services/Upstream/Drivers/HostingPanelApi/HostingPanelApiTransport.php
+			path: app/Services/Upstream/Support/UpstreamConfigOptionNormalizer.php
 
 		-
 			message: '#^Access to an undefined property App\\Models\\Invoice\:\:\$unpaid_amount\.$#'
@@ -6975,7 +6753,7 @@ parameters:
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$amount\.$#'
 			identifier: property.notFound
-			count: 3
+			count: 2
 			path: app/Services/User/UserService.php
 
 		-
@@ -6993,7 +6771,7 @@ parameters:
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$display_product_name\.$#'
 			identifier: property.notFound
-			count: 5
+			count: 4
 			path: app/Services/User/UserService.php
 
 		-
@@ -7023,7 +6801,7 @@ parameters:
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$order_no\.$#'
 			identifier: property.notFound
-			count: 6
+			count: 5
 			path: app/Services/User/UserService.php
 
 		-
@@ -7051,12 +6829,6 @@ parameters:
 			path: app/Services/User/UserService.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$trade_no\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/User/UserService.php
-
-		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$user_id\.$#'
 			identifier: property.notFound
 			count: 1
@@ -7069,15 +6841,9 @@ parameters:
 			path: app/Services/User/UserService.php
 
 		-
-			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:gatewayKey\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: app/Services/User/UserService.php
-
-		-
 			message: '#^Cannot call method format\(\) on string\.$#'
 			identifier: method.nonObject
-			count: 6
+			count: 3
 			path: app/Services/User/UserService.php
 
 		-
@@ -7125,13 +6891,13 @@ parameters:
 		-
 			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:filter\(\) expects \(callable\(Illuminate\\Database\\Eloquent\\Model, int\)\: bool\)\|null, Closure\(App\\Models\\Payment\)\: bool given\.$#'
 			identifier: argument.type
-			count: 2
+			count: 1
 			path: app/Services/User/UserService.php
 
 		-
 			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:first\(\) expects \(callable\(Illuminate\\Database\\Eloquent\\Model, int\)\: bool\)\|null, Closure\(App\\Models\\Payment\)\: bool given\.$#'
 			identifier: argument.type
-			count: 2
+			count: 1
 			path: app/Services/User/UserService.php
 
 		-
@@ -7189,15 +6955,9 @@ parameters:
 			path: app/Services/User/UserService.php
 
 		-
-			message: '#^Using nullsafe method call on non\-nullable type string\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 2
-			path: app/Services/User/UserService.php
-
-		-
 			message: '#^Using nullsafe property access "\?\-\>amount" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
-			count: 3
+			count: 2
 			path: app/Services/User/UserService.php
 
 		-
@@ -7215,7 +6975,7 @@ parameters:
 		-
 			message: '#^Using nullsafe property access "\?\-\>display_product_name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
-			count: 5
+			count: 4
 			path: app/Services/User/UserService.php
 
 		-
@@ -7263,7 +7023,7 @@ parameters:
 		-
 			message: '#^Using nullsafe property access "\?\-\>order_no" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
-			count: 5
+			count: 4
 			path: app/Services/User/UserService.php
 
 		-
@@ -7334,12 +7094,6 @@ parameters:
 
 		-
 			message: '#^Using nullsafe property access "\?\-\>total_reward_amount" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Services/User/UserService.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>trade_no" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Services/User/UserService.php
@@ -7469,3 +7223,45 @@ parameters:
 			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Support/ServiceHostname.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$config_snapshot\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/ServiceListPresentation.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$display_product_name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/ServiceListPresentation.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$productGroup\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/ServiceListPresentation.php
+
+		-
+			message: '#^Offset ''product_display_name'' on array\{product_display_name\: string, product_spec_display\: string, custom_display_name\: string, cpu_memory_display\: string, cpu_memory_slug_display\: string, combined_display_name\: string, instance_spec_text\: string, cpu_display\: string, \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Support/ServiceListPresentation.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>config_snapshot" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Support/ServiceListPresentation.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>display_product_name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Support/ServiceListPresentation.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 3
+			path: app/Support/ServiceListPresentation.php

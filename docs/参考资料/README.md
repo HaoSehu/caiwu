@@ -10,7 +10,6 @@
 | 后端   | [财务单据生成规则](后端/财务单据生成规则.md)                            | current      | 财务单据的生成边界和规则。         |
 | 数据库 | [DATABASE.md](../DATABASE.md)                                           | generated    | 由实库结构导出的数据库快照。       |
 | 数据库 | [本地 IDC 数据迁移流程](数据库/本地IDC数据迁移流程.md)                  | current      | 旧数据迁移的操作流程。             |
-| 数据库 | [日志归档与 MySQL 日志维护](数据库/日志归档与MySQL日志维护.md)          | current      | 日志保留与维护操作。               |
 | 集成   | [本地对接说明](集成/本地对接说明.md)                                    | needs-review | 上游本地联调入口与边界。           |
 | 集成   | [插件开发](集成/插件/README.md)                                         | current      | 插件目录、扩展点与示例。           |
 | 集成   | [demo-ali-pay](集成/插件/demo-ali-pay.md)                               | current      | 支付网关插件示例。                 |

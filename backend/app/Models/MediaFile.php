@@ -3,7 +3,6 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class MediaFile extends Model
 {
@@ -27,10 +26,5 @@ class MediaFile extends Model
             'height' => 'integer',
             'uploaded_by' => 'integer',
         ];
-    }
-
-    public function uploader(): BelongsTo
-    {
-        return $this->belongsTo(AdminUser::class, 'uploaded_by');
     }
 }

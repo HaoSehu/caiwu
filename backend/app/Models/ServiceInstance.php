@@ -109,11 +109,6 @@ class ServiceInstance extends Model
         return $this->belongsTo(Server::class);
     }
 
-    public function sourceInvoice(): BelongsTo
-    {
-        return $this->belongsTo(Invoice::class, 'source_invoice_id');
-    }
-
     public function invoice(): HasOne
     {
         $invoice = new Invoice;
@@ -139,19 +134,9 @@ class ServiceInstance extends Model
         return $this->hasMany(Invoice::class, $foreignKey);
     }
 
-    public function lifecycleLogs(): HasMany
-    {
-        return $this->hasMany(ServiceLifecycleLog::class, 'service_instance_id');
-    }
-
     public function operationLogs(): HasMany
     {
         return $this->hasMany(ServiceOperationLog::class, 'service_instance_id');
-    }
-
-    public function remoteSnapshots(): HasMany
-    {
-        return $this->hasMany(ServiceRemoteSnapshot::class, 'service_instance_id');
     }
 
     public function tickets(): HasMany

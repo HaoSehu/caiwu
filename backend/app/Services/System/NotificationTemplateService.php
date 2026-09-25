@@ -122,11 +122,6 @@ class NotificationTemplateService
         return $remaining;
     }
 
-    public function isTemplateSettingKey(string $key): bool
-    {
-        return $this->parseTemplateSettingKey($key) !== null;
-    }
-
     /**
      * @return array{channel: string, code: string, field: string}|null
      */

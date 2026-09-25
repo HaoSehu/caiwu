@@ -146,11 +146,6 @@ class Order extends Model
         return $this->belongsTo(Coupon::class);
     }
 
-    public function userCoupon(): BelongsTo
-    {
-        return $this->belongsTo(UserCoupon::class);
-    }
-
     public function service(): BelongsTo
     {
         return $this->belongsTo(Service::class);

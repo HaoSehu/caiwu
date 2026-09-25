@@ -7,7 +7,7 @@ return [
         'local' => [
             'driver' => 'local',
             'root' => storage_path('app/private'),
-            'serve' => true,
+            // 不注册 /storage/{path} 路由：业务代码零 Storage:: 使用，开放即是无中间件暴露面。
             'throw' => false,
         ],
 

@@ -71,9 +71,4 @@ class NoticeReadService
             ['read_at']
         );
     }
-
-    public function requireReread(ContentArticle $article): void
-    {
-        $article->update(['require_reread_at' => now()]);
-    }
 }

@@ -163,11 +163,6 @@ class Payment extends Model
             : [];
     }
 
-    public function refundCallbackPayload(): array
-    {
-        return $this->callbackPayload('refund');
-    }
-
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

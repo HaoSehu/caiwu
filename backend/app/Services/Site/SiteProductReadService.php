@@ -10,39 +10,6 @@ class SiteProductReadService
         private ProductCatalogService $productCatalogService,
     ) {}
 
-    public function productsInit(?string $productType = null): array
-    {
-        $types = $this->productCatalogService->siteProductTypes();
-
-        if ($types === []) {
-            return [
-                'types' => [],
-                'root_groups' => [],
-                'catalog' => null,
-            ];
-        }
-
-        $resolvedType = $productType;
-        if ($resolvedType === null || $resolvedType === '') {
-            $resolvedType = (string) ($types[0]['value'] ?? '');
-        }
-
-        $rootGroups = $resolvedType !== ''
-            ? $this->productCatalogService->siteRootGroups($resolvedType)
-            : [];
-
-        $firstGroupId = (int) ($rootGroups[0]['id'] ?? 0);
-        $catalog = $firstGroupId > 0
-            ? $this->productCatalogService->siteGroupCatalog($firstGroupId)
-            : null;
-
-        return [
-            'types' => $types,
-            'root_groups' => $rootGroups,
-            'catalog' => $catalog,
-        ];
-    }
-
     public function productTypes(): array
     {
         return [
@@ -55,18 +22,6 @@ class SiteProductReadService
         return [
             'list' => $this->productCatalogService->siteRootGroups($productType),
         ];
-    }
-
-    public function childGroups(int $groupId): array
-    {
-        return [
-            'list' => $this->productCatalogService->siteChildGroups($groupId),
-        ];
-    }
-
-    public function groupCatalog(int $groupId): array
-    {
-        return $this->productCatalogService->siteGroupCatalog($groupId);
     }
 
     /**
@@ -182,43 +137,8 @@ class SiteProductReadService
             ->all();
     }
 
-    public function products(array $validated): array
-    {
-        return [
-            'items_by_group' => $this->productCatalogService->siteProductsByGroupIds(
-                $this->normalizeCategoryIds($validated)
-            ),
-        ];
-    }
-
-    public function productDetail(int $productId): ?array
-    {
-        return $this->productCatalogService->siteProductDetail($productId);
-    }
-
     public function productStock(int $productId): ?array
     {
         return $this->productCatalogService->siteProductStock($productId);
-    }
-
-    /**
-     * @return array<int, int>
-     */
-    private function normalizeCategoryIds(array $validated): array
-    {
-        return collect([
-            isset($validated['effective_product_group_id']) ? [(int) $validated['effective_product_group_id']] : [],
-            (array) ($validated['effective_product_group_ids'] ?? []),
-            isset($validated['second_product_group_id']) ? [(int) $validated['second_product_group_id']] : [],
-            (array) ($validated['second_product_group_ids'] ?? []),
-            isset($validated['third_product_group_id']) ? [(int) $validated['third_product_group_id']] : [],
-            (array) ($validated['third_product_group_ids'] ?? []),
-        ])
-            ->flatten()
-            ->map(fn ($id) => (int) $id)
-            ->filter(fn (int $id) => $id > 0)
-            ->unique()
-            ->values()
-            ->all();
     }
 }

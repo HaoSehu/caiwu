@@ -68,13 +68,4 @@ class ArchiveItem extends Model
             'purged_at' => 'datetime',
         ];
     }
-
-    public function isTerminal(): bool
-    {
-        return in_array($this->status, [
-            self::STATUS_PURGED,
-            self::STATUS_FAILED,
-            self::STATUS_NEEDS_RECOVERY,
-        ], true);
-    }
 }

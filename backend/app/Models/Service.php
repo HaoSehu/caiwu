@@ -420,9 +420,4 @@ class Service extends Model
             ->where('auto_renew', 1)
             ->where('expires_at', '<=', now()->addDays($days));
     }
-
-    public function isExpired(): bool
-    {
-        return $this->expires_at && $this->expires_at->isPast();
-    }
 }
