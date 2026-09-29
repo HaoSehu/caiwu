@@ -10,6 +10,7 @@ use App\Models\Product;
 use App\Models\SecondProductGroup;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 
 class ProductV2QueryService
 {
@@ -81,6 +82,9 @@ class ProductV2QueryService
             ->orderBy('id')
             ->paginate($this->perPage($filters, 20, 50), ['*'], 'page', $this->page($filters));
 
+        // 浏览覆盖：目录页当页商品拉上游实时库存展示并回写快照（失败降级快照，不阻塞列表）。
+        $this->catalog->overlayLiveStockForBrowse(new Collection($paginator->getCollection()->all()));
+
         return $this->attachCpuModelPayloads($paginator);
     }
 
@@ -97,6 +101,9 @@ class ProductV2QueryService
         if (! $product instanceof Product) {
             throw new BusinessException('商品不存在', 40400, 404);
         }
+
+        // 浏览覆盖：商品详情拉上游实时库存展示并回写快照（失败降级快照，不阻塞详情）。
+        $this->catalog->overlayLiveStockForBrowse(new Collection([$product]));
 
         return $product;
     }

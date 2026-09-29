@@ -3733,12 +3733,6 @@ parameters:
 			path: app/Services/Finance/PaymentService.php
 
 		-
-			message: '#^Parameter \#1 \$order of method App\\Services\\Finance\\PaymentService\:\:restoreOrderProductStockIfNeeded\(\) expects App\\Models\\Order, Illuminate\\Database\\Eloquent\\Model given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Services/Finance/PaymentService.php
-
-		-
 			message: '#^Using nullsafe property access "\?\-\>display_product_name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1

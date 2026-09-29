@@ -15,13 +15,14 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/v2/site/product-groups', [V2SiteProductGroupController::class, 'index']);
 Route::get('/v2/site/product-groups/{group}/children', [V2SiteProductGroupController::class, 'children']);
-Route::get('/v2/site/product-groups/{group}/products', [V2SiteProductGroupController::class, 'products']);
+// 商品目录/详情/库存为公开端点且联动上游实时库存拉取，统一按 IP 限流防止刷量放大上游压力。
+Route::get('/v2/site/product-groups/{group}/products', [V2SiteProductGroupController::class, 'products'])->middleware('throttle:site-product-browse');
 Route::get('/v2/site/product-groups/{group}/catalog', [V2SiteProductGroupController::class, 'catalog']);
 Route::get('/v2/site/product-types', [V2SiteProductController::class, 'types']);
-Route::get('/v2/site/products', [V2SiteProductController::class, 'index']);
-Route::get('/v2/site/products/{product}/stock', [V2SiteProductController::class, 'stock']);
+Route::get('/v2/site/products', [V2SiteProductController::class, 'index'])->middleware('throttle:site-product-browse');
+Route::get('/v2/site/products/{product}/stock', [V2SiteProductController::class, 'stock'])->middleware('throttle:site-product-browse');
 Route::post('/v2/site/products/{product}/quote', [V2SiteProductController::class, 'quote'])->middleware('throttle:product-quote');
-Route::get('/v2/site/products/{product}', [V2SiteProductController::class, 'show']);
+Route::get('/v2/site/products/{product}', [V2SiteProductController::class, 'show'])->middleware('throttle:site-product-browse');
 Route::get('/v2/site/product-purchase-context', [V2SiteProductController::class, 'purchaseContext']);
 Route::get('/v2/site/config', [V2SiteHomeController::class, 'config']);
 Route::get('/v2/site/home', [V2SiteHomeController::class, 'home']);

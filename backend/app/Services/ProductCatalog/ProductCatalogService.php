@@ -187,14 +187,13 @@ class ProductCatalogService
         return $this->syncService->syncUpstreamProductStocks($providerKey);
     }
 
-    public function applyLiveStockToProduct(Product $product, bool $strict = false): Product
+    /**
+     * 浏览时实时库存覆盖（前台目录/详情）：展示上游实时库存并把快照回写 products.stock，
+     * 缩短上游售罄到本地结账闸门感知的窗口；拉取失败降级快照展示，不影响页面可用性。
+     */
+    public function overlayLiveStockForBrowse(Collection $products): Collection
     {
-        return $this->syncService->applyLiveStockToProduct($product, $strict);
-    }
-
-    public function applyLiveStockToProducts(Collection $products, bool $strict = false): Collection
-    {
-        return $this->syncService->applyLiveStockToProducts($products, $strict);
+        return $this->syncService->applyLiveStockToProducts($products, persistSnapshot: true);
     }
 
     public function siteProductStock(int $productId): ?array
@@ -202,9 +201,14 @@ class ProductCatalogService
         return $this->syncService->siteProductStock($productId);
     }
 
-    public function assertProductCanBeProvisioned(Product $product, int $requiredQuantity = 1): void
+    public function assertSnapshotStockAvailable(Product $product, int $requiredQuantity = 1): void
     {
-        $this->syncService->assertProductCanBeProvisioned($product, $requiredQuantity);
+        $this->syncService->assertSnapshotStockAvailable($product, $requiredQuantity);
+    }
+
+    public function assertUpstreamStockForProvision(Product $product, int $excludeOrderId = 0, int $requiredQuantity = 1): void
+    {
+        $this->syncService->assertUpstreamStockForProvision($product, $excludeOrderId, $requiredQuantity);
     }
 
     public function bulkConnectSupplierProducts(Supplier $supplier, array $data): array

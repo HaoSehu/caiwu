@@ -25,6 +25,7 @@ use App\Support\CacheKey;
 use App\Support\ProductGroupHierarchyFields;
 use App\Support\SchemaMetadataCache;
 use App\Support\TextSanitizer;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Cache;
@@ -782,25 +783,71 @@ class ProductSyncService
         $store->put($staleKey, $result, now()->addSeconds(self::SITE_STOCK_STALE_TTL_SECONDS));
     }
 
-    public function assertProductCanBeProvisioned(Product $product, int $requiredQuantity = 1): void
+    /**
+     * 第一遍库存闸门（结账）：按 15 分钟同步任务写入的本地库存快照与开放预留计数校验。
+     * 供结账事务内在 products 行锁之后调用，stock 以锁定后的最新值为准；纯 DB 查询，
+     * 不占用上游超时预算。stock < 0 视为不限库存直接放行。
+     */
+    public function assertSnapshotStockAvailable(Product $product, int $requiredQuantity = 1): void
     {
-        $product = $this->applyLiveStockToProduct($product->loadMissing('supplier'), true);
-        $availableStock = (int) ($product->getAttribute('live_stock') ?? $product->stock ?? 0);
+        $stock = (int) ($product->stock ?? 0);
+        if ($stock < 0) {
+            return;
+        }
+
+        $reserved = $this->queryOpenStockReservations([(int) $product->id])[(int) $product->id] ?? 0;
 
         throw_if(
-            $availableStock >= 0 && $availableStock < max($requiredQuantity, 1),
-            new BusinessException('该商品库存不足，无法继续下单')
+            $stock - max($reserved, 0) < max($requiredQuantity, 1),
+            new BusinessException('库存不足')
         );
     }
 
-    public function applyLiveStockToProduct(Product $product, bool $strict = false): Product
+    /**
+     * 第二遍库存闸门（履约）：新购订单提交上游购物车结算前，按上游实时库存（15 秒缓存）复核。
+     * 已付款订单在服务开通完成前会计入开放预留，必须排除本单自身额度，
+     * 否则上游库存恰好等于在途预留数时会把本单拦截。
+     * 上游不可达、无库存数据或上游不限量（负值）时放行，交由上游购物车结算环节最终把关。
+     */
+    public function assertUpstreamStockForProvision(Product $product, int $excludeOrderId = 0, int $requiredQuantity = 1): void
     {
-        $products = $this->applyLiveStockToProducts(new Collection([$product]), $strict);
+        $supplier = $this->resolveProductSupplier($product);
+        $supplierProductId = $this->resolveProductUpstreamProductId($product);
+        if (! $supplier instanceof Supplier || $supplierProductId <= 0) {
+            return;
+        }
+
+        if (! $this->providerResolver->resolveForSupplier($supplier)->supports(ProvidesConsoleCatalog::class)) {
+            return;
+        }
+
+        try {
+            $remoteStocks = $this->resolveSupplierRemoteStocks($supplier, [$supplierProductId]);
+        } catch (\Throwable) {
+            return;
+        }
+
+        $remoteStock = $remoteStocks[$supplierProductId] ?? null;
+        if ($remoteStock === null || $remoteStock < 0) {
+            return;
+        }
+
+        $reserved = $this->queryOpenStockReservations([(int) $product->id], $excludeOrderId)[(int) $product->id] ?? 0;
+
+        throw_if(
+            $remoteStock - max($reserved, 0) < max($requiredQuantity, 1),
+            new BusinessException('库存不足')
+        );
+    }
+
+    public function applyLiveStockToProduct(Product $product, bool $persistSnapshot = false): Product
+    {
+        $products = $this->applyLiveStockToProducts(new Collection([$product]), $persistSnapshot);
 
         return $products->first() ?? $product;
     }
 
-    public function applyLiveStockToProducts(Collection $products, bool $strict = false): Collection
+    public function applyLiveStockToProducts(Collection $products, bool $persistSnapshot = false): Collection
     {
         if ($products->isEmpty()) {
             return $products;
@@ -845,10 +892,6 @@ class ProductSyncService
             try {
                 $remoteStocks = $this->resolveSupplierRemoteStocks($supplier, $supplierProductIds);
             } catch (\Throwable $exception) {
-                if ($strict) {
-                    throw new BusinessException('暂时无法获取上游库存，请稍后重试');
-                }
-
                 $throttleKey = CacheKey::stockLogThrottle('detail_fail', (int) $supplier->id);
                 if (! Cache::store('redis_volatile')->has($throttleKey)) {
                     Cache::store('redis_volatile')->put($throttleKey, true, now()->addSeconds(60));
@@ -870,10 +913,6 @@ class ProductSyncService
                     : null;
 
                 if ($remoteStock === null) {
-                    if ($strict) {
-                        throw new BusinessException('未找到上游库存信息，请稍后重试');
-                    }
-
                     $notFoundThrottleKey = CacheKey::stockLogThrottle('not_found', (int) $product->id);
                     if (! Cache::store('redis_volatile')->has($notFoundThrottleKey)) {
                         Cache::store('redis_volatile')->put($notFoundThrottleKey, true, now()->addSeconds(60));
@@ -888,6 +927,13 @@ class ProductSyncService
                 }
 
                 $reservedCount = (int) ($reservedCounts[(int) $product->id] ?? 0);
+                // 浏览回写：上游实时值与本地快照不一致时静默覆盖 products.stock，
+                // 缩短上游售罄到本地结账闸门感知的窗口（与定时同步同口径写上游原始值）。
+                if ($persistSnapshot
+                    && $product instanceof Product
+                    && $remoteStock !== (int) ($product->stock ?? 0)) {
+                    $this->persistBrowseStockSnapshot($product, $remoteStock);
+                }
                 $liveStockMap[(int) $product->id] = $this->resolveLiveStockValue(
                     (int) ($product->stock ?? -1),
                     $remoteStock,
@@ -927,18 +973,41 @@ class ProductSyncService
             return [];
         }
 
+        $store = Cache::store('redis_volatile');
         $cacheKey = CacheKey::productRemoteStock((int) $supplier->id, $normalizedSupplierProductIds);
-        $cached = Cache::store('redis_volatile')->get($cacheKey);
+        $cached = $store->get($cacheKey);
 
         if (is_array($cached)) {
             return $cached;
         }
 
-        $remoteStocks = $this->fetchSupplierRemoteStocks($supplier, $normalizedSupplierProductIds);
+        // single-flight：目录/详情为公开接口且直连上游，缓存失效瞬间并发 miss 会形成
+        // 对上游的请求风暴；同一 key 只放一个请求去拉，等锁者重读缓存，仍 miss 降级空集。
+        $lock = Cache::lock($cacheKey.':lock', 30);
 
-        Cache::store('redis_volatile')->put($cacheKey, $remoteStocks, now()->addSeconds(self::REMOTE_STOCK_CACHE_TTL_SECONDS));
+        try {
+            if ($lock->block(3)) {
+                $cached = $store->get($cacheKey);
+                if (is_array($cached)) {
+                    return $cached;
+                }
 
-        return $remoteStocks;
+                $remoteStocks = $this->fetchSupplierRemoteStocks($supplier, $normalizedSupplierProductIds);
+                $store->put($cacheKey, $remoteStocks, now()->addSeconds(self::REMOTE_STOCK_CACHE_TTL_SECONDS));
+
+                return $remoteStocks;
+            }
+        } catch (LockTimeoutException) {
+            // 等锁超时：落到下方重读缓存，拿不到就降级，不在浏览路径继续排队。
+        } finally {
+            if ($lock->owner()) {
+                $lock->release();
+            }
+        }
+
+        $cached = $store->get($cacheKey);
+
+        return is_array($cached) ? $cached : [];
     }
 
     private function fetchSupplierRemoteStocks(Supplier $supplier, array $supplierProductIds): array
@@ -2070,6 +2139,20 @@ class ProductSyncService
         return $this->upstreamBindingWriter ??= app(UpstreamBindingWriter::class);
     }
 
+    /**
+     * 浏览回写上游库存快照：与定时同步同款 withoutEvents 静默写，不触发模型事件
+     * 连带的前台目录缓存版本失效（浏览高频，避免击穿分组目录缓存），也不写
+     * binding 库存溯源快照（溯源仅由定时同步记录，source=scheduled_stock_sync）。
+     */
+    private function persistBrowseStockSnapshot(Product $product, int $remoteStock): void
+    {
+        Product::withoutEvents(function () use ($product, $remoteStock): void {
+            $product->forceFill(['stock' => $remoteStock])->save();
+        });
+
+        $product->stock = $remoteStock;
+    }
+
     private function recordProductStockSnapshot(Product $product, Supplier $supplier, int $supplierProductId, int $remoteStock): void
     {
         $this->upstreamBindingWriter()->syncProductBinding($product, $supplier, (string) $supplierProductId, [
@@ -2084,7 +2167,7 @@ class ProductSyncService
         return $this->bindingResolver ??= app(PluginBindingResolver::class);
     }
 
-    private function queryOpenStockReservations(array $productIds): array
+    private function queryOpenStockReservations(array $productIds, int $excludeOrderId = 0): array
     {
         if ($productIds === []) {
             return [];
@@ -2093,6 +2176,7 @@ class ProductSyncService
         return Order::query()
             ->selectRaw('product_id, SUM(CASE WHEN quantity IS NULL OR quantity < 1 THEN 1 ELSE quantity END) as aggregate')
             ->whereIn('product_id', $productIds)
+            ->when($excludeOrderId > 0, fn ($query) => $query->where('id', '!=', $excludeOrderId))
             ->where('type', OrderType::NEW)
             ->whereIn('status', [
                 OrderStatus::PENDING,

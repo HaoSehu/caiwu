@@ -34,7 +34,6 @@ use App\Services\Referral\ReferralService;
 use App\Services\System\OperationLogService;
 use App\Services\User\AccountService;
 use App\Support\SchemaMetadataCache;
-use App\Support\StockReservation;
 use App\Support\VersionedJson;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Cache\LockTimeoutException;
@@ -1570,7 +1569,6 @@ class PaymentService
                 $lockedOrder->forceFill([
                     'status' => OrderStatus::REFUNDED,
                 ])->save();
-                $this->restoreOrderProductStockIfNeeded($lockedOrder);
 
                 Log::info("[{$gatewayLabel}退款] 订单退款成功", [
                     'order_id' => $lockedOrder->id,
@@ -1751,8 +1749,6 @@ class PaymentService
                     $order->forceFill([
                         'status' => OrderStatus::REFUNDED,
                     ])->save();
-
-                    $this->restoreOrderProductStockIfNeeded($order);
                 }
 
                 Log::info('[账单退款] 已退回用户余额', [
@@ -2269,7 +2265,6 @@ class PaymentService
         $invoice->forceFill(['status' => InvoiceStatus::CANCELLED])->save();
         $this->cancelLinkedPendingOrderForInvoice($invoice);
         $this->couponService->releaseInvoiceCoupon($invoice);
-        $this->restoreStockForCancelledInvoice($invoice);
         $this->closeOtherPendingPayments($invoice, (int) $payment->id, 'payment_window_expired', true);
     }
 
@@ -2373,18 +2368,6 @@ class PaymentService
     private function invoicePayableAmount(Invoice $invoice): float
     {
         return round(max((float) $invoice->amount - (float) ($invoice->paid_amount ?? 0), 0), 2);
-    }
-
-    private function restoreStockForCancelledInvoice(Invoice $invoice): void
-    {
-        if (! in_array((string) $invoice->type, [InvoiceType::NEW_PURCHASE, 'normal'], true) || ! $invoice->product_id) {
-            return;
-        }
-
-        $product = Product::query()->lockForUpdate()->find((int) $invoice->product_id);
-        if ($product instanceof Product) {
-            StockReservation::restore($product, $invoice->config_snapshot, (int) ($invoice->quantity ?? 1));
-        }
     }
 
     private function cancelLinkedPendingOrderForInvoice(Invoice $invoice): void
@@ -2778,21 +2761,6 @@ class PaymentService
             : null;
 
         return $payment?->gatewayKey() ?? '';
-    }
-
-    private function restoreOrderProductStockIfNeeded(Order $order): void
-    {
-        if ((string) $order->type !== 'new' || (int) ($order->service_id ?? 0) > 0 || ! $order->product_id) {
-            return;
-        }
-
-        $product = Product::query()
-            ->lockForUpdate()
-            ->find($order->product_id);
-
-        if ($product instanceof Product) {
-            StockReservation::restore($product, $order->config_snapshot, (int) ($order->quantity ?? 1));
-        }
     }
 
     private function resolvePaymentGatewayLabel(string $gateway): string

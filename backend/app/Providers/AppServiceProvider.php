@@ -51,6 +51,10 @@ class AppServiceProvider extends ServiceProvider
         // 公开询价接口按 IP 收敛阈值：默认 throttle:60,1 不足以限制竞品批量抓取价格。
         RateLimiter::for('product-quote', fn (Request $request) => Limit::perMinute(10)->by('product-quote:'.$request->ip()));
 
+        // 公开目录/详情/库存接口按 IP 收敛：这些端点会联动上游实时库存拉取（浏览覆盖），
+        // 过高的单 IP 频率会放大为对供应商接口的请求压力。60/分钟远高于正常浏览节奏。
+        RateLimiter::for('site-product-browse', fn (Request $request) => Limit::perMinute(60)->by('site-product-browse:'.$request->ip()));
+
         // api 组全局限流兜底：细粒度限流（登录、询价等）之外，防止公开端点被滥用时绕过缓存直击 DB。
         // 按 IP 计数；throttle 中间件在 auth 之前执行，此处不依赖登录态。
         RateLimiter::for('api', fn (Request $request) => Limit::perMinute(120)->by('api:'.$request->ip()));

@@ -12,6 +12,7 @@ use App\Models\SecondProductGroup;
 use App\Models\ThirdProductGroup;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 
@@ -19,6 +20,7 @@ class ProductGroupV2QueryService
 {
     public function __construct(
         private readonly ProductSiteService $siteProducts,
+        private readonly ProductCatalogService $catalog,
     ) {}
 
     /**
@@ -290,6 +292,9 @@ class ProductGroupV2QueryService
             ->orderBy('sort_order')
             ->orderBy('id')
             ->paginate($this->perPage($filters, 20, 50), ['*'], 'page', $this->page($filters));
+
+        // 浏览覆盖：分组商品列表与全量列表同口径，拉上游实时库存展示并回写快照（失败降级快照）。
+        $this->catalog->overlayLiveStockForBrowse(new EloquentCollection($paginator->getCollection()->all()));
 
         return $this->attachCpuModelPayloads($paginator);
     }

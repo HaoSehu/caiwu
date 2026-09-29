@@ -55,7 +55,9 @@ class SiteProductDetailResource extends JsonResource
             'primary_cycle' => $primaryCycle,
             'primary_price' => $primaryCycle !== '' ? $pricing[$primaryCycle] : '0.00',
             'setup_fee' => number_format((float) ($product->setup_fee ?? 0), 2, '.', ''),
-            'stock' => (int) ($product->stock ?? -1),
+            // 库存展示取 live_stock（上游实时减在途预留的净值），与 /stock 接口、分组目录与结账闸门同口径；
+            // live_stock 缺失时降级快照原始值。
+            'stock' => (int) ($product->getAttribute('live_stock') ?? $product->stock ?? -1),
             'auto_setup' => (int) ($product->auto_setup ?? 0),
             'group' => $this->groupPayload($hierarchy, $productType, $display),
             'config_options' => $this->trimConfigOptions($product->config_options),

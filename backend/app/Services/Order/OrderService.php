@@ -6,7 +6,6 @@ namespace App\Services\Order;
 
 use App\Constants\InvoiceStatus;
 use App\Constants\OrderStatus;
-use App\Constants\OrderType;
 use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
 use App\Exceptions\BusinessException;
@@ -20,7 +19,6 @@ use App\Services\Finance\CouponService;
 use App\Services\Finance\PaymentService;
 use App\Services\Order\Concerns\HandlesOrderCalculation;
 use App\Services\System\OperationLogService;
-use App\Support\StockReservation;
 use Illuminate\Support\Facades\DB;
 
 class OrderService
@@ -107,17 +105,6 @@ class OrderService
                 $this->couponService->syncInvoiceCouponUsage($invoice);
             }
 
-            // 仅新购订单在创建时预扣库存，取消时按创建时实际预扣量对称恢复。
-            if ((string) $lockedOrder->type === OrderType::NEW && $lockedOrder->product_id) {
-                $product = Product::query()
-                    ->lockForUpdate()
-                    ->find($lockedOrder->product_id);
-
-                if ($product instanceof Product) {
-                    StockReservation::restore($product, $lockedOrder->config_snapshot, (int) ($lockedOrder->quantity ?? 1));
-                }
-            }
-
             return $lockedOrder->fresh(['user:id,email,nickname', 'product', 'invoice', 'service']) ?? $lockedOrder;
         });
 
@@ -193,7 +180,7 @@ class OrderService
         $query->chunkById(100, function ($orders) use (&$count, $context): void {
             foreach ($orders as $order) {
                 // 管理员手动开通产生的挂账订单按 due_date 计费，不受 5 分钟支付会话窗口约束；
-                // 且这类订单从未扣过库存，被取消会触发 stock+1 造成库存虚增。
+                // 预留统计按订单状态（PENDING/PAID）占用库存，豁免清理的挂账单会持续占用名额，需管理端显式取消释放。
                 if ($this->isAdminManualOrder($order)) {
                     continue;
                 }

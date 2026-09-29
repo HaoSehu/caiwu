@@ -23,7 +23,6 @@ use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Services\ProductCatalog\ProductFullPathResolver;
 use App\Services\System\OperationLogService;
 use App\Support\OrderInvoiceNoGenerator;
-use App\Support\StockReservation;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -112,13 +111,6 @@ class CheckoutService
                     }
                 }
 
-                // 上游实时库存校验必须在 DB 事务外完成：strict 模式下该方法同步调用上游 HTTP
-                // （最长占用上游超时预算），放回事务内会在持有 products 行锁与幂等锁期间等待上游，
-                // 上游抖动时同商品所有结账互斥堆积，放大为锁等待与连接池耗尽。事务内保留本地校验，
-                // 预检与下单之间的竞态由 StockReservation 预扣与履约侧幂等兜底。
-                $precheckedProduct = Product::query()->findOrFail($productId);
-                $this->productCatalogService->assertProductCanBeProvisioned($precheckedProduct, $quantity);
-
                 return DB::transaction(function () use (
                     $userId,
                     $productId,
@@ -132,6 +124,9 @@ class CheckoutService
                 ) {
                     $product = Product::query()->lockForUpdate()->findOrFail($productId);
                     throw_if($product->status !== 1, new BusinessException('产品已下架'));
+                    // 第一遍库存闸门：行锁内按 15 分钟同步快照库存减开放预留校验，不通过直接拦截；
+                    // 下单与付款之间的上游库存竞态由履约侧第二遍闸门（assertUpstreamStockForProvision）兜底。
+                    $this->productCatalogService->assertSnapshotStockAvailable($product, $quantity);
                     // 分组可见性复核：与前台报价（SiteProductQuoteService::saleProductQuery 的
                     // withVisibleProductGroupPath）同口径。隐藏分组内的商品即使 status=1，
                     // 持有效报价令牌（过期前签发或直接伪造）也不允许结账。
@@ -166,8 +161,6 @@ class CheckoutService
                     $displayNamePayload = $this->resolveProductDisplayNameResolver()->resolveForProduct($product, $normalizedConfig);
                     $productDisplayName = $this->resolveCheckoutProductDisplayName($displayNamePayload);
                     $invoiceConfigSnapshot = $this->withProductDisplaySnapshot($product, $normalizedConfig, $productDisplayName);
-                    // 库存预扣只针对有限正库存，并把实际预扣量写入快照，供取消/退款时对称恢复。
-                    $invoiceConfigSnapshot['stock_reserved'] = StockReservation::reserve($product, $quantity);
                     throw_if($amount <= 0, new BusinessException('无效的计费周期'));
 
                     // 会员折扣层：目录价按「等级 × 营销组」先折算，优惠券以折后价为基数
@@ -331,14 +324,6 @@ class CheckoutService
             }
 
             $this->couponService->releaseInvoiceCoupon($lockedInvoice);
-
-            // 新购账单取消时按创建时实际预扣量恢复库存
-            if (in_array((string) $lockedInvoice->type, [InvoiceType::NEW_PURCHASE, 'normal'], true) && $lockedInvoice->product_id) {
-                $product = Product::query()->lockForUpdate()->find($lockedInvoice->product_id);
-                if ($product instanceof Product) {
-                    StockReservation::restore($product, $lockedInvoice->config_snapshot, (int) ($lockedInvoice->quantity ?? 1));
-                }
-            }
 
             return $lockedInvoice->fresh(['user:id,email,nickname', 'product', 'service']) ?? $lockedInvoice;
         });

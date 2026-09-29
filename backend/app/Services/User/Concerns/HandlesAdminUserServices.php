@@ -784,10 +784,8 @@ trait HandlesAdminUserServices
                 $this->invoiceService->syncProjection($invoice);
             }
 
-            if ($sourceType === 'upstream' && (int) $product->stock > 0) {
-                $product->decrement('stock');
-            }
-
+            // 库存占用统一由开放预留统计承担（新购订单 PENDING/PAID 即占用，取消/完成自动释放），
+            // products.stock 为纯上游快照，任何业务路径不得增减。
             return $service;
         });
 
@@ -968,7 +966,7 @@ trait HandlesAdminUserServices
         $traceId = trim((string) ($context['trace_id'] ?? ''));
         $ipAddress = trim((string) ($context['ip_address'] ?? ''));
 
-        DB::transaction(function () use ($service, $product) {
+        DB::transaction(function () use ($service) {
             Order::query()
                 ->where('service_id', $service->id)
                 ->update(['service_id' => null]);
@@ -982,10 +980,8 @@ trait HandlesAdminUserServices
                 ->where('service_id', $service->id)
                 ->delete();
 
-            if ($product instanceof Product && (int) $product->stock >= 0) {
-                $product->increment('stock');
-            }
-
+            // 库存占用由开放预留统计承担：PENDING 订单由支付窗口过期清理自动释放，
+            // PAID 订单若需释放库存占用，由管理员显式取消订单，不再回补快照。
             $service->delete();
         });
 

@@ -13,6 +13,7 @@ use App\Services\Integrations\Plugins\PluginBindingResolver;
 use App\Services\Integrations\Plugins\ServiceUpstreamBindingWriter;
 use App\Services\Integrations\Plugins\UpstreamBindingWriter;
 use App\Services\Integrations\Support\ProviderErrorMapper;
+use App\Services\ProductCatalog\ProductCatalogService;
 use App\Services\System\SettingService;
 use App\Services\Upstream\Contracts\ProvidesProvisioning;
 use App\Services\Upstream\ProviderResolver;
@@ -52,8 +53,14 @@ class ProvisionService
     public function __construct(
         private ProviderResolver $providerResolver,
         private SettingService $settingService,
+        private ?ProductCatalogService $productCatalogService = null,
         private ?PluginBindingResolver $bindingResolver = null,
     ) {}
+
+    private function productCatalogService(): ProductCatalogService
+    {
+        return $this->productCatalogService ??= app(ProductCatalogService::class);
+    }
 
     public function processPaidOrder(Order $order): ?Service
     {
@@ -189,6 +196,12 @@ class ProvisionService
         $providerKey = $this->resolveProviderKeyForProduct($order->product);
 
         try {
+            // 第二遍库存闸门：提交上游购物车结算前按上游实时库存复核（排除本单预留额度），
+            // 上游已无货时直接拦截，不再空走清购物车→加购→checkout 流程；失败统一落 provision_error。
+            if ($order->product instanceof Product) {
+                $this->productCatalogService()->assertUpstreamStockForProvision($order->product, (int) $order->id);
+            }
+
             $result = $this->provisionViaUpstream($order, $service);
             $hostDetail = $result['host_detail'];
             $serviceStatus = $this->resolveServiceStatusFromUpstream($hostDetail);
