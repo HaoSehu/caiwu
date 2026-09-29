@@ -44,6 +44,12 @@ function resolveHintOrigin(assetBase: string) {
   }
 }
 
+// hydun CDN 回源不带 Accept-Encoding，identity 全量超过约 1MiB 会被节点截断，
+// 因此 vendor-tdesign 单桶必须保持在 950KB 以内；TDesign 内部经 _chunks 强连通，
+// 按组件拆桶会产生循环 chunk 且在顶层 props 求值处运行时崩溃，禁止再拆。
+// dayjs、tvision-color 等第三方库被 TDesign 与业务代码共同引用，必须外置到
+// vendor-misc（约省 190KB）才能让单桶不超限。
+
 function resolveManualChunk(id: string) {
   const normalized = id.split(path.sep).join('/');
 
@@ -53,6 +59,19 @@ function resolveManualChunk(id: string) {
 
   if (normalized.includes('/axios/')) {
     return 'vendor-axios';
+  }
+
+  // 这些第三方库被 TDesign 与业务代码共同引用，若随引用方混入 vendor-tdesign
+  // 各桶，会在桶间循环时出现未初始化访问，必须独立成桶让两桶单向依赖它。
+  if (
+    normalized.includes('/dayjs/') ||
+    normalized.includes('/clipboard/') ||
+    normalized.includes('/mitt/') ||
+    normalized.includes('/tvision-color/') ||
+    normalized.includes('/nprogress/') ||
+    normalized.includes('/qs/')
+  ) {
+    return 'vendor-misc';
   }
 
   if (
