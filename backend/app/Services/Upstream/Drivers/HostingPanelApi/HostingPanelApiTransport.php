@@ -709,18 +709,30 @@ class HostingPanelApiTransport extends UpstreamJwtSessionManager implements Prov
             $this->forgetJwtCache($supplier);
         }
 
+        if (! is_array($decoded)) {
+            $this->safeLog('info', '[主机面板接口] 接口响应', [
+                'supplier_id' => $supplier->id,
+                'method' => $method,
+                'url' => $url,
+                'http_code' => $httpCode,
+                'duration_ms' => $this->elapsedMilliseconds($startedAt),
+                'response' => $this->truncateLogValue($output),
+            ]);
+
+            throw new BusinessException($this->buildInvalidJsonMessage($httpCode, $contentType, $output), 50000);
+        }
+
+        // 大响应下先释放原始报文再构建日志摘要，避免原始串、解码数组与摘要三份数据同时驻留。
+        unset($output);
+
         $this->safeLog('info', '[主机面板接口] 接口响应', [
             'supplier_id' => $supplier->id,
             'method' => $method,
             'url' => $url,
             'http_code' => $httpCode,
             'duration_ms' => $this->elapsedMilliseconds($startedAt),
-            'response' => is_array($decoded) ? $this->summarizeLogResponse($decoded) : $this->truncateLogValue($output),
+            'response' => $this->summarizeLogResponse($decoded),
         ]);
-
-        if (! is_array($decoded)) {
-            throw new BusinessException($this->buildInvalidJsonMessage($httpCode, $contentType, $output), 50000);
-        }
 
         return [
             'response' => $decoded,

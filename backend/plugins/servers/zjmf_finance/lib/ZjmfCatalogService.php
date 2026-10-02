@@ -184,22 +184,22 @@ final class ZjmfCatalogService
      */
     private function fetchProductStocksFromDetails(Supplier $supplier, array $productIds): array
     {
-        $details = $this->fetchBatchProductDetails($supplier, $productIds);
         $results = [];
 
-        foreach ($productIds as $productId) {
-            $detail = $details[$productId] ?? null;
-            if (! is_array($detail) || ! array_key_exists('stock_control', $detail)) {
-                continue;
-            }
+        $this->eachProductDetailChunk($supplier, $productIds, function (array $details) use (&$results): void {
+            foreach ($details as $productId => $detail) {
+                if (! array_key_exists('stock_control', $detail)) {
+                    continue;
+                }
 
-            $results[$productId] = [
-                'stock_control' => (int) ($detail['stock_control'] ?? 0),
-                'qty' => is_numeric($detail['qty'] ?? null) ? max((int) $detail['qty'], 0) : null,
-                'stock' => $this->normalizeCatalogStock($detail),
-                'allow_qty' => (int) ($detail['allow_qty'] ?? 0),
-            ];
-        }
+                $results[$productId] = [
+                    'stock_control' => (int) ($detail['stock_control'] ?? 0),
+                    'qty' => is_numeric($detail['qty'] ?? null) ? max((int) $detail['qty'], 0) : null,
+                    'stock' => $this->normalizeCatalogStock($detail),
+                    'allow_qty' => (int) ($detail['allow_qty'] ?? 0),
+                ];
+            }
+        });
 
         return $results;
     }
@@ -290,36 +290,41 @@ final class ZjmfCatalogService
 
     /**
      * /cart/all 不含价格与库存，使用 api/product/prodetail 的详情补齐。
+     * 详情按批流式应用，批内用完即弃，避免整表解码明细跨批驻留推高内存峰值。
      *
      * @param  array<int, array<string, mixed>>  $products
      * @return array<int, array<string, mixed>>
      */
     private function mergeUpstreamProductPricing(Supplier $supplier, array $products): array
     {
-        $ids = collect($products)
-            ->map(fn (array $item) => (int) ($item['id'] ?? 0))
-            ->filter(fn (int $id) => $id > 0)
-            ->unique()
-            ->values()
-            ->all();
+        $indexesById = [];
+        foreach ($products as $index => $item) {
+            $productId = (int) ($item['id'] ?? 0);
+            if ($productId > 0) {
+                $indexesById[$productId] = $index;
+            }
+        }
 
-        if ($ids === []) {
+        if ($indexesById === []) {
             return $products;
         }
 
-        $details = $this->fetchBatchProductDetails($supplier, $ids);
-        if ($details === []) {
-            return $products;
-        }
+        $this->eachProductDetailChunk(
+            $supplier,
+            array_keys($indexesById),
+            function (array $details) use (&$products, $indexesById): void {
+                foreach ($details as $productId => $detail) {
+                    $index = $indexesById[$productId] ?? null;
+                    if ($index === null) {
+                        continue;
+                    }
 
-        return collect($products)
-            ->map(function (array $item) use ($details): array {
-                $detail = $details[(int) ($item['id'] ?? 0)] ?? null;
+                    $products[$index] = $this->applyUpstreamProductDetail($products[$index], $detail);
+                }
+            }
+        );
 
-                return $this->applyUpstreamProductDetail($item, $detail);
-            })
-            ->values()
-            ->all();
+        return $products;
     }
 
     /**
@@ -362,16 +367,20 @@ final class ZjmfCatalogService
     }
 
     /**
-     * 上游 prodetail 单次最多返回 500 个商品，按批拉取。
+     * 按批拉取 prodetail 详情并流式交给处理方，批内明细处理完即释放。
+     * 批量大小决定内存峰值：单批 200 商品原始报文 6.2MB、解码后约 40MB，
+     * 实测三批峰值 142.8MB 会击穿 FPM 128M 限制；单批 50 控制在约 25MB 以内。
      *
      * @param  array<int, int>  $productIds
-     * @return array<int, array<string, mixed>>
      */
-    private function fetchBatchProductDetails(Supplier $supplier, array $productIds, int $chunkSize = 200): array
-    {
+    private function eachProductDetailChunk(
+        Supplier $supplier,
+        array $productIds,
+        callable $processor,
+        int $chunkSize = 50
+    ): void {
         $chunkSize = max(1, min($chunkSize, 500));
         $jwt = $this->transport->login($supplier);
-        $details = [];
 
         foreach (array_chunk($productIds, $chunkSize) as $chunk) {
             try {
@@ -395,14 +404,15 @@ final class ZjmfCatalogService
                 continue;
             }
 
+            $details = [];
             foreach ($payload['detail'] as $pid => $detail) {
                 if (is_array($detail)) {
                     $details[(int) $pid] = $detail;
                 }
             }
-        }
 
-        return $details;
+            $processor($details);
+        }
     }
 
     /**

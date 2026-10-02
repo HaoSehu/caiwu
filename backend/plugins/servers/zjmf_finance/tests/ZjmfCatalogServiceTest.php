@@ -360,6 +360,66 @@ class ZjmfCatalogServiceTest extends TestCase
         $this->assertSame(9, $results[3]['stock'] ?? null);
     }
 
+    public function test_get_product_catalog_merges_prodetail_pricing_and_stock(): void
+    {
+        $platform = $this->createMock(HostingPanelApiTransport::class);
+        $platform->method('request')->willReturnCallback(function (Supplier $supplier, string $method, string $uri): array {
+            if ($uri === '/zjmf_api_login') {
+                return ['status' => 200, 'jwt' => 'jwt-1'];
+            }
+
+            if ($uri === '/cart/all') {
+                return [
+                    'status' => 200,
+                    'data' => [
+                        'products' => [
+                            ['id' => 11, 'name' => '有详情', 'type' => 'cloud'],
+                            ['id' => 12, 'name' => '无详情', 'type' => 'cloud'],
+                        ],
+                    ],
+                ];
+            }
+
+            if ($uri === '/api/product/prodetail') {
+                return [
+                    'status' => 200,
+                    'data' => [
+                        'detail' => [
+                            '11' => [
+                                'stock_control' => 1,
+                                'qty' => 4,
+                                'allow_qty' => 1,
+                                'product_pricings' => [
+                                    ['monthly' => 30.00, 'msetupfee' => 0.00],
+                                ],
+                            ],
+                        ],
+                    ],
+                ];
+            }
+
+            return ['status' => 200, 'data' => []];
+        });
+
+        $service = new ZjmfCatalogService(
+            new ZjmfFinanceTransport($platform, new ZjmfAuthManager($platform)),
+            new ZjmfCloudConfigTemplate,
+        );
+        $catalog = $service->getProductCatalog($this->supplier());
+
+        $this->assertCount(2, $catalog['products']);
+        $merged = $catalog['products'][0];
+        $this->assertSame('monthly', $merged['billingcycle']);
+        $this->assertSame('30.00', $merged['product_price']);
+        $this->assertSame(1, $merged['stock_control']);
+        $this->assertSame(4, $merged['stock']);
+
+        $untouched = $catalog['products'][1];
+        $this->assertSame('', $untouched['billingcycle']);
+        $this->assertNull($untouched['product_price']);
+        $this->assertSame(-1, $untouched['stock']);
+    }
+
     private function supplier(): Supplier
     {
         $supplier = new Supplier;
