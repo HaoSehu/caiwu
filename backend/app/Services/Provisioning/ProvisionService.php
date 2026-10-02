@@ -17,6 +17,7 @@ use App\Services\ProductCatalog\ProductCatalogService;
 use App\Services\System\SettingService;
 use App\Services\Upstream\Contracts\ProvidesProvisioning;
 use App\Services\Upstream\ProviderResolver;
+use App\Support\Money;
 use App\Support\ProductProvisionHostname;
 use App\Support\ServiceHostname;
 use Carbon\Carbon;
@@ -130,17 +131,20 @@ class ProvisionService
             'product_id' => $product->id,
         ]);
 
+        // 开通基数用目录价（应付价 + 券减免 + 会员折扣减免）：折后价进入续费定价会被再次打折，逐轮复利衰减。
+        $catalogAmount = Money::catalogAmountOf($invoice);
+
         $service = Service::create([
             'user_id' => $invoice->user_id,
             'product_id' => $invoice->product_id,
             'name' => $invoice->display_product_name ?: '未命名服务',
             'domain' => '',
             'billing_cycle' => (string) ($invoice->billing_cycle ?? ''),
-            'amount' => (float) $invoice->amount,
+            'amount' => $catalogAmount,
             'locked_pricing' => Service::buildDefaultRenewPricing(
                 is_array($product->pricing ?? null) ? $product->pricing : [],
                 (string) ($invoice->billing_cycle ?? ''),
-                $invoice->amount
+                $catalogAmount
             ),
             'status' => ServiceStatus::PENDING,
             'auto_renew' => 0,
@@ -335,6 +339,9 @@ class ProvisionService
             trim((string) ($order->product_spec_snapshot ?? $order->display_product_name ?? $order->product?->name ?? ''))
         );
 
+        // 开通基数用目录价（应付价 + 券减免 + 会员折扣减免）：折后价进入续费定价会被再次打折，逐轮复利衰减。
+        $catalogAmount = Money::catalogAmountOf($order);
+
         $service = Service::create([
             'user_id' => $order->user_id,
             'product_id' => (int) ($order->product?->id ?? $order->product_id),
@@ -342,12 +349,12 @@ class ProvisionService
             'name' => $instanceName !== '' ? $instanceName : '未命名服务',
             'domain' => $hostname,
             'billing_cycle' => (string) $order->billing_cycle,
-            'amount' => (float) $order->amount,
+            'amount' => $catalogAmount,
             // 开通时快照标准续费周期价格，默认按购买时价格续费。
             'locked_pricing' => Service::buildDefaultRenewPricing(
                 is_array($order->product?->pricing ?? null) ? $order->product->pricing : [],
                 (string) $order->billing_cycle,
-                $order->amount
+                $catalogAmount
             ),
             'status' => ServiceStatus::PENDING,
             'auto_renew' => 0,

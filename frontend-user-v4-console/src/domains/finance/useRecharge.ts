@@ -289,7 +289,12 @@ export function useRecharge() {
 
     try {
       const response = await clientApi.serviceRenewPreview(serviceId);
-      const renewPrice = Number(response.data?.renew_price || 0);
+      const payload = response.data;
+      // renew_price 是目录基数（不含会员折扣），实际扣款取默认周期的折后应付价
+      const cycles = Array.isArray(payload?.cycles) ? payload.cycles : [];
+      const defaultCycle =
+        cycles.find((cycle) => cycle?.billing_cycle === payload?.default_cycle) ?? cycles[0];
+      const renewPrice = Number(defaultCycle?.amount || 0);
       return Number.isFinite(renewPrice) ? renewPrice : 0;
     } catch {
       return 0;

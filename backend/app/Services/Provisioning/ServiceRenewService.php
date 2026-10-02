@@ -28,6 +28,7 @@ use App\Services\System\OperationLogService;
 use App\Services\System\SettingService;
 use App\Services\Upstream\Contracts\ProvidesRenewal;
 use App\Services\Upstream\ProviderResolver;
+use App\Support\Money;
 use App\Support\OrderInvoiceNoGenerator;
 use Carbon\Carbon;
 use Illuminate\Contracts\Cache\LockTimeoutException;
@@ -287,7 +288,7 @@ class ServiceRenewService
 
         if ($existingInvoice instanceof Invoice) {
             // 还原目录价基数（应收 + 券减免 + 会员折扣）后与当前报价对账
-            $existingCatalogAmount = round((float) $existingInvoice->amount + (float) ($existingInvoice->discount ?? 0) + (float) ($existingInvoice->member_discount_amount ?? 0), 2);
+            $existingCatalogAmount = Money::catalogAmountOf($existingInvoice);
             $existingMemberDiscount = round((float) ($existingInvoice->member_discount_amount ?? 0), 2);
             $existingCouponDiscount = round((float) ($existingInvoice->discount ?? 0), 2);
             $expectedCouponPayload = $this->couponService->previewOwnedCoupon(
@@ -339,7 +340,7 @@ class ServiceRenewService
                 ->first();
 
             if ($concurrentInvoice instanceof Invoice) {
-                $existingCatalogAmount = round((float) $concurrentInvoice->amount + (float) ($concurrentInvoice->discount ?? 0) + (float) ($concurrentInvoice->member_discount_amount ?? 0), 2);
+                $existingCatalogAmount = Money::catalogAmountOf($concurrentInvoice);
                 $existingMemberDiscount = round((float) ($concurrentInvoice->member_discount_amount ?? 0), 2);
                 $existingCouponDiscount = round((float) ($concurrentInvoice->discount ?? 0), 2);
                 $expectedDiscount = round((float) ($this->couponService->previewOwnedCoupon(
@@ -530,7 +531,7 @@ class ServiceRenewService
 
         if ($existingOrder instanceof Order) {
             // 还原目录价基数后与当前报价对账，会员折扣或券变化都会触发重建
-            $existingCatalogAmount = round((float) $existingOrder->amount + (float) ($existingOrder->discount ?? 0) + (float) ($existingOrder->member_discount_amount ?? 0), 2);
+            $existingCatalogAmount = Money::catalogAmountOf($existingOrder);
             $expectedDiscount = round((float) ($this->couponService->previewOwnedCoupon(
                 $userCouponId > 0 ? $userCouponId : null,
                 (int) $user->id,
@@ -591,7 +592,7 @@ class ServiceRenewService
                 ->first();
 
             if ($concurrentOrder instanceof Order) {
-                $existingCatalogAmount = round((float) $concurrentOrder->amount + (float) ($concurrentOrder->discount ?? 0) + (float) ($concurrentOrder->member_discount_amount ?? 0), 2);
+                $existingCatalogAmount = Money::catalogAmountOf($concurrentOrder);
                 $expectedDiscount = round((float) ($this->couponService->previewOwnedCoupon(
                     $userCouponId > 0 ? $userCouponId : null,
                     (int) $user->id,
@@ -1200,8 +1201,8 @@ class ServiceRenewService
                 'product_id' => (int) ($invoice->product_id ?: $service->product_id),
                 'invoice_id' => (int) $invoice->id,
                 'billing_cycle' => (string) ($invoice->billing_cycle ?? $service->billing_cycle),
-                // 服务金额记录续费原价，优惠仅作用于本次账单，不能改变后续续费定价。
-                'amount' => round((float) $invoice->amount + (float) ($invoice->discount ?? 0), 2),
+                // 服务金额记录续费目录价（应付价 + 券减免 + 会员折扣减免），优惠仅作用于本次账单，不能改变后续续费定价。
+                'amount' => Money::catalogAmountOf($invoice),
                 'expires_at' => $nextExpiresAt,
                 'status' => $resolvedStatus,
                 'provision_data' => $provisionData,
