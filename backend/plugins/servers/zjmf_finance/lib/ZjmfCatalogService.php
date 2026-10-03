@@ -35,6 +35,162 @@ final class ZjmfCatalogService
         return $catalog;
     }
 
+    /**
+     * 批量对接时按需补充选中商品的价格（ZJMF 的 /cart/all 列表不含价格，
+     * 价格在 /cart/get_product_config 的 product_pricings 中）。
+     * 目录价格通常已由 prodetail 详情合并，这里只兜底详情缺失导致仍无价格的选中商品，
+     * 避免批量对接因缺少可导入价格而整批跳过。
+     *
+     * @param  array<int, array<string, mixed>>  $products
+     * @param  array<int, int>  $selectedIds
+     * @return array<int, array<string, mixed>> 回填价格后的商品列表
+     */
+    public function hydrateSelectedPricing(Supplier $supplier, array $products, array $selectedIds): array
+    {
+        $selectedIdSet = collect($selectedIds)
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn (int $id) => $id > 0)
+            ->unique()
+            ->flip();
+
+        if ($selectedIdSet->isEmpty()) {
+            return $products;
+        }
+
+        $missingPricingIds = collect($products)
+            ->filter(fn ($product): bool => is_array($product) && $selectedIdSet->has((int) ($product['id'] ?? 0)))
+            ->filter(fn (array $product): bool => ! $this->hasImportablePricing($product))
+            ->map(fn (array $product): int => (int) ($product['id'] ?? 0))
+            ->filter(fn (int $productId): bool => $productId > 0)
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($missingPricingIds === []) {
+            return $products;
+        }
+
+        $pricingMap = $this->fetchSelectedProductPricing($supplier, $missingPricingIds);
+
+        if ($pricingMap === []) {
+            return $products;
+        }
+
+        return collect($products)
+            ->map(function ($product) use ($pricingMap) {
+                if (! is_array($product)) {
+                    return $product;
+                }
+
+                $pricing = $pricingMap[(int) ($product['id'] ?? 0)] ?? null;
+                if (! is_array($pricing) || $pricing === []) {
+                    return $product;
+                }
+
+                return array_replace($product, $pricing);
+            })
+            ->values()
+            ->all();
+    }
+
+    /**
+     * 判断商品是否已有可导入价格（月价或周期价任一为正数即可），与
+     * ProductSyncService::buildImportedPricing 的「缺少可导入价格」判定口径一致。
+     *
+     * @param  array<string, mixed>  $product
+     */
+    private function hasImportablePricing(array $product): bool
+    {
+        foreach (['monthly_price', 'product_price'] as $key) {
+            $amount = $this->normalizeCatalogAmount($product[$key] ?? null);
+            if ($amount !== null && (float) $amount > 0) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * 串行拉取选中商品的购买配置价格；单个失败只记日志不中断整批。
+     *
+     * @param  array<int, int>  $productIds
+     * @return array<int, array<string, mixed>>
+     */
+    private function fetchSelectedProductPricing(Supplier $supplier, array $productIds): array
+    {
+        $jwt = $this->transport->login($supplier);
+        $results = [];
+
+        foreach ($productIds as $productId) {
+            try {
+                $response = $this->transport->get(
+                    $supplier,
+                    '/cart/get_product_config',
+                    $jwt,
+                    ['pid' => $productId],
+                );
+            } catch (\Throwable $exception) {
+                Log::warning('[ZJMF 商品目录] 单个商品价格补充失败', [
+                    'supplier_id' => $supplier->id,
+                    'product_id' => $productId,
+                    'message' => $exception->getMessage(),
+                ]);
+
+                continue;
+            }
+
+            $pricing = is_array($response) ? $this->extractProductPricingFromResponse($response) : [];
+            if ($pricing !== []) {
+                $results[$productId] = $pricing;
+            }
+        }
+
+        return $results;
+    }
+
+    /**
+     * 从 /cart/get_product_config 响应中提取商品价格字段（product_pricings 的周期价格），
+     * 与 applyUpstreamProductDetail 的价格合并同口径；只产出有值的字段，不覆盖已有信息。
+     *
+     * @return array<string, mixed>
+     */
+    private function extractProductPricingFromResponse(array $response): array
+    {
+        $data = is_array($response['data'] ?? null) ? $response['data'] : $response;
+        $pricings = is_array($data['product_pricings'] ?? null) ? $data['product_pricings'] : [];
+
+        if ($pricings === [] && is_array($data['products'] ?? null)) {
+            $pricings = is_array($data['products']['product_pricings'] ?? null)
+                ? $data['products']['product_pricings']
+                : [];
+        }
+
+        $pricingRow = collect($pricings)->first(fn ($pricing) => is_array($pricing));
+        if (! is_array($pricingRow)) {
+            return [];
+        }
+
+        [$cycle, $price, $setupFee] = $this->resolveUpstreamPricingCycle($pricingRow);
+
+        $pricing = [];
+        if ($cycle !== null) {
+            $pricing['billingcycle'] = $cycle;
+            $pricing['product_price'] = $price;
+
+            if ($setupFee !== null) {
+                $pricing['setup_fee'] = $setupFee;
+            }
+        }
+
+        $monthly = $this->normalizeCatalogNonNegativeAmount($pricingRow['monthly'] ?? null);
+        if ($monthly !== null) {
+            $pricing['monthly_price'] = $monthly;
+        }
+
+        return $pricing;
+    }
+
     public function getProductConfigTemplate(Supplier $supplier, int $productId): array
     {
         // 模板只需单个商品：目录树定位商品，配置项按商品 id 单独获取。
@@ -86,7 +242,7 @@ final class ZjmfCatalogService
         );
     }
 
-    public function fetchBatchProductConfigOptions(Supplier $supplier, array $productIds, int $chunkSize = 8): array
+    public function fetchBatchProductConfigOptions(Supplier $supplier, array $productIds, int $chunkSize = 8, ?float $deadline = null): array
     {
         $ids = collect($productIds)
             ->map(fn ($id) => (int) $id)
@@ -104,6 +260,12 @@ final class ZjmfCatalogService
         $results = [];
 
         foreach (array_chunk($ids, $chunkSize) as $chunk) {
+            // 定时同步传入整体截止时间：超过预算后立即停止拉取，
+            // 剩余商品按空结果处理，避免「商品多 × 上游慢」拖垮整个同步任务。
+            if ($deadline !== null && microtime(true) >= $deadline) {
+                break;
+            }
+
             $responses = $this->transport->parallelGet(
                 $supplier,
                 collect($chunk)->mapWithKeys(fn (int $productId) => [

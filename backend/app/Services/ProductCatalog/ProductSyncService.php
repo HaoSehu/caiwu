@@ -46,6 +46,12 @@ class ProductSyncService
 
     private const REMOTE_STOCK_CACHE_TTL_SECONDS = 15;
 
+    /** 上游商品配置定时同步整体时间预算（秒），需小于任务超时 3600s。 */
+    private const UPSTREAM_SYNC_DEADLINE_SECONDS = 2700;
+
+    /** 单个供应商拉取配置的时间预算（秒），防止单个慢供应商拖垮整批。 */
+    private const UPSTREAM_SUPPLIER_BUDGET_SECONDS = 240;
+
     // 前台实时库存外层缓存：基于 redis_volatile，未命中时才会去上游实时拉取，
     // 提高 TTL 减少每次进 /products 都命中冷缓存、重复打上游的窗口。
     private const SITE_STOCK_CACHE_TTL_SECONDS = 30;
@@ -230,6 +236,19 @@ class ProductSyncService
         $catalogProducts = collect($catalog['products'] ?? [])
             ->filter(fn ($item) => is_array($item) && (int) ($item['id'] ?? 0) > 0)
             ->keyBy(fn (array $item) => (int) ($item['id'] ?? 0));
+
+        // ZJMF 等上游的目录接口可能不返回价格（价格在详情/购买配置接口），
+        // 按选中商品补充价格，避免批量对接因缺少可导入价格而整批跳过。
+        if (method_exists($catalogCapability, 'hydrateSelectedPricing')) {
+            $catalog['products'] = $catalogCapability->hydrateSelectedPricing(
+                $supplier,
+                $catalog['products'] ?? [],
+                $supplierProductIds->all(),
+            );
+            $catalogProducts = collect($catalog['products'] ?? [])
+                ->filter(fn ($item) => is_array($item) && (int) ($item['id'] ?? 0) > 0)
+                ->keyBy(fn (array $item) => (int) ($item['id'] ?? 0));
+        }
 
         $existingProducts = $this->findExistingProductsBySupplierUpstreamIds($supplier, $supplierProductIds->all());
 
@@ -497,6 +516,10 @@ class ProductSyncService
 
         $hasChanges = false;
 
+        // 整体时间预算：上游拉取慢时宁可部分跳过也要保证在任务超时前正常收尾，
+        // 避免运行记录被队列超时强杀后永久卡在 running（自愈兜底见 HeartbeatScheduler）。
+        $syncDeadline = microtime(true) + self::UPSTREAM_SYNC_DEADLINE_SECONDS;
+
         $supplierMap = $this->resolveProductSupplierMap($products);
 
         foreach ($products->groupBy(fn (Product $product) => (int) ($supplierMap[(int) $product->id]?->id ?? 0)) as $supplierProducts) {
@@ -526,18 +549,35 @@ class ProductSyncService
                 continue;
             }
 
+            // 整体时间预算耗尽：剩余供应商本轮全部跳过，下轮心跳续传。
+            if (microtime(true) >= $syncDeadline) {
+                $summary['skipped_products'] += $supplierProducts->count();
+
+                Log::info('[定时任务] 上游产品配置同步跳过：整体时间预算已耗尽', [
+                    'supplier_id' => $supplier->id,
+                    'product_ids' => $supplierProducts->pluck('id')->values()->all(),
+                ]);
+
+                continue;
+            }
+
             $summary['matched_suppliers']++;
 
             try {
                 $catalogCapability = $this->resolveCatalogCapability($supplier);
+                $supplierProductIds = $supplierProducts
+                    ->map(fn (Product $product) => $this->resolveProductUpstreamProductId($product))
+                    ->filter(fn (int $supplierProductId) => $supplierProductId > 0)
+                    ->unique()
+                    ->values()
+                    ->all();
+                // 单个供应商最多占用剩余预算（上限 240s），超时立即停止拉取，避免拖垮后续供应商。
+                $supplierDeadline = microtime(true) + min(self::UPSTREAM_SUPPLIER_BUDGET_SECONDS, max(1.0, $syncDeadline - microtime(true)));
                 $remoteConfigOptions = $catalogCapability->fetchBatchProductConfigOptions(
                     $supplier,
-                    $supplierProducts
-                        ->map(fn (Product $product) => $this->resolveProductUpstreamProductId($product))
-                        ->filter(fn (int $supplierProductId) => $supplierProductId > 0)
-                        ->unique()
-                        ->values()
-                        ->all()
+                    $supplierProductIds,
+                    8,
+                    $supplierDeadline,
                 );
             } catch (\Throwable $exception) {
                 $summary['failed_products'] += $supplierProducts->count();
@@ -1322,8 +1362,13 @@ class ProductSyncService
 
         $pricing = [];
 
+        // 上游金额是两位小数（如 '19.99'）。周期换算先转为「分」整数再相乘，
+        // 与 Money 支持的两位小数口径一致，避免浮点乘法（19.99 * 12 = 239.87999...）
+        // 在边界产生一分钱误差。
+        $monthlyBaseCents = (int) round(((float) $monthlyBasePrice) * 100);
+
         foreach (self::IMPORT_PRICING_MONTHS as $cycle => $months) {
-            $pricing[$cycle] = number_format($monthlyBasePrice * $months, 2, '.', '');
+            $pricing[$cycle] = number_format($monthlyBaseCents * $months / 100, 2, '.', '');
         }
 
         return $pricing;

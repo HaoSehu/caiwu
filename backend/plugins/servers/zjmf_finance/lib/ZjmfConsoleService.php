@@ -120,19 +120,37 @@ final class ZjmfConsoleService
     public function fetchCustomModulePage(Supplier $supplier, int $hostId, string $moduleKey, ?string $jwt = null): string
     {
         $resolvedJwt = $this->resolveJwt($supplier, $jwt);
-        $rootUrl = $this->resolveSupplierRootUrl($supplier);
 
-        return $this->normalizeModulePageBody($this->transport->getText(
+        // 走魔方财务 API 协议端点（home/provision/postClientAreaContent）：
+        // 入参 post.id = 上游主机 id、post.key = 自定义 tab 标识、post.now_jwt = API JWT，
+        // 响应为 {status:200, data:{html}}。该端点用 API JWT 鉴权；
+        // 若走客户区路由 GET /provision/custom/content，它只认客户区登录会话
+        // （client_user_login_token_ 缓存），API JWT 必然取不到内容，面板只能拿到空白页。
+        $response = $this->transport->post(
             $supplier,
-            $rootUrl.'/provision/custom/content',
+            '/zjmf_api/provision/custom/content',
+            [
+                'id' => $hostId,
+                'key' => $moduleKey,
+                'now_jwt' => $resolvedJwt,
+            ],
             $resolvedJwt,
-            ['id' => $hostId, 'key' => $moduleKey, 'jwt' => $resolvedJwt],
-            ['Authorization: JWT '.$resolvedJwt]
-        ));
+            self::FORM_HEADERS,
+            ['jwt' => $resolvedJwt],
+        );
+
+        $payload = is_array($response['data'] ?? null) ? $response['data'] : $response;
+        $html = $payload['html'] ?? null;
+
+        return is_string($html) ? $this->normalizeModulePageBody($html) : '';
     }
 
     /**
      * Returns the same-system form action used by ZJMF custom modules.
+     *
+     * 动作端点用客户区路径 /provision/custom/{hostId}：魔方财务上游只注册了
+     * 该动作路由（home/provision/customFunc），它同样接受 API JWT 鉴权。
+     * 取内容走的是另一个端点 /zjmf_api/provision/custom/content。
      */
     public function getCustomModuleActionEndpoint(Supplier $supplier, int $hostId): string
     {
@@ -302,7 +320,7 @@ final class ZjmfConsoleService
                 ? trim((string) ($item['value'] ?? $item['type'] ?? $item['key'] ?? ''))
                 : trim((string) (is_string($key) ? $key : $item));
             $label = is_array($item)
-                ? trim((string) ($item['label'] ?? $item['name'] ?? ''))
+                ? trim((string) ($item['label'] ?? $item['name'] ?? $item['title'] ?? ''))
                 : '';
             $value = $this->normalizeMonitorType($value);
 
@@ -359,13 +377,18 @@ final class ZjmfConsoleService
         return max($timestamp, 0);
     }
 
+    /**
+     * 上游 module_chart 的 type 取值（cpu / disk / memory / flow），
+     * 用于上游未给 title 时的兜底显示名。
+     */
     private function monitorTypeLabel(string $type): string
     {
         return match ($type) {
-            'bw' => '带宽',
-            'disk_io' => '磁盘 I/O',
+            'cpu' => 'CPU',
+            'bw', 'flow' => '带宽',
+            'disk', 'disk_io' => '磁盘 I/O',
             'memory' => '内存',
-            default => 'CPU',
+            default => $type,
         };
     }
 
