@@ -11,6 +11,7 @@ use App\Models\Product;
 use App\Models\SecondProductGroup;
 use App\Models\ThirdProductGroup;
 use App\Services\ProductCatalog\Concerns\HandlesProductCatalogHelpers;
+use App\Support\SchemaMetadataCache;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -209,27 +210,95 @@ class ProductCategoryService
             if ($level === 1) {
                 $group = $this->findFirstGroup($groupId);
                 throw_if($group->secondProductGroups()->exists(), new BusinessException('请先删除下级分类'));
-                throw_if(Product::query()->inFirstProductGroup((int) $group->id)->exists(), new BusinessException('请先迁移或删除该分类下的商品'));
+                $this->assertNoActiveProductsInGroup(fn (Builder $query) => $query->inFirstProductGroup((int) $group->id));
+                $this->forceDeleteSoftDeletedProductsInGroup(fn (Builder $query) => $query->inFirstProductGroup((int) $group->id));
                 $group->delete();
             } elseif ($level === 2) {
                 $group = $this->findSecondGroup($groupId);
                 throw_if($group->thirdProductGroups()->exists(), new BusinessException('请先删除下级分类'));
-                throw_if(Product::query()->inSecondProductGroup((int) $group->id)->exists(), new BusinessException('请先迁移或删除该分类下的商品'));
+                $this->assertNoActiveProductsInGroup(fn (Builder $query) => $query->inSecondProductGroup((int) $group->id));
+                $this->forceDeleteSoftDeletedProductsInGroup(fn (Builder $query) => $query->inSecondProductGroup((int) $group->id));
                 $group->delete();
             } else {
                 $group = $this->findThirdGroup($groupId);
-                // 外键 ON DELETE RESTRICT 对软删商品同样生效，预检必须包含软删记录，
-                // 否则界面不可见的软删商品会让物理 DELETE 撞外键被兜底渲染成 500。
-                $hasProducts = Product::query()
-                    ->withTrashed()
-                    ->inCurrentProductGroup((int) $group->id)
-                    ->exists();
-                throw_if($hasProducts, new BusinessException('请先迁移或彻底删除该分类下的商品（含已删除商品）'));
+                $this->assertNoActiveProductsInGroup(fn (Builder $query) => $query->inCurrentProductGroup((int) $group->id));
+                $this->forceDeleteSoftDeletedProductsInGroup(fn (Builder $query) => $query->inCurrentProductGroup((int) $group->id));
                 $group->delete();
             }
         });
 
         $this->forgetSiteCatalogCache();
+    }
+
+    /**
+     * 校验分组下不存在未删除商品（软删除商品由 forceDeleteSoftDeletedProductsInGroup 清理）。
+     *
+     * 守卫必须用 withoutGlobalScopes 后再显式排除软删：默认作用域会漏掉软删商品，
+     * 而外键 ON DELETE RESTRICT 对软删行同样生效，漏检会让物理 DELETE 撞外键被兜底渲染成 500。
+     *
+     * @param  \Closure(Builder<Product>): Builder<Product>  $scopeQuery
+     */
+    private function assertNoActiveProductsInGroup(\Closure $scopeQuery): void
+    {
+        $hasActive = Product::query()
+            ->withoutGlobalScopes()
+            ->whereNull('products.deleted_at')
+            ->tap($scopeQuery)
+            ->exists();
+
+        throw_if($hasActive, new BusinessException('请先迁移或删除该分类下的商品'));
+    }
+
+    /**
+     * 物理删除分组下已软删除的商品，避免其外键引用阻塞分组删除；
+     * 上游绑定（product_upstream_bindings，product_id 为 RESTRICT 外键）一并清除。
+     *
+     * 与商品物理删除守卫（ProductAdminService::forceDeleteProduct）语义协同：
+     * 已有服务实例的软删商品不得静默清除——服务行对 products 同样是 RESTRICT 外键
+     * （含已软删的服务行，其外键引用仍然存在），必须阻断分类删除并提示管理员先处理。
+     *
+     * @param  \Closure(Builder<Product>): Builder<Product>  $scopeQuery
+     */
+    private function forceDeleteSoftDeletedProductsInGroup(\Closure $scopeQuery): void
+    {
+        $trashedProductIds = Product::query()
+            ->withoutGlobalScopes()
+            ->whereNotNull('products.deleted_at')
+            ->tap($scopeQuery)
+            ->pluck('products.id')
+            ->map(fn ($id): int => (int) $id)
+            ->filter(fn (int $id): bool => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($trashedProductIds === []) {
+            return;
+        }
+
+        $hasServicedProducts = Product::query()
+            ->withoutGlobalScopes()
+            ->whereIn('products.id', $trashedProductIds)
+            ->whereExists(function ($query): void {
+                $query->selectRaw(1)
+                    ->from('services')
+                    ->whereColumn('services.product_id', 'products.id');
+            })
+            ->exists();
+
+        throw_if($hasServicedProducts, new BusinessException('该分类下存在已有服务实例的已删除商品，请先彻底删除这些商品后再删除分类'));
+
+        if (SchemaMetadataCache::hasTable('product_upstream_bindings')) {
+            DB::table('product_upstream_bindings')
+                ->whereIn('product_id', $trashedProductIds)
+                ->delete();
+        }
+
+        // forceDelete 查询必须去掉软删作用域，否则 whereNull(deleted_at) 会过滤掉目标行。
+        Product::query()
+            ->withoutGlobalScopes()
+            ->whereIn('products.id', $trashedProductIds)
+            ->forceDelete();
     }
 
     public function reorderAdminCategories(int $level, ?int $parentGroupId, array $groupIds): array

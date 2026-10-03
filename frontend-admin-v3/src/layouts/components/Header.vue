@@ -100,7 +100,7 @@ import LogoFull from '@/assets/assets-logo-full.svg?component';
 import { prefix } from '@/config/global';
 import { t } from '@/locales';
 import { getActive } from '@/router';
-import { useSettingStore, useUserStore } from '@/store';
+import { getPermissionStore, getTabsRouterStore, useSettingStore, useUserStore } from '@/store';
 import type { MenuRoute, ModeType } from '@/types/interface';
 import { errorMessage } from '@/utils/userMessage';
 
@@ -256,11 +256,18 @@ const submitPassword = async () => {
   }
 };
 
-const handleLogout = () => {
-  router.push({
-    path: '/admin/login',
-    query: { redirect: encodeURIComponent(router.currentRoute.value.fullPath) },
-  });
+// 退出登录必须真正清理会话：吊销服务端 token（userStore.logout 内调用后端登出接口）、
+// 清本地 token 与 userInfo、丢弃标签页与已注册的动态路由。只做 router.push 的话 token 仍在，
+// 用户按后退键或手输 /admin/* 会被守卫直接放行，等于没有登出。
+// 也不要带 redirect：登出后再把人送回原页面与「退出」的语义相悖。
+const handleLogout = async () => {
+  try {
+    await user.logout();
+  } finally {
+    getTabsRouterStore().removeTabRouterList();
+    await getPermissionStore().restoreRoutes();
+    router.push({ path: '/admin/login' });
+  }
 };
 </script>
 <style lang="less" scoped>

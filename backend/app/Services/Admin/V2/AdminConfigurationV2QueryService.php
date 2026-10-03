@@ -774,7 +774,10 @@ class AdminConfigurationV2QueryService
         $bindingIds = $this->supplierPluginBindingIds((int) $supplier->id);
         if (SchemaMetadataCache::hasTable('product_upstream_bindings') && SchemaMetadataCache::hasTable('supplier_plugin_bindings')) {
             if ($normalizedIds !== [] && $bindingIds !== []) {
-                $bindingProducts = Product::withTrashed()
+                // 已删除（软删）的商品不算「已对接」：绑定行保留是为了恢复商品时还原映射，
+                // 但删除后上游商品应可重新导入/对接，而不是永远显示已对接。
+                // 重新对接时 ProductSyncService 会按 withTrashed 命中同一条软删商品并复活更新。
+                $bindingProducts = Product::query()
                     ->with(['productGroup.secondProductGroup.firstProductGroup'])
                     ->select('products.*', 'pub.upstream_product_id as binding_upstream_product_id')
                     ->join('product_upstream_bindings as pub', 'pub.product_id', '=', 'products.id')

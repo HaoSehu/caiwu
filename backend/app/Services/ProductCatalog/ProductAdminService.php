@@ -689,6 +689,14 @@ class ProductAdminService
         throw_if(! $product->trashed(), new BusinessException('请先删除商品，再执行彻底删除'));
         throw_if($product->services()->count() > 0, new BusinessException('该商品已有服务实例，无法彻底删除'));
 
+        // product_upstream_bindings.product_id 对 products 是 ON DELETE RESTRICT 外键，
+        // 彻底删除前必须先清掉上游绑定行，否则会撞外键被兜底渲染成 500。
+        if (SchemaMetadataCache::hasTable('product_upstream_bindings')) {
+            DB::table('product_upstream_bindings')
+                ->where('product_id', (int) $product->id)
+                ->delete();
+        }
+
         $product->forceDelete();
         $this->forgetSiteCatalogCache();
     }

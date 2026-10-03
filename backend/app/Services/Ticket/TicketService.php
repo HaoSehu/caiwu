@@ -20,6 +20,7 @@ use App\Services\System\NotificationService;
 use App\Services\System\UploadedAssetReferenceService;
 use App\Support\AdminPermissions;
 use App\Support\AdminPrivacy;
+use App\Support\MediaAssetTypes;
 use App\Support\PublicUrl;
 use App\Support\SchemaMetadataCache;
 use App\Support\SecureAsset;
@@ -1132,8 +1133,11 @@ class TicketService
 
         throw_if(! File::exists($absolutePath), new BusinessException('图片不存在或已失效'));
 
+        // 与上传白名单（UploadImageRequest/UploadTicketImageRequest）及读取端
+        // MediaAssetTypes 保持一致：`image/` 前缀会放行 image/svg+xml，
+        // 而 SVG 内联渲染等同于在本站源执行脚本，必须在准入时就挡下。
         $resolvedMimeType = (string) ($mimeType ?: File::mimeType($absolutePath) ?: '');
-        throw_if(! str_starts_with($resolvedMimeType, 'image/'), new BusinessException('仅支持图片附件'));
+        throw_if(! MediaAssetTypes::isAllowedImageMimeType($resolvedMimeType), new BusinessException('仅支持图片附件'));
 
         return [
             'name' => TextSanitizer::clean($name) !== '' ? TextSanitizer::clean($name) : basename($path),
@@ -1406,7 +1410,9 @@ class TicketService
         $mimeType = trim((string) ($stored['mime_type'] ?? ''));
         $size = (int) ($stored['size'] ?? 0);
 
-        if ($mimeType === '' || $size <= 0 || ! str_starts_with($mimeType, 'image/')) {
+        // 信任固化值前先过 MIME 白名单：`image/` 前缀会放行 image/svg+xml，
+        // 落入本分支的历史 SVG 附件会被挡回文件系统校验路径（同样过白名单）。
+        if ($mimeType === '' || $size <= 0 || ! MediaAssetTypes::isAllowedImageMimeType($mimeType)) {
             return $this->buildStoredAttachmentMeta($normalizedPath, (string) ($stored['name'] ?? null), $mimeType !== '' ? $mimeType : null);
         }
 

@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Constants\ProductType;
-use App\Exceptions\BusinessException;
 use App\Models\FirstProductGroup;
 use App\Models\Product;
 use App\Models\SecondProductGroup;
@@ -183,9 +182,10 @@ class ProductCatalogFixesTest extends TestCase
     }
 
     /**
-     * D2A-04：三级分组内商品全部软删时，删除分组给出业务提示而非 500；彻底删除商品后可删分组。
+     * D2A-04：三级分组下无服务实例的软删商品随分组删除一并清理（不再要求管理员先彻底删除）；
+     * 分组删除成功后商品与分组均不存在。
      */
-    public function test_delete_third_group_with_soft_deleted_products_reports_business_error(): void
+    public function test_delete_third_group_with_serviceless_soft_deleted_products_cleans_up(): void
     {
         $first = $this->ensureFirstGroupByCode((string) (ProductType::items()[0]['value'] ?? 'vps'));
         $second = $this->categoryService()->createCategory([
@@ -202,17 +202,8 @@ class ProductCatalogFixesTest extends TestCase
         $product = $this->createProductInGroup(ThirdProductGroup::query()->findOrFail((int) $third['id']));
         $product->delete();
 
-        try {
-            $this->categoryService()->deleteCategory((int) $third['id'], 3);
-            $this->fail('期待业务异常');
-        } catch (BusinessException $exception) {
-            $this->assertStringContainsString('彻底删除', $exception->getMessage());
-        }
-
-        $this->assertDatabaseHas('third_product_groups', ['id' => (int) $third['id']]);
-
-        $product->forceDelete();
         $this->categoryService()->deleteCategory((int) $third['id'], 3);
+        $this->assertDatabaseMissing('products', ['id' => (int) $product->id]);
         $this->assertDatabaseMissing('third_product_groups', ['id' => (int) $third['id']]);
     }
 

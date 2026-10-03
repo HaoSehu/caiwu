@@ -8,6 +8,7 @@ use App\Exceptions\BusinessException;
 use App\Models\Product;
 use App\Support\CacheKey;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 trait HandlesProductCatalogHelpers
 {
@@ -37,12 +38,18 @@ trait HandlesProductCatalogHelpers
 
     private function forgetSiteCatalogCache(): void
     {
-        Cache::forget(self::ADMIN_SUMMARY_CACHE_KEY);
-        Cache::forget(self::SITE_CATALOG_CACHE_KEY);
+        // 整体注册为 afterCommit 回调：多数调用方（如 ProductCategoryService）在 DB::transaction()
+        // 内触发失效。若在事务提交前就 bump 版本号，并发请求会用新版本键缓存住提交前的旧目录，
+        // 提交后不再有第二次失效——旧数据要挂满整个 600-900 秒 TTL。afterCommit 的语义（Laravel 实测）：
+        // 无事务立即执行、事务提交后执行、事务回滚则丢弃——三种场景都是想要的行为。
+        DB::afterCommit(function (): void {
+            Cache::forget(self::ADMIN_SUMMARY_CACHE_KEY);
+            Cache::forget(self::SITE_CATALOG_CACHE_KEY);
 
-        // 站点商品缓存由 bumpSiteCatalogCacheVersion() 的版本号统一控制失效，
-        // 无需单独清理带 tag 的缓存键（且整个仓库从未向 tag 写入任何键）。
-        $this->bumpSiteCatalogCacheVersion();
+            // 站点商品缓存由 bumpSiteCatalogCacheVersion() 的版本号统一控制失效，
+            // 无需单独清理带 tag 的缓存键（且整个仓库从未向 tag 写入任何键）。
+            $this->bumpSiteCatalogCacheVersion();
+        });
     }
 
     private function bumpSiteCatalogCacheVersion(): void
