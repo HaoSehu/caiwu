@@ -22,17 +22,17 @@ class ListInvoicesRequest extends AdminFormRequest
     public function rules(): array
     {
         return [
-            'keyword' => ['sometimes', 'string', 'max:80'],
-            'invoice_no' => ['sometimes', 'string', 'max:80'],
-            'user_id' => ['sometimes', 'integer', 'min:1'],
-            'status' => ['sometimes', 'integer'],
-            'type' => ['sometimes', 'string', Rule::in($this->allowedTypes())],
-            'product_id' => ['sometimes', 'integer', 'min:1'],
-            'start_date' => ['sometimes', 'date_format:Y-m-d'],
-            'end_date' => ['sometimes', 'date_format:Y-m-d'],
+            'keyword' => ['nullable', 'string', 'max:80'],
+            'invoice_no' => ['nullable', 'string', 'max:80'],
+            'user_id' => ['nullable', 'integer', 'min:1'],
+            'status' => ['nullable', 'integer'],
+            'type' => ['nullable', 'string', Rule::in($this->allowedTypes())],
+            'product_id' => ['nullable', 'integer', 'min:1'],
+            'start_date' => ['nullable', 'date_format:Y-m-d'],
+            'end_date' => ['nullable', 'date_format:Y-m-d'],
             'date_range' => ['prohibited'],
-            'page' => ['sometimes', 'integer', 'min:1'],
-            'page_size' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'page' => ['nullable', 'integer', 'min:1'],
+            'page_size' => ['nullable', 'integer', 'min:1', 'max:100'],
             'pageSize' => ['prohibited'],
             'per_page' => ['prohibited'],
         ];
