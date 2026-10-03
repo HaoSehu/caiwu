@@ -1180,7 +1180,7 @@ CREATE TABLE `referral_rewards` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `referrer_user_id` bigint unsigned NOT NULL,
   `referred_user_id` bigint unsigned NOT NULL,
-  `order_id` bigint unsigned NOT NULL,
+  `order_id` bigint unsigned DEFAULT NULL,
   `invoice_id` bigint unsigned DEFAULT NULL,
   `product_id` bigint unsigned DEFAULT NULL,
   `order_amount` decimal(12,2) NOT NULL DEFAULT '0.00',

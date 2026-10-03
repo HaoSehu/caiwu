@@ -140,12 +140,20 @@ class AdminOrderNotificationService
             return;
         }
 
+        // 统计本轮成败：单个收件人失败只记日志并继续（个别地址问题不该阻断其他人），
+        // 全部失败时额外打一条 error 级日志，把「通道整体不可用」与「个别地址失败」
+        // 区分开，便于告警发现 SMTP 整体故障导致的通知静默丢失。
+        $attempted = 0;
+        $failed = 0;
+
         foreach ($recipients as $admin) {
             $ruleKey = 'admin:'.(int) $admin->id;
 
             if (AutomationLog::hasRecord(self::TASK_KEY, $action, 'order', (int) $order->id, $ruleKey)) {
                 continue;
             }
+
+            $attempted++;
 
             try {
                 $this->notificationService->sendTemplateEmail(
@@ -167,6 +175,8 @@ class AdminOrderNotificationService
                     ]
                 );
             } catch (\Throwable $exception) {
+                $failed++;
+
                 Log::warning('[管理员账单通知] 邮件发送失败', [
                     'action' => $action,
                     'order_id' => $order->id,
@@ -177,6 +187,20 @@ class AdminOrderNotificationService
                     'message' => $exception->getMessage(),
                 ]);
             }
+        }
+
+        // 本轮全部收件人都失败：发信通道整体不可用（而非个别地址问题）。
+        // 刻意只升级日志级别、不外抛：本方法无队列任务承接重试，外抛换不到重投，
+        // 反而会把异常带进调用方流程（如支付回调/履约链路）。
+        if ($attempted > 0 && $failed === $attempted) {
+            Log::error('[管理员账单通知] 全部收件人发送失败，本次通知已丢失且不会自动重投', [
+                'action' => $action,
+                'order_id' => (int) $order->id,
+                'order_no' => (string) $order->order_no,
+                'template_code' => $templateCode,
+                'attempted' => $attempted,
+                'failed' => $failed,
+            ]);
         }
     }
 

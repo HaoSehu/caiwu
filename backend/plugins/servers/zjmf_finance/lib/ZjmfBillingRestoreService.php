@@ -139,8 +139,8 @@ class ZjmfBillingRestoreService
         usort($invoicePayload, fn (array $a, array $b) => $a['id'] <=> $b['id']);
         usort($balanceLogPayload, fn (array $a, array $b) => $a['id'] <=> $b['id']);
 
-        // 空库强制审计：先统计目标表既有数据供 dry-run 预检展示；非 dry-run 且目标表
-        // 非空时必须显式 --force 才允许物理删除重插，防止误把 dump 快照后的新财务数据抹掉。
+        // 空库强制审计：先统计目标表既有数据供 dry-run 预检展示；非 dry-run 的非空校验
+        // 在恢复事务内重新执行（见下方事务闭包），防止误把 dump 快照后的新财务数据抹掉。
         $existingInvoices = Schema::hasTable('invoices') ? (int) DB::table('invoices')->count() : 0;
         $existingBalanceLogs = Schema::hasTable('balance_logs') ? (int) DB::table('balance_logs')->count() : 0;
         $summary['existing_invoices'] = $existingInvoices;
@@ -150,19 +150,31 @@ class ZjmfBillingRestoreService
             return $summary;
         }
 
-        if (($existingInvoices > 0 || $existingBalanceLogs > 0) && ! $forceOverwrite) {
-            throw new RuntimeException(
-                '目标库 invoices/balance_logs 已有数据（invoices='.$existingInvoices.', balance_logs='.$existingBalanceLogs.'），'
-                .'恢复将物理删除并覆盖全部现有财务数据；如确认覆盖，请追加 --force'
-            );
-        }
-
         $summary['overwrite_forced'] = true;
 
-        DB::transaction(function () use ($invoicePayload, $balanceLogPayload, $clientBalances): void {
+        DB::transaction(function () use ($invoicePayload, $balanceLogPayload, $clientBalances, $forceOverwrite): void {
+            // 非空校验与恢复写入放在同一事务内：事务外计数后、写入前，线上仍可能写入
+            // 新账单，此处于物理删除前重新计数并立即拒绝，收窄「计数后、写入前」的并发窗口。
+            // （本工具按单实例停机式运维恢复使用，未引入多实例互斥锁；如需并发恢复请另行加锁）
+            $guardInvoices = Schema::hasTable('invoices') ? (int) DB::table('invoices')->count() : 0;
+            $guardBalanceLogs = Schema::hasTable('balance_logs') ? (int) DB::table('balance_logs')->count() : 0;
+
+            if (($guardInvoices > 0 || $guardBalanceLogs > 0) && ! $forceOverwrite) {
+                throw new RuntimeException(
+                    '目标库 invoices/balance_logs 已有数据（invoices='.$guardInvoices.', balance_logs='.$guardBalanceLogs.'），'
+                    .'恢复将物理删除并覆盖全部现有财务数据；如确认覆盖，请追加 --force'
+                );
+            }
+
             $now = now()->format('Y-m-d H:i:s');
 
-            DB::table('balance_logs')->delete();
+            // caiwu 已归档删除 balance_logs 表（流水真源为 account_transactions，见
+            // database/_archive/migrations/2026_07_04_190000_drop_balance_logs_table.php），
+            // 目标库不存在该表时跳过其清空与重插，避免 --force 恢复整体不可用。
+            if (Schema::hasTable('balance_logs')) {
+                DB::table('balance_logs')->delete();
+            }
+
             DB::table('invoices')->delete();
             DB::table('users')->update([
                 'updated_at' => $now,
@@ -177,8 +189,10 @@ class ZjmfBillingRestoreService
                 DB::table('invoices')->insert($chunk);
             }
 
-            foreach (array_chunk($balanceLogPayload, 500) as $chunk) {
-                DB::table('balance_logs')->insert($chunk);
+            if (Schema::hasTable('balance_logs')) {
+                foreach (array_chunk($balanceLogPayload, 500) as $chunk) {
+                    DB::table('balance_logs')->insert($chunk);
+                }
             }
 
             foreach ($clientBalances as $userId => $balance) {
@@ -596,7 +610,8 @@ class ZjmfBillingRestoreService
             return null;
         }
 
-        return Carbon::createFromTimestamp($timestamp)->format('Y-m-d H:i:s');
+        // 上游时间戳按应用时区解析，避免 UTC 服务器上偏移 8 小时
+        return Carbon::createFromTimestamp($timestamp, config('app.timezone'))->format('Y-m-d H:i:s');
     }
 
     private function formatDate(int $timestamp): ?string
@@ -605,6 +620,6 @@ class ZjmfBillingRestoreService
             return null;
         }
 
-        return Carbon::createFromTimestamp($timestamp)->toDateString();
+        return Carbon::createFromTimestamp($timestamp, config('app.timezone'))->toDateString();
     }
 }

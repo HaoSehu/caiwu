@@ -282,7 +282,8 @@ class ReferralService
      *
      * $sourceType 目前仅取 'order' 与 'invoice'，决定：
      * - 锁键中段："lock:referral:reward:{$sourceType}:{$sourceId}"
-     * - ReferralReward 的幂等列与外键列：{$sourceType}_id
+     * - ReferralReward 的幂等查询列与落库来源列：{$sourceType}_id（order_id/invoice_id
+     *   两列在 create 时显式赋值，另一来源侧写 null，见 create 处注释）
      * - 账号日志 relatedType 与操作日志 detail 中 {$sourceType}_no / {$sourceType}_amount 键名
      * $type 取 'new'（新购）或 'renew'（续费），决定按大使的 reward_rate 或 renewal_reward_rate 结算。
      * 来源侧的业务守卫、取数金额与中文文案由各薄壳组装后传入；
@@ -391,10 +392,14 @@ class ReferralService
                     ],
                 );
 
+                // order_id 已由迁移放宽为可空：订单路径保持写值；无订单账单（invoice 路径）
+                // 显式写 null——列既已可空，strict 模式下未指定列会正常落 NULL，
+                // 且 order_id 上的唯一索引对多个 NULL 不生效去重，订单路径约束不变。
                 return ReferralReward::query()->create([
                     'referrer_user_id' => $lockedReferrer->id,
                     'referred_user_id' => $buyer->id,
-                    "{$sourceType}_id" => $sourceId,
+                    'order_id' => $sourceType === 'order' ? $sourceId : null,
+                    'invoice_id' => $sourceType === 'invoice' ? $sourceId : null,
                     'product_id' => $productId,
                     'order_amount' => $amount,
                     'reward_rate' => $rewardRate,
