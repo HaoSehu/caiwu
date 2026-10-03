@@ -17,6 +17,7 @@ use App\Services\ProductCatalog\ProductCatalogService;
 use App\Services\System\SettingService;
 use App\Services\Upstream\Contracts\ProvidesProvisioning;
 use App\Services\Upstream\ProviderResolver;
+use App\Support\BillingCycle;
 use App\Support\Money;
 use App\Support\ProductProvisionHostname;
 use App\Support\ServiceHostname;
@@ -1004,18 +1005,12 @@ class ProvisionService
     {
         $nextDueDate = $hostDetail['nextduedate'] ?? null;
         if (is_numeric($nextDueDate) && (int) $nextDueDate > 0) {
-            return Carbon::createFromTimestamp((int) $nextDueDate);
+            // 上游时间戳按应用时区解析，避免 UTC 服务器上偏移 8 小时
+            return Carbon::createFromTimestamp((int) $nextDueDate, config('app.timezone'));
         }
 
-        return match ((string) $order->billing_cycle) {
-            'monthly' => now()->addMonth(),
-            'quarterly' => now()->addMonths(3),
-            'semiannually' => now()->addMonths(6),
-            'annually' => now()->addYear(),
-            'biennially' => now()->addYears(2),
-            'triennially' => now()->addYears(3),
-            default => null,
-        };
+        // 到期推进统一走 BillingCycle::advance（夹月末不溢出）；未知周期交由调用方兜底
+        return BillingCycle::advance(now(), (string) $order->billing_cycle);
     }
 
     private function sanitizeRequestedConfig(array $config): array

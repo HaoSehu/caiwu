@@ -102,14 +102,19 @@ final class ZjmfFinanceAdapter implements ProvidesConsoleAccess, ProvidesConsole
         return $this->catalogService->getProductCatalog($supplier);
     }
 
+    public function hydrateSelectedPricing(Supplier $supplier, array $products, array $selectedIds): array
+    {
+        return $this->catalogService->hydrateSelectedPricing($supplier, $products, $selectedIds);
+    }
+
     public function fetchRealConfigOptions(Supplier $supplier, int $productId): array
     {
         return $this->catalogService->fetchRealConfigOptions($supplier, $productId);
     }
 
-    public function fetchBatchProductConfigOptions(Supplier $supplier, array $productIds, int $chunkSize = 8): array
+    public function fetchBatchProductConfigOptions(Supplier $supplier, array $productIds, int $chunkSize = 8, ?float $deadline = null): array
     {
-        return $this->catalogService->fetchBatchProductConfigOptions($supplier, $productIds, $chunkSize);
+        return $this->catalogService->fetchBatchProductConfigOptions($supplier, $productIds, $chunkSize, $deadline);
     }
 
     public function fetchBatchProductStocks(Supplier $supplier, array $productIds, int $chunkSize = 8): array
@@ -135,6 +140,16 @@ final class ZjmfFinanceAdapter implements ProvidesConsoleAccess, ProvidesConsole
     public function renewHost(Supplier $supplier, int $hostId, string $billingCycle): array
     {
         return $this->renewService->renewHost($supplier, $hostId, $billingCycle);
+    }
+
+    /**
+     * 上游认可的该主机可续周期；null 表示上游不可达，调用方应回退本地周期集合。
+     *
+     * @return list<string>|null
+     */
+    public function renewableCycles(Supplier $supplier, int $hostId): ?array
+    {
+        return $this->renewService->renewableCycles($supplier, $hostId);
     }
 
     public function renewServiceInvoice(Supplier $supplier, int $hostId, string $billingCycle): array

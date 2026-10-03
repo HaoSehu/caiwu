@@ -464,7 +464,8 @@ class ServiceMigrationService
         }
 
         try {
-            return CarbonImmutable::parse($paidAt)->addMonths($months)->format('Y-m-d H:i:s');
+            // 夹月末不溢出：1 月 31 日按月推进得 2 月 28 日，而不是跳过 2 月漂移到 3 月
+            return CarbonImmutable::parse($paidAt)->addMonthsNoOverflow($months)->format('Y-m-d H:i:s');
         } catch (\Throwable) {
             return null;
         }

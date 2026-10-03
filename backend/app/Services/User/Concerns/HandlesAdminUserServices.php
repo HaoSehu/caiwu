@@ -23,6 +23,7 @@ use App\Services\Integrations\Plugins\ServiceUpstreamBindingWriter;
 use App\Services\Integrations\Plugins\UpstreamBindingWriter;
 use App\Services\Upstream\Contracts\ProvidesConsoleRuntime;
 use App\Services\Upstream\ProviderResolver;
+use App\Support\BillingCycle;
 use App\Support\ServiceHostname;
 use App\Support\TextSanitizer;
 use Carbon\Carbon;
@@ -1166,15 +1167,8 @@ trait HandlesAdminUserServices
             return null;
         }
 
-        return match ($billingCycle) {
-            'monthly' => now()->addMonth(),
-            'quarterly' => now()->addMonths(3),
-            'semiannually' => now()->addMonths(6),
-            'annually' => now()->addYear(),
-            'biennially' => now()->addYears(2),
-            'triennially' => now()->addYears(3),
-            default => null,
-        };
+        // 到期推进统一走 BillingCycle::advance（夹月末不溢出）；未知周期返回 null
+        return BillingCycle::advance(now(), $billingCycle);
     }
 
     private function resolveManualServiceName(Product $product, array $data, string $domain): string

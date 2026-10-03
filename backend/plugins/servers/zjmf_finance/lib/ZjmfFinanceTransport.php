@@ -90,9 +90,9 @@ final class ZjmfFinanceTransport
         return $this->transport->fetchRealConfigOptions($supplier, $productId);
     }
 
-    public function fetchBatchProductConfigOptions(Supplier $supplier, array $productIds, int $chunkSize = 8): array
+    public function fetchBatchProductConfigOptions(Supplier $supplier, array $productIds, int $chunkSize = 8, ?float $deadline = null): array
     {
-        return $this->transport->fetchBatchProductConfigOptions($supplier, $productIds, $chunkSize);
+        return $this->transport->fetchBatchProductConfigOptions($supplier, $productIds, $chunkSize, $deadline);
     }
 
     public function fetchBatchProductStocks(Supplier $supplier, array $productIds, int $chunkSize = 8): array
@@ -108,6 +108,17 @@ final class ZjmfFinanceTransport
         ]);
 
         return $this->normalizeHostDetailResponse($response);
+    }
+
+    /**
+     * 上游"续费页"接口：返回该主机可用的续费周期列表（data.cycle），
+     * 是上游对"这台主机还能按哪些周期续费"的官方口径。
+     */
+    public function getRenewPage(Supplier $supplier, int $hostId, ?string $jwt = null): array
+    {
+        return $this->get($supplier, '/host/renewpage', $this->resolveJwt($supplier, $jwt), [
+            'hostid' => $hostId,
+        ]);
     }
 
     /**

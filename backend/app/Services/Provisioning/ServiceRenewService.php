@@ -28,6 +28,7 @@ use App\Services\System\OperationLogService;
 use App\Services\System\SettingService;
 use App\Services\Upstream\Contracts\ProvidesRenewal;
 use App\Services\Upstream\ProviderResolver;
+use App\Support\BillingCycle;
 use App\Support\Money;
 use App\Support\OrderInvoiceNoGenerator;
 use Carbon\Carbon;
@@ -61,18 +62,6 @@ class ServiceRenewService
         'triennially' => 6,
         'one_time' => 7,
         'onetime' => 7,
-    ];
-
-    /** 续费周期对应的自然月数，用于识别"同一续费窗口内已履约"的重复续费拦截。 */
-    private const CYCLE_MONTHS = [
-        'monthly' => 1,
-        'quarterly' => 3,
-        'semiannually' => 6,
-        'annually' => 12,
-        'biennially' => 24,
-        'triennially' => 36,
-        'one_time' => 0,
-        'onetime' => 0,
     ];
 
     private ?ServiceUpstreamBindingWriter $serviceBindingWriter = null;
@@ -222,6 +211,10 @@ class ServiceRenewService
     {
         $service = $this->findUserService($user, $serviceId);
         $service = $this->healServiceProductMapping($service);
+
+        // 已取消的服务不可续费：避免创建并支付续费账单后状态仍保持取消（收了钱不交付）。
+        throw_if((int) $service->status === ServiceStatus::CANCELLED, new BusinessException('服务已取消，无法续费'));
+
         $renewConfig = $this->buildRenewConfig($service);
         $cycle = trim($billingCycle);
         $cycleOption = collect($renewConfig['cycles'])->firstWhere('billing_cycle', $cycle);
@@ -474,6 +467,10 @@ class ServiceRenewService
     {
         $service = $this->findUserService($user, $serviceId);
         $service = $this->healServiceProductMapping($service);
+
+        // 已取消的服务不可续费：避免自动续费对已取消服务再次建单扣款（收了钱不交付）。
+        throw_if((int) $service->status === ServiceStatus::CANCELLED, new BusinessException('服务已取消，无法续费'));
+
         $renewConfig = $this->buildRenewConfig($service);
         $cycle = trim($billingCycle);
         $cycleOption = collect($renewConfig['cycles'])->firstWhere('billing_cycle', $cycle);
@@ -1282,16 +1279,89 @@ class ServiceRenewService
 
         usort($cycles, fn (array $left, array $right) => (self::CYCLE_SORT_MAP[$left['billing_cycle']] ?? 999) <=> (self::CYCLE_SORT_MAP[$right['billing_cycle']] ?? 999));
 
+        // 有上游续费能力时，把本地可选周期收敛到上游认可的可续周期，避免选中
+        // 上游不支持的周期后本地扣款成功、上游履约被拒（扣款假成功）。
+        $cycles = $this->filterCyclesByUpstreamRenewable(
+            $service,
+            $effectiveProduct instanceof Product ? $effectiveProduct : null,
+            $supportsUpstream,
+            $hostId,
+            $cycles,
+        );
+
         if (! collect($cycles)->contains(fn (array $item) => $item['billing_cycle'] === $defaultCycle)) {
             $defaultCycle = (string) ($cycles[0]['billing_cycle'] ?? $defaultCycle);
         }
 
         return [
-            'cycles' => array_values($cycles),
+            'cycles' => $cycles,
             'default_cycle' => $defaultCycle,
             'supports_upstream' => $supportsUpstream,
             'host_id' => $hostId,
         ];
+    }
+
+    /**
+     * 有上游续费能力时，把本地可选周期收敛到上游认可的可续周期（/host/renewpage 口径）。
+     *
+     * 上游对"换周期续费"会校验商品定价，未启用该周期时返回"续费周期无效"；若不过滤，
+     * 用户可以选中上游不支持的周期并完成本地扣款，履约在上游被拒后失败，形成"扣款成功、
+     * 上游未续费"。预览、创建账单、创建订单、自动续费共用本配置，过滤在此一处收口。
+     * 上游不可达或未提供该能力时回退本地集合；交集为空时同样回退并记日志，防止口径漂移误伤。
+     *
+     * @param  list<array<string, mixed>>  $cycles
+     * @return list<array<string, mixed>>
+     */
+    private function filterCyclesByUpstreamRenewable(Service $service, ?Product $effectiveProduct, bool $supportsUpstream, int $hostId, array $cycles): array
+    {
+        if (! $supportsUpstream || $hostId <= 0 || $cycles === []) {
+            return $cycles;
+        }
+
+        $supplier = $this->supplierWithRuntimeCredentials(
+            $this->pluginBindingResolver()->supplierForService($service)
+                ?? ($effectiveProduct instanceof Product
+                    ? $this->pluginBindingResolver()->supplierForProduct($effectiveProduct)
+                    : null),
+        );
+        if (! $supplier instanceof Supplier) {
+            return $cycles;
+        }
+
+        try {
+            $renewal = $this->resolveRenewalCapability($service, $effectiveProduct);
+        } catch (\Throwable) {
+            return $cycles;
+        }
+
+        if (! method_exists($renewal, 'renewableCycles')) {
+            return $cycles;
+        }
+
+        $upstreamCycles = $renewal->renewableCycles($supplier, $hostId);
+        if (! is_array($upstreamCycles) || $upstreamCycles === []) {
+            return $cycles;
+        }
+
+        $filtered = [];
+        foreach ($cycles as $cycleItem) {
+            if (in_array((string) $cycleItem['billing_cycle'], $upstreamCycles, true)) {
+                $filtered[] = $cycleItem;
+            }
+        }
+
+        if ($filtered === []) {
+            Log::warning('[服务续费] 上游可续周期与本地定价周期无交集，保留本地周期集合', [
+                'service_id' => (int) $service->id,
+                'host_id' => $hostId,
+                'upstream_cycles' => $upstreamCycles,
+                'local_cycles' => array_column($cycles, 'billing_cycle'),
+            ]);
+
+            return $cycles;
+        }
+
+        return $filtered;
     }
 
     private function resolveRenewedExpiry(Service $service, string $billingCycle, array $hostDetail = []): ?Carbon
@@ -1306,15 +1376,8 @@ class ServiceRenewService
             ? $service->expires_at->copy()
             : now();
 
-        return match ($billingCycle) {
-            'monthly' => $base->addMonth(),
-            'quarterly' => $base->addMonths(3),
-            'semiannually' => $base->addMonths(6),
-            'annually' => $base->addYear(),
-            'biennially' => $base->addYears(2),
-            'triennially' => $base->addYears(3),
-            default => $base,
-        };
+        // 到期推进统一走 BillingCycle::advance（夹月末不溢出）；未知周期沿用原到期时间
+        return BillingCycle::advance($base, $billingCycle) ?? $base;
     }
 
     /**
@@ -1330,7 +1393,8 @@ class ServiceRenewService
         if (is_numeric($nextDueDate)) {
             $timestamp = (int) $nextDueDate;
 
-            return $timestamp > 0 ? Carbon::createFromTimestamp($timestamp) : null;
+            // 上游时间戳按应用时区解析，避免 UTC 服务器上偏移 8 小时
+            return $timestamp > 0 ? Carbon::createFromTimestamp($timestamp, config('app.timezone')) : null;
         }
 
         try {
@@ -1410,19 +1474,23 @@ class ServiceRenewService
     }
 
     /**
-     * 拦截"同一续费窗口内已履约"的重复续费，防止自动续费与手动续费同周期重叠造成双扣。
+     * 拦截"同一续费周期已被已履约账单覆盖"的重复续费，防止自动续费与手动续费对同一周期双扣。
      *
-     * 仅在服务未过期、且最近一次已履约的同周期续费发生在一个周期自然月内时拦截；
-     * 服务已过期（续费属于恢复动作）或跨周期续费不受影响。
+     * 判定口径：以最近一次已履约的同周期续费账单的支付时间按同一周期推进得到覆盖到期点，
+     * 只有当其晚于服务当前到期时间时才拦截——即这笔收款尚未反映到 expires_at 上
+     * （自动续费已扣款但履约在途，此时再续费就是对同一周期二次收费）。
+     * 覆盖到期点已落在当前到期时间之内，说明该笔续费已完整体现为续费后的有效期，
+     * 用户此时续费买的是下一周期（含提前续多期），属合法续费不得拦截。
+     * 服务已过期（续费属于恢复动作）、未知周期与一次性/免费周期不拦截。
      */
     private function assertNoFulfilledRenewForCycle(Service $service, string $cycle): void
     {
-        $months = self::CYCLE_MONTHS[trim($cycle)] ?? 0;
-        if ($months <= 0) {
+        // 未知周期与不产生续期的周期（一次性/免费）不参与拦截
+        if ((BillingCycle::months($cycle) ?? 0) <= 0) {
             return;
         }
 
-        if ($service->expires_at !== null && ! Carbon::parse($service->expires_at)->isFuture()) {
+        if ($service->expires_at === null || ! Carbon::parse($service->expires_at)->isFuture()) {
             return;
         }
 
@@ -1439,7 +1507,14 @@ class ServiceRenewService
         }
 
         $fulfilledAt = $latestPaid->paid_at ?? $latestPaid->updated_at;
-        if ($fulfilledAt !== null && Carbon::parse($fulfilledAt)->gte(now()->subMonths($months))) {
+        if ($fulfilledAt === null) {
+            return;
+        }
+
+        // 已履约续费账单的覆盖到期点：按同一周期从支付时间推进，与服务续费后的
+        // expires_at 口径一致（BillingCycle::advance，夹月末不溢出）。
+        $coveredUntil = BillingCycle::advance(Carbon::parse($fulfilledAt), $cycle);
+        if ($coveredUntil instanceof Carbon && $coveredUntil->gt(Carbon::parse($service->expires_at))) {
             throw new BusinessException('当前续费周期已完成，请勿重复续费');
         }
     }
@@ -1622,8 +1697,12 @@ class ServiceRenewService
     }
 
     /**
-     * 尽力对账：本地续费应收金额与上游实扣金额不一致时记 warning 日志。
-     * 上游金额字段契约不确定，提取不到则静默跳过；差异 > 0.01 元视为不一致，仅告警不阻断。
+     * 尽力对账：上游实扣金额与本地应收口径不一致时记 warning 日志（不阻断续费）。
+     *
+     * 对账基准取 Money::catalogAmountOf 还原的目录价（应付价 + 优惠券减免 + 会员折扣减免）：
+     * 会员折扣是本地让利，上游按目录价实扣供应商余额；若直接用应付价对账，带会员折扣的
+     * 续费每笔都会误报 WARNING。与目录价仍不一致才是真异常（如上游调价），差异 > 0.01 元
+     * 视为不一致，仅告警不阻断；上游金额字段契约不确定，提取不到则静默跳过。
      */
     private function reconcileRenewUpstreamAmount(Invoice $invoice, array $renewResult): void
     {
@@ -1632,14 +1711,16 @@ class ServiceRenewService
             return;
         }
 
-        $localAmount = round((float) $invoice->amount + (float) ($invoice->discount ?? 0), 2);
+        $localAmount = Money::catalogAmountOf($invoice);
         $upstream = round((float) $upstreamAmount, 2);
 
         if (abs($upstream - $localAmount) > 0.01) {
-            Log::warning('[服务续费·对账] 上游实扣金额与本地应收不一致', [
+            Log::warning('[服务续费·对账] 上游实扣金额与本地目录价不一致', [
                 'invoice_id' => (int) $invoice->id,
                 'invoice_no' => (string) ($invoice->invoice_no ?? ''),
-                'local_amount' => $localAmount,
+                'local_catalog_amount' => $localAmount,
+                'local_payable_amount' => round((float) $invoice->amount, 2),
+                'member_discount_amount' => round((float) ($invoice->member_discount_amount ?? 0), 2),
                 'upstream_amount' => $upstream,
             ]);
         }

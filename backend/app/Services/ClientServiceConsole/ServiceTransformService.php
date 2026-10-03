@@ -879,7 +879,8 @@ class ServiceTransformService
     {
         $nextDueDate = $host['nextduedate'] ?? null;
         if (is_numeric($nextDueDate) && (int) $nextDueDate > 0) {
-            return Carbon::createFromTimestamp((int) $nextDueDate);
+            // 上游时间戳按应用时区解析，避免 UTC 服务器上偏移 8 小时
+            return Carbon::createFromTimestamp((int) $nextDueDate, config('app.timezone'));
         }
 
         return $service->expires_at;
