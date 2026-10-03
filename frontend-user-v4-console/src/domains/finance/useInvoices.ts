@@ -395,11 +395,25 @@ export function useInvoiceDetail() {
     persistPollCredentials();
   }
 
+  // 详情并发守卫：快速切换账单/重复刷新时，旧请求晚返回不得覆盖当前路由的最新态。
+  let detailRequestSeq = 0;
+
   async function loadDetail() {
-    if (!invoiceId.value) return;
+    const validId = Number(invoiceId.value);
+    if (!Number.isInteger(validId) || validId <= 0) {
+      // 无效 ID（0/负数/NaN）：失效进行中的请求并复位详情与加载态，避免调用接口。
+      detailRequestSeq += 1;
+      detail.value = null;
+      loading.value = false;
+      return;
+    }
+    const seq = ++detailRequestSeq;
     loading.value = true;
     try {
-      const res = await clientApi.invoiceDetail(invoiceId.value);
+      const res = await clientApi.invoiceDetail(validId);
+      if (seq !== detailRequestSeq) {
+        return;
+      }
       detail.value = res.data || null;
       alipayAmount.value = formatMoney(payableAmount.value);
       syncPayMethod();
@@ -415,9 +429,14 @@ export function useInvoiceDetail() {
         resetPaymentPayload();
       }
     } catch (error: unknown) {
+      if (seq !== detailRequestSeq) {
+        return;
+      }
       MessagePlugin.error(getErrorMessage(error, '账单详情加载失败'));
     } finally {
-      loading.value = false;
+      if (seq === detailRequestSeq) {
+        loading.value = false;
+      }
     }
   }
 

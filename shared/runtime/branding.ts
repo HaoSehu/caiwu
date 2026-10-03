@@ -27,17 +27,26 @@ export function updateFavicon(href: string, fallbackHref: string) {
     return
   }
 
-  let icon = document.querySelector("link[rel='icon']") as HTMLLinkElement | null
+  const resolvedHref = href || fallbackHref
+  const resolvedType = resolvedHref.endsWith('.svg') ? 'image/svg+xml' : 'image/png'
+  // 同时更新所有 icon 链接（index.html 常同时声明 icon / apple-touch-icon 等多种尺寸），
+  // 避免浏览器仍命中旧的静态 favicon。
+  const icons = document.querySelectorAll("link[rel*='icon']")
 
-  if (!icon) {
-    icon = document.createElement('link')
+  if (icons.length === 0) {
+    const icon = document.createElement('link')
     icon.rel = 'icon'
+    icon.href = resolvedHref
+    icon.type = resolvedType
     document.head.appendChild(icon)
+    return
   }
 
-  const resolvedHref = href || fallbackHref
-  icon.href = resolvedHref
-  icon.type = resolvedHref.endsWith('.svg') ? 'image/svg+xml' : 'image/png'
+  icons.forEach((node) => {
+    const link = node as HTMLLinkElement
+    link.href = resolvedHref
+    link.type = resolvedType
+  })
 }
 
 export function applyDocumentTitle(pageTitle: string, baseTitle: string, faviconHref: string, fallbackFavicon: string) {
@@ -61,8 +70,23 @@ export function syncDocumentTitle(baseTitle: string, previousBaseTitle: string, 
 
   const currentTitle = String(document.title || '').trim()
   const previousBase = String(previousBaseTitle || '').trim()
+  const normalizedDefault = String(defaultSiteName || '').trim()
 
-  if (!currentTitle || currentTitle === previousBase || currentTitle === defaultSiteName) {
+  // 空标题 / 直接就是旧基名 / 默认品牌名 → 整体替换
+  if (
+    !currentTitle ||
+    currentTitle === previousBase ||
+    (normalizedDefault !== '' && currentTitle === normalizedDefault)
+  ) {
+    document.title = nextBaseTitle
+    return
+  }
+
+  // 硬编码 SEO 标题以默认品牌开头（如 "创欧云 - 稳定、安全…"）→ 视为未规范化的基础标题，整体替换为站点名
+  if (
+    normalizedDefault !== '' &&
+    currentTitle.startsWith(`${normalizedDefault} - `)
+  ) {
     document.title = nextBaseTitle
     return
   }

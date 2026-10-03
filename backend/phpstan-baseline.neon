@@ -1837,12 +1837,6 @@ parameters:
 			path: app/Services/Automation/ServiceLifecycleAutomationService.php
 
 		-
-			message: '#^Method App\\Services\\Automation\\ServiceStatusSyncService\:\:resolveExpiry\(\) should return Carbon\\Carbon\|null but returns string\|null\.$#'
-			identifier: return.type
-			count: 1
-			path: app/Services/Automation/ServiceStatusSyncService.php
-
-		-
 			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<\(int\|string\),Illuminate\\Database\\Eloquent\\Model\>\:\:filter\(\) expects \(callable\(Illuminate\\Database\\Eloquent\\Model, int\|string\)\: bool\)\|null, Closure\(App\\Models\\Service\)\: bool given\.$#'
 			identifier: argument.type
 			count: 1
@@ -2555,24 +2549,6 @@ parameters:
 			identifier: nullCoalesce.variable
 			count: 1
 			path: app/Services/ClientServiceConsole/ServiceUpgradeService.php
-
-		-
-			message: '#^Call to function is_array\(\) with non\-empty\-array\<mixed, mixed\> will always evaluate to true\.$#'
-			identifier: function.alreadyNarrowedType
-			count: 2
-			path: app/Services/ClientServiceConsole/ServiceVncService.php
-
-		-
-			message: '#^Result of \|\| is always false\.$#'
-			identifier: booleanOr.alwaysFalse
-			count: 2
-			path: app/Services/ClientServiceConsole/ServiceVncService.php
-
-		-
-			message: '#^Variable \$params in empty\(\) always exists and is not falsy\.$#'
-			identifier: empty.variable
-			count: 2
-			path: app/Services/ClientServiceConsole/ServiceVncService.php
 
 		-
 			message: '#^PHPDoc tag @return with type array\<int, string\> is incompatible with native type Illuminate\\Database\\Eloquent\\Collection\.$#'
@@ -4489,12 +4465,6 @@ parameters:
 			path: app/Services/ProductCatalog/ProductDisplayNameResolver.php
 
 		-
-			message: '#^Strict comparison using \!\=\= between non\-empty\-string and '''' will always evaluate to true\.$#'
-			identifier: notIdentical.alwaysTrue
-			count: 1
-			path: app/Services/ProductCatalog/ProductDisplayNameResolver.php
-
-		-
 			message: '#^Offset ''combined_display…''\|''product_display_name''\|''product_spec_display'' on array\{product_display_name\: string, product_spec_display\: string, custom_display_name\: string, cpu_memory_display\: string, cpu_memory_slug_display\: string, combined_display_name\: string, instance_spec_text\: string, cpu_display\: string, \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
 			count: 1
@@ -5158,12 +5128,6 @@ parameters:
 			message: '#^Offset ''product_spec_display'' on array\{product_display_name\: string, product_spec_display\: string, custom_display_name\: string, cpu_memory_display\: string, cpu_memory_slug_display\: string, combined_display_name\: string, instance_spec_text\: string, cpu_display\: string, \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
 			count: 2
-			path: app/Services/Provisioning/ServiceRenewService.php
-
-		-
-			message: '#^Parameter \#1 \$array \(list\<array\{billing_cycle\: ''annually'', billing_cycle_label\: ''年付'', amount\: numeric\-string, upstream_amount\: ''''\}\|array\{billing_cycle\: ''monthly'', billing_cycle_label\: ''月付'', amount\: numeric\-string, upstream_amount\: ''''\}\|array\{billing_cycle\: ''quarterly'', billing_cycle_label\: ''季付'', amount\: numeric\-string, upstream_amount\: ''''\}\|array\{billing_cycle\: ''semiannually'', billing_cycle_label\: ''半年付'', amount\: numeric\-string, upstream_amount\: ''''\}\>\) of array_values is already a list, call has no effect\.$#'
-			identifier: arrayValues.list
-			count: 1
 			path: app/Services/Provisioning/ServiceRenewService.php
 
 		-

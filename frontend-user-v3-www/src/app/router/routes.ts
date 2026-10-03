@@ -19,7 +19,8 @@ export const clientRoutes: RouteRecordRaw[] = [
         name: 'WwwHome',
         component: lazyRouteView(() => import('@/pages/website/home/index.vue')),
         meta: {
-          title: '创欧云 - 稳定、安全、高性价比的云服务器与 IDC 服务平台',
+          // 首页标题由站点配置的 browser_title 动态提供，不硬编码品牌名
+          title: '',
           description: '创欧云提供云服务器、独立服务器、云电脑与 IDC 服务，覆盖香港、美国与国内多地节点。',
           canonical: '/',
         },
@@ -29,7 +30,7 @@ export const clientRoutes: RouteRecordRaw[] = [
         name: 'WwwProducts',
         component: lazyRouteView(() => import('@/pages/website/products/index.vue')),
         meta: {
-          title: '产品与服务 - 创欧云',
+          title: '产品与服务',
           description: '浏览创欧云云服务器、独立服务器、云电脑与 IDC 产品方案。',
           canonical: '/products',
         },
@@ -58,7 +59,7 @@ export const clientRoutes: RouteRecordRaw[] = [
         name: 'WwwAbout',
         component: lazyRouteView(() => import('@/pages/website/about/index.vue')),
         meta: {
-          title: '关于我们 - 创欧云',
+          title: '关于我们',
           description: '了解创欧云的 IDC 服务能力、节点覆盖和平台优势。',
           canonical: '/about',
         },
@@ -68,7 +69,7 @@ export const clientRoutes: RouteRecordRaw[] = [
         name: 'WwwTerms',
         component: lazyRouteView(() => import('@/pages/website/legal-document/index.vue')),
         meta: {
-          title: '服务条款 - 创欧云',
+          title: '服务条款',
           description: '查看创欧云服务条款。',
           canonical: '/terms',
           documentKey: 'terms',
@@ -79,7 +80,7 @@ export const clientRoutes: RouteRecordRaw[] = [
         name: 'WwwPrivacy',
         component: lazyRouteView(() => import('@/pages/website/legal-document/index.vue')),
         meta: {
-          title: '隐私政策 - 创欧云',
+          title: '隐私政策',
           description: '查看创欧云隐私政策。',
           canonical: '/privacy',
           documentKey: 'privacy',
@@ -90,7 +91,7 @@ export const clientRoutes: RouteRecordRaw[] = [
         name: 'WwwNotices',
         component: lazyRouteView(() => import('@/pages/website/notices/index.vue')),
         meta: {
-          title: '官方公告 - 创欧云',
+          title: '官方公告',
           description: '查看创欧云平台公告和服务通知。',
           canonical: '/notices',
         },
@@ -106,7 +107,7 @@ export const clientRoutes: RouteRecordRaw[] = [
         name: 'WwwHelp',
         component: lazyRouteView(() => import('@/pages/website/help/index.vue')),
         meta: {
-          title: '帮助中心 - 创欧云',
+          title: '帮助中心',
           description: '查看创欧云产品购买、账单支付和服务管理帮助。',
           canonical: '/help',
         },

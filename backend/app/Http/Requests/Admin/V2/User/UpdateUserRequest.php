@@ -5,6 +5,7 @@ namespace App\Http\Requests\Admin\V2\User;
 use App\Http\Requests\Admin\V2\Common\AdminFormRequest;
 use App\Models\User;
 use App\Support\AccountIdentifier;
+use App\Support\AdminPrivacy;
 use Illuminate\Validation\Rule;
 
 class UpdateUserRequest extends AdminFormRequest
@@ -12,10 +13,35 @@ class UpdateUserRequest extends AdminFormRequest
     protected function prepareForValidation(): void
     {
         if ($this->has('phone')) {
+            $phone = trim((string) $this->input('phone'));
+
+            // 无原始隐私权限的管理员拿到的是脱敏回显值（如 138****1234）。
+            // 含 * 的值不参与格式/唯一性校验：与该用户当前手机号的脱敏形态一致时
+            // 视为「未修改」直接剔除字段；不一致时保留原值，由 rules() 强校验拒绝，
+            // 绝不能把脱敏串剥成残缺号码后覆盖入库。
+            if (str_contains($phone, '*')) {
+                if ($this->maskedPhoneMatchesCurrentUser($phone)) {
+                    $this->offsetUnset('phone');
+                }
+
+                return;
+            }
+
             $this->merge([
-                'phone' => AccountIdentifier::normalizeOptionalPhone((string) $this->input('phone')),
+                'phone' => AccountIdentifier::normalizeOptionalPhone($phone),
             ]);
         }
+    }
+
+    /**
+     * 脱敏手机号是否与当前用户手机号的脱敏形态一致（即「未修改」）。
+     */
+    private function maskedPhoneMatchesCurrentUser(string $maskedPhone): bool
+    {
+        $user = $this->route('user');
+        $currentPhone = trim((string) ($user instanceof User ? $user->phone : ''));
+
+        return $currentPhone !== '' && (new AdminPrivacy(false, true))->phone($currentPhone) === $maskedPhone;
     }
 
     public function rules(): array

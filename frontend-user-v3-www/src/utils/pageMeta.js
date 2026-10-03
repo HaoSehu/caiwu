@@ -108,7 +108,8 @@ export function updatePageMeta(options = {}) {
 export function applyRouteMeta(to, baseConfig = {}) {
   const meta = to?.meta || {}
   const siteUrl = String(baseConfig.siteUrl || '').replace(/\/+$/, '')
-  const siteName = baseConfig.siteName || ''
+  // 浏览器标题真源是站点配置的 browser_title，未配置时回退站名
+  const siteName = baseConfig.browserTitle || baseConfig.siteName || ''
 
   const pageTitle = typeof meta.title === 'string' ? meta.title : ''
   const description = typeof meta.description === 'string' ? meta.description : ''
@@ -121,10 +122,11 @@ export function applyRouteMeta(to, baseConfig = {}) {
     ? meta.structuredData({ siteUrl, route: to })
     : meta.structuredData
 
-  // 仅当标题未包含站点名时追加后缀，避免静态页（已含完整标题）与详情页（短标题）重复拼接
-  const fullTitle = pageTitle && siteName && !pageTitle.includes(siteName)
-    ? `${pageTitle} - ${siteName}`
-    : pageTitle
+  // 仅当标题未包含站点名时追加后缀，避免静态页（已含完整标题）与详情页（短标题）重复拼接；
+  // 页面未声明标题（如首页）时回退到站点名，保证 og:title 等 meta 不被清空。
+  const fullTitle = pageTitle
+    ? (siteName && !pageTitle.includes(siteName) ? `${pageTitle} - ${siteName}` : pageTitle)
+    : siteName
 
   updatePageMeta({
     title: fullTitle,

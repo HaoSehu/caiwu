@@ -94,6 +94,12 @@ class SendAccountCodeService
         } catch (Throwable $exception) {
             report($exception);
 
+            // 插件层已带用户可读原因的（如阿里云 biz.FREQUENCY 频繁限制）直接透传，
+            // 其余未知异常回退通用文案，避免吞掉关键提示导致用户盲目重试。
+            if ($exception instanceof BusinessException && trim((string) $exception->getMessage()) !== '') {
+                throw $exception;
+            }
+
             throw new BusinessException($isSms ? '短信服务暂不可用，请稍后重试' : '邮件服务暂不可用，请稍后重试', 42200, 422);
         }
 

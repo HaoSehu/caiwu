@@ -1669,6 +1669,8 @@ async function saveNote() {
     user.value.admin_note = noteForm.value;
     noteEditing.value = false;
     MessagePlugin.success('备注已保存');
+  } catch (error) {
+    MessagePlugin.error(errorMessage(error, '备注保存失败'));
   } finally {
     noteSaving.value = false;
   }

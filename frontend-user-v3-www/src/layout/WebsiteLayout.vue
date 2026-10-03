@@ -707,7 +707,14 @@
             <ul class="footer-contact">
               <li v-for="item in supportContacts" :key="item.key">
                 <span class="footer-contact__label">{{ item.label }}</span>
-                <span class="footer-contact__value">{{ item.value }}</span>
+                <a
+                  v-if="item.key === 'qq-group' && appStore.supportGroupLink"
+                  :href="appStore.supportGroupLink"
+                  class="footer-contact__value footer-contact__link"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >{{ item.value }}</a>
+                <span v-else class="footer-contact__value">{{ item.value }}</span>
               </li>
             </ul>
           </div>
@@ -2181,6 +2188,14 @@ onBeforeUnmount(() => {
   color: $text-color-primary;
   font-size: 13px;
   font-weight: 500;
+}
+
+.footer-contact__link {
+  text-decoration: none;
+
+  &:hover {
+    color: $color-primary;
+  }
 }
 
 .footer-columns {
