@@ -6,7 +6,7 @@ use App\Constants\InvoiceStatus;
 use App\Constants\OrderStatus;
 use App\Models\Invoice;
 use App\Models\Order;
-use App\Services\Finance\PaymentService;
+use App\Services\Finance\InvoicePaidOrchestrator;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -51,7 +51,7 @@ class ProcessPaidOrderFulfillmentJob implements ShouldBeUnique, ShouldQueue
         return (string) $this->orderId;
     }
 
-    public function handle(PaymentService $paymentService): void
+    public function handle(InvoicePaidOrchestrator $paymentService): void
     {
         $paymentService->processPaidOrderFulfillmentById($this->orderId);
     }

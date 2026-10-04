@@ -6,7 +6,7 @@ use App\Constants\ServiceStatus;
 use App\Models\AutomationLog;
 use App\Models\Order;
 use App\Models\Service;
-use App\Services\Finance\PaymentService;
+use App\Services\Finance\BalanceInvoicePaymentService;
 use App\Services\Provisioning\ServiceRenewService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
@@ -16,7 +16,7 @@ class AutoRenewService
 {
     public function __construct(
         private ServiceRenewService $serviceRenewService,
-        private PaymentService $paymentService,
+        private BalanceInvoicePaymentService $paymentService,
     ) {}
 
     public function handle(): array

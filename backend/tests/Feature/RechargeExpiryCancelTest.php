@@ -8,7 +8,7 @@ use App\Constants\PaymentStatus;
 use App\Models\Payment;
 use App\Models\User;
 use App\Services\Finance\CheckoutSecurityService;
-use App\Services\Finance\PaymentService;
+use App\Services\Finance\RechargePaymentService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\TestCase;
 
@@ -27,7 +27,7 @@ class RechargeExpiryCancelTest extends TestCase
     {
         $payment = $this->makePendingRechargePayment();
 
-        $result = app(PaymentService::class)->cancelExpiredPendingRecharge($payment, [
+        $result = app(RechargePaymentService::class)->cancelExpiredPendingRecharge($payment, [
             'reason' => 'payment_window_expired',
             'actor_name' => 'recharge-status-poll',
         ]);
@@ -42,7 +42,7 @@ class RechargeExpiryCancelTest extends TestCase
             'created_at' => now()->subSeconds(CheckoutSecurityService::paymentSessionTtlSeconds() + 60),
         ])->save();
 
-        $result = app(PaymentService::class)->cancelExpiredPendingRecharge($payment, [
+        $result = app(RechargePaymentService::class)->cancelExpiredPendingRecharge($payment, [
             'reason' => 'payment_window_expired',
             'actor_name' => 'recharge-status-poll',
         ]);
@@ -57,7 +57,7 @@ class RechargeExpiryCancelTest extends TestCase
             'created_at' => now()->subSeconds(CheckoutSecurityService::paymentSessionTtlSeconds() + 60),
         ])->save();
 
-        $count = app(PaymentService::class)->cancelExpiredPendingRechargesForUser((int) $payment->user_id, [
+        $count = app(RechargePaymentService::class)->cancelExpiredPendingRechargesForUser((int) $payment->user_id, [
             'reason' => 'payment_window_expired',
             'actor_name' => 'recharge-cleanup',
         ]);

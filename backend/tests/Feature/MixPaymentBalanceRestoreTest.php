@@ -16,7 +16,8 @@ use App\Models\Payment;
 use App\Models\PaymentCallback;
 use App\Models\User;
 use App\Services\Finance\CheckoutService;
-use App\Services\Finance\PaymentService;
+use App\Services\Finance\GatewayInvoicePaymentService;
+use App\Services\Finance\MixPaymentService;
 use App\Services\Integrations\Payments\Data\PaymentPrecreateRequest;
 use App\Services\Integrations\Payments\Data\PaymentPrecreateResult;
 use App\Services\Integrations\Payments\Data\PaymentQueryResult;
@@ -61,25 +62,26 @@ class MixPaymentBalanceRestoreTest extends TestCase
         $this->assertEqualsWithDelta(100.00, $accounts->cashBalance($user), 0.001);
         $this->assertSame(1, $this->countBalanceLogs($user, FinanceLedgerEventType::INVOICE_REFUND, '组合支付取消退回余额'));
 
-        $service = app(PaymentService::class);
+        $gatewayFlow = app(GatewayInvoicePaymentService::class);
+        $mix = app(MixPaymentService::class);
         $callbackContext = [
             'closed_reason' => 'cancelled_invoice_captured',
             'mark_payment_failed' => false,
         ];
 
         // 回调到达（已取消账单分支的第一步）：预扣余额不得二次退回。
-        $this->assertFalse($service->restoreReservedMixBalance($payment, $callbackContext));
+        $this->assertFalse($mix->restoreReservedMixBalance($payment, $callbackContext));
         $this->assertEqualsWithDelta(100.00, $accounts->cashBalance($user), 0.001);
 
         // 网关款 70 按「异常支付转入余额」入账一次。
-        $this->creditCapturedPaymentToBalance($service, $payment, $invoice, 'cancelled_invoice');
+        $this->creditCapturedPaymentToBalance($mix, $payment, $invoice, 'cancelled_invoice');
         $payment->refresh();
         $this->assertSame(PaymentStatus::SUCCESS, (int) $payment->status);
         $this->assertEqualsWithDelta(170.00, $accounts->cashBalance($user), 0.001);
 
         // 网关重复回调：余额退回与网关款入账均被幂等闸拦截，余额不再变化。
-        $this->assertFalse($service->restoreReservedMixBalance($payment, $callbackContext));
-        $this->creditCapturedPaymentToBalance($service, $payment, $invoice, 'cancelled_invoice');
+        $this->assertFalse($mix->restoreReservedMixBalance($payment, $callbackContext));
+        $this->creditCapturedPaymentToBalance($mix, $payment, $invoice, 'cancelled_invoice');
         $this->assertEqualsWithDelta(170.00, $accounts->cashBalance($user), 0.001);
         $this->assertSame(1, $this->countBalanceLogs($user, FinanceLedgerEventType::INVOICE_REFUND, '组合支付取消退回余额'));
         $this->assertSame(1, $this->countBalanceLogs($user, FinanceLedgerEventType::RECHARGE, '异常支付转入余额'));
@@ -96,16 +98,17 @@ class MixPaymentBalanceRestoreTest extends TestCase
         $invoice = $this->makeMixInvoice($user, 30.00, 70.00);
         $invoice->forceFill(['paid_amount' => 30.00])->save();
         $payment = $this->makeMixPayment($user, $invoice, 70.00, 30.00);
-        $service = app(PaymentService::class);
+        $gatewayFlow = app(GatewayInvoicePaymentService::class);
+        $mix = app(MixPaymentService::class);
 
         $context = ['closed_reason' => 'payment_window_expired_captured', 'mark_payment_failed' => false];
 
-        $this->assertTrue($service->restoreReservedMixBalance($payment, $context));
+        $this->assertTrue($mix->restoreReservedMixBalance($payment, $context));
         $this->assertEqualsWithDelta(100.00, $accounts->cashBalance($user), 0.001);
         $payment->refresh();
         $this->assertSame(PaymentStatus::PENDING, (int) $payment->status);
 
-        $this->assertFalse($service->restoreReservedMixBalance($payment, $context));
+        $this->assertFalse($mix->restoreReservedMixBalance($payment, $context));
         $this->assertEqualsWithDelta(100.00, $accounts->cashBalance($user), 0.001);
         $this->assertSame(1, $this->countBalanceLogs($user, FinanceLedgerEventType::INVOICE_REFUND, '组合支付取消退回余额'));
     }
@@ -130,7 +133,7 @@ class MixPaymentBalanceRestoreTest extends TestCase
 
         // 组合支付下单（余额+网关）真实入口：扣余额 30，剩余 70 生成网关支付单。
         $invoice = $this->makeMixInvoice($user, 30.00, 70.00);
-        $payload = app(PaymentService::class)->payByBalanceAndGateway(
+        $payload = app(MixPaymentService::class)->payByBalanceAndGateway(
             $invoice, $user, 30.00, PaymentGatewayCode::ALIPAY
         );
         $payment = Payment::query()->where('payment_no', $payload['payment_no'])->firstOrFail();
@@ -146,7 +149,8 @@ class MixPaymentBalanceRestoreTest extends TestCase
         $this->assertEqualsWithDelta(100.00, $accounts->cashBalance($user), 0.001);
 
         // 真实入口 handleGatewayNotify：同一 trade_no 的成功通知重复发送两次。
-        $service = app(PaymentService::class);
+        $gatewayFlow = app(GatewayInvoicePaymentService::class);
+        $mix = app(MixPaymentService::class);
         $tradeNo = 'TRADE'.date('YmdHis').mt_rand(100000, 999999);
         $notifyParams = [
             'out_trade_no' => $payment->payment_no,
@@ -154,8 +158,8 @@ class MixPaymentBalanceRestoreTest extends TestCase
             'trade_status' => 'TRADE_SUCCESS',
             'total_amount' => '70.00',
         ];
-        $this->assertTrue($service->handleGatewayNotify(PaymentGatewayCode::ALIPAY, $notifyParams));
-        $this->assertTrue($service->handleGatewayNotify(PaymentGatewayCode::ALIPAY, $notifyParams));
+        $this->assertTrue($gatewayFlow->handleGatewayNotify(PaymentGatewayCode::ALIPAY, $notifyParams));
+        $this->assertTrue($gatewayFlow->handleGatewayNotify(PaymentGatewayCode::ALIPAY, $notifyParams));
 
         // 余额只退一次（取消已退 30），网关款 70 只入账一次，最终余额精确。
         $payment->refresh();
@@ -187,7 +191,7 @@ class MixPaymentBalanceRestoreTest extends TestCase
 
         // 组合支付下单后取消：余额退回一次（100），网关支付单保持已取消。
         $invoice = $this->makeMixInvoice($user, 30.00, 70.00);
-        app(PaymentService::class)->payByBalanceAndGateway($invoice, $user, 30.00, PaymentGatewayCode::ALIPAY);
+        app(MixPaymentService::class)->payByBalanceAndGateway($invoice, $user, 30.00, PaymentGatewayCode::ALIPAY);
         $payment = Payment::query()
             ->where('invoice_id', (int) $invoice->id)
             ->whereGatewayKey(PaymentGatewayCode::ALIPAY)
@@ -198,8 +202,9 @@ class MixPaymentBalanceRestoreTest extends TestCase
         $this->assertEqualsWithDelta(100.00, $accounts->cashBalance($user), 0.001);
 
         // 轮询通道真实入口：账单已取消状态下主动查询到网关单已支付。
-        $service = app(PaymentService::class);
-        $firstQuery = $service->queryGatewayPaymentStatus($payment);
+        $gatewayFlow = app(GatewayInvoicePaymentService::class);
+        $mix = app(MixPaymentService::class);
+        $firstQuery = $gatewayFlow->queryGatewayPaymentStatus($payment);
         $this->assertNotFalse((bool) ($firstQuery['paid'] ?? false));
 
         $payment->refresh();
@@ -209,7 +214,7 @@ class MixPaymentBalanceRestoreTest extends TestCase
         $this->assertSame(1, $this->countBalanceLogs($user, FinanceLedgerEventType::RECHARGE, '异常支付转入余额'));
 
         // 重复轮询：支付单已成功后入口短路，余额不二次退、入账不重复。
-        $secondQuery = $service->queryGatewayPaymentStatus($payment);
+        $secondQuery = $gatewayFlow->queryGatewayPaymentStatus($payment);
         $this->assertNotFalse((bool) ($secondQuery['paid'] ?? false));
         $this->assertEqualsWithDelta(170.00, $accounts->cashBalance($user), 0.001);
         $this->assertSame(1, $this->countBalanceLogs($user, FinanceLedgerEventType::RECHARGE, '异常支付转入余额'));
@@ -301,9 +306,9 @@ class MixPaymentBalanceRestoreTest extends TestCase
      * 通过反射调用私有的 creditCapturedPaymentToBalance，
      * 复现回调「已取消账单/窗口过期」分支中网关款转余额的处理步骤。
      */
-    private function creditCapturedPaymentToBalance(PaymentService $service, Payment $payment, Invoice $invoice, string $reason): void
+    private function creditCapturedPaymentToBalance(MixPaymentService $service, Payment $payment, Invoice $invoice, string $reason): void
     {
-        $method = new ReflectionMethod(PaymentService::class, 'creditCapturedPaymentToBalance');
+        $method = new ReflectionMethod(MixPaymentService::class, 'creditCapturedPaymentToBalance');
         $method->invoke(
             $service,
             $payment,

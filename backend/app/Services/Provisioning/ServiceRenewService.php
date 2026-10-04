@@ -16,8 +16,8 @@ use App\Models\Supplier;
 use App\Models\User;
 use App\Services\Finance\CheckoutService;
 use App\Services\Finance\CouponService;
+use App\Services\Finance\InvoiceRefundService;
 use App\Services\Finance\InvoiceService;
-use App\Services\Finance\PaymentService;
 use App\Services\Integrations\Plugins\PluginBindingResolver;
 use App\Services\Integrations\Plugins\ServiceUpstreamBindingWriter;
 use App\Services\Integrations\Support\ProviderErrorMapper;
@@ -72,6 +72,7 @@ class ServiceRenewService
         private CouponService $couponService,
         private OperationLogService $operationLogService,
         private SettingService $settingService,
+        private InvoiceRefundService $invoiceRefundService,
         private ?PluginBindingResolver $bindingResolver = null,
         private ?MemberGroupDiscountService $memberGroupDiscountService = null,
     ) {}
@@ -1622,8 +1623,7 @@ class ServiceRenewService
 
             throw_if(! $user instanceof User, new BusinessException('续费账单用户不存在，无法自动退款'));
 
-            // 方法内延迟解析 PaymentService，避免构造器循环依赖（PaymentService 依赖本服务）
-            app(PaymentService::class)->refundInvoiceToBalance($user, $invoice, [], [
+            $this->invoiceRefundService->refundInvoiceToBalance($user, $invoice, [], [
                 'actor_type' => 'system',
                 'operator' => 'auto_refund',
                 'actor_name' => '续费账单被更新账单取代自动退款',

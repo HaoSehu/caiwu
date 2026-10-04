@@ -32,7 +32,7 @@ class Payment extends Model
         'payment_no', 'user_id',
         /**
          * @deprecated order_id 是冗余字段，推荐通过 payment → invoice → order 链路追溯订单。
-         *             仅在创建时由 PaymentService 按 Invoice.order_id 回填，不保证与实际订单一致。
+         *             仅在创建时由支付流服务按 Invoice.order_id 回填，不保证与实际订单一致。
          */
         'order_id',
         'invoice_id', 'gateway',

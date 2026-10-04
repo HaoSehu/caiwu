@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Builder;
 class ClientPaymentQueryService
 {
     public function __construct(
-        private readonly PaymentService $payments,
+        private readonly RechargePaymentService $payments,
     ) {}
 
     /**

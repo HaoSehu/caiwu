@@ -14,10 +14,10 @@ use App\Models\Product;
 use App\Models\Service;
 use App\Models\Supplier;
 use App\Models\User;
+use App\Services\Finance\BalanceInvoicePaymentService;
 use App\Services\Finance\CheckoutSecurityService;
 use App\Services\Finance\CheckoutService;
 use App\Services\Finance\InvoiceService;
-use App\Services\Finance\PaymentService;
 use App\Services\Integrations\Plugins\PluginFileLoader;
 use App\Services\Integrations\Plugins\PluginInstaller;
 use App\Services\Integrations\Plugins\PluginScanner;
@@ -152,7 +152,7 @@ class LocalProductSimulateCommand extends Command
             'quote_token' => (string) $token['quote_token'],
         ], ['idempotency_key' => 'sim-new-'.$suffix, 'trace_id' => 'sim-new-'.$suffix]);
 
-        app(PaymentService::class)->payByBalance($invoice, $this->user, ['trace_id' => 'sim-pay-new-'.$suffix]);
+        app(BalanceInvoicePaymentService::class)->payByBalance($invoice, $this->user, ['trace_id' => 'sim-pay-new-'.$suffix]);
 
         $invoice->refresh();
         $order = Order::query()->find((int) $invoice->order_id);
@@ -209,7 +209,7 @@ class LocalProductSimulateCommand extends Command
             'trace_id' => 'sim-upgrade',
         ]);
 
-        app(PaymentService::class)->payByBalance($invoice, $this->user, ['trace_id' => 'sim-pay-upgrade']);
+        app(BalanceInvoicePaymentService::class)->payByBalance($invoice, $this->user, ['trace_id' => 'sim-pay-upgrade']);
         $invoice->refresh();
         $this->push('upgrade', '附加配置', $invoice);
     }

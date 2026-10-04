@@ -17,7 +17,9 @@ class ClientInvoicePaymentWorkflowService
 {
     public function __construct(
         private readonly InvoiceService $invoices,
-        private readonly PaymentService $payments,
+        private readonly BalanceInvoicePaymentService $balancePayments,
+        private readonly GatewayInvoicePaymentService $gatewayPayments,
+        private readonly MixPaymentService $mixPayments,
         private readonly PaymentGatewayManager $paymentGateways,
         private readonly CheckoutSecurityService $checkoutSecurity,
         private readonly CheckoutService $checkout,
@@ -78,7 +80,7 @@ class ClientInvoicePaymentWorkflowService
         $invoice = $this->cancelExpiredInvoice($user, $invoiceId, $expiredContext);
         $this->checkoutSecurity->assertInvoicePaymentSessionToken($paymentSessionToken, $invoice, (int) $user->id);
 
-        $paidInvoice = $this->payments->payByBalance($invoice, $user, $operationContext);
+        $paidInvoice = $this->balancePayments->payByBalance($invoice, $user, $operationContext);
         $invoice->refresh()->load($this->invoiceRelations());
         $user->refresh();
 
@@ -108,7 +110,7 @@ class ClientInvoicePaymentWorkflowService
         $invoice = $this->cancelExpiredInvoice($user, $invoiceId, $expiredContext);
         $this->checkoutSecurity->assertInvoicePaymentSessionToken($paymentSessionToken, $invoice, (int) $user->id);
 
-        $result = $this->payments->payByBalanceAndGateway($invoice, $user, $balanceAmount, PaymentGatewayCode::ALIPAY, $operationContext);
+        $result = $this->mixPayments->payByBalanceAndGateway($invoice, $user, $balanceAmount, PaymentGatewayCode::ALIPAY, $operationContext);
         $invoice->refresh()->load($this->invoiceRelations());
         $payment = $this->findInvoicePayment(
             $user,
@@ -149,7 +151,7 @@ class ClientInvoicePaymentWorkflowService
         }
 
         $gatewayContext = $paymentType !== '' ? ['payment_type' => $paymentType] : [];
-        $result = $this->payments->payByGateway(
+        $result = $this->gatewayPayments->payByGateway(
             $invoice,
             $user,
             $gateway,
@@ -211,7 +213,7 @@ class ClientInvoicePaymentWorkflowService
             $ipAddress,
         );
 
-        $result = $this->payments->queryGatewayPaymentStatus($payment);
+        $result = $this->gatewayPayments->queryGatewayPaymentStatus($payment);
         if (($result['paid'] ?? false) !== true) {
             return $result;
         }

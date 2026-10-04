@@ -12,7 +12,7 @@ use App\Models\Order;
 use App\Models\Payment;
 use App\Services\Finance\CheckoutSecurityService;
 use App\Services\Finance\CheckoutService;
-use App\Services\Finance\PaymentService;
+use App\Services\Finance\RechargePaymentService;
 use App\Services\Order\OrderService;
 use App\Services\System\SettingService;
 use Illuminate\Support\Facades\Log;
@@ -26,7 +26,7 @@ class InvoiceCleanupAutomationService
     public function __construct(
         private SettingService $settingService,
         private CheckoutService $checkoutService,
-        private PaymentService $paymentService,
+        private RechargePaymentService $paymentService,
         private OrderService $orderService,
     ) {}
 

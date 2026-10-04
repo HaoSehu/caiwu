@@ -13,7 +13,7 @@ use App\Services\Integrations\Payments\PaymentGatewayManager;
 class ClientRechargeWorkflowService
 {
     public function __construct(
-        private readonly PaymentService $payments,
+        private readonly RechargePaymentService $payments,
         private readonly CheckoutSecurityService $checkoutSecurity,
         private readonly PaymentGatewayManager $paymentGateways,
     ) {}

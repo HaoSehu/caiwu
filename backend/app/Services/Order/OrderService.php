@@ -16,7 +16,8 @@ use App\Models\Product;
 use App\Models\User;
 use App\Services\Finance\CheckoutSecurityService;
 use App\Services\Finance\CouponService;
-use App\Services\Finance\PaymentService;
+use App\Services\Finance\MixPaymentService;
+use App\Services\Finance\PaymentCallbackProjector;
 use App\Services\Order\Concerns\HandlesOrderCalculation;
 use App\Services\System\OperationLogService;
 use Illuminate\Support\Facades\DB;
@@ -28,10 +29,11 @@ class OrderService
     // RANGE_TYPES / OS_TYPES / BILLING_CYCLE_MONTHS / TYPE_FIELD_MAP 已移入 HandlesOrderCalculation Trait
 
     public function __construct(
-        private PaymentService $paymentService,
+        private MixPaymentService $mixPaymentService,
         private CouponService $couponService,
         private CheckoutSecurityService $checkoutSecurityService,
         private OperationLogService $operationLogService,
+        private PaymentCallbackProjector $callbackProjector,
     ) {}
 
     /**
@@ -71,7 +73,7 @@ class OrderService
 
                 foreach ($pendingPayments as $pendingPayment) {
                     // 组合支付（余额+网关）先行扣除了余额，取消时需把预扣余额退回。
-                    if ($this->paymentService->restoreReservedMixBalance($pendingPayment, [
+                    if ($this->mixPaymentService->restoreReservedMixBalance($pendingPayment, [
                         'trace_id' => (string) ($context['trace_id'] ?? ''),
                         'closed_reason' => 'order_cancelled',
                     ])) {
@@ -87,7 +89,7 @@ class OrderService
                         'status' => PaymentStatus::CANCELLED,
                         'callback_raw' => $callbackRaw,
                     ])->save();
-                    $this->paymentService->syncProjection($pendingPayment);
+                    $this->callbackProjector->syncProjection($pendingPayment);
                 }
 
                 if ((int) $invoice->status !== InvoiceStatus::CANCELLED) {

@@ -11,7 +11,7 @@ use App\Models\AccountTransaction;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\User;
-use App\Services\Finance\PaymentService;
+use App\Services\Finance\BalanceInvoicePaymentService;
 use App\Services\Order\PaidOrderBusinessFlowDispatcher;
 use App\Services\User\AccountService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -39,7 +39,7 @@ class AutoRenewLedgerSourceTest extends TestCase
         $order = $this->makeOrder($user);
         $invoice = $this->makeInvoice($user, $order);
 
-        app(PaymentService::class)->payOrderByBalance($order, $user, ['auto_renew' => true]);
+        app(BalanceInvoicePaymentService::class)->payOrderByBalance($order, $user, ['auto_renew' => true]);
 
         $txn = AccountTransaction::query()
             ->where('user_id', $user->id)
@@ -68,7 +68,7 @@ class AutoRenewLedgerSourceTest extends TestCase
         $order = $this->makeOrder($user);
         $invoice = $this->makeInvoice($user, $order);
 
-        app(PaymentService::class)->payByBalance($invoice, $user);
+        app(BalanceInvoicePaymentService::class)->payByBalance($invoice, $user);
 
         $txn = AccountTransaction::query()
             ->where('user_id', $user->id)

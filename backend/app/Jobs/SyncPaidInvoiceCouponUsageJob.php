@@ -2,7 +2,7 @@
 
 namespace App\Jobs;
 
-use App\Services\Finance\PaymentService;
+use App\Services\Finance\InvoicePaidOrchestrator;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -49,7 +49,7 @@ class SyncPaidInvoiceCouponUsageJob implements ShouldQueue
         ];
     }
 
-    public function handle(PaymentService $paymentService): void
+    public function handle(InvoicePaidOrchestrator $paymentService): void
     {
         $paymentService->processPaidInvoiceCouponSyncById($this->invoiceId);
     }

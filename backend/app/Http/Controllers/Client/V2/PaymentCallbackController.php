@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Client\V2;
 
 use App\Constants\PaymentGatewayCode;
 use App\Http\Controllers\Controller;
-use App\Services\Finance\PaymentService;
+use App\Services\Finance\GatewayInvoicePaymentService;
 use App\Services\Integrations\Payments\PaymentGatewayManager;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Log;
 class PaymentCallbackController extends Controller
 {
     public function __construct(
-        private PaymentService $paymentService,
+        private GatewayInvoicePaymentService $paymentService,
         private PaymentGatewayManager $paymentGatewayManager,
     ) {}
 

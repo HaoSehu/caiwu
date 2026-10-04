@@ -28,6 +28,7 @@ use Illuminate\Support\Facades\DB;
 class InvoiceService
 {
     public function __construct(
+        private readonly PaymentCallbackProjector $callbackProjector,
         private readonly ?ProductDisplayNameResolver $productDisplayNameResolver = null,
     ) {}
 
@@ -1193,7 +1194,7 @@ class InvoiceService
                         'status' => PaymentStatus::CANCELLED,
                         'callback_raw' => $callbackRaw,
                     ])->save();
-                    app(PaymentService::class)->syncProjection($payment);
+                    $this->callbackProjector->syncProjection($payment);
                 });
 
             // 补一条 manual Payment 审计记录，保留 trade_no 与入账信息，供财务对账追溯。
@@ -1237,7 +1238,9 @@ class InvoiceService
         });
 
         if ($syncBusinessFlow) {
-            app(PaymentService::class)->handlePaidInvoice($updatedInvoice, $traceId !== '' ? 'manual:'.$traceId : 'manual:invoice:'.$updatedInvoice->id);
+            // app() 延迟解析：本类经 InvoicePaidOrchestrator -> ServiceRenewService 反向依赖自身，
+            // 构造器注入会形成容器环，与既有回调链路的解法保持一致。
+            app(InvoicePaidOrchestrator::class)->handlePaidInvoice($updatedInvoice, $traceId !== '' ? 'manual:'.$traceId : 'manual:invoice:'.$updatedInvoice->id);
         }
 
         app(OperationLogService::class)->write(

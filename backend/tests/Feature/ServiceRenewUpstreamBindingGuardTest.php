@@ -14,6 +14,7 @@ use App\Models\Service;
 use App\Models\Supplier;
 use App\Models\User;
 use App\Services\Finance\CouponService;
+use App\Services\Finance\InvoiceRefundService;
 use App\Services\Finance\InvoiceService;
 use App\Services\Integrations\Plugins\PluginDomain;
 use App\Services\Provisioning\ServiceRenewService;
@@ -265,6 +266,7 @@ class ServiceRenewUpstreamBindingGuardTest extends TestCase
             app(CouponService::class),
             app(OperationLogService::class),
             app(SettingService::class),
+            app(InvoiceRefundService::class),
         );
     }
 

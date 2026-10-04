@@ -7,7 +7,7 @@ namespace Tests\Feature;
 use App\Exceptions\BusinessException;
 use App\Models\RechargeRecord;
 use App\Models\User;
-use App\Services\Finance\PaymentService;
+use App\Services\Finance\RechargePaymentService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
@@ -22,7 +22,7 @@ class RechargeIdempotencyTest extends TestCase
     public function test_same_idempotency_key_enters_balance_only_once(): void
     {
         $user = $this->makeUser();
-        $service = app(PaymentService::class);
+        $service = app(RechargePaymentService::class);
         $key = 'idem-'.uniqid();
         $context = ['operator_id' => 1, 'operator_name' => 'admin-test', 'idempotency_key' => $key];
 
@@ -39,7 +39,7 @@ class RechargeIdempotencyTest extends TestCase
     public function test_missing_key_keeps_legacy_behavior(): void
     {
         $user = $this->makeUser();
-        $service = app(PaymentService::class);
+        $service = app(RechargePaymentService::class);
         $context = ['operator_id' => 1, 'operator_name' => 'admin-test'];
 
         $service->adjustBalance($user, 5, '第一笔', $context);
@@ -51,7 +51,7 @@ class RechargeIdempotencyTest extends TestCase
     public function test_failed_attempt_releases_idempotency_key(): void
     {
         $user = $this->makeUser();
-        $service = app(PaymentService::class);
+        $service = app(RechargePaymentService::class);
         $key = 'idem-'.uniqid();
         $context = ['operator_id' => 1, 'operator_name' => 'admin-test', 'idempotency_key' => $key];
 

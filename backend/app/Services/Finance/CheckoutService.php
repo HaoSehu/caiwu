@@ -40,12 +40,13 @@ class CheckoutService
 
     public function __construct(
         private InvoiceService $invoiceService,
-        private PaymentService $paymentService,
+        private MixPaymentService $mixPaymentService,
         private ProductCatalogService $productCatalogService,
         private CheckoutSecurityService $checkoutSecurityService,
         private CouponService $couponService,
         private OperationLogService $operationLogService,
         private AdminOrderNotificationService $adminOrderNotificationService,
+        private PaymentCallbackProjector $callbackProjector,
         private ?ProductDisplayNameResolver $productDisplayNameResolver = null,
         private ?MemberGroupDiscountService $memberGroupDiscountService = null,
     ) {}
@@ -295,7 +296,7 @@ class CheckoutService
                 ->get();
 
             foreach ($pendingPayments as $pending) {
-                if ($this->paymentService->restoreReservedMixBalance($pending, [
+                if ($this->mixPaymentService->restoreReservedMixBalance($pending, [
                     'trace_id' => (string) ($context['trace_id'] ?? ''),
                     'closed_reason' => 'invoice_cancelled',
                 ])) {
@@ -311,7 +312,7 @@ class CheckoutService
                     'status' => PaymentStatus::CANCELLED,
                     'callback_raw' => $callbackRaw,
                 ])->save();
-                $this->paymentService->syncProjection($pending);
+                $this->callbackProjector->syncProjection($pending);
             }
 
             $lockedInvoice->forceFill(['status' => InvoiceStatus::CANCELLED])->save();

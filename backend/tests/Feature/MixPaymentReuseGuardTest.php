@@ -15,7 +15,7 @@ use App\Models\Order;
 use App\Models\Payment;
 use App\Models\User;
 use App\Services\Finance\CheckoutService;
-use App\Services\Finance\PaymentService;
+use App\Services\Finance\MixPaymentService;
 use App\Services\Integrations\Payments\Data\PaymentPrecreateRequest;
 use App\Services\Integrations\Payments\Data\PaymentPrecreateResult;
 use App\Services\Integrations\Payments\Data\PaymentQueryResult;
@@ -44,7 +44,7 @@ class MixPaymentReuseGuardTest extends TestCase
         $accounts = app(AccountService::class);
         $accounts->setCashBalance($user, 100.00);
         $this->registerStubGateway();
-        $service = app(PaymentService::class);
+        $service = app(MixPaymentService::class);
 
         // 第一次混付：预扣 30，网关单 70 保持 PENDING。
         $invoice = $this->makeUnpaidInvoice($user, 100.00);

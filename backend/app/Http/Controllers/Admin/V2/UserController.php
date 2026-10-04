@@ -45,7 +45,7 @@ use App\Services\Admin\V2\AdminManualEntryV2Service;
 use App\Services\Admin\V2\AdminUserActionV2Service;
 use App\Services\Auth\AuthService;
 use App\Services\Finance\OrderV2QueryService;
-use App\Services\Finance\PaymentService;
+use App\Services\Finance\RechargePaymentService;
 use App\Services\User\UserService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -58,7 +58,7 @@ class UserController extends Controller
         private readonly OrderV2QueryService $orderQueries,
         private readonly UserService $users,
         private readonly AuthService $auth,
-        private readonly PaymentService $payments,
+        private readonly RechargePaymentService $payments,
     ) {}
 
     public function index(ListUsersRequest $request): JsonResponse
