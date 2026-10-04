@@ -89,6 +89,8 @@ export function useRecharge() {
   const submitting = ref(false);
   const polling = ref(false);
   const rechargePaid = ref(false);
+  // 支付单已被服务端取消（超时/窗口过期）：停止轮询并提示重新发起，避免对已取消单重复支付。
+  const rechargeCancelled = ref(false);
   const summaryLoading = ref(false);
   const paymentGatewaysLoading = ref(true);
   const selectedGateway = ref('');
@@ -122,10 +124,12 @@ export function useRecharge() {
   });
   const qrCodeTitle = computed(() => {
     if (rechargePaid.value) return '已支付，余额已刷新';
+    if (rechargeCancelled.value) return '该充值单已失效';
     return qrCodeValue.value ? `请使用${selectedPaymentGatewayName.value}扫码支付` : '支付二维码待生成';
   });
   const qrCodeSubtitle = computed(() => {
     if (rechargePaid.value) return '到账完成后，可继续购买或续费服务。';
+    if (rechargeCancelled.value) return '支付单已取消，请重新发起充值。';
     if (qrCodeValue.value && polling.value) return '正在自动确认支付状态，请勿重复支付。';
     return qrCodeValue.value ? '' : '选择金额和支付方式后生成二维码。';
   });
@@ -173,6 +177,7 @@ export function useRecharge() {
   function clearPaymentPayload() {
     clearPollingTimer();
     rechargePaid.value = false;
+    rechargeCancelled.value = false;
     paymentPayload.value = null;
   }
 
@@ -191,6 +196,7 @@ export function useRecharge() {
 
     submitting.value = true;
     rechargePaid.value = false;
+    rechargeCancelled.value = false;
     try {
       const payload: Record<string, unknown> = { amount: targetAmount, gateway: gateway.key };
       if (gateway.payment_type) {
@@ -243,6 +249,17 @@ export function useRecharge() {
         );
         notifyScreenReader('支付已成功，充值金额已到账');
         MessagePlugin.success('充值成功，余额已刷新');
+      } else if (Number(payload.status) === 4) {
+        // PaymentStatus::CANCELLED：支付单已被服务端取消（超时/窗口过期），
+        // 二维码已不可支付，停止轮询并引导重新发起，避免用户对失效单付款。
+        rechargeCancelled.value = true;
+        paymentPayload.value = {
+          ...paymentPayload.value,
+          ...payload,
+        };
+        clearPollingTimer();
+        notifyScreenReader('该充值支付单已取消，请重新发起充值');
+        MessagePlugin.warning('该充值单已失效，请重新发起充值');
       } else if (!options.silentPending) {
         notifyScreenReader('支付仍在处理中，请稍候');
         MessagePlugin.info(payload.message || '当前仍未支付成功');
@@ -456,6 +473,7 @@ export function useRecharge() {
     submitting,
     polling,
     rechargePaid,
+    rechargeCancelled,
     summaryLoading,
     paymentGatewaysLoading,
     selectedGateway,

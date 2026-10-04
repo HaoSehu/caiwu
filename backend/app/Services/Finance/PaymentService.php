@@ -528,7 +528,8 @@ class PaymentService
                 return $lockedPayment;
             }
 
-            if ($this->checkoutSecurityService->paymentRecordExpiresAt($lockedPayment)->lessThanOrEqualTo(CarbonImmutable::now())) {
+            // 仅未过期的支付单不允许取消；已过期的继续走取消流程
+            if ($this->checkoutSecurityService->paymentRecordExpiresAt($lockedPayment)->greaterThan(CarbonImmutable::now())) {
                 return $lockedPayment;
             }
 
@@ -814,7 +815,18 @@ class PaymentService
                 ->latest('id')
                 ->first();
 
-            if ($existingPayment) {
+            if ($existingPayment instanceof Payment) {
+                $existingRaw = (array) ($existingPayment->callback_raw ?? []);
+
+                // 已退回过余额（balance_restored）或余额预扣额与本次不一致的旧单不可复用：
+                // 复用会让本次预扣在后续取消时被旧单的回补幂等闸拦截，造成预扣余额被冻结。
+                if (! empty($existingRaw['balance_restored'])
+                    || (float) ($existingRaw['balance_amount'] ?? 0) !== (float) $normalizedBalanceAmount) {
+                    $existingPayment = null;
+                }
+            }
+
+            if ($existingPayment instanceof Payment) {
                 $this->ensurePaymentGatewayAudit($existingPayment, $gateway, $traceId);
 
                 return $existingPayment;
@@ -1378,6 +1390,13 @@ class PaymentService
                 throw_if(
                     ! in_array((int) $lockedInvoice->status, [InvoiceStatus::PAID], true),
                     new BusinessException('当前账单状态不支持退款')
+                );
+
+                // 充值账单到账时余额已同步增加、补录账单为系统外收款凭证：
+                // 两者退回余额都没有对应的资金流出，等于凭空增加余额，必须走原路退款或红字冲抵。
+                throw_if(
+                    in_array((string) $lockedInvoice->type, [InvoiceType::RECHARGE, InvoiceType::MANUAL], true),
+                    new BusinessException('充值/补录账单不支持退回余额')
                 );
 
                 $order = $lockedInvoice->order;

@@ -114,7 +114,7 @@
             <div v-if="paymentNo || rechargePaid" class="mobile-payment-meta">
               <div class="meta-row">
                 <span>支付状态</span>
-                <strong>{{ rechargePaid ? '已支付' : '待支付' }}</strong>
+                <strong>{{ rechargePaid ? '已支付' : rechargeCancelled ? '已取消' : '待支付' }}</strong>
               </div>
               <div class="meta-row">
                 <span>商家订单号</span>
@@ -126,7 +126,7 @@
               </div>
             </div>
 
-            <div v-if="qrCodeValue && !rechargePaid" class="mobile-pay-helper">
+            <div v-if="qrCodeValue && !rechargePaid && !rechargeCancelled" class="mobile-pay-helper">
               <p>{{ mobilePayHelperText }}</p>
               <t-button size="small" theme="primary" variant="outline" @click="copyPayUrl">复制支付链接</t-button>
             </div>
@@ -202,11 +202,14 @@
           </div>
 
           <aside class="qrcode-panel">
-            <div class="qrcode-frame" :class="{ 'is-ready': qrCodeValue, 'is-paid': rechargePaid }">
+            <div
+              class="qrcode-frame"
+              :class="{ 'is-ready': qrCodeValue, 'is-paid': rechargePaid, 'is-cancelled': rechargeCancelled }"
+            >
               <qrcode-vue
                 v-if="qrCodeValue"
                 class="qrcode-svg"
-                :class="{ 'is-muted': rechargePaid }"
+                :class="{ 'is-muted': rechargePaid || rechargeCancelled }"
                 :value="qrCodeValue"
                 :size="160"
                 level="H"
@@ -221,6 +224,10 @@
                   <small>余额已刷新</small>
                 </div>
               </transition>
+              <div v-if="rechargeCancelled" class="qrcode-cancelled" aria-live="polite">
+                <strong>该充值单已失效</strong>
+                <small>请重新发起充值</small>
+              </div>
               <div v-if="!qrCodeValue" class="qrcode-empty">
                 <span class="empty-icon">¥</span>
                 <p>选择金额后生成支付二维码</p>
@@ -274,6 +281,7 @@ const {
   activePreset,
   submitting,
   rechargePaid,
+  rechargeCancelled,
   paymentGatewaysLoading,
   selectedGateway,
   paymentGateways,
@@ -295,7 +303,9 @@ const {
 } = useRecharge();
 
 const mobileCustomSelected = computed(() => mobileCustomMode.value || activePreset.value === null);
-const mobileSubmitText = computed(() => (rechargePaid.value ? '继续充值' : '立即充值'));
+const mobileSubmitText = computed(() =>
+  rechargePaid.value ? '继续充值' : rechargeCancelled.value ? '重新发起充值' : '立即充值',
+);
 const mobilePayHelperText = computed(() => {
   if (selectedPaymentGateway.value?.payment_type === 'wxpay') {
     return '请复制支付链接后在微信或手机浏览器中继续支付。';
@@ -772,6 +782,29 @@ onMounted(() => {
 
   strong {
     color: var(--td-success-color);
+    font: var(--td-font-title-large);
+    font-weight: 700;
+  }
+
+  small {
+    color: var(--td-text-color-secondary);
+    font: var(--td-font-body-small);
+  }
+}
+
+.qrcode-cancelled {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: var(--td-comp-margin-xs);
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+
+  strong {
+    color: var(--td-warning-color);
     font: var(--td-font-title-large);
     font-weight: 700;
   }
