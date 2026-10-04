@@ -106,6 +106,7 @@ export const INVOICE_TYPE_MAP = {
   recharge: "充值",
   upgrade: "附加配置",
   deduction: "扣款",
+  refund: "退款",
   referral_credit: "推荐奖励账单",
   manual: "手工账单",
 };
@@ -356,6 +357,7 @@ export const FINANCE_LEDGER_EVENT_MAP = {
     direction: "in",
   },
   system_adjustment: { label: "系统调账", tagType: "info", direction: "in" },
+  verification_fee: { label: "实名认证费", tagType: "danger", direction: "out" },
 };
 
 export const ACCOUNT_TRANSACTION_EVENT_MAP = {
