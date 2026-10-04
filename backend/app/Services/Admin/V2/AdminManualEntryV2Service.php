@@ -206,9 +206,17 @@ class AdminManualEntryV2Service
         });
 
         try {
-            return Cache::lock('lock:admin:manual-order:'.((int) $service->id), 10)->block(3, $entry);
+            return Cache::lock('lock:admin:manual-order:'.((int) $service->id), 10)->block(3, function () use ($user, $tradeNo, $entry) {
+                // 与补录账单链路共享同一交易号锁：两条链路的查重都是事务内快照读，
+                // 不共享锁时并发提交同一交易号会互相看不到未提交的 Payment 行，造成双入账。
+                if ($tradeNo !== '') {
+                    return Cache::lock('lock:admin:manual-trade:'.((int) $user->id).':'.md5($tradeNo), 10)->block(3, $entry);
+                }
+
+                return $entry();
+            });
         } catch (LockTimeoutException) {
-            throw new BusinessException('该实例的补录正在处理中，请稍候重试');
+            throw new BusinessException('该实例或相同交易号的补录正在处理中，请稍候重试');
         }
     }
 
