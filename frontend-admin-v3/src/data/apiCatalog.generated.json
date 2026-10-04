@@ -1,7 +1,7 @@
 {
     "meta": {
-        "generatedAt": "2026-09-23 23:10:16",
-        "total": 365,
+        "generatedAt": "2026-10-04 15:27:54",
+        "total": 363,
         "baseURL": "/api/v2",
         "dataSource": "php artisan route:list --json v2-only",
         "scopeLabels": {
@@ -21,13 +21,13 @@
             "permission": "登录 + 权限"
         },
         "scopeCounts": {
-            "admin": 219,
+            "admin": 217,
             "client": 127,
             "site": 18,
             "system": 1
         },
         "accessCounts": {
-            "public": 365
+            "public": 363
         },
         "moduleCount": 77
     },
@@ -4380,29 +4380,6 @@
             "sourceFiles": []
         },
         {
-            "id": "POST:/api/v2/admin/users/{user}/invoices/{invoice}/refunds",
-            "scope": "admin",
-            "scopeLabel": "管理端",
-            "module": "users",
-            "moduleLabel": "用户",
-            "method": "POST",
-            "methods": [
-                "POST"
-            ],
-            "callPath": "/admin/users/{user}/invoices/{invoice}/refunds",
-            "backendPath": "/api/v2/admin/users/{user}/invoices/{invoice}/refunds",
-            "normalizedPath": "/admin/users/{param}/invoices/{param}/refunds",
-            "access": "public",
-            "accessLabel": "公开",
-            "permission": "",
-            "throttle": "",
-            "guards": [],
-            "handler": "App\\Http\\Controllers\\Admin\\V2\\UserController@refundInvoice",
-            "sourceApps": [],
-            "sourceAppLabels": [],
-            "sourceFiles": []
-        },
-        {
             "id": "POST:/api/v2/admin/users/{user}/login-as",
             "scope": "admin",
             "scopeLabel": "管理端",
@@ -4835,29 +4812,6 @@
             "throttle": "",
             "guards": [],
             "handler": "App\\Http\\Controllers\\Admin\\V2\\UserController@servicePower",
-            "sourceApps": [],
-            "sourceAppLabels": [],
-            "sourceFiles": []
-        },
-        {
-            "id": "POST:/api/v2/admin/users/{user}/services/{service}/refunds",
-            "scope": "admin",
-            "scopeLabel": "管理端",
-            "module": "users",
-            "moduleLabel": "用户",
-            "method": "POST",
-            "methods": [
-                "POST"
-            ],
-            "callPath": "/admin/users/{user}/services/{service}/refunds",
-            "backendPath": "/api/v2/admin/users/{user}/services/{service}/refunds",
-            "normalizedPath": "/admin/users/{param}/services/{param}/refunds",
-            "access": "public",
-            "accessLabel": "公开",
-            "permission": "",
-            "throttle": "",
-            "guards": [],
-            "handler": "App\\Http\\Controllers\\Admin\\V2\\UserController@refundService",
             "sourceApps": [],
             "sourceAppLabels": [],
             "sourceFiles": []

@@ -135,12 +135,6 @@ export interface ServiceMetaPayload {
   service_name?: string;
 }
 
-export interface RefundPayload {
-  refund_method: 'balance' | 'original';
-  amount?: number | string;
-  remark: string;
-}
-
 interface UserServiceV2DetailPayload {
   service?: Record<string, unknown> | null;
 }
@@ -235,8 +229,6 @@ export const userApi = {
     request.post<{ message?: string }>({ url: `/v2/admin/users/${id}/manual-orders`, data }),
   invoiceDetail: (id: number | string, invoiceId: number | string) =>
     request.get<Record<string, unknown>>({ url: `/v2/admin/users/${id}/invoices/${invoiceId}` }),
-  refundInvoice: (id: number | string, invoiceId: number | string, data: RefundPayload) =>
-    request.post({ url: `/v2/admin/users/${id}/invoices/${invoiceId}/refunds`, data }),
   tickets: (id: number | string, params: PageParams) =>
     request.get<{
       list?: Record<string, unknown>[];
@@ -297,7 +289,5 @@ export const userApi = {
     request
       .put<UserServiceV2DetailPayload>({ url: `/v2/admin/users/${id}/services/${serviceId}/manual-provision`, data })
       .then(normalizeV2ServicePayload),
-  refundService: (id: number | string, serviceId: number | string, data: RefundPayload) =>
-    request.post<{ message?: string }>({ url: `/v2/admin/users/${id}/services/${serviceId}/refunds`, data }),
   osOptions: () => request.get<{ groups?: Record<string, unknown>[] }>({ url: '/v2/admin/os-options' }),
 };

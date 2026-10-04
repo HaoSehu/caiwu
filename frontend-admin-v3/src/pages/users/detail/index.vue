@@ -644,15 +644,7 @@
                 @click="openManualProvisionDialog"
                 >手动开通</t-button
               >
-              <t-button
-                v-if="canRefundService"
-                theme="danger"
-                size="small"
-                :loading="serviceDrawer.actionLoading === 'refund'"
-                @click="openServiceRefundDialog"
-                >退款</t-button
-              >
-              <t-tag v-else-if="isServiceRefunded" theme="danger" variant="light">已退款</t-tag>
+              <t-tag v-if="isServiceRefunded" theme="danger" variant="light">已退款</t-tag>
             </div>
           </section>
 
@@ -817,37 +809,6 @@
       </t-form>
     </t-dialog>
 
-    <t-dialog
-      v-model:visible="serviceRefundVisible"
-      header="服务退款"
-      width="500px"
-      :confirm-btn="{ content: '确认退款', theme: 'danger', loading: serviceDrawer.actionLoading === 'refund' }"
-      @cancel="serviceRefundVisible = false"
-      @confirm="handleServiceRefund"
-    >
-      <t-alert theme="warning" message="退款将把对应账单标记为已退款，并关闭该实例的计费流程，当前仅支持全额退款。" />
-      <t-form
-        ref="serviceRefundFormRef"
-        :data="serviceRefundForm"
-        :rules="refundRules"
-        label-align="top"
-        class="dialog-form"
-      >
-        <t-form-item label="退款金额">
-          <t-input :value="formatMoney(serviceRefundAmount)" disabled />
-        </t-form-item>
-        <t-form-item label="退款方式" name="refund_method">
-          <t-radio-group v-model="serviceRefundForm.refund_method">
-            <t-radio value="balance">退回余额</t-radio>
-            <t-radio value="original" :disabled="!canOriginalServiceRefund">原路退款</t-radio>
-          </t-radio-group>
-        </t-form-item>
-        <t-form-item label="退款原因" name="remark">
-          <t-textarea v-model="serviceRefundForm.remark" :maxlength="200" placeholder="请输入退款原因" />
-        </t-form-item>
-      </t-form>
-    </t-dialog>
-
     <t-drawer v-model:visible="invoiceDrawer.visible" size="720px" header="账单详情" @close="closeInvoiceDrawer">
       <t-loading :loading="invoiceDrawer.loading" size="small">
         <div class="invoice-detail-panel">
@@ -891,13 +852,6 @@
               :loading="invoiceDrawer.cancelLoading"
               @click="handleDrawerCancelInvoice"
               >取消账单</t-button
-            >
-            <t-button
-              v-if="canRefundInvoice"
-              theme="danger"
-              :loading="invoiceRefundLoading"
-              @click="openInvoiceRefundDialog"
-              >退款</t-button
             >
           </div>
 
@@ -966,30 +920,6 @@
         </div>
       </t-loading>
     </t-drawer>
-
-    <t-dialog
-      v-model:visible="invoiceRefundVisible"
-      header="账单退款"
-      width="500px"
-      :confirm-btn="{ content: '确认退款', theme: 'danger', loading: invoiceRefundLoading }"
-      @cancel="invoiceRefundVisible = false"
-      @confirm="handleInvoiceRefund"
-    >
-      <t-form ref="invoiceRefundFormRef" :data="invoiceRefundForm" :rules="refundRules" label-align="top">
-        <t-form-item label="退款金额">
-          <t-input :value="formatMoney(currentInvoice.paid_amount || currentInvoice.amount)" disabled />
-        </t-form-item>
-        <t-form-item label="退款方式" name="refund_method">
-          <t-radio-group v-model="invoiceRefundForm.refund_method">
-            <t-radio value="balance">退回余额</t-radio>
-            <t-radio value="original" :disabled="!canOriginalInvoiceRefund">原路退款</t-radio>
-          </t-radio-group>
-        </t-form-item>
-        <t-form-item label="退款原因" name="remark">
-          <t-textarea v-model="invoiceRefundForm.remark" :maxlength="200" placeholder="请输入退款原因" />
-        </t-form-item>
-      </t-form>
-    </t-dialog>
 
     <t-dialog
       v-model:visible="manualInvoiceVisible"
@@ -1137,9 +1067,6 @@ const serviceNameVisible = ref(false);
 const serviceNameSubmitting = ref(false);
 const resetPasswordVisible = ref(false);
 const manualProvisionVisible = ref(false);
-const serviceRefundVisible = ref(false);
-const invoiceRefundVisible = ref(false);
-const invoiceRefundLoading = ref(false);
 const editFormRef = ref<FormInstanceFunctions>();
 const rechargeFormRef = ref<FormInstanceFunctions>();
 const addServiceFormRef = ref<FormInstanceFunctions>();
@@ -1147,8 +1074,6 @@ const serviceUpstreamFormRef = ref<FormInstanceFunctions>();
 const servicePricingFormRef = ref<FormInstanceFunctions>();
 const resetPasswordFormRef = ref<FormInstanceFunctions>();
 const manualProvisionFormRef = ref<FormInstanceFunctions>();
-const serviceRefundFormRef = ref<FormInstanceFunctions>();
-const invoiceRefundFormRef = ref<FormInstanceFunctions>();
 const editForm = reactive({
   nickname: '',
   phone: '',
@@ -1211,8 +1136,6 @@ const servicePricingForm = reactive({
 const serviceNameForm = reactive({ service_name: '' });
 const resetPasswordForm = reactive({ password: '' });
 const manualProvisionForm = reactive({ upstream_host_id: undefined as number | undefined });
-const serviceRefundForm = reactive({ refund_method: 'balance' as 'balance' | 'original', remark: '' });
-const invoiceRefundForm = reactive({ refund_method: 'balance' as 'balance' | 'original', remark: '' });
 const serviceDrawer = reactive({ visible: false, loading: false, actionLoading: '', serviceId: 0, detail: {} as Row });
 const invoiceDrawer = reactive({
   visible: false,
@@ -1304,10 +1227,6 @@ const resetPasswordRules: Record<string, FormRule[]> = {
 };
 const manualProvisionRules: Record<string, FormRule[]> = {
   upstream_host_id: [required('请输入上游实例 ID')],
-};
-const refundRules: Record<string, FormRule[]> = {
-  refund_method: [required('请选择退款方式')],
-  remark: [required('请填写退款原因')],
 };
 
 const serviceStatusLabelMap = toLabelMap(SERVICE_STATUS_MAP);
@@ -1449,17 +1368,7 @@ const canReboot = computed(() => {
     serviceDrawer.detail.runtime?.power_state === 'running'
   );
 });
-const canRefundService = computed(() => {
-  const status = Number(serviceDrawer.detail.status);
-  if ([0, 5, 6].includes(status)) return false;
-  const available = serviceActions.value.available;
-  return !Array.isArray(available) || available.includes('refund');
-});
 const isServiceRefunded = computed(() => [5, 6].includes(Number(serviceDrawer.detail.status)));
-const canOriginalServiceRefund = computed(() => serviceDrawer.detail.refund?.can_original !== false);
-const serviceRefundAmount = computed(
-  () => serviceDrawer.detail.refund?.amount ?? serviceDrawer.detail.amount ?? serviceDrawer.detail.order?.amount ?? 0,
-);
 const servicePricingEntries = computed(() =>
   Object.entries(servicePricingForm.locked_pricing || {}).map(([cycle, item]) => ({
     cycle,
@@ -1480,9 +1389,6 @@ const invoiceSceneItems = computed(() => {
   if (Array.isArray(sceneItems) && sceneItems.length) return sceneItems;
   return Array.isArray(invoiceDrawer.detail.items) ? invoiceDrawer.detail.items : [];
 });
-const canRefundInvoice = computed(() => Number(currentInvoice.value.status) === 1);
-const primaryPayment = computed(() => invoicePayments.value.find((item: Row) => Number(item.status) === 1) || null);
-const canOriginalInvoiceRefund = computed(() => primaryPayment.value?.gateway === 'alipay');
 const statCards = computed(() => [
   { key: 'ticket_open', label: '在线工单', value: stats.value.ticket_open || 0, tone: 'warning' },
   { key: 'cash_balance', label: '余额', value: formatMoney(user.value.cash_balance), tone: 'success' },
@@ -2308,33 +2214,6 @@ async function submitServiceName() {
   }
 }
 
-function openServiceRefundDialog() {
-  serviceRefundForm.refund_method = 'balance';
-  serviceRefundForm.remark = '';
-  serviceRefundVisible.value = true;
-  serviceRefundFormRef.value?.clearValidate?.();
-}
-
-async function handleServiceRefund() {
-  const result = await serviceRefundFormRef.value?.validate?.();
-  if (!isValidationPass(result) || !serviceDrawer.serviceId) return;
-  serviceDrawer.actionLoading = 'refund';
-  try {
-    const response = await userApi.refundService(userId.value, serviceDrawer.serviceId, {
-      refund_method: serviceRefundForm.refund_method,
-      amount: serviceRefundAmount.value,
-      remark: serviceRefundForm.remark,
-    });
-    MessagePlugin.success(response.message || '服务已完成退款');
-    serviceRefundVisible.value = false;
-    await Promise.all([reloadServiceDrawer(), loadServices(), loadDetail()]);
-  } catch (error) {
-    MessagePlugin.error(errorMessage(error, '退款失败'));
-  } finally {
-    serviceDrawer.actionLoading = '';
-  }
-}
-
 async function openInvoiceDrawer(row: Row) {
   if (!row?.id) return;
   invoiceDrawer.currentId = Number(row.id);
@@ -2403,33 +2282,6 @@ async function handleDrawerCancelInvoice() {
     MessagePlugin.error(errorMessage(error, '取消账单失败'));
   } finally {
     invoiceDrawer.cancelLoading = false;
-  }
-}
-
-function openInvoiceRefundDialog() {
-  invoiceRefundForm.refund_method = 'balance';
-  invoiceRefundForm.remark = '';
-  invoiceRefundVisible.value = true;
-  invoiceRefundFormRef.value?.clearValidate?.();
-}
-
-async function handleInvoiceRefund() {
-  const result = await invoiceRefundFormRef.value?.validate?.();
-  if (!isValidationPass(result) || !invoiceDrawer.currentId) return;
-  invoiceRefundLoading.value = true;
-  try {
-    await userApi.refundInvoice(userId.value, invoiceDrawer.currentId, {
-      refund_method: invoiceRefundForm.refund_method,
-      amount: currentInvoice.value.paid_amount || currentInvoice.value.amount,
-      remark: invoiceRefundForm.remark,
-    });
-    MessagePlugin.success('账单已完成退款');
-    invoiceRefundVisible.value = false;
-    await Promise.all([loadInvoices(), loadDetail(), reloadInvoiceDrawer()]);
-  } catch (error) {
-    MessagePlugin.error(errorMessage(error, '退款失败'));
-  } finally {
-    invoiceRefundLoading.value = false;
   }
 }
 
