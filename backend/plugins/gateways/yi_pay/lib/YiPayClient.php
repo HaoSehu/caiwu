@@ -8,7 +8,6 @@ use App\Constants\PaymentGatewayCode;
 use App\Exceptions\BusinessException;
 use App\Services\Integrations\Payments\Concerns\BuildsGatewayHttpClient;
 use App\Services\Integrations\Payments\Concerns\WrapsPemKeys;
-use App\Services\Integrations\Payments\Data\PaymentRefundRequest;
 use App\Services\System\GatewayLogService;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Log;
@@ -188,42 +187,6 @@ class YiPayClient
             'trade_no' => (string) ($result['trade_no'] ?? ''),
             'out_trade_no' => (string) ($result['out_trade_no'] ?? $outTradeNo),
             'total_amount' => number_format((float) ($result['money'] ?? 0), 2, '.', ''),
-            'raw' => $result,
-        ];
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    public function refund(PaymentRefundRequest $request): array
-    {
-        $payload = [
-            'act' => 'refund',
-            'pid' => $this->merchantId,
-            'out_trade_no' => $request->outTradeNo,
-            'money' => number_format($request->refundAmount, 2, '.', ''),
-        ];
-
-        if ($request->tradeNo !== null && trim($request->tradeNo) !== '') {
-            $payload['trade_no'] = trim($request->tradeNo);
-        }
-        $payload = $this->withApiCredentials($payload);
-
-        $result = $this->request('post', $this->endpoint('api.php'), $payload);
-
-        if ((string) ($result['code'] ?? '') !== '1') {
-            $this->recordFailure('refund', (string) ($result['msg'] ?? '退款失败'), $request->outTradeNo, $payload, $result);
-            throw new BusinessException('易支付退款失败，请稍后重试');
-        }
-
-        $this->recordSuccess('refund', $request->outTradeNo, $payload, $result);
-
-        return [
-            'trade_no' => (string) ($result['trade_no'] ?? $request->tradeNo ?? ''),
-            'out_trade_no' => $request->outTradeNo,
-            'refund_fee' => number_format($request->refundAmount, 2, '.', ''),
-            'fund_change' => '',
-            'gmt_refund_pay' => '',
             'raw' => $result,
         ];
     }
@@ -411,7 +374,7 @@ class YiPayClient
     private function request(string $method, string $url, array $payload): array
     {
         try {
-            // GET（订单查询）无副作用可安全重试；POST（precreate/refund）连接异常时
+            // GET（订单查询）无副作用可安全重试；POST（precreate）连接异常时
             // 无法确认网关是否已受理，重试有重复提交风险，不自动重试。
             $response = $method === 'get'
                 ? $this->buildHttpClient()->get($url, $payload)

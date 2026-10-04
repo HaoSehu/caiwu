@@ -72,19 +72,7 @@
 - `out_trade_no`：系统交易号。
 - `total_amount`：第三方确认金额。
 
-### `payment.refund`
-
-系统发起退款时调用。
-
-请求 `payload`：
-
-- `out_trade_no`：系统交易号。
-- `refund_amount`：退款金额。
-- `refund_reason`：退款原因。
-- `trade_no`：可选第三方交易号。
-- `out_request_no`：可选退款请求号。
-
-返回数据应包含 `trade_no`、`out_trade_no`、`refund_fee`、`fund_change`。
+> 系统退款功能已于 2026-10-03 移除，`payment.refund` 动作不再注册；实现网关时无需提供该动作。
 
 ### `payment.verify_notify`
 

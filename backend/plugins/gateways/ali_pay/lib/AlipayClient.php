@@ -234,90 +234,6 @@ class AlipayClient
     }
 
     /**
-     * 交易退款
-     */
-    public function refund(
-        string $outTradeNo,
-        float $refundAmount,
-        string $refundReason = '',
-        ?string $tradeNo = null,
-        ?string $outRequestNo = null,
-    ): array {
-        $bizContent = [
-            'out_trade_no' => $outTradeNo,
-            'refund_amount' => number_format($refundAmount, 2, '.', ''),
-        ];
-
-        if ($tradeNo !== null && trim($tradeNo) !== '') {
-            $bizContent['trade_no'] = trim($tradeNo);
-        }
-
-        if ($refundReason !== '') {
-            $bizContent['refund_reason'] = $refundReason;
-        }
-
-        if ($outRequestNo !== null && trim($outRequestNo) !== '') {
-            $bizContent['out_request_no'] = trim($outRequestNo);
-        }
-
-        $params = $this->buildRequestParams('alipay.trade.refund', $bizContent);
-
-        try {
-            $result = $this->request($params, false);
-        } catch (BusinessException $exception) {
-            app(GatewayLogService::class)->recordFailure(
-                gateway: PaymentGatewayCode::ALIPAY,
-                action: 'refund',
-                errorMsg: $exception->getMessage(),
-                outTradeNo: $outTradeNo,
-                requestData: $bizContent,
-                responseData: [],
-            );
-            throw $exception;
-        }
-
-        Log::info('[支付宝当面付] refund 响应', [
-            'out_trade_no' => $outTradeNo,
-            'trade_no' => $tradeNo,
-            'out_request_no' => $outRequestNo,
-            'response' => $result,
-        ]);
-
-        $data = $result['alipay_trade_refund_response'] ?? [];
-
-        if (($data['code'] ?? '') !== '10000') {
-            Log::error('[支付宝当面付] 退款失败', ['data' => $data]);
-            app(GatewayLogService::class)->recordFailure(
-                gateway: PaymentGatewayCode::ALIPAY,
-                action: 'refund',
-                errorMsg: $data['sub_msg'] ?? $data['msg'] ?? '退款失败',
-                outTradeNo: $outTradeNo,
-                requestData: $bizContent,
-                responseData: $data,
-            );
-            throw new BusinessException('支付宝退款失败，请稍后重试');
-        }
-
-        app(GatewayLogService::class)->recordSuccess(
-            gateway: PaymentGatewayCode::ALIPAY,
-            action: 'refund',
-            outTradeNo: $outTradeNo,
-            tradeNo: $data['trade_no'] ?? $tradeNo,
-            requestData: $bizContent,
-            responseData: $data,
-        );
-
-        return [
-            'trade_no' => $data['trade_no'] ?? ($tradeNo ?? ''),
-            'out_trade_no' => $data['out_trade_no'] ?? $outTradeNo,
-            'refund_fee' => $data['refund_fee'] ?? number_format($refundAmount, 2, '.', ''),
-            'fund_change' => $data['fund_change'] ?? '',
-            'gmt_refund_pay' => $data['gmt_refund_pay'] ?? '',
-            'raw' => $data,
-        ];
-    }
-
-    /**
      * 验证异步通知签名
      */
     public function verifyNotify(array $params): bool
@@ -350,7 +266,7 @@ class AlipayClient
     /**
      * 发送请求到支付宝网关，自动处理 GBK→UTF-8 转码
      *
-     * @param  bool  $retryOnFailure  是否对连接失败自动重试 1 次；precreate/refund 等写请求传 false，
+     * @param  bool  $retryOnFailure  是否对连接失败自动重试 1 次；precreate 等写请求传 false，
      *                                连接异常时无法确认网关是否已受理，重试有重复提交风险
      */
     private function request(array $params, bool $retryOnFailure = true): array

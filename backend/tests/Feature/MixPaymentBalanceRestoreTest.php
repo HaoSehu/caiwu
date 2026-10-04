@@ -20,8 +20,6 @@ use App\Services\Finance\PaymentService;
 use App\Services\Integrations\Payments\Data\PaymentPrecreateRequest;
 use App\Services\Integrations\Payments\Data\PaymentPrecreateResult;
 use App\Services\Integrations\Payments\Data\PaymentQueryResult;
-use App\Services\Integrations\Payments\Data\PaymentRefundRequest;
-use App\Services\Integrations\Payments\Data\PaymentRefundResult;
 use App\Services\Integrations\Payments\PaymentGatewayRegistry;
 use App\Services\Integrations\Plugins\PluginDomain;
 use App\Services\User\AccountService;
@@ -283,17 +281,6 @@ class MixPaymentBalanceRestoreTest extends TestCase
                     outTradeNo: $outTradeNo,
                     totalAmount: $this->queryResult?->totalAmount ?? '0.00',
                     raw: $this->queryResult?->raw ?? ['stub' => true],
-                );
-            }
-
-            public function refund(PaymentRefundRequest $request): PaymentRefundResult
-            {
-                return new PaymentRefundResult(
-                    tradeNo: $request->tradeNo ?? '',
-                    outTradeNo: $request->outTradeNo,
-                    refundFee: number_format($request->refundAmount, 2, '.', ''),
-                    fundChange: 'N',
-                    raw: ['stub' => true],
                 );
             }
 

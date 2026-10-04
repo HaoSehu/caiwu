@@ -18,8 +18,6 @@ use App\Http\Requests\Admin\V2\User\ListUsersRequest;
 use App\Http\Requests\Admin\V2\User\ListUserTicketsRequest;
 use App\Http\Requests\Admin\V2\User\LoginAsUserRequest;
 use App\Http\Requests\Admin\V2\User\RechargeUserRequest;
-use App\Http\Requests\Admin\V2\User\RefundUserInvoiceActionRequest;
-use App\Http\Requests\Admin\V2\User\RefundUserServiceActionRequest;
 use App\Http\Requests\Admin\V2\User\ServicePasswordResetActionRequest;
 use App\Http\Requests\Admin\V2\User\ServicePowerActionRequest;
 use App\Http\Requests\Admin\V2\User\ShowUserInvoiceRequest;
@@ -227,20 +225,6 @@ class UserController extends Controller
     public function resetServicePassword(ServicePasswordResetActionRequest $request, User $user, int $service): JsonResponse
     {
         $result = $this->actions->resetServicePassword($user, $service, $request->payload(), $request);
-
-        return $this->success(AdminActionResultResource::make($result)->resolve(), (string) $result['message']);
-    }
-
-    public function refundInvoice(RefundUserInvoiceActionRequest $request, User $user, int $invoice): JsonResponse
-    {
-        $result = $this->actions->refundInvoice($user, $invoice, $request->payload(), $request);
-
-        return $this->success(AdminActionResultResource::make($result)->resolve(), (string) $result['message']);
-    }
-
-    public function refundService(RefundUserServiceActionRequest $request, User $user, int $service): JsonResponse
-    {
-        $result = $this->actions->refundService($user, $service, $request->payload(), $request);
 
         return $this->success(AdminActionResultResource::make($result)->resolve(), (string) $result['message']);
     }

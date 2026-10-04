@@ -83,7 +83,7 @@ use Caiwu\Plugins\Gateways\AliPay\Lib\AlipayService;
 class AliPayPlugin extends AlipayService {}
 ```
 
-入口类可以很薄，真实能力放在 `lib/AlipayService.php`，支付宝 SDK/签名、预下单、查询、退款细节放在 `lib/AlipayClient.php`。
+入口类可以很薄，真实能力放在 `lib/AlipayService.php`，支付宝 SDK/签名、预下单、查询细节放在 `lib/AlipayClient.php`。
 
 ## 业务类 demo
 
@@ -141,9 +141,10 @@ class AlipayService
 
 - 支付宝预下单。
 - 支付宝交易查询。
-- 支付宝退款。
 - 支付宝异步通知验签。
 - 构造支付宝要求的回调响应。
+
+> 退款能力已于 2026-10-03 随系统退款功能移除下线（`payment.refund` 动作与 `AlipayClient::refund` 均已删除）。
 
 平台负责：
 

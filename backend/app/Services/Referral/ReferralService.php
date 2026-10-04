@@ -867,15 +867,6 @@ class ReferralService
         ];
     }
 
-    public function assertOrderRewardRefundable(Order $order): void
-    {
-        $reward = ReferralReward::query()
-            ->where('order_id', $order->id)
-            ->first();
-
-        $this->assertRewardRefundableByRecord($reward, (int) $order->id);
-    }
-
     /**
      * 账单退款前阻断校验：与订单退款同规则（奖励已释放且可提余额不足时阻断）。
      * 奖励记录可能以 invoice_id 落库（无订单账单），也可能以关联订单的 order_id 落库。
@@ -940,30 +931,6 @@ class ReferralService
                 self::REFUND_BLOCKED_REWARD_WITHDRAWN_CODE
             );
         }
-    }
-
-    public function reverseRewardForRefundedOrder(Order $order, ?string $traceId = null): ?ReferralReward
-    {
-        $lockKey = "lock:referral:reward:reverse:order:{$order->id}";
-
-        return Cache::lock($lockKey, 30)->block(5, function () use ($order, $traceId) {
-            return DB::transaction(function () use ($order, $traceId) {
-                $reward = ReferralReward::query()
-                    ->lockForUpdate()
-                    ->where('order_id', $order->id)
-                    ->first();
-
-                return $this->reverseRewardRecord(
-                    $reward,
-                    "订单退款，推广奖励已撤销 #{$order->order_no}",
-                    [
-                        'order_id' => (int) $order->id,
-                        'order_no' => (string) $order->order_no,
-                    ],
-                    $traceId,
-                );
-            });
-        });
     }
 
     /**

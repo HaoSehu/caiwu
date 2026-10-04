@@ -7,8 +7,6 @@ namespace App\Contracts\Integrations\Payments;
 use App\Services\Integrations\Payments\Data\PaymentPrecreateRequest;
 use App\Services\Integrations\Payments\Data\PaymentPrecreateResult;
 use App\Services\Integrations\Payments\Data\PaymentQueryResult;
-use App\Services\Integrations\Payments\Data\PaymentRefundRequest;
-use App\Services\Integrations\Payments\Data\PaymentRefundResult;
 use Illuminate\Http\Response;
 
 interface PaymentGatewayInterface
@@ -30,8 +28,6 @@ interface PaymentGatewayInterface
     public function precreate(PaymentPrecreateRequest $request): PaymentPrecreateResult;
 
     public function query(string $outTradeNo): PaymentQueryResult;
-
-    public function refund(PaymentRefundRequest $request): PaymentRefundResult;
 
     public function verifyNotify(array $payload): bool;
 

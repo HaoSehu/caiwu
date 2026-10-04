@@ -1461,37 +1461,31 @@ parameters:
 		-
 			message: '#^Access to an undefined property App\\Models\\AdminUser\|App\\Models\\User\:\:\$name\.$#'
 			identifier: property.notFound
-			count: 2
-			path: app/Services/Admin/V2/AdminUserActionV2Service.php
-
-		-
-			message: '#^Cannot call method format\(\) on string\.$#'
-			identifier: method.nonObject
 			count: 1
 			path: app/Services/Admin/V2/AdminUserActionV2Service.php
 
 		-
 			message: '#^Using nullsafe property access "\?\-\>email" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
-			count: 2
+			count: 1
 			path: app/Services/Admin/V2/AdminUserActionV2Service.php
 
 		-
 			message: '#^Using nullsafe property access "\?\-\>id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
-			count: 2
+			count: 1
 			path: app/Services/Admin/V2/AdminUserActionV2Service.php
 
 		-
 			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
-			count: 2
+			count: 1
 			path: app/Services/Admin/V2/AdminUserActionV2Service.php
 
 		-
 			message: '#^Using nullsafe property access "\?\-\>username" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
-			count: 2
+			count: 1
 			path: app/Services/Admin/V2/AdminUserActionV2Service.php
 
 		-
@@ -3685,21 +3679,9 @@ parameters:
 			path: app/Services/Finance/PaymentService.php
 
 		-
-			message: '#^Offset ''already_refunded'' on array\{already_refunded\: false, order_id\: int, payment_id\: int, payment_no\: string, trade_no\: string, refund_amount\: float, refund_reason\: non\-empty\-string, out_request_no\: string\}\|array\{already_refunded\: true, order_id\: int, payment_id\: int\} on left side of \?\? always exists and is not nullable\.$#'
-			identifier: nullCoalesce.offset
-			count: 1
-			path: app/Services/Finance/PaymentService.php
-
-		-
 			message: '#^Offset ''trace_id'' on non\-empty\-array on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
 			count: 8
-			path: app/Services/Finance/PaymentService.php
-
-		-
-			message: '#^Offset ''trade_no'' on \*NEVER\* on left side of \?\? always exists and is not nullable\.$#'
-			identifier: nullCoalesce.offset
-			count: 1
 			path: app/Services/Finance/PaymentService.php
 
 		-
@@ -6709,43 +6691,13 @@ parameters:
 			path: app/Services/User/UserService.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$amount\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Services/User/UserService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$billing_cycle\.$#'
-			identifier: property.notFound
-			count: 3
-			path: app/Services/User/UserService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$callback_raw\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/User/UserService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$display_product_name\.$#'
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
 			identifier: property.notFound
 			count: 4
 			path: app/Services/User/UserService.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 7
-			path: app/Services/User/UserService.php
-
-		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$invoice\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/User/UserService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$invoice_no\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Services/User/UserService.php
@@ -6759,7 +6711,7 @@ parameters:
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$order_no\.$#'
 			identifier: property.notFound
-			count: 5
+			count: 2
 			path: app/Services/User/UserService.php
 
 		-
@@ -6776,18 +6728,6 @@ parameters:
 
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$reward_rate\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/User/UserService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$status\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/User/UserService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$user_id\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Services/User/UserService.php
@@ -6811,18 +6751,6 @@ parameters:
 			path: app/Services/User/UserService.php
 
 		-
-			message: '#^Method App\\Services\\User\\UserService\:\:buildInvoiceSummary\(\) is unused\.$#'
-			identifier: method.unused
-			count: 1
-			path: app/Services/User/UserService.php
-
-		-
-			message: '#^Method App\\Services\\User\\UserService\:\:buildSceneInvoiceItems\(\) is unused\.$#'
-			identifier: method.unused
-			count: 1
-			path: app/Services/User/UserService.php
-
-		-
 			message: '#^Method App\\Services\\User\\UserService\:\:findUserInvoice\(\) should return App\\Models\\Invoice but returns Illuminate\\Database\\Eloquent\\Model\.$#'
 			identifier: return.type
 			count: 1
@@ -6831,30 +6759,6 @@ parameters:
 		-
 			message: '#^Method App\\Services\\User\\UserService\:\:resolveInvoiceDisplayStatus\(\) is unused\.$#'
 			identifier: method.unused
-			count: 1
-			path: app/Services/User/UserService.php
-
-		-
-			message: '#^Method App\\Services\\User\\UserService\:\:resolveInvoiceLogs\(\) is unused\.$#'
-			identifier: method.unused
-			count: 1
-			path: app/Services/User/UserService.php
-
-		-
-			message: '#^Method App\\Services\\User\\UserService\:\:resolveInvoiceScene\(\) is unused\.$#'
-			identifier: method.unused
-			count: 1
-			path: app/Services/User/UserService.php
-
-		-
-			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:filter\(\) expects \(callable\(Illuminate\\Database\\Eloquent\\Model, int\)\: bool\)\|null, Closure\(App\\Models\\Payment\)\: bool given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Services/User/UserService.php
-
-		-
-			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:first\(\) expects \(callable\(Illuminate\\Database\\Eloquent\\Model, int\)\: bool\)\|null, Closure\(App\\Models\\Payment\)\: bool given\.$#'
-			identifier: argument.type
 			count: 1
 			path: app/Services/User/UserService.php
 
@@ -6872,12 +6776,6 @@ parameters:
 
 		-
 			message: '#^Parameter \#1 \$collection of method Illuminate\\Pagination\\AbstractPaginator\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:setCollection\(\) expects Illuminate\\Support\\Collection\<int, Illuminate\\Database\\Eloquent\\Model\>, Illuminate\\Support\\Collection\<int, non\-empty\-array\<mixed\>\> given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Services/User/UserService.php
-
-		-
-			message: '#^Parameter \#1 \$order of method App\\Services\\Finance\\PaymentService\:\:refundOrder\(\) expects App\\Models\\Order, Illuminate\\Database\\Eloquent\\Model given\.$#'
 			identifier: argument.type
 			count: 1
 			path: app/Services/User/UserService.php
@@ -6907,45 +6805,15 @@ parameters:
 			path: app/Services/User/UserService.php
 
 		-
-			message: '#^Strict comparison using \!\=\= between non\-empty\-string and '''' will always evaluate to true\.$#'
-			identifier: notIdentical.alwaysTrue
-			count: 1
-			path: app/Services/User/UserService.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>amount" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 2
-			path: app/Services/User/UserService.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>billing_cycle" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			message: '#^Using nullsafe property access "\?\-\>id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 3
 			path: app/Services/User/UserService.php
 
 		-
-			message: '#^Using nullsafe property access "\?\-\>callback_raw" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Services/User/UserService.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>display_product_name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 4
-			path: app/Services/User/UserService.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 4
-			path: app/Services/User/UserService.php
-
-		-
 			message: '#^Using nullsafe property access "\?\-\>invoice_no" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
-			count: 2
+			count: 1
 			path: app/Services/User/UserService.php
 
 		-
@@ -6981,7 +6849,7 @@ parameters:
 		-
 			message: '#^Using nullsafe property access "\?\-\>order_no" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
-			count: 4
+			count: 2
 			path: app/Services/User/UserService.php
 
 		-

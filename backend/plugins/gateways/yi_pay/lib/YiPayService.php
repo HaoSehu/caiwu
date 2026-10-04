@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Caiwu\Plugins\Gateways\YiPay\Lib;
 
 use App\Services\Integrations\Payments\Concerns\InteractsWithStandardPaymentActions;
-use App\Services\Integrations\Payments\Data\PaymentRefundRequest;
 
 class YiPayService
 {
@@ -18,7 +17,6 @@ class YiPayService
         'payment.options',
         'payment.precreate',
         'payment.query',
-        'payment.refund',
         'payment.verify_notify',
     ];
 
@@ -72,13 +70,6 @@ class YiPayService
             'payment.query' => $this->success($action, $client->query(
                 (string) ($payload['out_trade_no'] ?? '')
             )),
-            'payment.refund' => $this->success($action, $client->refund(new PaymentRefundRequest(
-                outTradeNo: (string) ($payload['out_trade_no'] ?? ''),
-                refundAmount: (float) ($payload['refund_amount'] ?? 0),
-                refundReason: (string) ($payload['refund_reason'] ?? ''),
-                tradeNo: isset($payload['trade_no']) ? (string) $payload['trade_no'] : null,
-                outRequestNo: isset($payload['out_request_no']) ? (string) $payload['out_request_no'] : null,
-            ))),
             'payment.verify_notify' => $this->success($action, [
                 'verified' => $client->verifyNotify($payload),
             ]),

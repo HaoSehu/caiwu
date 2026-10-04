@@ -7,7 +7,6 @@ namespace App\Services\Integrations\Payments;
 use App\Contracts\Integrations\Payments\PaymentGatewayInterface;
 use App\Models\Payment;
 use App\Services\Integrations\Payments\Data\PaymentPrecreateRequest;
-use App\Services\Integrations\Payments\Data\PaymentRefundRequest;
 use App\Services\Integrations\Plugins\PaymentGatewayBindingResolver;
 use Illuminate\Support\Facades\Schema;
 
@@ -88,28 +87,6 @@ class PaymentGatewayOperationService
     public function query(string $gateway, string $outTradeNo): array
     {
         return $this->gateway($gateway)->query($outTradeNo)->toArray();
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    public function refund(
-        string $gateway,
-        string $outTradeNo,
-        float $refundAmount,
-        string $refundReason,
-        ?string $tradeNo,
-        string $outRequestNo,
-    ): array {
-        return $this->gateway($gateway)
-            ->refund(new PaymentRefundRequest(
-                outTradeNo: $outTradeNo,
-                refundAmount: $refundAmount,
-                refundReason: $refundReason,
-                tradeNo: $tradeNo,
-                outRequestNo: $outRequestNo,
-            ))
-            ->toArray();
     }
 
     /**

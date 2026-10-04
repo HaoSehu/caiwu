@@ -18,7 +18,6 @@ use App\Services\Finance\AdminFinanceQueryService;
 use App\Services\Finance\CheckoutService;
 use App\Services\Finance\ClientInvoicePaymentWorkflowService;
 use App\Services\Finance\InvoiceV2QueryService;
-use App\Services\Finance\PaymentService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -108,23 +107,6 @@ class InvoicePaymentStatusFilterTest extends TestCase
         $this->assertSame(1, $summary['paid']);
         $this->assertArrayHasKey('unpaid_amount', $summary);
         $this->assertArrayNotHasKey('overdue', $summary);
-    }
-
-    public function test_refund_guard_only_allows_paid_invoice(): void
-    {
-        $user = $this->makeUser('refund');
-        $service = app(PaymentService::class);
-
-        foreach ([InvoiceStatus::UNPAID, InvoiceStatus::CANCELLED, InvoiceStatus::REFUNDED] as $status) {
-            $invoice = $this->makeInvoice($user, $status);
-
-            try {
-                $service->refundInvoiceToBalance($user, $invoice);
-                $this->fail('Expected BusinessException for invoice status '.$status);
-            } catch (BusinessException) {
-                $this->addToAssertionCount(1);
-            }
-        }
     }
 
     public function test_cancel_guard_only_allows_unpaid_invoice(): void

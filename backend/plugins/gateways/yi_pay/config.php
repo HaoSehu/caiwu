@@ -12,7 +12,7 @@ return [
         'name' => '易支付',
         'version' => '1.0.0',
         'entry' => YiPayPlugin::class,
-        'capabilities' => ['precreate', 'query', 'refund', 'notify_verify'],
+        'capabilities' => ['precreate', 'query', 'notify_verify'],
     ],
     'config' => [
         'yipay_notice' => [

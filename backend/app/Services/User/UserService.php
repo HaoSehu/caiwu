@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Services\User;
 
 use App\Constants\InvoiceStatus;
-use App\Constants\InvoiceType;
 use App\Constants\OrderStatus;
 use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
@@ -28,7 +27,6 @@ use App\Services\Automation\ServiceStatusSyncService;
 use App\Services\ClientServiceConsole\ClientServiceConsoleService;
 use App\Services\Finance\FinanceLedgerQueryService;
 use App\Services\Finance\InvoiceService;
-use App\Services\Finance\PaymentService;
 use App\Services\Provisioning\ProvisionService;
 use App\Services\Referral\ReferralService;
 use App\Services\System\OperationLogService;
@@ -49,7 +47,6 @@ class UserService
         private ClientServiceConsoleService $clientServiceConsoleService,
         private ReferralService $referralService,
         private InvoiceService $invoiceService,
-        private PaymentService $paymentService,
         private FinanceLedgerQueryService $financeLedgerQueryService,
         private OperationLogService $operationLogService,
         private ProvisionService $provisionService,
@@ -510,123 +507,6 @@ class UserService
         return $query->orderByDesc('id')->paginate($perPage);
     }
 
-    public function refundInvoice(User $user, int $invoiceId, array $data, array $context = []): array
-    {
-        $invoice = $this->findUserInvoice($user, $invoiceId);
-        $invoice->loadMissing([
-            'order',
-            'payments.callbacks',
-        ]);
-
-        $paymentSummary = $this->buildInvoicePaymentSummary($invoice);
-        $refundActions = $this->resolveInvoiceRefundActions($invoice, $paymentSummary);
-        $refundMethod = trim((string) ($data['refund_method'] ?? 'balance'));
-        $scope = (array) ($data['scope'] ?? ['order', 'payment']);
-
-        throw_if(
-            ! ($refundActions['can_balance'] ?? false) && ! ($refundActions['can_original'] ?? false),
-            new BusinessException((string) ($refundActions['blocked_reason'] ?? '当前账单不支持退款'))
-        );
-
-        $result = match ($refundMethod) {
-            'balance' => $this->paymentService->refundInvoiceToBalance($user, $invoice, [
-                'amount' => $data['amount'] ?? null,
-                'remark' => $data['remark'] ?? '',
-                'scope' => $scope,
-            ], $context),
-            'original' => $this->refundInvoiceByOriginalRoute($user, $invoice, $paymentSummary, $refundActions, $data, $context),
-            default => throw new BusinessException('不支持的退款方式'),
-        };
-
-        if (($result['already_refunded'] ?? false) !== true) {
-            $refund = (array) ($result['refund'] ?? []);
-
-            $this->operationLogService->write(
-                userId: ((int) ($context['operator_id'] ?? 0)) ?: null,
-                userType: 'admin',
-                action: 'invoice.refund',
-                module: 'order',
-                targetId: (int) ($invoice->order_id ?: 0) ?: null,
-                detail: [
-                    'invoice_id' => (int) $invoice->id,
-                    'invoice_no' => (string) $invoice->invoice_no,
-                    'refund_method' => (string) ($refund['refund_method'] ?? $refundMethod),
-                    'refund_amount' => (string) ($refund['refund_amount'] ?? ''),
-                    'refund_reason' => (string) ($refund['refund_reason'] ?? ''),
-                    'trade_no' => (string) ($refund['trade_no'] ?? ''),
-                    'operator_name' => (string) ($context['operator_name'] ?? ''),
-                ],
-                ipAddress: (string) ($context['ip_address'] ?? ''),
-            );
-        }
-
-        return array_merge($this->invoiceDetail($user, $invoiceId), [
-            'document_links' => [
-                'refund_id' => isset($result['refund_id']) ? (int) $result['refund_id'] : null,
-                'refund_invoice_id' => isset($result['refund_invoice_id']) ? (int) $result['refund_invoice_id'] : null,
-                'recharge_record_id' => isset($result['recharge_record_id']) ? (int) $result['recharge_record_id'] : null,
-            ],
-        ]);
-    }
-
-    /**
-     * 从服务实例发起退款（管理端 → 用户 → 产品/服务 → 退款）
-     */
-    public function refundService(User $user, int $serviceId, array $data, array $context = []): array
-    {
-        $service = Service::query()
-            ->where('id', $serviceId)
-            ->where('user_id', $user->id)
-            ->firstOrFail();
-
-        $order = $service->order;
-        throw_if(! $order, new BusinessException('该服务未关联账单，无法退款'));
-        throw_if((int) $order->user_id !== (int) $user->id, new BusinessException('账单与用户不匹配'));
-
-        $order->loadMissing(['invoice.payments', 'user']);
-
-        $result = $this->paymentService->refundOrder($order, [
-            'refund_method' => $data['refund_method'] ?? 'balance',
-            'amount' => $data['amount'] ?? null,
-            'remark' => $data['remark'] ?? '',
-        ], $context);
-
-        if (($result['already_refunded'] ?? false) !== true) {
-            $refund = (array) ($result['refund'] ?? []);
-
-            $this->operationLogService->write(
-                userId: ((int) ($context['operator_id'] ?? 0)) ?: null,
-                userType: 'admin',
-                action: 'service.refund',
-                module: 'order',
-                targetId: (int) $order->id,
-                detail: [
-                    'service_id' => (int) $service->id,
-                    'service_name' => (string) ($service->name ?? ''),
-                    'order_no' => (string) $order->order_no,
-                    'invoice_id' => (int) ($order->invoice?->id ?? 0),
-                    'refund_method' => (string) ($refund['refund_method'] ?? ''),
-                    'refund_amount' => (string) ($refund['refund_amount'] ?? ''),
-                    'refund_reason' => (string) ($refund['refund_reason'] ?? ''),
-                    'trade_no' => (string) ($refund['trade_no'] ?? ''),
-                    'operator_name' => (string) ($context['operator_name'] ?? ''),
-                ],
-                ipAddress: (string) ($context['ip_address'] ?? ''),
-            );
-        }
-
-        $service->refresh();
-        $service->loadMissing(['order.invoice', 'product']);
-
-        return [
-            'service_id' => (int) $service->id,
-            'order_id' => (int) $order->id,
-            'order_status' => (int) $order->fresh()->status,
-            'refund' => $result['refund'] ?? [],
-            'already_refunded' => (bool) ($result['already_refunded'] ?? false),
-        ];
-    }
-
     /**
      * 用户工单列表
      */
@@ -837,36 +717,6 @@ class UserService
             ->firstOrFail();
     }
 
-    private function refundInvoiceByOriginalRoute(
-        User $user,
-        Invoice $invoice,
-        ?array $paymentSummary,
-        array $refundActions,
-        array $data,
-        array $context = [],
-    ): array {
-        throw_if(
-            ! ($refundActions['can_original'] ?? false),
-            new BusinessException((string) ($refundActions['original_blocked_reason'] ?? $refundActions['blocked_reason'] ?? '当前支付方式不支持原路退款'))
-        );
-
-        $gateway = (string) ($paymentSummary['gateway'] ?? '');
-
-        if ($gateway === 'balance') {
-            return $this->paymentService->refundInvoiceToBalance($user, $invoice, [
-                'amount' => $data['amount'] ?? null,
-                'remark' => $data['remark'] ?? '后台按原余额路径退款',
-            ], $context);
-        }
-
-        throw_if($gateway !== PaymentGatewayCode::ALIPAY, new BusinessException('当前支付方式不支持原路退款'));
-
-        return $this->invoiceService->refundByPaymentMethod($invoice, [
-            'amount' => $data['amount'] ?? ($paymentSummary['amount'] ?? null),
-            'remark' => $data['remark'] ?? '后台发起原路退款',
-        ], $context);
-    }
-
     private function resolvePaymentGatewayLabel(string $gateway): string
     {
         return match ($gateway) {
@@ -886,7 +736,6 @@ class UserService
     {
         $detail = $this->invoiceService->adminListItem($invoice);
         $paymentSummary = $this->buildInvoicePaymentSummary($invoice);
-        $refundActions = $this->resolveInvoiceRefundActions($invoice, $paymentSummary);
 
         return [
             ...$detail,
@@ -894,7 +743,6 @@ class UserService
             'due_date' => (string) ($detail['due_date'] ?? $invoice->due_date?->format('Y-m-d')),
             'paid_at' => (string) ($detail['paid_at'] ?? $invoice->paid_at?->format('Y-m-d H:i:s')),
             'payment_summary' => $detail['payment_summary'] ?? $paymentSummary,
-            'refund_actions' => $refundActions,
         ];
     }
 
@@ -962,51 +810,6 @@ class UserService
         ];
     }
 
-    private function resolveInvoiceRefundActions(Invoice $invoice, ?array $paymentSummary): array
-    {
-        $paymentGateway = (string) ($paymentSummary['gateway'] ?? '');
-        $service = $invoice->service;
-        $blockedReason = '';
-        $originalBlockedReason = '';
-        $canBalance = false;
-        $canOriginal = false;
-
-        if ((int) $invoice->status !== InvoiceStatus::PAID) {
-            $blockedReason = '仅已支付账单支持退款';
-        } elseif (! is_array($paymentSummary)) {
-            $blockedReason = '未找到可退款的支付记录';
-        } elseif (($paymentSummary['status'] ?? null) === PaymentStatus::REFUNDED) {
-            $blockedReason = '该账单已完成退款';
-        } elseif ($service && (int) $service->id > 0 && (int) ($service->status ?? 0) !== 0) {
-            // 已开通服务需先在服务控制台处理资源再退款
-            $blockedReason = '账单已开通服务，请先在服务控制台处理资源后再退款';
-        } else {
-            $canBalance = true;
-            $canOriginal = in_array($paymentGateway, [PaymentGatewayCode::ALIPAY, PaymentGatewayCode::BALANCE], true);
-
-            // 混付账单：余额部分无法走支付宝原路退款，全额会超过支付宝该笔交易实收金额，
-            // 仅允许「退回余额」，禁止原路退款并给出明确原因。
-            $primaryPaymentAmount = round((float) ($paymentSummary['amount'] ?? 0), 2);
-            $invoicePaidAmount = round((float) ($invoice->paid_amount ?? $invoice->amount ?? 0), 2);
-            $involvesBalance = $primaryPaymentAmount > 0
-                && $invoicePaidAmount - $primaryPaymentAmount > 0.0001;
-
-            if ($involvesBalance) {
-                $canOriginal = false;
-                $originalBlockedReason = '该账单包含余额支付，无法全额原路退款，请使用「退回余额」';
-            } elseif (! $canOriginal) {
-                $originalBlockedReason = '当前支付方式不支持原路退款';
-            }
-        }
-
-        return [
-            'can_balance' => $canBalance,
-            'can_original' => $canOriginal,
-            'blocked_reason' => $blockedReason,
-            'original_blocked_reason' => $originalBlockedReason,
-        ];
-    }
-
     private function resolvePaymentStatusLabel(int $status): string
     {
         return match ($status) {
@@ -1015,290 +818,5 @@ class UserService
             PaymentStatus::CANCELLED => '已取消',
             default => '未支付',
         };
-    }
-
-    private function resolveInvoiceTypeLabel(string $type, Invoice $invoice): string
-    {
-        return match ($type) {
-            'new' => '新购账单',
-            'normal' => '新购账单',
-            'renew' => '续费账单',
-            'recharge' => '充值账单',
-            'deduction' => '扣款账单',
-            'refund' => '退款红字账单',
-            'referral_credit' => '推荐奖励账单',
-            'manual' => '手工账单',
-            default => ($invoice->order?->display_product_name ?? '') !== '' ? '产品账单' : '普通账单',
-        };
-    }
-
-    private function resolveInvoiceScene(Invoice $invoice): array
-    {
-        $type = InvoiceType::normalize((string) $invoice->type);
-        $remark = trim((string) ($invoice->config_snapshot['remark'] ?? $invoice->coupon_snapshot['remark'] ?? ''));
-        $productName = trim((string) ($invoice->order?->display_product_name ?? ''));
-        $billingCycle = trim((string) ($invoice->billing_cycle ?? $invoice->order?->billing_cycle ?? ''));
-        $refundScene = $this->resolveRefundScene($invoice);
-
-        if ($refundScene !== null) {
-            return $refundScene;
-        }
-
-        return match ($type) {
-            InvoiceType::NEW_PURCHASE => [
-                'kind' => 'new_purchase',
-                'headline' => '新购账单',
-                'subheadline' => '首次购买产生的账单，通常包含产品价格、配置附加费与优惠信息。',
-                'badge' => '新购',
-                'highlight' => $productName !== '' ? $productName : (string) ($invoice->order?->order_no ?? ''),
-                'items' => $this->buildOrderBasedSceneItems($invoice),
-            ],
-            InvoiceType::RENEW => [
-                'kind' => 'renew',
-                'headline' => '续费账单',
-                'subheadline' => '用于延长现有服务周期，通常与已有实例关联。',
-                'badge' => '续费',
-                'highlight' => $billingCycle !== '' ? $billingCycle : (string) ($invoice->order?->order_no ?? ''),
-                'items' => $this->buildOrderBasedSceneItems($invoice),
-            ],
-            InvoiceType::RECHARGE => [
-                'kind' => 'recharge',
-                'headline' => '充值账单',
-                'subheadline' => '余额充值到账后生成，通常直接完成支付。',
-                'badge' => '充值',
-                'highlight' => $remark !== '' ? $remark : '资金到账',
-                'items' => [[
-                    'description' => '账户充值入账',
-                    'amount' => $invoice->amount,
-                ]],
-            ],
-            InvoiceType::DEDUCTION => [
-                'kind' => 'deduction',
-                'headline' => '扣款账单',
-                'subheadline' => '管理员或系统发起的余额扣减记录。',
-                'badge' => '扣款',
-                'highlight' => $remark !== '' ? $remark : '余额扣减',
-                'items' => [[
-                    'description' => '账户扣款',
-                    'amount' => $invoice->amount,
-                ]],
-            ],
-            InvoiceType::REFUND => [
-                'kind' => 'refund',
-                'headline' => '退款红字账单',
-                'subheadline' => '用于冲抵原账单的退款单据。',
-                'badge' => '退款',
-                'highlight' => (string) ($invoice->originInvoice?->invoice_no ?? $invoice->config_snapshot['origin_invoice_no'] ?? ''),
-                'items' => [[
-                    'description' => '退款冲抵',
-                    'amount' => $invoice->amount,
-                ]],
-            ],
-            InvoiceType::REFERRAL_CREDIT => [
-                'kind' => 'referral_credit',
-                'headline' => '推荐奖励账单',
-                'subheadline' => '推荐返利结算到账后生成，金额通常直接入账到余额。',
-                'badge' => '推荐奖励',
-                'highlight' => $remark !== '' ? $remark : '推广返利入账',
-                'items' => [[
-                    'description' => '推荐奖励入账',
-                    'amount' => $invoice->amount,
-                ]],
-            ],
-            InvoiceType::MANUAL => [
-                'kind' => 'manual',
-                'headline' => '手工账单',
-                'subheadline' => '后台人工创建或修正的账单。',
-                'badge' => '手工',
-                'highlight' => $remark !== '' ? $remark : '人工账单',
-            ],
-            default => [
-                'kind' => 'default',
-                'headline' => '账单详情',
-                'subheadline' => '',
-                'badge' => $this->resolveInvoiceTypeLabel((string) $invoice->type, $invoice),
-                'highlight' => $remark !== '' ? $remark : '',
-            ],
-        };
-    }
-
-    private function resolveRefundScene(Invoice $invoice): ?array
-    {
-        $payment = null;
-        if ($invoice->relationLoaded('payments')) {
-            $payment = collect($invoice->payments)
-                ->filter(fn (Payment $item) => $item->isThirdPartyGateway())
-                ->first(fn (Payment $item) => (int) $item->status === PaymentStatus::REFUNDED
-                    || is_array(data_get((array) ($item->callback_raw ?? []), 'refund')));
-        }
-
-        if (! $payment instanceof Payment && (int) $invoice->status !== InvoiceStatus::REFUNDED) {
-            return null;
-        }
-
-        $refund = (array) data_get((array) ($payment?->callback_raw ?? []), 'refund', []);
-        $refundAmount = (float) ($refund['refund_amount'] ?? $payment?->amount ?? $invoice->amount ?? 0);
-        $originalAmount = (float) ($payment?->amount ?? $invoice->amount ?? 0);
-        $refundMethodLabel = trim((string) ($refund['refund_method_label'] ?? ''));
-
-        if ($refundMethodLabel === '') {
-            $refundMethod = trim((string) ($refund['refund_method'] ?? ''));
-            $refundMethodLabel = match ($refundMethod) {
-                'balance' => '退回余额',
-                'original' => '原路退款',
-                default => '已退款',
-            };
-        }
-
-        $refundReason = trim((string) ($refund['refund_reason'] ?? ''));
-        $refundedAt = trim((string) ($refund['refunded_at'] ?? ($refund['gmt_refund_pay'] ?? '')));
-
-        return [
-            'kind' => 'refund',
-            'headline' => '退款账单',
-            'subheadline' => $refundedAt !== '' ? "退款时间：{$refundedAt}" : '该账单已完成退款。',
-            'badge' => '退款',
-            'highlight' => $refundMethodLabel !== '' ? $refundMethodLabel : '已退款',
-            'remark' => $refundReason,
-            'items' => [
-                [
-                    'description' => '原支付金额',
-                    'amount' => $originalAmount,
-                ],
-                [
-                    'description' => '退款金额',
-                    'amount' => -1 * ($refundAmount > 0 ? $refundAmount : $originalAmount),
-                ],
-            ],
-        ];
-    }
-
-    private function buildInvoiceSummary(Invoice $invoice, array $scene): array
-    {
-        $remark = trim((string) ($invoice->config_snapshot['remark'] ?? $invoice->coupon_snapshot['remark'] ?? ''));
-
-        return [
-            'headline' => (string) ($scene['headline'] ?? $this->resolveInvoiceTypeLabel((string) $invoice->type, $invoice)),
-            'subheadline' => (string) ($scene['subheadline'] ?? ''),
-            'badge' => (string) ($scene['badge'] ?? $this->resolveInvoiceTypeLabel((string) $invoice->type, $invoice)),
-            'highlight' => (string) ($scene['highlight'] ?? $remark),
-            'remark' => $remark,
-        ];
-    }
-
-    private function buildOrderBasedSceneItems(Invoice $invoice): array
-    {
-        $items = [];
-        $productName = trim((string) ($invoice->order?->display_product_name ?? ''));
-        $billingCycle = trim((string) ($invoice->billing_cycle ?? $invoice->order?->billing_cycle ?? ''));
-        $grossAmount = (float) ($invoice->amount ?? 0) + (float) ($invoice->discount ?? 0);
-
-        if ($productName !== '') {
-            $items[] = [
-                'description' => $billingCycle !== '' ? "{$productName} / {$billingCycle}" : $productName,
-                'amount' => $grossAmount,
-            ];
-        }
-
-        if ((float) ($invoice->discount ?? 0) > 0) {
-            $items[] = [
-                'description' => '优惠抵扣',
-                'amount' => -1 * (float) $invoice->discount,
-            ];
-        }
-
-        return $items;
-    }
-
-    private function buildSceneInvoiceItems(Invoice $invoice, array $scene): array
-    {
-        if (($scene['kind'] ?? '') === 'refund' && ! empty($scene['items']) && is_array($scene['items'])) {
-            return collect($scene['items'])->map(function ($item, $index) use ($invoice) {
-                return [
-                    'id' => (int) ($invoice->id * 100 + $index + 1),
-                    'description' => (string) ($item['description'] ?? ''),
-                    'amount' => number_format((float) ($item['amount'] ?? 0), 2, '.', ''),
-                ];
-            })->values()->all();
-        }
-
-        if (empty($scene['items']) || ! is_array($scene['items'])) {
-            return [[
-                'id' => (int) $invoice->id,
-                'description' => $this->resolveInvoiceItemDescription($invoice),
-                'amount' => number_format((float) $invoice->amount, 2, '.', ''),
-            ]];
-        }
-
-        return collect($scene['items'])->map(function ($item, $index) use ($invoice) {
-            return [
-                'id' => (int) ($invoice->id * 100 + $index + 1),
-                'description' => (string) ($item['description'] ?? ''),
-                'amount' => number_format((float) ($item['amount'] ?? 0), 2, '.', ''),
-            ];
-        })->values()->all();
-    }
-
-    private function resolveInvoiceItemDescription(Invoice $invoice): string
-    {
-        $productName = trim((string) ($invoice->order?->display_product_name ?? ''));
-        $billingCycle = trim((string) ($invoice->order?->billing_cycle ?? ''));
-        $typeLabel = $this->resolveInvoiceTypeLabel((string) $invoice->type, $invoice);
-
-        if ($productName === '') {
-            return $typeLabel;
-        }
-
-        if ($billingCycle === '') {
-            return $productName;
-        }
-
-        return "{$productName} / {$billingCycle}";
-    }
-
-    private function resolveInvoiceLogs(Invoice $invoice): array
-    {
-        if (! $invoice->order_id) {
-            return [];
-        }
-
-        return ActivityLog::query()
-            ->where('module', 'order')
-            ->where('subject_id', $invoice->order_id)
-            ->orderByDesc('id')
-            ->limit(50)
-            ->get()
-            ->map(fn (ActivityLog $log) => [
-                'id' => (int) $log->id,
-                'created_at' => $log->created_at?->format('Y-m-d H:i:s'),
-                'action' => $log->action,
-                'detail' => $this->stringifyOperationDetail((array) ($log->context ?? [])),
-                'ip_address' => $log->ip_address,
-            ])
-            ->values()
-            ->all();
-    }
-
-    private function stringifyOperationDetail(array $detail): string
-    {
-        if ($detail === []) {
-            return '-';
-        }
-
-        $pairs = [];
-
-        foreach ($detail as $key => $value) {
-            if (is_array($value)) {
-                $value = json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-            } elseif (is_bool($value)) {
-                $value = $value ? 'true' : 'false';
-            } elseif ($value === null) {
-                $value = '';
-            }
-
-            $pairs[] = "{$key}: {$value}";
-        }
-
-        return implode(' | ', $pairs);
     }
 }

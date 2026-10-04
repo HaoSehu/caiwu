@@ -9,8 +9,6 @@ use App\Services\Integrations\Payments\Concerns\InteractsWithStandardPaymentActi
 use App\Services\Integrations\Payments\Data\PaymentPrecreateRequest;
 use App\Services\Integrations\Payments\Data\PaymentPrecreateResult;
 use App\Services\Integrations\Payments\Data\PaymentQueryResult;
-use App\Services\Integrations\Payments\Data\PaymentRefundRequest;
-use App\Services\Integrations\Payments\Data\PaymentRefundResult;
 use Illuminate\Http\Response;
 
 class DemoPayService
@@ -23,7 +21,6 @@ class DemoPayService
         'payment.matches_merchant',
         'payment.precreate',
         'payment.query',
-        'payment.refund',
         'payment.verify_notify',
     ];
 
@@ -94,17 +91,6 @@ class DemoPayService
         );
     }
 
-    public function refund(PaymentRefundRequest $request): PaymentRefundResult
-    {
-        return new PaymentRefundResult(
-            tradeNo: $request->tradeNo ?? 'DEMO'.date('YmdHis'),
-            outTradeNo: $request->outTradeNo,
-            refundFee: number_format($request->refundAmount, 2, '.', ''),
-            fundChange: 'N',
-            raw: ['demo' => true],
-        );
-    }
-
     /**
      * @param  array<string, mixed>  $payload
      * @param  array<string, mixed>  $config
@@ -165,13 +151,6 @@ class DemoPayService
                 timeoutExpress: isset($payload['timeout_express']) ? (string) $payload['timeout_express'] : null,
             ))->toArray()),
             'payment.query' => $this->success($action, $this->query((string) ($payload['out_trade_no'] ?? ''))->toArray()),
-            'payment.refund' => $this->success($action, $this->refund(new PaymentRefundRequest(
-                outTradeNo: (string) ($payload['out_trade_no'] ?? ''),
-                refundAmount: (float) ($payload['refund_amount'] ?? 0),
-                refundReason: (string) ($payload['refund_reason'] ?? ''),
-                tradeNo: isset($payload['trade_no']) ? (string) $payload['trade_no'] : null,
-                outRequestNo: isset($payload['out_request_no']) ? (string) $payload['out_request_no'] : null,
-            ))->toArray()),
             'payment.verify_notify' => $this->success($action, ['verified' => $this->verifyNotify($payload, $config)]),
             default => ['success' => false, 'action' => $action, 'message' => 'Unsupported plugin action', 'data' => []],
         };

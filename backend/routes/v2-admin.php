@@ -79,7 +79,6 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
 
     Route::middleware(['permission:'.AdminPermissions::INVOICE_MANAGE])->group(function (): void {
         Route::post('/invoices/{invoice}/cancellations', [InvoiceController::class, 'cancel']);
-        Route::post('/users/{user}/invoices/{invoice}/refunds', [UserController::class, 'refundInvoice']);
     });
 
     // 补录为资金写入入口，用默认不下发的专用权限码把关，与 invoice.manage/order.manage 隔离。
@@ -132,7 +131,6 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
         Route::delete('/users/{user}/services/{service}', [UserServiceController::class, 'destroy']);
         Route::post('/users/{user}/services/{service}/power-actions', [UserController::class, 'servicePower']);
         Route::post('/users/{user}/services/{service}/password-resets', [UserController::class, 'resetServicePassword']);
-        Route::post('/users/{user}/services/{service}/refunds', [UserController::class, 'refundService']);
     });
 
     Route::middleware(['permission:'.AdminPermissions::USER_LOGIN_AS])->group(function (): void {

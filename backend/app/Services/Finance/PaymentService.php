@@ -1358,237 +1358,6 @@ class PaymentService
     }
 
     /**
-     * 后台发起订单退款
-     */
-    public function refundOrder(Order $order, array $payload = [], array $context = []): array
-    {
-        $refundMethod = trim((string) ($payload['refund_method'] ?? 'original'));
-        $paymentGateway = $this->detectPrimaryPaymentGateway($order);
-        $traceId = trim((string) ($context['trace_id'] ?? ''));
-
-        $this->referralService->assertOrderRewardRefundable($order);
-
-        $result = match ($refundMethod) {
-            'balance' => $this->refundOrderToBalance($order, $payload, $context, 'balance', '退回余额'),
-            'original' => match ($paymentGateway) {
-                PaymentGatewayCode::ALIPAY => $this->refundOrderByGateway(PaymentGatewayCode::ALIPAY, $order, $payload, $context),
-                'balance' => $this->refundOrderToBalance($order, $payload, $context, 'original', '原路退款'),
-                default => throw new BusinessException('当前支付方式不支持原路退款'),
-            },
-            default => throw new BusinessException('不支持的退款方式'),
-        };
-
-        if (($result['already_refunded'] ?? false) !== true) {
-            $this->referralService->reverseRewardForRefundedOrder($order, $traceId !== '' ? "refund:{$traceId}" : "refund:order:{$order->id}");
-        }
-
-        return $result;
-    }
-
-    /**
-     * 后台发起网关原路退款
-     */
-    public function refundOrderByGateway(string $gateway, Order $order, array $payload = [], array $context = []): array
-    {
-        $gatewayLabel = PaymentGatewayCode::label($gateway);
-        $invoiceId = (int) ($order->invoice_id ?? Invoice::query()->where('order_id', $order->id)->value('id') ?? 0);
-        $lockKey = $invoiceId > 0 ? "lock:refund:invoice:{$invoiceId}" : "lock:refund:{$gateway}:order:{$order->id}";
-
-        return $this->withLock($lockKey, 40, function () use ($gateway, $gatewayLabel, $order, $payload, $context) {
-            $snapshot = DB::transaction(function () use ($gateway, $gatewayLabel, $order, $payload) {
-                $lockedOrder = Order::query()
-                    ->lockForUpdate()
-                    ->with(['invoice.payments', 'service'])
-                    ->findOrFail($order->id);
-
-                $invoice = $lockedOrder->invoice;
-                throw_if(! $invoice instanceof Invoice, new BusinessException('订单未关联账单，无法退款'));
-
-                if ((int) $lockedOrder->status === OrderStatus::REFUNDED) {
-                    return [
-                        'already_refunded' => true,
-                        'order_id' => (int) $lockedOrder->id,
-                        'payment_id' => 0,
-                    ];
-                }
-
-                throw_if((int) $invoice->status !== InvoiceStatus::PAID, new BusinessException("当前账单状态不支持{$gatewayLabel}退款"));
-                throw_if(
-                    (int) $lockedOrder->status !== OrderStatus::PAID,
-                    new BusinessException("当前订单状态不支持{$gatewayLabel}退款")
-                );
-
-                $payment = $this->resolvePrimaryRefundablePayment($invoice, [$gateway]);
-                throw_if(! $payment instanceof Payment, new BusinessException("未找到可退款的{$gatewayLabel}支付记录"));
-
-                if ((int) $payment->status === PaymentStatus::REFUNDED) {
-                    return [
-                        'already_refunded' => true,
-                        'order_id' => (int) $lockedOrder->id,
-                        'payment_id' => (int) $payment->id,
-                    ];
-                }
-
-                // 原路退款与「退回余额」同口径：扣除已完成退款，防止两条退款通道叠加超额退款
-                $refundableAmount = $this->remainingRefundableAmount($invoice, $payment);
-                $refundAmount = round((float) ($payload['amount'] ?? $refundableAmount), 2);
-                throw_if(
-                    $refundAmount <= 0,
-                    new BusinessException($this->invoiceCreditedToBalanceAmount($invoice) > 0
-                        ? '该账单款项已通过重复支付转入余额，无需再退款'
-                        : '退款金额不正确')
-                );
-                throw_if(abs($refundAmount - $refundableAmount) > 0.00001, new BusinessException('当前仅支持按原支付金额全额退款'));
-
-                // 混付账单：余额部分无法走支付宝原路退款，全额会超过支付宝该笔交易实收金额，
-                // 直接拒绝，避免向支付宝发起超额退款（支付宝返回"退款金额超过原交易金额"）。
-                throw_if(
-                    $refundAmount - round((float) $payment->amount, 2) > 0.00001,
-                    new BusinessException('该账单包含余额支付，无法全额原路退款，请使用「退回余额」')
-                );
-
-                $refundReason = trim((string) ($payload['remark'] ?? ''));
-                if ($refundReason === '') {
-                    $refundReason = "后台发起{$gatewayLabel}原路退款";
-                }
-
-                return [
-                    'already_refunded' => false,
-                    'order_id' => (int) $lockedOrder->id,
-                    'payment_id' => (int) $payment->id,
-                    'payment_no' => (string) $payment->payment_no,
-                    'trade_no' => trim((string) ($payment->trade_no ?? '')),
-                    'refund_amount' => $refundAmount,
-                    'refund_reason' => $refundReason,
-                    'out_request_no' => $this->buildOriginalRefundRequestNo($payment),
-                ];
-            });
-
-            if (($snapshot['already_refunded'] ?? false) === true) {
-                return $snapshot;
-            }
-
-            $refundResult = $this->refundGatewayPayment(
-                gateway: $gateway,
-                outTradeNo: (string) $snapshot['payment_no'],
-                refundAmount: (float) $snapshot['refund_amount'],
-                refundReason: (string) $snapshot['refund_reason'],
-                tradeNo: (string) ($snapshot['trade_no'] ?? ''),
-                outRequestNo: (string) $snapshot['out_request_no'],
-            );
-
-            return DB::transaction(function () use ($gateway, $gatewayLabel, $snapshot, $refundResult, $context) {
-                $lockedOrder = Order::query()
-                    ->lockForUpdate()
-                    ->with('invoice')
-                    ->findOrFail((int) $snapshot['order_id']);
-                $payment = Payment::query()
-                    ->lockForUpdate()
-                    ->findOrFail((int) $snapshot['payment_id']);
-
-                if ((int) $lockedOrder->status === OrderStatus::REFUNDED || (int) $payment->status === PaymentStatus::REFUNDED) {
-                    $refund = (array) data_get((array) ($payment->callback_raw ?? []), 'refund', []);
-                    $this->recordOriginalRefund($payment, $lockedOrder->invoice, $refund, $context);
-                    if ($lockedOrder->invoice instanceof Invoice && (int) $lockedOrder->invoice->status !== InvoiceStatus::REFUNDED) {
-                        $this->markInvoiceRefunded(
-                            $lockedOrder->invoice,
-                            $refund,
-                            $gateway,
-                            (float) ($refund['refund_amount'] ?? $refund['refund_fee'] ?? 0),
-                            $context
-                        );
-                    }
-
-                    if ((int) $lockedOrder->status !== OrderStatus::REFUNDED) {
-                        $lockedOrder->forceFill(['status' => OrderStatus::REFUNDED])->save();
-                    }
-
-                    return [
-                        'already_refunded' => true,
-                        'order_id' => (int) $lockedOrder->id,
-                        'payment_id' => (int) $payment->id,
-                        'refund' => $refund,
-                    ];
-                }
-
-                if ($lockedOrder->invoice instanceof Invoice) {
-                    // 落地终检：快照校验后、网关退款期间若发生并发退款，剩余可退额可能已不足。
-                    // 此时网关侧退款已执行，throw 回滚前必须写日志留痕，否则账实不符且无对账线索。
-                    $remainingRefundable = $this->remainingRefundableAmount($lockedOrder->invoice, $payment);
-                    if ((float) $snapshot['refund_amount'] - $remainingRefundable > 0.00001) {
-                        Log::error("[{$gatewayLabel}退款] 网关退款已执行但账单剩余可退金额不足，本次落地已回滚，请人工对账", [
-                            'order_id' => (int) $lockedOrder->id,
-                            'invoice_id' => (int) $lockedOrder->invoice->id,
-                            'payment_id' => (int) $payment->id,
-                            'payment_no' => (string) $payment->payment_no,
-                            'trade_no' => (string) ($payment->trade_no ?? ''),
-                            'out_request_no' => (string) $snapshot['out_request_no'],
-                            'gateway_refund_amount' => (float) $snapshot['refund_amount'],
-                            'remaining_refundable' => $remainingRefundable,
-                        ]);
-
-                        throw new BusinessException('账单剩余可退金额已不足，请刷新后重新发起退款');
-                    }
-                }
-
-                $refundRecord = [
-                    'out_request_no' => (string) $snapshot['out_request_no'],
-                    'refund_amount' => number_format((float) $snapshot['refund_amount'], 2, '.', ''),
-                    'refund_reason' => (string) $snapshot['refund_reason'],
-                    'trade_no' => (string) ($refundResult['trade_no'] ?? $payment->trade_no ?? ''),
-                    'refund_fee' => number_format((float) ($refundResult['refund_fee'] ?? $snapshot['refund_amount']), 2, '.', ''),
-                    'fund_change' => (string) ($refundResult['fund_change'] ?? ''),
-                    'gmt_refund_pay' => (string) ($refundResult['gmt_refund_pay'] ?? ''),
-                    'operator_id' => (int) ($context['operator_id'] ?? 0),
-                    'operator_name' => (string) ($context['operator_name'] ?? ''),
-                    'trace_id' => (string) ($context['trace_id'] ?? ''),
-                    'refunded_at' => now()->format('Y-m-d H:i:s'),
-                    'raw' => (array) ($refundResult['raw'] ?? []),
-                ];
-
-                $callbackRaw = (array) ($payment->callback_raw ?? []);
-                $callbackRaw['refund'] = $refundRecord;
-
-                $payment->forceFill([
-                    'status' => PaymentStatus::REFUNDED,
-                    'callback_raw' => $callbackRaw,
-                ])->save();
-                $this->syncProjection($payment);
-
-                if ($lockedOrder->invoice instanceof Invoice) {
-                    $this->markInvoiceRefunded(
-                        $lockedOrder->invoice,
-                        $refundRecord,
-                        $gateway,
-                        (float) $snapshot['refund_amount'],
-                        $context
-                    );
-                    $this->recordOriginalRefund($payment, $lockedOrder->invoice, $refundRecord, $context);
-                }
-
-                $lockedOrder->forceFill([
-                    'status' => OrderStatus::REFUNDED,
-                ])->save();
-
-                Log::info("[{$gatewayLabel}退款] 订单退款成功", [
-                    'order_id' => $lockedOrder->id,
-                    'payment_id' => $payment->id,
-                    'payment_no' => $payment->payment_no,
-                    'refund_amount' => $refundRecord['refund_amount'],
-                    'out_request_no' => $refundRecord['out_request_no'],
-                ]);
-
-                return [
-                    'already_refunded' => false,
-                    'order_id' => (int) $lockedOrder->id,
-                    'payment_id' => (int) $payment->id,
-                    'refund' => $refundRecord,
-                ];
-            });
-        }, '退款处理中，请勿重复提交');
-    }
-
-    /**
      * 后台发起账单退款到用户余额
      */
     public function refundInvoiceToBalance(User $user, Invoice $invoice, array $payload = [], array $context = []): array
@@ -1770,24 +1539,6 @@ class PaymentService
                 ];
             });
         }, '退款处理中，请勿重复提交');
-    }
-
-    private function refundOrderToBalance(
-        Order $order,
-        array $payload,
-        array $context,
-        string $refundMethod,
-        string $refundMethodLabel,
-    ): array {
-        $order->loadMissing(['invoice', 'user']);
-
-        throw_if(! $order->invoice instanceof Invoice, new BusinessException('订单未关联账单，无法退款'));
-        throw_if(! $order->user instanceof User, new BusinessException('订单未关联用户，无法退款'));
-
-        return $this->refundInvoiceToBalance($order->user, $order->invoice, array_merge($payload, [
-            'refund_method' => $refundMethod,
-            'refund_method_label' => $refundMethodLabel,
-        ]), $context);
     }
 
     public function handlePaidInvoice(Invoice $invoice, ?string $traceId = null): void
@@ -2443,14 +2194,6 @@ class PaymentService
     }
 
     /**
-     * 当前仅支持单次全额退款，使用固定退款单号保证后台重复点击时幂等。
-     */
-    private function buildOriginalRefundRequestNo(Payment $payment): string
-    {
-        return 'RFD'.$payment->payment_no;
-    }
-
-    /**
      * @param  array<string, mixed>  $payload
      * @return array<string, mixed>
      */
@@ -2519,27 +2262,6 @@ class PaymentService
     private function queryGatewayPayment(string $gateway, string $outTradeNo): array
     {
         return $this->gatewayOperations()->query($gateway, $outTradeNo);
-    }
-
-    /**
-     * 支付业务仍保留旧数组结构，网关层只负责 provider 请求和响应归一化。
-     */
-    private function refundGatewayPayment(
-        string $gateway,
-        string $outTradeNo,
-        float $refundAmount,
-        string $refundReason,
-        ?string $tradeNo,
-        string $outRequestNo,
-    ): array {
-        return $this->gatewayOperations()->refund(
-            $gateway,
-            $outTradeNo,
-            $refundAmount,
-            $refundReason,
-            $tradeNo,
-            $outRequestNo,
-        );
     }
 
     private function resolvePrimaryRefundablePayment(Invoice $invoice, ?array $gateways = null): ?Payment
@@ -2753,16 +2475,6 @@ class PaymentService
             ->sum('amount'), 2);
     }
 
-    private function detectPrimaryPaymentGateway(Order $order): string
-    {
-        $order->loadMissing(['invoice.payments']);
-        $payment = $order->invoice instanceof Invoice
-            ? $this->resolvePrimaryRefundablePayment($order->invoice)
-            : null;
-
-        return $payment?->gatewayKey() ?? '';
-    }
-
     private function resolvePaymentGatewayLabel(string $gateway): string
     {
         return match ($gateway) {
@@ -2805,51 +2517,6 @@ class PaymentService
         }
 
         $this->financeDocuments()->recordThirdPartyPayment($payment, $invoice);
-    }
-
-    private function recordOriginalRefund(
-        Payment $payment,
-        ?Invoice $invoice,
-        array $refundRecord,
-        array $context = [],
-    ): ?Refund {
-        if (! $invoice instanceof Invoice || (int) $invoice->user_id <= 0) {
-            return null;
-        }
-
-        $gatewayRefundNo = trim((string) ($refundRecord['out_request_no'] ?? $refundRecord['trade_no'] ?? ''));
-        $query = Refund::query()->where('payment_id', (int) $payment->id);
-        if ($gatewayRefundNo !== '') {
-            $query->where('gateway_refund_no', $gatewayRefundNo);
-        }
-
-        $existing = $query->lockForUpdate()->first();
-        if ($existing instanceof Refund) {
-            return $existing;
-        }
-
-        $amount = number_format((float) ($refundRecord['refund_amount'] ?? $refundRecord['refund_fee'] ?? 0), 2, '.', '');
-        if ((float) $amount <= 0) {
-            return null;
-        }
-
-        return Refund::query()->create([
-            'refund_no' => Refund::generateRefundNo(),
-            'payment_id' => (int) $payment->id,
-            'invoice_id' => (int) $invoice->id,
-            'user_id' => (int) $invoice->user_id,
-            'amount' => $amount,
-            'status' => Refund::STATUS_COMPLETED,
-            'refund_method' => 'alipay',
-            'currency' => (string) ($payment->currency ?: 'CNY'),
-            'reason' => (string) ($refundRecord['refund_reason'] ?? '支付宝原路退款'),
-            'gateway_refund_no' => $gatewayRefundNo !== '' ? $gatewayRefundNo : null,
-            'operator_type' => (string) ($context['operator_type'] ?? 'admin'),
-            'operator_id' => (int) ($context['operator_id'] ?? 0) ?: null,
-            'operator_name' => (string) ($context['operator_name'] ?? '') ?: null,
-            'refunded_at' => $refundRecord['refunded_at'] ?? now(),
-            'trace_id' => (string) ($context['trace_id'] ?? $payment->trace_id ?: ''),
-        ]);
     }
 
     private function markInvoiceRefunded(

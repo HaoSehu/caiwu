@@ -1264,52 +1264,6 @@ class InvoiceService
         return $updatedInvoice;
     }
 
-    /**
-     * 管理员原路退款（Invoice-first 入口）。
-     */
-    public function refundByPaymentMethod(Invoice $invoice, array $payload, array $context = []): array
-    {
-        $invoice->loadMissing('order');
-
-        throw_if(
-            ! $invoice->order instanceof Order,
-            new BusinessException('账单未关联订单，暂不支持原路退款')
-        );
-
-        $result = app(PaymentService::class)->refundOrder($invoice->order, $payload, $context);
-
-        if (($result['already_refunded'] ?? false) !== true) {
-            $refund = (array) ($result['refund'] ?? []);
-
-            app(OperationLogService::class)->write(
-                userId: ((int) ($context['operator_id'] ?? 0)) ?: null,
-                userType: 'admin',
-                action: 'invoice.payment.refund',
-                module: 'invoice',
-                targetId: (int) $invoice->id,
-                detail: [
-                    'invoice_no' => (string) $invoice->invoice_no,
-                    'order_id' => (int) ($invoice->order_id ?? 0),
-                    'payment_id' => (int) ($result['payment_id'] ?? 0),
-                    'refund_method' => (string) ($refund['refund_method'] ?? $payload['refund_method'] ?? 'original'),
-                    'refund_method_label' => (string) ($refund['refund_method_label'] ?? ''),
-                    'refund_amount' => (string) ($refund['refund_amount'] ?? $payload['amount'] ?? ''),
-                    'refund_reason' => (string) ($refund['refund_reason'] ?? $payload['remark'] ?? ''),
-                    'out_request_no' => (string) ($refund['out_request_no'] ?? ''),
-                    'trade_no' => (string) ($refund['trade_no'] ?? ''),
-                    'actor_name' => (string) ($context['operator_name'] ?? ''),
-                    'trace_id' => (string) ($context['trace_id'] ?? ''),
-                ],
-                ipAddress: (string) ($context['ip_address'] ?? '') ?: null,
-            );
-        }
-
-        return array_merge($result, [
-            'invoice_id' => (int) $invoice->id,
-        ]);
-
-    }
-
     private function resolveInvoiceLogs(Invoice $invoice): array
     {
         if (! $invoice->order_id) {

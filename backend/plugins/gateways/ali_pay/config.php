@@ -12,7 +12,7 @@ return [
         'name' => '支付宝当面付',
         'version' => '1.0.0',
         'entry' => AliPayPlugin::class,
-        'capabilities' => ['precreate', 'query', 'refund', 'notify_verify'],
+        'capabilities' => ['precreate', 'query', 'notify_verify'],
         'extra' => [
             'legacy_settings' => [
                 'group' => 'payment',

@@ -16,7 +16,6 @@ class AlipayService
         'payment.matches_merchant',
         'payment.precreate',
         'payment.query',
-        'payment.refund',
         'payment.verify_notify',
     ];
 
@@ -62,13 +61,6 @@ class AlipayService
             )),
             'payment.query' => $this->success($action, $client->query(
                 (string) ($payload['out_trade_no'] ?? '')
-            )),
-            'payment.refund' => $this->success($action, $client->refund(
-                outTradeNo: (string) ($payload['out_trade_no'] ?? ''),
-                refundAmount: (float) ($payload['refund_amount'] ?? 0),
-                refundReason: (string) ($payload['refund_reason'] ?? ''),
-                tradeNo: isset($payload['trade_no']) ? (string) $payload['trade_no'] : null,
-                outRequestNo: isset($payload['out_request_no']) ? (string) $payload['out_request_no'] : null,
             )),
             'payment.verify_notify' => $this->success($action, [
                 'verified' => $client->verifyNotify($payload),

@@ -12,7 +12,7 @@ return [
         'name' => 'Demo 支付网关',
         'version' => '1.0.0',
         'entry' => DemoPayPlugin::class,
-        'capabilities' => ['precreate', 'query', 'refund', 'notify_verify'],
+        'capabilities' => ['precreate', 'query', 'notify_verify'],
     ],
     'config' => [
         'demo_notice' => ['title' => '演示插件', 'type' => 'notice', 'theme' => 'info', 'content' => '该插件只模拟支付下单、查询、退款和回调验签。'],

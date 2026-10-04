@@ -22,7 +22,6 @@ final class ProviderErrorMapper
     {
         return match (trim($action)) {
             'precreate', 'pay', 'payment' => '支付请求',
-            'refund' => '退款请求',
             'callback' => '回调处理',
             'verification', 'identity' => '实名认证',
             'provision' => '服务开通',
