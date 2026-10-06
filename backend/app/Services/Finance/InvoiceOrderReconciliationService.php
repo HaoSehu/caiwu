@@ -482,7 +482,9 @@ class InvoiceOrderReconciliationService
             $invoiceNo = Invoice::generateInvoiceNo();
         }
 
-        $invoiceAmount = max(0, (float) $order->amount - (float) ($order->discount ?? 0));
+        // 订单金额统一应付价口径，直接取订单金额（不再按目录价语义反推扣减折扣列）
+        $invoiceAmount = max(0, (float) ($order->amount ?? 0));
+        $memberDiscountAmount = (float) ($order->member_discount_amount ?? 0);
         $status = $this->invoiceStatusForOrder((int) $order->order_status);
         $paidAmount = $status === InvoiceStatus::PAID
             ? ($this->positiveDecimal($order->paid_amount ?? null) ?? number_format($invoiceAmount, 2, '.', ''))
@@ -506,6 +508,8 @@ class InvoiceOrderReconciliationService
             },
             'amount' => number_format($invoiceAmount, 2, '.', ''),
             'discount' => number_format((float) ($order->discount ?? 0), 2, '.', ''),
+            'member_discount_amount' => number_format($memberDiscountAmount, 2, '.', ''),
+            'member_discount_snapshot' => $order->member_discount_snapshot ?? null,
             'paid_amount' => $paidAmount,
             'billing_cycle' => $order->billing_cycle ?? null,
             'quantity' => $order->quantity ?? 1,

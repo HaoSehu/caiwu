@@ -186,16 +186,21 @@ class BalanceInvoicePaymentService
         return $paidInvoice?->fresh() ?? $paidInvoice ?? $order->invoice;
     }
 
+    /**
+     * 订单余额支付应付额：订单金额已统一为应付价口径（与账单一致），
+     * 有账单时以账单为真源扣除未付余额，避免再减折扣列造成二次扣减。
+     */
     private function resolveOrderPayableAmount(Order $order): float
     {
+        if ($order->invoice instanceof Invoice) {
+            return round(
+                max((float) $order->invoice->amount - (float) ($order->invoice->paid_amount ?? 0), 0),
+                2
+            );
+        }
+
         return round(
-            max(
-                (float) ($order->amount ?? 0)
-                - (float) ($order->discount ?? 0)
-                - (float) ($order->member_discount_amount ?? 0)
-                - (float) ($order->paid_amount ?? 0),
-                0
-            ),
+            max((float) ($order->amount ?? 0) - (float) ($order->paid_amount ?? 0), 0),
             2
         );
     }

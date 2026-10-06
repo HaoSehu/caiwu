@@ -232,7 +232,7 @@ class ServiceRenewService
         $memberDiscountAmount = round((float) ($memberDiscount['discount_amount'] ?? 0), 2);
         $couponBaseAmount = max($amount - $memberDiscountAmount, 0.0);
 
-        $blockingPaidInvoice = $this->findBlockingPaidRenewInvoice($user, $service, $cycle, $userCouponId);
+        $blockingPaidInvoice = $this->findBlockingPaidRenewInvoice($user, $service, $cycle);
         if ($blockingPaidInvoice instanceof Invoice) {
             if ($rejectBlockingPaidInvoice) {
                 $this->operationLogService->writeServiceConsoleLog($service, 'service.console.renew.invoice.create', [
@@ -275,7 +275,6 @@ class ServiceRenewService
             ->where('service_id', $service->id)
             ->where('type', OrderType::RENEW)
             ->where('billing_cycle', $cycle)
-            ->where('user_coupon_id', $userCouponId > 0 ? $userCouponId : null)
             ->where('status', InvoiceStatus::UNPAID)
             ->latest('id')
             ->first();
@@ -328,7 +327,6 @@ class ServiceRenewService
                 ->where('service_id', $service->id)
                 ->where('type', OrderType::RENEW)
                 ->where('billing_cycle', $cycle)
-                ->where('user_coupon_id', $userCouponId > 0 ? $userCouponId : null)
                 ->where('status', InvoiceStatus::UNPAID)
                 ->latest('id')
                 ->first();
@@ -427,7 +425,10 @@ class ServiceRenewService
                 'coupon_id' => $couponPayload['coupon_id'] ?? null,
                 'user_coupon_id' => $couponPayload['user_coupon_id'] ?? null,
                 'coupon_code' => $couponPayload['code'] ?? null,
-                'amount' => $amount,
+                // 订单金额统一应付价口径（与账单一致，目录价 = amount + discount + member_discount_amount）：
+                // 目录价语义会让 FinanceDocumentService 组成断言失败（网关支付回调死循环），
+                // 且 Money::catalogAmountOf 还原错误导致同周期复用检查恒不成立。
+                'amount' => $payableAmount,
                 'discount' => $discountAmount,
                 'member_discount_amount' => $memberDiscountAmount,
                 'member_discount_snapshot' => $memberDiscount['snapshot'] ?? null,
@@ -489,7 +490,7 @@ class ServiceRenewService
         $couponBaseAmount = max($amount - $memberDiscountAmount, 0.0);
 
         // 复用已支付未履约续费账单：用户已付过钱，直接返回既有订单，防止自动续费重复建单扣款
-        $blockingPaidInvoice = $this->findBlockingPaidRenewInvoice($user, $service, $cycle, $userCouponId);
+        $blockingPaidInvoice = $this->findBlockingPaidRenewInvoice($user, $service, $cycle);
         if ($blockingPaidInvoice instanceof Invoice && $blockingPaidInvoice->order instanceof Order) {
             $reusedOrder = $blockingPaidInvoice->order->loadMissing([
                 'invoice.product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
@@ -522,7 +523,6 @@ class ServiceRenewService
             ->where('service_id', $service->id)
             ->where('type', OrderType::RENEW)
             ->where('billing_cycle', $cycle)
-            ->where('user_coupon_id', $userCouponId > 0 ? $userCouponId : null)
             ->whereHas('invoice', fn ($query) => $query->where('status', InvoiceStatus::UNPAID))
             ->latest('id')
             ->first();
@@ -584,7 +584,6 @@ class ServiceRenewService
                 ->where('service_id', $service->id)
                 ->where('type', OrderType::RENEW)
                 ->where('billing_cycle', $cycle)
-                ->where('user_coupon_id', $userCouponId > 0 ? $userCouponId : null)
                 ->whereHas('invoice', fn ($query) => $query->where('status', InvoiceStatus::UNPAID))
                 ->latest('id')
                 ->first();
@@ -634,6 +633,7 @@ class ServiceRenewService
                 OrderType::RENEW
             );
             $discountAmount = round((float) ($couponPayload['discount_amount'] ?? 0), 2);
+            $payableAmount = round(max($couponBaseAmount - $discountAmount, 0), 2);
 
             $order = Order::query()->create([
                 'order_no' => Order::generateOrderNo(),
@@ -647,7 +647,8 @@ class ServiceRenewService
                 'coupon_id' => $couponPayload['coupon_id'] ?? null,
                 'user_coupon_id' => $couponPayload['user_coupon_id'] ?? null,
                 'coupon_code' => $couponPayload['code'] ?? null,
-                'amount' => $amount,
+                // 订单金额统一应付价口径（与 invoice 路径一致，见 createRenewInvoiceForUser 注释）
+                'amount' => $payableAmount,
                 'discount' => $discountAmount,
                 'member_discount_amount' => $memberDiscountAmount,
                 'member_discount_snapshot' => $memberDiscount['snapshot'] ?? null,
@@ -687,7 +688,8 @@ class ServiceRenewService
 
         $invoice = $order->invoice;
         $discountAmount = round((float) ($invoice?->discount ?? $order->discount ?? 0), 2);
-        $payableAmount = round((float) ($invoice?->amount ?? ((float) $order->amount - (float) $order->discount)), 2);
+        // 订单金额即应付价，兜底直取；invoice 缺失时不再按目录价语义二次扣减折扣
+        $payableAmount = round((float) ($invoice?->amount ?? $order->amount), 2);
 
         $this->operationLogService->writeServiceConsoleLog($service, 'service.console.renew.order.create', [
             'category' => 'renew',
@@ -709,9 +711,9 @@ class ServiceRenewService
     /**
      * 查询已支付但尚未履约完成的续费订单，供自动续费在扣款前复用，避免重复建单重复扣款。
      */
-    public function findPaidUnfulfilledRenewOrder(User $user, Service $service, string $billingCycle, int $userCouponId = 0): ?Order
+    public function findPaidUnfulfilledRenewOrder(User $user, Service $service, string $billingCycle): ?Order
     {
-        $blockingPaidInvoice = $this->findBlockingPaidRenewInvoice($user, $service, trim($billingCycle), $userCouponId);
+        $blockingPaidInvoice = $this->findBlockingPaidRenewInvoice($user, $service, trim($billingCycle));
 
         if ($blockingPaidInvoice instanceof Invoice && $blockingPaidInvoice->order instanceof Order) {
             return $blockingPaidInvoice->order->loadMissing(['invoice', 'invoice.service']);
@@ -1423,7 +1425,9 @@ class ServiceRenewService
                 'product_id' => (int) ($order->product_id ?: $service->product_id),
                 'order_id' => (int) $order->id,
                 'billing_cycle' => (string) $order->billing_cycle,
-                'amount' => (float) $order->amount,
+                // 续费定价基数必须取目录价（应付价 + 券减免 + 会员折扣减免）：订单已是应付价口径，
+                // 直接落订单金额会让下轮续费对折后价二次打折（0.75^n 式复利衰减）
+                'amount' => Money::catalogAmountOf($order),
                 'expires_at' => $nextExpiresAt,
                 'status' => $resolvedStatus,
                 'provision_data' => $provisionData,
@@ -1520,14 +1524,15 @@ class ServiceRenewService
         }
     }
 
-    private function findBlockingPaidRenewInvoice(User $user, Service $service, string $cycle, int $userCouponId): ?Invoice
+    private function findBlockingPaidRenewInvoice(User $user, Service $service, string $cycle): ?Invoice
     {
+        // 防双扣拦截不区分券选择：带券 A 的已付账单对换券 B / 去券请求同样生效，
+        // 否则换券请求会绕过同周期防重造成并存扣款。
         $latestPaidInvoice = Invoice::query()
             ->where('user_id', $user->id)
             ->where('service_id', $service->id)
             ->where('type', OrderType::RENEW)
             ->where('billing_cycle', $cycle)
-            ->where('user_coupon_id', $userCouponId > 0 ? $userCouponId : null)
             ->where('status', InvoiceStatus::PAID)
             ->latest('id')
             ->first();

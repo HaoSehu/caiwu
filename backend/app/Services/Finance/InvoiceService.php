@@ -53,7 +53,8 @@ class InvoiceService
                 OrderType::UPGRADE => InvoiceType::UPGRADE,
                 default => 'normal',
             },
-            'amount' => max((float) $order->amount - (float) ($order->discount ?? 0) - (float) ($order->member_discount_amount ?? 0), 0),
+            // 订单金额即应付价（所有链路统一口径），不再按目录价语义反推扣减折扣列
+            'amount' => max((float) ($order->amount ?? 0), 0),
             'discount' => $order->discount ?? 0,
             'member_discount_amount' => (float) ($order->member_discount_amount ?? 0),
             'member_discount_snapshot' => $order->member_discount_snapshot,
@@ -599,7 +600,7 @@ class InvoiceService
 
     private function buildInvoiceSummary(Invoice $invoice, array $scene): array
     {
-        $remark = trim((string) ($scene['remark'] ?? $invoice->config_snapshot['remark'] ?? $invoice->coupon_snapshot['remark'] ?? ''));
+        $remark = trim((string) ($scene['remark'] ?? $invoice->config_snapshot['remark'] ?? ''));
         $subheadline = (string) ($scene['subheadline'] ?? '');
         $highlight = (string) ($scene['highlight'] ?? '');
 
@@ -637,7 +638,7 @@ class InvoiceService
     private function resolveInvoiceScene(Invoice $invoice): array
     {
         $type = InvoiceType::normalize((string) $invoice->type);
-        $remark = trim((string) ($invoice->config_snapshot['remark'] ?? $invoice->coupon_snapshot['remark'] ?? ''));
+        $remark = trim((string) ($invoice->config_snapshot['remark'] ?? ''));
         $productName = trim((string) ($invoice->order?->display_product_name ?? ''));
         $billingCycle = trim((string) ($invoice->billing_cycle ?? $invoice->order?->billing_cycle ?? ''));
         $paymentSummary = $this->resolveInvoicePaymentSummary($invoice);
