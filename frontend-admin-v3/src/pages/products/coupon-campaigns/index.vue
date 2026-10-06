@@ -213,13 +213,13 @@
               </t-form-item>
               <t-form-item label="优惠阶段" name="discount_scope">
                 <t-select v-model="form.discount_scope">
-                  <t-option value="first_month" label="首月优惠" />
+                  <t-option value="first_month" label="新购优惠" />
                   <t-option value="recurring" label="持续优惠" />
                   <t-option value="renew" label="续费优惠" />
                 </t-select>
               </t-form-item>
               <t-form-item
-                :label="form.discount_type === 'percentage' ? '优惠值（百分比）' : '优惠金额'"
+                :label="form.discount_type === 'percentage' ? '折扣值（折后价比例）' : '优惠金额'"
                 name="discount_value"
               >
                 <t-input-number
@@ -693,7 +693,7 @@ function discountTypeLabel(value: unknown) {
 }
 
 function discountScopeLabel(value: unknown) {
-  const map: Record<string, string> = { first_month: '首月优惠', recurring: '持续优惠', renew: '续费优惠' };
+  const map: Record<string, string> = { first_month: '新购优惠', recurring: '持续优惠', renew: '续费优惠' };
   return map[String(value || '')] || '-';
 }
 

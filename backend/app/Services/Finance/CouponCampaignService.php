@@ -133,13 +133,22 @@ class CouponCampaignService
 
     public function toggleCampaignStatus(CouponCampaign $campaign, array $context = []): array
     {
-        $campaign->forceFill([
-            'status' => (int) $campaign->status === CouponStatus::ACTIVE
-                ? CouponStatus::DISABLED
-                : CouponStatus::ACTIVE,
-            'operator' => (string) ($context['operator'] ?? $campaign->operator ?? ''),
-            'trace_id' => (string) ($context['trace_id'] ?? $campaign->trace_id ?? ''),
-        ])->save();
+        // 行锁内读-判-写：并发双击时后写者基于翻转后的最新状态再翻转
+        DB::transaction(function () use ($campaign, $context): void {
+            $locked = CouponCampaign::query()
+                ->whereKey($campaign->id)
+                ->lockForUpdate()
+                ->first();
+            throw_if(! $locked, new BusinessException('活动不存在或已删除'));
+
+            $locked->forceFill([
+                'status' => (int) $locked->status === CouponStatus::ACTIVE
+                    ? CouponStatus::DISABLED
+                    : CouponStatus::ACTIVE,
+                'operator' => (string) ($context['operator'] ?? $locked->operator ?? ''),
+                'trace_id' => (string) ($context['trace_id'] ?? $locked->trace_id ?? ''),
+            ])->save();
+        });
 
         $campaign = $campaign->fresh(['lastCoupon'])->loadCount('coupons');
 
@@ -171,7 +180,7 @@ class CouponCampaignService
         $triggerAt = CarbonImmutable::now(config('app.timezone'));
         $ruleKey = 'manual-'.$triggerAt->format('YmdHis').'-'.Str::lower(Str::random(6));
         $result = $this->dispatchSingleCampaign($campaign, $triggerAt, $ruleKey, $context, true);
-        throw_if($result === null, new BusinessException('该活动今日已发放过批次，请勿重复操作'));
+        throw_if($result === null, new BusinessException('该活动今日已发放过批次或已被停用，请勿重复操作'));
         $campaign = $campaign->fresh(['lastCoupon'])->loadCount('coupons');
 
         return [
@@ -261,6 +270,12 @@ class CouponCampaignService
             $lockedCampaign = CouponCampaign::query()
                 ->lockForUpdate()
                 ->findOrFail((int) $campaign->id);
+
+            // 锁内重读状态：遍历筛选（快照）与锁之间活动可能已被停用，
+            // 停用活动不再发出「最后一批」券
+            if ((int) $lockedCampaign->status !== CouponStatus::ACTIVE) {
+                return null;
+            }
 
             if ($this->campaignDispatchedOnDay($lockedCampaign, $dispatchAt)) {
                 return null;
@@ -469,8 +484,12 @@ class CouponCampaignService
             'status' => CouponStatus::ACTIVE,
             'sort_order' => (int) ($campaign->sort_order ?? 0),
             'starts_at' => $dispatchAt->format('Y-m-d H:i:s'),
+            // 有效期从实际生成时刻起算：调度中断后的当日补发（dispatchAt 为计划时刻）若仍按
+            // 计划时刻起算，晚到的批次有效期被压缩，中断超过时长则生成即过期
             'expires_at' => $campaign->valid_duration_hours
-                ? $dispatchAt->addHours((int) $campaign->valid_duration_hours)->format('Y-m-d H:i:s')
+                ? CarbonImmutable::now(config('app.timezone'))
+                    ->addHours((int) $campaign->valid_duration_hours)
+                    ->format('Y-m-d H:i:s')
                 : null,
             'remark' => $remarkParts === [] ? null : implode(' / ', $remarkParts),
         ];
@@ -576,7 +595,7 @@ class CouponCampaignService
         return match ($discountScope) {
             'recurring' => '持续优惠',
             'renew' => '续费优惠',
-            default => '首月优惠',
+            default => '新购优惠',
         };
     }
 

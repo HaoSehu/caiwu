@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 
 class AutomationLog extends Model
@@ -49,13 +50,23 @@ class AutomationLog extends Model
 
         // 创建即写入认领标记：新建窗口（创建→markExecuted 之间）内的并发调用方
         // 会被 claimCrashResidual 的 TTL 窗口拦截，保证"仅一个调用方获得执行权"。
-        $log = static::query()->firstOrCreate(
-            $where,
-            [
-                'meta' => array_merge($meta, ['_retry_claimed_at' => now()->toDateTimeString()]),
-                'executed_at' => null,
-            ]
-        );
+        $log = null;
+        try {
+            $log = static::query()->firstOrCreate(
+                $where,
+                [
+                    'meta' => array_merge($meta, ['_retry_claimed_at' => now()->toDateTimeString()]),
+                    'executed_at' => null,
+                ]
+            );
+        } catch (QueryException $exception) {
+            // 多机同 tick 并发插入撞五键唯一索引：重读对方已插入的记录继续认领语义，
+            // 避免未捕获异常中断本轮整批调度
+            $log = static::query()->where($where)->first();
+            if (! $log instanceof static) {
+                throw $exception;
+            }
+        }
 
         if ($log->wasRecentlyCreated) {
             return true;
