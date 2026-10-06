@@ -84,8 +84,8 @@ class AdminOrderDetailResource extends AdminOrderSummaryResource
             'id' => $coupon ? (int) $coupon->id : null,
             'code' => $code,
             'name' => (string) ($coupon?->name ?? ($snapshot['name'] ?? '')),
-            'type' => (string) ($coupon?->type ?? ($snapshot['type'] ?? '')),
-            'value' => (string) ($coupon?->value ?? ($snapshot['value'] ?? '')),
+            'discount_type' => (string) ($coupon?->discount_type ?? ($snapshot['discount_type'] ?? '')),
+            'discount_value' => (string) ($coupon?->discount_value ?? ($snapshot['discount_value'] ?? '')),
         ];
     }
 

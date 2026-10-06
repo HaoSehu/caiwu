@@ -152,13 +152,13 @@
               <span>优惠券名称</span>
               <strong>{{ fieldValue(couponInfo.name) }}</strong>
             </div>
-            <div v-if="couponInfo.type" class="detail-kv-item">
-              <span>类型</span>
-              <strong>{{ fieldValue(couponInfo.type) }}</strong>
+            <div v-if="couponInfo.discount_type" class="detail-kv-item">
+              <span>优惠类型</span>
+              <strong>{{ couponInfo.discount_type === 'percentage' ? '折扣券' : couponInfo.discount_type === 'fixed' ? '满减券' : fieldValue(couponInfo.discount_type) }}</strong>
             </div>
-            <div v-if="couponInfo.value" class="detail-kv-item detail-kv-item--span-2">
-              <span>面值</span>
-              <strong>{{ fieldValue(couponInfo.value) }}</strong>
+            <div v-if="couponInfo.discount_value" class="detail-kv-item detail-kv-item--span-2">
+              <span>优惠值</span>
+              <strong>{{ couponInfo.discount_type === 'percentage' ? (couponInfo.discount_value + '（折后价比例，80 = 8 折）') : ('¥' + fieldValue(couponInfo.discount_value)) }}</strong>
             </div>
           </div>
         </section>
@@ -419,8 +419,8 @@ const couponInfo = computed(() => {
   return {
     code,
     name: coupon?.name as string | undefined,
-    type: coupon?.type as string | undefined,
-    value: coupon?.value as string | undefined,
+    discount_type: coupon?.discount_type as string | undefined,
+    discount_value: coupon?.discount_value as string | undefined,
   };
 });
 

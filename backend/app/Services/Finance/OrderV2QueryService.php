@@ -103,7 +103,7 @@ class OrderV2QueryService
                 'product.productGroup.secondProductGroup:id,first_product_group_id,name',
                 'product.productGroup.secondProductGroup.firstProductGroup:id,code,name',
                 'service:id,name,domain,status,expires_at',
-                'coupon:id,code,name,type,value',
+                'coupon:id,code,name,discount_type,discount_value',
             ])
             ->findOrFail($id);
     }

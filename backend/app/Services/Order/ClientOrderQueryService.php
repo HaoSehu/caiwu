@@ -120,7 +120,7 @@ class ClientOrderQueryService
         return [
             'invoice:id,invoice_no,order_id,type,status,amount,paid_amount,paid_at,due_date,created_at',
             'service:id,name,domain,status,expires_at',
-            'coupon:id,code,name,type,value',
+            'coupon:id,code,name,discount_type,discount_value',
             'product:id,product_type,service_type_code,product_group_id,remark,config_options,purchase_requires',
             'product.productGroup:id,second_product_group_id,name',
             'product.productGroup.secondProductGroup:id,first_product_group_id,name',
@@ -169,8 +169,8 @@ class ClientOrderQueryService
             'id' => (int) $order->coupon->id,
             'code' => (string) $order->coupon->code,
             'name' => (string) ($order->coupon->name ?? ''),
-            'type' => (string) ($order->coupon->type ?? ''),
-            'value' => (string) ($order->coupon->value ?? ''),
+            'discount_type' => (string) ($order->coupon->discount_type ?? ''),
+            'discount_value' => (string) ($order->coupon->discount_value ?? ''),
         ] : null;
         $base['coupon_code'] = (string) ($order->coupon_code ?? '');
         $base['remark'] = (string) ($order->remark ?? '');

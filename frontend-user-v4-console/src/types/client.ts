@@ -1226,8 +1226,8 @@ export interface OrderCouponInfo {
   id?: number;
   code?: string;
   name?: string;
-  type?: string;
-  value?: string;
+  discount_type?: string;
+  discount_value?: string;
   [key: string]: unknown;
 }
 

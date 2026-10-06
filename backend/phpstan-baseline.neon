@@ -577,13 +577,13 @@ parameters:
 			path: app/Http/Resources/Admin/V2/AdminOrderDetailResource.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$type\.$#'
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$discount_type\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Http/Resources/Admin/V2/AdminOrderDetailResource.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$value\.$#'
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$discount_value\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Http/Resources/Admin/V2/AdminOrderDetailResource.php
@@ -613,13 +613,13 @@ parameters:
 			path: app/Http/Resources/Admin/V2/AdminOrderDetailResource.php
 
 		-
-			message: '#^Using nullsafe property access "\?\-\>type" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			message: '#^Using nullsafe property access "\?\-\>discount_type" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Http/Resources/Admin/V2/AdminOrderDetailResource.php
 
 		-
-			message: '#^Using nullsafe property access "\?\-\>value" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			message: '#^Using nullsafe property access "\?\-\>discount_value" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Http/Resources/Admin/V2/AdminOrderDetailResource.php
