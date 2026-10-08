@@ -9,6 +9,7 @@ use App\Models\Payment;
 use App\Services\Integrations\Plugins\PaymentGatewayBindingResolver;
 use App\Support\SchemaMetadataCache;
 use App\Support\VersionedJson;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -114,6 +115,80 @@ class PaymentCallbackProjector
                 'created_at' => $payment->created_at ?? $now,
             ])
         );
+    }
+
+    /**
+     * 记录被拒绝的回调（验签失败/商户号不匹配/金额不符），is_verified=0 留痕。
+     * 已验签的真实回调投影（is_verified=1）不可被拒绝载荷覆盖；预创建/历史拒绝行
+     * 允许被最新的拒绝痕迹替换，保证支付单的回调投影始终反映最近一次审计结论。
+     */
+    public function recordRejectedCallback(Payment $payment, array $payload, string $reason): void
+    {
+        if (! SchemaMetadataCache::hasTable('payment_callbacks') || ! $payment->exists) {
+            return;
+        }
+
+        $verifiedExists = DB::table('payment_callbacks')
+            ->where('payment_id', (int) $payment->id)
+            ->where('callback_type', 'payment')
+            ->where('is_verified', 1)
+            ->exists();
+        if ($verifiedExists) {
+            return;
+        }
+
+        $now = now();
+        $resolvedTraceId = trim((string) ($payload['trace_id'] ?? $payment->trace_id ?? ''));
+        $row = [
+            'gateway_trade_no' => $this->nullableString($payload['trade_no'] ?? $payment->trade_no ?? null),
+            'payload_json' => $this->encodeJson(VersionedJson::paymentCallback(
+                array_merge($payload, ['reject_reason' => $reason]),
+                'payment'
+            )),
+            'is_verified' => 0,
+            'received_at' => $now,
+            'updated_at' => $now,
+        ];
+        $gatewayContext = $this->paymentGatewayBindingResolver()->contextForPayment($payment);
+
+        if (SchemaMetadataCache::hasColumn('payment_callbacks', 'plugin_id')) {
+            $row['plugin_id'] = $gatewayContext['plugin_id'];
+        }
+
+        if (SchemaMetadataCache::hasColumn('payment_callbacks', 'gateway_key')) {
+            $row['gateway_key'] = $gatewayContext['gateway_key'];
+        }
+
+        if (SchemaMetadataCache::hasColumn('payment_callbacks', 'trace_id')) {
+            $row['trace_id'] = $this->nullableString($resolvedTraceId);
+        }
+
+        if (SchemaMetadataCache::hasColumn('payment_callbacks', 'remark')) {
+            $row['remark'] = $reason;
+        }
+
+        // 竞态防护：SELECT（verified 检查）与 UPSERT 之间真实回调可能并发落行。
+        // update 只命中未验签行（预创建/历史拒绝），永不触碰已验签投影；
+        // 未命中时 insert，若间隙里已生成真实回调行则被唯一键拦截后静默放弃。
+        $updated = DB::table('payment_callbacks')
+            ->where('payment_id', (int) $payment->id)
+            ->where('callback_type', 'payment')
+            ->where('is_verified', 0)
+            ->update($row);
+
+        if ($updated > 0) {
+            return;
+        }
+
+        try {
+            DB::table('payment_callbacks')->insert(array_merge($row, [
+                'payment_id' => (int) $payment->id,
+                'callback_type' => 'payment',
+                'created_at' => $now,
+            ]));
+        } catch (QueryException $e) {
+            // 并发窗口内已出现同键投影行（真实回调或另一拒绝痕迹），保留既有行。
+        }
     }
 
     private function resolveCallbackVerified(Payment $payment, array $callbackRaw): bool

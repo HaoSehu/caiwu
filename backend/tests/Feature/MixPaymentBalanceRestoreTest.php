@@ -14,6 +14,7 @@ use App\Models\IntegrationPlugin;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\PaymentCallback;
+use App\Models\RechargeRecord;
 use App\Models\User;
 use App\Services\Finance\CheckoutService;
 use App\Services\Finance\GatewayInvoicePaymentService;
@@ -28,6 +29,7 @@ use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Schema;
 use ReflectionMethod;
+use ReflectionProperty;
 use Tests\TestCase;
 
 /**
@@ -79,6 +81,27 @@ class MixPaymentBalanceRestoreTest extends TestCase
         $this->assertSame(PaymentStatus::SUCCESS, (int) $payment->status);
         $this->assertEqualsWithDelta(170.00, $accounts->cashBalance($user), 0.001);
 
+        // 真钱入余额补齐凭证链：独立充值账单（PAID/70）+ 充值凭证（关联台账与支付单）。
+        $rechargeInvoice = Invoice::query()
+            ->where('user_id', (int) $user->id)
+            ->where('type', 'recharge')
+            ->where('amount', '70.00')
+            ->first();
+        $this->assertNotNull($rechargeInvoice);
+        $this->assertSame(InvoiceStatus::PAID, (int) $rechargeInvoice->status);
+        $rechargeRecord = RechargeRecord::query()
+            ->where('account_transaction_id', (int) AccountTransaction::query()
+                ->where('user_id', (int) $user->id)
+                ->where('event_type', FinanceLedgerEventType::RECHARGE)
+                ->where('remark', 'like', '异常支付转入余额%')
+                ->firstOrFail()
+                ->id)
+            ->first();
+        $this->assertNotNull($rechargeRecord);
+        $this->assertSame((int) $rechargeInvoice->id, (int) $rechargeRecord->invoice_id);
+        $this->assertSame((int) $payment->id, (int) $rechargeRecord->payment_id);
+        $this->assertSame('in', (string) $rechargeRecord->direction);
+
         // 网关重复回调：余额退回与网关款入账均被幂等闸拦截，余额不再变化。
         $this->assertFalse($mix->restoreReservedMixBalance($payment, $callbackContext));
         $this->creditCapturedPaymentToBalance($mix, $payment, $invoice, 'cancelled_invoice');
@@ -122,6 +145,59 @@ class MixPaymentBalanceRestoreTest extends TestCase
         // 已注册网关但签名无效：按网关约定返回 200 fail 文本，不产生 500。
         $response = $this->post('/api/v2/client/payment/notify/alipay', ['out_trade_no' => 'PYMIXTEST'.mt_rand(1000, 9999)]);
         $this->assertSame(200, $response->status());
+    }
+
+    public function test_rejected_notify_leaves_unverified_trace_without_blocking_later_success(): void
+    {
+        $user = $this->makeUser();
+        app(AccountService::class)->setCashBalance($user, 100.00);
+        $this->registerStubGateway();
+
+        $invoice = $this->makeMixInvoice($user, 30.00, 70.00);
+        $payload = app(MixPaymentService::class)->payByBalanceAndGateway(
+            $invoice, $user, 30.00, PaymentGatewayCode::ALIPAY
+        );
+        $payment = Payment::query()->where('payment_no', $payload['payment_no'])->firstOrFail();
+
+        // 切换为验签恒失败的替身，发送一笔伪造成功回调：验签失败按契约返回 false。
+        $this->registerStubGateway(verifyNotify: false);
+        $rejectParams = [
+            'out_trade_no' => $payment->payment_no,
+            'trade_no' => 'FAKETRADE'.mt_rand(100000, 999999),
+            'trade_status' => 'TRADE_SUCCESS',
+            'total_amount' => '70.00',
+        ];
+        $this->assertFalse(app(GatewayInvoicePaymentService::class)->handleGatewayNotify(PaymentGatewayCode::ALIPAY, $rejectParams));
+
+        // 拒绝痕迹落表：is_verified=0、带拒绝原因，支付单不被误入账。
+        $payment->refresh();
+        $this->assertSame(PaymentStatus::PENDING, (int) $payment->status);
+        $rejected = PaymentCallback::query()
+            ->where('payment_id', (int) $payment->id)
+            ->where('callback_type', 'payment')
+            ->firstOrFail();
+        $this->assertSame(0, (int) $rejected->is_verified);
+        $this->assertSame('签名验证失败', (string) $rejected->remark);
+
+        // 换回验签恒过的替身发送真实回调：真实回调正常覆盖预创建/拒绝痕迹并入账。
+        $this->registerStubGateway();
+        $realParams = [
+            'out_trade_no' => $payment->payment_no,
+            'trade_no' => 'REALTRADE'.mt_rand(100000, 999999),
+            'trade_status' => 'TRADE_SUCCESS',
+            'total_amount' => '70.00',
+        ];
+        $this->assertTrue(app(GatewayInvoicePaymentService::class)->handleGatewayNotify(PaymentGatewayCode::ALIPAY, $realParams));
+
+        $payment->refresh();
+        $this->assertSame(PaymentStatus::SUCCESS, (int) $payment->status);
+        $callbacks = PaymentCallback::query()
+            ->where('payment_id', (int) $payment->id)
+            ->where('callback_type', 'payment')
+            ->get();
+        $this->assertSame(1, $callbacks->count());
+        $this->assertSame(1, (int) $callbacks->first()->is_verified);
+        $this->assertSame((string) $realParams['trade_no'], (string) $callbacks->first()->gateway_trade_no);
     }
 
     public function test_gateway_notify_full_flow_after_cancel_credits_gateway_part_once(): void
@@ -229,19 +305,25 @@ class MixPaymentBalanceRestoreTest extends TestCase
      * 注册 alipay 网关测试替身：验签恒过、商户恒匹配，回调/主动查询由此驱动真实入账分支。
      * 真实网关插件的 RSA 验签在测试环境无法替身，注册前先禁用支付域已启用插件，
      * 避免真实适配器占用 alipay key 导致替身注册冲突（DatabaseTransactions 会回滚插件状态）。
+     * 同一用例内可重复调用以切换替身行为（registry 禁止重复注册，先反射清空）。
      */
-    private function registerStubGateway(?PaymentQueryResult $queryResult = null): void
+    private function registerStubGateway(?PaymentQueryResult $queryResult = null, bool $verifyNotify = true): void
     {
+        $registry = app(PaymentGatewayRegistry::class);
+        $gateways = new ReflectionProperty(PaymentGatewayRegistry::class, 'gateways');
+        $gateways->setAccessible(true);
+        $gateways->setValue($registry, []);
         if (Schema::hasTable('integration_plugins')) {
             IntegrationPlugin::query()
                 ->where('domain', PluginDomain::PAYMENT)
                 ->update(['status' => IntegrationPlugin::STATUS_DISABLED]);
         }
 
-        app(PaymentGatewayRegistry::class)->register(new class($queryResult) implements PaymentGatewayInterface
+        app(PaymentGatewayRegistry::class)->register(new class($queryResult, $verifyNotify) implements PaymentGatewayInterface
         {
             public function __construct(
                 private readonly ?PaymentQueryResult $queryResult,
+                private readonly bool $verifyNotify,
             ) {}
 
             public function key(): string
@@ -291,7 +373,7 @@ class MixPaymentBalanceRestoreTest extends TestCase
 
             public function verifyNotify(array $payload): bool
             {
-                return true;
+                return $this->verifyNotify;
             }
 
             public function buildNotifyResponse(bool $success): Response

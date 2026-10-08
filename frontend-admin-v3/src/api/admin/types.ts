@@ -61,6 +61,13 @@ export interface InvoiceRecord {
   type?: string;
   type_label?: string;
   amount?: number | string;
+  // 折扣分列：discount=优惠券减免，member_discount_amount=会员折扣
+  discount?: number | string;
+  member_discount_amount?: number | string;
+  member_discount_snapshot?: Record<string, unknown> | null;
+  config_pricing_snapshot?: Record<string, unknown> | null;
+  coupon_code?: string;
+  coupon_name?: string;
   paid_amount?: number | string;
   status?: number | string;
   created_at?: string;
@@ -113,6 +120,11 @@ export interface OrderRecord {
   upgrade_target_label?: string;
   upgrade_mode?: string;
   amount?: number | string;
+  // 折扣分列：discount=优惠券减免，member_discount_amount=会员折扣
+  discount?: number | string;
+  member_discount_amount?: number | string;
+  member_discount_snapshot?: Record<string, unknown> | null;
+  coupon_code?: string;
   quantity?: number | string;
   status?: number | string;
   invoice?: Record<string, unknown> | null;

@@ -27,6 +27,7 @@ use App\Services\Automation\ServiceStatusSyncService;
 use App\Services\ClientServiceConsole\ClientServiceConsoleService;
 use App\Services\Finance\FinanceLedgerQueryService;
 use App\Services\Finance\InvoiceService;
+use App\Services\Finance\TradeLifecycleService;
 use App\Services\Provisioning\ProvisionService;
 use App\Services\Referral\ReferralService;
 use App\Services\System\OperationLogService;
@@ -52,6 +53,7 @@ class UserService
         private ProvisionService $provisionService,
         private ServiceStatusSyncService $serviceStatusSyncService,
         private SettingService $settingService,
+        private TradeLifecycleService $tradeLifecycleService,
         private ?AccountService $accountService = null,
     ) {}
 

@@ -61,9 +61,13 @@
               <span>订单金额</span>
               <strong>{{ formatMoney(order.amount) }}</strong>
             </div>
-            <div class="detail-kv-item">
-              <span>优惠金额</span>
-              <strong>{{ formatMoney(order.discount) }}</strong>
+            <div v-if="Number(order.discount || 0) > 0" class="detail-kv-item">
+              <span>优惠券减免</span>
+              <strong>-{{ formatMoney(order.discount) }}</strong>
+            </div>
+            <div v-if="Number(order.member_discount_amount || 0) > 0" class="detail-kv-item">
+              <span>会员折扣{{ memberDiscountLevelName ? `（${memberDiscountLevelName}）` : '' }}</span>
+              <strong>-{{ formatMoney(order.member_discount_amount) }}</strong>
             </div>
             <div class="detail-kv-item">
               <span>实付金额</span>
@@ -422,6 +426,12 @@ const couponInfo = computed(() => {
     discount_type: coupon?.discount_type as string | undefined,
     discount_value: coupon?.discount_value as string | undefined,
   };
+});
+
+const memberDiscountLevelName = computed(() => {
+  const snap = order.value.member_discount_snapshot as Record<string, unknown> | null | undefined;
+  if (!snap || typeof snap !== 'object') return '';
+  return String(snap.member_level_name || snap.group_name || '').trim();
 });
 
 const configItems = computed(() => {

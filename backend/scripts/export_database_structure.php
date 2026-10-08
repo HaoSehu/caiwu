@@ -367,7 +367,17 @@ foreach ($tables as $offset => $table) {
 }
 
 $target = dirname($basePath).'/docs/DATABASE.md';
-file_put_contents($target, implode("\n", $lines)."\n");
+
+// 结构章节整体重写；标记区间内的手工维护章节（如「订单/账单职责与记录契约」）原样保留。
+$preserved = '';
+if (is_file($target)) {
+    $existing = (string) file_get_contents($target);
+    if (preg_match('/<!-- BEGIN:MANUAL -->\n(.*?)<!-- END:MANUAL -->\n?/s', $existing, $matches) === 1) {
+        $preserved = "\n".$matches[0];
+    }
+}
+
+file_put_contents($target, implode("\n", $lines)."\n".rtrim($preserved, "\n").($preserved !== '' ? "\n" : ''));
 
 fwrite(STDOUT, sprintf(
     '已生成数据库结构文档: %s，表数: %d，字段数: %d，索引数: %d%s',

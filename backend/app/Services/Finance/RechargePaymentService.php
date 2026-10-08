@@ -192,6 +192,13 @@ class RechargePaymentService
 
                 if ($payment) {
                     $this->ensurePaymentGatewayAudit($payment, $gateway, $traceId);
+                    // 复用旧单在事务内补齐网关上下文：崩溃后 payment_context 缺失会绕过复用匹配造成重复建单
+                    $payment->forceFill([
+                        'callback_raw' => array_merge(
+                            (array) ($payment->callback_raw ?? []),
+                            $this->rechargeGatewayCallbackRaw($gatewayContext)
+                        ),
+                    ])->save();
 
                     return $payment;
                 }

@@ -68,6 +68,36 @@ class ReferralInvoiceOnlyRewardTest extends TestCase
         $this->assertSame(ReferralReward::STATUS_FROZEN, (int) $reward->status);
     }
 
+    public function test_order_reward_base_amount_reads_invoice_not_order_snapshot(): void
+    {
+        // 固定费率 10%，使奖励金额可精确反推基数（80 → 8.00；若误用订单快照 100 → 10.00）
+        Setting::setValue('referral', 'reward_rate', 10);
+
+        $referrer = $this->makeUser('baseinf');
+        $this->makeAccount($referrer->id);
+        $buyer = $this->makeUser('basebuy');
+        $buyer->forceFill(['referrer_user_id' => $referrer->id])->save();
+
+        // 订单金额列是创建时快照，账单才是资金真源：订单快照 100 / 账单实收 80 时基数必须取账单
+        $order = $this->makeOrder($buyer, 100.00);
+        Invoice::query()->create([
+            'invoice_no' => 'IV'.date('YmdHis').mt_rand(1000, 9999),
+            'user_id' => $buyer->id,
+            'order_id' => $order->id,
+            'type' => 'new',
+            'amount' => 80.00,
+            'paid_amount' => 80.00,
+            'status' => InvoiceStatus::PAID,
+            'due_date' => now()->addDays(7),
+            'paid_at' => now(),
+        ]);
+
+        $reward = app(ReferralService::class)->rewardForPaidOrder($order->fresh(['user', 'product', 'invoice']));
+
+        $this->assertNotNull($reward);
+        $this->assertSame('8.00', number_format((float) $reward->refresh()->reward_amount, 2, '.', ''), '奖励基数必须读账单实收而非订单快照');
+    }
+
     private function makeUser(string $prefix): User
     {
         return User::query()->create([
@@ -102,14 +132,14 @@ class ReferralInvoiceOnlyRewardTest extends TestCase
         ]);
     }
 
-    private function makeOrder(User $buyer): Order
+    private function makeOrder(User $buyer, float $amount = 100.00): Order
     {
         return Order::query()->create([
             'order_no' => 'RR'.date('YmdHis').mt_rand(1000, 9999),
             'user_id' => $buyer->id,
             'type' => 'new',
-            'amount' => 100.00,
-            'paid_amount' => 100.00,
+            'amount' => $amount,
+            'paid_amount' => $amount,
             'status' => OrderStatus::PAID,
             'paid_at' => now(),
         ]);

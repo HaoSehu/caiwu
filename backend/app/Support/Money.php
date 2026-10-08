@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Support;
 
 use App\Models\Invoice;
-use App\Models\Order;
 
 /**
  * 金额运算集中工具。
@@ -18,15 +17,17 @@ final class Money
     private const SCALE = 2;
 
     /**
-     * 从账单/订单还原目录价（应收基数）。
+     * 从账单还原目录价（应收基数）。
      *
      * 唯一还原口径：目录价 = 应付价 + 优惠券减免 + 会员折扣减免。
+     * 账单是资金域唯一真源，目录价还原只接受账单（方案 2 职责重划：
+     * 订单金额列降级为创建时快照与生命周期投影，不再参与资金还原）。
      * services.amount 与 locked_pricing 只允许写入本方法的结果，
      * 直接写入 amount（折后价）会让续费对折后价二次打折，产生 0.75^n 式复利衰减。
      */
-    public static function catalogAmountOf(Invoice|Order $record): float
+    public static function catalogAmountOf(Invoice $invoice): float
     {
-        return self::add($record->amount, $record->discount, $record->member_discount_amount);
+        return self::add($invoice->amount, $invoice->discount, $invoice->member_discount_amount);
     }
 
     public static function round(mixed $value): float

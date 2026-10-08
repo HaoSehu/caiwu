@@ -145,6 +145,7 @@ class GatewayInvoicePaymentService
                 'trade_no' => (string) ($params['trade_no'] ?? ''),
                 'trade_status' => (string) ($params['trade_status'] ?? ''),
             ]);
+            $this->recordNotifyRejection($gateway, $params, '签名验证失败');
 
             return false;
         }
@@ -172,6 +173,7 @@ class GatewayInvoicePaymentService
                 'payment_no' => $paymentNo,
                 'merchant_id' => $merchantId,
             ]);
+            $this->recordNotifyRejection($gateway, $params, '商户号不匹配');
 
             return false;
         }
@@ -184,6 +186,7 @@ class GatewayInvoicePaymentService
                 'expected_amount' => $expectedAmount,
                 'notify_amount' => $notifyAmount,
             ]);
+            $this->recordNotifyRejection($gateway, $params, '金额校验失败');
 
             return false;
         }
@@ -253,6 +256,33 @@ class GatewayInvoicePaymentService
         }
 
         return true;
+    }
+
+    /**
+     * 拒绝回调留痕：能按网关+支付单号定位到支付单时落一条 is_verified=0 审计行。
+     * 拒绝载荷不可信，投影器只在无既有投影行时插入，不会覆盖真实回调。
+     */
+    private function recordNotifyRejection(string $gateway, array $params, string $reason): void
+    {
+        $paymentNo = (string) ($params['out_trade_no'] ?? '');
+        if ($paymentNo === '') {
+            return;
+        }
+
+        $payment = Payment::query()->whereGatewayKey($gateway)->where('payment_no', $paymentNo)->first();
+        if (! $payment instanceof Payment) {
+            return;
+        }
+
+        try {
+            $this->callbackProjector->recordRejectedCallback($payment, $params, $reason);
+        } catch (\Throwable $exception) {
+            Log::warning("[{$gateway}回调] 拒绝回调留痕失败", [
+                'payment_no' => $paymentNo,
+                'reason' => $reason,
+                'message' => $exception->getMessage(),
+            ]);
+        }
     }
 
     /**

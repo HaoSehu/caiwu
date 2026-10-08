@@ -130,8 +130,8 @@ class AdminManualOrderEntryTest extends TestCase
 
         /** @var Invoice $invoice */
         $invoice = Invoice::query()->where('order_id', $order->id)->firstOrFail();
-        // 新购订单投影为 normal 账单类型，与 InvoiceOrderReconciliationService 对账口径一致。
-        $this->assertSame('normal', (string) $invoice->type);
+        // 新购订单投影为 new 账单类型（createFromOrder 已补 NEW 分支，'normal' 仅读取兼容）。
+        $this->assertSame('new', (string) $invoice->type);
         $this->assertSame('35.00', number_format((float) $invoice->amount, 2, '.', ''));
 
         // 新购补录同样仅记账：不触发开通，实例到期时间不得被推进。
@@ -211,7 +211,7 @@ class AdminManualOrderEntryTest extends TestCase
         $this->assertTrue((bool) data_get($order->config_snapshot, 'admin_manual'));
 
         $invoice = Invoice::query()->where('order_id', $order->id)->firstOrFail();
-        $this->assertSame('normal', (string) $invoice->type);
+        $this->assertSame('new', (string) $invoice->type);
         $this->assertSame(
             $expiresAt?->format('Y-m-d H:i:s'),
             $service->fresh()?->expires_at?->format('Y-m-d H:i:s')

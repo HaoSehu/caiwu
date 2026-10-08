@@ -40,13 +40,31 @@
           <template #item="{ row }">
             <div class="stack-cell">
               <strong>{{ invoiceTitle(row) }}</strong>
-              <span>{{ fieldValue(row.order?.order_no || row.summary?.highlight || row.order_no) }}</span>
+              <span v-if="row.order?.id">
+                订单：<t-link theme="primary" hover="color" @click.stop="goToOrder(row.order.id)">{{ row.order.order_no || row.order.id }}</t-link>
+              </span>
+              <span v-else>{{ fieldValue(row.summary?.highlight || row.order_no) }}</span>
             </div>
           </template>
           <template #type="{ row }">{{ row.type_label || invoiceTypeLabel(row.type) }}</template>
           <template #amount="{ row }"
             ><span class="t-num-strong">{{ formatMoney(row.amount) }}</span></template
           >
+          <template #discount="{ row }">
+            <div class="stack-cell">
+              <strong v-if="couponDiscountOf(row) > 0" class="t-num-strong"
+                >券 {{ formatMoney(couponDiscountOf(row)) }}</strong
+              >
+              <span v-if="memberDiscountOf(row) > 0">会员 {{ formatMoney(memberDiscountOf(row)) }}</span>
+              <span v-if="couponDiscountOf(row) <= 0 && memberDiscountOf(row) <= 0">--</span>
+            </div>
+          </template>
+          <template #coupon="{ row }">
+            <div class="stack-cell">
+              <strong>{{ fieldValue(row.coupon_name || row.coupon_code) }}</strong>
+              <span v-if="row.coupon_name && row.coupon_code">{{ row.coupon_code }}</span>
+            </div>
+          </template>
           <template #paid="{ row }"
             ><span class="t-num-strong">{{ formatMoney(row.paid_amount) }}</span></template
           >
@@ -218,6 +236,8 @@ const columns: PrimaryTableCol<InvoiceRecord>[] = [
   { colKey: 'item', title: '账单项目', minWidth: 240 },
   { colKey: 'type', title: '类型', width: 120 },
   { colKey: 'amount', title: '金额', width: 120, align: 'right' },
+  { colKey: 'discount', title: '优惠', width: 130, align: 'right' },
+  { colKey: 'coupon', title: '优惠券', minWidth: 150, ellipsis: true },
   { colKey: 'paid', title: '已付', width: 120, align: 'right' },
   { colKey: 'status', title: '状态', width: 110 },
   { colKey: 'createdAt', title: '创建时间', width: 170 },
@@ -280,11 +300,21 @@ async function cancelInvoice(row: InvoiceRecord, fromDrawer = false) {
   }
 }
 
+function goToOrder(orderId: unknown) {
+  if (orderId) {
+    router.push(`/admin/finance/orders/${orderId}`);
+  }
+}
+
 function mobileActionOptions(row: InvoiceRecord) {
-  return [
-    { content: '详情', value: 'detail' },
-    { content: '取消', value: 'cancel', disabled: !canCancel(row) },
-  ];
+  const options = [{ content: '详情', value: 'detail' }];
+  if (row.order?.id) {
+    options.push({ content: '查看订单', value: 'order' });
+  }
+  if (canCancel(row)) {
+    options.push({ content: '取消', value: 'cancel' });
+  }
+  return options;
 }
 
 function handleMobileActionHandler(row: InvoiceRecord) {
@@ -293,17 +323,37 @@ function handleMobileActionHandler(row: InvoiceRecord) {
 
 function handleMobileAction(action: unknown, row: InvoiceRecord) {
   if (action === 'detail') openDetail(row);
+  if (action === 'order' && row.order?.id) goToOrder(row.order.id);
   if (action === 'cancel' && canCancel(row)) confirmCancel(row);
 }
 
 function invoiceMobileRows(row: InvoiceRecord) {
   return [
     { label: '用户', value: userName(row.user) },
+    { label: '优惠', value: discountTextOf(row), show: hasDiscount(row) },
+    { label: '优惠券', value: couponTextOf(row), show: Boolean(row.coupon_code || row.coupon_name) },
     { label: '已付', value: formatMoney(row.paid_amount) },
     { label: '订单', value: fieldValue(row.order?.order_no || row.order_no) },
     { label: '创建', value: formatDateTime(row.created_at) },
     { label: '支付', value: formatDateTime(row.paid_at), show: Boolean(row.paid_at) },
   ];
+}
+
+function hasDiscount(row: Record<string, unknown>): boolean {
+  return couponDiscountOf(row) > 0 || memberDiscountOf(row) > 0;
+}
+
+// 移动端卡片只有单行位置，两类折扣合并为一行但保留来源前缀
+// 注意：管理端 formatMoney 自带 ￥，此处不再补币符
+function discountTextOf(row: Record<string, unknown>): string {
+  const parts: string[] = [];
+  if (couponDiscountOf(row) > 0) parts.push(`券 ${formatMoney(couponDiscountOf(row))}`);
+  if (memberDiscountOf(row) > 0) parts.push(`会员 ${formatMoney(memberDiscountOf(row))}`);
+  return parts.join(' / ');
+}
+
+function couponTextOf(row: Record<string, unknown>): string {
+  return String(row.coupon_name || row.coupon_code || '');
 }
 
 function invoiceTitle(row: InvoiceRecord) {
@@ -319,6 +369,15 @@ function invoiceTitle(row: InvoiceRecord) {
 
 function invoiceTypeLabel(type: unknown) {
   return INVOICE_TYPE_MAP[String(type || '')] || fieldValue(type);
+}
+
+// 优惠券减免与会员折扣来源不同，列表内分列展示，避免混成一个数字无法区分
+function couponDiscountOf(row: Record<string, unknown>): number {
+  return Number(row.discount || 0);
+}
+
+function memberDiscountOf(row: Record<string, unknown>): number {
+  return Number(row.member_discount_amount || 0);
 }
 
 function invoiceStatusLabel(status: unknown) {

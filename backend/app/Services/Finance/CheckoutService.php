@@ -47,6 +47,7 @@ class CheckoutService
         private OperationLogService $operationLogService,
         private AdminOrderNotificationService $adminOrderNotificationService,
         private PaymentCallbackProjector $callbackProjector,
+        private TradeLifecycleService $tradeLifecycleService,
         private ?ProductDisplayNameResolver $productDisplayNameResolver = null,
         private ?MemberGroupDiscountService $memberGroupDiscountService = null,
     ) {}
@@ -219,10 +220,10 @@ class CheckoutService
                         $invoiceConfigSnapshot,
                         $configPricingSnapshot,
                         $productDisplayName,
-                        $amount,
                         $discountAmount,
                         $payableAmount,
-                        $couponPayload
+                        $couponPayload,
+                        (string) ($context['trace_id'] ?? '')
                     );
                     $this->checkoutSecurityService->rememberCreatedInvoice(
                         $userId, $idempotencyKey, $fingerprint, (int) $invoice->id
@@ -315,16 +316,8 @@ class CheckoutService
                 $this->callbackProjector->syncProjection($pending);
             }
 
-            $lockedInvoice->forceFill(['status' => InvoiceStatus::CANCELLED])->save();
-
-            $linkedOrder = $lockedInvoice->order_id
-                ? Order::query()->lockForUpdate()->find((int) $lockedInvoice->order_id)
-                : null;
-            if ($linkedOrder instanceof Order && (int) $linkedOrder->status === OrderStatus::PENDING) {
-                $linkedOrder->forceFill(['status' => OrderStatus::CANCELLED])->save();
-            }
-
-            $this->couponService->releaseInvoiceCoupon($lockedInvoice);
+            // 状态联动收敛到生命周期状态机：账单取消 + PENDING 订单级联 + 券释放。
+            $this->tradeLifecycleService->cancelTrade($lockedInvoice, $context);
 
             return $lockedInvoice->fresh(['user:id,email,nickname', 'product', 'service']) ?? $lockedInvoice;
         });
@@ -414,10 +407,10 @@ class CheckoutService
         array $configSnapshot,
         array $configPricingSnapshot,
         string $productDisplayName,
-        float $amount,
         float $discountAmount,
         float $payableAmount,
         ?array $couponPayload,
+        string $traceId,
     ): Order {
         $orderNo = OrderInvoiceNoGenerator::deriveOrderNoFromInvoiceNo((string) $invoice->invoice_no)
             ?? Order::generateOrderNo();
@@ -444,6 +437,7 @@ class CheckoutService
             'config_pricing_snapshot' => $configPricingSnapshot,
             'coupon_snapshot' => $couponPayload,
             'status' => OrderStatus::PENDING,
+            'trace_id' => $traceId,
         ]);
 
         // 双向绑定

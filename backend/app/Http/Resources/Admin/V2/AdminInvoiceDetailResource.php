@@ -40,6 +40,11 @@ class AdminInvoiceDetailResource extends AdminInvoiceSummaryResource
             'financial' => [
                 'amount' => (string) ($invoice['amount'] ?? '0.00'),
                 'discount' => (string) ($invoice['discount'] ?? '0.00'),
+                'member_discount_amount' => (string) ($invoice['member_discount_amount'] ?? '0.00'),
+                // W7：会员折扣明细快照（等级/组/比例），管理端不做脱敏
+                'member_discount_snapshot' => $this->stripSensitiveKeys((array) ($invoice['member_discount_snapshot'] ?? [])),
+                'coupon_code' => (string) ($invoice['coupon_code'] ?? ''),
+                'coupon_name' => (string) ($invoice['coupon_name'] ?? ''),
                 'paid_amount' => (string) ($invoice['paid_amount'] ?? '0.00'),
                 'payable_amount' => (string) ($invoice['payable_amount'] ?? '0.00'),
                 'paid_at' => $invoice['paid_at'] ?? null,

@@ -6,11 +6,9 @@ namespace App\Services\Finance;
 
 use App\Constants\InvoiceStatus;
 use App\Constants\InvoiceType;
-use App\Constants\OrderStatus;
 use App\Constants\PaymentStatus;
 use App\Exceptions\BusinessException;
 use App\Models\Invoice;
-use App\Models\Order;
 use App\Models\Payment;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
@@ -40,8 +38,8 @@ class InvoiceSettlementService
         private MixPaymentService $mixPaymentService,
         private PaymentCallbackProjector $callbackProjector,
         private FinanceDocumentService $financeDocumentService,
-        private CouponService $couponService,
         private CheckoutSecurityService $checkoutSecurityService,
+        private TradeLifecycleService $tradeLifecycleService,
     ) {}
 
     /**
@@ -166,18 +164,9 @@ class InvoiceSettlementService
                 ])->save();
                 $this->callbackProjector->syncProjection($lockedPayment);
 
-                $invoice->forceFill([
-                    'status' => InvoiceStatus::PAID,
-                    'paid_amount' => $invoice->amount,
-                    'paid_at' => now(),
-                    'trace_id' => (string) ($payload['trace_id'] ?? $invoice->trace_id),
-                ])->save();
-
-                $invoice->order?->forceFill([
-                    'status' => OrderStatus::PAID,
-                    'paid_amount' => $invoice->amount,
-                    'paid_at' => now(),
-                ])->save();
+                $invoice = $this->tradeLifecycleService->markInvoicePaid($invoice, [
+                    'trace_id' => (string) ($payload['trace_id'] ?? ''),
+                ]);
 
                 $this->closeOtherPendingPayments($invoice, (int) $lockedPayment->id, $closeReason);
                 $this->recordSuccessfulInvoicePayment($lockedPayment, $invoice);
@@ -224,20 +213,8 @@ class InvoiceSettlementService
 
     private function cancelExpiredInvoiceAfterCapturedPayment(Invoice $invoice, Payment $payment): void
     {
-        $invoice->forceFill(['status' => InvoiceStatus::CANCELLED])->save();
-        $this->cancelLinkedPendingOrderForInvoice($invoice);
-        $this->couponService->releaseInvoiceCoupon($invoice);
+        $this->tradeLifecycleService->cancelTrade($invoice);
         $this->closeOtherPendingPayments($invoice, (int) $payment->id, 'payment_window_expired', true);
-    }
-
-    private function cancelLinkedPendingOrderForInvoice(Invoice $invoice): void
-    {
-        $orderId = (int) ($invoice->order_id ?? $invoice->order?->id ?? 0);
-        $order = $orderId > 0 ? Order::query()->lockForUpdate()->find($orderId) : null;
-
-        if ($order instanceof Order && (int) $order->status === OrderStatus::PENDING) {
-            $order->forceFill(['status' => OrderStatus::CANCELLED])->save();
-        }
     }
 
     private function recordSuccessfulInvoicePayment(Payment $payment, Invoice $invoice): void

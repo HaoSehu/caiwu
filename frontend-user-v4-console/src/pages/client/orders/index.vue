@@ -57,6 +57,16 @@
           <template #amount="{ row }">
             <span class="order-money">¥{{ formatMoney(row.amount) }}</span>
           </template>
+          <template #discount="{ row }">
+            <div class="stack-cell">
+              <strong v-if="couponDiscountOf(row) > 0" class="order-money"
+                >券 ¥{{ formatMoney(couponDiscountOf(row)) }}</strong
+              >
+              <span v-if="memberDiscountOf(row) > 0">会员 ¥{{ formatMoney(memberDiscountOf(row)) }}</span>
+              <span v-if="couponDiscountOf(row) <= 0 && memberDiscountOf(row) <= 0">--</span>
+            </div>
+          </template>
+          <template #coupon="{ row }">{{ row.coupon_name || row.coupon_code || '--' }}</template>
           <template #status="{ row }">
             <status-tag :status-map="ORDER_STATUS_MAP" :status="Number(row.status)" />
           </template>
@@ -108,6 +118,13 @@
               <strong>{{ orderProductDisplay(row) }}</strong>
               <span>{{ row.type_label || '--' }}</span>
               <span class="stack-money">¥{{ formatMoney(row.amount) }}</span>
+              <span v-if="couponDiscountOf(row) > 0" class="stack-money"
+                >优惠券减免：¥{{ formatMoney(couponDiscountOf(row))
+                }}{{ row.coupon_name ? `（${row.coupon_name}）` : '' }}</span
+              >
+              <span v-if="memberDiscountOf(row) > 0" class="stack-money"
+                >会员折扣：¥{{ formatMoney(memberDiscountOf(row)) }}</span
+              >
             </div>
             <div class="record-mobile-card__meta">
               <span>{{ formatDateTime(row.created_at) }}</span>
@@ -196,10 +213,21 @@ const {
   cancelOrder,
 } = useOrderList();
 
+// 优惠券减免与会员折扣来源不同，列表内分列展示，避免混成一个数字无法区分
+function couponDiscountOf(row: Record<string, unknown>): number {
+  return Number(row.discount || 0);
+}
+
+function memberDiscountOf(row: Record<string, unknown>): number {
+  return Number(row.member_discount_amount || 0);
+}
+
 const columns: PrimaryTableCol[] = [
   { colKey: 'order', title: '订单号', minWidth: '12rem' },
   { colKey: 'product', title: '产品/服务', minWidth: '12rem' },
   { colKey: 'amount', title: '金额', width: '9rem', align: 'right' },
+  { colKey: 'discount', title: '优惠', width: '10rem', align: 'right' },
+  { colKey: 'coupon', title: '优惠券', minWidth: '10rem', ellipsis: true },
   { colKey: 'status', title: '状态', width: '8rem' },
   { colKey: 'created_at', title: '创建时间', minWidth: '12rem' },
   { colKey: 'operation', title: '操作', width: '12rem', fixed: 'right', align: 'right' },

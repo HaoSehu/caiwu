@@ -10,7 +10,6 @@ use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
 use App\Exceptions\BusinessException;
 use App\Models\Invoice;
-use App\Models\Order;
 use App\Models\Payment;
 use App\Models\User;
 use App\Services\Integrations\Payments\PaymentGatewayManager;
@@ -39,6 +38,9 @@ class MixPaymentService
         private AccountService $accountService,
         private FinanceLedgerWriter $financeLedgerWriter,
         private PaymentCallbackProjector $callbackProjector,
+        private TradeLifecycleService $tradeLifecycleService,
+        private InvoiceService $invoiceService,
+        private FinanceDocumentService $financeDocumentService,
         private ?PaymentGatewayBindingResolver $paymentGatewayBindingResolver = null,
     ) {}
 
@@ -59,8 +61,8 @@ class MixPaymentService
         $lockKey = "lock:pay:mix:invoice:{$invoice->id}";
         $normalizedBalanceAmount = round(max($balanceAmount, 0), 2);
 
-        $payload = $this->withLock($lockKey, 20, function () use ($invoice, $user, $traceId, $normalizedBalanceAmount) {
-            return DB::transaction(function () use ($invoice, $user, $traceId, $normalizedBalanceAmount) {
+        $payload = $this->withLock($lockKey, 20, function () use ($invoice, $user, $traceId, $normalizedBalanceAmount, $context) {
+            return DB::transaction(function () use ($invoice, $user, $traceId, $normalizedBalanceAmount, $context) {
                 $lockedInvoice = Invoice::query()
                     ->lockForUpdate()
                     ->with('order')
@@ -91,19 +93,20 @@ class MixPaymentService
                     (int) $lockedInvoice->id,
                     '账单余额支付 '.(string) $lockedInvoice->invoice_no,
                     [
+                        'operator' => $this->resolveOperator($context),
                         'trace_id' => $traceId,
                     ]
                 );
 
-                $nextPaidAmount = round((float) ($lockedInvoice->paid_amount ?? 0) + $normalizedBalanceAmount, 2);
+                // 预扣投影递增经状态机（与回补递减对称），同步订单侧 paid_amount
                 $lockedInvoice->forceFill([
-                    'paid_amount' => $nextPaidAmount,
                     'trace_id' => $traceId !== '' ? $traceId : $lockedInvoice->trace_id,
                 ])->save();
+                $this->tradeLifecycleService->reservePaidProjection($lockedInvoice, $normalizedBalanceAmount);
 
                 return [
                     'invoice' => $lockedInvoice,
-                    'remaining_amount' => round(max((float) $lockedInvoice->amount - $nextPaidAmount, 0), 2),
+                    'remaining_amount' => round(max((float) $lockedInvoice->amount - (float) ($lockedInvoice->paid_amount ?? 0), 0), 2),
                 ];
             });
         }, '支付请求处理中，请勿重复提交');
@@ -247,32 +250,13 @@ class MixPaymentService
                     ? '组合支付预下单失败恢复余额 '.(string) $invoice->invoice_no
                     : '组合支付取消退回余额 '.(string) $invoice->invoice_no,
                 [
+                    'operator' => $this->resolveOperator($context),
                     'trace_id' => (string) ($context['trace_id'] ?? ''),
                 ],
             );
 
             if (! $preserveInvoicePaidAmount) {
-                $nextInvoicePaidAmount = number_format(
-                    max(round((float) ($invoice->paid_amount ?? 0) - $balanceAmount, 2), 0),
-                    2,
-                    '.',
-                    ''
-                );
-                $invoice->forceFill([
-                    'paid_amount' => $nextInvoicePaidAmount,
-                ])->save();
-
-                if ($invoice->order instanceof Order) {
-                    $nextOrderPaidAmount = number_format(
-                        max(round((float) ($invoice->order->paid_amount ?? 0) - $balanceAmount, 2), 0),
-                        2,
-                        '.',
-                        ''
-                    );
-                    $invoice->order->forceFill([
-                        'paid_amount' => $nextOrderPaidAmount,
-                    ])->save();
-                }
+                $this->tradeLifecycleService->decrementPaidProjection($invoice, $balanceAmount);
             }
 
             $callbackRaw = PaymentCallbackRaw::rawDecode($lockedPayment);
@@ -362,7 +346,7 @@ class MixPaymentService
             ->findOrFail((int) $payment->user_id);
         $balanceAfter = $this->setUserBalance($lockedUser, $this->getUserBalance($lockedUser) + $amount);
 
-        $this->financeLedgerWriter->createBalanceLog(
+        $transaction = $this->financeLedgerWriter->createBalanceLog(
             (int) $lockedUser->id,
             FinanceLedgerEventType::RECHARGE,
             $amount,
@@ -372,6 +356,29 @@ class MixPaymentService
             [
                 'trace_id' => $traceId,
             ]
+        );
+
+        // 与 completeRechargePayment 同构：真钱入余额补齐充值账单 + 充值凭证，
+        // 保证该笔资金在账单域/凭证域可追溯（此前仅有台账行，凭证面缺位）。
+        // payment 传 null：mix 支付单的 invoice_id 已绑定业务账单，传入会被
+        // createForRecharge 重定向到该账单导致金额校验失败；凭证经
+        // recordRecharge 的 payment_id/account_transaction_id 关联，链路仍完整。
+        $rechargeInvoice = $this->invoiceService->createForRecharge(
+            $lockedUser,
+            $amount,
+            null,
+            '异常支付转入余额 '.(string) $payment->payment_no,
+            $traceId,
+        );
+        $this->financeDocumentService->recordRecharge(
+            $rechargeInvoice,
+            $payment,
+            $transaction,
+            'user_recharge',
+            [
+                'record_remark' => '异常支付转入余额 '.(string) $payment->payment_no,
+                'trace_id' => $traceId,
+            ],
         );
 
         $reasonFlags = match ($reason) {
@@ -420,6 +427,14 @@ class MixPaymentService
     private function invoicePayableAmount(Invoice $invoice): float
     {
         return round(max((float) $invoice->amount - (float) ($invoice->paid_amount ?? 0), 0), 2);
+    }
+
+    /**
+     * 台账操作人归一：控制器上下文统一 actor_name，兼容服务层 operator_name/operator 键。
+     */
+    private function resolveOperator(array $context): string
+    {
+        return trim((string) ($context['actor_name'] ?? $context['operator_name'] ?? $context['operator'] ?? ''));
     }
 
     private function getUserBalance(User $user): float

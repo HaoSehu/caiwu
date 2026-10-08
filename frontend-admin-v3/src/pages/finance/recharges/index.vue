@@ -34,11 +34,20 @@
               <span>{{ fieldValue(row.user?.email) }}</span>
             </div>
           </template>
-          <template #payment="{ row }">
+          <template #channel="{ row }">
             <div class="stack-cell">
-              <strong>{{ fieldValue(row.payment_no) }}</strong>
-              <span>{{ paymentSummary(row.payment || paymentRecord(row)) }}</span>
+              <strong>{{ fieldValue(row.gateway_label || row.gateway || toRecord(row.payment).gateway || '第三方支付') }}</strong>
+              <span>{{ fieldValue(row.trade_no || toRecord(row.payment).trade_no) }}</span>
             </div>
+          </template>
+          <template #invoice="{ row }">
+            <div v-if="row.invoice_no || toRecord(row.invoice).invoice_no" class="stack-cell">
+              <t-link theme="primary" hover="color" @click="openDetail(row)">
+                {{ fieldValue(row.invoice_no || toRecord(row.invoice).invoice_no) }}
+              </t-link>
+              <span v-if="toRecord(row.order).order_no">订单：{{ toRecord(row.order).order_no }}</span>
+            </div>
+            <span v-else>--</span>
           </template>
           <template #amount="{ row }"
             ><span class="t-num-strong">{{ formatMoney(row.amount) }}</span></template
@@ -211,7 +220,8 @@ const paymentStatusOptions = computed(() => Object.entries(statusLabelMap).map((
 const columns: PrimaryTableCol<RechargeRecord>[] = [
   { colKey: 'payment_no', title: '支付单号', minWidth: 190, ellipsis: true },
   { colKey: 'user', title: '用户', minWidth: 180 },
-  { colKey: 'payment', title: '支付记录', minWidth: 220 },
+  { colKey: 'channel', title: '渠道 / 三方单号', minWidth: 200 },
+  { colKey: 'invoice', title: '关联账单', minWidth: 180 },
   { colKey: 'amount', title: '金额', width: 120, align: 'right' },
   { colKey: 'paid', title: '到账', width: 120, align: 'right' },
   { colKey: 'status', title: '状态', width: 110 },
@@ -282,10 +292,12 @@ function mobileActionOptions() {
 }
 
 function rechargeMobileRows(row: RechargeRecord) {
+  const invoiceNo = row.invoice_no || toRecord(row.invoice).invoice_no;
   return [
     { label: '用户', value: userName(row.user) },
+    { label: '渠道', value: fieldValue(row.gateway_label || row.gateway || '第三方支付') },
     { label: '到账', value: formatMoney(row.paid_amount), strong: true },
-    { label: '账单', value: fieldValue(row.invoice_no), show: Boolean(row.invoice_no) },
+    { label: '账单', value: fieldValue(invoiceNo), show: Boolean(invoiceNo) },
     { label: '三方单', value: fieldValue(row.trade_no), show: Boolean(row.trade_no) },
     { label: '创建', value: formatDateTime(row.created_at) },
     { label: '支付时', value: formatDateTime(row.paid_at), show: Boolean(row.paid_at) },

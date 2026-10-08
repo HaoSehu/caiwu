@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Services\Finance;
 
 use App\Constants\InvoiceStatus;
+use App\Constants\InvoiceType;
 use App\Constants\OrderStatus;
+use App\Constants\OrderType;
 use App\Models\Invoice;
 use App\Support\OrderInvoiceNoGenerator;
 use Illuminate\Support\Carbon;
@@ -19,6 +21,10 @@ class InvoiceOrderReconciliationService
     private const PAID_ORDER_STATUSES = [
         OrderStatus::PAID,
     ];
+
+    public function __construct(
+        private TradeLifecycleService $tradeLifecycleService,
+    ) {}
 
     /**
      * @return array<string,mixed>
@@ -403,50 +409,54 @@ class InvoiceOrderReconciliationService
             return 1;
         }
 
-        DB::table('invoices')->insert($this->filterColumns('invoices', $this->buildInvoiceRowFromOrder($order)));
+        $invoiceId = (int) DB::table('invoices')->insertGetId(
+            $this->filterColumns('invoices', $this->buildInvoiceRowFromOrder($order))
+        );
+
+        // 与业务建单路径同口径：直插后补 invoice_items 明细投影（行口径 unit_price×quantity − discount = line_amount）
+        Invoice::query()->findOrFail($invoiceId)->syncInvoiceItemProjection();
 
         return 1;
     }
 
     private function repairStatusMismatch(object $pair): int
     {
+        // 状态修复统一经生命周期状态机执行（与正常入账/取消/退款同一写者），
+        // 由状态机保证账单↔订单投影一致；状态机自身幂等，重复修复无副作用。
         if ((int) $pair->invoice_status === InvoiceStatus::PAID) {
+            $invoice = Invoice::query()->find((int) $pair->invoice_id);
+            if (! $invoice instanceof Invoice) {
+                return 0;
+            }
+
             if ((int) $pair->order_status === OrderStatus::REFUNDED) {
-                DB::table('invoices')
-                    ->where('id', (int) $pair->invoice_id)
-                    ->update($this->filterColumns('invoices', [
-                        'status' => InvoiceStatus::REFUNDED,
+                $this->tradeLifecycleService->markInvoiceRefunded(
+                    $invoice,
+                    [
                         'refund_amount' => $this->positiveDecimal($pair->invoice_paid_amount ?? null)
                             ?? $this->positiveDecimal($pair->invoice_amount ?? null)
                             ?? '0.00',
                         'refunded_at' => now(),
-                        'updated_at' => now(),
-                    ]));
+                    ],
+                    'balance',
+                    0.0,
+                );
 
                 return 1;
             }
 
             if ((int) $pair->order_status === OrderStatus::CANCELLED) {
-                DB::table('invoices')
-                    ->where('id', (int) $pair->invoice_id)
-                    ->update($this->filterColumns('invoices', [
-                        'status' => InvoiceStatus::CANCELLED,
-                        'updated_at' => now(),
-                    ]));
+                $this->tradeLifecycleService->cancelTrade($invoice);
 
                 return 1;
             }
 
-            DB::table('orders')
-                ->where('id', (int) $pair->order_id)
-                ->update($this->filterColumns('orders', [
-                    'status' => OrderStatus::PAID,
-                    'paid_amount' => $this->positiveDecimal($pair->invoice_paid_amount ?? null)
-                        ?? $this->positiveDecimal($pair->invoice_amount ?? null)
-                        ?? '0.00',
-                    'paid_at' => $pair->invoice_paid_at ?: now(),
-                    'updated_at' => now(),
-                ]));
+            $this->tradeLifecycleService->markInvoicePaid($invoice, [
+                'paid_amount' => $this->positiveDecimal($pair->invoice_paid_amount ?? null)
+                    ?? $this->positiveDecimal($pair->invoice_amount ?? null)
+                    ?? '0.00',
+                'paid_at' => $pair->invoice_paid_at ?: now(),
+            ]);
 
             return 1;
         }
@@ -458,16 +468,17 @@ class InvoiceOrderReconciliationService
         }
 
         // 剩余组合为「订单已付 + 账单待支付」，按订单侧金额回填账单入账信息。
-        DB::table('invoices')
-            ->where('id', (int) $pair->invoice_id)
-            ->update($this->filterColumns('invoices', [
-                'status' => InvoiceStatus::PAID,
-                'paid_amount' => $this->positiveDecimal($pair->order_paid_amount ?? null)
-                    ?? $this->positiveDecimal($pair->invoice_amount ?? null)
-                    ?? '0.00',
-                'paid_at' => $pair->order_paid_at ?: now(),
-                'updated_at' => now(),
-            ]));
+        $invoice = Invoice::query()->find((int) $pair->invoice_id);
+        if (! $invoice instanceof Invoice) {
+            return 0;
+        }
+
+        $this->tradeLifecycleService->markInvoicePaid($invoice, [
+            'paid_amount' => $this->positiveDecimal($pair->order_paid_amount ?? null)
+                ?? $this->positiveDecimal($pair->invoice_amount ?? null)
+                ?? '0.00',
+            'paid_at' => $pair->order_paid_at ?: now(),
+        ]);
 
         return 1;
     }
@@ -502,9 +513,10 @@ class InvoiceOrderReconciliationService
             'user_coupon_id' => $order->user_coupon_id ?? null,
             'coupon_code' => $order->coupon_code ?? null,
             'type' => match ((string) $order->type) {
-                'renew' => 'renew',
-                'upgrade' => 'upgrade',
-                default => 'normal',
+                OrderType::NEW => InvoiceType::NEW_PURCHASE,
+                OrderType::RENEW => InvoiceType::RENEW,
+                OrderType::UPGRADE => InvoiceType::UPGRADE,
+                default => InvoiceType::NEW_PURCHASE,
             },
             'amount' => number_format($invoiceAmount, 2, '.', ''),
             'discount' => number_format((float) ($order->discount ?? 0), 2, '.', ''),

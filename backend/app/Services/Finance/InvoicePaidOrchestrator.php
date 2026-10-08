@@ -287,17 +287,6 @@ class InvoicePaidOrchestrator
         $this->clearFulfillmentPending($order->invoice);
     }
 
-    public function processPaidInvoiceCouponSyncById(int $invoiceId): void
-    {
-        $invoice = Invoice::query()->find($invoiceId);
-
-        if (! $invoice instanceof Invoice || (int) $invoice->status !== InvoiceStatus::PAID) {
-            return;
-        }
-
-        $this->couponService->syncInvoiceCouponUsage($invoice);
-    }
-
     private function provisionPaidOrder(?Invoice $invoice): bool
     {
         $order = $invoice?->order;

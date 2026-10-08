@@ -15,9 +15,9 @@ use App\Models\Payment;
 use App\Models\Product;
 use App\Models\User;
 use App\Services\Finance\CheckoutSecurityService;
-use App\Services\Finance\CouponService;
 use App\Services\Finance\MixPaymentService;
 use App\Services\Finance\PaymentCallbackProjector;
+use App\Services\Finance\TradeLifecycleService;
 use App\Services\Order\Concerns\HandlesOrderCalculation;
 use App\Services\System\OperationLogService;
 use Illuminate\Support\Facades\DB;
@@ -30,10 +30,10 @@ class OrderService
 
     public function __construct(
         private MixPaymentService $mixPaymentService,
-        private CouponService $couponService,
         private CheckoutSecurityService $checkoutSecurityService,
         private OperationLogService $operationLogService,
         private PaymentCallbackProjector $callbackProjector,
+        private TradeLifecycleService $tradeLifecycleService,
     ) {}
 
     /**
@@ -92,19 +92,14 @@ class OrderService
                     $this->callbackProjector->syncProjection($pendingPayment);
                 }
 
-                if ((int) $invoice->status !== InvoiceStatus::CANCELLED) {
-                    $invoice->forceFill([
-                        'status' => InvoiceStatus::CANCELLED,
-                    ])->save();
-                }
-            }
-
-            $lockedOrder->forceFill([
-                'status' => OrderStatus::CANCELLED,
-            ])->save();
-
-            if ($invoice instanceof Invoice) {
-                $this->couponService->syncInvoiceCouponUsage($invoice);
+                // 状态联动与投影收敛到生命周期状态机：账单取消 + PENDING 订单级联 + 券释放。
+                $updatedInvoice = $this->tradeLifecycleService->cancelTrade($invoice, $context);
+                $lockedOrder->setRelation('invoice', $updatedInvoice);
+            } else {
+                // 无账单订单：状态机以账单为锚，无锚时订单自行取消。
+                $lockedOrder->forceFill([
+                    'status' => OrderStatus::CANCELLED,
+                ])->save();
             }
 
             return $lockedOrder->fresh(['user:id,email,nickname', 'product', 'invoice', 'service']) ?? $lockedOrder;

@@ -12,6 +12,7 @@ use App\Exceptions\BusinessException;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Payment;
+use App\Models\Product;
 use App\Models\Service;
 use App\Models\User;
 use App\Services\Finance\InvoiceService;
@@ -154,11 +155,19 @@ class AdminManualEntryV2Service
             $this->assertTradeNoAvailable((int) $user->id, $tradeNo);
             $this->assertNotDuplicatedManualOrder($service, $type, $amount, $remark, $tradeNo);
 
+            // 商品快照与「添加实例」建单同款：createFromOrder 会原样继承到账单，
+            // 缺失会导致账单商品字段为空、历史不可追溯
+            $product = $service->product;
+            $productSpecSnapshot = $product instanceof Product ? trim((string) $product->name) : '';
+            $productTypeSnapshot = $product instanceof Product ? (string) $product->product_type : '';
+
             $created = Order::create([
                 'order_no' => Order::generateOrderNo(),
                 'user_id' => (int) $user->id,
                 'product_id' => $service->product_id,
                 'service_id' => (int) $service->id,
+                'product_spec_snapshot' => $productSpecSnapshot,
+                'product_type_snapshot' => $productTypeSnapshot,
                 'type' => $type,
                 'amount' => $amount,
                 'billing_cycle' => trim((string) ($payload['billing_cycle'] ?? '')) !== ''

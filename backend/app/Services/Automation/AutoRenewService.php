@@ -130,7 +130,7 @@ class AutoRenewService
                                 return true;
                             }
 
-                            $order = $this->serviceRenewService->createRenewOrderForUser(
+                            $invoice = $this->serviceRenewService->createRenewInvoiceForUser(
                                 $service->user,
                                 (int) $service->id,
                                 $resolvedCycle,
@@ -138,14 +138,8 @@ class AutoRenewService
                                 $autoRenewContext
                             );
 
-                            if (! $order instanceof Order || ! $order->invoice) {
-                                $summary['skipped']++;
-
-                                return true;
-                            }
-
-                            $this->paymentService->payOrderByBalance(
-                                $order->fresh(['invoice.product.supplier', 'invoice.service']) ?? $order,
+                            $this->paymentService->payByBalance(
+                                $invoice->fresh(['service.product.supplier', 'order']) ?? $invoice,
                                 $service->user,
                                 $autoRenewContext
                             );

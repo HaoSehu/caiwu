@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Referral;
 
+use App\Constants\FinanceLedgerEventType;
 use App\Constants\InvoiceStatus;
 use App\Constants\OrderStatus;
 use App\Exceptions\BusinessException;
@@ -56,17 +57,18 @@ class ReferralService
 
     public const REFUND_BLOCKED_FROZEN_INSUFFICIENT_CODE = 42212;
 
-    public const ACCOUNT_LOG_TYPE_REWARD_FROZEN = 'reward_frozen';
+    // 返利子域台账 event_type 统一引用 FinanceLedgerEventType 常量，避免裸字符串与台账值域脱节
+    public const ACCOUNT_LOG_TYPE_REWARD_FROZEN = FinanceLedgerEventType::REFERRAL_REWARD_FROZEN;
 
-    public const ACCOUNT_LOG_TYPE_REWARD_RELEASED = 'reward_released';
+    public const ACCOUNT_LOG_TYPE_REWARD_RELEASED = FinanceLedgerEventType::REFERRAL_REWARD_RELEASED;
 
-    public const ACCOUNT_LOG_TYPE_REWARD_REVERSED = 'reward_reversed';
+    public const ACCOUNT_LOG_TYPE_REWARD_REVERSED = FinanceLedgerEventType::REFERRAL_REWARD_REVERSED;
 
-    public const ACCOUNT_LOG_TYPE_WITHDRAW_APPLY = 'withdraw_apply';
+    public const ACCOUNT_LOG_TYPE_WITHDRAW_APPLY = FinanceLedgerEventType::REFERRAL_WITHDRAW_APPLY;
 
-    public const ACCOUNT_LOG_TYPE_WITHDRAW_APPROVED = 'withdraw_approved';
+    public const ACCOUNT_LOG_TYPE_WITHDRAW_APPROVED = FinanceLedgerEventType::REFERRAL_WITHDRAW_APPROVED;
 
-    public const ACCOUNT_LOG_TYPE_WITHDRAW_REJECTED = 'withdraw_rejected';
+    public const ACCOUNT_LOG_TYPE_WITHDRAW_REJECTED = FinanceLedgerEventType::REFERRAL_WITHDRAW_REJECTED;
 
     private const ACCOUNT_LOG_EVENT_TYPES = [
         self::ACCOUNT_LOG_TYPE_REWARD_FROZEN,
@@ -198,7 +200,7 @@ class ReferralService
             return null;
         }
 
-        $order->loadMissing(['user', 'product']);
+        $order->loadMissing(['user', 'product', 'invoice']);
         $buyer = $order->user;
         $referrerUserId = $buyer ? $this->resolveBuyerReferrerUserId($buyer) : null;
 
@@ -212,7 +214,10 @@ class ReferralService
         }
 
         // 订单来源的差异面只剩守卫、取数金额与来源文案，加锁与结算主体统一走 resolveRewardCore。
-        $orderAmount = round((float) ($order->paid_amount ?: $order->amount), 2);
+        // 奖励基数读账单（资金真源实收额）：订单金额列降级为创建时快照与投影，不作为计算依据。
+        $orderAmount = $order->invoice instanceof Invoice
+            ? round((float) ($order->invoice->paid_amount ?: $order->invoice->amount), 2)
+            : round((float) ($order->paid_amount ?: $order->amount), 2);
 
         return $this->resolveRewardCore(
             sourceType: 'order',
@@ -1112,7 +1117,7 @@ class ReferralService
                     AccountTransaction::query()->create([
                         'user_id' => $user->id,
                         'account_type' => 'cash',
-                        'event_type' => 'referral_withdraw_approved',
+                        'event_type' => FinanceLedgerEventType::REFERRAL_CREDIT_CASH,
                         'change_amount' => $amount,
                         'balance_after' => $account->cash_balance,
                         'source_type' => 'referral_withdrawal',

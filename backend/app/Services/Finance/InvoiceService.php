@@ -5,7 +5,6 @@ namespace App\Services\Finance;
 use App\Constants\InvoiceStatus;
 use App\Constants\InvoiceType;
 use App\Constants\ManualPaymentGateway;
-use App\Constants\OrderStatus;
 use App\Constants\OrderType;
 use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
@@ -29,6 +28,7 @@ class InvoiceService
 {
     public function __construct(
         private readonly PaymentCallbackProjector $callbackProjector,
+        private readonly TradeLifecycleService $tradeLifecycleService,
         private readonly ?ProductDisplayNameResolver $productDisplayNameResolver = null,
     ) {}
 
@@ -49,6 +49,7 @@ class InvoiceService
             'user_coupon_id' => $order->user_coupon_id,
             'coupon_code' => $order->coupon_code,
             'type' => match ((string) $order->type) {
+                OrderType::NEW => InvoiceType::NEW_PURCHASE,
                 OrderType::RENEW => InvoiceType::RENEW,
                 OrderType::UPGRADE => InvoiceType::UPGRADE,
                 default => 'normal',
@@ -89,6 +90,10 @@ class InvoiceService
             'type' => $data['type'] ?? 'normal',
             'amount' => $data['amount'],
             'discount' => $data['discount'] ?? 0,
+            // 调用方带会员折扣时必须透传，静默丢弃会让账单资金组成不完整
+            'member_discount_amount' => (float) ($data['member_discount_amount'] ?? 0),
+            'member_discount_snapshot' => $data['member_discount_snapshot'] ?? null,
+            'paid_amount' => (float) ($data['paid_amount'] ?? 0),
             'billing_cycle' => $data['billing_cycle'] ?? null,
             'quantity' => $data['quantity'] ?? 1,
             'config_snapshot' => $data['config_snapshot'] ?? null,
@@ -313,6 +318,11 @@ class InvoiceService
             'scene' => $scene,
             'amount' => number_format((float) $invoice->amount, 2, '.', ''),
             'discount' => number_format((float) ($invoice->discount ?? 0), 2, '.', ''),
+            // 折扣分列下发：券减免（discount）与会员折扣（member_discount_amount）来源不同
+            'member_discount_amount' => number_format((float) ($invoice->member_discount_amount ?? 0), 2, '.', ''),
+            'member_discount_snapshot' => (array) ($invoice->member_discount_snapshot ?? []),
+            'coupon_code' => (string) ($invoice->coupon_code ?? ''),
+            'coupon_name' => $this->resolveInvoiceCouponName($invoice),
             'paid_amount' => number_format((float) ($invoice->paid_amount ?? 0), 2, '.', ''),
             'payable_amount' => number_format(max((float) $invoice->amount - (float) ($invoice->paid_amount ?? 0), 0), 2, '.', ''),
             'status' => (int) $displayStatus['status'],
@@ -449,6 +459,9 @@ class InvoiceService
             'discount' => number_format((float) ($invoice->discount ?? 0), 2, '.', ''),
             'member_discount_amount' => number_format((float) ($invoice->member_discount_amount ?? 0), 2, '.', ''),
             'member_discount_snapshot' => (array) ($invoice->member_discount_snapshot ?? []),
+            // 券标识：此前详情只给 coupon_snapshot，前端按 coupon_code 渲染的区块恒不显示
+            'coupon_code' => (string) ($invoice->coupon_code ?? ''),
+            'coupon_name' => $this->resolveInvoiceCouponName($invoice),
             'paid_amount' => number_format((float) ($invoice->paid_amount ?? 0), 2, '.', ''),
             'payable_amount' => number_format(max((float) $invoice->amount - (float) ($invoice->paid_amount ?? 0), 0), 2, '.', ''),
             'status' => (int) $displayStatus['status'],
@@ -545,6 +558,10 @@ class InvoiceService
             'scene' => $scene,
             'amount' => number_format((float) $invoice->amount, 2, '.', ''),
             'discount' => number_format((float) ($invoice->discount ?? 0), 2, '.', ''),
+            // 折扣分列下发：券减免（discount）与会员折扣（member_discount_amount）来源不同
+            'member_discount_amount' => number_format((float) ($invoice->member_discount_amount ?? 0), 2, '.', ''),
+            'coupon_code' => (string) ($invoice->coupon_code ?? ''),
+            'coupon_name' => $this->resolveInvoiceCouponName($invoice),
             'paid_amount' => number_format((float) ($invoice->paid_amount ?? 0), 2, '.', ''),
             'payable_amount' => number_format(max((float) $invoice->amount - (float) ($invoice->paid_amount ?? 0), 0), 2, '.', ''),
             'status' => (int) $displayStatus['status'],
@@ -633,6 +650,27 @@ class InvoiceService
         }
 
         return $this->resolveInvoiceTypeLabel((string) $invoice->type, $invoice);
+    }
+
+    /**
+     * 券名：优先取已加载的券关系，其次取账单券快照。
+     *
+     * 列表路径不加载 coupon 关系（避免 N+1），只能靠 coupon_snapshot 里的 name；
+     * 券被删除后关系为空、快照仍在，快照兜底同时覆盖该场景。
+     */
+    private function resolveInvoiceCouponName(Invoice $invoice): string
+    {
+        if ($invoice->relationLoaded('coupon') && $invoice->coupon !== null) {
+            $name = trim((string) ($invoice->coupon->name ?? ''));
+            if ($name !== '') {
+                return $name;
+            }
+        }
+
+        $snapshot = $invoice->coupon_snapshot;
+        $snapshot = is_array($snapshot) ? $snapshot : [];
+
+        return trim((string) ($snapshot['name'] ?? ''));
     }
 
     private function resolveInvoiceScene(Invoice $invoice): array
@@ -936,7 +974,10 @@ class InvoiceService
         $items = [];
         $productName = $this->resolveInvoiceProductDisplayName($invoice);
         $billingCycle = trim((string) ($invoice->billing_cycle ?? $invoice->order?->billing_cycle ?? ''));
-        $grossAmount = (float) ($invoice->amount ?? 0) + (float) ($invoice->discount ?? 0);
+        // 商品行按目录价展示（应付价 + 券减免 + 会员折扣），折扣各成负数行，行合计 = 应付价
+        $grossAmount = (float) ($invoice->amount ?? 0)
+            + (float) ($invoice->discount ?? 0)
+            + (float) ($invoice->member_discount_amount ?? 0);
 
         if ($productName !== '') {
             $items[] = [
@@ -947,8 +988,15 @@ class InvoiceService
 
         if ((float) ($invoice->discount ?? 0) > 0) {
             $items[] = [
-                'description' => '优惠抵扣',
+                'description' => '优惠券减免',
                 'amount' => -1 * (float) $invoice->discount,
+            ];
+        }
+
+        if ((float) ($invoice->member_discount_amount ?? 0) > 0) {
+            $items[] = [
+                'description' => '会员折扣',
+                'amount' => -1 * (float) $invoice->member_discount_amount,
             ];
         }
 
@@ -1209,6 +1257,8 @@ class InvoiceService
                 'amount' => $lockedInvoice->amount,
                 'status' => PaymentStatus::SUCCESS,
                 'paid_at' => $paidAt,
+                'remark' => $remark !== '' ? $remark : null,
+                'operator' => trim((string) ($context['operator_name'] ?? '')) ?: null,
                 'trace_id' => $traceId,
                 'callback_raw' => [
                     'source' => 'admin_manual_entry',
@@ -1221,19 +1271,12 @@ class InvoiceService
             ]);
             $manualPayment->allowNonThirdPartyGateway = true;
             $manualPayment->save();
+            $this->callbackProjector->syncProjection($manualPayment);
 
-            $lockedInvoice->forceFill([
-                'status' => InvoiceStatus::PAID,
-                'paid_amount' => $lockedInvoice->amount,
+            $lockedInvoice = $this->tradeLifecycleService->markInvoicePaid($lockedInvoice, [
                 'paid_at' => $paidAt,
-                'trace_id' => $traceId !== '' ? $traceId : $lockedInvoice->trace_id,
-            ])->save();
-
-            $lockedInvoice->order?->forceFill([
-                'status' => OrderStatus::PAID,
-                'paid_amount' => $lockedInvoice->amount,
-                'paid_at' => $paidAt,
-            ])->save();
+                'trace_id' => $traceId,
+            ]);
 
             return $lockedInvoice->fresh(['order', 'items', 'payments']) ?? $lockedInvoice;
         });

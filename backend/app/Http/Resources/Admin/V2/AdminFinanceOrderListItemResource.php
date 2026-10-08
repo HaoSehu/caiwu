@@ -33,6 +33,9 @@ class AdminFinanceOrderListItemResource extends JsonResource
             'status_label' => (string) ($item['status_label'] ?? ''),
             'amount' => (string) ($item['amount'] ?? '0.00'),
             'discount' => (string) ($item['discount'] ?? '0.00'),
+            // 折扣分列：券减免（discount）与会员折扣（member_discount_amount）来源不同
+            'member_discount_amount' => (string) ($item['member_discount_amount'] ?? '0.00'),
+            'coupon_code' => (string) ($item['coupon_code'] ?? ''),
             'paid_amount' => (string) ($item['paid_amount'] ?? '0.00'),
             'billing_cycle' => (string) ($item['billing_cycle'] ?? ''),
             'quantity' => (int) ($item['quantity'] ?? 1),

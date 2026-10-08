@@ -100,22 +100,35 @@ class ServiceUpgradeService
         $billingCycle = (string) $quote['billing_cycle'];
         $promoCode = trim((string) ($selection['promo_code'] ?? ''));
 
-        $existingInvoice = Invoice::query()
+        // 同服务同 type=upgrade 的未付账单按 kind 分治：本 kind 复用/替换；
+        // 其它 kind（流量包）不取消、不互踩，显式报错避免并行履约冲突与静默丢单
+        $pendingUpgradeInvoices = Invoice::query()
             ->where('user_id', (int) $user->id)
             ->where('service_id', (int) $service->id)
             ->where('type', OrderType::UPGRADE)
             ->where('status', InvoiceStatus::UNPAID)
-            ->latest('id')
-            ->first();
+            ->orderByDesc('id')
+            ->get();
+
+        $pendingOtherKind = $pendingUpgradeInvoices->first(
+            fn (Invoice $invoice): bool => (string) data_get($invoice->config_pricing_snapshot ?? [], 'meta.kind', '') !== self::ORDER_KIND
+        );
+        throw_if($pendingOtherKind instanceof Invoice, new BusinessException(
+            '该服务存在待支付的流量包账单（'.$pendingOtherKind->invoice_no.'），请先支付或取消后再申请升降级'
+        ));
+
+        $existingInvoice = $pendingUpgradeInvoices->first(
+            fn (Invoice $invoice): bool => (string) data_get($invoice->config_pricing_snapshot ?? [], 'meta.kind', '') === self::ORDER_KIND
+        );
 
         if ($existingInvoice instanceof Invoice) {
-            $sameKind = (string) data_get($existingInvoice->config_pricing_snapshot ?? [], 'meta.kind', '') === self::ORDER_KIND;
+            // 能进入此分支的未付账单已按 kind 过滤，必然是本 kind
             $sameProduct = (int) data_get($existingInvoice->config_pricing_snapshot ?? [], 'meta.product_id', 0) === $productId;
             $sameCycle = (string) data_get($existingInvoice->config_pricing_snapshot ?? [], 'meta.billing_cycle', '') === $billingCycle;
             $samePromo = (string) data_get($existingInvoice->config_pricing_snapshot ?? [], 'meta.promo_code', '') === $promoCode;
             $sameAmount = round((float) ($existingInvoice->amount ?? 0), 2) === round((float) $amount, 2);
 
-            if ($sameKind && $sameProduct && $sameCycle && $samePromo && $sameAmount) {
+            if ($sameProduct && $sameCycle && $samePromo && $sameAmount) {
                 $this->ensureHostUpgradeOrderForInvoice($existingInvoice);
 
                 return $existingInvoice->fresh(['product', 'service', 'order'])

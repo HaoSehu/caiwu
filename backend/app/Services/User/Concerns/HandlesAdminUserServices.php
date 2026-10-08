@@ -5,11 +5,10 @@ declare(strict_types=1);
 namespace App\Services\User\Concerns;
 
 use App\Constants\FinanceLedgerEventType;
-use App\Constants\InvoiceStatus;
+use App\Constants\InvoiceType;
 use App\Constants\OrderStatus;
 use App\Constants\ServiceStatus;
 use App\Exceptions\BusinessException;
-use App\Models\AccountTransaction;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Product;
@@ -18,6 +17,7 @@ use App\Models\Supplier;
 use App\Models\Ticket;
 use App\Models\User;
 use App\Services\ClientServiceConsole\ServiceDetailService;
+use App\Services\Finance\FinanceLedgerWriter;
 use App\Services\Integrations\Plugins\PluginBindingResolver;
 use App\Services\Integrations\Plugins\ServiceUpstreamBindingWriter;
 use App\Services\Integrations\Plugins\UpstreamBindingWriter;
@@ -710,7 +710,8 @@ trait HandlesAdminUserServices
                         'product_spec_snapshot' => trim((string) $product->name),
                         'product_type_snapshot' => (string) $product->product_type,
                         'service_id' => $service->id,
-                        'type' => 'normal',
+                        // 管理员手工开通实例直建账单：I6 值域收敛到 InvoiceType::MANUAL（历史写 'normal' 依赖 normalize 读兼容）
+                        'type' => InvoiceType::MANUAL,
                         'amount' => $amount,
                         'billing_cycle' => $billingCycle,
                         'config_snapshot' => array_filter([
@@ -749,36 +750,26 @@ trait HandlesAdminUserServices
 
                 if ($amount > 0) {
                     $balanceAfter = $this->accounts()->setCashBalance($lockedUser, $currentBalance - $amount);
-                    $balanceTransaction = AccountTransaction::query()->create([
-                        'user_id' => (int) $lockedUser->id,
-                        'account_type' => 'cash',
-                        'event_type' => FinanceLedgerEventType::INVOICE_PAYMENT,
-                        'change_amount' => number_format(-$amount, 2, '.', ''),
-                        'balance_after' => $balanceAfter,
-                        'source_type' => 'invoice',
-                        'source_id' => (int) $invoice->id,
-                        'origin_type' => 'invoice',
-                        'origin_id' => (int) $invoice->id,
-                        'remark' => '支付账单 '.(string) $invoice->invoice_no,
-                        'operator' => $operatorName !== '' ? $operatorName : null,
-                        'trace_id' => $traceId !== '' ? $traceId : null,
-                    ]);
+                    $balanceTransaction = app(FinanceLedgerWriter::class)->createBalanceLog(
+                        (int) $lockedUser->id,
+                        FinanceLedgerEventType::INVOICE_PAYMENT,
+                        -$amount,
+                        $balanceAfter,
+                        (int) $invoice->id,
+                        '支付账单 '.(string) $invoice->invoice_no,
+                        [
+                            'operator' => $operatorName !== '' ? $operatorName : null,
+                            'trace_id' => $traceId !== '' ? $traceId : null,
+                        ]
+                    );
                     $balanceTransactionId = (int) $balanceTransaction->id;
                 }
 
-                if ($order instanceof Order) {
-                    $order->forceFill([
-                        'status' => OrderStatus::PAID,
-                        'paid_amount' => $amount,
-                        'paid_at' => $now,
-                    ])->save();
-                }
-
-                $invoice->forceFill([
-                    'status' => InvoiceStatus::PAID,
+                // 入账联动收敛到生命周期状态机：账单 PAID + 订单投影（同事务单一写者）。
+                $invoice = $this->tradeLifecycleService->markInvoicePaid($invoice, [
                     'paid_amount' => $amount,
                     'paid_at' => $now,
-                ])->save();
+                ]);
             }
 
             if ($invoice instanceof Invoice) {

@@ -63,7 +63,10 @@
             </div>
             <div>
               <span>订单号</span>
-              <strong>{{ fieldValue(invoice.order?.order_no || invoice.order_no) }}</strong>
+              <strong v-if="orderId">
+                <t-link theme="primary" hover="color" @click="goToOrder">{{ orderNo }}</t-link>
+              </strong>
+              <strong v-else>{{ fieldValue(invoice.order?.order_no || invoice.order_no) }}</strong>
             </div>
             <div>
               <span>到期日</span>
@@ -84,6 +87,10 @@
             <div v-if="invoice.refund_trace_id">
               <span>退款追踪</span>
               <strong>{{ fieldValue(invoice.refund_trace_id) }}</strong>
+            </div>
+            <div v-if="memberLevelName">
+              <span>会员等级</span>
+              <strong>{{ memberLevelName }}</strong>
             </div>
           </div>
         </section>
@@ -146,6 +153,7 @@
 <script setup lang="ts">
 import { getStatusLabel, getStatusTagType, INVOICE_TYPE_MAP, PAYMENT_STATUS_MAP } from '@shared/statusConfig';
 import { computed, ref } from 'vue';
+import { useRouter } from 'vue-router';
 
 import type { InvoiceRecord } from '@/api/admin';
 import type { RecordDetailMetric, RecordDetailTab } from '@/components/record-detail-page/index.vue';
@@ -199,8 +207,56 @@ const items = computed(() => {
   return props.items || [];
 });
 
+// 折扣分列：券减免与会员折扣来源不同，分别展示（formatMoney 自带 ￥，勿再补币符）
+const couponDiscountAmount = computed(() => Number(invoice.value.discount || 0));
+const memberDiscountAmount = computed(() => Number(invoice.value.member_discount_amount || 0));
+const couponText = computed(() =>
+  String(invoice.value.coupon_name || invoice.value.coupon_code || '').trim(),
+);
+const memberLevelName = computed(() => {
+  const snap = invoice.value.member_discount_snapshot as Record<string, unknown> | null | undefined;
+  if (!snap || typeof snap !== 'object') return '';
+  return String(snap.member_level_name || snap.group_name || '').trim();
+});
+
+const router = useRouter();
+
+const orderId = computed(() => {
+  const o = invoice.value.order;
+  if (o && typeof o === 'object') {
+    return (o as Record<string, unknown>).id;
+  }
+  return invoice.value.order_id;
+});
+
+const orderNo = computed(() => {
+  const o = invoice.value.order;
+  if (o && typeof o === 'object') {
+    return String((o as Record<string, unknown>).order_no || '');
+  }
+  return String(invoice.value.order_no || orderId.value || '');
+});
+
+function goToOrder() {
+  if (orderId.value) {
+    emit('update:visible', false);
+    router.push(`/admin/finance/orders/${orderId.value}`);
+  }
+}
+
 const summaryMetrics = computed<RecordDetailMetric[]>(() => [
   { label: '账单金额', value: formatMoney(invoice.value.amount), primary: true },
+  {
+    label: '优惠券减免',
+    value: `-${formatMoney(couponDiscountAmount.value)}`,
+    show: couponDiscountAmount.value > 0,
+  },
+  {
+    label: memberLevelName.value ? `会员折扣（${memberLevelName.value}）` : '会员折扣',
+    value: `-${formatMoney(memberDiscountAmount.value)}`,
+    show: memberDiscountAmount.value > 0,
+  },
+  { label: '优惠券', value: couponText.value, show: couponText.value !== '' },
   { label: '已付金额', value: formatMoney(invoice.value.paid_amount) },
   { label: '创建时间', value: formatDateTime(invoice.value.created_at) },
 ]);

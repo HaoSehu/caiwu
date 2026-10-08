@@ -74,6 +74,10 @@
               <span>账单状态</span>
               <status-tag :status-map="INVOICE_STATUS_MAP" :status="Number(detail.invoice.status)" />
             </div>
+            <div v-if="detail.invoice.type" class="detail-kv-item">
+              <span>账单类型</span>
+              <strong>{{ invoiceTypeDisplay(detail.invoice.type) }}</strong>
+            </div>
             <div class="detail-kv-item">
               <span>账单金额</span>
               <strong>¥{{ formatMoney(detail.invoice.amount) }}</strong>
@@ -121,6 +125,18 @@ async function loadPayment() {
   } finally {
     loading.value = false;
   }
+}
+
+function invoiceTypeDisplay(type?: string) {
+  const map: Record<string, string> = {
+    new: '新购',
+    normal: '新购',
+    renew: '续费',
+    upgrade: '升降级',
+    recharge: '充值',
+    deduction: '扣款',
+  };
+  return map[String(type || '')] || type || '--';
 }
 
 onMounted(() => {

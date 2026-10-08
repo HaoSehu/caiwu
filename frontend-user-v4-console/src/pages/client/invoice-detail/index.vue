@@ -189,7 +189,9 @@
                   <strong class="summary-item__value">-¥{{ formatMoney(memberDiscountAmount) }}</strong>
                 </div>
                 <div v-if="couponDiscountAmount > 0" class="summary-item summary-discount-row">
-                  <span class="summary-item__label">优惠金额</span>
+                  <span class="summary-item__label"
+                    >优惠券减免{{ couponLabel ? `（${couponLabel}）` : '' }}</span
+                  >
                   <strong class="summary-item__value">-¥{{ formatMoney(couponDiscountAmount) }}</strong>
                 </div>
                 <div class="summary-item">
@@ -382,6 +384,10 @@ const pricingItemsView = computed(() => pricingItems(detail.value));
 const productPathView = computed(() => productPath(detail.value));
 const memberDiscountAmount = computed(() => Math.max(0, Number(detail.value?.member_discount_amount || 0)));
 const couponDiscountAmount = computed(() => Math.max(0, Number(detail.value?.discount || 0)));
+// 券标识：优先券名（更易读），无券名回退券码
+const couponLabel = computed(() =>
+  String(detail.value?.coupon_name || detail.value?.coupon_code || '').trim(),
+);
 const memberDiscountLevelName = computed(() => {
   const snapshot = detail.value?.member_discount_snapshot;
   return snapshot && typeof snapshot === 'object'

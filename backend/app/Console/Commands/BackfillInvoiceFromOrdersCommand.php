@@ -80,6 +80,9 @@ class BackfillInvoiceFromOrdersCommand extends Command
                         'user_coupon_id' => $order->user_coupon_id,
                         'coupon_code' => $order->coupon_code,
                         'discount' => $order->discount ?? 0,
+                        // 会员折扣两列与 discount 同源回填，缺失会让资金组成（目录价还原）不完整
+                        'member_discount_amount' => $order->member_discount_amount ?? 0,
+                        'member_discount_snapshot' => $order->member_discount_snapshot,
                         'billing_cycle' => $order->billing_cycle,
                         'quantity' => $order->quantity ?? 1,
                         'config_snapshot' => $order->config_snapshot,

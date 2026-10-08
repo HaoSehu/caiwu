@@ -51,6 +51,21 @@
           <template #amount="{ row }">
             <span class="invoice-money">¥{{ formatMoney(row.amount) }}</span>
           </template>
+          <template #discount="{ row }">
+            <div class="stack-cell">
+              <strong v-if="couponDiscountOf(row) > 0" class="invoice-money"
+                >券 ¥{{ formatMoney(couponDiscountOf(row)) }}</strong
+              >
+              <span v-if="memberDiscountOf(row) > 0">会员 ¥{{ formatMoney(memberDiscountOf(row)) }}</span>
+              <span v-if="couponDiscountOf(row) <= 0 && memberDiscountOf(row) <= 0">--</span>
+            </div>
+          </template>
+          <template #coupon="{ row }">
+            <div class="stack-cell">
+              <strong>{{ row.coupon_name || row.coupon_code || '--' }}</strong>
+              <span v-if="row.coupon_name && row.coupon_code">{{ row.coupon_code }}</span>
+            </div>
+          </template>
           <template #paid="{ row }">
             <span class="invoice-money">¥{{ formatMoney(row.paid_amount) }}</span>
           </template>
@@ -92,6 +107,13 @@
             <div class="stack-cell">
               <strong>{{ row.type_label || '--' }}</strong>
               <span class="stack-money">账单金额：¥{{ formatMoney(row.amount) }}</span>
+              <span v-if="couponDiscountOf(row) > 0" class="stack-money"
+                >优惠券减免：¥{{ formatMoney(couponDiscountOf(row))
+                }}{{ row.coupon_name ? `（${row.coupon_name}）` : '' }}</span
+              >
+              <span v-if="memberDiscountOf(row) > 0" class="stack-money"
+                >会员折扣：¥{{ formatMoney(memberDiscountOf(row)) }}</span
+              >
               <span class="stack-money">已付金额：¥{{ formatMoney(row.paid_amount) }}</span>
             </div>
 
@@ -171,9 +193,20 @@ function goToDetail(row: InvoiceRecord) {
   router.push(`/client/invoices/${row.id}`);
 }
 
+// 优惠券减免与会员折扣来源不同，列表内分列展示，避免混成一个数字无法区分
+function couponDiscountOf(row: Record<string, unknown>): number {
+  return Number(row.discount || 0);
+}
+
+function memberDiscountOf(row: Record<string, unknown>): number {
+  return Number(row.member_discount_amount || 0);
+}
+
 const columns: PrimaryTableCol[] = [
   { colKey: 'invoice', title: '账单号', minWidth: '12rem' },
   { colKey: 'amount', title: '账单金额', width: '9rem', align: 'right' },
+  { colKey: 'discount', title: '优惠', width: '10rem', align: 'right' },
+  { colKey: 'coupon', title: '优惠券', minWidth: '10rem', ellipsis: true },
   { colKey: 'paid', title: '已付金额', width: '9rem', align: 'right' },
   { colKey: 'status', title: '状态', width: '8rem' },
   { colKey: 'created_at', title: '创建时间', minWidth: '12rem' },

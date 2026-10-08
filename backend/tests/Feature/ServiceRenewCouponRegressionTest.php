@@ -76,6 +76,27 @@ class ServiceRenewCouponRegressionTest extends TestCase
         $this->assertSame('20.00', number_format((float) $invoice2->amount, 2, '.', ''));
     }
 
+    public function test_renew_with_same_coupon_reuses_pending_invoice(): void
+    {
+        [$user, $service, $couponA] = $this->fixture();
+        $userCouponA = $this->userCouponOf($user, $couponA);
+        $renew = app(ServiceRenewService::class);
+
+        $invoice1 = $renew->createRenewInvoiceForUser($user, (int) $service->id, 'monthly', (int) $userCouponA->id);
+
+        // 同券同周期重复提交：必须复用同一张待支付账单。券占用拦截只作用于「再次占用」，
+        // 不得让复用路径（previewOwnedCoupon 被复用参数比较直接调用）抛错整单失败。
+        $invoice2 = $renew->createRenewInvoiceForUser($user, (int) $service->id, 'monthly', (int) $userCouponA->id);
+
+        $this->assertSame((int) $invoice1->id, (int) $invoice2->id);
+        $this->assertSame(InvoiceStatus::UNPAID, (int) $invoice1->refresh()->status);
+        $this->assertSame(1, Invoice::query()
+            ->where('service_id', (int) $service->id)
+            ->where('type', 'renew')
+            ->where('status', InvoiceStatus::UNPAID)
+            ->count());
+    }
+
     public function test_renew_order_amount_matches_invoice_payable(): void
     {
         [$user, $service, $couponA] = $this->fixture();
@@ -88,12 +109,12 @@ class ServiceRenewCouponRegressionTest extends TestCase
             (int) $userCouponA->id
         );
 
-        // 订单金额必须与账单同口径（应付价）；目录价经 catalogAmountOf 还原
+        // 订单金额必须与账单同口径（应付价）；目录价从账单侧经 catalogAmountOf 还原
         $order = Order::query()->findOrFail((int) $invoice->order_id);
         $this->assertSame('15.00', number_format((float) $order->amount, 2, '.', ''));
         $this->assertSame('15.00', number_format((float) $invoice->amount, 2, '.', ''));
         $this->assertSame('5.00', number_format((float) $order->discount, 2, '.', ''));
-        $this->assertSame('20.00', number_format(Money::catalogAmountOf($order), 2, '.', ''));
+        $this->assertSame('20.00', number_format(Money::catalogAmountOf($invoice), 2, '.', ''));
     }
 
     public function test_blocking_paid_renew_invoice_ignores_coupon_selection(): void

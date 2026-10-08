@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Constants\InvoiceStatus;
 use App\Constants\OrderStatus;
+use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\User;
 use App\Services\Finance\AdminFinanceQueryService;
@@ -78,6 +80,41 @@ class OrderStatusFilterTest extends TestCase
         $this->assertSame(1, $summary['refunded']);
         $this->assertArrayNotHasKey('processing', $summary);
         $this->assertArrayNotHasKey('completed', $summary);
+    }
+
+    public function test_client_summary_amounts_read_invoice_as_source_of_truth(): void
+    {
+        $user = $this->makeUser('amounts');
+        $userId = (int) $user->id;
+
+        // 部分支付的未付账单：欠款 = 100 - 40 = 60（GREATEST 防负）
+        $this->makeInvoice($user, 'new', '100.00', '40.00', InvoiceStatus::UNPAID);
+        // 充值账单：不属于消费，既不计欠款口径校验也不计入本月消费
+        $this->makeInvoice($user, 'recharge', '200.00', '0.00', InvoiceStatus::PAID);
+        // 本月已付续费账单：计入本月消费
+        $this->makeInvoice($user, 'renew', '88.00', '88.00', InvoiceStatus::PAID);
+        // 已取消账单不计任何口径
+        $this->makeInvoice($user, 'new', '55.00', '0.00', InvoiceStatus::CANCELLED);
+
+        $summary = app(ClientOrderQueryService::class)->summary($userId, []);
+
+        $this->assertSame('60.00', $summary['unpaid_amount'], '待付金额 = 未付账单应付余额');
+        // 100 + 88 + 55 = 243：与原订单口径一致不排除已取消（充值 recharge 类型被排除）。
+        $this->assertSame('243.00', $summary['month_amount'], '本月消费 = 本月消费类账单合计，充值不计入');
+    }
+
+    private function makeInvoice(User $user, string $type, string $amount, string $paidAmount, int $status): Invoice
+    {
+        return Invoice::query()->create([
+            'invoice_no' => Invoice::generateInvoiceNo(),
+            'user_id' => (int) $user->id,
+            'type' => $type,
+            'amount' => $amount,
+            'paid_amount' => $paidAmount,
+            'status' => $status,
+            'due_date' => now()->addDay(),
+            'paid_at' => $status === InvoiceStatus::PAID ? now() : null,
+        ]);
     }
 
     /**

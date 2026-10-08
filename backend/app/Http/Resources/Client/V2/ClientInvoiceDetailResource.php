@@ -38,6 +38,8 @@ class ClientInvoiceDetailResource extends AdminInvoiceSummaryResource
                 'member_discount_snapshot' => is_array($invoice['member_discount_snapshot'] ?? null)
                     ? $invoice['member_discount_snapshot']
                     : null,
+                'coupon_code' => (string) ($invoice['coupon_code'] ?? ''),
+                'coupon_name' => (string) ($invoice['coupon_name'] ?? ''),
                 'summary' => $this->summary($invoice['summary'] ?? null),
             ],
             'financial' => [

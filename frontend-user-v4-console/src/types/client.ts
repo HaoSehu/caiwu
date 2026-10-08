@@ -1084,6 +1084,7 @@ export interface InvoiceRecord {
   member_discount_snapshot?: Record<string, unknown> | null;
   payment_no?: string;
   coupon_code?: string;
+  coupon_name?: string;
   payment_summary?: PaymentSummary | null;
   product?: InvoiceProduct | null;
   service?: ServiceInstance | null;
@@ -1181,6 +1182,7 @@ export interface OrderRecord {
   amount?: number | string;
   paid_amount?: number | string;
   discount?: number | string;
+  member_discount_amount?: number | string;
   billing_cycle?: string;
   quantity?: number;
   product_name?: string;
@@ -1188,6 +1190,7 @@ export interface OrderRecord {
   product_path_segments?: string[];
   service_name?: string;
   coupon_code?: string;
+  coupon_name?: string;
   remark?: string;
   paid_at?: string;
   created_at?: string;

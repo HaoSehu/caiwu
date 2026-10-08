@@ -48,6 +48,14 @@
                   <span>账单金额</span>
                   <strong>¥{{ formatMoney(detail.amount) }}</strong>
                 </div>
+                <div v-if="memberDiscountAmount > 0" class="detail-kv-item">
+                  <span>会员折扣{{ memberDiscountLevelName ? `（${memberDiscountLevelName}）` : '' }}</span>
+                  <strong>-¥{{ formatMoney(memberDiscountAmount) }}</strong>
+                </div>
+                <div v-if="couponDiscountAmount > 0" class="detail-kv-item">
+                  <span>优惠券减免{{ detail.coupon_name ? `（${detail.coupon_name}）` : '' }}</span>
+                  <strong>-¥{{ formatMoney(couponDiscountAmount) }}</strong>
+                </div>
                 <div class="detail-kv-item">
                   <span>已付金额</span>
                   <strong>¥{{ formatMoney(detail.paid_amount) }}</strong>
@@ -104,10 +112,14 @@
               <div v-else class="related-empty">暂无关联订单</div>
 
               <!-- 优惠券 -->
-              <section v-if="detail.coupon_code" class="related-section">
+              <section v-if="detail.coupon_code || detail.coupon_name" class="related-section">
                 <h4>使用优惠券</h4>
                 <div class="detail-kv-grid">
-                  <div class="detail-kv-item">
+                  <div v-if="detail.coupon_name" class="detail-kv-item">
+                    <span>优惠券名称</span>
+                    <strong>{{ detail.coupon_name }}</strong>
+                  </div>
+                  <div v-if="detail.coupon_code" class="detail-kv-item">
                     <span>优惠券码</span>
                     <strong>{{ detail.coupon_code }}</strong>
                   </div>
@@ -162,6 +174,15 @@ const router = useRouter();
 const loading = ref(false);
 const detail = ref<InvoiceRecord | null>(null);
 const activeTab = ref('basic');
+
+// 券减免与会员折扣分列展示，来源不同不合并
+const couponDiscountAmount = computed(() => Math.max(0, Number(detail.value?.discount || 0)));
+const memberDiscountAmount = computed(() => Math.max(0, Number(detail.value?.member_discount_amount || 0)));
+const memberDiscountLevelName = computed(() => {
+  const snapshot = detail.value?.member_discount_snapshot as Record<string, unknown> | null | undefined;
+  if (!snapshot || typeof snapshot !== 'object') return '';
+  return String(snapshot.member_level_name || snapshot.group_name || '').trim();
+});
 
 const invoiceId = Number(route.params.id || 0);
 

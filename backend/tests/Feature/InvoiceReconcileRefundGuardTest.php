@@ -11,6 +11,7 @@ use App\Models\Order;
 use App\Models\User;
 use App\Services\Finance\InvoiceOrderReconciliationService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Facades\DB;
 use ReflectionMethod;
 use Tests\TestCase;
 
@@ -71,6 +72,53 @@ class InvoiceReconcileRefundGuardTest extends TestCase
         $this->assertSame('100.00', number_format((float) $invoice->paid_amount, 2, '.', ''));
         $this->assertNotNull($invoice->paid_at);
         $this->assertSame(OrderStatus::PAID, (int) $order->status);
+    }
+
+    public function test_order_without_invoice_direct_insert_writes_typed_invoice_with_items(): void
+    {
+        // 孤儿已付订单（无任何账单）：对账直插补建账单后，type 必须按订单类型落值
+        // （不再写 'normal'），且必须补 invoice_items 明细投影（行口径自洽）。
+        $user = $this->makeUser();
+        $order = Order::query()->create([
+            'order_no' => Order::generateOrderNo(),
+            'user_id' => $user->id,
+            'type' => 'new',
+            'product_spec_snapshot' => '直插回归规格',
+            'product_type_snapshot' => 'hosting',
+            'amount' => 88.00,
+            'quantity' => 1,
+            'status' => OrderStatus::PAID,
+            'paid_amount' => 88.00,
+            'paid_at' => now(),
+            'trace_id' => 'recon-direct-insert-test',
+        ]);
+
+        $service = app(InvoiceOrderReconciliationService::class);
+        $method = new ReflectionMethod($service, 'repairOrderWithoutInvoice');
+        $method->setAccessible(true);
+        // 生产路径传入的是 ordersWithoutInvoiceQuery 查询行（stdClass：o.* 原始 JSON 串
+        // + order_id/order_status 别名），Eloquent 模型的 array cast 会把快照列转成
+        // 数组破坏 insert，别名缺失会让 payload 构造取不到列，须按同构构造行对象。
+        $row = (object) array_merge($order->getAttributes(), [
+            'order_id' => (int) $order->id,
+            'order_status' => (int) $order->status,
+        ]);
+        $this->assertSame(1, $method->invoke($service, $row));
+
+        $invoice = Invoice::query()->where('order_id', (int) $order->id)->firstOrFail();
+        $this->assertSame('new', (string) $invoice->type);
+        $this->assertSame(InvoiceStatus::PAID, (int) $invoice->status);
+        $this->assertSame('88.00', number_format((float) $invoice->amount, 2, '.', ''));
+        $this->assertSame('recon-direct-insert-test', (string) $invoice->trace_id);
+
+        $item = DB::table('invoice_items')->where('invoice_id', (int) $invoice->id)->first();
+        $this->assertNotNull($item, '对账直插账单必须有明细投影');
+        $this->assertSame('88.00', (string) $item->line_amount);
+        $this->assertEqualsWithDelta(
+            88.00,
+            (float) $item->unit_price * (int) $item->quantity - (float) $item->discount_amount,
+            0.01
+        );
     }
 
     /**

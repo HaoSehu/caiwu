@@ -43,6 +43,19 @@
             </div>
           </template>
           <template #gateway="{ row }">{{ gatewayDisplay(row) }}</template>
+          <template #invoice="{ row }">
+            <t-button
+              v-if="row.invoice_no"
+              size="small"
+              theme="primary"
+              variant="text"
+              class="payment-invoice-btn"
+              @click.stop="goToInvoice(row)"
+            >
+              {{ row.invoice_no }}
+            </t-button>
+            <span v-else>--</span>
+          </template>
           <template #amount="{ row }">
             <span class="payment-money">¥{{ formatMoney(row.amount) }}</span>
           </template>
@@ -77,6 +90,9 @@
             <div class="record-mobile-card__meta">
               <span>第三方：{{ row.trade_no || '等待渠道回调' }}</span>
               <span>{{ formatDateTime(row.paid_at || row.created_at) }}</span>
+            </div>
+            <div v-if="row.invoice_no" class="record-mobile-card__meta">
+              <span>关联账单：<a class="payment-invoice-link" @click.stop="goToInvoice(row)">{{ row.invoice_no }}</a></span>
             </div>
           </article>
         </div>
@@ -139,6 +155,12 @@ function goToDetail(row: PaymentRecord) {
   router.push(`/client/payments/${row.id}`);
 }
 
+function goToInvoice(row: PaymentRecord) {
+  if (row.invoice_id) {
+    router.push(`/client/invoices/${row.invoice_id}`);
+  }
+}
+
 function gatewayDisplay(row: PaymentRecord) {
   return row.gateway_label || row.gateway_key || row.gateway || '--';
 }
@@ -146,6 +168,7 @@ function gatewayDisplay(row: PaymentRecord) {
 const columns: PrimaryTableCol[] = [
   { colKey: 'payment', title: '支付订单号', minWidth: '16rem' },
   { colKey: 'gateway', title: '支付渠道', width: '8rem' },
+  { colKey: 'invoice', title: '关联账单', minWidth: '13rem' },
   { colKey: 'amount', title: '支付金额', width: '9rem', align: 'right' },
   { colKey: 'status', title: '状态', width: '8rem' },
   { colKey: 'time', title: '时间', minWidth: '12rem' },
@@ -160,5 +183,16 @@ const columns: PrimaryTableCol[] = [
   font: var(--td-font-body-medium);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+}
+
+.payment-invoice-btn {
+  padding: 0;
+  height: auto;
+  font: var(--td-font-body-medium);
+}
+
+.payment-invoice-link {
+  color: var(--td-brand-color);
+  cursor: pointer;
 }
 </style>

@@ -1621,20 +1621,8 @@ parameters:
 			path: app/Services/Automation/AutoRenewService.php
 
 		-
-			message: '#^Instanceof between App\\Models\\Order and App\\Models\\Order will always evaluate to true\.$#'
-			identifier: instanceof.alwaysTrue
-			count: 1
-			path: app/Services/Automation/AutoRenewService.php
-
-		-
 			message: '#^Instanceof between string\|null and Carbon\\Carbon will always evaluate to false\.$#'
 			identifier: instanceof.alwaysFalse
-			count: 1
-			path: app/Services/Automation/AutoRenewService.php
-
-		-
-			message: '#^Parameter \#1 \$user of method App\\Services\\Provisioning\\ServiceRenewService\:\:createRenewOrderForUser\(\) expects App\\Models\\User, Illuminate\\Database\\Eloquent\\Model given\.$#'
-			identifier: argument.type
 			count: 1
 			path: app/Services/Automation/AutoRenewService.php
 
@@ -1651,14 +1639,20 @@ parameters:
 			path: app/Services/Automation/AutoRenewService.php
 
 		-
-			message: '#^Parameter \#2 \$user of method App\\Services\\Finance\\BalanceInvoicePaymentService\:\:payOrderByBalance\(\) expects App\\Models\\User, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			message: '#^Using nullsafe property access "\?\-\>amount" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Services/Automation/AutoRenewService.php
+
+		-
+			message: '#^Parameter \#1 \$user of method App\\Services\\Provisioning\\ServiceRenewService\:\:createRenewInvoiceForUser\(\) expects App\\Models\\User, Illuminate\\Database\\Eloquent\\Model given\.$#'
 			identifier: argument.type
 			count: 1
 			path: app/Services/Automation/AutoRenewService.php
 
 		-
-			message: '#^Using nullsafe property access "\?\-\>amount" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
+			message: '#^Parameter \#2 \$user of method App\\Services\\Finance\\BalanceInvoicePaymentService\:\:payByBalance\(\) expects App\\Models\\User, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
 			count: 1
 			path: app/Services/Automation/AutoRenewService.php
 
@@ -2851,12 +2845,6 @@ parameters:
 			path: app/Services/Finance/AdminOrderNotificationService.php
 
 		-
-			message: '#^Using nullsafe property access "\?\-\>id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Services/Finance/BalanceInvoicePaymentService.php
-
-		-
 			message: '#^Ternary operator condition is always false\.$#'
 			identifier: ternary.alwaysFalse
 			count: 2
@@ -3146,12 +3134,6 @@ parameters:
 
 		-
 			message: '#^Method App\\Services\\Finance\\CouponService\:\:buildClaimablePublicCouponItems\(\) is unused\.$#'
-			identifier: method.unused
-			count: 1
-			path: app/Services/Finance/CouponService.php
-
-		-
-			message: '#^Method App\\Services\\Finance\\CouponService\:\:buildOwnedCouponItems\(\) is unused\.$#'
 			identifier: method.unused
 			count: 1
 			path: app/Services/Finance/CouponService.php
@@ -3741,13 +3723,7 @@ parameters:
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
 			identifier: property.notFound
-			count: 4
-			path: app/Services/Finance/InvoiceSettlementService.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
+			count: 3
 			path: app/Services/Finance/InvoiceSettlementService.php
 
 		-
@@ -3931,12 +3907,6 @@ parameters:
 			path: app/Services/Order/ClientOrderQueryService.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Order\:\:\$unpaid_amount\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Order/ClientOrderQueryService.php
-
-		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$code\.$#'
 			identifier: property.notFound
 			count: 1
@@ -4022,12 +3992,6 @@ parameters:
 
 		-
 			message: '#^Using nullsafe property access "\?\-\>total" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Services/Order/ClientOrderQueryService.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>unpaid_amount" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Services/Order/ClientOrderQueryService.php
@@ -5107,18 +5071,6 @@ parameters:
 			path: app/Services/Provisioning/ServiceRenewService.php
 
 		-
-			message: '#^Method App\\Services\\Provisioning\\ServiceRenewService\:\:completeLocalRenewal\(\) is unused\.$#'
-			identifier: method.unused
-			count: 1
-			path: app/Services/Provisioning/ServiceRenewService.php
-
-		-
-			message: '#^Method App\\Services\\Provisioning\\ServiceRenewService\:\:isRenewOrderAlreadyCompleted\(\) is unused\.$#'
-			identifier: method.unused
-			count: 1
-			path: app/Services/Provisioning/ServiceRenewService.php
-
-		-
 			message: '#^Method App\\Services\\Provisioning\\ServiceRenewService\:\:normalizeAmount\(\) is unused\.$#'
 			identifier: method.unused
 			count: 1
@@ -5151,25 +5103,19 @@ parameters:
 		-
 			message: '#^Offset ''product_spec_display'' on array\{product_display_name\: string, product_spec_display\: string, custom_display_name\: string, cpu_memory_display\: string, cpu_memory_slug_display\: string, combined_display_name\: string, instance_spec_text\: string, cpu_display\: string, \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
-			count: 2
+			count: 1
 			path: app/Services/Provisioning/ServiceRenewService.php
 
 		-
 			message: '#^Parameter \#2 \$product of method App\\Services\\Integrations\\Plugins\\ServiceUpstreamBindingWriter\:\:syncServiceState\(\) expects App\\Models\\Product\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
 			identifier: argument.type
-			count: 3
+			count: 2
 			path: app/Services/Provisioning/ServiceRenewService.php
 
 		-
 			message: '#^Parameter \#2 \$product of method App\\Services\\Provisioning\\ServiceRenewService\:\:recordRenewInvoiceAttempt\(\) expects App\\Models\\Product\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
 			identifier: argument.type
 			count: 2
-			path: app/Services/Provisioning/ServiceRenewService.php
-
-		-
-			message: '#^Parameter \#2 \$product of method App\\Services\\Provisioning\\ServiceRenewService\:\:recordRenewOrderAttempt\(\) expects App\\Models\\Product\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
-			identifier: argument.type
-			count: 1
 			path: app/Services/Provisioning/ServiceRenewService.php
 
 		-
@@ -5197,18 +5143,6 @@ parameters:
 			path: app/Services/Provisioning/ServiceRenewService.php
 
 		-
-			message: '#^Using nullsafe property access "\?\-\>amount" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Services/Provisioning/ServiceRenewService.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>discount" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Services/Provisioning/ServiceRenewService.php
-
-		-
 			message: '#^Using nullsafe property access "\?\-\>display_name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
@@ -5216,18 +5150,6 @@ parameters:
 
 		-
 			message: '#^Using nullsafe property access "\?\-\>email" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Services/Provisioning/ServiceRenewService.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Services/Provisioning/ServiceRenewService.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>invoice_no" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Services/Provisioning/ServiceRenewService.php

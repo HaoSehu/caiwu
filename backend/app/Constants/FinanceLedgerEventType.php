@@ -16,6 +16,24 @@ class FinanceLedgerEventType
 
     public const REFERRAL_CREDIT_CASH = 'referral_credit_cash';
 
+    /** 推荐奖励冻结（referral_frozen 子域台账） */
+    public const REFERRAL_REWARD_FROZEN = 'reward_frozen';
+
+    /** 推荐奖励释放（referral_available 子域台账） */
+    public const REFERRAL_REWARD_RELEASED = 'reward_released';
+
+    /** 退款触发推荐奖励反转（referral_available 子域台账） */
+    public const REFERRAL_REWARD_REVERSED = 'reward_reversed';
+
+    /** 提现申请冻结（referral_pending_withdrawal 子域台账） */
+    public const REFERRAL_WITHDRAW_APPLY = 'withdraw_apply';
+
+    /** 提现审核通过（referral_withdrawn 子域台账） */
+    public const REFERRAL_WITHDRAW_APPROVED = 'withdraw_approved';
+
+    /** 提现驳回回退（referral_available 子域台账） */
+    public const REFERRAL_WITHDRAW_REJECTED = 'withdraw_rejected';
+
     public const SYSTEM_ADJUSTMENT = 'system_adjustment';
 
     /** 实名认证费用扣款 */
@@ -46,6 +64,12 @@ class FinanceLedgerEventType
             'invoice_payment' => self::INVOICE_PAYMENT,
             'invoice_refund' => self::INVOICE_REFUND,
             'referral_withdraw_approved', 'referral_credit_cash' => self::REFERRAL_CREDIT_CASH,
+            self::REFERRAL_REWARD_FROZEN,
+            self::REFERRAL_REWARD_RELEASED,
+            self::REFERRAL_REWARD_REVERSED,
+            self::REFERRAL_WITHDRAW_APPLY,
+            self::REFERRAL_WITHDRAW_APPROVED,
+            self::REFERRAL_WITHDRAW_REJECTED => trim($eventType),
             default => trim($eventType) !== '' ? trim($eventType) : self::SYSTEM_ADJUSTMENT,
         };
     }
@@ -64,6 +88,12 @@ class FinanceLedgerEventType
             self::MANUAL_RECHARGE => '手动充值',
             self::MANUAL_DEDUCTION => '手动扣款',
             self::REFERRAL_CREDIT_CASH => '奖励转余额',
+            self::REFERRAL_REWARD_FROZEN => '奖励冻结',
+            self::REFERRAL_REWARD_RELEASED => '奖励释放',
+            self::REFERRAL_REWARD_REVERSED => '奖励反转',
+            self::REFERRAL_WITHDRAW_APPLY => '提现申请',
+            self::REFERRAL_WITHDRAW_APPROVED => '提现通过',
+            self::REFERRAL_WITHDRAW_REJECTED => '提现驳回',
             self::SYSTEM_ADJUSTMENT => '系统调账',
             self::VERIFICATION_FEE => '实名认证费用',
         ];
@@ -85,7 +115,13 @@ class FinanceLedgerEventType
         return match (self::normalize($eventType)) {
             self::INVOICE_PAYMENT, self::INVOICE_REFUND => self::CATEGORY_INVOICE,
             self::RECHARGE, self::MANUAL_RECHARGE, self::MANUAL_DEDUCTION, self::SYSTEM_ADJUSTMENT, self::VERIFICATION_FEE => self::CATEGORY_BALANCE,
-            self::REFERRAL_CREDIT_CASH => self::CATEGORY_REWARD,
+            self::REFERRAL_CREDIT_CASH,
+            self::REFERRAL_REWARD_FROZEN,
+            self::REFERRAL_REWARD_RELEASED,
+            self::REFERRAL_REWARD_REVERSED,
+            self::REFERRAL_WITHDRAW_APPLY,
+            self::REFERRAL_WITHDRAW_APPROVED,
+            self::REFERRAL_WITHDRAW_REJECTED => self::CATEGORY_REWARD,
             default => self::CATEGORY_ADJUSTMENT,
         };
     }

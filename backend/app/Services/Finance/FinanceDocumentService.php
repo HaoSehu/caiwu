@@ -263,9 +263,12 @@ class FinanceDocumentService
 
     private function businessScene(Invoice $invoice): string
     {
-        return InvoiceType::normalize((string) $invoice->type) === InvoiceType::RENEW
-            ? 'renewal'
-            : 'new_purchase';
+        return match (InvoiceType::normalize((string) $invoice->type)) {
+            InvoiceType::RENEW => 'renewal',
+            InvoiceType::UPGRADE => 'upgrade',
+            InvoiceType::MANUAL => 'manual',
+            default => 'new_purchase',
+        };
     }
 
     private function assertRecordBinding(RechargeRecord $record, Invoice $invoice, Payment $payment): void

@@ -148,6 +148,8 @@ function normalizeV2InvoiceDetail(payload: V2InvoiceDetailPayload | null | undef
     product_full_path: display.product_full_path as string | undefined,
     member_discount_amount: display.member_discount_amount as number | string | undefined,
     member_discount_snapshot: display.member_discount_snapshot as InvoiceRecord['member_discount_snapshot'],
+    coupon_code: display.coupon_code as string | undefined,
+    coupon_name: display.coupon_name as string | undefined,
     summary: display.summary as InvoiceRecord['summary'],
     amount: financial.amount as number | string | undefined,
     discount: financial.discount as number | string | undefined,

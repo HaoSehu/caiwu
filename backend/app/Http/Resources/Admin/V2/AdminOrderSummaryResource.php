@@ -42,6 +42,9 @@ class AdminOrderSummaryResource extends JsonResource
             'status_label' => OrderStatus::$labels[(int) $order->status] ?? (string) $order->status,
             'amount' => $this->money($order->amount),
             'discount' => $this->money($order->discount),
+            // 折扣分列：券减免（discount）与会员折扣（member_discount_amount）来源不同
+            'member_discount_amount' => $this->money($order->member_discount_amount),
+            'coupon_code' => (string) ($order->coupon_code ?? ''),
             'paid_amount' => $this->money($order->paid_amount),
             'billing_cycle' => (string) ($order->billing_cycle ?? ''),
             'quantity' => (int) ($order->quantity ?? 1),

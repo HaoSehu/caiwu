@@ -55,6 +55,7 @@ class FinanceLedgerWriter
             FinanceLedgerEventType::INVOICE_PAYMENT,
             FinanceLedgerEventType::INVOICE_REFUND => 'invoice',
             FinanceLedgerEventType::REFERRAL_CREDIT_CASH => 'referral_withdrawal',
+            FinanceLedgerEventType::VERIFICATION_FEE => 'verification',
             default => null,
         };
     }

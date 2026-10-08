@@ -19,7 +19,6 @@ use App\Models\Refund;
 use App\Models\User;
 use App\Services\Referral\ReferralService;
 use App\Services\User\AccountService;
-use App\Support\SchemaMetadataCache;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -41,7 +40,7 @@ class InvoiceRefundService
         private PaymentCallbackProjector $callbackProjector,
         private MixPaymentService $mixPaymentService,
         private ReferralService $referralService,
-        private CouponService $couponService,
+        private TradeLifecycleService $tradeLifecycleService,
     ) {}
 
     /**
@@ -101,7 +100,7 @@ class InvoiceRefundService
                     if ($payment instanceof Payment && (int) $payment->status === PaymentStatus::REFUNDED) {
                         $refund = (array) data_get((array) ($payment->callback_raw ?? []), 'refund', []);
                         if ((int) $lockedInvoice->status !== InvoiceStatus::REFUNDED) {
-                            $this->markInvoiceRefunded(
+                            $this->tradeLifecycleService->markInvoiceRefunded(
                                 $lockedInvoice,
                                 $refund,
                                 (string) ($refund['refund_method'] ?? 'balance'),
@@ -199,7 +198,7 @@ class InvoiceRefundService
                     }
 
                     if ($isFullyRefunded) {
-                        $this->markInvoiceRefunded($lockedInvoice, $refundRecord, $refundMethod, $refundAmount, $context);
+                        $this->tradeLifecycleService->markInvoiceRefunded($lockedInvoice, $refundRecord, $refundMethod, $refundAmount, $context);
 
                         // 全款退款回退推广奖励（幂等：订单退款流程已回退则直接跳过）
                         $refundTraceId = trim((string) ($context['trace_id'] ?? ''));
@@ -209,13 +208,7 @@ class InvoiceRefundService
                         );
                     }
 
-                    $scope = (array) ($payload['scope'] ?? ['order', 'payment']);
-
-                    if ($isFullyRefunded && $order && in_array('order', $scope, true)) {
-                        $order->forceFill([
-                            'status' => OrderStatus::REFUNDED,
-                        ])->save();
-                    }
+                    // 订单 REFUNDED 投影由状态机 markInvoiceRefunded 统一级联（原 scope 直写段已收敛）。
 
                     Log::info('[账单退款] 已退回用户余额', [
                         'invoice_id' => $lockedInvoice->id,
@@ -353,48 +346,5 @@ class InvoiceRefundService
     private function setUserBalance(User $user, float $balance): string
     {
         return $this->accountService->setCashBalance($user, $balance);
-    }
-
-    private function markInvoiceRefunded(
-        Invoice $invoice,
-        array $refundRecord,
-        string $refundMethod,
-        float $refundAmount,
-        array $context = [],
-    ): void {
-        $traceId = trim((string) ($refundRecord['trace_id'] ?? $context['trace_id'] ?? ''));
-        $refundedAt = trim((string) ($refundRecord['refunded_at'] ?? $refundRecord['gmt_refund_pay'] ?? ''));
-        $normalizedRefundAmount = number_format(round(max(
-            $refundAmount,
-            (float) ($refundRecord['refund_amount'] ?? $refundRecord['refund_fee'] ?? 0)
-        ), 2), 2, '.', '');
-
-        $payload = [
-            'status' => InvoiceStatus::REFUNDED,
-        ];
-
-        if (SchemaMetadataCache::hasColumn('invoices', 'refunded_at')) {
-            $payload['refunded_at'] = $refundedAt !== '' ? $refundedAt : now();
-        }
-
-        if (SchemaMetadataCache::hasColumn('invoices', 'refund_amount')) {
-            $payload['refund_amount'] = $normalizedRefundAmount;
-        }
-
-        if (SchemaMetadataCache::hasColumn('invoices', 'refund_method')) {
-            $payload['refund_method'] = trim($refundMethod) !== '' ? trim($refundMethod) : 'balance';
-        }
-
-        if (SchemaMetadataCache::hasColumn('invoices', 'refund_trace_id')) {
-            $payload['refund_trace_id'] = $traceId !== '' ? $traceId : null;
-        } elseif ($traceId !== '' && SchemaMetadataCache::hasColumn('invoices', 'trace_id')) {
-            $payload['trace_id'] = $traceId;
-        }
-
-        $invoice->forceFill($payload)->save();
-
-        // 退款成功后与取消路径（CheckoutService/OrderService）保持同一口径：
-        // 重算优惠券用量与状态，无有效已付账单时把用户券回落为可复用。方法本身幂等。
-        $this->couponService->syncInvoiceCouponUsage($invoice);
     }
 }

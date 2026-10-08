@@ -38,7 +38,7 @@ class Payment extends Model
         'invoice_id', 'gateway',
         'plugin_id', 'gateway_key',
         'trade_no', 'amount', 'currency', 'status', 'callback_raw', 'paid_at',
-        'trace_id',
+        'remark', 'operator', 'trace_id',
     ];
 
     protected function casts(): array

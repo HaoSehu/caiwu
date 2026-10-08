@@ -145,6 +145,39 @@ class RenewPricingMemberDiscountCompoundingTest extends TestCase
     }
 
     /**
+     * 无账单存量订单的回退分支：目录价 = amount + discount + member_discount 三项相加
+     * （券减免与会员折扣两项优惠都不得漏加，否则开通基数落折后价）。
+     */
+    public function test_order_path_provision_without_invoice_adds_coupon_discount(): void
+    {
+        $product = Product::query()->create([
+            'product_type' => 'cloud_host',
+            'status' => 1,
+            'pricing' => ['monthly' => '11.90'],
+        ]);
+        $user = User::factory()->create();
+        $order = Order::query()->create([
+            'order_no' => Order::generateOrderNo(),
+            'user_id' => $user->id,
+            'product_id' => $product->id,
+            'type' => 'new',
+            'amount' => 7.92,
+            'discount' => 1.00,
+            'member_discount_amount' => 2.98,
+            'billing_cycle' => 'monthly',
+            'quantity' => 1,
+            'status' => OrderStatus::PAID,
+            'paid_amount' => 7.92,
+            'paid_at' => now(),
+        ]);
+
+        $service = app(ProvisionService::class)->processPaidOrder($order);
+
+        $this->assertInstanceOf(Service::class, $service);
+        $this->assertSame('11.90', (string) $service->amount, '回退分支三项相加（7.92 + 1.00 + 2.98）必须还原目录价');
+    }
+
+    /**
      * 会员折扣 + 优惠券叠加续费：三项还原恒等目录价，成交写回不得漏加会员折扣。
      */
     public function test_agent_renew_with_coupon_restores_catalog_base(): void

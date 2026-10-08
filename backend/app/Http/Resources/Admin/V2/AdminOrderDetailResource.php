@@ -34,6 +34,10 @@ class AdminOrderDetailResource extends AdminOrderSummaryResource
             'financial' => [
                 'amount' => $this->money($order->amount),
                 'discount' => $this->money($order->discount),
+                // 会员折扣与券减免分列，避免两者混成一个「优惠金额」无法区分来源
+                'member_discount_amount' => $this->money($order->member_discount_amount),
+                // W7：会员折扣明细快照（等级/组/比例），管理端不做脱敏
+                'member_discount_snapshot' => $this->stripSensitiveKeys((array) ($order->member_discount_snapshot ?? [])),
                 'paid_amount' => $this->money($order->paid_amount),
                 'paid_at' => $order->paid_at?->format('Y-m-d H:i:s'),
             ],

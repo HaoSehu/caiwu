@@ -4,10 +4,10 @@ namespace App\Services\Auth;
 
 use App\Constants\FinanceLedgerEventType;
 use App\Exceptions\BusinessException;
-use App\Models\AccountTransaction;
 use App\Models\IntegrationPlugin;
 use App\Models\User;
 use App\Models\VerificationHistory;
+use App\Services\Finance\FinanceLedgerWriter;
 use App\Services\Integrations\Plugins\IntegrationDriverBindingResolver;
 use App\Services\Integrations\Plugins\PluginConfigRepository;
 use App\Services\Integrations\Plugins\PluginDomain;
@@ -54,6 +54,8 @@ class VerificationService
     private ?bool $verificationHistoryTableAvailable = null;
 
     private ?array $verificationPluginConfigCache = null;
+
+    private ?FinanceLedgerWriter $financeLedgerWriter = null;
 
     public function __construct(
         VerificationDriverManager $driverManager,
@@ -635,18 +637,24 @@ class VerificationService
 
         $balanceAfter = $accounts->setCashBalance($user, $currentBalance - $feeAmount, true);
 
-        AccountTransaction::query()->create([
-            'user_id' => (int) $user->id,
-            'account_type' => 'cash',
-            'event_type' => FinanceLedgerEventType::VERIFICATION_FEE,
-            'change_amount' => number_format(-$feeAmount, 2, '.', ''),
-            'balance_after' => $balanceAfter,
-            'source_type' => 'verification',
-            'origin_type' => 'verification',
-            'remark' => '实名认证费用',
-            // 系统按配置自动扣费，标记来源便于对账；认证发起链路暂不携带业务 trace。
-            'operator' => 'system',
-        ]);
+        // 台账统一写入口：source_type 经 FinanceLedgerWriter 映射为 verification，保证现金域口径一致
+        $this->financeLedgerWriter()->createBalanceLog(
+            (int) $user->id,
+            FinanceLedgerEventType::VERIFICATION_FEE,
+            -$feeAmount,
+            $balanceAfter,
+            null,
+            '实名认证费用',
+            [
+                // 系统按配置自动扣费；认证发起链路暂不携带业务 trace，由 EnsuresTraceId 兜底 auto:uuid
+                'operator' => 'system',
+            ]
+        );
+    }
+
+    private function financeLedgerWriter(): FinanceLedgerWriter
+    {
+        return $this->financeLedgerWriter ??= app(FinanceLedgerWriter::class);
     }
 
     /**

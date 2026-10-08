@@ -402,6 +402,31 @@ class ServiceRenewService
                     'member_discount_amount' => number_format($memberDiscountAmount, 2, '.', ''),
                 ], fn ($value) => ! in_array($value, ['', null], true)),
                 'coupon_snapshot' => $couponPayload,
+                // 计价快照与升级/流量包同构（meta.kind 供跨 kind 分治与展示统一读取）；
+                // config_snapshot 在续费链路承载续费元数据，两者语义分离
+                'config_pricing_snapshot' => [
+                    'base_amount' => number_format($amount, 2, '.', ''),
+                    'config_amount' => number_format($amount, 2, '.', ''),
+                    'setup_fee' => '0.00',
+                    'items' => [[
+                        'field' => 'billing_cycle',
+                        'label' => '续费周期',
+                        'value_label' => (string) $cycle,
+                        'amount' => number_format($amount, 2, '.', ''),
+                    ]],
+                    'meta' => [
+                        'kind' => 'renew',
+                        'mode' => 'service_renew',
+                        'product_id' => (int) $effectiveProduct->id,
+                        'billing_cycle' => $cycle,
+                        'renew_service_id' => (int) $service->id,
+                        'upstream_host_id' => $renewConfig['host_id'],
+                        'local_renew_amount' => number_format($amount, 2, '.', ''),
+                        'upstream_amount' => (string) ($cycleOption['upstream_amount'] ?? ''),
+                        'discount_amount' => number_format($discountAmount, 2, '.', ''),
+                        'member_discount_amount' => number_format($memberDiscountAmount, 2, '.', ''),
+                    ],
+                ],
                 'status' => InvoiceStatus::UNPAID,
                 'due_date' => now()->addDays(7),
                 'trace_id' => (string) ($context['trace_id'] ?? ''),
@@ -463,249 +488,6 @@ class ServiceRenewService
         ], $context);
 
         return $invoice;
-    }
-
-    public function createRenewOrderForUser(User $user, int $serviceId, string $billingCycle, int $userCouponId = 0, array $context = []): Order
-    {
-        $service = $this->findUserService($user, $serviceId);
-        $service = $this->healServiceProductMapping($service);
-
-        // 已取消的服务不可续费：避免自动续费对已取消服务再次建单扣款（收了钱不交付）。
-        throw_if((int) $service->status === ServiceStatus::CANCELLED, new BusinessException('服务已取消，无法续费'));
-
-        $renewConfig = $this->buildRenewConfig($service);
-        $cycle = trim($billingCycle);
-        $cycleOption = collect($renewConfig['cycles'])->firstWhere('billing_cycle', $cycle);
-        $effectiveProduct = $this->resolveEffectiveProduct($service) ?? $service->product;
-
-        throw_if(! is_array($cycleOption), new BusinessException('当前服务不支持所选续费周期'));
-        throw_if(! $effectiveProduct instanceof Product, new BusinessException('服务关联商品不存在，无法创建续费订单'));
-
-        $amount = round((float) ($cycleOption['amount'] ?? 0), 2);
-        throw_if($amount <= 0, new BusinessException('当前续费周期金额无效'));
-
-        // 会员折扣层先于优惠券落位，券以折后价为基数
-        $memberDiscount = $this->memberDiscountFor($user, $effectiveProduct, $amount);
-        $memberDiscountAmount = round((float) ($memberDiscount['discount_amount'] ?? 0), 2);
-        $couponBaseAmount = max($amount - $memberDiscountAmount, 0.0);
-
-        // 复用已支付未履约续费账单：用户已付过钱，直接返回既有订单，防止自动续费重复建单扣款
-        $blockingPaidInvoice = $this->findBlockingPaidRenewInvoice($user, $service, $cycle);
-        if ($blockingPaidInvoice instanceof Invoice && $blockingPaidInvoice->order instanceof Order) {
-            $reusedOrder = $blockingPaidInvoice->order->loadMissing([
-                'invoice.product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
-                'invoice.service',
-            ]);
-
-            $this->operationLogService->writeServiceConsoleLog($service, 'service.console.renew.order.create', [
-                'category' => 'renew',
-                'summary' => '获取已支付待处理续费订单',
-                'billing_cycle' => $cycle,
-                'billing_cycle_label' => $this->resolveBillingCycleLabel($cycle),
-                'amount' => number_format((float) $blockingPaidInvoice->amount, 2, '.', ''),
-                'order_id' => (int) $reusedOrder->id,
-                'order_no' => (string) $reusedOrder->order_no,
-                'invoice_id' => (int) $blockingPaidInvoice->id,
-                'invoice_no' => (string) $blockingPaidInvoice->invoice_no,
-                'reused_order' => true,
-                'paid_unfulfilled' => true,
-            ], $context);
-
-            return $reusedOrder;
-        }
-
-        // 同一续费窗口内已履约（含自动续费先扣款）时拦截再建单，避免同周期双扣。
-        $this->assertNoFulfilledRenewForCycle($service, $cycle);
-
-        // 复用未付续费订单：金额与商品一致时直接支付既有订单，避免每次调度堆叠未付账单
-        $existingOrder = Order::query()
-            ->where('user_id', $user->id)
-            ->where('service_id', $service->id)
-            ->where('type', OrderType::RENEW)
-            ->where('billing_cycle', $cycle)
-            ->whereHas('invoice', fn ($query) => $query->where('status', InvoiceStatus::UNPAID))
-            ->latest('id')
-            ->first();
-
-        if ($existingOrder instanceof Order) {
-            // 还原目录价基数后与当前报价对账，会员折扣或券变化都会触发重建
-            $existingCatalogAmount = Money::catalogAmountOf($existingOrder);
-            $expectedDiscount = round((float) ($this->couponService->previewOwnedCoupon(
-                $userCouponId > 0 ? $userCouponId : null,
-                (int) $user->id,
-                $effectiveProduct,
-                $cycle,
-                $couponBaseAmount,
-                OrderType::RENEW
-            )['discount_amount'] ?? 0), 2);
-
-            if (
-                $existingCatalogAmount === $amount
-                && round((float) ($existingOrder->member_discount_amount ?? 0), 2) === $memberDiscountAmount
-                && round((float) ($existingOrder->discount ?? 0), 2) === $expectedDiscount
-                && (int) $existingOrder->product_id === (int) $effectiveProduct->id
-            ) {
-                $reusedOrder = $existingOrder->loadMissing([
-                    'invoice.product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
-                    'invoice.service',
-                ]);
-                $reusedInvoice = $reusedOrder->invoice;
-
-                $this->operationLogService->writeServiceConsoleLog($service, 'service.console.renew.order.create', [
-                    'category' => 'renew',
-                    'summary' => '获取待支付续费订单',
-                    'billing_cycle' => $cycle,
-                    'billing_cycle_label' => $this->resolveBillingCycleLabel($cycle),
-                    'amount' => number_format($amount, 2, '.', ''),
-                    'order_id' => (int) $reusedOrder->id,
-                    'order_no' => (string) $reusedOrder->order_no,
-                    'invoice_id' => (int) ($reusedInvoice?->id ?? 0),
-                    'invoice_no' => (string) ($reusedInvoice?->invoice_no ?? ''),
-                    'reused_order' => true,
-                ], $context);
-
-                return $reusedOrder;
-            }
-
-            // 参数不一致的未付订单：交给下方建单事务在服务行锁内统一取消再重建，
-            // 避免「事务外 cancel」与「建单」之间存在并发竞态窗口。
-        }
-
-        $sourceProvisionData = $this->serviceProvisionData($service);
-
-        $order = DB::transaction(function () use ($user, $service, $cycle, $amount, $renewConfig, $cycleOption, $effectiveProduct, $userCouponId, $context, $sourceProvisionData, $memberDiscountAmount, $couponBaseAmount, $memberDiscount) {
-            // 锁服务行串行化并发续费建单：把「复用检查」与「建单」收敛到同一事务/锁内，
-            // 杜绝检查-新建窗口内的 TOCTOU 双订单（手动续费/支付回调/履约重试路径无缓存锁保护）。
-            Service::query()->lockForUpdate()->findOrFail($service->id);
-
-            // 锁内重查可复用未付订单：并发请求在服务行锁释放后能看到前一请求已创建的订单并复用。
-            $concurrentOrder = Order::query()
-                ->where('user_id', $user->id)
-                ->where('service_id', $service->id)
-                ->where('type', OrderType::RENEW)
-                ->where('billing_cycle', $cycle)
-                ->whereHas('invoice', fn ($query) => $query->where('status', InvoiceStatus::UNPAID))
-                ->latest('id')
-                ->first();
-
-            if ($concurrentOrder instanceof Order) {
-                $existingCatalogAmount = Money::catalogAmountOf($concurrentOrder);
-                $expectedDiscount = round((float) ($this->couponService->previewOwnedCoupon(
-                    $userCouponId > 0 ? $userCouponId : null,
-                    (int) $user->id,
-                    $effectiveProduct,
-                    $cycle,
-                    $couponBaseAmount,
-                    OrderType::RENEW
-                )['discount_amount'] ?? 0), 2);
-
-                if (
-                    $existingCatalogAmount === $amount
-                    && round((float) ($concurrentOrder->member_discount_amount ?? 0), 2) === $memberDiscountAmount
-                    && round((float) ($concurrentOrder->discount ?? 0), 2) === $expectedDiscount
-                    && (int) $concurrentOrder->product_id === (int) $effectiveProduct->id
-                ) {
-                    return $concurrentOrder->loadMissing([
-                        'invoice.product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
-                        'invoice.service',
-                    ]);
-                }
-
-                // 同周期未付订单参数不一致：在服务行锁内取消其账单后重建，避免残留同周期未付订单。
-                if ($concurrentOrder->invoice instanceof Invoice) {
-                    app(CheckoutService::class)->cancel($concurrentOrder->invoice, array_merge($context, [
-                        'actor_type' => 'system',
-                        'actor_user_id' => (int) $user->id,
-                        'actor_name' => (string) ($user->display_name ?? $user->nickname ?? $user->email ?? ''),
-                        'reason' => 'renew_order_replaced',
-                    ]));
-                }
-            }
-
-            $displayPayload = (new ProductDisplayNameResolver)->resolveForProduct($effectiveProduct);
-            $productSpecDisplay = (string) ($displayPayload['product_spec_display'] ?? '');
-            $couponPayload = $this->couponService->reserveOwnedCouponForOrder(
-                $userCouponId > 0 ? $userCouponId : null,
-                (int) $user->id,
-                $effectiveProduct,
-                $cycle,
-                $couponBaseAmount,
-                OrderType::RENEW
-            );
-            $discountAmount = round((float) ($couponPayload['discount_amount'] ?? 0), 2);
-            $payableAmount = round(max($couponBaseAmount - $discountAmount, 0), 2);
-
-            $order = Order::query()->create([
-                'order_no' => Order::generateOrderNo(),
-                'projection_type' => Order::PROJECTION_TYPE_PROVISIONING,
-                'user_id' => (int) $user->id,
-                'product_id' => (int) $effectiveProduct->id,
-                'product_spec_snapshot' => $productSpecDisplay,
-                'product_type_snapshot' => (string) $effectiveProduct->product_type,
-                'service_id' => (int) $service->id,
-                'type' => OrderType::RENEW,
-                'coupon_id' => $couponPayload['coupon_id'] ?? null,
-                'user_coupon_id' => $couponPayload['user_coupon_id'] ?? null,
-                'coupon_code' => $couponPayload['code'] ?? null,
-                // 订单金额统一应付价口径（与 invoice 路径一致，见 createRenewInvoiceForUser 注释）
-                'amount' => $payableAmount,
-                'discount' => $discountAmount,
-                'member_discount_amount' => $memberDiscountAmount,
-                'member_discount_snapshot' => $memberDiscount['snapshot'] ?? null,
-                'paid_amount' => 0,
-                'billing_cycle' => $cycle,
-                'quantity' => 1,
-                'config_snapshot' => array_filter([
-                    'renew_service_id' => (int) $service->id,
-                    'renew_service_name' => (string) $service->name,
-                    'source_type' => (string) (($sourceProvisionData['source_type'] ?? '') ?: 'manual'),
-                    'created_by' => (string) ($context['source'] ?? $context['operator'] ?? ''),
-                    'auto_renew' => ! empty($context['auto_renew']) ? 1 : null,
-                    'auto_renew_trace_id' => ! empty($context['auto_renew']) ? (string) ($context['trace_id'] ?? '') : null,
-                    'upstream_host_id' => $renewConfig['host_id'],
-                    'supports_upstream' => $renewConfig['supports_upstream'],
-                    'local_renew_amount' => number_format($amount, 2, '.', ''),
-                    'upstream_amount' => (string) ($cycleOption['upstream_amount'] ?? ''),
-                    'discount_amount' => number_format($discountAmount, 2, '.', ''),
-                    'member_discount_amount' => number_format($memberDiscountAmount, 2, '.', ''),
-                ], fn ($value) => ! in_array($value, ['', null], true)),
-                'coupon_snapshot' => $couponPayload,
-                'status' => OrderStatus::PENDING,
-                'trace_id' => (string) ($context['trace_id'] ?? ''),
-            ]);
-
-            $invoice = $this->invoiceService->createFromOrder($order);
-            throw_if(
-                ! empty($context['auto_renew']) && round((float) ($invoice->amount ?? 0), 2) <= 0,
-                new BusinessException('自动续费金额异常，已拦截本次续费')
-            );
-
-            return $order->setRelation('invoice', $invoice)->load([
-                'invoice.product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
-                'invoice.service',
-            ]);
-        });
-
-        $invoice = $order->invoice;
-        $discountAmount = round((float) ($invoice?->discount ?? $order->discount ?? 0), 2);
-        // 订单金额即应付价，兜底直取；invoice 缺失时不再按目录价语义二次扣减折扣
-        $payableAmount = round((float) ($invoice?->amount ?? $order->amount), 2);
-
-        $this->operationLogService->writeServiceConsoleLog($service, 'service.console.renew.order.create', [
-            'category' => 'renew',
-            'summary' => '创建续费订单',
-            'billing_cycle' => $cycle,
-            'billing_cycle_label' => $this->resolveBillingCycleLabel($cycle),
-            'amount' => number_format($payableAmount, 2, '.', ''),
-            'discount' => number_format($discountAmount, 2, '.', ''),
-            'order_id' => (int) $order->id,
-            'order_no' => (string) $order->order_no,
-            'invoice_id' => (int) ($invoice instanceof Invoice ? $invoice->id : 0),
-            'invoice_no' => (string) ($invoice instanceof Invoice ? $invoice->invoice_no : ''),
-            'reused_order' => false,
-        ], $context);
-
-        return $order;
     }
 
     /**
@@ -1236,20 +1018,6 @@ class ServiceRenewService
         return $updatedService;
     }
 
-    private function completeLocalRenewal(Service $service, Order $order): Service
-    {
-        $nextExpiresAt = $this->resolveRenewedExpiry($service, (string) $order->billing_cycle);
-        $provisionData = $this->serviceProvisionData($service);
-        $provisionData['last_renewed_at'] = now()->format('Y-m-d H:i:s');
-        $provisionData['last_renew_billing_cycle'] = (string) $order->billing_cycle;
-        $provisionData['last_renew_order_id'] = (int) $order->id;
-        $provisionData['last_renew_order_no'] = (string) $order->order_no;
-        $provisionData['last_renew_source'] = 'local';
-        $provisionData['renew_error'] = null;
-
-        return $this->finalizeRenewSuccess($service, $order, $provisionData, $nextExpiresAt);
-    }
-
     private function buildRenewConfig(Service $service): array
     {
         $effectiveProduct = $this->resolveEffectiveProduct($service) ?? $service->product;
@@ -1412,49 +1180,6 @@ class ServiceRenewService
         return in_array($status, [ServiceStatus::ACTIVE, ServiceStatus::PENDING, ServiceStatus::SUSPENDED, ServiceStatus::EXPIRED], true)
             ? ServiceStatus::ACTIVE
             : $status;
-    }
-
-    private function finalizeRenewSuccess(Service $service, Order $order, array $provisionData, ?Carbon $nextExpiresAt): Service
-    {
-        $previousStatus = (int) $service->status;
-        $resolvedStatus = $this->resolveRenewedStatus($previousStatus);
-        unset($provisionData[self::EXPIRED_SUSPENDED_AT_KEY]);
-
-        DB::transaction(function () use ($service, $order, $provisionData, $nextExpiresAt, $resolvedStatus, $previousStatus) {
-            $service->forceFill([
-                'product_id' => (int) ($order->product_id ?: $service->product_id),
-                'order_id' => (int) $order->id,
-                'billing_cycle' => (string) $order->billing_cycle,
-                // 续费定价基数必须取目录价（应付价 + 券减免 + 会员折扣减免）：订单已是应付价口径，
-                // 直接落订单金额会让下轮续费对折后价二次打折（0.75^n 式复利衰减）
-                'amount' => Money::catalogAmountOf($order),
-                'expires_at' => $nextExpiresAt,
-                'status' => $resolvedStatus,
-                'provision_data' => $provisionData,
-                'suspended_reason' => in_array($previousStatus, [ServiceStatus::EXPIRED, ServiceStatus::SUSPENDED], true) ? null : $service->suspended_reason,
-            ])->save();
-
-            $order->forceFill([
-                'service_id' => (int) $service->id,
-            ])->save();
-        });
-
-        $updatedService = $service->fresh(['product.supplier', 'order']) ?? $service;
-        $this->serviceBindingWriter()->syncServiceState($updatedService, $updatedService->product, $provisionData);
-        $this->recordRenewOrderAttempt($updatedService, $updatedService->product, $order, $provisionData, 'success', null, [
-            'expires_at' => $nextExpiresAt?->format('Y-m-d H:i:s'),
-            'service_status' => (int) $updatedService->status,
-        ]);
-        $this->sendUnsuspendNotificationIfNeeded($updatedService, $previousStatus);
-
-        return $updatedService;
-    }
-
-    private function isRenewOrderAlreadyCompleted(Order $order, Service $service): bool
-    {
-        $provisionData = $this->serviceProvisionData($service);
-
-        return (int) ($provisionData['last_renew_order_id'] ?? 0) === (int) $order->id;
     }
 
     public function isRenewInvoiceFulfilled(Invoice $invoice, ?Service $service = null): bool
@@ -1790,35 +1515,6 @@ class ServiceRenewService
                 'upstream_invoice_id' => $provisionData['upstream_invoice_id'] ?? null,
                 'last_renewed_at' => $provisionData['last_renewed_at'] ?? null,
                 'renew_fulfillment_status' => $provisionData[self::RENEW_FULFILLMENT_STATUS_KEY] ?? null,
-            ], $responseMeta)),
-            self::RENEW_ATTEMPT_ACTION
-        );
-    }
-
-    private function recordRenewOrderAttempt(
-        Service $service,
-        ?Product $product,
-        Order $order,
-        array $provisionData,
-        string $attemptStatus,
-        ?string $errorMessage = null,
-        array $responseMeta = []
-    ): void {
-        $this->serviceBindingWriter()->recordProvisionAttempt(
-            $service,
-            $product,
-            $provisionData,
-            $attemptStatus,
-            $errorMessage,
-            $this->filterAttemptMeta([
-                'order_id' => (int) $order->id,
-                'order_no' => (string) $order->order_no,
-                'billing_cycle' => (string) ($order->billing_cycle ?? ''),
-                'source' => (string) ($provisionData['last_renew_source'] ?? ''),
-                'trace_id' => (string) ($order->trace_id ?? ''),
-            ]),
-            $this->filterAttemptMeta(array_merge([
-                'last_renewed_at' => $provisionData['last_renewed_at'] ?? null,
             ], $responseMeta)),
             self::RENEW_ATTEMPT_ACTION
         );

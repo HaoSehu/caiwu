@@ -341,7 +341,10 @@ class ProvisionService
         );
 
         // 开通基数用目录价（应付价 + 券减免 + 会员折扣减免）：折后价进入续费定价会被再次打折，逐轮复利衰减。
-        $catalogAmount = Money::catalogAmountOf($order);
+        // 账单为资金真源：优先从关联账单还原目录价，无账单的存量订单按同口径从订单快照列还原。
+        $catalogAmount = $order->invoice instanceof Invoice
+            ? Money::catalogAmountOf($order->invoice)
+            : Money::add($order->amount, $order->discount, $order->member_discount_amount);
 
         $service = Service::create([
             'user_id' => $order->user_id,

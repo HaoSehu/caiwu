@@ -71,15 +71,28 @@
           <template #amount="{ row }"
             ><span class="t-num-strong">{{ formatMoney(row.amount) }}</span></template
           >
+          <template #discount="{ row }">
+            <div class="stack-cell">
+              <strong v-if="couponDiscountOf(row) > 0" class="t-num-strong"
+                >券 {{ formatMoney(couponDiscountOf(row)) }}</strong
+              >
+              <span v-if="memberDiscountOf(row) > 0">会员 {{ formatMoney(memberDiscountOf(row)) }}</span>
+              <span v-if="couponDiscountOf(row) <= 0 && memberDiscountOf(row) <= 0">--</span>
+            </div>
+          </template>
+          <template #coupon="{ row }">{{ fieldValue(row.coupon_code) }}</template>
           <template #quantity="{ row }">{{ row.quantity || 1 }}</template>
           <template #status="{ row }">
             <status-tag :status-map="ORDER_STATUS_MAP" :status="row.status" />
           </template>
           <template #invoice="{ row }">
-            <div class="stack-cell">
-              <strong>{{ fieldValue(row.invoice?.invoice_no) }}</strong>
+            <div v-if="row.invoice?.invoice_no" class="stack-cell">
+              <t-link theme="primary" hover="color" @click="openInvoiceDrawer(row)">
+                {{ row.invoice.invoice_no }}
+              </t-link>
               <span v-if="row.invoice?.paid_at">支付：{{ formatDateTime(row.invoice.paid_at) }}</span>
             </div>
+            <span v-else>--</span>
           </template>
           <template #createdAt="{ row }">{{ formatDateTime(row.created_at) }}</template>
           <template #operation="{ row }">
@@ -103,7 +116,7 @@
               :status-map="ORDER_STATUS_MAP"
               :status="row.status"
               :rows="orderMobileRows(row)"
-              :action-options="[{ content: '详情', value: 'detail' }]"
+              :action-options="mobileActionOptions(row)"
               @action="(value) => handleMobileAction(value, row)"
             />
           </div>
@@ -122,6 +135,16 @@
         />
       </div>
     </t-card>
+
+    <!-- 关联账单快速抽屉 -->
+    <invoice-detail-drawer
+      v-model:visible="invoiceDrawerState.visible"
+      :invoice="currentInvoice"
+      :payments="invoicePayments"
+      :items="invoiceItems"
+      :logs="invoiceLogs"
+      @refresh="reloadInvoiceDetail"
+    />
   </div>
 </template>
 <script setup lang="ts">
@@ -134,11 +157,14 @@ import { MessagePlugin } from 'tdesign-vue-next';
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
-import type { OrderRecord } from '@/api/admin';
+import type { InvoiceRecord, OrderRecord } from '@/api/admin';
 import { adminApi } from '@/api/admin';
+import InvoiceDetailDrawer from '@/components/finance-record-detail/InvoiceDetailDrawer.vue';
 import MobileRecordCard from '@/components/mobile-record-card/index.vue';
 import QuickFilterTags from '@/components/quick-filter-tags/index.vue';
 import StatusTag from '@/components/status-tag/index.vue';
+import type { InvoiceDetailPayload } from '@/hooks/useFinanceDetailDrawer';
+import { useFinanceDetailDrawer } from '@/hooks/useFinanceDetailDrawer';
 import { useListPage } from '@/hooks/useListPage';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { fieldValue, formatDateTime, formatMoney } from '@/utils/format';
@@ -235,6 +261,8 @@ const columns = computed<PrimaryTableCol<OrderRecord>[]>(() => {
   }
   base.push(
     { colKey: 'amount', title: '金额', width: 120, align: 'right' },
+    { colKey: 'discount', title: '优惠', width: 130, align: 'right' },
+    { colKey: 'coupon', title: '优惠券', minWidth: 150, ellipsis: true },
     { colKey: 'quantity', title: '数量', width: 80 },
     { colKey: 'status', title: '状态', width: 110 },
     { colKey: 'invoice', title: '关联账单', minWidth: 170 },
@@ -262,8 +290,67 @@ function goDetail(row: OrderRecord) {
   router.push(`/admin/finance/orders/${row.id}`);
 }
 
+function mobileActionOptions(row: OrderRecord) {
+  const options = [{ content: '详情', value: 'detail' }];
+  if (row.invoice?.id) {
+    options.push({ content: '查看账单', value: 'invoice' });
+  }
+  return options;
+}
+
 function handleMobileAction(value: unknown, row: OrderRecord) {
   if (value === 'detail') goDetail(row);
+  if (value === 'invoice') openInvoiceDrawer(row);
+}
+
+// 账单详情抽屉联动
+function normalizeInvoiceDetailPayload(
+  payload: Record<string, unknown> = {},
+  fallback: InvoiceRecord = {},
+): InvoiceDetailPayload {
+  const invoice =
+    payload.invoice && typeof payload.invoice === 'object'
+      ? (payload.invoice as InvoiceRecord)
+      : (payload as InvoiceRecord);
+  return {
+    invoice: {
+      ...fallback,
+      ...invoice,
+    },
+    payments: Array.isArray(payload.payments)
+      ? (payload.payments as Record<string, unknown>[])
+      : invoiceDrawerState.detail.payments,
+    items: Array.isArray(payload.items) ? (payload.items as Record<string, unknown>[]) : [],
+    logs: Array.isArray(payload.logs) ? (payload.logs as Record<string, unknown>[]) : [],
+  };
+}
+
+const {
+  detailState: invoiceDrawerState,
+  reloadDetail: reloadInvoiceDetail,
+} = useFinanceDetailDrawer({
+  fetchDetail: (id) => adminApi.invoices.detail(id),
+  errorFallback: '加载账单详情失败',
+  normalize: normalizeInvoiceDetailPayload,
+});
+
+const currentInvoice = computed(() => invoiceDrawerState.detail.invoice || ({} as InvoiceRecord));
+const invoicePayments = computed(() => invoiceDrawerState.detail.payments || []);
+const invoiceItems = computed(() => invoiceDrawerState.detail.items || []);
+const invoiceLogs = computed(() => invoiceDrawerState.detail.logs || []);
+
+async function openInvoiceDrawer(row: OrderRecord) {
+  const invoiceId = row.invoice?.id;
+  if (!invoiceId) return;
+  invoiceDrawerState.visible = true;
+  invoiceDrawerState.currentId = Number(invoiceId);
+  invoiceDrawerState.detail = {
+    invoice: (row.invoice || {}) as InvoiceRecord,
+    payments: [],
+    items: [],
+    logs: [],
+  };
+  await reloadInvoiceDetail();
 }
 
 function orderMobileRows(row: OrderRecord) {
@@ -271,6 +358,8 @@ function orderMobileRows(row: OrderRecord) {
     { label: '用户', value: userName(row) },
     { label: '数量', value: String(row.quantity || 1) },
     { label: '服务', value: serviceIdLabel(row.service) },
+    { label: '优惠', value: discountTextOf(row), show: hasDiscount(row) },
+    { label: '优惠券', value: String(row.coupon_code || ''), show: Boolean(row.coupon_code) },
     { label: '账单', value: fieldValue(row.invoice?.invoice_no) },
     { label: '时间', value: formatDateTime(row.created_at) },
   ];
@@ -291,6 +380,28 @@ function serviceIdLabel(service: unknown) {
 
 function orderTypeLabel(type: unknown) {
   return ORDER_TYPE_MAP[String(type || '')] || fieldValue(type);
+}
+
+// 优惠券减免与会员折扣来源不同，列表内分列展示，避免混成一个数字无法区分
+function couponDiscountOf(row: Record<string, unknown>): number {
+  return Number(row.discount || 0);
+}
+
+function memberDiscountOf(row: Record<string, unknown>): number {
+  return Number(row.member_discount_amount || 0);
+}
+
+function hasDiscount(row: Record<string, unknown>): boolean {
+  return couponDiscountOf(row) > 0 || memberDiscountOf(row) > 0;
+}
+
+// 移动端卡片只有单行位置，两类折扣合并为一行但保留来源前缀
+// 注意：管理端 formatMoney 自带 ￥，此处不再补币符
+function discountTextOf(row: Record<string, unknown>): string {
+  const parts: string[] = [];
+  if (couponDiscountOf(row) > 0) parts.push(`券 ${formatMoney(couponDiscountOf(row))}`);
+  if (memberDiscountOf(row) > 0) parts.push(`会员 ${formatMoney(memberDiscountOf(row))}`);
+  return parts.join(' / ');
 }
 
 function toRecord(value: unknown): Record<string, unknown> {

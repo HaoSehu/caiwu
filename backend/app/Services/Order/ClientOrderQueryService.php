@@ -4,8 +4,12 @@ declare(strict_types=1);
 
 namespace App\Services\Order;
 
+use App\Constants\InvoiceStatus;
+use App\Constants\InvoiceType;
 use App\Constants\OrderStatus;
 use App\Constants\OrderType;
+use App\Models\Coupon;
+use App\Models\Invoice;
 use App\Models\Order;
 use App\Services\ProductCatalog\ProductFullPathResolver;
 use Carbon\CarbonImmutable;
@@ -64,6 +68,7 @@ class ClientOrderQueryService
     {
         $this->orders->cancelExpiredPendingOrdersForUser($userId, $expiredContext);
 
+        // 计数维度仍是订单（履约工单），金额口径收敛到账单（资金真源）。
         $row = Order::query()
             ->where('user_id', $userId)
             ->selectRaw('COUNT(*) AS total')
@@ -71,12 +76,23 @@ class ClientOrderQueryService
             ->selectRaw('SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS paid', [OrderStatus::PAID])
             ->selectRaw('SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS cancelled', [OrderStatus::CANCELLED])
             ->selectRaw('SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS refunded', [OrderStatus::REFUNDED])
-            ->selectRaw('SUM(CASE WHEN status = ? THEN COALESCE(amount, 0) - COALESCE(paid_amount, 0) ELSE 0 END) AS unpaid_amount', [OrderStatus::PENDING])
             ->first();
 
         $now = now();
-        $monthAmount = Order::query()
+
+        // 待付金额：未付账单的应付余额（部分支付的账单按 amount - paid_amount 计）。
+        $unpaidAmount = Invoice::query()
             ->where('user_id', $userId)
+            ->where('status', InvoiceStatus::UNPAID)
+            ->selectRaw('SUM(GREATEST(COALESCE(amount, 0) - COALESCE(paid_amount, 0), 0)) AS unpaid_amount')
+            ->value('unpaid_amount');
+
+        // 本月消费：本月创建账单的应付金额合计（订单金额列是创建时快照，不再作为计算依据）。
+        // 类型白名单与订单消费值域（new/renew/upgrade，normal 为存量新购读取兼容）对齐，
+        // 充值/返利/扣款/退款红字/手工账单不属于消费，不得计入。
+        $monthAmount = Invoice::query()
+            ->where('user_id', $userId)
+            ->whereIn('type', [InvoiceType::NEW_PURCHASE, InvoiceType::RENEW, InvoiceType::UPGRADE, 'normal'])
             ->whereYear('created_at', $now->year)
             ->whereMonth('created_at', $now->month)
             ->sum('amount');
@@ -87,7 +103,7 @@ class ClientOrderQueryService
             'paid' => (int) ($row?->paid ?? 0),
             'cancelled' => (int) ($row?->cancelled ?? 0),
             'refunded' => (int) ($row?->refunded ?? 0),
-            'unpaid_amount' => number_format((float) ($row?->unpaid_amount ?? 0), 2, '.', ''),
+            'unpaid_amount' => number_format((float) ($unpaidAmount ?? 0), 2, '.', ''),
             'month_amount' => number_format((float) $monthAmount, 2, '.', ''),
         ];
     }
@@ -133,6 +149,8 @@ class ClientOrderQueryService
      */
     private function listItem(Order $order): array
     {
+        $coupon = $order->coupon;
+
         return [
             'id' => (int) $order->id,
             'order_no' => (string) $order->order_no,
@@ -143,6 +161,10 @@ class ClientOrderQueryService
             'amount' => number_format((float) $order->amount, 2, '.', ''),
             'paid_amount' => number_format((float) $order->paid_amount, 2, '.', ''),
             'discount' => number_format((float) $order->discount, 2, '.', ''),
+            // 折扣分列：券减免（discount）与会员折扣来源不同；券标识给出券码与券名
+            'member_discount_amount' => number_format((float) ($order->member_discount_amount ?? 0), 2, '.', ''),
+            'coupon_code' => (string) ($order->coupon_code ?? ''),
+            'coupon_name' => $coupon instanceof Coupon ? (string) ($coupon->name ?? '') : '',
             'billing_cycle' => (string) ($order->billing_cycle ?? ''),
             'quantity' => (int) ($order->quantity ?? 1),
             'product_name' => (string) ($order->display_product_name ?? $order->product_spec_snapshot ?? ''),

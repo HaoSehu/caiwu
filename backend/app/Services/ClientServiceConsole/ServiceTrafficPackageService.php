@@ -173,20 +173,33 @@ class ServiceTrafficPackageService
 
         throw_if(! $product, new BusinessException('服务关联商品不存在，无法创建流量包账单'));
 
-        $existingInvoice = Invoice::query()
+        // 同服务同 type=upgrade 的未付账单按 kind 分治：本 kind 复用/替换；
+        // 其它 kind（主机升降级）不取消、不互踩，显式报错避免并行履约冲突与静默丢单
+        $pendingUpgradeInvoices = Invoice::query()
             ->where('user_id', (int) $user->id)
             ->where('service_id', (int) $service->id)
             ->where('type', OrderType::UPGRADE)
             ->where('status', InvoiceStatus::UNPAID)
-            ->latest('id')
-            ->first();
+            ->orderByDesc('id')
+            ->get();
+
+        $pendingOtherKind = $pendingUpgradeInvoices->first(
+            fn (Invoice $invoice): bool => (string) data_get($invoice->config_pricing_snapshot ?? [], 'meta.kind', '') !== self::TRAFFIC_ORDER_KIND
+        );
+        throw_if($pendingOtherKind instanceof Invoice, new BusinessException(
+            '该服务存在待支付的升降级账单（'.$pendingOtherKind->invoice_no.'），请先支付或取消后再购买流量包'
+        ));
+
+        $existingInvoice = $pendingUpgradeInvoices->first(
+            fn (Invoice $invoice): bool => (string) data_get($invoice->config_pricing_snapshot ?? [], 'meta.kind', '') === self::TRAFFIC_ORDER_KIND
+        );
 
         if ($existingInvoice instanceof Invoice) {
+            // 能进入此分支的未付账单已按 kind 过滤，必然是本 kind
             $sameConfigOption = (array) data_get($existingInvoice->config_pricing_snapshot ?? [], 'meta.configoption', []) === $quote['configoption'];
-            $sameKind = (string) data_get($existingInvoice->config_pricing_snapshot ?? [], 'meta.kind', '') === self::TRAFFIC_ORDER_KIND;
             $sameAmount = round((float) ($existingInvoice->amount ?? 0), 2) === round((float) $quote['pricing']['amount'], 2);
 
-            if ($sameKind && $sameConfigOption && $sameAmount) {
+            if ($sameConfigOption && $sameAmount) {
                 $displayPayload = (new ProductDisplayNameResolver)->resolveForProduct($product, (array) ($existingInvoice->config_snapshot ?? []));
                 $productSpecDisplay = (string) ($displayPayload['product_spec_display'] ?? $displayPayload['combined_display_name'] ?? '');
                 $this->ensureTrafficPackageOrderForInvoice($existingInvoice, $service, $product, $productSpecDisplay, $context);

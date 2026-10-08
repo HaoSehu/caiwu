@@ -246,8 +246,13 @@ class Invoice extends Model
                 $itemName = $this->normalizeInvoiceItemName((string) ($this->order?->display_product_name ?? ''));
             }
             $quantity = max((int) ($this->quantity ?? $this->order?->quantity ?? 1), 1);
-            $grossAmount = (float) ($this->amount ?? 0) + (float) ($this->discount ?? 0);
-            $discountAmount = (float) ($this->discount ?? $this->order?->discount ?? 0);
+            // 行口径自洽：unit_price=目录单价、discount_amount=合计优惠（券+会员）、line_amount=应付价，
+            // 满足 unit_price×quantity − discount_amount = line_amount；漏算会员折扣会让明细与汇总口径对不上
+            $grossAmount = (float) ($this->amount ?? 0)
+                + (float) ($this->discount ?? 0)
+                + (float) ($this->member_discount_amount ?? 0);
+            $discountAmount = (float) ($this->discount ?? $this->order?->discount ?? 0)
+                + (float) ($this->member_discount_amount ?? 0);
             $unitPrice = $quantity > 0 ? $grossAmount / $quantity : $grossAmount;
 
             DB::table('invoice_items')->insert([

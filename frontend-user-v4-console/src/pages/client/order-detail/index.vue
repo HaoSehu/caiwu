@@ -57,9 +57,13 @@
                   <span>订单金额</span>
                   <strong>¥{{ formatMoney(detail.amount) }}</strong>
                 </div>
-                <div class="detail-kv-item">
-                  <span>优惠金额</span>
-                  <strong>¥{{ formatMoney(detail.discount) }}</strong>
+                <div v-if="Number(detail.discount || 0) > 0" class="detail-kv-item">
+                  <span>优惠券减免</span>
+                  <strong>-¥{{ formatMoney(detail.discount) }}</strong>
+                </div>
+                <div v-if="Number(detail.member_discount_amount || 0) > 0" class="detail-kv-item">
+                  <span>会员折扣</span>
+                  <strong>-¥{{ formatMoney(detail.member_discount_amount) }}</strong>
                 </div>
                 <div class="detail-kv-item">
                   <span>已付金额</span>
