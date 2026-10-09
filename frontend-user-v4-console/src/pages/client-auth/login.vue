@@ -144,6 +144,7 @@ import PasswordToggle from '@/components/auth/PasswordToggle.vue';
 import { useGeeTestCaptcha } from '@/composables/useGeeTestCaptcha';
 import { useUserStore } from '@/store';
 import { buildAccountPayload, detectAccountType, normalizeAccountValue } from '@/utils/account';
+import { resolveLoginRedirectPath } from '@/utils/loginRedirect';
 import { clearLoginRedirectHold, holdLoginRedirect } from '@/utils/request';
 
 interface LoginForm {
@@ -215,10 +216,7 @@ const codeRules: Record<keyof CodeLoginForm, FormRule[]> = {
   ],
 };
 
-const redirectPath = computed(() => {
-  const redirect = route.query.redirect;
-  return typeof redirect === 'string' && redirect.startsWith('/') ? redirect : '/client/dashboard';
-});
+const redirectPath = computed(() => resolveLoginRedirectPath(route.query.redirect));
 
 const registerLink = computed(() => ({
   path: '/client/register',

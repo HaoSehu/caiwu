@@ -3,6 +3,7 @@ import { MessagePlugin } from 'tdesign-vue-next';
 
 import { getClientToken, removeClientToken } from '@/app/runtime/session';
 import router from '@/router';
+import { buildLoginLocation } from '@/utils/loginRedirect';
 
 let lastErrorMsg = '';
 let lastErrorTimer: ReturnType<typeof setTimeout> | null = null;
@@ -62,7 +63,12 @@ function redirectLogin(msg?: string, requestToken?: string | null) {
   if (msg && !/[\u4E00-\u9FA5]/.test(msg)) {
     MessagePlugin.warning('登录状态已失效，请重新登录');
   }
-  router.push('/client/login').finally(() => {
+  // 与路由守卫口径一致：401 弹回登录页时携带 redirect，登录成功后回到原页面。
+  const currentFullPath =
+    typeof window !== 'undefined'
+      ? `${window.location.pathname}${window.location.search}${window.location.hash}`
+      : '';
+  router.push(buildLoginLocation(currentFullPath)).finally(() => {
     redirectingToLogin = false;
   });
 }

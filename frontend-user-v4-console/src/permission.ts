@@ -8,6 +8,7 @@ import { getClientToken } from '@/app/runtime/session';
 import { useSiteBrandingStore } from '@/app/stores/siteBranding';
 import router from '@/router';
 import { getPermissionStore, useUserStore } from '@/store';
+import { CLIENT_LOGIN_PATH, resolveLoginRedirectPath } from '@/utils/loginRedirect';
 
 const DYNAMIC_IMPORT_RELOAD_KEY = 'client-router-dynamic-import-reload';
 const dynamicImportErrorPattern = /Failed to fetch dynamically imported module|Importing a module script failed/i;
@@ -15,20 +16,6 @@ const dynamicImportErrorPattern = /Failed to fetch dynamically imported module|I
 let fetchingUser = false;
 
 NProgress.configure({ showSpinner: false });
-
-function resolveRedirectPath(raw: unknown, fallback = '/client/dashboard') {
-  const redirect = typeof raw === 'string' ? redirectURIComponentSafe(raw) : '';
-  // 仅接受站内绝对路径，拒绝 //evil.com 协议相对形态
-  return redirect.startsWith('/') && !redirect.startsWith('//') ? redirect : fallback;
-}
-
-function redirectURIComponentSafe(value: string) {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
-}
 
 function resolvePageTitle(raw: unknown) {
   if (typeof raw === 'string') {
@@ -55,7 +42,7 @@ router.beforeEach(async (to, _from, next) => {
 
   if (to.meta.guest) {
     if (token && !allowGuestWithToken) {
-      next(resolveRedirectPath(to.query.redirect));
+      next(resolveLoginRedirectPath(to.query.redirect));
       return;
     }
     next();
@@ -66,7 +53,7 @@ router.beforeEach(async (to, _from, next) => {
     if (!token) {
       useUserStore().clearLocalSession();
       next({
-        path: '/client/login',
+        path: CLIENT_LOGIN_PATH,
         query: { redirect: to.fullPath },
       });
       return;
@@ -84,7 +71,7 @@ router.beforeEach(async (to, _from, next) => {
         userStore.clearLocalSession();
         MessagePlugin.warning('登录状态已失效，请重新登录');
         next({
-          path: '/client/login',
+          path: CLIENT_LOGIN_PATH,
           query: { redirect: to.fullPath },
         });
         return;
