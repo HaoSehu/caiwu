@@ -126,3 +126,68 @@ test("小视口(等效高缩放)下结算条作为覆盖层钉在费用栏底部
   await expect(buyBtn).toBeInViewport();
   expect(await hitTestButton()).toBe("btn");
 });
+
+test("官网产品层级文案统一为产品目录/地区/可用区", async ({ page }) => {
+  // 一级菜单 / 二级分组接口按用例 mock，保证导航文案与真实数据无关。
+  await page.route("**/api/v2/site/product-types*", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        code: 0,
+        message: "操作成功",
+        data: {
+          list: [
+            {
+              id: 1,
+              value: "cloud_server",
+              label: "大陆云服",
+              product_type: "cloud_server",
+              product_count: 3,
+              group_count: 1,
+              first_product_group_code: "cloud_server",
+            },
+          ],
+        },
+      }),
+    }),
+  );
+  await page.route("**/api/v2/site/product-groups*", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        code: 0,
+        message: "操作成功",
+        data: {
+          list: [
+            {
+              id: 11,
+              name: "华南地区",
+              slogan: "",
+              product_count: 3,
+              product_type: "cloud_server",
+              first_product_group_code: "cloud_server",
+              children_count: 1,
+            },
+          ],
+        },
+      }),
+    }),
+  );
+
+  await page.setViewportSize({ width: 1280, height: 800 });
+
+  // 选购页：一级「产品目录」侧边栏
+  await page.goto("/products", { waitUntil: "domcontentloaded" });
+  await expect(page.locator(".sidebar-head-text")).toHaveText("产品目录");
+
+  // 导航：一级「产品目录」、二级「地区」
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.locator(".main-nav__link", { hasText: "产品" }).first().hover();
+
+  const levelLabels = page.locator("#mega-menu .mega-menu__level-label");
+  await expect(levelLabels).toHaveCount(2);
+  await expect(levelLabels.nth(0)).toHaveText("产品目录");
+  await expect(levelLabels.nth(1)).toHaveText("地区");
+});

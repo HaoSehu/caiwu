@@ -55,7 +55,8 @@
           >
             <div class="mega-menu__inner container">
               <template v-if="activeMenuId === 'products'">
-                <div class="mega-menu__types">
+                <div class="mega-menu__types" role="group" aria-label="产品目录">
+                  <span class="mega-menu__level-label">产品目录</span>
                   <button
                     v-for="type in navProductTypes"
                     :key="type.value"
@@ -72,7 +73,8 @@
                     }}</span>
                   </button>
                 </div>
-                <div class="mega-menu__groups">
+                <div class="mega-menu__groups" role="group" aria-label="地区">
+                  <span class="mega-menu__level-label">地区</span>
                   <router-link
                     v-for="group in navActiveGroups"
                     :key="group.id"
@@ -449,6 +451,7 @@
           <div class="mobile-menu-col mobile-menu-col--right">
             <template v-if="mobileActiveFirstLevel === 'products'">
               <template v-if="navProductTypes.length">
+                <div class="mobile-menu-section-label">产品目录</div>
                 <div
                   v-for="type in navProductTypes"
                   :key="`m-type-${type.value}`"
@@ -494,6 +497,7 @@
                     "
                     class="mobile-third-level-list"
                   >
+                    <div class="mobile-menu-section-label">地区</div>
                     <router-link
                       v-for="group in navGetGroupsForType(type.value)"
                       :key="`m-group-${group.id}`"
@@ -1427,6 +1431,21 @@ onBeforeUnmount(() => {
   align-content: start;
 }
 
+/* 产品层级统一文案：一级 产品目录 / 二级 地区（与选购页、控制台保持一致）。 */
+.mega-menu__level-label {
+  display: block;
+  padding: 12px 20px 4px;
+  color: $text-color-placeholder;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.mega-menu__groups > .mega-menu__level-label {
+  grid-column: 1 / -1;
+  padding-top: 8px;
+}
+
 .mega-group-card {
   display: flex;
   flex-direction: column;
@@ -1967,6 +1986,15 @@ onBeforeUnmount(() => {
 
 .mobile-second-group {
   margin-bottom: 4px;
+}
+
+/* 产品层级统一文案：一级 产品目录 / 二级 地区（与选购页、控制台保持一致）。 */
+.mobile-menu-section-label {
+  padding: 8px 4px 4px;
+  color: $text-color-placeholder;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
 }
 
 .mobile-second-level-item {
