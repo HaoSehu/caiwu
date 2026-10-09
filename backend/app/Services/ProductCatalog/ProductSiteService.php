@@ -12,6 +12,7 @@ use App\Models\ThirdProductGroup;
 use App\Services\ProductCatalog\Concerns\HandlesProductCatalogHelpers;
 use App\Support\Money;
 use App\Support\ProductGroupHierarchyFields;
+use App\Support\SiteProductGroupQuery;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Cache;
@@ -107,20 +108,20 @@ class ProductSiteService
         );
     }
 
-    public function siteRootGroups(?string $productType = null): array
+    public function siteRootGroups(?string $firstGroupCode = null): array
     {
-        $cacheSuffix = self::SITE_ROOT_GROUPS_CACHE_KEY.':'.($productType ?: 'all');
+        $cacheSuffix = self::SITE_ROOT_GROUPS_CACHE_KEY.':'.($firstGroupCode ?: 'all');
 
         return $this->rememberSitePayload(
             $cacheSuffix,
             self::SITE_GROUPS_CACHE_TTL_SECONDS,
-            function () use ($productType) {
+            function () use ($firstGroupCode) {
                 $visibleProductTypes = ProductType::visibleValues();
                 if ($visibleProductTypes === []) {
                     return [];
                 }
 
-                return $this->visibleSecondProductGroupQuery($productType)
+                return SiteProductGroupQuery::visibleSecondGroups($firstGroupCode)
                     ->select([
                         'second_product_groups.id',
                         'second_product_groups.first_product_group_id',
@@ -303,7 +304,7 @@ class ProductSiteService
         return Cache::remember(
             self::SITE_CATALOG_CACHE_KEY,
             now()->addSeconds(self::SITE_CATALOG_CACHE_TTL_SECONDS),
-            fn () => $this->visibleSecondProductGroupQuery()
+            fn () => SiteProductGroupQuery::visibleSecondGroups()
                 ->select('second_product_groups.*')
                 ->with([
                     'firstProductGroup',
@@ -348,6 +349,7 @@ class ProductSiteService
             'third_product_group_name' => null,
             'effective_product_group_id' => (int) $group->id,
             'effective_product_group_level' => 2,
+            ...ProductGroupHierarchyFields::forGroupNode($firstGroupName, (string) $group->name, null, 2),
             'service_type_code' => $productType,
             'name' => (string) $group->name,
             'slogan' => (string) ($group->description ?? ''),
@@ -366,6 +368,7 @@ class ProductSiteService
         $productType = ProductType::businessValueForFirstGroup($firstGroup, $firstGroupCode);
         $productTypeId = $firstGroup instanceof FirstProductGroup ? (int) $firstGroup->id : ProductType::routeIdOf($firstGroupCode);
         $firstGroupName = (string) ($firstGroup?->name ?? ProductType::labelOf($firstGroupCode));
+        $secondGroupName = (string) ($secondGroup?->name ?? '');
 
         return [
             'id' => (int) $group->id,
@@ -377,13 +380,14 @@ class ProductSiteService
             'first_product_group_code' => $firstGroupCode,
             'first_product_group_name' => $firstGroupName,
             'second_product_group_id' => $secondGroup instanceof SecondProductGroup ? (int) $secondGroup->id : null,
-            'second_product_group_name' => (string) ($secondGroup?->name ?? ''),
+            'second_product_group_name' => $secondGroupName,
             'second_product_group_parent_id' => $firstGroup instanceof FirstProductGroup ? (int) $firstGroup->id : null,
             'second_product_group_parent_name' => $firstGroupName,
             'third_product_group_id' => (int) $group->id,
             'third_product_group_name' => (string) $group->name,
             'effective_product_group_id' => (int) $group->id,
             'effective_product_group_level' => 3,
+            ...ProductGroupHierarchyFields::forGroupNode($firstGroupName, $secondGroupName, (string) $group->name, 3),
             'service_type_code' => $productType,
             'name' => (string) $group->name,
             'slogan' => (string) ($group->description ?? ''),
@@ -465,42 +469,9 @@ class ProductSiteService
             ->all();
     }
 
-    private function visibleSecondProductGroupQuery(?string $productType = null): Builder
-    {
-        $visibleProductTypes = ProductType::visibleValues();
-
-        if ($visibleProductTypes === []) {
-            return SecondProductGroup::query()->whereRaw('1 = 0');
-        }
-
-        return SecondProductGroup::query()
-            ->select('second_product_groups.*')
-            ->join('first_product_groups', 'first_product_groups.id', '=', 'second_product_groups.first_product_group_id')
-            ->where('second_product_groups.is_visible', 1)
-            ->where('first_product_groups.is_visible', 1)
-            ->whereIn('first_product_groups.code', $visibleProductTypes)
-            ->when($productType, function (Builder $query) use ($productType): void {
-                $businessType = ProductType::normalizeBusinessValue($productType);
-                $query->where(function (Builder $typeQuery) use ($productType, $businessType): void {
-                    $typeQuery
-                        ->where('first_product_groups.code', $productType)
-                        ->orWhere('first_product_groups.product_type', $businessType);
-                });
-            });
-    }
-
     private function resolveVisibleSecondProductGroup(int $groupId): ?SecondProductGroup
     {
-        if ($groupId <= 0) {
-            return null;
-        }
-
-        $group = $this->visibleSecondProductGroupQuery()
-            ->with(['firstProductGroup'])
-            ->where('second_product_groups.id', $groupId)
-            ->first();
-
-        return $group instanceof SecondProductGroup ? $group : null;
+        return SiteProductGroupQuery::resolveVisibleSecondGroup($groupId);
     }
 
     /**
@@ -509,32 +480,7 @@ class ProductSiteService
      */
     private function resolveVisibleProductGroupIds(array $groupIds): array
     {
-        if ($groupIds === []) {
-            return ['second' => [], 'third' => []];
-        }
-
-        $secondIds = $this->visibleSecondProductGroupQuery()
-            ->whereIn('second_product_groups.id', $groupIds)
-            ->pluck('second_product_groups.id')
-            ->map(fn ($id): int => (int) $id)
-            ->all();
-
-        $thirdIds = ThirdProductGroup::query()
-            ->join('second_product_groups', 'second_product_groups.id', '=', 'third_product_groups.second_product_group_id')
-            ->join('first_product_groups', 'first_product_groups.id', '=', 'second_product_groups.first_product_group_id')
-            ->where('third_product_groups.is_visible', 1)
-            ->where('second_product_groups.is_visible', 1)
-            ->where('first_product_groups.is_visible', 1)
-            ->whereIn('first_product_groups.code', ProductType::visibleValues())
-            ->whereIn('third_product_groups.id', $groupIds)
-            ->pluck('third_product_groups.id')
-            ->map(fn ($id): int => (int) $id)
-            ->all();
-
-        return [
-            'second' => $secondIds,
-            'third' => $thirdIds,
-        ];
+        return SiteProductGroupQuery::resolveVisibleGroupIds($groupIds);
     }
 
     private function buildPricingEntries(array $pricing, string $setupFee): array

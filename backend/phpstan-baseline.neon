@@ -6937,12 +6937,6 @@ parameters:
 			path: app/Support/ProductGroupHierarchyFields.php
 
 		-
-			message: '#^Static method App\\Support\\ProductGroupHierarchyFields\:\:empty\(\) is unused\.$#'
-			identifier: method.unused
-			count: 1
-			path: app/Support/ProductGroupHierarchyFields.php
-
-		-
 			message: '#^Using nullsafe property access "\?\-\>code" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1

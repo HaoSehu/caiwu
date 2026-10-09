@@ -11,6 +11,7 @@ use App\Models\SecondProductGroup;
 use App\Models\Service;
 use App\Models\ThirdProductGroup;
 use App\Models\User;
+use App\Support\ProductGroupHierarchyFields;
 use App\Support\SchemaMetadataCache;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
@@ -179,41 +180,49 @@ class ServiceOverviewService
             ->get();
 
         $expiringDeadline = now()->addDays(7);
-        // 用户端“已开通产品”只展示前台可见目录中的前 5 个种类，
-        // 第 6 个固定保留给“其他服务”。
+        // 用户端“已开通产品”按一级菜单分组（first_product_groups.code），
+        // 而非业务 product_type：两个一级菜单同为 cloud_server 时不得被合并。
+        // 只展示前台可见目录中的前 5 个一级菜单，第 6 个固定保留给“其他服务”。
         $typeItems = collect(ProductType::visibleItems())->values();
-        $typeOrderMap = $typeItems->values()
-            ->mapWithKeys(fn (array $item, int $index) => [(string) ($item['product_type'] ?? $item['value'] ?? '') => $index])
-            ->all();
-        $knownTypeValues = $typeItems
-            ->map(fn (array $item) => trim((string) ($item['product_type'] ?? $item['value'] ?? '')))
+        $menuCodes = $typeItems
+            ->map(fn (array $item) => trim((string) ($item['value'] ?? '')))
             ->filter(fn (string $value) => $value !== '')
             ->values()->all();
-        $primaryTypeItems = $typeItems
-            ->take(5)->values();
-        $primaryTypeValues = $primaryTypeItems
-            ->map(fn (array $item) => trim((string) ($item['product_type'] ?? $item['value'] ?? '')))
-            ->filter(fn (string $value) => $value !== '')
-            ->values()->all();
-        $otherTypeValues = collect($knownTypeValues)
-            ->reject(fn (string $value) => in_array($value, $primaryTypeValues, true))
-            ->values()->all();
+        $menuCodeSet = array_flip($menuCodes);
+        $businessToMenuCode = [];
+        foreach ($typeItems as $typeItem) {
+            $businessValue = trim((string) ($typeItem['product_type'] ?? $typeItem['value'] ?? ''));
+            $menuCode = trim((string) ($typeItem['value'] ?? ''));
+            if ($businessValue !== '' && $menuCode !== '' && ! isset($businessToMenuCode[$businessValue])) {
+                $businessToMenuCode[$businessValue] = $menuCode;
+            }
+        }
 
-        $list = $primaryTypeItems->map(fn (array $typeItem) => $this->buildGroupedOverviewTypeItem(
+        $primaryTypeItems = $typeItems->take(5)->values();
+        $primaryMenuCodes = $primaryTypeItems
+            ->map(fn (array $item) => trim((string) ($item['value'] ?? '')))
+            ->filter(fn (string $value) => $value !== '')
+            ->values()->all();
+        $primaryMenuCodeSet = array_flip($primaryMenuCodes);
+
+        $bucketKeyByServiceId = $services->mapWithKeys(
+            fn (Service $service): array => [
+                (int) $service->id => $this->resolveOverviewBucketKey($service, $businessToMenuCode),
+            ]
+        )->all();
+
+        $list = $primaryTypeItems->map(fn (array $typeItem, int $index) => $this->buildGroupedOverviewTypeItem(
             $typeItem,
             $services->filter(
-                fn (Service $service) => $this->resolverService->resolveGroupedOverviewTypeValue($service) === trim((string) ($typeItem['product_type'] ?? $typeItem['value'] ?? ''))
+                fn (Service $service) => ($bucketKeyByServiceId[(int) $service->id] ?? '') === trim((string) ($typeItem['value'] ?? ''))
             )->values(),
             $expiringDeadline,
-            (int) ($typeOrderMap[(string) ($typeItem['product_type'] ?? $typeItem['value'] ?? '')] ?? 9999)
+            $index
         ))->values();
 
-        $otherServices = $services->filter(function (Service $service) use ($otherTypeValues, $knownTypeValues) {
-            $resolvedType = $this->resolverService->resolveGroupedOverviewTypeValue($service);
-
-            return in_array($resolvedType, $otherTypeValues, true)
-                || ! in_array($resolvedType, $knownTypeValues, true);
-        })->values();
+        $otherServices = $services->filter(
+            fn (Service $service) => ! isset($primaryMenuCodeSet[$bucketKeyByServiceId[(int) $service->id] ?? ''])
+        )->values();
 
         $list->push($this->buildGroupedOverviewTypeItem(
             ['value' => 'other_services', 'label' => '其他服务'],
@@ -224,7 +233,6 @@ class ServiceOverviewService
         ));
 
         $list = $list
-            ->sortBy(fn (array $item) => (int) ($item['sort_order'] ?? 9999))
             ->values()
             ->map(function (array $item) {
                 unset($item['sort_order']);
@@ -232,27 +240,23 @@ class ServiceOverviewService
                 return $item;
             })->all();
 
-        $primaryTypeValueMap = $primaryTypeItems
-            ->mapWithKeys(fn (array $item) => [trim((string) ($item['product_type'] ?? $item['value'] ?? '')) => true])
-            ->all();
+        $catalogTypes = $typeItems->map(function (array $item) use ($services, $bucketKeyByServiceId, $menuCodeSet, $primaryMenuCodeSet) {
+            $menuCode = trim((string) ($item['value'] ?? ''));
+            $count = $services->filter(function (Service $service) use ($bucketKeyByServiceId, $menuCode, $menuCodeSet, $primaryMenuCodeSet) {
+                $bucketKey = $bucketKeyByServiceId[(int) $service->id] ?? '';
 
-        $catalogTypes = $typeItems->map(function (array $item) use ($services, $knownTypeValues, $primaryTypeValueMap) {
-            $typeValue = trim((string) ($item['product_type'] ?? $item['value'] ?? ''));
-            $databaseTypeValue = trim((string) ($item['value'] ?? $typeValue));
-            $count = $services->filter(function (Service $service) use ($typeValue, $knownTypeValues, $primaryTypeValueMap) {
-                $resolvedType = $this->resolverService->resolveGroupedOverviewTypeValue($service);
-
-                if ($typeValue === ProductType::OTHER && ! isset($primaryTypeValueMap[$typeValue])) {
-                    return ! in_array($resolvedType, $knownTypeValues, true) || $resolvedType === ProductType::OTHER;
+                // “其他”项承载未命中可见一级菜单的服务，保持与列表“其他服务”一致的口径。
+                if (! isset($menuCodeSet[$menuCode])) {
+                    return ! isset($primaryMenuCodeSet[$bucketKey]) && ! isset($menuCodeSet[$bucketKey]);
                 }
 
-                return $resolvedType === $typeValue;
+                return $bucketKey === $menuCode;
             })->count();
 
             return [
-                'label' => (string) ($item['label'] ?? $typeValue ?: '其他'),
-                'value' => $databaseTypeValue,
-                'icon' => (string) ($item['icon'] ?? ProductType::iconOf($typeValue)),
+                'label' => (string) ($item['label'] ?? $menuCode ?: '其他'),
+                'value' => $menuCode,
+                'icon' => (string) ($item['icon'] ?? ProductType::iconOf($menuCode)),
                 'count' => $count,
             ];
         })->filter(fn (array $item) => $item['value'] !== '')->values()->all();
@@ -263,6 +267,27 @@ class ServiceOverviewService
             'list' => $list,
             'catalog_types' => $catalogTypes,
         ];
+    }
+
+    /**
+     * 服务在概览中的归属一级菜单 code。
+     *
+     * 有分组时以一级菜单 code 为准（即使该菜单不可见也保持独立，不并入同 product_type 的可见菜单）；
+     * 无分组时才退回业务类型对应的菜单，保证未归类服务仍有稳定归属。
+     *
+     * @param  array<string, string>  $businessToMenuCode
+     */
+    private function resolveOverviewBucketKey(Service $service, array $businessToMenuCode): string
+    {
+        $rootGroup = $this->resolverService->resolveServiceRootGroup($service);
+
+        if ($rootGroup instanceof FirstProductGroup) {
+            return trim((string) ($rootGroup->code ?? ''));
+        }
+
+        $businessValue = $this->resolverService->resolveGroupedOverviewTypeValue($service);
+
+        return $businessToMenuCode[$businessValue] ?? '';
     }
 
     private function buildGroupedOverviewTypeItem(
@@ -313,6 +338,7 @@ class ServiceOverviewService
             'id' => null,
             'product_type' => $typeValue,
             'product_type_label' => $typeLabel,
+            ...ProductGroupHierarchyFields::forGroupNode($typeLabel, null, null, 1),
             'icon' => (string) ($typeItem['icon'] ?? ProductType::iconOf($typeValue)),
             'name' => $typeLabel,
             'title' => $typeLabel,
@@ -358,9 +384,25 @@ class ServiceOverviewService
         /** @var Service|null $firstService */
         $firstService = $services->first();
         $leafGroup = $firstService ? $this->resolveServiceLeafGroup($firstService) : null;
+        $secondGroup = null;
+        if ($leafGroup instanceof ThirdProductGroup) {
+            $relatedSecond = $leafGroup->relationLoaded('secondProductGroup') ? $leafGroup->secondProductGroup : null;
+            $secondGroup = $relatedSecond instanceof SecondProductGroup ? $relatedSecond : null;
+        }
+        $groupLevel = $leafGroup instanceof ThirdProductGroup ? 3 : ($leafGroup instanceof SecondProductGroup ? 2 : null);
         $groupName = trim((string) ($leafGroup?->name ?? '')) ?: (trim((string) ($rootGroup?->name ?? '')) ?: '未分类');
         $groupTitle = $groupName;
         $groupDescription = trim((string) ($leafGroup?->description ?? $rootGroup?->description ?? ''));
+        // 子卡 key 使用「层级:ID」，避免二级 #57 与三级 #57 因 slug 相同互相覆盖。
+        $groupKey = ProductGroupHierarchyFields::groupNodeKey($groupLevel, $leafGroup?->id ? (int) $leafGroup->id : null, $fallbackKey);
+        $secondGroupName = $secondGroup instanceof SecondProductGroup ? (string) $secondGroup->name : null;
+        $leafSecondName = $leafGroup instanceof SecondProductGroup ? (string) $leafGroup->name : null;
+        $hierarchy = ProductGroupHierarchyFields::forGroupNode(
+            $rootGroup?->name,
+            $secondGroupName ?? $leafSecondName,
+            $leafGroup instanceof ThirdProductGroup ? (string) $leafGroup->name : null,
+            (int) ($groupLevel ?? 0),
+        );
         $activeCount = $services->where('status', ServiceStatus::ACTIVE)->count();
         $pendingCount = $services->filter(
             fn (Service $service) => in_array((int) $service->status, [ServiceStatus::PENDING, ServiceStatus::SUSPENDED], true)
@@ -378,8 +420,10 @@ class ServiceOverviewService
         $consoleMode = $firstService ? $this->resolverService->resolveConsoleMode($firstService) : 'default';
 
         return [
-            'key' => $leafGroup?->slug ? (string) $leafGroup->slug : $fallbackKey,
+            'key' => $groupKey,
             'id' => $leafGroup?->id ? (int) $leafGroup->id : null,
+            'level' => $groupLevel,
+            ...$hierarchy,
             'name' => $groupName,
             'title' => $groupTitle,
             'description' => $groupDescription !== ''

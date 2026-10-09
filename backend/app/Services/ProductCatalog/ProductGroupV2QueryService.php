@@ -10,6 +10,7 @@ use App\Models\FirstProductGroup;
 use App\Models\Product;
 use App\Models\SecondProductGroup;
 use App\Models\ThirdProductGroup;
+use App\Support\SiteProductGroupQuery;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
@@ -202,9 +203,14 @@ class ProductGroupV2QueryService
      */
     public function paginateSiteRootGroups(array $filters): LengthAwarePaginator
     {
-        $productType = trim((string) ($filters['first_product_group_code'] ?? $filters['product_type'] ?? ''));
+        // 一级菜单 code 精确命中；product_type 仅在一级菜单 code 缺省时作为独立筛选，二者不做 OR 并项。
+        $firstGroupCode = trim((string) ($filters['first_product_group_code'] ?? ''));
+        $productType = trim((string) ($filters['product_type'] ?? ''));
 
-        return $this->visibleSecondProductGroupQuery($productType !== '' ? $productType : null)
+        return SiteProductGroupQuery::visibleSecondGroups(
+            $firstGroupCode !== '' ? $firstGroupCode : null,
+            $firstGroupCode === '' && $productType !== '' ? $productType : null,
+        )
             ->with(['firstProductGroup'])
             ->withCount([
                 'thirdProductGroups as children_count' => fn (Builder $query) => $query->where('is_visible', 1),
@@ -299,30 +305,6 @@ class ProductGroupV2QueryService
         return $this->attachCpuModelPayloads($paginator);
     }
 
-    private function visibleSecondProductGroupQuery(?string $productType = null): Builder
-    {
-        $visibleProductTypes = ProductType::visibleValues();
-
-        if ($visibleProductTypes === []) {
-            return SecondProductGroup::query()->whereRaw('1 = 0');
-        }
-
-        return SecondProductGroup::query()
-            ->select('second_product_groups.*')
-            ->join('first_product_groups', 'first_product_groups.id', '=', 'second_product_groups.first_product_group_id')
-            ->where('second_product_groups.is_visible', 1)
-            ->where('first_product_groups.is_visible', 1)
-            ->whereIn('first_product_groups.code', $visibleProductTypes)
-            ->when($productType !== null, function (Builder $query) use ($productType): void {
-                $businessType = ProductType::normalizeBusinessValue($productType);
-                $query->where(function (Builder $typeQuery) use ($productType, $businessType): void {
-                    $typeQuery
-                        ->where('first_product_groups.code', $productType)
-                        ->orWhere('first_product_groups.product_type', $businessType);
-                });
-            });
-    }
-
     private function adminSecondProductGroupQuery(int $firstGroupId): Builder
     {
         if (! FirstProductGroup::query()->whereKey($firstGroupId)->exists()) {
@@ -357,37 +339,12 @@ class ProductGroupV2QueryService
 
     private function resolveVisibleSecondProductGroup(int $groupId): ?SecondProductGroup
     {
-        if ($groupId <= 0) {
-            return null;
-        }
-
-        $group = $this->visibleSecondProductGroupQuery()
-            ->with(['firstProductGroup'])
-            ->where('second_product_groups.id', $groupId)
-            ->first();
-
-        return $group instanceof SecondProductGroup ? $group : null;
+        return SiteProductGroupQuery::resolveVisibleSecondGroup($groupId);
     }
 
     private function resolveVisibleThirdProductGroup(int $groupId): ?ThirdProductGroup
     {
-        if ($groupId <= 0 || ProductType::visibleValues() === []) {
-            return null;
-        }
-
-        $group = ThirdProductGroup::query()
-            ->select('third_product_groups.*')
-            ->join('second_product_groups', 'second_product_groups.id', '=', 'third_product_groups.second_product_group_id')
-            ->join('first_product_groups', 'first_product_groups.id', '=', 'second_product_groups.first_product_group_id')
-            ->where('third_product_groups.id', $groupId)
-            ->where('third_product_groups.is_visible', 1)
-            ->where('second_product_groups.is_visible', 1)
-            ->where('first_product_groups.is_visible', 1)
-            ->whereIn('first_product_groups.code', ProductType::visibleValues())
-            ->with(['secondProductGroup.firstProductGroup'])
-            ->first();
-
-        return $group instanceof ThirdProductGroup ? $group : null;
+        return SiteProductGroupQuery::resolveVisibleThirdGroup($groupId);
     }
 
     /**

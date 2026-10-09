@@ -8,6 +8,7 @@ use App\Constants\ProductType;
 use App\Models\FirstProductGroup;
 use App\Models\SecondProductGroup;
 use App\Models\ThirdProductGroup;
+use App\Support\ProductGroupHierarchyFields;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -25,6 +26,12 @@ class AdminProductGroupListResource extends JsonResource
         $firstGroupCode = (string) ($firstGroup?->code ?? '');
         $productType = ProductType::businessValueForFirstGroup($firstGroup, $firstGroupCode);
         $name = (string) ($this->resource->name ?? '');
+        $hierarchy = ProductGroupHierarchyFields::forGroupNode(
+            $firstGroup?->name,
+            $secondGroup?->name,
+            $thirdGroup?->name,
+            $level,
+        );
 
         return [
             'id' => (int) $this->resource->id,
@@ -48,6 +55,7 @@ class AdminProductGroupListResource extends JsonResource
             'third_product_group_name' => $thirdGroup?->name,
             'effective_product_group_id' => (int) $this->resource->id,
             'effective_product_group_level' => $level,
+            ...$hierarchy,
             'children_count' => (int) ($this->resource->children_count ?? 0),
             'products_count' => (int) ($this->resource->products_count ?? $this->resource->product_count ?? 0),
             'direct_products_count' => (int) ($this->resource->direct_products_count ?? $this->resource->products_count ?? 0),
