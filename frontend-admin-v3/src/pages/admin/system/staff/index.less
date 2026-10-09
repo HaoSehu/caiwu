@@ -4,11 +4,27 @@
   }
 
   .staff-filter {
-    display: grid;
-    grid-template-columns: minmax(220px, 1.3fr) minmax(160px, 0.8fr) minmax(140px, 0.7fr) repeat(3, auto);
+    display: flex;
+    flex-wrap: wrap;
     gap: 12px;
     align-items: center;
     margin-bottom: 14px;
+
+    > .t-input {
+      flex: 1 1 220px;
+      min-width: 180px;
+    }
+
+    > .t-select {
+      flex: 0 0 150px;
+    }
+
+    .staff-filter-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-left: auto;
+    }
   }
 
   .staff-summary {
@@ -56,29 +72,24 @@
   }
 }
 
-@media (width <= 1024px) {
+@media (width <= 768px) {
   .admin-staff-page {
     .staff-filter {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      grid-template-areas:
-        "keyword keyword"
-        "role status"
-        "create create";
+      flex-direction: column;
+      align-items: stretch;
+      gap: 10px;
 
-      > :nth-child(1) {
-        grid-area: keyword;
+      > .t-input,
+      > .t-select {
+        width: 100%;
+        flex: none;
       }
 
-      > :nth-child(2) {
-        grid-area: role;
-      }
-
-      > :nth-child(3) {
-        grid-area: status;
-      }
-
-      > :nth-child(4) {
-        grid-area: create;
+      .staff-filter-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr 2fr;
+        width: 100%;
+        margin-left: 0;
       }
     }
 

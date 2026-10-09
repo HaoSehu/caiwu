@@ -217,11 +217,25 @@
 }
 
 .log-filter-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(160px, 1fr)) auto auto;
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--td-comp-margin-m);
-  align-items: stretch;
+  align-items: center;
   margin: 16px 0;
+
+  > .t-input,
+  > .t-select,
+  > .t-date-picker {
+    flex: 1 1 160px;
+    min-width: 140px;
+  }
+
+  .log-filter-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+  }
 }
 
 .log-filter-grid > * {
@@ -230,27 +244,6 @@
 
 .log-filter-grid .t-button {
   min-width: 88px;
-}
-
-.log-filter-grid--api {
-  grid-template-columns: minmax(240px, 1.3fr) repeat(4, minmax(120px, 0.8fr)) 150px 150px auto auto;
-}
-
-.log-filter-grid--tasks {
-  grid-template-columns: minmax(180px, 0.9fr) 140px minmax(220px, 1.2fr) 150px 150px auto auto;
-}
-
-.log-filter-grid--gateway {
-  grid-template-columns: minmax(220px, 1.2fr) 130px 120px 140px 150px 150px auto auto;
-}
-
-.log-filter-grid--activity {
-  grid-template-columns: minmax(220px, 1.2fr) 130px 130px 130px 150px 150px auto auto;
-}
-
-.log-filter-grid--sms,
-.log-filter-grid--email {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .table-scroll {

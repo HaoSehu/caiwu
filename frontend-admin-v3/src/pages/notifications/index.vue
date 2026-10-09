@@ -169,7 +169,7 @@
                   }}
                 </p>
               </div>
-              <t-button variant="outline" @click="resetApiFilters">重置筛选</t-button>
+              <t-button theme="default" variant="base" @click="resetApiFilters">重置</t-button>
             </div>
             <div class="api-filter-grid">
               <t-input v-model="apiFilters.keyword" clearable placeholder="搜索路径、权限码、控制器或源码文件">
@@ -248,7 +248,7 @@
       v-model:visible="testSendVisible"
       :header="testSendDialogTitle"
       width="560px"
-      :confirm-btn="{ content: '确认发送', loading: testSending }"
+      :confirm-btn="{ content: '确定', loading: testSending }"
       @confirm="submitTestSend"
     >
       <div class="template-test-dialog">

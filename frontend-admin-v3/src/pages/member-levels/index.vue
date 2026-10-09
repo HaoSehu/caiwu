@@ -7,7 +7,7 @@
         <t-space>
           <t-button theme="primary" @click="openCreateDialog">
             <template #icon><add-icon /></template>
-            新增等级
+            新建等级
           </t-button>
         </t-space>
       </template>
@@ -66,7 +66,7 @@
 
     <t-dialog
       v-model:visible="dialogVisible"
-      :header="form.id ? '编辑会员等级' : '新增会员等级'"
+      :header="form.id ? '编辑会员等级' : '新建会员等级'"
       width="720px"
       :confirm-btn="{ content: '保存', theme: 'primary' }"
       :confirm-loading="saving"
@@ -320,7 +320,7 @@ function handleDelete(row: MemberLevelRecord) {
   const dialog = DialogPlugin.confirm({
     header: '删除会员等级',
     body: `确认删除等级“${fieldValue(row.name)}”吗？`,
-    confirmBtn: { content: '确认删除', theme: 'danger' },
+    confirmBtn: { content: '确定', theme: 'danger' },
     async onConfirm() {
       try {
         await adminApi.memberLevels.delete(row.id);

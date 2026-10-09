@@ -168,6 +168,10 @@
             placeholder="结束日期"
             @change="handleLogSearch"
           />
+          <div class="log-filter-actions">
+            <t-button theme="primary" @click="handleLogSearch">查询</t-button>
+            <t-button theme="default" variant="base" @click="resetLogFilters">重置</t-button>
+          </div>
         </div>
 
         <div v-if="!isMobile" class="table-scroll">

@@ -18,10 +18,14 @@
           <t-option label="启用" :value="1" />
           <t-option label="停用" :value="0" />
         </t-select>
-        <t-button v-if="canManage" theme="primary" @click="openCreateDialog">
-          <template #icon><user-add-icon /></template>
-          新增员工
-        </t-button>
+        <div class="staff-filter-actions">
+          <t-button theme="primary" @click="handleSearch">查询</t-button>
+          <t-button theme="default" variant="base" @click="resetFilters">重置</t-button>
+          <t-button v-if="canManage" theme="primary" @click="openCreateDialog">
+            <template #icon><user-add-icon /></template>
+            新建员工
+          </t-button>
+        </div>
       </div>
 
       <div class="staff-summary">
@@ -133,7 +137,7 @@
 
     <t-dialog
       v-model:visible="formVisible"
-      :header="form.id ? '编辑员工' : '新增员工'"
+      :header="form.id ? '编辑员工' : '新建员工'"
       width="720px"
       :confirm-btn="{ content: '保存', theme: 'primary' }"
       :confirm-loading="saving"
@@ -173,7 +177,7 @@
       v-model:visible="resetVisible"
       header="重置员工密码"
       width="520px"
-      :confirm-btn="{ content: '确认重置', theme: 'danger' }"
+      :confirm-btn="{ content: '确定', theme: 'danger' }"
       :confirm-loading="resetting"
       @confirm="submitResetPassword"
     >
@@ -236,7 +240,7 @@ interface StaffFilter {
   role_id: number | string | '';
 }
 
-const { filters, list, total, loading, pagination, loadList, handleSearch, handlePaginationChange } = useListPage<
+const { filters, list, total, loading, pagination, loadList, handleSearch, resetFilters, handlePaginationChange } = useListPage<
   StaffFilter,
   StaffRecord
 >({

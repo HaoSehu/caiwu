@@ -54,10 +54,26 @@
 }
 
 .referral-filter {
-  display: grid;
-  grid-template-columns: minmax(260px, 1fr) 180px auto auto;
+  display: flex;
+  flex-wrap: wrap;
   gap: 12px;
-  align-items: stretch;
+  align-items: center;
+
+  .referral-filter-keyword {
+    flex: 1 1 260px;
+    min-width: 200px;
+  }
+
+  .referral-filter-status {
+    flex: 0 0 160px;
+  }
+
+  .referral-filter-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+  }
 }
 
 .referral-filter > * {
@@ -212,16 +228,6 @@
   color: var(--td-text-color-secondary);
 }
 
-@media (width <= 1024px) {
-  .referral-metrics {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .referral-filter {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
 @media (width <= 768px) {
   .referral-head {
     flex-direction: column;
@@ -232,28 +238,22 @@
   }
 
   .referral-filter {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-areas:
-      "keyword keyword"
-      "status status";
+    flex-direction: column;
     align-items: stretch;
     gap: 10px;
-  }
 
-  .referral-filter > * {
-    min-width: 0;
-  }
+    .referral-filter-keyword,
+    .referral-filter-status {
+      width: 100%;
+      flex: none;
+    }
 
-  .referral-filter > :nth-child(1) {
-    grid-area: keyword;
-  }
-
-  .referral-filter > :nth-child(2) {
-    grid-area: status;
-  }
-
-  .referral-filter .t-button {
-    width: 100%;
+    .referral-filter-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      width: 100%;
+      margin-left: 0;
+    }
   }
 
   .referral-metrics,

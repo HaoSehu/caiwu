@@ -533,7 +533,7 @@ function handleClose() {
     header: '关闭工单',
     body: '确认关闭该工单吗？关闭后图片会被物理删除。',
     theme: 'warning',
-    confirmBtn: '确认关闭',
+    confirmBtn: { content: '确定', theme: 'warning' },
     cancelBtn: '取消',
     async onConfirm() {
       closeLoading.value = true;

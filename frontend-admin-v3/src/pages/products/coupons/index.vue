@@ -37,10 +37,14 @@
             <t-option value="public" label="公开优惠券" />
             <t-option value="private" label="私有优惠券" />
           </t-select>
-          <t-button theme="primary" :disabled="!couponFeatureEnabled || !canManage" @click="openCouponDialog()">
-            <template #icon><add-icon /></template>
-            新增优惠券
-          </t-button>
+          <div class="coupons-filter-actions">
+            <t-button theme="primary" @click="handleSearch">查询</t-button>
+            <t-button theme="default" variant="base" @click="resetFilters">重置</t-button>
+            <t-button theme="primary" :disabled="!couponFeatureEnabled || !canManage" @click="openCouponDialog()">
+              <template #icon><add-icon /></template>
+              新建优惠券
+            </t-button>
+          </div>
         </div>
 
         <div v-if="!isMobile" class="table-scroll">
@@ -171,7 +175,7 @@
 
       <t-drawer
         v-model:visible="dialogVisible"
-        :header="form.id ? '编辑优惠券' : '新增优惠券'"
+        :header="form.id ? '编辑优惠券' : '新建优惠券'"
         size="820px"
         class="coupon-edit-drawer"
         :close-on-overlay-click="false"
@@ -496,6 +500,7 @@ const {
   pagination,
   loadList,
   handleSearch: engineHandleSearch,
+  resetFilters,
   handlePaginationChange,
 } = useListPage<CouponFilter, CouponRecord>({
   defaultFilters: { keyword: '', status: '', discount_type: '', discount_scope: '', distribution_type: '' },
@@ -835,7 +840,7 @@ function handleDelete(row: CouponRecord) {
     header: '删除优惠券',
     body: `确认删除优惠券「${row.name || row.id}」吗？未使用的领取和发放记录会一并清理。`,
     theme: 'warning',
-    confirmBtn: '确认删除',
+    confirmBtn: { content: '确定', theme: 'danger' },
     cancelBtn: '取消',
     async onConfirm() {
       actionLoading.value = row.id;

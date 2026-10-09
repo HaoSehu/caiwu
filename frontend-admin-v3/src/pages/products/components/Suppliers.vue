@@ -1471,7 +1471,7 @@ function handleDeleteSupplier(row: SupplierRecord) {
     header: '删除提供商',
     body: `确认删除「${row.name || row.id}」吗？`,
     theme: 'warning',
-    confirmBtn: '确认删除',
+    confirmBtn: { content: '确定', theme: 'danger' },
     cancelBtn: '取消',
     async onConfirm() {
       supplierActionLoading.value = row.id;

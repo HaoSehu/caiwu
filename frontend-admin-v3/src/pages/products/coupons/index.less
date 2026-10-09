@@ -39,11 +39,27 @@
 }
 
 .coupons-filter {
-  display: grid;
-  grid-template-columns: minmax(240px, 1fr) repeat(4, minmax(120px, 145px)) auto;
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--td-comp-margin-m);
-  align-items: stretch;
+  align-items: center;
   margin-bottom: 16px;
+
+  > .t-input {
+    flex: 1 1 220px;
+    min-width: 180px;
+  }
+
+  > .t-select {
+    flex: 0 0 130px;
+  }
+
+  .coupons-filter-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+  }
 }
 
 .coupons-filter > * {
@@ -294,12 +310,6 @@
   font-style: normal;
 }
 
-@media (width <= 1024px) {
-  .coupons-filter {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
 @media (width <= 768px) {
   .coupons-head,
   .user-picker-head {
@@ -312,14 +322,22 @@
   }
 
   .coupons-filter {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-areas:
-      "keyword keyword"
-      "status type"
-      "scope distribution"
-      "create create";
+    flex-direction: column;
     align-items: stretch;
     gap: 10px;
+
+    > .t-input,
+    > .t-select {
+      width: 100%;
+      flex: none;
+    }
+
+    .coupons-filter-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr 2fr;
+      width: 100%;
+      margin-left: 0;
+    }
   }
 
   .coupons-filter > * {

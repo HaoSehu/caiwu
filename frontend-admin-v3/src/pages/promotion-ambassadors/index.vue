@@ -7,7 +7,7 @@
         <t-space>
           <t-button theme="primary" @click="openCreateDialog">
             <template #icon><add-icon /></template>
-            新增大使档位
+            新建大使档位
           </t-button>
         </t-space>
       </template>
@@ -74,7 +74,7 @@
 
     <t-dialog
       v-model:visible="dialogVisible"
-      :header="form.id ? '编辑大使档位' : '新增大使档位'"
+      :header="form.id ? '编辑大使档位' : '新建大使档位'"
       width="720px"
       :confirm-btn="{ content: '保存', theme: 'primary' }"
       :confirm-loading="saving"
@@ -229,7 +229,7 @@ function handleDelete(row: PromotionAmbassadorRecord) {
   const dialog = DialogPlugin.confirm({
     header: '删除大使档位',
     body: `确认删除大使档位“${fieldValue(row.name)}”吗？`,
-    confirmBtn: { content: '确认删除', theme: 'danger' },
+    confirmBtn: { content: '确定', theme: 'danger' },
     async onConfirm() {
       try {
         await adminApi.promotionAmbassadors.delete(row.id);

@@ -21,14 +21,18 @@
           <t-option label="仅看置顶" :value="1" />
           <t-option label="仅看普通" :value="0" />
         </t-select>
-        <t-button variant="outline" @click="openCategoryDialog">
-          <template #icon><folder-icon /></template>
-          分类管理
-        </t-button>
-        <t-button theme="primary" @click="goCreateArticle">
-          <template #icon><add-icon /></template>
-          新增{{ articleLabel }}
-        </t-button>
+        <div class="content-filter-actions">
+          <t-button theme="primary" @click="handleSearch">查询</t-button>
+          <t-button theme="default" variant="base" @click="resetFilters">重置</t-button>
+          <t-button variant="outline" @click="openCategoryDialog">
+            <template #icon><folder-icon /></template>
+            分类管理
+          </t-button>
+          <t-button theme="primary" @click="goCreateArticle">
+            <template #icon><add-icon /></template>
+            新建{{ articleLabel }}
+          </t-button>
+        </div>
       </div>
 
       <div class="category-strip">
@@ -165,7 +169,7 @@
     <t-dialog v-model:visible="categoryDialogVisible" header="分类管理" width="880px" :footer="false">
       <div class="category-dialog">
         <t-card :bordered="false">
-          <template #title>{{ categoryForm.id ? '编辑分类' : '新增分类' }}</template>
+          <template #title>{{ categoryForm.id ? '编辑分类' : '新建分类' }}</template>
           <t-form ref="categoryFormRef" :data="categoryForm" :rules="categoryRules" label-align="top">
             <div class="category-form-grid">
               <t-form-item label="分类名称" name="name">
@@ -192,7 +196,7 @@
           <div class="category-actions">
             <t-button v-if="categoryForm.id" variant="outline" @click="resetCategoryForm">取消编辑</t-button>
             <t-button theme="primary" :loading="categorySaving" @click="submitCategory">
-              {{ categoryForm.id ? '保存分类' : '新增分类' }}
+              {{ categoryForm.id ? '保存分类' : '新建分类' }}
             </t-button>
             <t-button variant="outline" @click="categoryDialogVisible = false">关闭</t-button>
           </div>
@@ -265,6 +269,7 @@ const {
   pagination,
   loadList,
   handleSearch,
+  resetFilters,
   handlePaginationChange,
 } = useListPage<ArticleFilter, ContentArticleRecord>({
   defaultFilters: { keyword: '', category_id: '', status: '', is_pinned: '' },
@@ -434,7 +439,7 @@ function handleDeleteCategory(row: ContentCategoryRecord) {
   const dialog = DialogPlugin.confirm({
     header: '删除分类',
     body: `确认删除分类"${fieldValue(row.name)}"吗？`,
-    confirmBtn: { content: '确认删除', theme: 'danger' },
+    confirmBtn: { content: '确定', theme: 'danger' },
     async onConfirm() {
       try {
         await adminApi.content.categories.delete(row.id);
@@ -453,7 +458,7 @@ function handleDeleteArticle(row: ContentArticleRecord) {
   const dialog = DialogPlugin.confirm({
     header: '删除内容',
     body: `确认删除"${fieldValue(row.title)}"吗？`,
-    confirmBtn: { content: '确认删除', theme: 'danger' },
+    confirmBtn: { content: '确定', theme: 'danger' },
     async onConfirm() {
       try {
         await adminApi.content.articles.delete(row.id);

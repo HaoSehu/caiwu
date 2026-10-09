@@ -6,7 +6,7 @@
           <template #icon><arrow-left-icon /></template>
           返回列表
         </t-button>
-        <span class="content-edit-head__title">{{ isEditing ? `编辑${articleLabel}` : `新增${articleLabel}` }}</span>
+        <span class="content-edit-head__title">{{ isEditing ? `编辑${articleLabel}` : `新建${articleLabel}` }}</span>
       </div>
     </t-card>
 

@@ -232,7 +232,7 @@
                   class="smtp-account-add"
                   @click="openSmtpAccountDialog()"
                 >
-                  添加账号
+                  新建账号
                 </t-button>
               </div>
               <secret-input
@@ -299,7 +299,7 @@
 
     <t-dialog
       v-model:visible="smtpAccountDialogVisible"
-      :header="editingSmtpAccountIndex >= 0 ? '编辑 SMTP 账号' : '添加 SMTP 账号'"
+      :header="editingSmtpAccountIndex >= 0 ? '编辑 SMTP 账号' : '新建 SMTP 账号'"
       width="520px"
       :confirm-btn="{ content: '保存账号', loading: savingConfig }"
       @confirm="confirmSmtpAccount"
@@ -573,7 +573,7 @@ function deletePlugin(plugin: IntegrationPluginRecord) {
     body: force
       ? `插件「${plugin.name}」仍被业务数据引用${summary ? `（${summary}）` : ''}。卸载会一并删除这些绑定关系且无法恢复，确定继续吗？`
       : `确定删除插件「${plugin.name}」的安装记录和配置吗？插件目录文件不会被删除。`,
-    confirmBtn: { content: force ? '强制卸载' : '确认删除', theme: 'danger' },
+    confirmBtn: { content: '确定', theme: 'danger' },
     async onConfirm() {
       dialog.destroy();
       await runAction(plugin, 'delete', async () => {
@@ -954,7 +954,7 @@ async function handleSmtpAccountAction(action: string, index: number) {
     const dialog = DialogPlugin.confirm({
       header: '删除 SMTP 账号',
       body: '确定删除这个 SMTP 账号吗？',
-      confirmBtn: { content: '确认删除', theme: 'danger' },
+      confirmBtn: { content: '确定', theme: 'danger' },
       async onConfirm() {
         dialog.destroy();
         smtpAccounts.value.splice(index, 1);

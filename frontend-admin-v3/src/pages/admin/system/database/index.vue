@@ -149,7 +149,7 @@ function handleOptimizeTables(tables: string[]) {
     body: isAll
       ? `确认检查${label}？仅对可回收空间达到阈值的表执行 OPTIMIZE TABLE；该操作可能短暂锁表，请避开高峰期。`
       : `确认对${label}执行 OPTIMIZE TABLE？该操作可能短暂锁表，请避开高峰期。`,
-    confirmBtn: { content: '确认优化', theme: 'warning' },
+    confirmBtn: { content: '确定', theme: 'warning' },
     cancelBtn: '取消',
     onConfirm: async () => {
       optimizing.value = true;
@@ -175,7 +175,7 @@ function handleExportBackup() {
   const dialog = DialogPlugin.confirm({
     header: '导出数据库备份',
     body: '确认导出当前数据库完整 SQL 备份？文件可能较大，导出期间请勿重复点击。',
-    confirmBtn: { content: '确认导出', theme: 'primary' },
+    confirmBtn: { content: '确定', theme: 'primary' },
     cancelBtn: '取消',
     onConfirm: async () => {
       exporting.value = true;

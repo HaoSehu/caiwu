@@ -7,7 +7,7 @@
         </t-input>
         <t-button v-if="canManage" theme="primary" @click="openCreateDialog">
           <template #icon><add-icon /></template>
-          新增角色
+          新建角色
         </t-button>
       </div>
 
@@ -75,7 +75,7 @@
 
     <t-dialog
       v-model:visible="dialogVisible"
-      :header="form.id ? '编辑角色权限' : '新增角色'"
+      :header="form.id ? '编辑角色权限' : '新建角色'"
       width="960px"
       :confirm-btn="dialogConfirmBtn"
       :confirm-loading="saving"
@@ -572,7 +572,7 @@ function confirmAllPermission() {
     const dialog = DialogPlugin.confirm({
       header: '确认授予全部权限',
       body: '全部权限将允许该角色访问并操作后台所有功能。',
-      confirmBtn: { content: '确认授予', theme: 'danger' },
+      confirmBtn: { content: '确定', theme: 'danger' },
       cancelBtn: '取消',
       onConfirm: () => {
         settle(true);

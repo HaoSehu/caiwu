@@ -4,6 +4,7 @@
       <div class="tickets-filter">
         <t-input
           v-model="filters.keyword"
+          class="tickets-filter-keyword"
           clearable
           placeholder="搜索工单标题或 ID"
           @enter="handleSearch"
@@ -11,13 +12,13 @@
         >
           <template #suffix-icon><search-icon /></template>
         </t-input>
-        <t-select v-model="filters.status" clearable placeholder="工单状态" @change="handleSearch">
+        <t-select v-model="filters.status" class="tickets-filter-status" clearable placeholder="工单状态" @change="handleSearch">
           <t-option v-for="option in statusOptions" :key="option.value" :label="option.label" :value="option.value" />
         </t-select>
-        <t-select v-model="filters.priority" clearable placeholder="优先级" @change="handleSearch">
+        <t-select v-model="filters.priority" class="tickets-filter-priority" clearable placeholder="优先级" @change="handleSearch">
           <t-option v-for="option in priorityOptions" :key="option.value" :label="option.label" :value="option.value" />
         </t-select>
-        <t-select v-model="filters.department" clearable placeholder="工单分类" @change="handleSearch">
+        <t-select v-model="filters.department" class="tickets-filter-department" clearable placeholder="工单分类" @change="handleSearch">
           <t-option
             v-for="option in departmentOptions"
             :key="option.value"
@@ -25,6 +26,10 @@
             :value="option.value"
           />
         </t-select>
+        <div class="tickets-filter-actions">
+          <t-button theme="primary" @click="handleSearch">查询</t-button>
+          <t-button theme="default" variant="base" @click="resetFilters">重置</t-button>
+        </div>
       </div>
     </t-card>
 
@@ -91,10 +96,16 @@ interface TicketFilter {
   department: string;
 }
 
-const { filters, list, total, loading, pagination, handleSearch, handlePaginationChange } = useListPage<
-  TicketFilter,
-  TicketRecord
->({
+const {
+  filters,
+  list,
+  total,
+  loading,
+  pagination,
+  handleSearch,
+  resetFilters,
+  handlePaginationChange,
+} = useListPage<TicketFilter, TicketRecord>({
   defaultFilters: {
     keyword: '',
     status: DEFAULT_STATUS_FILTER,

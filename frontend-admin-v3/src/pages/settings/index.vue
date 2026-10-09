@@ -590,7 +590,7 @@ const configs: Record<Exclude<SettingsTab, 'site_hero'>, SettingsConfig> = {
           { key: 'reward_rate', label: '新购默认奖励比例（%）', type: 'number', default: 10, min: 0, max: 100 },
           { key: 'renewal_reward_rate', label: '续费默认奖励比例（%）', type: 'number', default: 0, min: 0, max: 100 },
           { key: 'reward_freeze_days', label: '奖励冻结期（天）', type: 'number', default: 4, min: 0, max: 365 },
-          { key: 'withdraw_min_amount', label: '最低提现金额（元）', type: 'number', default: 20, min: 0 },
+          { key: 'withdraw_min_amount', label: '最低提现金额 (¥)', type: 'number', default: 20, min: 0 },
         ],
       },
     ],
@@ -1306,7 +1306,7 @@ function resetSlidesToDefault() {
   const dialog = DialogPlugin.confirm({
     header: '恢复默认轮播',
     body: '恢复默认会覆盖当前轮播项，下次保存才会写入数据库。',
-    confirmBtn: '恢复默认',
+    confirmBtn: { content: '确定', theme: 'primary' },
     cancelBtn: '取消',
     onConfirm: () => {
       heroForm.slides = cloneList(heroDefaults.slides);
@@ -1319,7 +1319,7 @@ function resetFeaturesToDefault() {
   const dialog = DialogPlugin.confirm({
     header: '恢复默认卡片',
     body: '恢复默认会覆盖当前特色卡片，下次保存才会写入数据库。',
-    confirmBtn: '恢复默认',
+    confirmBtn: { content: '确定', theme: 'primary' },
     cancelBtn: '取消',
     onConfirm: () => {
       heroForm.features = cloneList(heroDefaults.features);

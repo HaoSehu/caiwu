@@ -31,19 +31,40 @@
 }
 
 .service-filter {
-  display: grid;
-  grid-template-columns: 150px minmax(280px, 1fr) repeat(2, auto);
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--td-comp-margin-m);
-  align-items: stretch;
+  align-items: center;
   margin-bottom: 16px;
+
+  .service-filter-keyword {
+    flex: 1 1 280px;
+    min-width: 200px;
+  }
+
+  .service-filter-status {
+    flex: 0 0 150px;
+  }
+
+  .service-filter-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+  }
 }
 
-.service-filter > * {
-  min-width: 0;
-}
-
-.service-filter .t-button {
-  min-width: 88px;
+.service-batch-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  margin-bottom: 16px;
+  background: var(--td-bg-color-secondarycontainer);
+  border: 1px solid var(--td-component-border);
+  border-radius: var(--td-radius-medium, 6px);
+  color: var(--td-text-color-primary);
+  font-size: var(--td-font-size-size-2, 13px);
 }
 
 .table-scroll {
@@ -195,28 +216,28 @@
   }
 
   .service-filter {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-areas:
-      "keyword keyword"
-      "status status";
+    flex-direction: column;
     align-items: stretch;
     gap: 10px;
+
+    .service-filter-keyword,
+    .service-filter-status {
+      width: 100%;
+      flex: none;
+    }
+
+    .service-filter-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      width: 100%;
+      margin-left: 0;
+    }
   }
 
-  .service-filter > * {
-    min-width: 0;
-  }
-
-  .service-filter > :nth-child(1) {
-    grid-area: status;
-  }
-
-  .service-filter > :nth-child(2) {
-    grid-area: keyword;
-  }
-
-  .service-filter .t-button {
-    width: 100%;
+  .service-batch-bar {
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
   }
 
   .pagination-row {
@@ -227,9 +248,6 @@
 
 @media (width <= 360px) {
   .service-filter {
-    grid-template-columns: 1fr;
-    grid-template-areas:
-      "keyword"
-      "status";
+    flex-direction: column;
   }
 }

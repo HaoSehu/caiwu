@@ -110,7 +110,7 @@
       v-model:visible="testSendVisible"
       :header="testSendDialogTitle"
       width="560px"
-      :confirm-btn="{ content: '确认发送', loading: testSending }"
+      :confirm-btn="{ content: '确定', loading: testSending }"
       @confirm="submitTestSend"
     >
       <div class="template-test-dialog">

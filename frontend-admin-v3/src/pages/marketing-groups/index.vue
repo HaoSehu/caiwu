@@ -7,7 +7,7 @@
         <t-space>
           <t-button theme="primary" @click="openCreateDialog">
             <template #icon><add-icon /></template>
-            新增营销组
+            新建营销组
           </t-button>
         </t-space>
       </template>
@@ -58,12 +58,12 @@
         </article>
       </div>
 
-      <t-empty v-if="!loading && groups.length === 0" description="还没有营销组，点击右上角新增" />
+      <t-empty v-if="!loading && groups.length === 0" description="暂无营销组，点击右上角新建" />
     </t-card>
 
     <t-dialog
       v-model:visible="dialogVisible"
-      :header="form.id ? '编辑营销组' : '新增营销组'"
+      :header="form.id ? '编辑营销组' : '新建营销组'"
       width="560px"
       :confirm-btn="{ content: '保存', theme: 'primary' }"
       :confirm-loading="saving"
@@ -233,7 +233,7 @@ function handleDelete(row: MarketingProductGroupRecord) {
   const dialog = DialogPlugin.confirm({
     header: '删除营销组',
     body: `确认删除营销组“${row.name}”吗？组内仍有商品或已配置折扣时无法删除。`,
-    confirmBtn: { content: '确认删除', theme: 'danger' },
+    confirmBtn: { content: '确定', theme: 'danger' },
     async onConfirm() {
       try {
         await adminApi.marketingProductGroups.delete(row.id);

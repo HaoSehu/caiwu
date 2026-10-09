@@ -5,7 +5,7 @@
         <template #icon><chevron-left-icon /></template>
         返回商品目录
       </t-button>
-      <h2>{{ isEdit ? '编辑商品' : '新增商品' }}</h2>
+      <h2>{{ isEdit ? '编辑商品' : '新建商品' }}</h2>
     </div>
 
     <div class="product-edit-card">

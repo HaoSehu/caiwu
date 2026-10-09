@@ -2,11 +2,9 @@
   <div class="services-page">
     <t-card :bordered="false">
       <div class="service-filter">
-        <t-select v-model="filters.status" clearable placeholder="主机状态" @change="handleSearch">
-          <t-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value" />
-        </t-select>
         <t-input
           v-model="filters.keyword"
+          class="service-filter-keyword"
           clearable
           placeholder="搜索主机ID / 主机IP / 实例ID / 用户名 / 账单号"
           @enter="handleSearch"
@@ -14,12 +12,23 @@
         >
           <template #suffix-icon><search-icon /></template>
         </t-input>
-        <t-button v-if="!isMobile" variant="outline" :disabled="!selectedRowKeys.length" @click="openHostnameDialog">
-          批量主机名<span v-if="selectedRowKeys.length">({{ selectedRowKeys.length }})</span>
-        </t-button>
-        <t-button v-if="!isMobile" variant="text" :disabled="!selectedRowKeys.length" @click="clearSelection"
-          >清空选择</t-button
-        >
+        <t-select v-model="filters.status" class="service-filter-status" clearable placeholder="主机状态" @change="handleSearch">
+          <t-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value" />
+        </t-select>
+        <div class="service-filter-actions">
+          <t-button theme="primary" @click="handleSearch">查询</t-button>
+          <t-button theme="default" variant="base" @click="resetFilters">重置</t-button>
+        </div>
+      </div>
+
+      <div v-if="!isMobile && selectedRowKeys.length" class="service-batch-bar">
+        <span>已选 {{ selectedRowKeys.length }} 个服务</span>
+        <t-space size="small">
+          <t-button variant="outline" @click="openHostnameDialog">
+            批量主机名
+          </t-button>
+          <t-button variant="text" @click="clearSelection">清空选择</t-button>
+        </t-space>
       </div>
 
       <div v-if="!isMobile" class="table-scroll">
@@ -133,7 +142,7 @@
       v-model:visible="hostnameDialogVisible"
       :header="hostnameRows.length > 1 ? '批量设置自定义主机名' : '设置自定义主机名'"
       width="920px"
-      :confirm-btn="{ content: '保存', loading: hostnameSubmitting }"
+      :confirm-btn="{ content: '确定', loading: hostnameSubmitting }"
       @confirm="submitHostnames"
     >
       <t-alert theme="info" message="留空目标主机名会清空对应服务的自定义主机名。" />
@@ -214,8 +223,9 @@ const {
   loading,
   pagination,
   loadList,
-  handleSearch,
-  handlePaginationChange,
+    handleSearch,
+    resetFilters,
+    handlePaginationChange,
 } = useListPage<ServiceFilter, ServiceRecord>({
   defaultFilters: { keyword: '', status: '' },
   defaultPageSize: 20,

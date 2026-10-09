@@ -32,10 +32,28 @@
 }
 
 .tickets-filter {
-  display: grid;
-  grid-template-columns: minmax(240px, 1fr) 150px 120px 150px auto auto;
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--td-comp-margin-m);
-  align-items: stretch;
+  align-items: center;
+
+  .tickets-filter-keyword {
+    flex: 1 1 240px;
+    min-width: 180px;
+  }
+
+  .tickets-filter-status,
+  .tickets-filter-priority,
+  .tickets-filter-department {
+    flex: 0 0 130px;
+  }
+
+  .tickets-filter-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+  }
 }
 
 .tickets-filter > * {
@@ -167,54 +185,30 @@
   justify-content: flex-end;
 }
 
-@media (width <= 1024px) {
-  .tickets-filter {
-    grid-template-columns: minmax(220px, 1fr) repeat(3, minmax(120px, 150px));
-  }
-
-  .tickets-filter .t-button {
-    width: 100%;
-  }
-}
-
 @media (width <= 768px) {
   .tickets-filter {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-areas:
-      "keyword keyword"
-      "status priority"
-      "department department";
+    flex-direction: column;
     align-items: stretch;
     gap: var(--td-comp-margin-s);
-  }
 
-  .tickets-filter > * {
-    min-width: 0;
-  }
+    .tickets-filter-keyword,
+    .tickets-filter-status,
+    .tickets-filter-priority,
+    .tickets-filter-department {
+      width: 100%;
+      flex: none;
+    }
 
-  .tickets-filter > :nth-child(1) {
-    grid-area: keyword;
-  }
-
-  .tickets-filter > :nth-child(2) {
-    grid-area: status;
-  }
-
-  .tickets-filter > :nth-child(3) {
-    grid-area: priority;
-  }
-
-  .tickets-filter > :nth-child(4) {
-    grid-area: department;
+    .tickets-filter-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      width: 100%;
+      margin-left: 0;
+    }
   }
 
   .ticket-grid {
     grid-template-columns: 1fr;
-  }
-
-  .tickets-filter .t-button {
-    width: 100%;
-    margin-left: 0;
   }
 
   .ticket-card__foot time {

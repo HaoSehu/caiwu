@@ -92,9 +92,9 @@
 
     <t-dialog
       v-model:visible="groupDialogVisible"
-      :header="editingGroupId ? '编辑 CPU 分组' : '新增 CPU 分组'"
+      :header="editingGroupId ? '编辑 CPU 分组' : '新建 CPU 分组'"
       width="520px"
-      :confirm-btn="{ content: '确认', loading: groupSubmitting }"
+      :confirm-btn="{ content: '确定', loading: groupSubmitting }"
       @confirm="handleSubmitGroup"
     >
       <t-form ref="groupFormRef" :data="groupForm" :rules="groupRules" label-align="top">
@@ -109,9 +109,9 @@
 
     <t-dialog
       v-model:visible="modelDialogVisible"
-      :header="editingModelId ? '编辑 CPU 型号' : '新增 CPU 型号'"
+      :header="editingModelId ? '编辑 CPU 型号' : '新建 CPU 型号'"
       width="520px"
-      :confirm-btn="{ content: '确认', loading: modelSubmitting }"
+      :confirm-btn="{ content: '确定', loading: modelSubmitting }"
       @confirm="handleSubmitModel"
     >
       <t-form ref="modelFormRef" :data="modelForm" :rules="modelRules" label-align="top">
@@ -358,7 +358,7 @@ async function handleSubmitGroup() {
       activeGroupId.value = nextGroup.id;
     }
     groupDialogVisible.value = false;
-    MessagePlugin.success(editingGroupId.value ? 'CPU 分组已更新' : 'CPU 分组已添加');
+    MessagePlugin.success(editingGroupId.value ? 'CPU 分组已更新' : 'CPU 分组已新建');
   } finally {
     groupSubmitting.value = false;
   }
@@ -403,7 +403,7 @@ async function handleSubmitModel() {
       };
     });
     modelDialogVisible.value = false;
-    MessagePlugin.success(editingModelId.value ? 'CPU 型号已更新' : 'CPU 型号已添加');
+    MessagePlugin.success(editingModelId.value ? 'CPU 型号已更新' : 'CPU 型号已新建');
   } finally {
     modelSubmitting.value = false;
   }
@@ -414,7 +414,7 @@ function handleDeleteGroup(group: CpuGroup) {
     header: '删除 CPU 分组',
     body: `确认删除「${group.name || group.id}」吗？`,
     theme: 'warning',
-    confirmBtn: '确认删除',
+    confirmBtn: { content: '确定', theme: 'danger' },
     cancelBtn: '取消',
     onConfirm() {
       rebuildCatalogState(groups.value.filter((item) => item.id !== group.id));
@@ -431,7 +431,7 @@ function handleDeleteModel(model: CpuModel) {
     header: '删除 CPU 型号',
     body: `确认删除「${model.name || model.id}」吗？`,
     theme: 'warning',
-    confirmBtn: '确认删除',
+    confirmBtn: { content: '确定', theme: 'danger' },
     cancelBtn: '取消',
     onConfirm() {
       groups.value = groups.value.map((group) => {

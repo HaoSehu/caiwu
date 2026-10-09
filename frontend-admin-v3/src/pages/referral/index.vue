@@ -46,6 +46,7 @@
         <div class="referral-filter">
           <t-input
             v-model="rewardFilters.keyword"
+            class="referral-filter-keyword"
             clearable
             placeholder="搜索推荐人 / 被推荐人 / 账单号"
             @enter="handleRewardSearch"
@@ -53,9 +54,13 @@
           >
             <template #suffix-icon><search-icon /></template>
           </t-input>
-          <t-select v-model="rewardFilters.status" clearable placeholder="奖励状态" @change="handleRewardSearch">
+          <t-select v-model="rewardFilters.status" class="referral-filter-status" clearable placeholder="奖励状态" @change="handleRewardSearch">
             <t-option v-for="item in rewardStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
           </t-select>
+          <div class="referral-filter-actions">
+            <t-button theme="primary" @click="handleRewardSearch">查询</t-button>
+            <t-button theme="default" variant="base" @click="resetRewardFilters">重置</t-button>
+          </div>
         </div>
       </t-card>
 
@@ -138,6 +143,7 @@
         <div class="referral-filter">
           <t-input
             v-model="withdrawalFilters.keyword"
+            class="referral-filter-keyword"
             clearable
             placeholder="搜索用户 / 邮箱 / 账号 / 备注"
             @enter="handleWithdrawalSearch"
@@ -147,6 +153,7 @@
           </t-input>
           <t-select
             v-model="withdrawalFilters.status"
+            class="referral-filter-status"
             clearable
             placeholder="提现状态"
             @change="handleWithdrawalSearch"
@@ -158,6 +165,10 @@
               :value="item.value"
             />
           </t-select>
+          <div class="referral-filter-actions">
+            <t-button theme="primary" @click="handleWithdrawalSearch">查询</t-button>
+            <t-button theme="default" variant="base" @click="resetWithdrawalFilters">重置</t-button>
+          </div>
         </div>
       </t-card>
 
@@ -256,7 +267,7 @@
       :header="withdrawalDialog.mode === 'approve' ? '通过提现申请' : '拒绝提现申请'"
       width="520px"
       :confirm-btn="{
-        content: withdrawalDialog.mode === 'approve' ? '确认通过' : '确认拒绝',
+        content: '确定',
         theme: withdrawalDialog.mode === 'approve' ? 'primary' : 'danger',
       }"
       :confirm-loading="withdrawalSubmitting"
@@ -338,6 +349,7 @@ const {
   pagination: rewardPagination,
   loadList: loadRewards,
   handleSearch: handleRewardSearch,
+  resetFilters: resetRewardFilters,
   handlePaginationChange: handleRewardPageChange,
 } = useListPage<ReferralFilter, ReferralRewardRecord>({
   defaultFilters: { keyword: '', status: '' },
@@ -359,6 +371,7 @@ const {
   pagination: withdrawalPagination,
   loadList: loadWithdrawals,
   handleSearch: handleWithdrawalSearch,
+  resetFilters: resetWithdrawalFilters,
   handlePaginationChange: handleWithdrawalPageChange,
 } = useListPage<ReferralFilter, ReferralWithdrawalRecord>({
   defaultFilters: { keyword: '', status: '' },

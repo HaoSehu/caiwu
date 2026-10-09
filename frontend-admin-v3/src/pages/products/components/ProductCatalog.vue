@@ -44,9 +44,9 @@
             >
               <template #icon><refresh-icon /></template>
             </t-button>
-            <t-button theme="primary" size="small" aria-label="新增二级分类" @click="openSecondCategoryDialog()">
+            <t-button theme="primary" size="small" aria-label="新建二级分类" @click="openSecondCategoryDialog()">
               <template #icon><add-icon /></template>
-              新增二级
+              新建二级
             </t-button>
           </t-space>
         </div>
@@ -119,7 +119,7 @@
             </t-dropdown>
           </div>
         </div>
-        <t-empty v-else-if="categoryOptions.length" description="无匹配分类" />
+        <t-empty v-else-if="categoryOptions.length" description="未找到匹配结果" />
         <t-empty v-else description="暂无分类" />
       </t-card>
 
@@ -169,7 +169,7 @@
           <div class="catalog-filter-actions">
             <t-button theme="primary" @click="router.push({ name: 'AdminProductCreate' })">
               <template #icon><add-icon /></template>
-              新增商品
+              新建商品
             </t-button>
           </div>
         </div>
@@ -202,12 +202,12 @@
               <t-empty
                 :description="
                   productLoading
-                    ? '正在加载...'
+                    ? '加载中...'
                     : catalogFilters.keyword ||
                         catalogFilters.status !== '' ||
                         catalogFilters.lifecycle_status !== 'active'
-                      ? '筛选无匹配商品'
-                      : '暂无商品'
+                      ? '未找到匹配结果'
+                      : '暂无数据'
                 "
               />
             </template>
@@ -320,7 +320,7 @@
               </t-button>
               <t-button theme="primary" size="small" @click="openSecondCategoryDialog()">
                 <template #icon><add-icon /></template>
-                新增二级
+                新建二级
               </t-button>
             </t-space>
           </div>
@@ -398,7 +398,7 @@
               </t-dropdown>
             </div>
           </div>
-          <t-empty v-else-if="categoryOptions.length" description="无匹配分类" />
+          <t-empty v-else-if="categoryOptions.length" description="未找到匹配结果" />
           <t-empty v-else description="暂无分类" />
         </section>
       </div>
@@ -406,7 +406,7 @@
 
     <t-drawer
       v-model:visible="productDialogVisible"
-      :header="editingProduct ? '编辑商品' : '新增商品'"
+      :header="editingProduct ? '编辑商品' : '新建商品'"
       size="860px"
       class="product-edit-drawer"
       :close-on-overlay-click="false"
@@ -708,7 +708,7 @@
       v-model:visible="batchCategoryDialogVisible"
       header="批量归类"
       width="520px"
-      :confirm-btn="{ content: '确认归类', loading: batchCategorySubmitting }"
+      :confirm-btn="{ content: '确定', loading: batchCategorySubmitting }"
       @confirm="submitBatchCategory"
     >
       <div class="batch-dialog-summary">将 {{ batchCategoryTargetKeys.length }} 个商品移动到目标分类。</div>
@@ -736,7 +736,7 @@
       header="拆分商品"
       width="680px"
       :confirm-btn="{
-        content: '确认拆分',
+        content: '确定',
         loading: splitProductSubmitting,
         disabled: splitProductPreviewLoading || !splitProductPreviewRows.length,
       }"
@@ -882,7 +882,7 @@
         <section class="type-manager-editor" :class="{ 'is-editing': editingTypeValue }">
           <div class="type-manager-editor__head">
             <div>
-              <strong>{{ editingTypeValue ? '编辑一级分类' : '新增一级分类' }}</strong>
+              <strong>{{ editingTypeValue ? '编辑一级分类' : '新建一级分类' }}</strong>
               <span v-if="editingTypeValue">{{ normalizeBusinessProductType(typeForm.product_type) }}</span>
             </div>
           </div>
@@ -915,7 +915,7 @@
               <t-form-item class="type-form-actions">
                 <t-button theme="primary" :loading="typeSubmitting" @click="submitType">
                   <template #icon><add-icon v-if="!editingTypeValue" /><edit-icon v-else /></template>
-                  {{ editingTypeValue ? '保存' : '新增' }}
+                  {{ editingTypeValue ? '保存' : '新建' }}
                 </t-button>
                 <t-button variant="outline" @click="resetTypeForm">{{
                   editingTypeValue ? '取消编辑' : '重置'
@@ -1379,7 +1379,7 @@ const editingCategoryHasChildren = computed(() => {
 });
 const categoryDialogHeader = computed(() => {
   if (editingCategory.value) return '编辑分类';
-  return creatingThirdCategoryParent.value ? '新增三级分类' : '新增二级分类';
+  return creatingThirdCategoryParent.value ? '新建三级分类' : '新建二级分类';
 });
 const categoryParentFieldVisible = computed(() => {
   if (creatingThirdCategoryParent.value) return true;
@@ -1828,7 +1828,7 @@ function categoryMenuOptions(row: ProductCategoryRecord): DropdownOption[] {
     { content: '下移', value: 'down', disabled: !canMoveCategory(row, 'down') },
   ];
   if (productGroupLevel(row) === 2) {
-    options.push({ content: '新增三级分类', value: 'create-child', divider: true });
+    options.push({ content: '新建三级分类', value: 'create-child', divider: true });
   }
   options.push(
     { content: '编辑', value: 'edit', divider: productGroupLevel(row) !== 2 },
@@ -2025,7 +2025,7 @@ function deleteType(type: ProductTypeRecord) {
     header: '删除一级分类',
     body: `确认删除「${type.label || type.value}」吗？`,
     theme: 'warning',
-    confirmBtn: '确认删除',
+    confirmBtn: { content: '确定', theme: 'danger' },
     cancelBtn: '取消',
     async onConfirm() {
       typeSubmitting.value = true;
@@ -2803,7 +2803,7 @@ async function handleToggleProduct(row: ProductRecord) {
   const dialog = DialogPlugin.confirm({
     header: `${actionLabel}商品`,
     body: `确定${actionLabel}「${row.display_name || row.name || row.id}」吗？${newStatus ? '' : '隐藏后前台不显示，可在筛选中找回。'}`,
-    confirmBtn: `确认${actionLabel}`,
+    confirmBtn: { content: '确定', theme: 'primary' },
     cancelBtn: '取消',
     async onConfirm() {
       productActionLoading.value = row.id;
@@ -2826,7 +2826,7 @@ function handleDeleteProduct(row: ProductRecord) {
     header: '删除商品',
     body: `确认删除「${row.display_name || row.name || row.id}」吗？${Number(row.active_services_count ?? row.services_count ?? 0) > 0 ? ` 该商品下有 ${row.active_services_count ?? row.services_count} 个现存服务，删除后可能影响已开通实例。` : ''}`,
     theme: 'warning',
-    confirmBtn: '确认删除',
+    confirmBtn: { content: '确定', theme: 'danger' },
     cancelBtn: '取消',
     async onConfirm() {
       productActionLoading.value = row.id;
@@ -2851,7 +2851,7 @@ function handleRestoreProduct(row: ProductRecord) {
   const dialog = DialogPlugin.confirm({
     header: '恢复商品',
     body: `确认恢复《${row.display_name || row.name || row.id}》吗？`,
-    confirmBtn: '确认恢复',
+    confirmBtn: { content: '确定', theme: 'primary' },
     cancelBtn: '取消',
     async onConfirm() {
       productActionLoading.value = `restore:${row.id}`;
@@ -2874,7 +2874,7 @@ function handleForceDeleteProduct(row: ProductRecord) {
     header: '彻底删除商品',
     body: `确认彻底删除《${row.display_name || row.name || row.id}》吗？该操作不可恢复。`,
     theme: 'warning',
-    confirmBtn: '确认彻底删除',
+    confirmBtn: { content: '确定', theme: 'danger' },
     cancelBtn: '取消',
     async onConfirm() {
       productActionLoading.value = `force:${row.id}`;
@@ -2985,7 +2985,7 @@ function handleDeleteCategory(row: ProductCategoryRecord) {
     header: '删除分类',
     body: `确认删除「${row.name || row.label || row.id}」吗？`,
     theme: 'warning',
-    confirmBtn: '确认删除',
+    confirmBtn: { content: '确定', theme: 'danger' },
     cancelBtn: '取消',
     async onConfirm() {
       categorySubmitting.value = true;

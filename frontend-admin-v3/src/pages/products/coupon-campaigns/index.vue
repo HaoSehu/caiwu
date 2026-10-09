@@ -4,6 +4,7 @@
       <div class="campaigns-filter">
         <t-input
           v-model="filters.keyword"
+          class="campaigns-filter-keyword"
           clearable
           placeholder="搜索活动名称 / 描述 / 备注"
           @enter="handleSearch"
@@ -11,14 +12,18 @@
         >
           <template #suffix-icon><search-icon /></template>
         </t-input>
-        <t-select v-model="filters.status" clearable placeholder="状态" @change="handleSearch">
+        <t-select v-model="filters.status" class="campaigns-filter-status" clearable placeholder="状态" @change="handleSearch">
           <t-option value="1" label="运行中" />
           <t-option value="0" label="已停用" />
         </t-select>
-        <t-button theme="primary" :disabled="!canManage" @click="openCampaignDialog()">
-          <template #icon><add-icon /></template>
-          新增活动
-        </t-button>
+        <div class="campaigns-filter-actions">
+          <t-button theme="primary" @click="handleSearch">查询</t-button>
+          <t-button theme="default" variant="base" @click="resetFilters">重置</t-button>
+          <t-button theme="primary" :disabled="!canManage" @click="openCampaignDialog()">
+            <template #icon><add-icon /></template>
+            新建活动
+          </t-button>
+        </div>
       </div>
 
       <div v-if="!isMobile" class="table-scroll">
@@ -165,7 +170,7 @@
 
     <t-drawer
       v-model:visible="dialogVisible"
-      :header="form.id ? '编辑优惠券活动' : '新增优惠券活动'"
+      :header="form.id ? '编辑优惠券活动' : '新建优惠券活动'"
       size="820px"
       class="campaign-edit-drawer"
       :close-on-overlay-click="false"
@@ -366,6 +371,7 @@ const {
   pagination,
   loadList,
   handleSearch,
+  resetFilters,
   handlePaginationChange,
 } = useListPage<CampaignFilter, CouponCampaignRecord>({
   defaultFilters: { keyword: '', status: '' },
@@ -588,7 +594,7 @@ function handleTrigger(row: CouponCampaignRecord) {
     header: '立即发放',
     body: `确认立即发放活动「${row.name || row.id}」的新一批优惠券吗？`,
     theme: 'warning',
-    confirmBtn: '确认发放',
+    confirmBtn: { content: '确定', theme: 'primary' },
     cancelBtn: '取消',
     async onConfirm() {
       await runRowAction(row, 'trigger', '发放活动批次失败', async () => {
@@ -626,7 +632,7 @@ function handleDelete(row: CouponCampaignRecord) {
     header: '删除活动',
     body: `确认删除活动「${row.name || row.id}」吗？仅未生成批次的活动可删除。`,
     theme: 'warning',
-    confirmBtn: '确认删除',
+    confirmBtn: { content: '确定', theme: 'danger' },
     cancelBtn: '取消',
     async onConfirm() {
       await runRowAction(row, 'delete', '删除活动失败', async () => {

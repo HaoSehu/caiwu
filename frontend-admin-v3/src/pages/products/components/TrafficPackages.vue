@@ -350,7 +350,7 @@ function removeTrafficGroup(group: TrafficPackageGroup) {
   const dialog = DialogPlugin.confirm({
     header: '删除流量包分组',
     body: `删除分组「${group.name}」后，该分组下的流量包配置也会一并移除，是否继续？`,
-    confirmBtn: { content: '确认删除', theme: 'danger' },
+    confirmBtn: { content: '确定', theme: 'danger' },
     cancelBtn: '取消',
     async onConfirm() {
       try {

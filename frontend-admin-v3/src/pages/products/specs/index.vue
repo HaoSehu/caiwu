@@ -60,9 +60,9 @@
 
     <t-dialog
       v-model:visible="specDialogVisible"
-      :header="editingSpecId ? '编辑实例规格' : '新增实例规格'"
+      :header="editingSpecId ? '编辑实例规格' : '新建实例规格'"
       width="540px"
-      :confirm-btn="{ content: '确认', loading: dialogSubmitting }"
+      :confirm-btn="{ content: '确定', loading: dialogSubmitting }"
       @confirm="handleSubmitSpec"
       @closed="handleDialogClosed"
     >
@@ -266,7 +266,7 @@ async function handleSubmitSpec() {
         ),
       ];
     }
-    MessagePlugin.success(editingSpecId.value ? '实例规格已更新' : '实例规格已添加');
+    MessagePlugin.success(editingSpecId.value ? '实例规格已更新' : '实例规格已新建');
     specDialogVisible.value = false;
   } finally {
     dialogSubmitting.value = false;
@@ -278,7 +278,7 @@ function handleDeleteSpec(row: SpecRecord) {
     header: '删除实例规格',
     body: `确认删除「${row.text || row.id}」吗？`,
     theme: 'warning',
-    confirmBtn: '确认删除',
+    confirmBtn: { content: '确定', theme: 'danger' },
     cancelBtn: '取消',
     onConfirm() {
       specs.value = specs.value.filter((item) => item.id !== row.id);
