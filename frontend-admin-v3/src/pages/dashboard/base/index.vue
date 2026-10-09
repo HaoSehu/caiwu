@@ -5,7 +5,13 @@
 
       <section class="chart-grid">
         <t-card :bordered="false" title="商品收入占比" :subtitle="monthLabel || '本月'">
-          <div v-if="positiveChartData.length" ref="productChartRef" class="chart-box" />
+          <div
+            v-if="positiveChartData.length"
+            ref="productChartRef"
+            class="chart-box"
+            role="img"
+            :aria-label="`商品收入占比环形图，${monthLabel || '本月'}共 ${positiveChartData.length} 个商品分类`"
+          />
           <t-empty
             v-else
             class="chart-empty"
@@ -13,11 +19,23 @@
             description="整月退款冲抵或暂无已付收入时不生成占比图。"
           />
           <div v-if="refundAdjustment > 0" class="chart-refund-note">
-            含退款冲抵：{{ formatCurrency(refundAdjustment) }}
+            含退款冲抵：{{ formatMoney(refundAdjustment) }}
           </div>
         </t-card>
         <t-card :bordered="false" title="每日收入趋势" :subtitle="monthLabel || '本月'">
-          <div ref="dailyChartRef" class="chart-box" />
+          <div
+            v-if="dailyRevenue.length"
+            ref="dailyChartRef"
+            class="chart-box"
+            role="img"
+            :aria-label="`每日收入趋势折线图，${monthLabel || '本月'}共 ${dailyRevenue.length} 天`"
+          />
+          <t-empty
+            v-else
+            class="chart-empty"
+            title="暂无收入趋势"
+            description="本月尚未产生已付账单，或收入数据加载失败。"
+          />
         </t-card>
       </section>
 
@@ -36,8 +54,15 @@
           <template #invoice_no="{ row }">
             <span class="invoice-no">{{ row.invoice_no || `#${row.id}` }}</span>
           </template>
+          <template #user="{ row }">
+            <div class="stack-cell">
+              <strong>{{ fieldValue(row.user?.nickname) }}</strong>
+              <span>{{ fieldValue(row.user?.email) }}</span>
+            </div>
+          </template>
+          <template #type="{ row }">{{ invoiceTypeLabel(row.type) }}</template>
           <template #amount="{ row }">
-            <strong>{{ formatCurrency(row.amount) }}</strong>
+            <span class="t-num-strong">{{ formatMoney(row.amount) }}</span>
           </template>
           <template #status="{ row }">
             <status-tag :status-map="INVOICE_STATUS_MAP" :status="row.status" />
@@ -46,7 +71,7 @@
             <span class="muted">{{ formatDateTime(row.created_at) }}</span>
           </template>
         </t-table>
-        <t-empty v-else title="暂无最近账单" description="有新购、续费或充值账单后会显示在这里。">
+        <t-empty v-else title="暂无数据" description="有新购、续费或充值账单后会显示在这里。">
           <t-button theme="primary" variant="outline" @click="router.push('/admin/finance/invoices')"
             >进入账单列表</t-button
           >
@@ -56,7 +81,7 @@
   </t-loading>
 </template>
 <script setup lang="ts">
-import { INVOICE_STATUS_MAP } from '@shared/statusConfig';
+import { INVOICE_STATUS_MAP, INVOICE_TYPE_MAP } from '@shared/statusConfig';
 import {
   computed,
   nextTick,
@@ -74,7 +99,8 @@ import type { DashboardStats, MonthlyRevenue, RecentInvoice } from '@/api/admin'
 import { adminApi } from '@/api/admin';
 import StatusTag from '@/components/status-tag/index.vue';
 import echarts from '@/utils/echarts';
-import { formatDateTime } from '@/utils/format';
+import { getChartListColor } from '@/utils/color';
+import { fieldValue, formatDateTime, formatMoney } from '@/utils/format';
 
 import TopPanel from './components/TopPanel.vue';
 
@@ -94,9 +120,11 @@ let productChart: echarts.ECharts | null = null;
 let dailyChart: echarts.ECharts | null = null;
 
 const invoiceColumns = [
-  { colKey: 'invoice_no', title: '账单号', minWidth: 180 },
-  { colKey: 'amount', title: '金额', width: 140, align: 'right' },
-  { colKey: 'status', title: '状态', width: 120 },
+  { colKey: 'invoice_no', title: '账单号', minWidth: 170 },
+  { colKey: 'user', title: '用户', minWidth: 170 },
+  { colKey: 'type', title: '类型', width: 110 },
+  { colKey: 'amount', title: '金额', width: 130, align: 'right' as const },
+  { colKey: 'status', title: '状态', width: 110, align: 'center' as const },
   { colKey: 'created_at', title: '创建时间', width: 180 },
 ];
 
@@ -122,52 +150,93 @@ const refundAdjustment = computed(() =>
   productChartData.value.filter((item) => item.value < 0).reduce((sum, item) => sum - item.value, 0),
 );
 
-function formatCurrency(value: unknown) {
-  return `¥${Number(value || 0).toFixed(2)}`;
+/** 读取 TDesign 主题令牌，保证图表配色与浅色主题一致 */
+function themeToken(name: string, fallback: string): string {
+  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return value || fallback;
 }
 
-function ensureCharts() {
-  if (productChartRef.value && !productChart) {
+function invoiceTypeLabel(type?: unknown) {
+  return INVOICE_TYPE_MAP[String(type || '')] || fieldValue(type);
+}
+
+function renderProductChart() {
+  // 数据为空时容器被 v-if 卸载，须释放实例，避免向脱离文档的节点写入
+  if (!positiveChartData.value.length || !productChartRef.value) {
+    productChart?.dispose();
+    productChart = null;
+    return;
+  }
+  if (!productChart) {
     productChart = echarts.init(productChartRef.value);
   }
-  if (dailyChartRef.value && !dailyChart) {
-    dailyChart = echarts.init(dailyChartRef.value);
-  }
-}
-
-function renderCharts() {
-  ensureCharts();
-
-  productChart?.setOption({
-    tooltip: { trigger: 'item' },
-    legend: { bottom: 0, type: 'scroll' },
+  productChart.setOption({
+    color: getChartListColor(),
+    tooltip: {
+      trigger: 'item',
+      valueFormatter: (value: unknown) => formatMoney(value),
+    },
+    legend: { bottom: 0, type: 'scroll', icon: 'circle' },
     series: [
       {
         type: 'pie',
         radius: ['45%', '70%'],
         center: ['50%', '42%'],
-        data: productChartData.value,
+        itemStyle: { borderColor: themeToken('--td-bg-color-container', '#ffffff'), borderWidth: 2 },
+        label: { formatter: '{b}\n{d}%', color: themeToken('--td-text-color-secondary', '#5B6B82') },
+        data: positiveChartData.value,
       },
     ],
   });
+}
 
-  dailyChart?.setOption({
-    tooltip: { trigger: 'axis' },
-    grid: { left: 36, right: 24, top: 24, bottom: 36 },
+function renderDailyChart() {
+  if (!dailyRevenue.value.length || !dailyChartRef.value) {
+    dailyChart?.dispose();
+    dailyChart = null;
+    return;
+  }
+  if (!dailyChart) {
+    dailyChart = echarts.init(dailyChartRef.value);
+  }
+  const axisColor = themeToken('--td-text-color-placeholder', '#606D80');
+  const splitColor = themeToken('--td-border-level-1-color', '#E5EAF3');
+  const brandColor = themeToken('--td-brand-color', '#165DFF');
+
+  dailyChart.setOption({
+    color: [brandColor],
+    tooltip: {
+      trigger: 'axis',
+      valueFormatter: (value: unknown) => formatMoney(value),
+    },
+    grid: { left: 56, right: 24, top: 24, bottom: 36 },
     xAxis: {
       type: 'category',
+      boundaryGap: false,
       data: dailyRevenue.value.map((item) => item.date || item.day || ''),
+      axisLabel: { color: axisColor },
+      axisLine: { lineStyle: { color: splitColor } },
     },
-    yAxis: { type: 'value' },
+    yAxis: {
+      type: 'value',
+      axisLabel: { color: axisColor, formatter: (value: number) => formatMoney(value) },
+      splitLine: { lineStyle: { color: splitColor } },
+    },
     series: [
       {
         type: 'line',
         smooth: true,
-        areaStyle: {},
+        showSymbol: false,
+        areaStyle: { opacity: 0.12 },
         data: dailyRevenue.value.map((item) => Number(item.income ?? item.amount ?? 0)),
       },
     ],
   });
+}
+
+function renderCharts() {
+  renderProductChart();
+  renderDailyChart();
 }
 
 function resizeCharts() {
@@ -181,6 +250,13 @@ function scheduleResizeCharts() {
     resizeFrame = 0;
     resizeCharts();
   });
+}
+
+function disposeCharts() {
+  productChart?.dispose();
+  productChart = null;
+  dailyChart?.dispose();
+  dailyChart = null;
 }
 
 async function loadDashboard() {
@@ -221,10 +297,7 @@ onActivated(() => {
 
 onDeactivated(() => {
   // 切走时释放 echarts 实例，避免常驻内存
-  productChart?.dispose();
-  productChart = null;
-  dailyChart?.dispose();
-  dailyChart = null;
+  disposeCharts();
 });
 
 onBeforeUnmount(() => {
@@ -233,10 +306,7 @@ onBeforeUnmount(() => {
     window.cancelAnimationFrame(resizeFrame);
     resizeFrame = 0;
   }
-  productChart?.dispose();
-  productChart = null;
-  dailyChart?.dispose();
-  dailyChart = null;
+  disposeCharts();
 });
 </script>
 <style lang="less" scoped>
@@ -264,7 +334,8 @@ onBeforeUnmount(() => {
 .chart-refund-note {
   margin-top: var(--td-comp-margin-s);
   color: var(--td-text-color-placeholder);
-  font-size: var(--td-font-size-body-small);
+  font-size: var(--td-font-size-body-small, 12px);
+  font-variant-numeric: tabular-nums;
   text-align: center;
 }
 
@@ -272,8 +343,32 @@ onBeforeUnmount(() => {
   padding: var(--td-comp-paddingTB-xxl) 0;
 }
 
+.stack-cell {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.stack-cell strong {
+  overflow: hidden;
+  color: var(--td-text-color-primary);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stack-cell span {
+  overflow: hidden;
+  color: var(--td-text-color-secondary);
+  font-size: var(--td-font-size-body-small, 12px);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .invoice-no {
   font-family: SFMono-Regular, Consolas, 'Liberation Mono', monospace;
+  font-variant-numeric: tabular-nums;
 }
 
 .muted {

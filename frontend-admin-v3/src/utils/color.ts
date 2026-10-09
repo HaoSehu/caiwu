@@ -1,4 +1,3 @@
-import type * as echarts from 'echarts/core';
 import { trim } from 'lodash-es';
 import { Color } from 'tvision-color';
 
@@ -25,31 +24,6 @@ export function getColorFromTheme(): Array<string> {
 /** 图表颜色 */
 export function getChartListColor(): Array<string> {
   return getColorFromTheme();
-}
-
-/**
- * 更改图表主题颜色
- *
- * @export
- * @param {Array<string>} chartsList
- */
-export function changeChartsTheme(chartsList: echarts.EChartsType[]): void {
-  if (chartsList && chartsList.length) {
-    const chartChangeColor = getChartListColor();
-
-    for (let index = 0; index < chartsList.length; index++) {
-      const elementChart = chartsList[index];
-
-      if (elementChart) {
-        const optionVal = elementChart.getOption();
-
-        // 更改主题颜色
-        optionVal.color = chartChangeColor;
-
-        elementChart.setOption(optionVal, true);
-      }
-    }
-  }
 }
 
 /**
