@@ -100,7 +100,7 @@
         <div v-if="categoryTreeRows.length" class="category-tree" role="tree" aria-label="商品分类树">
           <div
             v-for="{ node: item, level, childCount } in categoryTreeRows"
-            :key="String(item.id)"
+            :key="categoryIdKey(item)"
             class="category-tree-row"
             :class="{
               active: isCategoryRowActive(item),
@@ -126,9 +126,7 @@
             <button type="button" class="category-drag" aria-label="排序占位" disabled>::</button>
             <button type="button" class="category-tree-main" @click="handleCategorySelect(item)">
               <span class="category-title-line">
-                <span class="category-level-tag" :class="`category-level-${level}`">{{
-                  level === 0 ? '一级' : '二级'
-                }}</span>
+                <span class="category-level-tag" :class="categoryLevelClass(item)">{{ categoryLevelLabel(item) }}</span>
                 <span class="category-name" :class="{ 'is-hidden': !isCategoryVisible(item) }">
                   {{ categoryDisplayName(item) }}
                 </span>
@@ -345,7 +343,7 @@
           >
             <div
               v-for="{ node: item, level, childCount } in categoryTreeRows"
-              :key="String(item.id)"
+              :key="categoryIdKey(item)"
               class="category-tree-row"
               :class="{
                 active: isCategoryRowActive(item),
@@ -371,8 +369,8 @@
               <button type="button" class="category-drag" aria-label="排序占位" disabled>::</button>
               <button type="button" class="category-tree-main" @click="handleMobileCategorySelect(item)">
                 <span class="category-title-line">
-                  <span class="category-level-tag" :class="`category-level-${level}`">{{
-                    level === 0 ? '一级' : '二级'
+                  <span class="category-level-tag" :class="categoryLevelClass(item)">{{
+                    categoryLevelLabel(item)
                   }}</span>
                   <span class="category-name" :class="{ 'is-hidden': !isCategoryVisible(item) }">
                     {{ categoryDisplayName(item) }}
@@ -1479,6 +1477,24 @@ function categoryIdKey(row: ProductCategoryRecord) {
 
 function categoryDisplayName(row: ProductCategoryRecord) {
   return String(row.name || row.label || `分类 #${row.id}`).trim();
+}
+
+// 分类树按真实层级标注：一级=产品目录、二级=地区、三级=可用区（树中一级已被顶部菜单吸收）。
+function categoryLevelClass(row: ProductCategoryRecord) {
+  return `category-level-${productGroupLevel(row)}`;
+}
+
+function categoryLevelLabel(row: ProductCategoryRecord) {
+  switch (productGroupLevel(row)) {
+    case 1:
+      return '一级';
+    case 2:
+      return '二级';
+    case 3:
+      return '三级';
+    default:
+      return '分类';
+  }
 }
 
 function isCategoryVisible(row: ProductCategoryRecord) {

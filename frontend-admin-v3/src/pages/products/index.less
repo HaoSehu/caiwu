@@ -740,17 +740,6 @@
   white-space: nowrap;
 }
 
-.category-panel-title span {
-  flex: 0 0 auto;
-  border-radius: var(--td-radius-round);
-  padding: 1px 8px;
-  background: var(--td-bg-color-component);
-  color: var(--td-text-color-secondary);
-  font-size: var(--td-font-size-size-1, 12px);
-  font-weight: 600;
-  white-space: nowrap;
-}
-
 .category-panel-head .t-space {
   flex-shrink: 0;
 }
@@ -909,12 +898,18 @@
   user-select: none;
 }
 
-.category-level-tag.category-level-0 {
+/* 层级色板按真实层级（1/2/3）而非展示层级取色，避免树被提升后颜色错位 */
+.category-level-tag.category-level-1 {
+  color: var(--td-brand-color);
+  background: var(--td-brand-color-light);
+}
+
+.category-level-tag.category-level-2 {
   color: var(--td-text-color-secondary);
   background: var(--td-bg-color-component);
 }
 
-.category-level-tag.category-level-1 {
+.category-level-tag.category-level-3 {
   color: var(--td-brand-color);
   background: var(--td-brand-color-light);
 }
@@ -2576,10 +2571,6 @@ button.supplier-tree-node__content {
 
   .category-panel-title strong {
     font-size: var(--td-font-size-size-3, 14px);
-  }
-
-  .category-panel-title span {
-    padding: 1px 6px;
   }
 
   .category-tree {
