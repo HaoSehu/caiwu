@@ -5,7 +5,7 @@
       :class="`${prefix}-side-nav-mask`"
       @click="closeMobileSidebar"
     ></div>
-    <nav :class="sideNavCls" :aria-label="t('common.appName')">
+    <nav :class="sideNavCls" :aria-label="t('layout.sideNavLabel')">
       <t-menu
         :class="menuCls"
         :theme="theme"
@@ -21,7 +21,7 @@
             v-if="showLogo"
             :class="`${prefix}-side-nav-logo-wrapper`"
             type="button"
-            :aria-label="t('common.appName')"
+            :aria-label="t('layout.sideNavLogo')"
             @click="goHome"
           >
             <component :is="getLogo()" :class="logoCls" />
@@ -114,6 +114,14 @@ watch(
   },
 );
 
+// 菜单数据异步构建完成后需要重算展开分支，否则刷新时分组会停留在收起态
+watch(
+  () => menu,
+  () => {
+    getExpanded();
+  },
+);
+
 const onExpanded = (value: MenuValue[]) => {
   const openedMenus = value.filter((item) => !hasMenuValue(expanded.value, item));
   const latestOpenedMenu = openedMenus.at(-1);
@@ -169,11 +177,21 @@ const menuCls = computed(() => {
 const autoCollapsed = () => {
   const mobile = window.innerWidth <= MOBILE_POINT;
   const isCompact = !mobile && window.innerWidth <= MIN_POINT;
+  const isMobileSidebarVisible = mobile ? settingStore.isMobileSidebarVisible : false;
+
+  // resize 高频触发：仅在计算结果变化时写入 store，避免无意义的全局重渲染
+  if (
+    isMobile.value === mobile &&
+    settingStore.isSidebarCompact === isCompact &&
+    settingStore.isMobileSidebarVisible === isMobileSidebarVisible
+  ) {
+    return;
+  }
 
   isMobile.value = mobile;
   settingStore.updateConfig({
     isSidebarCompact: isCompact,
-    isMobileSidebarVisible: mobile ? settingStore.isMobileSidebarVisible : false,
+    isMobileSidebarVisible,
   });
 };
 

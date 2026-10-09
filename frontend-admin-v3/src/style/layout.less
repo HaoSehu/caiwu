@@ -301,7 +301,7 @@
   width: 232px;
   padding: var(--td-comp-paddingTB-s) var(--td-comp-paddingLR-s);
   background: var(--td-bg-color-container);
-  border-right: 1px solid var(--td-component-border);
+  border-right: 1px solid var(--td-border-level-1-color);
 
   .t-menu__logo {
     height: auto;
@@ -314,7 +314,7 @@
     line-height: var(--td-comp-size-l);
     font-size: var(--td-font-size-body-medium);
     font-weight: 400;
-    border-radius: var(--td-radius-medium);
+    border-radius: var(--td-radius-default);
     transition:
       color @anim-duration-base @anim-time-fn-easing,
       background-color @anim-duration-base @anim-time-fn-easing;
@@ -421,10 +421,11 @@
         background-color: var(--td-bg-color-container-hover);
       }
 
+      // 选中态统一为品牌色文字 + 主色浅底，与一级菜单选中语义保持一致
       &.t-is-active {
-        color: var(--td-text-color-primary);
-        font-weight: 400;
-        background-color: var(--td-bg-color-page);
+        color: var(--td-brand-color);
+        font-weight: 500;
+        background-color: var(--td-brand-color-light);
       }
     }
 
@@ -445,7 +446,7 @@
         &.t-is-active {
           color: var(--td-brand-color);
           font-weight: 500;
-          background-color: var(--td-bg-color-container);
+          background-color: var(--td-brand-color-light);
         }
       }
     }
@@ -459,7 +460,7 @@
   .t-menu__operations {
     padding-top: var(--td-comp-paddingTB-s);
     margin-top: var(--td-comp-margin-s);
-    border-top: 1px solid var(--td-component-border);
+    border-top: 1px solid var(--td-border-level-1-color);
   }
 
   .@{starter-prefix}-side-nav-version {

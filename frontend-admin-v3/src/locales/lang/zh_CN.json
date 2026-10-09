@@ -50,6 +50,8 @@
   },
   "layout": {
     "skipToContent": "跳到主内容",
+    "sideNavLabel": "管理端主导航",
+    "sideNavLogo": "返回首页",
     "header": {
       "code": "代码仓库",
       "help": "帮助文档",

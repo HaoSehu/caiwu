@@ -7,6 +7,7 @@ import {
   GiftIcon,
   ServerIcon,
   ShopIcon,
+  SystemLogIcon,
   ToolsIcon,
   UserCircleIcon,
 } from 'tdesign-icons-vue-next';
@@ -15,9 +16,9 @@ import type { RouteRecordRaw } from 'vue-router';
 
 import { hasPermissionInList } from '@/constants/permissions';
 import type { LocalizedTitle } from '@/locales';
-import type { MenuRoute } from '@/types/interface';
 import router, { homepageRouterList } from '@/router';
 import { store } from '@/store';
+import type { MenuRoute } from '@/types/interface';
 
 interface MenuRouteConfig {
   path: string;
@@ -223,7 +224,7 @@ const ADMIN_MENU_GROUPS: MenuGroupConfig[] = [
   {
     path: '/admin/menu/log-center',
     title: { zh_CN: '日志中心', en_US: 'Log Center' },
-    icon: shallowRef(FileIcon),
+    icon: shallowRef(SystemLogIcon),
     orderNo: 80,
     children: [
       {
