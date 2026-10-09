@@ -1,7 +1,7 @@
 <template>
   <t-dialog
     v-model:visible="ruleVisible"
-    header="新增安全组规则"
+    header="新建安全组规则"
     width="min(34rem, calc(100vw - 2rem))"
     destroy-on-close
   >

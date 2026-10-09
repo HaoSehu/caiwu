@@ -2,7 +2,7 @@
   <section class="service-console service-console--compute">
     <console-breadcrumb />
 
-    <loading-state :loading="detailLoading" text="正在加载云服务器控制台">
+    <loading-state :loading="detailLoading" text="数据加载中...">
       <console-header />
       <console-alerts />
 

@@ -73,7 +73,7 @@
         </div>
         <t-empty
           v-else
-          :description="securityState.canCreate ? '当前没有安全组，可先创建后再添加规则' : '当前没有可应用的安全组'"
+          :description="securityState.canCreate ? '当前没有安全组，可先新建后再配置规则' : '当前没有可应用的安全组'"
         />
 
         <div v-if="activeSecurityGroup" class="security-rules-panel">
@@ -86,7 +86,7 @@
               theme="primary"
               :disabled="!activeSecurityGroup.can_add_rule || securityState.submitting"
               @click="openSecurityRuleDialog"
-              >新增规则</t-button
+              >新建规则</t-button
             >
           </div>
 

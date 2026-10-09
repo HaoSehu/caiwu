@@ -84,10 +84,10 @@ export function useConsoleReinstall(options: UseConsoleReinstallOptions) {
 
     const confirmed = await new Promise<boolean>((resolve) => {
       const dialog = DialogPlugin.confirm({
-        header: '确认重装系统',
+        header: '重装系统',
         body: '重装系统后，当前系统盘中的所有数据将被永久清除且不可恢复，确定要重装系统吗？',
         theme: 'danger',
-        confirmBtn: { content: '确认重装', theme: 'danger' },
+        confirmBtn: { content: '确定', theme: 'danger' },
         onConfirm: () => {
           dialog.destroy();
           resolve(true);

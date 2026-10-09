@@ -100,10 +100,10 @@ export function useReferral() {
     return code && typeof window !== 'undefined' ? `${window.location.origin}/client/register?ref=${code}` : '--';
   });
   const summaryCards = computed(() => [
-    { key: 'available', label: '可提现余额', value: `￥${availableAmountText.value}`, primary: true },
-    { key: 'frozen', label: '冻结中', value: `￥${frozenAmountText.value}` },
-    { key: 'total', label: '累计奖励', value: `￥${totalRewardText.value}` },
-    { key: 'withdrawn', label: '已提现', value: `￥${withdrawnAmountText.value}` },
+    { key: 'available', label: '可提现余额', value: `¥${availableAmountText.value}`, primary: true },
+    { key: 'frozen', label: '冻结中', value: `¥${frozenAmountText.value}` },
+    { key: 'total', label: '累计奖励', value: `¥${totalRewardText.value}` },
+    { key: 'withdrawn', label: '已提现', value: `¥${withdrawnAmountText.value}` },
     { key: 'direct', label: '直推人数', value: `${Number(overview.direct_referral_count || 0)} 人` },
     { key: 'orders', label: '奖励账单数', value: `${Number(overview.rewarded_orders_count || 0)} 单` },
   ]);

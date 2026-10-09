@@ -148,8 +148,8 @@ export function useInvoiceList() {
     const dialog = DialogPlugin.confirm({
       header: '取消账单',
       body: '确定取消该账单？取消后不可恢复，使用的优惠券会退回账户；新产品购买的库存将被释放。',
-      confirmBtn: '确认取消',
-      cancelBtn: '再想想',
+      confirmBtn: '确定',
+      cancelBtn: '取消',
       theme: 'warning',
       async onConfirm() {
         dialog.setConfirmLoading(true);
@@ -445,8 +445,8 @@ export function useInvoiceDetail() {
     const dialog = DialogPlugin.confirm({
       header: '取消账单',
       body: '取消后需重新创建账单才能继续支付，确认取消吗？',
-      confirmBtn: '确认取消',
-      cancelBtn: '再想想',
+      confirmBtn: '确定',
+      cancelBtn: '取消',
       theme: 'warning',
       async onConfirm() {
         dialog.setConfirmLoading(true);
@@ -495,7 +495,7 @@ export function useInvoiceDetail() {
     const dialog = DialogPlugin.confirm({
       header: '余额支付',
       body: `确认使用账户余额支付 ¥${formatMoney(payableAmount.value)} 吗？`,
-      confirmBtn: '确认支付',
+      confirmBtn: '确定',
       cancelBtn: '取消',
       theme: 'warning',
       async onConfirm() {

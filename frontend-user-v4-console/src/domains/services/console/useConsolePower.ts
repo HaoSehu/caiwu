@@ -47,9 +47,9 @@ export function useConsolePower(options: UseConsolePowerOptions) {
   function handlePowerAction(action: string) {
     const label = POWER_LABELS[action] || action;
     const dialog = DialogPlugin.confirm({
-      header: `${label}确认`,
+      header: `${label}`,
       body: `确认对实例 ${detail.value.name || `#${serviceId.value}`} 执行“${label}”操作吗？`,
-      confirmBtn: `确认${label}`,
+      confirmBtn: '确定',
       cancelBtn: '取消',
       theme: ['hard_off', 'hard_reboot'].includes(action) ? 'danger' : 'warning',
       async onConfirm() {

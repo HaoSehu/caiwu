@@ -1,5 +1,5 @@
 <template>
-  <t-dialog v-model:visible="groupVisible" header="新增安全组" width="min(30rem, calc(100vw - 2rem))" destroy-on-close>
+  <t-dialog v-model:visible="groupVisible" header="新建安全组" width="min(30rem, calc(100vw - 2rem))" destroy-on-close>
     <div class="dialog-form">
       <label>
         <span>名称</span>

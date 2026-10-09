@@ -2,7 +2,7 @@
   <section class="service-console service-console--nat">
     <console-breadcrumb />
 
-    <loading-state :loading="detailLoading" text="正在加载端口映射控制台">
+    <loading-state :loading="detailLoading" text="数据加载中...">
       <console-header />
       <console-alerts />
 

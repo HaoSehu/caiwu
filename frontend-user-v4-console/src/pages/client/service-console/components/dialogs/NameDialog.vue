@@ -1,5 +1,5 @@
 <template>
-  <t-dialog v-model:visible="nameVisible" header="修改实例名称" width="min(28rem, calc(100vw - 2rem))" destroy-on-close>
+  <t-dialog v-model:visible="nameVisible" header="编辑实例名称" width="min(28rem, calc(100vw - 2rem))" destroy-on-close>
     <t-input v-model="nameForm.name" :maxlength="120" placeholder="填写便于识别的实例名称" />
     <template #footer>
       <t-button variant="outline" @click="nameVisible = false">取消</t-button>

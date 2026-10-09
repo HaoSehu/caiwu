@@ -225,7 +225,7 @@ export function useConsoleSecurity(options: UseConsoleSecurityOptions) {
       header: '删除安全组',
       body: `确认删除安全组“${group.name || group.id}”吗？`,
       theme: 'warning',
-      confirmBtn: '确认删除',
+      confirmBtn: '确定',
       cancelBtn: '取消',
       onConfirm: async () => {
         dialog.setConfirmLoading(true);
@@ -287,7 +287,7 @@ export function useConsoleSecurity(options: UseConsoleSecurityOptions) {
       header: '删除规则',
       body: '确认删除该安全组规则吗？',
       theme: 'warning',
-      confirmBtn: '确认删除',
+      confirmBtn: '确定',
       cancelBtn: '取消',
       onConfirm: async () => {
         dialog.setConfirmLoading(true);

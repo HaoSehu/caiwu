@@ -25,7 +25,7 @@
       </div>
     </div>
 
-    <t-loading :loading="loading" text="正在加载账单详情">
+    <t-loading :loading="loading" text="数据加载中...">
       <template v-if="detail">
         <!-- 标签页 -->
         <t-card :bordered="false" class="invoice-detail-tabs-card">
@@ -284,9 +284,10 @@ onMounted(() => {
   }
 
   strong {
-    font-weight: 500;
+    font-weight: 600;
     color: var(--td-text-color-primary);
     word-break: break-all;
+    font-variant-numeric: tabular-nums;
   }
 }
 

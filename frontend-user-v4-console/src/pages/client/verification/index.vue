@@ -1,6 +1,6 @@
 <template>
   <section class="client-verification">
-    <loading-state :loading="loading" text="正在加载实名信息">
+    <loading-state :loading="loading" text="数据加载中...">
       <t-card class="verification-status-card" :bordered="false">
         <div class="verification-status-card__main">
           <div>
@@ -61,7 +61,7 @@
       header="实名认证"
       width="min(32rem, calc(100vw - var(--td-comp-margin-xl)))"
       :confirm-btn="
-        verificationUrl ? null : { content: '提交认证', loading: verificationLoading, disabled: !canSubmit }
+        verificationUrl ? null : { content: '确定', loading: verificationLoading, disabled: !canSubmit }
       "
       cancel-btn="取消"
       destroy-on-close

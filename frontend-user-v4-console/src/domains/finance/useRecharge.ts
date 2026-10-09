@@ -116,7 +116,7 @@ export function useRecharge() {
     () => selectedPaymentGateway.value?.name || selectedPaymentGateway.value?.label || '支付',
   );
   const paymentButtonText = computed(() => {
-    if (paymentGatewaysLoading.value) return '正在加载支付方式';
+    if (paymentGatewaysLoading.value) return '支付方式加载中...';
     if (!hasPaymentGateways.value) return '暂无可用支付方式';
     if (submitting.value) return '正在生成二维码';
     if (rechargePaid.value) return '继续充值';

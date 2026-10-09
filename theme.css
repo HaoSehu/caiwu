@@ -219,13 +219,13 @@
 }
 
 :root {
-  --td-radius-small: 0px;
-  --td-radius-default: 0px;
-  --td-radius-medium: 0px;
-  --td-radius-large: 0px;
-  --td-radius-extraLarge: 0px;
-  --td-radius-round: 0px;
-  --td-radius-circle: 0px;
+  --td-radius-small: 2px;
+  --td-radius-default: 3px;
+  --td-radius-medium: 6px;
+  --td-radius-large: 9px;
+  --td-radius-extraLarge: 12px;
+  --td-radius-round: 999px;
+  --td-radius-circle: 50%;
   --td-font-family: PingFang SC, Microsoft YaHei, Arial, sans-serif;
   --td-font-family-medium: PingFang SC, Microsoft YaHei, Arial, sans-serif;
   --td-comp-margin-xxs: 2px;

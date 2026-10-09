@@ -5,7 +5,7 @@
     width="min(34rem, calc(100vw - 2rem))"
     destroy-on-close
   >
-    <loading-state :loading="reinstallState.loading" text="正在加载系统列表" compact>
+    <loading-state :loading="reinstallState.loading" text="数据加载中..." compact>
       <div class="dialog-form">
         <label>
           <span>系统分组</span>

@@ -183,7 +183,7 @@ export function useConsoleTabs(options: UseConsoleTabsOptions) {
       header: '删除端口转发',
       body: `确认删除端口转发“${String(forwarding.name || forwardingId)}”吗？`,
       theme: 'warning',
-      confirmBtn: '确认删除',
+      confirmBtn: '确定',
       cancelBtn: '取消',
       onConfirm: async () => {
         dialog.setConfirmLoading(true);

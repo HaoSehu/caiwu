@@ -25,44 +25,19 @@ export const useSettingStore = defineStore('setting', {
     showSidebar: (state) => state.layout !== 'top',
     showSidebarLogo: (state) => state.layout === 'side',
     showHeaderLogo: (state) => state.layout !== 'side',
-    displayMode: (state): ModeType => {
-      if (state.mode === 'auto') {
-        const media = window.matchMedia('(prefers-color-scheme:dark)');
-        if (media.matches) {
-          return 'dark';
-        }
-        return 'light';
-      }
-      return state.mode as ModeType;
-    },
-    displaySideMode: (state): ModeType => {
-      return state.sideMode as ModeType;
-    },
+    displayMode: (): ModeType => 'light',
+    displaySideMode: (): ModeType => 'light',
   },
   actions: {
-    async changeMode(mode: ModeType | 'auto') {
-      let theme = mode;
-
-      if (mode === 'auto') {
-        theme = this.getMediaColor();
-      }
-      const isDarkMode = theme === 'dark';
-
-      document.documentElement.setAttribute('theme-mode', isDarkMode ? 'dark' : '');
-
-      this.chartColors = isDarkMode ? DARK_CHART_COLORS : LIGHT_CHART_COLORS;
+    async changeMode(_mode?: ModeType | 'auto') {
+      // docs/DESIGN.md: 系统仅提供浅色（Light）模式，暂时不提供暗黑（Dark）主题
+      document.documentElement.setAttribute('theme-mode', '');
+      this.chartColors = LIGHT_CHART_COLORS;
     },
-    async changeSideMode(mode: ModeType) {
-      const isDarkMode = mode === 'dark';
-
-      document.documentElement.setAttribute('side-mode', isDarkMode ? 'dark' : '');
+    async changeSideMode(_mode?: ModeType) {
+      document.documentElement.setAttribute('side-mode', '');
     },
     getMediaColor() {
-      const media = window.matchMedia('(prefers-color-scheme:dark)');
-
-      if (media.matches) {
-        return 'dark';
-      }
       return 'light';
     },
     changeBrandTheme(brandTheme: string) {

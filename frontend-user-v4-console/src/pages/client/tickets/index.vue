@@ -93,7 +93,7 @@
       header="提交工单"
       width="min(44rem, calc(100vw - var(--td-comp-margin-xl)))"
       destroy-on-close
-      :confirm-btn="{ content: '提交工单', loading: creating, disabled: !createForm.subject.trim() || uploading }"
+      :confirm-btn="{ content: '确定', loading: creating, disabled: !createForm.subject.trim() || uploading }"
       cancel-btn="取消"
       @confirm="submitTicket"
       @close="closeCreateDialog"
@@ -157,7 +157,7 @@
                 @click="previewUploadFile(file)"
               >
                 <img :src="file.url || file.path" alt="附件" />
-                <span @click.stop="removeUploadFile(index)">移除</span>
+                <span @click.stop="removeUploadFile(index)">删除</span>
               </button>
             </div>
           </div>

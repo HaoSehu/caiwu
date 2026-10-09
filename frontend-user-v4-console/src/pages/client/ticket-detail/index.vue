@@ -169,7 +169,7 @@
                     @click="previewAttachment(file)"
                   >
                     <img :src="file.url || file.path" alt="附件" loading="lazy" decoding="async" />
-                    <span @click.stop="removeReplyAttachment(index)">移除</span>
+                    <span @click.stop="removeReplyAttachment(index)">删除</span>
                   </button>
                 </div>
                 <div class="reply-composer__bar">

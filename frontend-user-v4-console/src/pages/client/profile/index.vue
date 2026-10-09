@@ -100,7 +100,7 @@
 
     <t-dialog
       v-model:visible="passwordDialogVisible"
-      :header="passwordMode === 'old' ? '修改登录密码' : '验证码重置密码'"
+      :header="passwordMode === 'old' ? '编辑登录密码' : '验证码重置密码'"
       width="min(30rem, calc(100vw - 2rem))"
     >
       <t-form v-if="passwordMode === 'old'" label-align="top">

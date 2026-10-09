@@ -19,6 +19,7 @@ export const DARK_CHART_COLORS = {
 export type TChartColor = typeof LIGHT_CHART_COLORS;
 
 export const DEFAULT_COLOR_OPTIONS = [
+  '#165DFF',
   '#0052D9',
   '#0594FA',
   '#00A870',

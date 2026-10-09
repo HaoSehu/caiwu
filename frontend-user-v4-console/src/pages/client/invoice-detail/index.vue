@@ -13,7 +13,7 @@
       </div>
     </div>
 
-    <t-loading :loading="loading" text="正在加载账单详情">
+    <t-loading :loading="loading" text="数据加载中...">
       <template v-if="detail">
         <section class="pay-shell">
           <main class="pay-main-column">
@@ -1364,7 +1364,7 @@ onBeforeUnmount(() => {
 
 .summary-hero {
   padding-bottom: var(--td-comp-margin-m);
-  border-bottom: 1px dashed var(--td-border-color);
+  border-bottom: thin dashed var(--td-border-level-1-color);
   margin-bottom: var(--td-comp-margin-m);
 }
 
@@ -1483,8 +1483,8 @@ onBeforeUnmount(() => {
 }
 
 .summary-divider {
-  height: 1px;
-  background: var(--td-border-color);
+  border-top: thin solid var(--td-border-level-1-color);
+  height: 0;
   opacity: 0.6;
   margin: 0.25rem 0;
 }

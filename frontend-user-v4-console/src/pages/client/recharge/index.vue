@@ -56,7 +56,7 @@
 
               <div class="amount-payable amount-payable--mobile">
                 <span>实付金额</span>
-                <strong>{{ amountText }} 元</strong>
+                <strong>¥{{ amountText }}</strong>
               </div>
             </section>
 
@@ -122,7 +122,7 @@
               </div>
               <div class="meta-row">
                 <span>应付金额</span>
-                <strong>{{ amountText }} 元</strong>
+                <strong>¥{{ amountText }}</strong>
               </div>
             </div>
 
@@ -165,7 +165,7 @@
                 />
                 <div class="amount-payable">
                   <span>实付金额：</span>
-                  <strong>{{ amountText }} 元</strong>
+                  <strong>¥{{ amountText }}</strong>
                 </div>
               </div>
             </div>
@@ -243,7 +243,7 @@
               </div>
               <div class="meta-row">
                 <span>应付金额</span>
-                <strong>{{ amountText }} 元</strong>
+                <strong>¥{{ amountText }}</strong>
               </div>
             </div>
           </aside>
@@ -336,10 +336,10 @@ function handleMobileSubmit() {
   if (submitting.value) return;
   const gatewayName = selectedPaymentGateway.value?.name || selectedPaymentGateway.value?.label || '在线支付';
   const dialog = DialogPlugin.confirm({
-    header: '确认充值',
+    header: '在线充值',
     body: `确认通过 ${gatewayName} 充值 ¥${amountText.value}？`,
-    confirmBtn: '确认支付',
-    cancelBtn: '再想想',
+    confirmBtn: '确定',
+    cancelBtn: '取消',
     onConfirm: () => {
       dialog.destroy();
       void handleCreateOrder(true);
@@ -365,10 +365,10 @@ async function handleGatewayCreate(method: RechargeGatewayOption) {
   selectPaymentGateway(paymentOptionKey(method));
   const confirmed = await new Promise<boolean>((resolve) => {
     const dialog = DialogPlugin.confirm({
-      header: '确认充值',
+      header: '在线充值',
       body: `确认通过 ${method.name || method.label || '支付'} 充值 ¥${amountText.value}？`,
-      confirmBtn: '确认支付',
-      cancelBtn: '再想想',
+      confirmBtn: '确定',
+      cancelBtn: '取消',
       onConfirm: () => {
         dialog.destroy();
         resolve(true);

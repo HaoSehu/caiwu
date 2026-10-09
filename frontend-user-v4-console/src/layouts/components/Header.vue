@@ -254,7 +254,7 @@ const handleMarkAllRead = async () => {
     const dialog = DialogPlugin.confirm({
       header: '全部标记已读',
       body: '确认将所有未读消息标记为已读吗？此操作不可撤销。',
-      confirmBtn: '确认',
+      confirmBtn: '确定',
       onConfirm: () => {
         dialog.destroy();
         resolve(true);
@@ -307,7 +307,7 @@ const handleLogout = async () => {
     const dialog = DialogPlugin.confirm({
       header: '退出登录',
       body: '确认退出当前账户吗？',
-      confirmBtn: '确认退出',
+      confirmBtn: '确定',
       onConfirm: () => {
         dialog.destroy();
         resolve(true);

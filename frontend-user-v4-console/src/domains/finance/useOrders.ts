@@ -46,8 +46,8 @@ export function useOrderList() {
     const dialog = DialogPlugin.confirm({
       header: '取消订单',
       body: '确定取消该订单？取消后不可恢复，关联账单将一并取消，使用的优惠券会退回账户；新产品购买的库存将被释放。',
-      confirmBtn: '确认取消',
-      cancelBtn: '再想想',
+      confirmBtn: '确定',
+      cancelBtn: '取消',
       theme: 'warning',
       async onConfirm() {
         dialog.setConfirmLoading(true);
@@ -132,8 +132,8 @@ export function useOrderDetail() {
     const dialog = DialogPlugin.confirm({
       header: '取消订单',
       body: '确定取消该订单？取消后不可恢复，关联账单将一并取消，使用的优惠券会退回账户；新产品购买的库存将被释放。',
-      confirmBtn: '确认取消',
-      cancelBtn: '再想想',
+      confirmBtn: '确定',
+      cancelBtn: '取消',
       theme: 'warning',
       async onConfirm() {
         dialog.setConfirmLoading(true);

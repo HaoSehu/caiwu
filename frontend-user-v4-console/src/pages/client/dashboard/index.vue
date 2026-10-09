@@ -1,6 +1,6 @@
 <template>
   <section class="client-dashboard">
-    <loading-state :loading="loading" text="正在加载控制台数据">
+    <loading-state :loading="loading" text="数据加载中...">
       <div class="summary-grid">
         <t-card class="account-card dashboard-card" :bordered="false">
           <div class="account-card__user">
@@ -83,7 +83,7 @@
                 <div class="chart-card__actions">
                   <span class="card-meta">{{ currentYearLabel }}</span>
                   <span class="chart-summary">
-                    合计 <strong>{{ formatMoney(currentYearConsumptionTotal) }} 元</strong>
+                    合计 <strong>¥{{ formatMoney(currentYearConsumptionTotal) }}</strong>
                   </span>
                 </div>
               </template>
@@ -120,7 +120,7 @@
               <template #actions>
                 <div class="chart-card__actions">
                   <span class="chart-summary">
-                    合计 <strong>{{ formatMoney(last7DaysConsumptionTotal) }} 元</strong>
+                    合计 <strong>¥{{ formatMoney(last7DaysConsumptionTotal) }}</strong>
                   </span>
                   <t-button theme="primary" variant="text" @click="router.push('/client/payments')">消费明细</t-button>
                 </div>
@@ -897,6 +897,7 @@ onMounted(() => {
   margin-top: var(--td-comp-margin-xs);
   color: var(--td-text-color-primary);
   font: var(--td-font-headline-medium);
+  font-variant-numeric: tabular-nums;
 
   span {
     margin-left: var(--td-comp-margin-xs);
@@ -976,22 +977,22 @@ onMounted(() => {
   background: var(--td-bg-color-component);
 
   &.is-brand {
-    color: #fff;
+    color: var(--td-text-color-anti);
     background: var(--td-brand-color);
   }
 
   &.is-info {
-    color: #fff;
+    color: var(--td-text-color-anti);
     background: var(--td-brand-color-7);
   }
 
   &.is-success {
-    color: #fff;
+    color: var(--td-text-color-anti);
     background: var(--td-success-color);
   }
 
   &.is-warning {
-    color: #fff;
+    color: var(--td-text-color-anti);
     background: var(--td-warning-color);
   }
 

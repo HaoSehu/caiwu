@@ -4,7 +4,7 @@
       <h1>推广大使</h1>
     </header>
 
-    <t-loading :loading="loading" text="正在加载推广大使">
+    <t-loading :loading="loading" text="数据加载中...">
       <div class="referral-stats">
         <t-card v-for="item in summaryCards" :key="item.key" class="referral-stat" :bordered="false">
           <span>{{ item.label }}</span>
@@ -116,7 +116,7 @@
         /></t-form-item>
         <t-form-item label="短信验证码"><t-input v-model="bindForm.code" placeholder="请输入短信验证码" /></t-form-item>
         <t-form-item label="登录密码"
-          ><t-input v-model="bindForm.password" type="password" placeholder="请输入登录密码确认"
+          ><t-input v-model="bindForm.password" type="password" placeholder="请输入登录密码进行身份校验"
         /></t-form-item>
       </t-form>
       <template #footer>
@@ -230,6 +230,7 @@ const logColumns: PrimaryTableCol[] = [
     margin-top: var(--td-comp-margin-xs);
     color: var(--td-text-color-primary);
     font: var(--td-font-title-medium);
+    font-variant-numeric: tabular-nums;
 
     &.primary {
       color: var(--td-brand-color);

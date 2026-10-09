@@ -5,7 +5,7 @@
     width="min(36rem, calc(100vw - 2rem))"
     destroy-on-close
   >
-    <loading-state :loading="trafficLoading" text="正在加载流量包" compact>
+    <loading-state :loading="trafficLoading" text="数据加载中..." compact>
       <template v-if="trafficData?.supported !== false && trafficPackages.length">
         <div class="traffic-summary">
           <div>

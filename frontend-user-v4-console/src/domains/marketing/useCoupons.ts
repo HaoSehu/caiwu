@@ -46,7 +46,7 @@ export function resolveDiscountTypeLabel(type: unknown) {
 }
 
 export function resolveDiscountValue(item: CouponRecord) {
-  if (item.discount_type === 'fixed') return `￥${formatCouponAmount(item.discount_value)}`;
+  if (item.discount_type === 'fixed') return `¥${formatCouponAmount(item.discount_value)}`;
   if (item.discount_type === 'percentage') {
     const discount = Number(item.discount_value || 0) / 10;
     if (!Number.isFinite(discount) || discount <= 0) return item.discount_label || '--';
@@ -57,17 +57,17 @@ export function resolveDiscountValue(item: CouponRecord) {
 
 export function resolveThresholdText(item: CouponRecord) {
   const amount = Number(item.min_amount || 0);
-  return amount > 0 ? `满 ￥${formatCouponAmount(amount)} 可用` : '无门槛';
+  return amount > 0 ? `满 ¥${formatCouponAmount(amount)} 可用` : '无门槛';
 }
 
 export function resolveDiscountAmountText(item: CouponRecord) {
-  if (item.discount_type === 'fixed') return `减 ￥${formatCouponAmount(item.discount_value)}`;
+  if (item.discount_type === 'fixed') return `减 ¥${formatCouponAmount(item.discount_value)}`;
   if (item.discount_type === 'percentage') {
     return item.max_discount_amount
-      ? `最高减 ￥${formatCouponAmount(item.max_discount_amount)}`
+      ? `最高减 ¥${formatCouponAmount(item.max_discount_amount)}`
       : item.discount_label || '--';
   }
-  return item.discount_amount ? `减 ￥${formatCouponAmount(item.discount_amount)}` : item.discount_label || '--';
+  return item.discount_amount ? `减 ¥${formatCouponAmount(item.discount_amount)}` : item.discount_label || '--';
 }
 
 function resolveListPayload(response: ApiEnvelope<PagedList<CouponRecord>>) {

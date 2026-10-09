@@ -1,8 +1,9 @@
 <template>
   <t-dialog
     v-model:visible="natVisible"
-    header="添加端口转发"
-    confirm-btn="创建"
+    header="新建端口转发"
+    confirm-btn="确定"
+    cancel-btn="取消"
     :confirm-loading="natState.submitting"
     @confirm="submitNatForwarding"
   >

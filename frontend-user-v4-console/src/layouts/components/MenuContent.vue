@@ -140,10 +140,10 @@ const getMenuBadge = (item: ListItemType): number => {
   height: 16px;
   padding: 0 4px;
   margin-left: auto;
-  color: #fff;
+  color: var(--td-text-color-anti);
   background: var(--td-error-color);
-  border-radius: 8px;
-  font-size: 10px;
+  border-radius: var(--td-radius-round);
+  font-size: var(--td-font-size-caption-small, 10px);
   line-height: 1;
 }
 </style>

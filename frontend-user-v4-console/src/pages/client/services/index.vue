@@ -120,14 +120,14 @@
                           <span
                             class="service-remark-text"
                             :class="{ empty: !item.remark }"
-                            :title="item.remark || '添加备注'"
+                            :title="item.remark || '编辑备注'"
                           >
-                            {{ item.remark || '添加备注' }}
+                            {{ item.remark || '编辑备注' }}
                           </span>
                           <button
                             type="button"
                             class="service-remark-trigger"
-                            :aria-label="item.remark ? '编辑备注' : '添加备注'"
+                            :aria-label="item.remark ? '编辑备注' : '设置备注'"
                             @click="openRemark(item)"
                           >
                             <edit-icon />
@@ -199,7 +199,7 @@
                     <div class="service-table-meta">
                       <span>{{ row.product?.group_name || row.product?.type_label || '云服务' }}</span>
                       <span class="service-table-meta__dot"></span>
-                      <span :class="{ empty: !row.remark }">{{ row.remark || '未添加备注' }}</span>
+                      <span :class="{ empty: !row.remark }">{{ row.remark || '未设置备注' }}</span>
                       <t-button shape="square" variant="text" size="small" @click="openRemark(row)">
                         <template #icon><edit-icon /></template>
                       </t-button>
@@ -265,7 +265,7 @@
     </div>
 
     <t-dialog v-model:visible="renewVisible" header="服务续费" width="min(34rem, calc(100vw - 2rem))" destroy-on-close>
-      <loading-state :loading="renewPreviewLoading" text="正在加载续费信息" compact>
+      <loading-state :loading="renewPreviewLoading" text="数据加载中..." compact>
         <template v-if="renewData">
           <div class="renew-summary-card">
             <div class="renew-summary-row">
@@ -288,7 +288,7 @@
               :key="cycle.billing_cycle"
               :value="cycle.billing_cycle"
             >
-              {{ cycle.billing_cycle_label }} · ￥{{ formatMoney(cycle.amount) }}
+              {{ cycle.billing_cycle_label }} · ¥{{ formatMoney(cycle.amount) }}
             </t-radio-button>
           </t-radio-group>
 
@@ -311,7 +311,7 @@
 
           <div class="renew-total-line">
             <span>本次应付</span>
-            <strong>￥{{ selectedRenewAmount }}</strong>
+            <strong>¥{{ selectedRenewAmount }}</strong>
           </div>
         </template>
 
@@ -518,7 +518,7 @@ function actionOptions(item: Record<string, any>) {
   position: absolute;
   left: 0.125rem;
   bottom: 0.125rem;
-  color: #fff;
+  color: var(--td-text-color-anti);
   font-size: 0.6875rem;
   font-weight: 700;
   line-height: 1;
@@ -533,7 +533,7 @@ function actionOptions(item: Record<string, any>) {
   width: 1.125rem;
   height: 1.125rem;
   background: var(--td-success-color);
-  color: #fff;
+  color: var(--td-text-color-anti);
   font-size: 0.6875rem;
   font-weight: 700;
   line-height: 1;

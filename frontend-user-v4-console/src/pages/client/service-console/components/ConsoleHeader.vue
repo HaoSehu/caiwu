@@ -3,7 +3,7 @@
     <div class="console-header-main">
       <div class="console-title-line">
         <h1>{{ detail.name || `服务 #${serviceId}` }}</h1>
-        <t-button theme="primary" variant="text" @click="openNameDialog">修改名称</t-button>
+        <t-button theme="primary" variant="text" @click="openNameDialog">编辑名称</t-button>
         <t-tag :theme="resolveTdesignStatusTheme(detail)" variant="light">{{
           resolveServiceStatusLabel(detail.status)
         }}</t-tag>
@@ -24,12 +24,12 @@
         </div>
         <div class="console-remark-line">
           <span>备注：</span>
-          <strong :class="{ 'is-empty': !detail.remark }">{{ detail.remark || '点击添加备注' }}</strong>
+          <strong :class="{ 'is-empty': !detail.remark }">{{ detail.remark || '点击设置备注' }}</strong>
           <t-button
             shape="square"
             variant="text"
             size="small"
-            :aria-label="detail.remark ? '编辑备注' : '添加备注'"
+            :aria-label="detail.remark ? '编辑备注' : '设置备注'"
             @click="openRemarkDialog"
           >
             <template #icon><edit-icon /></template>

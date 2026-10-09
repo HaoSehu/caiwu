@@ -474,9 +474,9 @@ export function useTicketDetail() {
   function closeTicket() {
     if (!ticketId.value) return;
     const dialog = DialogPlugin.confirm({
-      header: '确认关闭工单',
+      header: '关闭工单',
       body: '关闭后将无法继续回复此工单，确认关闭吗？',
-      confirmBtn: '确认关闭',
+      confirmBtn: '确定',
       cancelBtn: '取消',
       theme: 'warning',
       async onConfirm() {

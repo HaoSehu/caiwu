@@ -9,7 +9,7 @@
             theme="primary"
             :disabled="natState.supported === false"
             @click="openNatForwardingDialog"
-            >添加端口转发</t-button
+            >新建端口转发</t-button
           >
         </t-space>
       </template>
