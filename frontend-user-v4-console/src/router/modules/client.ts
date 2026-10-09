@@ -63,7 +63,8 @@ export default [
       {
         path: '/client/overview',
         redirect: '/client/dashboard',
-        meta: { title: title('首页', 'Home'), icon: icon(DashboardIcon), requireAuth: true, orderNo: 10 },
+        // single: 侧边栏直接渲染为一级菜单项，省掉“首页 > 控制台”的二次点击
+        meta: { title: title('首页', 'Home'), icon: icon(DashboardIcon), requireAuth: true, orderNo: 10, single: true },
         children: [
           {
             path: '/client/dashboard',

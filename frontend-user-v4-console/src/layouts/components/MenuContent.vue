@@ -74,11 +74,11 @@ function getMenuList(list: MenuRoute[], basePath?: string): MenuRoute[] {
   if (!list || list.length === 0) {
     return [];
   }
-  // 如果meta中有orderNo则按照从小到大排序
-  list.sort((a, b) => {
+  // 如果meta中有orderNo则按照从小到大排序；复制后排序，避免直接改动 store 里的路由数组
+  const ordered = [...list].sort((a, b) => {
     return (a.meta?.orderNo || 0) - (b.meta?.orderNo || 0);
   });
-  return list
+  return ordered
     .map((item) => {
       const rawPath = String(item.path);
       const path = rawPath.startsWith('/')

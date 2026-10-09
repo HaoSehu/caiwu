@@ -248,15 +248,6 @@
         margin-left: 0;
       }
     }
-
-    .t-menu__item.t-is-active:not(.t-is-opened),
-    .t-submenu.t-is-active > .t-menu__item {
-      color: #fff;
-
-      .t-icon {
-        color: #fff;
-      }
-    }
   }
 
   &-side-nav-dark {
@@ -269,8 +260,8 @@
     transition: flex-basis @anim-duration-base @anim-time-fn-easing;
 
     &-hidden {
-      flex: 1 1 72px;
-      min-width: 72px;
+      flex: 1 1 64px;
+      min-width: 64px;
       transition: flex-basis @anim-duration-base @anim-time-fn-easing;
     }
   }
@@ -293,21 +284,7 @@
   opacity: 0.4;
 }
 
-// 侧边栏菜单层级样式：一级白色，二级灰色
-.t-default-menu .t-menu--scroll > div > .t-submenu > .t-menu__item {
-  background: var(--td-bg-color-container);
-}
-
-.t-default-menu .t-menu__sub .t-submenu__item {
-  background: var(--td-bg-color-secondarycontainer);
-  border-radius: var(--td-radius-small);
-  margin: 2px 8px;
-}
-
-.t-default-menu .t-menu__sub .t-submenu__item.t-is-active {
-  background: var(--td-brand-color-light);
-}
-
+// 二级菜单项的层级样式由 theme.css 统一维护（此处旧选择器 t-submenu__item 并不存在，已移除）
 .t-menu__popup {
   z-index: 1000;
 }

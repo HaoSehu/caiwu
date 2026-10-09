@@ -7,7 +7,14 @@
           <span class="header-logo-name">{{ siteBranding.siteName }}</span>
         </span>
         <div v-else class="header-operate-left">
-          <t-button theme="default" shape="square" variant="text" :title="sidebarButtonTitle" @click="changeCollapsed">
+          <t-button
+            theme="default"
+            shape="square"
+            variant="text"
+            :title="sidebarButtonTitle"
+            :aria-label="sidebarButtonTitle"
+            @click="changeCollapsed"
+          >
             <t-icon class="collapsed-icon" name="view-list" />
           </t-button>
           <span class="header-page-brand">{{ siteBranding.siteName }}</span>
@@ -202,7 +209,12 @@ const menuCls = computed(() => {
   ];
 });
 const menuTheme = computed(() => theme as ModeType);
-const sidebarButtonTitle = computed(() => (settingStore.isMobileSidebarVisible ? '关闭菜单' : '打开菜单'));
+const sidebarButtonTitle = computed(() => {
+  if (isMobile.value) {
+    return settingStore.isMobileSidebarVisible ? '关闭菜单' : '打开菜单';
+  }
+  return settingStore.isSidebarCompact ? '展开侧边栏' : '收起侧边栏';
+});
 
 const changeCollapsed = () => {
   if (isMobile.value) {

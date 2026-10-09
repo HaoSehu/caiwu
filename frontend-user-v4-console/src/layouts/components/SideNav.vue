@@ -1,10 +1,13 @@
 <template>
   <template v-if="settingStore.showSidebar">
-    <div
-      v-if="isMobile && settingStore.isMobileSidebarVisible"
-      :class="`${prefix}-side-nav-mask`"
-      @click="closeMobileSidebar"
-    ></div>
+    <transition name="side-nav-mask-fade">
+      <div
+        v-if="isMobile && settingStore.isMobileSidebarVisible"
+        :class="`${prefix}-side-nav-mask`"
+        aria-hidden="true"
+        @click="closeMobileSidebar"
+      ></div>
+    </transition>
     <div :class="sideNavCls">
       <t-menu
         :class="menuCls"
@@ -224,6 +227,17 @@ function handleMenuChange() {
 }
 </script>
 <style lang="less" scoped>
+// 移动端抽屉遮罩淡入淡出，避免开关时生硬闪现
+.side-nav-mask-fade-enter-active,
+.side-nav-mask-fade-leave-active {
+  transition: opacity 0.24s cubic-bezier(0, 0, 0.15, 1);
+}
+
+.side-nav-mask-fade-enter-from,
+.side-nav-mask-fade-leave-to {
+  opacity: 0;
+}
+
 .client-side-brand {
   display: inline-flex;
   align-items: center;
