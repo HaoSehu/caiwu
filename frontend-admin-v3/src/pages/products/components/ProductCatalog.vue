@@ -1,30 +1,71 @@
 <template>
-  <div>
-    <t-card :bordered="false" class="type-card">
-      <div class="type-strip">
-        <t-button
-          v-for="item in productTypeOptions"
-          :key="item.value"
-          :theme="catalogFilters.product_type === item.value ? 'primary' : 'default'"
-          :variant="catalogFilters.product_type === item.value ? 'base' : 'outline'"
-          :aria-label="`${item.label}，共${item.usage_count || 0}个商品`"
-          :aria-pressed="catalogFilters.product_type === item.value ? 'true' : 'false'"
-          @click="handleProductTypeChange(item.value)"
-        >
-          {{ item.label }}
-          <span class="type-count">{{ item.usage_count || 0 }}</span>
-        </t-button>
-        <t-tooltip content="管理一级分类">
+  <div class="catalog-page">
+    <t-card :bordered="false" class="catalog-filter-card">
+      <div class="catalog-type-bar">
+        <span class="catalog-bar-label">商品类型</span>
+        <div class="type-strip">
           <t-button
-            class="type-manage-button"
-            shape="square"
-            variant="outline"
-            aria-label="管理一级分类"
-            @click="openTypeManagerDialog()"
+            v-for="item in productTypeOptions"
+            :key="item.value"
+            :theme="catalogFilters.product_type === item.value ? 'primary' : 'default'"
+            :variant="catalogFilters.product_type === item.value ? 'base' : 'outline'"
+            :aria-label="`${item.label}，共${item.usage_count || 0}个商品`"
+            :aria-pressed="catalogFilters.product_type === item.value ? 'true' : 'false'"
+            @click="handleProductTypeChange(item.value)"
           >
-            <template #icon><setting-icon /></template>
+            {{ item.label }}
+            <span class="type-count">{{ item.usage_count || 0 }}</span>
           </t-button>
-        </t-tooltip>
+          <t-tooltip content="管理一级分类">
+            <t-button
+              class="type-manage-button"
+              shape="square"
+              variant="outline"
+              aria-label="管理一级分类"
+              @click="openTypeManagerDialog()"
+            >
+              <template #icon><setting-icon /></template>
+            </t-button>
+          </t-tooltip>
+        </div>
+      </div>
+
+      <div class="catalog-filter-row">
+        <t-input
+          v-model="catalogFilters.keyword"
+          class="catalog-filter-keyword"
+          clearable
+          placeholder="搜索商品名称"
+          aria-label="搜索商品名称"
+          @enter="handleCatalogSearch"
+          @clear="handleCatalogSearch"
+        >
+          <template #suffix-icon><search-icon /></template>
+        </t-input>
+        <t-select
+          v-model="catalogFilters.status"
+          class="catalog-filter-status"
+          clearable
+          placeholder="显示状态"
+          aria-label="筛选显示状态"
+          @change="handleCatalogSearch"
+        >
+          <t-option :value="1" label="显示中" />
+          <t-option :value="0" label="已隐藏" />
+        </t-select>
+        <t-select
+          v-model="catalogFilters.lifecycle_status"
+          class="catalog-filter-status"
+          placeholder="商品范围"
+          aria-label="筛选商品范围"
+          @change="handleCatalogSearch"
+        >
+          <t-option v-for="item in lifecycleStatusOptions" :key="item.value" :value="item.value" :label="item.label" />
+        </t-select>
+        <div class="catalog-filter-actions">
+          <t-button theme="default" variant="base" @click="handleCatalogReset">重置</t-button>
+          <t-button theme="primary" @click="handleCatalogSearch">查询</t-button>
+        </div>
       </div>
     </t-card>
 
@@ -91,14 +132,6 @@
                 <span class="category-name" :class="{ 'is-hidden': !isCategoryVisible(item) }">
                   {{ categoryDisplayName(item) }}
                 </span>
-                <t-tag
-                  v-if="!isCategoryVisible(item)"
-                  theme="warning"
-                  variant="light"
-                  size="small"
-                  style="margin-left: 4px"
-                  >隐藏</t-tag
-                >
               </span>
             </button>
             <t-dropdown
@@ -129,61 +162,38 @@
           <strong>{{ selectedProductTypeLabel }} / {{ selectedCategoryLabel }}</strong>
         </button>
 
-        <div class="filter-row catalog-filter-row">
-          <t-input
-            v-model="catalogFilters.keyword"
-            class="catalog-filter-keyword"
-            clearable
-            placeholder="搜索商品名称"
-            aria-label="搜索商品名称"
-            @enter="handleCatalogSearch"
-            @clear="handleCatalogSearch"
-          >
-            <template #suffix-icon><search-icon /></template>
-          </t-input>
-          <t-select
-            v-model="catalogFilters.status"
-            class="catalog-filter-status"
-            clearable
-            placeholder="显示状态"
-            aria-label="筛选显示状态"
-            @change="handleCatalogSearch"
-          >
-            <t-option :value="1" label="显示中" />
-            <t-option :value="0" label="已隐藏" />
-          </t-select>
-          <t-select
-            v-model="catalogFilters.lifecycle_status"
-            class="catalog-filter-status"
-            placeholder="商品范围"
-            aria-label="筛选商品范围"
-            @change="handleCatalogSearch"
-          >
-            <t-option
-              v-for="item in lifecycleStatusOptions"
-              :key="item.value"
-              :value="item.value"
-              :label="item.label"
-            />
-          </t-select>
-          <div class="catalog-filter-actions">
-            <t-button theme="primary" @click="router.push({ name: 'AdminProductCreate' })">
+        <div class="table-toolbar">
+          <div class="table-toolbar-info" aria-live="polite">
+            <template v-if="selectedProductKeys.length">
+              已选 <strong>{{ selectedProductKeys.length }}</strong> 个商品
+            </template>
+            <template v-else>共 {{ productTotal }} 个商品</template>
+          </div>
+          <div class="table-toolbar-actions">
+            <template v-if="selectedProductKeys.length">
+              <t-button size="small" variant="outline" @click="openBatchCategoryDialog">批量归类</t-button>
+              <t-button size="small" variant="outline" :loading="splitProductPreviewLoading" @click="openSplitProductDialog">
+                拆分商品
+              </t-button>
+              <t-button size="small" variant="outline" @click="openProvisionHostnameDialog">批量主机名</t-button>
+              <t-button size="small" variant="text" @click="clearProductSelection">清空选择</t-button>
+            </template>
+            <t-tooltip content="刷新列表">
+              <t-button
+                shape="square"
+                variant="text"
+                :loading="productLoading"
+                aria-label="刷新商品列表"
+                @click="handleCatalogSearch"
+              >
+                <template #icon><refresh-icon /></template>
+              </t-button>
+            </t-tooltip>
+            <t-button size="small" theme="primary" @click="router.push({ name: 'AdminProductCreate' })">
               <template #icon><add-icon /></template>
               新建商品
             </t-button>
           </div>
-        </div>
-
-        <div v-if="selectedProductKeys.length" class="product-batch-bar" aria-live="polite">
-          <span>已选 {{ selectedProductKeys.length }} 个商品</span>
-          <t-space size="small">
-            <t-button variant="outline" @click="openBatchCategoryDialog"> 批量归类 </t-button>
-            <t-button variant="outline" :loading="splitProductPreviewLoading" @click="openSplitProductDialog">
-              拆分商品
-            </t-button>
-            <t-button variant="outline" @click="openProvisionHostnameDialog"> 批量主机名 </t-button>
-            <t-button variant="text" @click="clearProductSelection">清空选择</t-button>
-          </t-space>
         </div>
 
         <div class="table-scroll">
@@ -220,12 +230,9 @@
               </div>
             </template>
             <template #status="{ row }">
-              <span
-                class="visibility-status-text"
-                :class="{ 'is-hidden': !isProductVisible(row), 'is-deleted': row.is_deleted }"
-              >
+              <t-tag :theme="productVisibilityTheme(row)" variant="light" size="small">
                 {{ productVisibilityLabel(row) }}
-              </span>
+              </t-tag>
             </template>
             <template #price="{ row }">
               {{ formatMonthlyPrice(row) }}
@@ -370,14 +377,6 @@
                   <span class="category-name" :class="{ 'is-hidden': !isCategoryVisible(item) }">
                     {{ categoryDisplayName(item) }}
                   </span>
-                  <t-tag
-                    v-if="!isCategoryVisible(item)"
-                    theme="warning"
-                    variant="light"
-                    size="small"
-                    style="margin-left: 4px"
-                    >隐藏</t-tag
-                  >
                 </span>
               </button>
               <t-dropdown
@@ -1295,14 +1294,14 @@ const productDrawerSections = [
 
 const productColumns: PrimaryTableCol<ProductRecord>[] = [
   { colKey: 'row-select', type: 'multiple', width: 54, fixed: 'left' },
-  { colKey: 'id', title: 'ID', width: 80 },
-  { colKey: 'name', title: '商品', minWidth: 220 },
-  { colKey: 'effective_product_group_full_name', title: '分类', width: 180 },
-  { colKey: 'price', title: '月价格', width: 120 },
-  { colKey: 'stock', title: '库存', width: 100 },
-  { colKey: 'services_count', title: '现存', width: 100 },
-  { colKey: 'status', title: '显示状态', width: 110 },
-  { colKey: 'operation', title: '操作', width: 72, fixed: 'right' },
+  { colKey: 'id', title: 'ID', width: 64 },
+  { colKey: 'name', title: '商品', minWidth: 200 },
+  { colKey: 'effective_product_group_full_name', title: '分类', width: 160, ellipsis: true },
+  { colKey: 'price', title: '月价格', width: 100, align: 'right' },
+  { colKey: 'stock', title: '库存', width: 84, align: 'right' },
+  { colKey: 'services_count', title: '现存', width: 84, align: 'right' },
+  { colKey: 'status', title: '显示状态', width: 100, align: 'center' },
+  { colKey: 'operation', title: '操作', width: 64, fixed: 'right', align: 'center' },
 ];
 
 const productRules = {
@@ -1504,6 +1503,11 @@ function categoryTotalProductCount(row: ProductCategoryRecord) {
 function productVisibilityLabel(row: ProductRecord) {
   if (row.is_deleted) return '已删除';
   return isProductVisible(row) ? '显示中' : '已隐藏';
+}
+
+function productVisibilityTheme(row: ProductRecord): 'success' | 'default' | 'danger' {
+  if (row.is_deleted) return 'danger';
+  return isProductVisible(row) ? 'success' : 'default';
 }
 
 function isProductVisible(row: ProductRecord) {
@@ -2205,6 +2209,14 @@ function handleMobileCategorySelect(row: ProductCategoryRecord) {
 }
 
 function handleCatalogSearch() {
+  productPage.value = 1;
+  void loadProducts();
+}
+
+function handleCatalogReset() {
+  catalogFilters.keyword = '';
+  catalogFilters.status = '';
+  catalogFilters.lifecycle_status = 'active';
   productPage.value = 1;
   void loadProducts();
 }

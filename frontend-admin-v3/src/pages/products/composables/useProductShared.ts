@@ -140,8 +140,8 @@ export function formatMonthlyPrice(row: {
   const amount = row.monthly_price ?? primaryPrice.amount ?? row.pricing?.monthly;
   if (amount === undefined || amount === null || amount === '') return '-';
   const numericAmount = Number(amount);
-  if (!Number.isFinite(numericAmount)) return `¥ ${amount}`;
-  return `¥ ${numericAmount.toFixed(2)}`;
+  if (!Number.isFinite(numericAmount)) return `¥${amount}`;
+  return `¥${numericAmount.toFixed(2)}`;
 }
 
 /**
