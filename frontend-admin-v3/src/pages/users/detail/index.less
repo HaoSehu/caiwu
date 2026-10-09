@@ -4,48 +4,135 @@
   gap: var(--td-comp-margin-l);
 }
 
-.detail-action-bar {
+/* 第一层：紧凑工具栏 (36px) */
+.user-detail-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--td-comp-margin-m);
-}
+  min-height: 36px;
+  margin-bottom: var(--td-comp-margin-m);
 
-.user-detail-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--td-comp-margin-s);
-}
-
-.user-detail-stats {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--td-comp-margin-s);
-
-  :deep(.t-card__body) {
-    padding: 12px 16px;
-  }
-}
-
-.user-stat-card {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-
-  &__label {
-    font-size: 12px;
+  &__back {
+    font-weight: 500;
     color: var(--td-text-color-secondary);
+    padding: 0 4px;
+
+    &:hover {
+      color: var(--td-brand-color);
+    }
+  }
+
+  &__actions {
+    display: flex;
+    align-items: center;
+    gap: var(--td-comp-margin-s);
   }
 }
 
-.user-stat-card strong {
-  overflow: hidden;
-  color: var(--td-text-color-primary);
-  font-size: var(--td-font-size-size-5, 18px);
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  line-height: 1.2;
+/* 第二层：实体概览与关键指标卡组 */
+.user-detail-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 20px 24px;
+  border: 1px solid var(--td-component-border);
+  border-radius: var(--td-radius-large, 8px);
+  background: var(--td-bg-color-container);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+  margin-bottom: var(--td-comp-margin-l);
+
+  &__identity {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+    flex: 1;
+
+    .identity-eyebrow {
+      font-size: var(--td-font-size-body-small, 12px);
+      color: var(--td-text-color-placeholder);
+      letter-spacing: 0.5px;
+    }
+
+    .identity-headline {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+
+      .identity-title {
+        font-size: 22px;
+        font-weight: 700;
+        color: var(--td-text-color-primary);
+        font-family: var(--td-font-family);
+        line-height: 1.25;
+      }
+
+      .copy-btn {
+        color: var(--td-text-color-placeholder);
+        &:hover {
+          color: var(--td-brand-color);
+        }
+      }
+
+      .identity-status-tag {
+        font-size: 13px;
+        font-weight: 500;
+        padding: 2px 10px;
+        border-radius: 4px;
+      }
+    }
+
+    .identity-sub-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+
+      .identity-description {
+        font-size: var(--td-font-size-body-medium, 13px);
+        color: var(--td-text-color-secondary);
+      }
+    }
+  }
+
+  &__metrics {
+    display: flex;
+    align-items: stretch;
+    gap: 12px;
+    flex-shrink: 0;
+
+    .summary-metric-card {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 4px;
+      padding: 10px 18px;
+      background: var(--td-bg-color-secondarycontainer);
+      border-radius: var(--td-radius-medium, 6px);
+      min-width: 120px;
+      text-align: right;
+
+      .metric-label {
+        font-size: var(--td-font-size-body-small, 12px);
+        color: var(--td-text-color-placeholder);
+      }
+
+      .metric-value {
+        font-size: 18px;
+        font-weight: 700;
+        color: var(--td-text-color-primary);
+        font-variant-numeric: tabular-nums;
+        line-height: 1.3;
+
+        &.is-primary {
+          color: var(--td-brand-color);
+        }
+      }
+    }
+  }
 }
 
 .is-success,
@@ -92,32 +179,37 @@
 .info-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px 24px;
+  gap: 12px;
   padding: 4px 0;
 }
 
 .info-field {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 10px 14px;
+  background: var(--td-bg-color-secondarycontainer);
+  border: 1px solid var(--td-component-border);
+  border-radius: var(--td-radius-medium, 6px);
+  min-width: 0;
 }
 
 .info-label {
   color: var(--td-text-color-placeholder);
   font-size: 12px;
-  line-height: 20px;
+  line-height: 1.4;
 }
 
 .info-value {
   overflow: hidden;
   color: var(--td-text-color-primary);
   font-size: 14px;
-  font-weight: 500;
-  line-height: 22px;
+  font-weight: 600;
+  line-height: 1.5;
   text-overflow: ellipsis;
   white-space: nowrap;
   cursor: pointer;
-  border-bottom: 1px dashed var(--td-component-border);
   transition: color 0.2s;
 
   &:hover {

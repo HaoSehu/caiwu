@@ -1,33 +1,75 @@
 <template>
   <div class="user-detail-page">
     <t-loading :loading="detailLoading" size="small">
-      <div class="detail-action-bar">
-        <t-button variant="text" theme="default" @click="goBack">
+      <!-- 第一层：紧凑工具栏 (36px) -->
+      <div class="user-detail-toolbar">
+        <t-button variant="text" theme="default" class="user-detail-toolbar__back" @click="goBack">
           <template #icon><chevron-left-icon /></template>
           返回用户列表
         </t-button>
-        <div class="user-detail-actions">
+        <div class="user-detail-toolbar__actions">
           <t-button
             v-if="canLoginAs"
             theme="primary"
             :disabled="!user.id"
             :loading="loginAsLoading"
             @click="handleLoginAs"
-            >代登录</t-button
           >
+            代登录
+          </t-button>
           <t-button theme="default" :disabled="!user.id" @click="openEditDialog">编辑资料</t-button>
+          <t-button variant="outline" :loading="detailLoading" @click="loadDetail">刷新</t-button>
         </div>
       </div>
-    </t-loading>
 
-    <div class="user-detail-stats">
-      <t-card v-for="item in statCards" :key="item.key" :bordered="false">
-        <div class="user-stat-card">
-          <div class="user-stat-card__label">{{ item.label }}</div>
-          <strong :class="`is-${item.tone}`">{{ item.value }}</strong>
+      <!-- 第二层：实体概览与关键指标卡组 -->
+      <section class="user-detail-summary">
+        <div class="user-detail-summary__identity">
+          <span class="identity-eyebrow">用户档案</span>
+          <div class="identity-headline">
+            <strong class="identity-title">{{ user.nickname || user.email || `用户 #${user.id}` }}</strong>
+            <t-tooltip content="复制用户 ID" placement="top">
+              <t-button
+                v-if="user.id"
+                variant="text"
+                shape="square"
+                size="small"
+                class="copy-btn"
+                @click="copyField('用户 ID', user.id)"
+              >
+                <template #icon><file-copy-icon /></template>
+              </t-button>
+            </t-tooltip>
+            <t-tag
+              :theme="Number(user.status) === 1 ? 'success' : 'danger'"
+              variant="light"
+              class="identity-status-tag"
+            >
+              {{ Number(user.status) === 1 ? '正常' : '禁用' }}
+            </t-tag>
+            <t-tag
+              :theme="isVerified ? 'success' : 'warning'"
+              variant="light"
+              class="identity-status-tag"
+            >
+              {{ isVerified ? '已实名' : '未实名' }}
+            </t-tag>
+          </div>
+          <div class="identity-sub-row">
+            <span v-if="user.email" class="identity-description">邮箱：{{ user.email }}</span>
+            <span v-if="user.phone" class="identity-description">手机：{{ user.phone }}</span>
+            <span v-if="user.company" class="identity-description">公司：{{ user.company }}</span>
+          </div>
         </div>
-      </t-card>
-    </div>
+
+        <div class="user-detail-summary__metrics">
+          <div v-for="item in statCards" :key="item.key" class="summary-metric-card">
+            <span class="metric-label">{{ item.label }}</span>
+            <strong class="metric-value" :class="`is-${item.tone}`">{{ item.value }}</strong>
+          </div>
+        </div>
+      </section>
+    </t-loading>
 
     <t-card :bordered="false">
       <t-tabs :value="activeTab" @change="handleTabChange">
@@ -49,9 +91,14 @@
             <div class="info-grid">
               <div v-for="item in infoItems" :key="item.label" class="info-field">
                 <span class="info-label">{{ item.label }}</span>
-                <t-popup :content="String(item.value)" trigger="click" placement="bottom-left" show-arrow>
-                  <span class="info-value" :class="item.tone ? `text-${item.tone}` : ''">{{ item.value }}</span>
-                </t-popup>
+                <span
+                  class="info-value"
+                  :class="item.tone ? `text-${item.tone}` : ''"
+                  :title="`点击复制 ${item.label}`"
+                  @click="copyField(item.label, item.value)"
+                >
+                  {{ item.value }}
+                </span>
               </div>
             </div>
           </div>
@@ -128,7 +175,7 @@
               :value="option.value"
             />
           </t-select>
-          <t-button theme="primary" @click="openAddServiceDialog">添加实例</t-button>
+          <t-button theme="primary" @click="openAddServiceDialog">新建实例</t-button>
           <t-button theme="default" :loading="services.refreshingStatus" @click="handleRefreshServicesStatus"
             >批量刷新状态</t-button
           >
@@ -341,7 +388,7 @@
       v-model:visible="editVisible"
       header="编辑资料"
       width="560px"
-      :confirm-btn="{ content: '保存修改', loading: saveLoading }"
+      :confirm-btn="{ content: '确定', loading: saveLoading }"
       @cancel="editVisible = false"
       @confirm="handleSave"
     >
@@ -398,7 +445,7 @@
       v-model:visible="rechargeVisible"
       header="资金管理"
       width="480px"
-      :confirm-btn="{ content: rechargeForm.type === 'decrease' ? '确认扣减' : '确认增加', loading: rechargeLoading }"
+      :confirm-btn="{ content: '确定', loading: rechargeLoading }"
       @cancel="rechargeVisible = false"
       @confirm="handleRecharge"
     >
@@ -429,9 +476,9 @@
 
     <t-dialog
       v-model:visible="addServiceVisible"
-      header="添加实例"
+      header="新建实例"
       width="760px"
-      :confirm-btn="{ content: '确认创建', loading: addServiceSubmitting }"
+      :confirm-btn="{ content: '确定', loading: addServiceSubmitting }"
       @cancel="addServiceVisible = false"
       @confirm="handleSubmitAddService"
     >
@@ -711,7 +758,7 @@
       v-model:visible="resetPasswordVisible"
       header="重置登录密码"
       width="420px"
-      :confirm-btn="{ content: '确认重置', loading: serviceDrawer.actionLoading === 'reset-password' }"
+      :confirm-btn="{ content: '确定', loading: serviceDrawer.actionLoading === 'reset-password' }"
       @cancel="resetPasswordVisible = false"
       @confirm="handleResetServicePassword"
     >
@@ -726,7 +773,7 @@
       v-model:visible="manualProvisionVisible"
       header="手动开通 / 关联上游"
       width="420px"
-      :confirm-btn="{ content: '确认关联', loading: serviceDrawer.actionLoading === 'manual-provision' }"
+      :confirm-btn="{ content: '确定', loading: serviceDrawer.actionLoading === 'manual-provision' }"
       @cancel="manualProvisionVisible = false"
       @confirm="handleManualProvision"
     >
@@ -741,7 +788,7 @@
       v-model:visible="serviceUpstreamVisible"
       header="上游绑定"
       width="520px"
-      :confirm-btn="{ content: '保存', loading: serviceUpstreamSubmitting }"
+      :confirm-btn="{ content: '确定', loading: serviceUpstreamSubmitting }"
       @cancel="serviceUpstreamVisible = false"
       @confirm="submitServiceUpstream"
     >
@@ -767,7 +814,7 @@
       v-model:visible="servicePricingVisible"
       header="调整价格"
       width="620px"
-      :confirm-btn="{ content: '保存', loading: servicePricingSubmitting }"
+      :confirm-btn="{ content: '确定', loading: servicePricingSubmitting }"
       @cancel="servicePricingVisible = false"
       @confirm="submitServicePricing"
     >
@@ -796,9 +843,9 @@
 
     <t-dialog
       v-model:visible="serviceNameVisible"
-      header="修改实例名称"
+      header="编辑实例名称"
       width="420px"
-      :confirm-btn="{ content: '保存', loading: serviceNameSubmitting }"
+      :confirm-btn="{ content: '确定', loading: serviceNameSubmitting }"
       @cancel="serviceNameVisible = false"
       @confirm="submitServiceName"
     >
@@ -809,123 +856,30 @@
       </t-form>
     </t-dialog>
 
-    <t-drawer v-model:visible="invoiceDrawer.visible" size="720px" header="账单详情" @close="closeInvoiceDrawer">
-      <t-loading :loading="invoiceDrawer.loading" size="small">
-        <div class="invoice-detail-panel">
-          <section class="invoice-summary">
-            <div class="invoice-summary__main">
-              <span>账单编号</span>
-              <strong>{{ fieldValue(currentInvoice.invoice_no) }}</strong>
-              <p>
-                {{
-                  fieldValue(
-                    currentInvoice.product_full_path ||
-                      currentInvoice.product_spec_display ||
-                      currentInvoice.product_display_name ||
-                      currentInvoice.product?.display_name,
-                  )
-                }}
-              </p>
-            </div>
-            <div>
-              <span>状态</span>
-              <t-tag :theme="invoiceStatusTheme(currentInvoice.status)" variant="light">{{
-                invoiceStatusLabel(currentInvoice.status)
-              }}</t-tag>
-            </div>
-            <div>
-              <span>金额</span>
-              <strong>{{ formatMoney(currentInvoice.amount) }}</strong>
-            </div>
-            <div>
-              <span>支付方式</span>
-              <strong>{{ fieldValue(currentInvoice.payment_summary?.gateway) }}</strong>
-            </div>
-          </section>
-
-          <div class="drawer-actions">
-            <t-button theme="default" :loading="invoiceDrawer.loading" @click="reloadInvoiceDrawer">刷新</t-button>
-            <t-button
-              v-if="isCancelableInvoice(currentInvoice)"
-              theme="danger"
-              variant="outline"
-              :loading="invoiceDrawer.cancelLoading"
-              @click="handleDrawerCancelInvoice"
-              >取消账单</t-button
-            >
-          </div>
-
-          <section class="invoice-detail-section">
-            <h4>基础信息</h4>
-            <div class="invoice-detail-grid">
-              <div>
-                <span>账单类型</span>
-                <strong>{{ currentInvoice.type_label || invoiceTypeLabel(currentInvoice.type) }}</strong>
-              </div>
-              <div>
-                <span>订单号</span>
-                <strong>{{ fieldValue(currentInvoice.order?.order_no || currentInvoice.order_no) }}</strong>
-              </div>
-              <div>
-                <span>到期日</span>
-                <strong>{{ fieldValue(currentInvoice.due_date) }}</strong>
-              </div>
-              <div>
-                <span>创建时间</span>
-                <strong>{{ formatDateTime(currentInvoice.created_at) }}</strong>
-              </div>
-              <div>
-                <span>支付时间</span>
-                <strong>{{ formatDateTime(currentInvoice.paid_at) }}</strong>
-              </div>
-            </div>
-          </section>
-
-          <section v-if="invoiceSceneItems.length" class="invoice-detail-section">
-            <h4>账单项目</h4>
-            <div class="line-list">
-              <div v-for="item in invoiceSceneItems" :key="item.id || item.description" class="line-item">
-                <span>{{ fieldValue(item.description) }}</span>
-                <strong>{{ formatMoney(item.amount) }}</strong>
-              </div>
-            </div>
-          </section>
-
-          <section v-if="invoicePayments.length" class="invoice-detail-section">
-            <h4>支付 / 退款记录</h4>
-            <div class="line-list">
-              <div v-for="payment in invoicePayments" :key="payment.id || payment.payment_no" class="line-item stacked">
-                <strong>{{ fieldValue(payment.payment_no) }}</strong>
-                <span>{{ fieldValue(payment.gateway) }} / {{ formatMoney(payment.amount) }}</span>
-                <span>{{ formatDateTime(payment.paid_at || payment.created_at) }}</span>
-              </div>
-            </div>
-          </section>
-
-          <section v-if="invoiceLogs.length" class="invoice-detail-section">
-            <h4>操作日志</h4>
-            <div class="line-list">
-              <div v-for="log in invoiceLogs" :key="log.id || log.created_at" class="line-item stacked">
-                <strong>{{ fieldValue(log.summary || log.action) }}</strong>
-                <span>{{ formatDateTime(log.created_at) }}</span>
-              </div>
-            </div>
-          </section>
-          <div class="drawer-close-actions">
-            <t-button variant="outline" @click="closeInvoiceDrawer">
-              <template #icon><chevron-left-icon /></template>
-              返回
-            </t-button>
-          </div>
-        </div>
-      </t-loading>
-    </t-drawer>
+    <!-- 关联账单详情抽屉（统一复用 InvoiceDetailDrawer） -->
+    <invoice-detail-drawer
+      v-model:visible="invoiceDrawer.visible"
+      :loading="invoiceDrawer.loading"
+      :invoice="currentInvoice"
+      :payments="invoicePayments"
+      :items="invoiceSceneItems"
+      :logs="invoiceLogs"
+      :status-label="invoiceStatusLabel(currentInvoice.status)"
+      :status-theme="invoiceStatusTheme(currentInvoice.status)"
+      :cancelable="isCancelableInvoice(currentInvoice)"
+      :cancel-loading="invoiceDrawer.cancelLoading"
+      @close="closeInvoiceDrawer"
+      @refresh="reloadInvoiceDrawer"
+      @cancel="handleDrawerCancelInvoice"
+      @view-order="(orderId) => orderId && router.push(`/admin/finance/orders/${orderId}`)"
+      @view-user="(targetUserId) => targetUserId && router.push(`/admin/users/${targetUserId}`)"
+    />
 
     <t-dialog
       v-model:visible="manualInvoiceVisible"
       header="补录账单"
       width="560px"
-      :confirm-btn="{ content: '确认补录', loading: manualInvoiceSubmitting }"
+      :confirm-btn="{ content: '确定', loading: manualInvoiceSubmitting }"
       @cancel="manualInvoiceVisible = false"
       @confirm="handleManualInvoiceSubmit"
     >
@@ -983,7 +937,7 @@ import {
   toSelectOptions,
   toTagTypeMap,
 } from '@shared/statusConfig';
-import { ChevronLeftIcon, SearchIcon } from 'tdesign-icons-vue-next';
+import { ChevronLeftIcon, FileCopyIcon, SearchIcon } from 'tdesign-icons-vue-next';
 import type { FormInstanceFunctions, FormRule, PageInfo, PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
@@ -998,11 +952,12 @@ import type { AdminUser, ManualPaymentGateway, PageParams } from '@/api/user';
 import { userApi } from '@/api/user';
 import ProductBindingTreeSelect from '@/components/product-binding-tree-select/index.vue';
 import { AdminPermissions } from '@/constants/permissions';
-import { fieldValue, formatDateTime, formatMoney } from '@/utils/format';
+import { copyToClipboard, fieldValue, formatDateTime, formatMoney } from '@/utils/format';
 import { phoneRule, required } from '@/utils/formRules';
 import { hasAdminPermission } from '@/utils/permission';
 import { errorMessage } from '@/utils/userMessage';
 
+import InvoiceDetailDrawer from '@/components/finance-record-detail/InvoiceDetailDrawer.vue';
 import OrdersTab from './components/OrdersTab.vue';
 import RechargesTab from './components/RechargesTab.vue';
 
@@ -1439,6 +1394,12 @@ const infoItems = computed(() => [
   { label: '最后登录 IP', value: fieldValue(user.value.last_login_ip) },
 ]);
 
+function copyField(label: string, value: unknown) {
+  const str = String(value || '').trim();
+  if (!str || str === '-') return;
+  void copyToClipboard(str, `已复制${label}`);
+}
+
 async function loadDetail() {
   if (!userId.value) {
     await router.replace('/admin/users');
@@ -1859,7 +1820,7 @@ function handleDeleteServiceRow(row: Row) {
   const dialog = DialogPlugin.confirm({
     header: '删除实例记录',
     body: `确认删除实例“${serviceName(row)}”记录吗？`,
-    confirmBtn: '确认删除',
+    confirmBtn: { content: '确定', theme: 'danger' },
     cancelBtn: '取消',
     theme: 'warning',
     async onConfirm() {
@@ -2027,7 +1988,7 @@ function handleServicePower(action: string) {
   const dialog = DialogPlugin.confirm({
     header: `${label}确认`,
     body: `确认对实例执行“${label}”操作？`,
-    confirmBtn: `确认${label}`,
+    confirmBtn: { content: '确定', theme: 'warning' },
     cancelBtn: '取消',
     theme: 'warning',
     async onConfirm() {
@@ -2255,7 +2216,7 @@ function handleCancelInvoice(row: Row) {
   const dialog = DialogPlugin.confirm({
     header: '取消账单',
     body: '取消账单后将关闭关联流程，确认继续吗？',
-    confirmBtn: '确认取消',
+    confirmBtn: { content: '确定', theme: 'warning' },
     cancelBtn: '取消',
     theme: 'warning',
     async onConfirm() {

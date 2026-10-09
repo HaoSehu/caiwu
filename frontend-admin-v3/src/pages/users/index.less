@@ -5,25 +5,32 @@
 }
 
 .users-filter {
-  display: grid;
-  grid-template-columns: minmax(220px, 1fr) 160px auto;
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--td-comp-margin-m);
   align-items: center;
-}
 
-.users-filter > * {
-  min-width: 0;
+  .users-filter-keyword {
+    flex: 1 1 240px;
+    min-width: 200px;
+  }
+
+  .users-filter-status {
+    flex: 0 0 140px;
+  }
+
+  .users-filter-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+  }
 }
 
 .users-filter .t-input,
 .users-filter .t-select,
 .users-filter .t-button {
   height: var(--td-comp-size-m);
-}
-
-.users-filter .t-button {
-  min-width: 88px;
-  min-height: 0;
 }
 
 .users-table-card {
@@ -239,33 +246,22 @@
   }
 
   .users-filter {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-areas:
-      "keyword keyword"
-      "status create";
-    align-items: center;
+    flex-direction: column;
+    align-items: stretch;
     gap: var(--td-comp-margin-s);
-  }
 
-  .users-filter > * {
-    min-width: 0;
-  }
+    .users-filter-keyword,
+    .users-filter-status {
+      width: 100%;
+      flex: none;
+    }
 
-  .users-filter > :nth-child(1) {
-    grid-area: keyword;
-  }
-
-  .users-filter > :nth-child(2) {
-    grid-area: status;
-  }
-
-  .users-filter > :nth-child(3) {
-    grid-area: create;
-  }
-
-  .users-filter .t-button {
-    width: 100%;
-    margin-left: 0;
+    .users-filter-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      width: 100%;
+      margin-left: 0;
+    }
   }
 
   .users-desktop-table {

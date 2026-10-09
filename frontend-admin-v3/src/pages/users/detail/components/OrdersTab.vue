@@ -36,7 +36,7 @@
       v-model:visible="manualOrderVisible"
       header="补录订单"
       width="560px"
-      :confirm-btn="{ content: '确认补录', loading: submitting }"
+      :confirm-btn="{ content: '确定', loading: submitting }"
       @cancel="manualOrderVisible = false"
       @confirm="handleManualOrderSubmit"
     >

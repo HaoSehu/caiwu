@@ -4,19 +4,24 @@
       <div class="verification-filter">
         <t-input
           v-model="filters.keyword"
+          class="verification-filter-keyword"
           clearable
-          placeholder="输入关键字"
+          placeholder="搜索用户名 / 真实姓名 / 手机号 / 身份证"
           @enter="handleSearch"
           @clear="handleSearch"
         >
           <template #suffix-icon><search-icon /></template>
         </t-input>
-        <t-select v-model="quickStatus" placeholder="状态筛选" @change="handleQuickStatusChange">
+        <t-select v-model="quickStatus" class="verification-filter-status" placeholder="状态筛选" @change="handleQuickStatusChange">
           <t-option label="全部" value="all" />
           <t-option label="待认证" value="pending" />
           <t-option label="成功" value="success" />
           <t-option label="失败" value="failed" />
         </t-select>
+        <div class="verification-filter-actions">
+          <t-button theme="primary" @click="handleSearch">查询</t-button>
+          <t-button theme="default" variant="base" @click="handleReset">重置</t-button>
+        </div>
       </div>
 
       <t-table
@@ -197,7 +202,7 @@
       v-model:visible="rejectVisible"
       header="驳回实名"
       width="460px"
-      :confirm-btn="{ content: '确认驳回', loading: Boolean(actionLoadingId) }"
+      :confirm-btn="{ content: '确定', loading: Boolean(actionLoadingId) }"
       @confirm="handleReject"
     >
       <p class="verification-help">请输入驳回原因，提交后会解除当前实名认证状态。</p>
@@ -242,6 +247,7 @@ const {
   pagination,
   loadList,
   handleSearch,
+  resetFilters: engineResetFilters,
   handlePaginationChange,
 } = useListPage<VerificationFilter, VerificationRecord>({
   defaultFilters: { keyword: '' },
@@ -340,6 +346,11 @@ async function loadSummary() {
 function handleQuickStatusChange(value: string | number) {
   quickStatus.value = String(value || 'all');
   handleSearch();
+}
+
+function handleReset() {
+  quickStatus.value = 'all';
+  engineResetFilters();
 }
 
 function verificationMethodLabel(row: VerificationRecord) {
@@ -513,11 +524,27 @@ onMounted(() => {
 }
 
 .verification-filter {
-  display: grid;
-  grid-template-columns: minmax(220px, 1fr) 180px;
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--td-comp-margin-m);
-  align-items: stretch;
+  align-items: center;
   margin-bottom: var(--td-comp-margin-l);
+
+  .verification-filter-keyword {
+    flex: 1 1 260px;
+    min-width: 200px;
+  }
+
+  .verification-filter-status {
+    flex: 0 0 160px;
+  }
+
+  .verification-filter-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+  }
 }
 
 .verification-filter > * {
@@ -658,8 +685,22 @@ onMounted(() => {
 
 @media (width <= 768px) {
   .verification-filter {
-    grid-template-columns: minmax(140px, 1fr) 130px;
+    flex-direction: column;
+    align-items: stretch;
     gap: var(--td-comp-margin-s);
+
+    .verification-filter-keyword,
+    .verification-filter-status {
+      width: 100%;
+      flex: none;
+    }
+
+    .verification-filter-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      width: 100%;
+      margin-left: 0;
+    }
   }
 
   .verification-table {

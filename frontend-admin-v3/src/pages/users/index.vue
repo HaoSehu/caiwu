@@ -4,6 +4,7 @@
       <div class="users-filter">
         <t-input
           v-model="filters.keyword"
+          class="users-filter-keyword"
           clearable
           placeholder="搜索用户ID/邮箱/手机号/昵称/真实姓名/QQ/身份证"
           @enter="handleSearch"
@@ -11,14 +12,18 @@
         >
           <template #suffix-icon><search-icon /></template>
         </t-input>
-        <t-select v-model="filters.status" clearable placeholder="状态" @change="handleSearch">
+        <t-select v-model="filters.status" class="users-filter-status" clearable placeholder="状态" @change="handleSearch">
           <t-option label="正常" :value="1" />
           <t-option label="禁用" :value="0" />
         </t-select>
-        <t-button v-if="canManage" size="medium" theme="primary" @click="openCreateDialog">
-          <template #icon><user-add-icon /></template>
-          新增用户
-        </t-button>
+        <div class="users-filter-actions">
+          <t-button theme="primary" @click="handleSearch">查询</t-button>
+          <t-button theme="default" variant="base" @click="resetFilters">重置</t-button>
+          <t-button v-if="canManage" size="medium" theme="primary" @click="openCreateDialog">
+            <template #icon><user-add-icon /></template>
+            新建用户
+          </t-button>
+        </div>
       </div>
 
       <div class="users-list-summary">
@@ -184,10 +189,17 @@ const canManage = hasPermissionInList(userPermissions(), AdminPermissions.USER_M
 
 const submitLoading = ref(false);
 
-const { filters, list, total, loading, pagination, loadList, handleSearch, handlePaginationChange } = useListPage<
-  UserFilter,
-  AdminUser
->({
+const {
+  filters,
+  list,
+  total,
+  loading,
+  pagination,
+  loadList,
+  handleSearch,
+  resetFilters,
+  handlePaginationChange,
+} = useListPage<UserFilter, AdminUser>({
   defaultFilters: { keyword: '', status: '' },
   defaultPageSize: 20,
   onError: (error) => MessagePlugin.error(errorMessage(error, '加载用户列表失败')),
