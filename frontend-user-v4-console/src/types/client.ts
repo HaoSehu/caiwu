@@ -308,6 +308,9 @@ export interface ServiceOverviewGroup {
   id?: number | null;
   product_type?: string;
   product_type_label?: string;
+  group_level_label?: string;
+  group_path?: string[];
+  group_path_text?: string;
   icon?: string;
   name?: string;
   title?: string;
@@ -327,6 +330,10 @@ export interface ServiceOverviewGroup {
 export interface ServiceOverviewCategoryCard {
   key?: string;
   id?: number | null;
+  level?: number | null;
+  group_level_label?: string;
+  group_path?: string[];
+  group_path_text?: string;
   name?: string;
   title?: string;
   description?: string;

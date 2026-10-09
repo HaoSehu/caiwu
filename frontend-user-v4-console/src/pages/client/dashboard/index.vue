@@ -380,14 +380,16 @@ function resolvePagedList<T>(payload: { list?: T[] } | T[] | null | undefined): 
 
 function resolveProductMeta(item: ServiceOverviewGroup, key: string) {
   const title = String(item.title || item.name || item.product_type_label || '').toLowerCase();
-  if (key === 'cloud_server' || title.includes('云服务器')) return { icon: ServerIcon, tone: 'is-brand' };
-  if (key === 'physical_machine' || key === 'bare_metal' || title.includes('物理机') || title.includes('裸金属')) {
+  // key 为一级菜单 code（分组口径），业务类型另取 product_type 兜底图标。
+  const typeKey = String(item.product_type || '').toLowerCase() || key;
+  if (typeKey === 'cloud_server' || title.includes('云服务器')) return { icon: ServerIcon, tone: 'is-brand' };
+  if (typeKey === 'physical_machine' || typeKey === 'bare_metal' || title.includes('物理机') || title.includes('裸金属')) {
     return { icon: DashboardIcon, tone: 'is-success' };
   }
-  if (key === 'game_cloud' || title.includes('游戏云')) return { icon: DashboardIcon, tone: 'is-info' };
-  if (key === 'cloud_desktop' || title.includes('云电脑')) return { icon: HelpCircleIcon, tone: 'is-info' };
-  if (key === 'web_hosting' || title.includes('虚拟主机')) return { icon: ServiceIcon, tone: 'is-warning' };
-  if (key === 'cdn' || title.includes('CDN')) return { icon: ServiceIcon, tone: 'is-warning' };
+  if (typeKey === 'game_cloud' || title.includes('游戏云')) return { icon: DashboardIcon, tone: 'is-info' };
+  if (typeKey === 'cloud_desktop' || title.includes('云电脑')) return { icon: HelpCircleIcon, tone: 'is-info' };
+  if (typeKey === 'web_hosting' || title.includes('虚拟主机')) return { icon: ServiceIcon, tone: 'is-warning' };
+  if (typeKey === 'cdn' || title.includes('CDN')) return { icon: ServiceIcon, tone: 'is-warning' };
   return { icon: ServerIcon, tone: 'is-muted' };
 }
 
