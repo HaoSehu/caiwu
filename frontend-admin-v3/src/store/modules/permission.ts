@@ -44,11 +44,11 @@ const ADMIN_MENU_GROUPS: MenuGroupConfig[] = [
     icon: shallowRef(DashboardIcon),
     orderNo: 0,
     children: [
-      '/admin/dashboard',
       {
-        path: '/admin/menu/data-dashboard/business-overview',
-        title: { zh_CN: '经营概览', en_US: 'Business Overview' },
+        path: '/admin/menu/data-dashboard/data-overview',
+        title: { zh_CN: '数据概览', en_US: 'Data Overview' },
         children: [
+          '/admin/dashboard',
           {
             path: '/admin/finance/new-customers',
             title: { zh_CN: '新客户日报', en_US: 'New Customer Daily' },
@@ -83,30 +83,32 @@ const ADMIN_MENU_GROUPS: MenuGroupConfig[] = [
     orderNo: 20,
     children: [
       {
-        path: '/admin/menu/user-management/customer-management',
-        title: { zh_CN: '客户管理', en_US: 'Customer Management' },
+        path: '/admin/menu/user-management/user-accounts',
+        title: { zh_CN: '用户与实名', en_US: 'Users & Verification' },
         children: ['/admin/users', '/admin/users/verification', '/admin/users/verification/manage'],
       },
       {
-        path: '/admin/menu/user-management/member-benefits',
-        title: { zh_CN: '会员权益', en_US: 'Member Benefits' },
-        children: ['/admin/member-levels', '/admin/promotion-ambassadors', '/admin/marketing-groups'],
+        path: '/admin/menu/user-management/membership',
+        title: { zh_CN: '会员体系', en_US: 'Membership' },
+        children: ['/admin/member-levels'],
       },
     ],
   },
   {
-    path: '/admin/menu/ticket-processing',
-    title: { zh_CN: '工单处理', en_US: 'Ticket Processing' },
+    path: '/admin/menu/service-tickets',
+    title: { zh_CN: '服务与工单', en_US: 'Services & Tickets' },
     icon: shallowRef(ServerIcon),
     orderNo: 30,
     children: [
       {
-        path: '/admin/menu/ticket-processing/services-tickets',
-        title: { zh_CN: '服务与工单', en_US: 'Services & Tickets' },
-        children: [
-          { path: '/admin/services', title: { zh_CN: '服务实例', en_US: 'Service Instances' } },
-          '/admin/tickets',
-        ],
+        path: '/admin/menu/service-tickets/service-management',
+        title: { zh_CN: '服务管理', en_US: 'Service Management' },
+        children: [{ path: '/admin/services', title: { zh_CN: '服务实例', en_US: 'Service Instances' } }],
+      },
+      {
+        path: '/admin/menu/service-tickets/ticket-management',
+        title: { zh_CN: '工单管理', en_US: 'Ticket Management' },
+        children: ['/admin/tickets'],
       },
     ],
   },
@@ -143,18 +145,19 @@ const ADMIN_MENU_GROUPS: MenuGroupConfig[] = [
     orderNo: 50,
     children: [
       {
-        path: '/admin/menu/marketing-promotion/coupons',
-        title: { zh_CN: '优惠券', en_US: 'Coupons' },
-        children: ['/admin/coupons', '/admin/coupon-campaigns'],
+        path: '/admin/menu/marketing-promotion/product-marketing',
+        title: { zh_CN: '商品营销', en_US: 'Product Marketing' },
+        children: ['/admin/coupons', '/admin/coupon-campaigns', '/admin/marketing-groups'],
       },
       {
-        path: '/admin/menu/marketing-promotion/referral-management',
-        title: { zh_CN: '推广管理', en_US: 'Referral Management' },
+        path: '/admin/menu/marketing-promotion/referral-distribution',
+        title: { zh_CN: '推广分销', en_US: 'Referral & Distribution' },
         children: [
           '/admin/referral',
           '/admin/referral/rewards',
           '/admin/referral/withdrawals',
           '/admin/referral-settings',
+          '/admin/promotion-ambassadors',
         ],
       },
     ],
@@ -178,11 +181,6 @@ const ADMIN_MENU_GROUPS: MenuGroupConfig[] = [
         title: { zh_CN: '内容管理', en_US: 'Content Management' },
         children: ['/admin/content/notices', '/admin/content/help', '/admin/content/media-library'],
       },
-      {
-        path: '/admin/menu/site-content/notifications-api',
-        title: { zh_CN: '通知与接口', en_US: 'Notifications & APIs' },
-        children: ['/admin/notifications', '/admin/notifications/sms-templates', '/admin/notifications/api-directory'],
-      },
     ],
   },
   {
@@ -191,6 +189,11 @@ const ADMIN_MENU_GROUPS: MenuGroupConfig[] = [
     icon: shallowRef(ToolsIcon),
     orderNo: 70,
     children: [
+      {
+        path: '/admin/menu/system-settings/notification-templates',
+        title: { zh_CN: '通知模板', en_US: 'Notification Templates' },
+        children: ['/admin/notifications', '/admin/notifications/sms-templates', '/admin/notifications/api-directory'],
+      },
       {
         path: '/admin/menu/system-settings/integration-plugins',
         title: { zh_CN: '集成插件', en_US: 'Integration Plugins' },
@@ -205,19 +208,14 @@ const ADMIN_MENU_GROUPS: MenuGroupConfig[] = [
         ],
       },
       {
-        path: '/admin/menu/system-settings/automation',
-        title: { zh_CN: '自动化', en_US: 'Automation' },
-        children: ['/admin/automation'],
-      },
-      {
         path: '/admin/menu/system-settings/permissions',
         title: { zh_CN: '权限管理', en_US: 'Permission Management' },
         children: ['/admin/system/staff', '/admin/system/roles'],
       },
       {
-        path: '/admin/menu/system-settings/database',
-        title: { zh_CN: '数据库状态', en_US: 'Database Status' },
-        children: ['/admin/system/database'],
+        path: '/admin/menu/system-settings/maintenance',
+        title: { zh_CN: '系统维护', en_US: 'System Maintenance' },
+        children: ['/admin/automation', '/admin/system/database'],
       },
     ],
   },
@@ -228,19 +226,19 @@ const ADMIN_MENU_GROUPS: MenuGroupConfig[] = [
     orderNo: 80,
     children: [
       {
-        path: '/admin/menu/log-center/log-management',
-        title: { zh_CN: '日志管理', en_US: 'Log Management' },
-        children: [
-          '/admin/logs/runtime',
-          '/admin/logs/admin-logins',
-          '/admin/logs/api',
-          '/admin/logs/sms',
-          '/admin/logs/email',
-          '/admin/logs/tasks',
-          '/admin/logs/gateway',
-          '/admin/logs/schedules',
-          '/admin/logs/cleanup',
-        ],
+        path: '/admin/menu/log-center/runtime-access',
+        title: { zh_CN: '运行与访问', en_US: 'Runtime & Access' },
+        children: ['/admin/logs/runtime', '/admin/logs/api', '/admin/logs/admin-logins', '/admin/logs/gateway'],
+      },
+      {
+        path: '/admin/menu/log-center/notification-logs',
+        title: { zh_CN: '通知日志', en_US: 'Notification Logs' },
+        children: ['/admin/logs/sms', '/admin/logs/email'],
+      },
+      {
+        path: '/admin/menu/log-center/task-maintenance',
+        title: { zh_CN: '任务与维护', en_US: 'Tasks & Maintenance' },
+        children: ['/admin/logs/tasks', '/admin/logs/schedules', '/admin/logs/cleanup', '/admin/log-archive'],
       },
     ],
   },
