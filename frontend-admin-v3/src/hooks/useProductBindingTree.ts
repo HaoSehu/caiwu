@@ -357,11 +357,18 @@ export function buildBindingTreeOptions(
   nodes.forEach((nodeValue, index) => {
     const node = toPlainRecord(nodeValue);
     const productType = String(node.product_type || 'other').trim() || 'other';
+    // 按一级菜单分组：两个一级菜单即使 product_type 相同（如大陆云服 / 轻量服务器同为 cloud_server）
+    // 也必须落在各自的菜单节点下，避免被合并。
+    const menuCode = String(node.first_product_group_code || productType).trim() || productType;
     const typeLabel = String(
-      node.product_type_label || node.service_type_label || PRODUCT_TYPE_LABELS[productType] || productType,
+      node.first_product_group_name ||
+        node.product_type_label ||
+        node.service_type_label ||
+        PRODUCT_TYPE_LABELS[productType] ||
+        menuCode,
     ).trim();
-    const typeNode = ensureBindingTreeTypeNode(typeNodes, productType, typeLabel, mode);
-    const categoryNode = buildBindingCategoryTreeNode(node, `${_parentKey}-${productType}-${index}`, mode, {
+    const typeNode = ensureBindingTreeTypeNode(typeNodes, menuCode, typeLabel, mode);
+    const categoryNode = buildBindingCategoryTreeNode(node, `${_parentKey}-${menuCode}-${index}`, mode, {
       product_type: productType,
       first_product_group_id: Number(node.first_product_group_id || 0) || null,
       first_product_group_code: String(node.first_product_group_code || '').trim() || null,
