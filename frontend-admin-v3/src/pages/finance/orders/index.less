@@ -7,68 +7,54 @@
 }
 
 .order-filter {
-  display: grid;
-  grid-template-columns: minmax(240px, 1fr) 140px 140px 240px;
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--td-comp-margin-m);
-  align-items: stretch;
+  align-items: center;
   margin-bottom: 16px;
-}
 
-.order-filter > * {
-  min-width: 0;
-}
+  .filter-keyword {
+    flex: 1 1 240px;
+    min-width: 200px;
+  }
 
-@media (width <= 1024px) {
-  .order-filter {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .filter-type,
+  .filter-status {
+    flex: 0 0 130px;
+  }
+
+  .filter-date {
+    flex: 0 0 250px;
+  }
+
+  .filter-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
   }
 }
 
 @media (width <= 768px) {
   .order-filter {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-areas:
-      "keyword keyword"
-      "type status"
-      "date date";
+    flex-direction: column;
     align-items: stretch;
     gap: 8px;
     margin-bottom: 12px;
-  }
 
-  .order-filter > * {
-    min-width: 0;
-  }
+    .filter-keyword,
+    .filter-type,
+    .filter-status,
+    .filter-date {
+      width: 100%;
+      flex: none;
+    }
 
-  .order-filter :where(.t-input, .t-select, .t-date-picker, .t-date-range-picker) {
-    width: 100%;
-    height: 38px;
-  }
-
-  .order-filter .filter-keyword {
-    grid-area: keyword;
-  }
-
-  .order-filter .filter-type {
-    grid-area: type;
-  }
-
-  .order-filter .filter-status {
-    grid-area: status;
-  }
-
-  .order-filter .filter-date {
-    grid-area: date;
-  }
-}
-
-@media (width <= 360px) {
-  .order-filter {
-    grid-template-columns: 1fr;
-    grid-template-areas:
-      "keyword"
-      "type"
-      "status"
-      "date";
+    .filter-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      width: 100%;
+      margin-left: 0;
+    }
   }
 }

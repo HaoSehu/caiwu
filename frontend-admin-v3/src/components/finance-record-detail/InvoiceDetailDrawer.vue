@@ -10,7 +10,7 @@
     <record-detail-page
       :loading="loading"
       :ready="Boolean(invoice.id || invoice.invoice_no)"
-      back-text="关闭详情"
+      :show-back="false"
       eyebrow="账单详情"
       :title="fieldValue(invoice.invoice_no || invoice.id)"
       :description="invoiceTitle(invoice)"
@@ -20,7 +20,6 @@
       :tabs="tabs"
       :active-tab="activeTab"
       empty-text="账单不存在"
-      @back="emit('close')"
       @refresh="emit('refresh')"
       @update:active-tab="(value) => (activeTab = value)"
     >
@@ -52,45 +51,88 @@
       <template #tab-basic>
         <section class="finance-detail-section">
           <h4>基础信息</h4>
-          <div class="finance-detail-grid">
-            <div>
-              <span>账单类型</span>
-              <strong>{{ fieldValue(invoice.type_label || invoiceTypeLabel(invoice.type)) }}</strong>
+          <div class="detail-kv-grid">
+            <div class="detail-kv-item">
+              <span class="detail-kv-item__label">账单类型</span>
+              <div class="detail-kv-item__value">
+                <t-tag theme="primary" variant="light">
+                  {{ fieldValue(invoice.type_label || invoiceTypeLabel(invoice.type)) }}
+                </t-tag>
+              </div>
             </div>
-            <div>
-              <span>用户</span>
-              <strong>{{ userName(invoice.user) }}</strong>
+            <div class="detail-kv-item">
+              <span class="detail-kv-item__label">归属用户</span>
+              <div class="detail-kv-item__value">
+                <strong>{{ userName(invoice.user) }}</strong>
+                <t-button
+                  v-if="invoice.user_id"
+                  size="small"
+                  variant="text"
+                  theme="primary"
+                  @click="emit('view-user', invoice.user_id)"
+                >
+                  用户详情 →
+                </t-button>
+              </div>
             </div>
-            <div>
-              <span>订单号</span>
-              <strong v-if="orderId">
-                <t-link theme="primary" hover="color" @click="goToOrder">{{ orderNo }}</t-link>
-              </strong>
-              <strong v-else>{{ fieldValue(invoice.order?.order_no || invoice.order_no) }}</strong>
+            <div class="detail-kv-item">
+              <span class="detail-kv-item__label">关联订单</span>
+              <div class="detail-kv-item__value">
+                <t-link v-if="orderId" theme="primary" hover="color" @click="goToOrder">
+                  {{ orderNo }}
+                </t-link>
+                <strong v-else>{{ fieldValue(invoice.order?.order_no || invoice.order_no) }}</strong>
+              </div>
             </div>
-            <div>
-              <span>到期日</span>
-              <strong>{{ fieldValue(invoice.due_date) }}</strong>
+            <div class="detail-kv-item">
+              <span class="detail-kv-item__label">到期截止日</span>
+              <strong class="detail-kv-item__value">{{ fieldValue(invoice.due_date) }}</strong>
             </div>
-            <div>
-              <span>创建时间</span>
-              <strong>{{ formatDateTime(invoice.created_at) }}</strong>
+            <div class="detail-kv-item">
+              <span class="detail-kv-item__label">创建时间</span>
+              <strong class="detail-kv-item__value">{{ formatDateTime(invoice.created_at) }}</strong>
             </div>
-            <div>
-              <span>支付时间</span>
-              <strong>{{ formatDateTime(invoice.paid_at) }}</strong>
+            <div class="detail-kv-item">
+              <span class="detail-kv-item__label">支付时间</span>
+              <strong class="detail-kv-item__value">{{ formatDateTime(invoice.paid_at) }}</strong>
             </div>
-            <div>
-              <span>链路追踪</span>
-              <strong>{{ fieldValue(invoice.trace_id) }}</strong>
+            <div v-if="memberLevelName" class="detail-kv-item">
+              <span class="detail-kv-item__label">会员等级</span>
+              <div class="detail-kv-item__value">
+                <t-tag theme="success" variant="light">{{ memberLevelName }}</t-tag>
+              </div>
             </div>
-            <div v-if="invoice.refund_trace_id">
-              <span>退款追踪</span>
-              <strong>{{ fieldValue(invoice.refund_trace_id) }}</strong>
+            <div v-if="invoice.trace_id" class="detail-kv-item detail-kv-item--span-2">
+              <span class="detail-kv-item__label">链路追踪 (Trace ID)</span>
+              <div class="detail-kv-item__value detail-copy-wrap">
+                <span style="font-family: monospace; font-size: 13px;">{{ invoice.trace_id }}</span>
+                <t-tooltip content="复制 Trace ID" placement="top">
+                  <t-button
+                    variant="text"
+                    shape="square"
+                    size="small"
+                    @click="copyText(invoice.trace_id)"
+                  >
+                    <template #icon><file-copy-icon /></template>
+                  </t-button>
+                </t-tooltip>
+              </div>
             </div>
-            <div v-if="memberLevelName">
-              <span>会员等级</span>
-              <strong>{{ memberLevelName }}</strong>
+            <div v-if="invoice.refund_trace_id" class="detail-kv-item detail-kv-item--span-2">
+              <span class="detail-kv-item__label">退款追踪号</span>
+              <div class="detail-kv-item__value detail-copy-wrap">
+                <span style="font-family: monospace; font-size: 13px;">{{ invoice.refund_trace_id }}</span>
+                <t-tooltip content="复制退款追踪" placement="top">
+                  <t-button
+                    variant="text"
+                    shape="square"
+                    size="small"
+                    @click="copyText(invoice.refund_trace_id)"
+                  >
+                    <template #icon><file-copy-icon /></template>
+                  </t-button>
+                </t-tooltip>
+              </div>
             </div>
           </div>
         </section>
@@ -152,6 +194,7 @@
 </template>
 <script setup lang="ts">
 import { getStatusLabel, getStatusTagType, INVOICE_TYPE_MAP, PAYMENT_STATUS_MAP } from '@shared/statusConfig';
+import { FileCopyIcon } from 'tdesign-icons-vue-next';
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
@@ -159,6 +202,7 @@ import type { InvoiceRecord } from '@/api/admin';
 import type { RecordDetailMetric, RecordDetailTab } from '@/components/record-detail-page/index.vue';
 import RecordDetailPage from '@/components/record-detail-page/index.vue';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { copyToClipboard } from '@/utils/format';
 
 const props = withDefaults(
   defineProps<{
@@ -244,6 +288,10 @@ function goToOrder() {
   }
 }
 
+function copyText(text: unknown) {
+  void copyToClipboard(String(text || ''));
+}
+
 const summaryMetrics = computed<RecordDetailMetric[]>(() => [
   { label: '账单金额', value: formatMoney(invoice.value.amount), primary: true },
   {
@@ -321,11 +369,11 @@ function toRecord(value: unknown): Record<string, unknown> {
 .finance-detail-section {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 
 .finance-detail-section + .finance-detail-section {
-  margin-top: 16px;
+  margin-top: 20px;
 }
 
 .finance-detail-section h4 {
@@ -333,69 +381,76 @@ function toRecord(value: unknown): Record<string, unknown> {
   margin: 0;
   padding-left: 10px;
   color: var(--td-text-color-primary);
-  font-size: var(--td-font-size-size-3, 14px);
-  font-weight: 650;
+  font-size: var(--td-font-size-title-medium, 14px);
+  font-weight: 700;
   line-height: 22px;
+
+  &::before {
+    position: absolute;
+    top: 3px;
+    bottom: 3px;
+    left: 0;
+    width: 3px;
+    border-radius: var(--td-radius-small, 2px);
+    background: var(--td-brand-color);
+    content: '';
+  }
 }
 
-.finance-detail-section h4::before {
-  position: absolute;
-  top: 4px;
-  bottom: 4px;
-  left: 0;
-  width: 3px;
-  border-radius: var(--td-radius-small, 2px);
-  background: var(--td-brand-color);
-  content: '';
+.detail-kv-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
 }
 
-.finance-detail-grid,
-.finance-line-list {
-  overflow: hidden;
+.detail-kv-item {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 10px 12px;
+  background: var(--td-bg-color-secondarycontainer);
   border: 1px solid var(--td-component-border);
   border-radius: var(--td-radius-medium, 6px);
-  background: var(--td-component-stroke);
-}
-
-.finance-detail-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1px;
-}
-
-.finance-detail-grid > div,
-.finance-line-item {
-  background: var(--td-bg-color-container);
-}
-
-.finance-detail-grid > div {
-  display: flex;
   min-width: 0;
-  flex-direction: column;
-  gap: 5px;
-  padding: 12px;
+
+  &__label {
+    color: var(--td-text-color-placeholder);
+    font-size: var(--td-font-size-body-small, 12px);
+    line-height: 1.4;
+  }
+
+  &__value {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--td-text-color-primary);
+    font-size: var(--td-font-size-body-medium, 13px);
+    font-weight: 600;
+    line-height: 1.5;
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+  }
+
+  &--span-2 {
+    grid-column: span 2;
+  }
+
+  &--span-3 {
+    grid-column: 1 / -1;
+  }
 }
 
-.finance-detail-grid span,
-.finance-line-item span {
-  color: var(--td-text-color-secondary);
-  font-size: var(--td-font-size-size-1, 12px);
-  line-height: 1.5;
-}
-
-.finance-detail-grid strong,
-.finance-line-item strong {
-  color: var(--td-text-color-primary);
-  font-size: var(--td-font-size-size-2, 13px);
-  font-weight: 600;
-  line-height: 1.5;
-  overflow-wrap: anywhere;
+.detail-copy-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .finance-line-list {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 8px;
 }
 
 .finance-line-item {
@@ -403,8 +458,46 @@ function toRecord(value: unknown): Record<string, unknown> {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  min-width: 0;
-  padding: 12px;
+  padding: 10px 14px;
+  background: var(--td-bg-color-secondarycontainer);
+  border: 1px solid var(--td-component-border);
+  border-radius: var(--td-radius-medium, 6px);
+
+  span {
+    color: var(--td-text-color-secondary);
+    font-size: var(--td-font-size-body-small, 12px);
+  }
+
+  strong {
+    color: var(--td-text-color-primary);
+    font-size: var(--td-font-size-body-medium, 13px);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.finance-line-item--stacked {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+
+  .finance-line-item__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 2px;
+  }
+}
+
+@media (max-width: 768px) {
+  .detail-kv-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .detail-kv-item--span-2,
+  .detail-kv-item--span-3 {
+    grid-column: 1;
+  }
 }
 
 .finance-line-item--stacked {

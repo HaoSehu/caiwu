@@ -7,63 +7,52 @@
 }
 
 .recharge-filter {
-  display: grid;
-  grid-template-columns: minmax(240px, 1fr) 130px 240px;
+  display: flex;
+  flex-wrap: wrap;
   gap: 12px;
-  align-items: stretch;
+  align-items: center;
   margin-bottom: 16px;
-}
 
-.recharge-filter > * {
-  min-width: 0;
-}
+  .filter-keyword {
+    flex: 1 1 240px;
+    min-width: 200px;
+  }
 
-@media (width <= 1024px) {
-  .recharge-filter {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .filter-status {
+    flex: 0 0 130px;
+  }
+
+  .filter-date {
+    flex: 0 0 250px;
+  }
+
+  .filter-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
   }
 }
 
 @media (width <= 768px) {
   .recharge-filter {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-areas:
-      "keyword keyword"
-      "status status"
-      "date date";
+    flex-direction: column;
     align-items: stretch;
     gap: 8px;
     margin-bottom: 12px;
-  }
 
-  .recharge-filter > * {
-    min-width: 0;
-  }
+    .filter-keyword,
+    .filter-status,
+    .filter-date {
+      width: 100%;
+      flex: none;
+    }
 
-  .recharge-filter :where(.t-input, .t-select, .t-date-picker, .t-date-range-picker) {
-    width: 100%;
-    height: 38px;
-  }
-
-  .recharge-filter .filter-keyword {
-    grid-area: keyword;
-  }
-
-  .recharge-filter .filter-status {
-    grid-area: status;
-  }
-
-  .recharge-filter .filter-date {
-    grid-area: date;
-  }
-}
-
-@media (width <= 360px) {
-  .recharge-filter {
-    grid-template-columns: 1fr;
-    grid-template-areas:
-      "keyword"
-      "status"
-      "date";
+    .filter-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      width: 100%;
+      margin-left: 0;
+    }
   }
 }

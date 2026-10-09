@@ -45,6 +45,10 @@
           value-type="YYYY-MM-DD"
           placeholder="选择日期范围"
         />
+        <div class="filter-actions">
+          <t-button theme="primary" @click="handleSearch">查询</t-button>
+          <t-button theme="default" variant="base" @click="resetFilters">重置</t-button>
+        </div>
       </div>
 
       <div v-if="!isMobile" class="table-scroll">

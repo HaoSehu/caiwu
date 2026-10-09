@@ -6,7 +6,7 @@
       back-text="返回订单列表"
       eyebrow="订单详情"
       :title="fieldValue(order.order_no || order.id)"
-      :description="`服务ID：${serviceIdLabel(order.service)}`"
+      :description="serviceSubtitle"
       :status-label="orderStatusLabel(order.status)"
       :status-theme="orderStatusTheme(order.status)"
       :metrics="summaryMetrics"
@@ -17,100 +17,168 @@
       @refresh="loadDetail"
       @update:active-tab="(value) => (activeTab = value)"
     >
-      <template #relations>
-        <t-button v-if="order.invoice_id" variant="outline" size="small" @click="openInvoiceDetail(order.invoice_id)">
-          查看账单详情
+      <!-- 头部右上角快捷动作 -->
+      <template #toolbar-actions>
+        <t-button
+          v-if="order.invoice_id"
+          variant="outline"
+          theme="primary"
+          @click="openInvoiceDetail(order.invoice_id)"
+        >
+          查看关联账单
         </t-button>
         <t-button
           v-if="order.user_id"
           variant="outline"
-          size="small"
           @click="router.push(`/admin/users/${order.user_id}`)"
         >
-          查看用户详情
+          查看用户资料
+        </t-button>
+        <t-button
+          v-if="order.service_id"
+          variant="outline"
+          @click="router.push(`/admin/services?service_id=${order.service_id}`)"
+        >
+          查看服务实例
         </t-button>
       </template>
 
+      <!-- 选项卡 1：基本信息与关联信息 -->
       <template #tab-basic>
+        <!-- 订单主信息 -->
         <section class="order-detail-section">
-          <h4>订单信息</h4>
-          <div class="detail-kv-grid detail-kv-grid--two">
+          <div class="order-detail-section__header">
+            <h4>订单主信息</h4>
+          </div>
+          <div class="detail-kv-grid">
             <div class="detail-kv-item detail-kv-item--span-2">
-              <span>订单号</span>
-              <strong>{{ fieldValue(order.order_no) }}</strong>
+              <span class="detail-kv-item__label">订单号</span>
+              <div class="detail-kv-item__value detail-copy-wrap">
+                <strong>{{ fieldValue(order.order_no) }}</strong>
+                <t-tooltip content="复制订单号" placement="top">
+                  <t-button
+                    variant="text"
+                    shape="square"
+                    size="small"
+                    @click="copyText(order.order_no || '')"
+                  >
+                    <template #icon><file-copy-icon /></template>
+                  </t-button>
+                </t-tooltip>
+              </div>
             </div>
             <div class="detail-kv-item">
-              <span>订单类型</span>
-              <strong>{{ order.type_label || orderTypeLabel(order.type) }}</strong>
+              <span class="detail-kv-item__label">订单类型</span>
+              <div class="detail-kv-item__value">
+                <t-tag theme="primary" variant="light">
+                  {{ order.type_label || orderTypeLabel(order.type) }}
+                </t-tag>
+              </div>
             </div>
             <div class="detail-kv-item">
-              <span>状态</span>
-              <t-tag :theme="orderStatusTheme(order.status)" variant="light">
-                {{ orderStatusLabel(order.status) }}
-              </t-tag>
+              <span class="detail-kv-item__label">订单状态</span>
+              <div class="detail-kv-item__value">
+                <t-tag :theme="orderStatusTheme(order.status)" variant="light">
+                  {{ orderStatusLabel(order.status) }}
+                </t-tag>
+              </div>
             </div>
             <div class="detail-kv-item">
-              <span>数量</span>
-              <strong>{{ order.quantity || 1 }}</strong>
+              <span class="detail-kv-item__label">购买数量</span>
+              <strong class="detail-kv-item__value">{{ order.quantity || 1 }} 台</strong>
             </div>
             <div class="detail-kv-item">
-              <span>计费周期</span>
-              <strong>{{ fieldValue(order.billing_cycle) }}</strong>
+              <span class="detail-kv-item__label">计费周期</span>
+              <strong class="detail-kv-item__value">{{ billingCycleDisplay(order.billing_cycle) }}</strong>
             </div>
             <div class="detail-kv-item">
-              <span>订单金额</span>
-              <strong>{{ formatMoney(order.amount) }}</strong>
-            </div>
-            <div v-if="Number(order.discount || 0) > 0" class="detail-kv-item">
-              <span>优惠券减免</span>
-              <strong>-{{ formatMoney(order.discount) }}</strong>
-            </div>
-            <div v-if="Number(order.member_discount_amount || 0) > 0" class="detail-kv-item">
-              <span>会员折扣{{ memberDiscountLevelName ? `（${memberDiscountLevelName}）` : '' }}</span>
-              <strong>-{{ formatMoney(order.member_discount_amount) }}</strong>
+              <span class="detail-kv-item__label">创建时间</span>
+              <strong class="detail-kv-item__value">{{ formatDateTime(order.created_at) }}</strong>
             </div>
             <div class="detail-kv-item">
-              <span>实付金额</span>
-              <strong>{{ formatMoney(order.paid_amount) }}</strong>
-            </div>
-            <div class="detail-kv-item">
-              <span>支付时间</span>
-              <strong>{{ formatDateTime(order.paid_at) }}</strong>
-            </div>
-            <div class="detail-kv-item">
-              <span>创建时间</span>
-              <strong>{{ formatDateTime(order.created_at) }}</strong>
-            </div>
-            <div class="detail-kv-item">
-              <span>更新时间</span>
-              <strong>{{ formatDateTime(order.updated_at) }}</strong>
-            </div>
-            <div class="detail-kv-item detail-kv-item--span-2">
-              <span>链路追踪</span>
-              <strong>{{ fieldValue(order.trace_id) }}</strong>
-            </div>
-            <div v-if="order.remark" class="detail-kv-item detail-kv-item--span-2">
-              <span>备注</span>
-              <strong>{{ order.remark }}</strong>
+              <span class="detail-kv-item__label">更新时间</span>
+              <strong class="detail-kv-item__value">{{ formatDateTime(order.updated_at) }}</strong>
             </div>
           </div>
         </section>
 
+        <!-- 金额与结算明细 -->
         <section class="order-detail-section">
-          <h4>关联信息</h4>
-          <div class="detail-kv-grid detail-kv-grid--two">
+          <div class="order-detail-section__header">
+            <h4>金额与结算明细</h4>
+          </div>
+          <div class="detail-kv-grid">
             <div class="detail-kv-item">
-              <span>用户 ID</span>
-              <strong>{{ order.user_id || '-' }}</strong>
+              <span class="detail-kv-item__label">订单应付金额</span>
+              <strong class="detail-kv-item__value is-money">{{ formatMoney(order.amount) }}</strong>
             </div>
             <div class="detail-kv-item">
-              <span>用户</span>
-              <strong>{{ userName(order.user) }}</strong>
+              <span class="detail-kv-item__label">优惠券减免</span>
+              <div class="detail-kv-item__value" :class="{ 'is-discount': hasCouponDiscount }">
+                <span v-if="hasCouponDiscount">-{{ formatMoney(order.discount) }}</span>
+                <span v-else class="is-dimmed">无</span>
+                <t-tag v-if="order.coupon_code" size="small" variant="light" theme="warning">
+                  {{ order.coupon_code }}
+                </t-tag>
+              </div>
+            </div>
+            <div class="detail-kv-item">
+              <span class="detail-kv-item__label">会员折扣</span>
+              <div class="detail-kv-item__value" :class="{ 'is-discount': hasMemberDiscount }">
+                <span v-if="hasMemberDiscount">-{{ formatMoney(order.member_discount_amount) }}</span>
+                <span v-else class="is-dimmed">无</span>
+                <t-tag v-if="memberDiscountLevelName" size="small" variant="light" theme="success">
+                  {{ memberDiscountLevelName }}
+                </t-tag>
+              </div>
+            </div>
+            <div class="detail-kv-item">
+              <span class="detail-kv-item__label">实付到账金额</span>
+              <strong class="detail-kv-item__value is-money" :style="{ color: isPaid ? 'var(--td-brand-color)' : '' }">
+                {{ formatMoney(order.paid_amount) }}
+              </strong>
             </div>
             <div class="detail-kv-item detail-kv-item--span-2">
-              <span>账单号</span>
-              <div class="detail-inline-action">
-                <strong>{{ fieldValue(order.invoice?.invoice_no) }}</strong>
+              <span class="detail-kv-item__label">支付完成时间</span>
+              <strong class="detail-kv-item__value">{{ formatDateTime(order.paid_at) }}</strong>
+            </div>
+            <div class="detail-kv-item detail-kv-item--span-2">
+              <span class="detail-kv-item__label">支付状态说明</span>
+              <strong class="detail-kv-item__value">{{ paymentStateSummary }}</strong>
+            </div>
+          </div>
+        </section>
+
+        <!-- 关联业务实体 -->
+        <section class="order-detail-section">
+          <div class="order-detail-section__header">
+            <h4>关联业务实体</h4>
+          </div>
+          <div class="detail-kv-grid">
+            <div class="detail-kv-item detail-kv-item--span-2">
+              <span class="detail-kv-item__label">关联用户</span>
+              <div class="detail-kv-item__value detail-inline-action">
+                <div>
+                  <strong>{{ userName(order.user) }}</strong>
+                  <span v-if="order.user_id" style="color: var(--td-text-color-placeholder); margin-left: 6px;">(#{{ order.user_id }})</span>
+                </div>
+                <t-button
+                  v-if="order.user_id"
+                  size="small"
+                  variant="text"
+                  theme="primary"
+                  @click="router.push(`/admin/users/${order.user_id}`)"
+                >
+                  用户资料 →
+                </t-button>
+              </div>
+            </div>
+
+            <div class="detail-kv-item detail-kv-item--span-2">
+              <span class="detail-kv-item__label">关联账单</span>
+              <div class="detail-kv-item__value detail-inline-action">
+                <strong v-if="order.invoice?.invoice_no">{{ order.invoice.invoice_no }}</strong>
+                <span v-else class="is-dimmed">未关联账单</span>
                 <t-button
                   v-if="order.invoice_id"
                   size="small"
@@ -118,79 +186,76 @@
                   theme="primary"
                   @click="openInvoiceDetail(order.invoice_id)"
                 >
-                  查看
+                  查看账单抽屉 →
                 </t-button>
               </div>
             </div>
-            <div class="detail-kv-item">
-              <span>账单金额</span>
-              <strong>{{ formatMoney(order.invoice?.amount) }}</strong>
+
+            <div v-if="order.service_id || order.service" class="detail-kv-item detail-kv-item--span-2">
+              <span class="detail-kv-item__label">关联服务实例</span>
+              <div class="detail-kv-item__value detail-inline-action">
+                <strong>{{ serviceIdLabel(order.service) }}</strong>
+                <t-button
+                  v-if="order.service_id"
+                  size="small"
+                  variant="text"
+                  theme="primary"
+                  @click="router.push(`/admin/services?service_id=${order.service_id}`)"
+                >
+                  服务详情 →
+                </t-button>
+              </div>
             </div>
-            <div class="detail-kv-item">
-              <span>账单支付时间</span>
-              <strong>{{ formatDateTime(order.invoice?.paid_at) }}</strong>
-            </div>
-            <div class="detail-kv-item detail-kv-item--span-2">
-              <span>账单链路追踪</span>
-              <strong>{{ fieldValue(order.invoice?.trace_id) }}</strong>
-            </div>
-            <div class="detail-kv-item detail-kv-item--span-2">
-              <span>服务 ID</span>
-              <strong>{{ serviceIdLabel(order.service) }}</strong>
-            </div>
-            <div class="detail-kv-item detail-kv-item--span-2">
-              <span>服务到期</span>
-              <strong>{{ formatDateTime(order.service?.expires_at) }}</strong>
+
+            <div v-if="order.trace_id" class="detail-kv-item detail-kv-item--span-2">
+              <span class="detail-kv-item__label">链路追踪号 (Trace ID)</span>
+              <div class="detail-kv-item__value detail-copy-wrap">
+                <span style="font-family: monospace; font-size: 13px;">{{ order.trace_id }}</span>
+                <t-tooltip content="复制 Trace ID" placement="top">
+                  <t-button
+                    variant="text"
+                    shape="square"
+                    size="small"
+                    @click="copyText(order.trace_id || '')"
+                  >
+                    <template #icon><file-copy-icon /></template>
+                  </t-button>
+                </t-tooltip>
+              </div>
             </div>
           </div>
-        </section>
 
-        <section v-if="couponInfo" class="order-detail-section">
-          <h4>优惠券信息</h4>
-          <div class="detail-kv-grid detail-kv-grid--two">
-            <div class="detail-kv-item detail-kv-item--span-2">
-              <span>优惠码</span>
-              <strong>{{ fieldValue(couponInfo.code) }}</strong>
-            </div>
-            <div v-if="couponInfo.name" class="detail-kv-item">
-              <span>优惠券名称</span>
-              <strong>{{ fieldValue(couponInfo.name) }}</strong>
-            </div>
-            <div v-if="couponInfo.discount_type" class="detail-kv-item">
-              <span>优惠类型</span>
-              <strong>{{ couponInfo.discount_type === 'percentage' ? '折扣券' : couponInfo.discount_type === 'fixed' ? '满减券' : fieldValue(couponInfo.discount_type) }}</strong>
-            </div>
-            <div v-if="couponInfo.discount_value" class="detail-kv-item detail-kv-item--span-2">
-              <span>优惠值</span>
-              <strong>{{ couponInfo.discount_type === 'percentage' ? (couponInfo.discount_value + '（折后价比例，80 = 8 折）') : ('¥' + fieldValue(couponInfo.discount_value)) }}</strong>
-            </div>
+          <!-- 订单备注 -->
+          <div v-if="order.remark" class="order-remark-box">
+            <span>管理员/系统备注</span>
+            <p>{{ order.remark }}</p>
           </div>
         </section>
       </template>
 
+      <!-- 选项卡 2：产品与配置快照 -->
       <template #tab-product>
         <section class="order-detail-section">
-          <h4>产品信息</h4>
-          <div class="detail-kv-grid detail-kv-grid--two">
+          <div class="order-detail-section__header">
+            <h4>订购产品信息</h4>
+          </div>
+          <div class="detail-kv-grid">
             <div class="detail-kv-item detail-kv-item--span-2">
-              <span>分类链路</span>
-              <strong>{{ fieldValue(order.product_full_path || order.product_name) }}</strong>
+              <span class="detail-kv-item__label">产品名称</span>
+              <strong class="detail-kv-item__value">{{ fieldValue(order.product_name || toRecord(order.product).name) }}</strong>
+            </div>
+            <div class="detail-kv-item detail-kv-item--span-2">
+              <span class="detail-kv-item__label">产品完整路径</span>
+              <strong class="detail-kv-item__value">{{ fieldValue(order.product_full_path) }}</strong>
             </div>
           </div>
         </section>
 
-        <section v-if="configItems.length" class="order-detail-section">
-          <h4>配置快照</h4>
-          <div class="config-list">
-            <div v-for="item in configItems" :key="item.label" class="config-item">
-              <span>{{ item.label }}</span>
-              <strong>{{ item.value }}</strong>
-            </div>
-          </div>
-        </section>
-
+        <!-- 价格/配置选项快照 -->
         <section v-if="pricingItems.length" class="order-detail-section">
-          <h4>配置定价</h4>
+          <div class="order-detail-section__header">
+            <h4>计价配置明细</h4>
+          </div>
           <div class="config-list">
             <div v-for="item in pricingItems" :key="item.label" class="config-item">
               <span>{{ item.label }}</span>
@@ -199,8 +264,24 @@
           </div>
         </section>
 
+        <!-- 基础配置快照 -->
+        <section v-if="configItems.length" class="order-detail-section">
+          <div class="order-detail-section__header">
+            <h4>产品参数快照</h4>
+          </div>
+          <div class="config-list">
+            <div v-for="item in configItems" :key="item.label" class="config-item">
+              <span>{{ item.label }}</span>
+              <strong>{{ item.value }}</strong>
+            </div>
+          </div>
+        </section>
+
+        <!-- 开通服务实例快照（仅新购订单） -->
         <section v-if="serviceSnapshotItems.length" class="order-detail-section">
-          <h4>实例快照</h4>
+          <div class="order-detail-section__header">
+            <h4>交付实例快照</h4>
+          </div>
           <div class="config-list">
             <div v-for="item in serviceSnapshotItems" :key="item.label" class="config-item">
               <span>{{ item.label }}</span>
@@ -210,46 +291,53 @@
         </section>
       </template>
 
+      <!-- 选项卡 3：关联支付记录 -->
       <template #tab-payments>
         <section class="order-detail-section">
-          <h4>支付记录</h4>
-          <div class="payment-list">
+          <div class="order-detail-section__header">
+            <h4>第三方支付与入账记录</h4>
+          </div>
+          <div v-if="payments.length" class="payment-list">
             <div v-for="payment in payments" :key="String(payment.id || payment.payment_no)" class="payment-item">
               <div class="payment-item__head">
                 <div>
-                  <span>支付单号</span>
                   <strong>{{ fieldValue(payment.payment_no) }}</strong>
+                  <span style="font-size: 12px; color: var(--td-text-color-placeholder);">
+                    第三方单号：{{ fieldValue(payment.trade_no) }}
+                  </span>
                 </div>
-                <t-tag :theme="paymentStatusTheme(payment)" variant="light">{{ paymentStatusLabel(payment) }}</t-tag>
+                <t-tag :theme="paymentStatusTheme(payment)" variant="light">
+                  {{ paymentStatusLabel(payment) }}
+                </t-tag>
               </div>
-              <div class="detail-kv-grid detail-kv-grid--two">
-                <div class="detail-kv-item">
-                  <span>支付方式</span>
-                  <strong>{{ fieldValue(payment.gateway) }}</strong>
-                </div>
-                <div class="detail-kv-item detail-kv-item--span-2">
-                  <span>第三方单号</span>
-                  <strong>{{ fieldValue(payment.trade_no) }}</strong>
-                </div>
-                <div class="detail-kv-item">
-                  <span>金额</span>
-                  <strong>{{ formatMoney(payment.amount) }}</strong>
-                </div>
-                <div class="detail-kv-item">
-                  <span>支付时间</span>
-                  <strong>{{ formatDateTime(payment.paid_at || payment.created_at) }}</strong>
-                </div>
-                <div class="detail-kv-item detail-kv-item--span-2">
-                  <span>链路追踪</span>
-                  <strong>{{ fieldValue(payment.trace_id) }}</strong>
+              <div class="payment-item__body">
+                <div class="detail-kv-grid">
+                  <div class="detail-kv-item">
+                    <span class="detail-kv-item__label">支付渠道</span>
+                    <strong class="detail-kv-item__value">{{ fieldValue(payment.gateway) }}</strong>
+                  </div>
+                  <div class="detail-kv-item">
+                    <span class="detail-kv-item__label">支付金额</span>
+                    <strong class="detail-kv-item__value is-money">{{ formatMoney(payment.amount) }}</strong>
+                  </div>
+                  <div class="detail-kv-item">
+                    <span class="detail-kv-item__label">支付时间</span>
+                    <strong class="detail-kv-item__value">{{ formatDateTime(payment.paid_at || payment.created_at) }}</strong>
+                  </div>
+                  <div class="detail-kv-item">
+                    <span class="detail-kv-item__label">Trace ID</span>
+                    <strong class="detail-kv-item__value">{{ fieldValue(payment.trace_id) }}</strong>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
+          <t-empty v-else description="暂无支付记录" />
         </section>
       </template>
     </record-detail-page>
 
+    <!-- 关联账单详情抽屉 -->
     <invoice-detail-drawer
       v-model:visible="invoiceDrawer.visible"
       :loading="invoiceDrawer.loading"
@@ -279,6 +367,7 @@ import {
   toLabelMap,
   toTagTypeMap,
 } from '@shared/statusConfig';
+import { FileCopyIcon } from 'tdesign-icons-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -288,95 +377,41 @@ import { adminApi } from '@/api/admin';
 import InvoiceDetailDrawer from '@/components/finance-record-detail/InvoiceDetailDrawer.vue';
 import type { RecordDetailMetric, RecordDetailTab } from '@/components/record-detail-page/index.vue';
 import RecordDetailPage from '@/components/record-detail-page/index.vue';
-import { fieldValue, formatDateTime, formatMoney } from '@/utils/format';
+import {
+  copyToClipboard,
+  fieldValue,
+  formatBillingCycle,
+  formatDateTime,
+  formatMoney,
+} from '@/utils/format';
 import { errorMessage } from '@/utils/userMessage';
 
+defineOptions({
+  name: 'AdminFinanceOrderDetail',
+});
+
 const SNAPSHOT_LABEL_MAP: Record<string, string> = {
-  // ── 产品配置 ──
   bw: '带宽',
   in_bw: '下行带宽',
   out_bw: '上行带宽',
   os: '操作系统',
   cpu: 'CPU',
-  area: '区域',
-  region: '区域',
-  node: '节点',
-  node_group: '节点分组',
-  ip: 'IP数量',
-  ip_num: 'IP数量',
-  ipv6_num: 'IPv6数量',
   memory: '内存',
-  hostname: '主机名',
-  quantity: '数量',
-  instance_id: '实例ID',
-  // ── 金额 ──
-  setup_fee: '初装费',
-  base_amount: '基础金额',
-  total_amount: '合计金额',
-  config_amount: '配置金额',
-  subtotal_amount: '小计金额',
-  discount_amount: '优惠金额',
-  amount: '金额',
-  price: '价格',
-  pricing: '价格',
-  // ── 通用 ──
-  items: '配置项',
-  meta: '扩展信息',
-  configoption: '配置参数',
-  kind: '类型',
-  mode: '模式',
-  source_type: '来源类型',
-  created_by: '创建者',
-  source: '来源',
-  remark: '备注',
-  // ── 产品/服务 ──
-  target_label: '目标服务',
-  target_service_id: '目标服务ID',
-  product_id: '产品ID',
-  product_name: '产品名称',
-  product_full_path: '产品路径',
-  product_path_segments: '产品路径段',
-  first_product_group_name: '一级分组',
-  second_product_group_name: '二级分组',
-  third_product_group_name: '三级分组',
-  // ── 计费周期 ──
-  billing_cycle: '周期',
-  billingcycle: '周期',
-  billingcycle_zh: '周期',
-  period: '周期',
-  // ── 续费 ──
-  renew_service_id: '续费服务ID',
-  renew_service_name: '续费服务名称',
-  auto_renew: '自动续费',
-  auto_renew_trace_id: '自动续费追踪',
-  local_renew_amount: '本地续费金额',
-  // ── 上游供应商 ──
-  upstream_host_id: '上游主机ID',
-  upstream_host_ids: '上游主机列表',
-  upstream_invoice_id: '上游账单ID',
-  upstream_product_id: '上游产品ID',
-  upstream_product_name: '上游产品名称',
-  upstream_amount: '上游金额',
-  upstream_status: '上游状态',
-  supports_upstream: '支持上游开通',
-  provider_key: '供应商标识',
-  supplier_id: '供应商ID',
-  // ── 开通 ──
-  requested_host: '请求主机名',
-  dedicated_ip: '独立IP',
-  assigned_ips: '分配IP',
-  host_config_option: '主机配置',
-  connection_secret: '连接信息',
-  connection_cached_at: '连接缓存时间',
-  last_provisioned_at: '开通时间',
-  last_provision_attempt_at: '开通尝试时间',
-  provision_error: '开通失败原因',
+  disk: '数据盘',
+  system_disk: '系统盘',
+  ip_num: 'IPv4 数量',
+  ipv6_num: 'IPv6 数量',
+  line: '线路',
+  data_center: '数据中心',
+  region: '区域',
+  billing_cycle: '计费周期',
+  upgrade_product_id: '升降级商品',
 };
 
 const route = useRoute();
 const router = useRouter();
+
 const detailLoading = ref(false);
-// 请求序号守卫：快速切换 ID/重开抽屉时旧响应不得覆盖最新数据
 const detailRequestSeq = ref(0);
 const invoiceRequestSeq = ref(0);
 const order = ref<OrderRecord>({} as OrderRecord);
@@ -398,40 +433,75 @@ const invoiceDrawer = reactive({
     logs: Record<string, unknown>[];
   },
 });
-const payments = computed<Record<string, unknown>[]>(() => {
-  const list = (order.value as Record<string, unknown>).payments;
-  return Array.isArray(list) ? list : [];
-});
 
-const summaryMetrics = computed<RecordDetailMetric[]>(() => [
-  { label: '订单金额', value: formatMoney(order.value.amount), primary: true },
-  { label: '实付金额', value: formatMoney(order.value.paid_amount) },
-  { label: '创建时间', value: formatDateTime(order.value.created_at) },
-]);
-
-const tabs = computed<RecordDetailTab[]>(() => [
-  { value: 'basic', label: '基本信息' },
-  { value: 'product', label: '产品配置' },
-  { value: 'payments', label: '支付记录', show: payments.value.length > 0 },
-]);
-
-const couponInfo = computed(() => {
-  const raw = order.value as Record<string, unknown>;
-  const coupon = raw.coupon as Record<string, unknown> | null | undefined;
-  const code = String(raw.coupon_code || coupon?.code || '');
-  if (!coupon && !code) return null;
-  return {
-    code,
-    name: coupon?.name as string | undefined,
-    discount_type: coupon?.discount_type as string | undefined,
-    discount_value: coupon?.discount_value as string | undefined,
-  };
-});
+const isPaid = computed(() => Number(order.value.status) === 1);
+const hasCouponDiscount = computed(() => Number(order.value.discount || 0) > 0);
+const hasMemberDiscount = computed(() => Number(order.value.member_discount_amount || 0) > 0);
 
 const memberDiscountLevelName = computed(() => {
   const snap = order.value.member_discount_snapshot as Record<string, unknown> | null | undefined;
   if (!snap || typeof snap !== 'object') return '';
   return String(snap.member_level_name || snap.group_name || '').trim();
+});
+
+const serviceSubtitle = computed(() => {
+  const service = order.value.service;
+  if (service && typeof service === 'object') {
+    const s = service as Record<string, unknown>;
+    return `关联服务：#${s.id || s.service_id || '-'}${s.name ? ` (${s.name})` : ''}`;
+  }
+  return order.value.service_id ? `关联服务：#${order.value.service_id}` : '未关联独立服务实例';
+});
+
+const paymentStateSummary = computed(() => {
+  if (isPaid.value) {
+    return `已支付（实付 ${formatMoney(order.value.paid_amount)}）`;
+  }
+  if (Number(order.value.status) === 4) {
+    return '订单已取消，无需支付';
+  }
+  if (Number(order.value.status) === 5) {
+    return '订单已全额退款';
+  }
+  return `待支付（应付 ${formatMoney(order.value.amount)}）`;
+});
+
+const summaryMetrics = computed<RecordDetailMetric[]>(() => {
+  const metrics: RecordDetailMetric[] = [
+    { label: '订单金额', value: formatMoney(order.value.amount), primary: true },
+  ];
+
+  if (hasCouponDiscount.value || hasMemberDiscount.value) {
+    const totalDiscount = Number(order.value.discount || 0) + Number(order.value.member_discount_amount || 0);
+    metrics.push({
+      label: '优惠抵扣',
+      value: `-${formatMoney(totalDiscount)}`,
+    });
+  }
+
+  metrics.push(
+    { label: '实付金额', value: formatMoney(order.value.paid_amount) },
+    { label: '创建时间', value: formatDateTime(order.value.created_at) },
+  );
+
+  return metrics;
+});
+
+const payments = computed<Record<string, unknown>[]>(() => {
+  const list = (order.value as Record<string, unknown>).payments;
+  return Array.isArray(list) ? list : [];
+});
+
+const tabs = computed<RecordDetailTab[]>(() => [
+  { value: 'basic', label: '基本信息' },
+  { value: 'product', label: '产品与配置' },
+  { value: 'payments', label: '支付记录', show: payments.value.length > 0 },
+]);
+
+const pricingItems = computed(() => {
+  const snapshot = order.value.config_pricing_snapshot;
+  if (!snapshot || typeof snapshot !== 'object') return [];
+  return flattenSnapshot(snapshot as Record<string, unknown>);
 });
 
 const configItems = computed(() => {
@@ -440,13 +510,6 @@ const configItems = computed(() => {
   return flattenSnapshot(snapshot as Record<string, unknown>, configValueLabelMap.value);
 });
 
-const pricingItems = computed(() => {
-  const snapshot = order.value.config_pricing_snapshot;
-  if (!snapshot || typeof snapshot !== 'object') return [];
-  return flattenSnapshot(snapshot as Record<string, unknown>);
-});
-
-// 实例快照仅在「新购」订单写入，作为开通时实例的存档展示。
 const isNewOrder = computed(() => order.value.type === 'new');
 
 const serviceSnapshotItems = computed(() => {
@@ -481,6 +544,14 @@ const invoiceItems = computed(() => {
   if (Array.isArray(sceneItems)) return sceneItems as Record<string, unknown>[];
   return invoiceDrawer.detail.items || [];
 });
+
+function billingCycleDisplay(cycle: unknown) {
+  return formatBillingCycle(cycle);
+}
+
+function copyText(text: unknown) {
+  void copyToClipboard(String(text || ''));
+}
 
 function flattenSnapshot(
   obj: Record<string, unknown>,
@@ -569,7 +640,6 @@ function formatSnapshotValue(value: unknown, key = ''): string {
 
 async function loadDetail() {
   const rawId = route.params.id as string;
-  // 无效 ID（空/非数字/≤0）直接回列表，避免无效请求与陈旧渲染
   if (!/^\d+$/.test(rawId) || Number(rawId) < 1) {
     detailRequestSeq.value += 1;
     MessagePlugin.warning('无效的订单 ID');
@@ -580,7 +650,7 @@ async function loadDetail() {
   detailLoading.value = true;
   try {
     const response = await adminApi.orders.detail(rawId);
-    if (seq !== detailRequestSeq.value) return; // 旧响应不再覆盖最新数据
+    if (seq !== detailRequestSeq.value) return;
     order.value = response;
   } catch (error) {
     if (seq !== detailRequestSeq.value) return;
@@ -617,7 +687,7 @@ async function reloadInvoiceDetail() {
   invoiceDrawer.loading = true;
   try {
     const response = await adminApi.invoices.detail(invoiceDrawer.currentId);
-    if (seq !== invoiceRequestSeq.value) return; // 旧响应不再覆盖最新数据
+    if (seq !== invoiceRequestSeq.value) return;
     invoiceDrawer.detail = normalizeInvoiceDetail(response, currentInvoice.value);
   } catch (error) {
     if (seq !== invoiceRequestSeq.value) return;
@@ -661,9 +731,11 @@ function orderStatusLabel(status: unknown) {
   return orderStatusLabelMap[String(status ?? '')] || fieldValue(status);
 }
 
-function orderStatusTheme(status: unknown) {
+function orderStatusTheme(status: unknown): 'default' | 'primary' | 'success' | 'warning' | 'danger' {
   const value = orderStatusTypeMap[String(status ?? '')] || 'default';
-  return value === 'info' ? 'default' : value;
+  if (value === 'info') return 'default';
+  if (value === 'blue') return 'primary';
+  return value as 'default' | 'primary' | 'success' | 'warning' | 'danger';
 }
 
 function invoiceStatusLabel(status: unknown) {
@@ -699,10 +771,8 @@ function toRecord(value: unknown): Record<string, unknown> {
 }
 
 onMounted(loadDetail);
-// 同组件参数复用（订单 A → B）时重新加载，避免残留 A 数据
 watch(() => route.params.id, loadDetail);
 onBeforeUnmount(() => {
-  // 卸载后到达的响应不再写组件状态
   detailRequestSeq.value += 1;
   invoiceRequestSeq.value += 1;
 });

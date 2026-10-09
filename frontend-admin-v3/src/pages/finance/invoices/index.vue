@@ -27,6 +27,10 @@
           value-type="YYYY-MM-DD"
           placeholder="选择日期范围"
         />
+        <div class="filter-actions">
+          <t-button theme="primary" @click="handleSearch">查询</t-button>
+          <t-button theme="default" variant="base" @click="resetFilters">重置</t-button>
+        </div>
       </div>
 
       <div v-if="!isMobile" class="table-scroll">
@@ -198,6 +202,7 @@ const {
   pagination,
   loadList,
   handleSearch,
+  resetFilters,
   handlePaginationChange,
   applyQuickFilter,
   dateRange,
@@ -274,7 +279,7 @@ function confirmCancel(row: InvoiceRecord, fromDrawer = false) {
     header: '取消账单',
     body: `确认取消账单「${row.invoice_no || row.id}」吗？`,
     theme: 'warning',
-    confirmBtn: '确认取消',
+    confirmBtn: { content: '确定', theme: 'warning' },
     cancelBtn: '取消',
     async onConfirm() {
       await cancelInvoice(row, fromDrawer);
