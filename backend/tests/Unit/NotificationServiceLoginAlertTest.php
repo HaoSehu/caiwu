@@ -6,11 +6,11 @@ namespace Tests\Unit;
 
 use App\Models\Setting;
 use App\Services\Integrations\Plugins\IntegrationDriverBindingResolver;
-use App\Services\Mail\Contracts\MailDriver;
 use App\Services\Mail\MailDriverManager;
 use App\Services\System\NotificationService;
 use App\Services\System\NotificationTemplateService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Tests\Fixtures\Mail\FakeMailDriver;
 use Tests\TestCase;
 
 /**
@@ -21,7 +21,7 @@ class NotificationServiceLoginAlertTest extends TestCase
 {
     use DatabaseTransactions;
 
-    private ?MailDriver $driver = null;
+    private ?FakeMailDriver $driver = null;
 
     protected function setUp(): void
     {
@@ -68,25 +68,7 @@ class NotificationServiceLoginAlertTest extends TestCase
             }
         };
 
-        $this->driver = new class implements MailDriver
-        {
-            public string $lastHtml = '';
-
-            public function key(): string
-            {
-                return 'fake';
-            }
-
-            public function label(): string
-            {
-                return '测试驱动';
-            }
-
-            public function sendHtml(string $to, string $subject, string $html, array $context = []): void
-            {
-                $this->lastHtml = $html;
-            }
-        };
+        $this->driver = new FakeMailDriver('fake');
 
         return new NotificationService(
             new MailDriverManager([$this->driver], $bindingResolver),
@@ -97,7 +79,7 @@ class NotificationServiceLoginAlertTest extends TestCase
 
     private function sentHtml(): string
     {
-        return $this->driver instanceof MailDriver ? $this->driver->lastHtml : '';
+        return $this->driver?->lastHtml() ?? '';
     }
 
     public function test_login_alert_renders_previous_ip_snapshot(): void

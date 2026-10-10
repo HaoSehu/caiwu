@@ -108,13 +108,18 @@ class InvoiceCleanupAutomationTest extends TestCase
         $order = $this->createPendingOrder($user, $product, OrderType::NEW, now()->subMinutes(10));
         $invoice->forceFill(['order_id' => $order->id])->save();
 
+        // 独立挂单（无账单）：验证订单侧清理路径本身。账单级联场景下订单会随账单先被取消
+        // （CheckoutService::cancel 级联），orders_cancelled 不再计入，不能作为订单侧计数的唯一来源。
+        $standaloneOrder = $this->createPendingOrder($user, $product, OrderType::NEW, now()->subMinutes(10));
+
         $summary = app(InvoiceCleanupAutomationService::class)->handle();
 
         // 共库并行会残留其他用例的未付数据，计数只做下限断言，状态以本次造数对象为准
         $this->assertGreaterThanOrEqual(1, $summary['invoices_cancelled']);
-        $this->assertGreaterThanOrEqual(1, $summary['orders_cancelled']);
+        $this->assertGreaterThanOrEqual(1, $summary['orders_cancelled'], '独立挂单必须由订单侧清理取消');
         $this->assertSame(InvoiceStatus::CANCELLED, (int) $invoice->fresh()->status);
-        $this->assertSame(OrderStatus::CANCELLED, (int) $order->fresh()->status);
+        $this->assertSame(OrderStatus::CANCELLED, (int) $order->fresh()->status, '关联订单应随账单级联取消');
+        $this->assertSame(OrderStatus::CANCELLED, (int) $standaloneOrder->fresh()->status);
     }
 
     public function test_disabled_recharge_switch_skips_recharge_cleanup(): void

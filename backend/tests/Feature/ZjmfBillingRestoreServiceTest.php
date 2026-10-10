@@ -146,10 +146,14 @@ class ZjmfBillingRestoreServiceTest extends TestCase
 
     /**
      * 生成最小可解析的上游 dump：一条 shd_clients + 一条已支付 shd_invoices。
+     *
+     * 客户端行首列（客户 ID）必须参数化为用例用户：恢复服务按「dump 客户 ID = users.id」
+     * 回写 user_accounts.cash_balance，硬编码固定 ID 只在恰有同 ID 用户的残留库上通过，
+     * 干净库会命中「用户不存在 → 过滤」分支导致余额断言失败。
      */
     private function makeDumpFile(int $userId): string
     {
-        $clientRow = '(3, 0, 0, 0, 1759449600, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '
+        $clientRow = '('.$userId.', 0, 0, 0, 1759449600, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '
             ."'20.00')";
         $invoiceRow = "(501, {$userId}, 'ZJMF-501', 1759449600, 1759449600, 1759968000, 1759449600, NULL, '88.00', '0.00', NULL, NULL, '88.00', NULL, NULL, 'Paid', NULL, NULL, 0, NULL, 'product', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0)";
 

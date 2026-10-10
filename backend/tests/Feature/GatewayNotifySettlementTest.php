@@ -10,6 +10,7 @@ use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
 use App\Contracts\Integrations\Payments\PaymentGatewayInterface;
 use App\Models\AccountTransaction;
+use App\Models\ActivityLog;
 use App\Models\IntegrationPlugin;
 use App\Models\Invoice;
 use App\Models\Payment;
@@ -69,6 +70,12 @@ class GatewayNotifySettlementTest extends TestCase
         $this->assertEqualsWithDelta(100.00, (float) $invoice->paid_amount, 0.001);
         $this->assertEqualsWithDelta(100.00, $accounts->cashBalance($user), 0.001);
         $this->assertSame(0, $this->countLedger($user, FinanceLedgerEventType::INVOICE_PAYMENT));
+
+        // S1-3：入账成功路径写入 activity_logs 审计行（幂等重放不重复写入）。
+        $this->assertSame(1, ActivityLog::query()
+            ->where('action', 'payment.callback.settled')
+            ->where('subject_id', (int) $invoice->id)
+            ->count());
 
         // 第三方实付凭证：new 类型账单按 payment_id 幂等记一条 RechargeRecord。
         $record = RechargeRecord::query()->where('payment_id', (int) $payment->id)->firstOrFail();

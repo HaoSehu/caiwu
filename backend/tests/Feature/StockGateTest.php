@@ -11,7 +11,9 @@ use App\Exceptions\BusinessException;
 use App\Models\FirstProductGroup;
 use App\Models\Order;
 use App\Models\Product;
+use App\Models\SecondProductGroup;
 use App\Models\Supplier;
+use App\Models\ThirdProductGroup;
 use App\Models\User;
 use App\Services\Finance\CheckoutSecurityService;
 use App\Services\Finance\CheckoutService;
@@ -288,7 +290,25 @@ class StockGateTest extends TestCase
             if ((int) $first->is_visible !== 1) {
                 $first->forceFill(['is_visible' => 1])->save();
             }
-            $productGroupId = (int) $first->id;
+
+            // 商品挂「可见三级分组」（products.product_group_id 外键 → third_product_groups），
+            // 逐级造 可见二级 + 可见三级；原实现直接把一级分组 id 塞给 product_group_id，
+            // 仅因历史库恰有同 id 的三级行才通过（重建库即触发外键失败）。
+            $second = SecondProductGroup::query()->create([
+                'first_product_group_id' => (int) $first->id,
+                'name' => '库存闸门测试二级分组',
+                'slug' => 'stock-gate-second-'.uniqid(),
+                'sort_order' => 999,
+                'is_visible' => 1,
+            ]);
+            $third = ThirdProductGroup::query()->create([
+                'second_product_group_id' => (int) $second->id,
+                'name' => '库存闸门测试三级分组',
+                'slug' => 'stock-gate-third-'.uniqid(),
+                'sort_order' => 999,
+                'is_visible' => 1,
+            ]);
+            $productGroupId = (int) $third->id;
         }
 
         return Product::query()->create([

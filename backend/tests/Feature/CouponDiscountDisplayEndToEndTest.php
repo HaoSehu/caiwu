@@ -8,6 +8,7 @@ use App\Constants\InvoiceStatus;
 use App\Constants\ProductType;
 use App\Constants\UserCouponStatus;
 use App\Exceptions\BusinessException;
+use App\Jobs\SyncInvoiceCouponUsageJob;
 use App\Models\AdminUser;
 use App\Models\Coupon;
 use App\Models\FirstProductGroup;
@@ -26,7 +27,7 @@ use App\Models\UserAccount;
 use App\Models\UserCoupon;
 use App\Services\Finance\CouponService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Queue;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -113,15 +114,16 @@ class CouponDiscountDisplayEndToEndTest extends TestCase
     {
         [$user, $product, $coupon, $userCouponId, $invoice] = $this->purchaseWithCoupon();
 
+        // 券核销统一走 coupon 队列。测试环境 QUEUE_CONNECTION=sync，用 Queue::fake 断言
+        // 真实派发目标队列（原「jobs 表存在行」断言依赖共库残留行，重建库即失败）。
+        Queue::fake();
+
         $this->payByBalance($user, $invoice);
         $invoice->refresh();
         $this->assertSame(InvoiceStatus::PAID, (int) $invoice->status);
 
-        // 支付成功后应向 coupon 队列投递核销任务（QUEUE_CONNECTION=database，真实落 jobs 表）
-        $this->assertTrue(
-            DB::table('jobs')->where('queue', 'coupon')->exists(),
-            '支付后应向 coupon 队列投递核销任务'
-        );
+        // 支付成功后应向 coupon 队列投递核销任务
+        Queue::assertPushedOn('coupon', SyncInvoiceCouponUsageJob::class);
 
         // 跑核销（队列任务内部调用的同一入口）
         app(CouponService::class)->syncInvoiceCouponUsage($invoice->fresh());
@@ -168,7 +170,7 @@ class CouponDiscountDisplayEndToEndTest extends TestCase
         $this->assertSame(1, $summary['used_up'], '核销后应落入已用完分组');
 
         // 管理端券列表：已使用 1 次
-        Sanctum::actingAs($this->makeAdmin(['product.manage']));
+        Sanctum::actingAs($this->makeAdmin(['coupon.list']));
         $row = collect($this->getJson('/api/v2/admin/coupons?page=1&page_size=50')
             ->assertOk()
             ->json('data.list'))

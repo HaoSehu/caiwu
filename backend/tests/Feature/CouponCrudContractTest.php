@@ -75,7 +75,7 @@ class CouponCrudContractTest extends TestCase
 
         $this->service()->createCoupon([
             'name' => '未知类型券'.uniqid(),
-            'discount_type' => 'override',
+            'discount_type' => 'unsupported',
             'discount_value' => 5,
         ], ['operator' => 'tester']);
     }

@@ -32,6 +32,8 @@ use Tests\TestCase;
  */
 class AdminManualOrderEntryTest extends TestCase
 {
+    use DatabaseTransactions;
+
     public function test_renew_entry_creates_paid_order_invoice_and_payment(): void
     {
         $user = $this->makeUser();

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Exceptions\BusinessException;
+use App\Models\ActivityLog;
 use App\Models\RechargeRecord;
 use App\Models\User;
 use App\Services\Finance\RechargePaymentService;
@@ -14,11 +15,13 @@ use Tests\TestCase;
 
 /**
  * 管理端手工充值幂等：同一 idempotency_key 10 分钟内仅入账一次，
- * 入账失败释放占位允许修正重试；无 key 保持旧行为。
+ * 入账失败释放占位允许修正重试；缺失幂等键一律拒绝（服务端强制，G3-3）。
  * 使用 DatabaseTransactions，测试结束回滚。
  */
 class RechargeIdempotencyTest extends TestCase
 {
+    use DatabaseTransactions;
+
     public function test_same_idempotency_key_enters_balance_only_once(): void
     {
         $user = $this->makeUser();
@@ -28,6 +31,12 @@ class RechargeIdempotencyTest extends TestCase
 
         $service->adjustBalance($user, 10, '第一次提交', $context);
 
+        // S1-3：成功路径写入 activity_logs 审计行。
+        $this->assertSame(1, ActivityLog::query()
+            ->where('action', 'balance.adjust.completed')
+            ->where('subject_id', (int) $user->id)
+            ->count());
+
         $this->expectException(BusinessException::class);
         try {
             $service->adjustBalance($user, 10, '双击重放', $context);
@@ -36,16 +45,17 @@ class RechargeIdempotencyTest extends TestCase
         }
     }
 
-    public function test_missing_key_keeps_legacy_behavior(): void
+    public function test_missing_key_is_rejected(): void
     {
         $user = $this->makeUser();
         $service = app(RechargePaymentService::class);
-        $context = ['operator_id' => 1, 'operator_name' => 'admin-test'];
 
-        $service->adjustBalance($user, 5, '第一笔', $context);
-        $service->adjustBalance($user, 5, '第二笔', $context);
-
-        $this->assertSame(2, RechargeRecord::query()->where('user_id', (int) $user->id)->count());
+        $this->expectException(BusinessException::class);
+        try {
+            $service->adjustBalance($user, 5, '缺少幂等键', ['operator_id' => 1, 'operator_name' => 'admin-test']);
+        } finally {
+            $this->assertSame(0, RechargeRecord::query()->where('user_id', (int) $user->id)->count());
+        }
     }
 
     public function test_failed_attempt_releases_idempotency_key(): void
@@ -56,7 +66,7 @@ class RechargeIdempotencyTest extends TestCase
         $context = ['operator_id' => 1, 'operator_name' => 'admin-test', 'idempotency_key' => $key];
 
         try {
-            $service->adjustBalance($user, -1000, '超額扣减必失败', $context);
+            $service->adjustBalance($user, -1000, '超额扣减必失败', $context);
             $this->fail('余额不足扣减应抛异常');
         } catch (BusinessException) {
         }

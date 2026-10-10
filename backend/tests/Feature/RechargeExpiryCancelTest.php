@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Constants\PaymentStatus;
+use App\Models\ActivityLog;
 use App\Models\Payment;
 use App\Models\User;
 use App\Services\Finance\CheckoutSecurityService;
@@ -48,6 +49,12 @@ class RechargeExpiryCancelTest extends TestCase
         ]);
 
         $this->assertSame(PaymentStatus::CANCELLED, (int) $result->status);
+
+        // S1-3：取消路径写入 activity_logs 审计行。
+        $this->assertSame(1, ActivityLog::query()
+            ->where('action', 'recharge.cancelled')
+            ->where('subject_id', (int) $payment->id)
+            ->count());
     }
 
     public function test_expired_pending_recharge_is_cancelled_by_batch_path(): void
