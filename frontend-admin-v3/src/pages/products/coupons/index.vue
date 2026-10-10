@@ -68,7 +68,7 @@
             <template #rule="{ row }">
               <div class="coupon-meta">
                 <div class="coupon-title-row">
-                  <t-tag size="small" :theme="row.discount_type === 'fixed' ? 'danger' : 'warning'" variant="light">
+                  <t-tag size="small" :theme="discountTypeTheme(row.discount_type)" variant="light">
                     {{ row.discount_type_label || discountTypeLabel(row.discount_type) }}
                   </t-tag>
                   <t-tag size="small" theme="primary" variant="light">
@@ -205,6 +205,7 @@
                   <t-select v-model="form.discount_type" :disabled="isFieldLocked('discount_type')">
                     <t-option value="fixed" label="满减券" />
                     <t-option value="percentage" label="折扣券" />
+                    <t-option value="override" label="覆盖价券（一口价）" />
                   </t-select>
                 </t-form-item>
                 <t-form-item label="优惠阶段" name="discount_scope">
@@ -220,14 +221,15 @@
             <section class="coupon-drawer-section" data-title="优惠规则">
               <div class="coupon-form-grid">
                 <t-form-item
-                  :label="form.discount_type === 'percentage' ? '折扣值（折后价比例）' : '优惠金额'"
+                  :label="discountValueLabel"
                   name="discount_value"
                   :help="discountValueHelp"
                 >
                   <t-input-number
                     v-model="form.discount_value"
-                    :min="0"
+                    :min="form.discount_type === 'override' ? 0.01 : 0"
                     :max="form.discount_type === 'percentage' ? 100 : 999999999"
+                    :decimal-places="form.discount_type === 'override' ? 2 : undefined"
                   />
                 </t-form-item>
                 <t-form-item label="最低消费金额" name="min_amount" help="按会员折扣后的金额判定，与订单原价可能不同">
@@ -478,7 +480,7 @@ const userSearchResults = ref<UserOption[]>([]);
 const userSearchKeyword = ref('');
 const userOptionsLoading = ref(false);
 const isMobile = useMediaQuery('(max-width: 768px)');
-const canManage = computed(() => hasAdminPermission(AdminPermissions.PRODUCT_MANAGE));
+const canManage = computed(() => hasAdminPermission(AdminPermissions.COUPON_MANAGE));
 
 interface CouponFilter {
   keyword: string;
@@ -517,9 +519,21 @@ const lockReason = ref('');
 
 // percentage 的 discount_value 语义是「折后价实付比例」而非折扣减免比例，
 // 历史上多次被按打折数误填（填 8 用户只付 8%），表单内直接给出刻度提示
-const discountValueHelp = computed(() =>
-  form.discount_type === 'percentage' ? '填 80 表示 8 折，用户实付为折后价的 80%；误填 8 则用户只需付 8%' : '',
-);
+const discountValueHelp = computed(() => {
+  if (form.discount_type === 'percentage') {
+    return '填 80 表示 8 折，用户实付为折后价的 80%；误填 8 则用户只需付 8%';
+  }
+  if (form.discount_type === 'override') {
+    return '覆盖价即用户实付一口价（如填 1 表示首月 1 元），最低 0.01 元，不产生 0 元账单';
+  }
+  return '';
+});
+
+const discountValueLabel = computed(() => {
+  if (form.discount_type === 'percentage') return '折扣值（折后价比例）';
+  if (form.discount_type === 'override') return '覆盖价（用户实付）';
+  return '优惠金额';
+});
 
 const formRules: Record<string, FormRule[]> = {
   name: [{ required: true, message: '请输入优惠券名称', type: 'error' }],
@@ -773,6 +787,10 @@ async function submitForm() {
     MessagePlugin.warning('折扣值不能大于 100');
     return;
   }
+  if (form.discount_type === 'override' && Number(form.discount_value || 0) < 0.01) {
+    MessagePlugin.warning('覆盖价不能小于 0.01');
+    return;
+  }
   if (form.distribution_type === 'private' && !form.user_ids.length) {
     MessagePlugin.warning('私有优惠券至少需要选择一个发放用户');
     return;
@@ -911,7 +929,15 @@ function removeSelectedUser(userId: number) {
 }
 
 function discountTypeLabel(value: unknown) {
-  return value === 'percentage' ? '折扣券' : '满减券';
+  if (value === 'percentage') return '折扣券';
+  if (value === 'override') return '覆盖价券';
+  return '满减券';
+}
+
+function discountTypeTheme(value: unknown) {
+  if (value === 'fixed') return 'danger';
+  if (value === 'override') return 'primary';
+  return 'warning';
 }
 
 function discountScopeLabel(value: unknown) {

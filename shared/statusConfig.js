@@ -112,11 +112,13 @@ export const INVOICE_TYPE_MAP = {
 };
 
 // ===================== 账单/发票状态 =====================
-// 4 态：待支付 / 已支付 / 已取消 / 已退款，与订单同构。
+// 库内 4 态：待支付 / 已支付 / 已取消 / 已退款，与订单同构；
+// PARTIAL_PAID(2) 为后端派生展示态（0 < paid_amount < amount），不落库。
 
 export const INVOICE_STATUS = {
   UNPAID: 0, // 待支付
   PAID: 1, // 已支付
+  PARTIAL_PAID: 2, // 部分已付（派生展示态，不落库）
   CANCELLED: 4, // 已取消
   REFUNDED: 5, // 已退款
 };
@@ -133,6 +135,12 @@ export const INVOICE_STATUS_MAP = {
     color: STATUS_COLORS.blue,
     tagType: "primary",
     icon: "CreditCard",
+  },
+  [INVOICE_STATUS.PARTIAL_PAID]: {
+    label: "部分已付",
+    color: STATUS_COLORS.warning,
+    tagType: "warning",
+    icon: "MoneyCircle",
   },
   [INVOICE_STATUS.CANCELLED]: {
     label: "已取消",

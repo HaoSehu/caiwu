@@ -42,11 +42,13 @@ export function resolveStatusTheme(statusOrItem: unknown, statusLabel?: unknown)
 export function resolveDiscountTypeLabel(type: unknown) {
   if (type === 'fixed') return '满减券';
   if (type === 'percentage') return '折扣券';
+  if (type === 'override') return '覆盖价券';
   return '优惠券';
 }
 
 export function resolveDiscountValue(item: CouponRecord) {
   if (item.discount_type === 'fixed') return `¥${formatCouponAmount(item.discount_value)}`;
+  if (item.discount_type === 'override') return `一口价 ¥${formatCouponAmount(item.discount_value)}`;
   if (item.discount_type === 'percentage') {
     const discount = Number(item.discount_value || 0) / 10;
     if (!Number.isFinite(discount) || discount <= 0) return item.discount_label || '--';
@@ -62,6 +64,7 @@ export function resolveThresholdText(item: CouponRecord) {
 
 export function resolveDiscountAmountText(item: CouponRecord) {
   if (item.discount_type === 'fixed') return `减 ¥${formatCouponAmount(item.discount_value)}`;
+  if (item.discount_type === 'override') return `一口价 ¥${formatCouponAmount(item.discount_value)}`;
   if (item.discount_type === 'percentage') {
     return item.max_discount_amount
       ? `最高减 ¥${formatCouponAmount(item.max_discount_amount)}`

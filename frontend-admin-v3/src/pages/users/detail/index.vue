@@ -893,6 +893,7 @@
             v-model="manualInvoiceForm.paid_at"
             enable-time-picker
             clearable
+            :disable-date="manualInvoicePaidAtLimit"
             placeholder="默认当前时间"
             style="width: 100%"
           />
@@ -928,6 +929,7 @@ import {
   toSelectOptions,
   toTagTypeMap,
 } from '@shared/statusConfig';
+import dayjs from 'dayjs';
 import { ChevronLeftIcon, FileCopyIcon, SearchIcon } from 'tdesign-icons-vue-next';
 import type { FormInstanceFunctions, FormRule, PageInfo, PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
@@ -1052,7 +1054,17 @@ const manualInvoiceRules: Record<string, FormRule[]> = {
   amount: [required('请输入补录金额')],
   payment_gateway: [required('请选择支付方式')],
   remark: [required('请填写补录原因')],
+  // 后端以 before_or_equal:now 校验付款时间，未来时间会被 422 拒绝，前端提前拦截
+  paid_at: [
+    {
+      validator: (val) => !val || !dayjs(String(val)).isAfter(dayjs()),
+      message: '付款时间不能晚于当前时间',
+      type: 'error',
+    },
+  ],
 };
+// 付款日期选择上限（禁用未来日期），打开对话框时刷新，配合 paid_at 校验兜住具体时间
+const manualInvoicePaidAtLimit = ref({ after: dayjs().format('YYYY-MM-DD') });
 const paymentMethodOptions = toSelectOptions(MANUAL_PAYMENT_METHOD_MAP, false);
 const addServiceForm = reactive({
   product_id: undefined as number | undefined,
@@ -1642,6 +1654,7 @@ function openManualInvoiceDialog() {
   manualInvoiceForm.trade_no = '';
   manualInvoiceForm.payment_gateway = 'bank_transfer';
   manualInvoiceForm.remark = '';
+  manualInvoicePaidAtLimit.value = { after: dayjs().format('YYYY-MM-DD') };
   manualInvoiceVisible.value = true;
 }
 

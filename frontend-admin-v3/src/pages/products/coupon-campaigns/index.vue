@@ -60,7 +60,7 @@
           <template #rule="{ row }">
             <div class="campaign-meta">
               <div class="campaign-title-row">
-                <t-tag size="small" :theme="row.discount_type === 'fixed' ? 'danger' : 'warning'" variant="light">
+                <t-tag size="small" :theme="discountTypeTheme(row.discount_type)" variant="light">
                   {{ row.discount_type_label || discountTypeLabel(row.discount_type) }}
                 </t-tag>
                 <t-tag size="small" theme="primary" variant="light">
@@ -220,6 +220,7 @@
                 <t-select v-model="form.discount_type">
                   <t-option value="fixed" label="满减券" />
                   <t-option value="percentage" label="折扣券" />
+                  <t-option value="override" label="覆盖价券（一口价）" />
                 </t-select>
               </t-form-item>
               <t-form-item label="优惠阶段" name="discount_scope">
@@ -229,14 +230,12 @@
                   <t-option value="renew" label="续费优惠" />
                 </t-select>
               </t-form-item>
-              <t-form-item
-                :label="form.discount_type === 'percentage' ? '折扣值（折后价比例）' : '优惠金额'"
-                name="discount_value"
-              >
+              <t-form-item :label="discountValueLabel" name="discount_value">
                 <t-input-number
                   v-model="form.discount_value"
-                  :min="0"
+                  :min="form.discount_type === 'override' ? 0.01 : 0"
                   :max="form.discount_type === 'percentage' ? 100 : 999999999"
+                  :decimal-places="form.discount_type === 'override' ? 2 : undefined"
                 />
               </t-form-item>
               <t-form-item label="最低消费金额" name="min_amount">
@@ -362,7 +361,7 @@ const dialogVisible = ref(false);
 const formRef = ref<FormInstanceFunctions>();
 const rowActionState = reactive<Record<string, string>>({});
 const isMobile = useMediaQuery('(max-width: 768px)');
-const canManage = computed(() => hasAdminPermission(AdminPermissions.PRODUCT_MANAGE));
+const canManage = computed(() => hasAdminPermission(AdminPermissions.COUPON_MANAGE));
 
 interface CampaignFilter {
   keyword: string;
@@ -397,6 +396,13 @@ const formRules: Record<string, FormRule[]> = {
   discount_scope: [{ required: true, message: '请选择优惠阶段', type: 'error' }],
   discount_value: [{ required: true, message: '请输入优惠值', type: 'error' }],
 };
+
+// 覆盖价券：discount_value 即用户实付一口价（最低 0.01），标签随之切换
+const discountValueLabel = computed(() => {
+  if (form.discount_type === 'percentage') return '折扣值（折后价比例）';
+  if (form.discount_type === 'override') return '覆盖价（用户实付）';
+  return '优惠金额';
+});
 
 const columns: PrimaryTableCol<CouponCampaignRecord>[] = [
   { colKey: 'id', title: 'ID', width: 72 },
@@ -536,6 +542,10 @@ async function submitForm() {
   }
   if (form.discount_type === 'percentage' && Number(form.discount_value || 0) > 100) {
     MessagePlugin.warning('折扣值不能大于 100');
+    return;
+  }
+  if (form.discount_type === 'override' && Number(form.discount_value || 0) < 0.01) {
+    MessagePlugin.warning('覆盖价不能小于 0.01');
     return;
   }
   saving.value = true;
@@ -701,7 +711,15 @@ function handleMobileAction(action: unknown, row: CouponCampaignRecord) {
 }
 
 function discountTypeLabel(value: unknown) {
-  return value === 'percentage' ? '折扣券' : '满减券';
+  if (value === 'percentage') return '折扣券';
+  if (value === 'override') return '覆盖价券';
+  return '满减券';
+}
+
+function discountTypeTheme(value: unknown) {
+  if (value === 'fixed') return 'danger';
+  if (value === 'override') return 'primary';
+  return 'warning';
 }
 
 function discountScopeLabel(value: unknown) {
