@@ -52,51 +52,10 @@
         <quick-actions />
         <service-overview :counts="dashboardStats.counts" :services="dashboardStats.services" />
       </section>
-
-      <t-card :bordered="false" title="最近账单" subtitle="展示最近业务流水" class="recent-invoices-card">
-        <template #actions>
-          <t-button theme="primary" variant="text" @click="router.push('/admin/finance/invoices')">查看全部</t-button>
-        </template>
-        <t-table
-          v-if="recentInvoices.length"
-          row-key="id"
-          hover
-          :data="recentInvoices"
-          :columns="invoiceColumns"
-          :pagination="null"
-          table-layout="fixed"
-        >
-          <template #invoice_no="{ row }">
-            <span class="invoice-no">{{ row.invoice_no || `#${row.id}` }}</span>
-          </template>
-          <template #user="{ row }">
-            <div class="stack-cell">
-              <strong>{{ fieldValue(row.user?.nickname) }}</strong>
-              <span>{{ fieldValue(row.user?.email) }}</span>
-            </div>
-          </template>
-          <template #type="{ row }">{{ invoiceTypeLabel(row.type) }}</template>
-          <template #amount="{ row }">
-            <span class="t-num-strong">{{ formatMoney(row.amount) }}</span>
-          </template>
-          <template #status="{ row }">
-            <status-tag :status-map="INVOICE_STATUS_MAP" :status="row.status" />
-          </template>
-          <template #created_at="{ row }">
-            <span class="muted">{{ formatDateTime(row.created_at) }}</span>
-          </template>
-        </t-table>
-        <t-empty v-else title="暂无数据" description="有新购、续费或充值账单后会显示在这里。">
-          <t-button theme="primary" variant="outline" @click="router.push('/admin/finance/invoices')"
-            >进入账单列表</t-button
-          >
-        </t-empty>
-      </t-card>
     </div>
   </t-loading>
 </template>
 <script setup lang="ts">
-import { INVOICE_STATUS_MAP, INVOICE_TYPE_MAP } from '@shared/statusConfig';
 import {
   computed,
   nextTick,
@@ -108,14 +67,12 @@ import {
   shallowRef,
   watch,
 } from 'vue';
-import { useRouter } from 'vue-router';
 
-import type { DashboardStats, MonthlyRevenue, RecentInvoice } from '@/api/admin';
+import type { DashboardStats, MonthlyRevenue } from '@/api/admin';
 import { adminApi } from '@/api/admin';
-import StatusTag from '@/components/status-tag/index.vue';
 import { getChartListColor } from '@/utils/color';
 import echarts from '@/utils/echarts';
-import { fieldValue, formatDateTime, formatMoney } from '@/utils/format';
+import { formatMoney } from '@/utils/format';
 
 import QuickActions from './components/QuickActions.vue';
 import ServiceOverview from './components/ServiceOverview.vue';
@@ -126,9 +83,7 @@ defineOptions({
   name: 'DashboardBase',
 });
 
-const router = useRouter();
 const loading = ref(false);
-const recentInvoices = ref<RecentInvoice[]>([]);
 const monthlyRevenue = shallowRef<MonthlyRevenue>({});
 const dashboardStats = shallowRef<DashboardStats>({});
 const productChartRef = ref<HTMLDivElement>();
@@ -136,15 +91,6 @@ const dailyChartRef = ref<HTMLDivElement>();
 let resizeFrame = 0;
 let productChart: echarts.ECharts | null = null;
 let dailyChart: echarts.ECharts | null = null;
-
-const invoiceColumns = [
-  { colKey: 'invoice_no', title: '账单号', minWidth: 170 },
-  { colKey: 'user', title: '用户', minWidth: 170 },
-  { colKey: 'type', title: '类型', width: 110 },
-  { colKey: 'amount', title: '金额', width: 130, align: 'right' as const },
-  { colKey: 'status', title: '状态', width: 110, align: 'center' as const },
-  { colKey: 'created_at', title: '创建时间', width: 180 },
-];
 
 const monthLabel = computed(() => monthlyRevenue.value.month_label || '');
 const revenueByProduct = computed(() => monthlyRevenue.value.revenue_by_product || []);
@@ -174,10 +120,6 @@ const refundAdjustment = computed(() =>
 function themeToken(name: string, fallback: string): string {
   const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   return value || fallback;
-}
-
-function invoiceTypeLabel(type?: unknown) {
-  return INVOICE_TYPE_MAP[String(type || '')] || fieldValue(type);
 }
 
 function renderProductChart() {
@@ -315,16 +257,13 @@ async function loadDashboard(options: { silent?: boolean } = {}) {
   const silent = options.silent === true;
   if (!silent) loading.value = true;
   try {
-    const [recentInvoicesRes, monthlyRevenueRes, statsRes] = await Promise.all([
-      adminApi.dashboardRecentInvoices(),
+    const [monthlyRevenueRes, statsRes] = await Promise.all([
       adminApi.dashboardMonthlyRevenue(),
       adminApi.dashboardStats(),
     ]);
-    recentInvoices.value = recentInvoicesRes?.recent_invoices || [];
     monthlyRevenue.value = monthlyRevenueRes || {};
     dashboardStats.value = statsRes || {};
   } catch {
-    recentInvoices.value = [];
     monthlyRevenue.value = {};
     dashboardStats.value = {};
   } finally {
@@ -414,42 +353,6 @@ onBeforeUnmount(() => {
     color: var(--td-text-color-primary);
     font-variant-numeric: tabular-nums;
   }
-}
-
-.recent-invoices-card :deep(.t-empty) {
-  padding: var(--td-comp-paddingTB-xxl) 0;
-}
-
-.stack-cell {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.stack-cell strong {
-  overflow: hidden;
-  color: var(--td-text-color-primary);
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.stack-cell span {
-  overflow: hidden;
-  color: var(--td-text-color-secondary);
-  font-size: var(--td-font-size-body-small, 12px);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.invoice-no {
-  font-family: SFMono-Regular, Consolas, 'Liberation Mono', monospace;
-  font-variant-numeric: tabular-nums;
-}
-
-.muted {
-  color: var(--td-text-color-secondary);
 }
 
 @media (width <= 1200px) {

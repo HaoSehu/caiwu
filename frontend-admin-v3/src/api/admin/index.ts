@@ -21,7 +21,6 @@ export * from './types';
 export const adminApi = {
   // Dashboard
   dashboardStats: dashboardApi.stats,
-  dashboardRecentInvoices: dashboardApi.recentInvoices,
   dashboardMonthlyRevenue: dashboardApi.monthlyRevenue,
 
   // Invoices

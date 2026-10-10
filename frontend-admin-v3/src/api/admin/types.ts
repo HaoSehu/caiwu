@@ -37,14 +37,6 @@ export interface DashboardStats {
   };
 }
 
-export interface RecentInvoice {
-  id: number | string;
-  invoice_no?: string;
-  amount?: number | string;
-  status?: number | string;
-  created_at?: string;
-}
-
 export interface MonthlyRevenue {
   month_label?: string;
   revenue_by_product?: Array<{
