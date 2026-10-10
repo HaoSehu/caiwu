@@ -122,18 +122,32 @@ function isSafeUrl(value, tagName, attrName) {
 // style 属性受控放行（仅 options.allowStyleAttr 时启用）：
 // 任一声明含脚本/绑定/固定定位向量，或 url() 指向非 http(s)/data:image，
 // 即整条丢弃（style 值内 url() 可含分号，逐声明拆分不可靠），宁可损失排版不留风险。
+// CSS 允许用反斜杠转义书写 at-规则与属性名（如 @\69 mport、position:\66 ixed），
+// 字面量正则会被这类写法绕过。这里把转义序列解码成等价文本后再做检测，
+// 返回值仍是原始样式串，不改变邮件排版。
+function decodeCssEscapes(value) {
+  return String(value || "")
+    .replace(/\\([0-9a-fA-F]{1,6})[ \t\r\n\f]?/g, (_match, hex) => {
+      const code = parseInt(hex, 16);
+      return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : "";
+    })
+    .replace(/\\(.)/g, "$1");
+}
+
 function sanitizeStyleValue(value) {
   // 浏览器把 CSS 注释当空白，先剥离再检测，防 expression/*x*/( 等拼接变体绕过
   const raw = String(value || "").replace(/\/\*[\s\S]*?\*\//g, "");
+  // 检测基于解码后的等价文本，返回仍用原始串
+  const probe = decodeCssEscapes(raw);
   if (
     /expression\s*\(|behaviou?r\s*:|-moz-binding|javascript\s*:|@import|position\s*:\s*fixed/i.test(
-      raw,
+      probe,
     )
   ) {
     return "";
   }
 
-  const urlMatches = raw.matchAll(/url\(\s*(['"]?)([^'")]+)\1\s*\)/gi);
+  const urlMatches = probe.matchAll(/url\(\s*(['"]?)([^'")]+)\1\s*\)/gi);
   for (const match of urlMatches) {
     if (!/^(https?:|data:image\/)/i.test(match[2].trim())) {
       return "";

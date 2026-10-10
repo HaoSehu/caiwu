@@ -235,4 +235,20 @@ const { sanitizeRenderedHtml } = await import('../htmlSanitizer.js')
   assert.equal(rejected.includes('data:text/html'), false, '非 data:image 的 data: URI 仍应被剥除')
 }
 
+// 27. allowStyleAttr 下 CSS 转义写法不得绕过高危检测（@\69 mport / position:\66 ixed）
+{
+  const importResult = sanitizeRenderedHtml('<div style="@\\69 mport \'https://evil.com/x.css\'">x</div>', {
+    allowStyleAttr: true,
+  })
+  assert.equal(importResult.includes('style='), false, '转义书写的 @import 应整条丢弃')
+
+  const fixedResult = sanitizeRenderedHtml('<div style="position:\\66 ixed; top: 0">x</div>', {
+    allowStyleAttr: true,
+  })
+  assert.equal(fixedResult.includes('style='), false, '转义书写的 position:fixed 应整条丢弃')
+
+  const benignResult = sanitizeRenderedHtml('<div style="color:\\23 fff">x</div>', { allowStyleAttr: true })
+  assert.ok(benignResult.includes('color'), '无高危向量的转义写法应保留')
+}
+
 console.log('sanitizer tests passed')
