@@ -1,7 +1,9 @@
 <template>
   <t-loading :loading="loading" show-overlay>
     <div class="dashboard-page">
-      <top-panel :stats="dashboardStats" />
+      <top-panel :stats="dashboardStats" :loading="loading" />
+
+      <todo-panel :todos="dashboardStats.todos" />
 
       <section class="chart-grid">
         <t-card :bordered="false" title="商品收入占比" :subtitle="monthLabel || '本月'">
@@ -18,17 +20,24 @@
             title="本月暂无正向收入"
             description="整月退款冲抵或暂无已付收入时不生成占比图。"
           />
-          <div v-if="refundAdjustment > 0" class="chart-refund-note">
-            含退款冲抵：{{ formatMoney(refundAdjustment) }}
+          <div v-if="positiveChartData.length" class="chart-summary">
+            <span class="chart-summary__item">
+              <em>正向收入合计</em>
+              <strong>{{ formatMoney(positiveTotal) }}</strong>
+            </span>
+            <span v-if="refundAdjustment > 0" class="chart-summary__item">
+              <em>含退款冲抵</em>
+              <strong>{{ formatMoney(refundAdjustment) }}</strong>
+            </span>
           </div>
         </t-card>
-        <t-card :bordered="false" title="每日收入趋势" :subtitle="monthLabel || '本月'">
+        <t-card :bordered="false" title="每日收入与新增用户" :subtitle="monthLabel || '本月'">
           <div
             v-if="dailyRevenue.length"
             ref="dailyChartRef"
             class="chart-box"
             role="img"
-            :aria-label="`每日收入趋势折线图，${monthLabel || '本月'}共 ${dailyRevenue.length} 天`"
+            :aria-label="`每日收入与新增用户组合图，${monthLabel || '本月'}共 ${dailyRevenue.length} 天`"
           />
           <t-empty
             v-else
@@ -39,6 +48,11 @@
         </t-card>
       </section>
 
+      <section class="side-grid">
+        <quick-actions />
+        <service-overview :counts="dashboardStats.counts" :services="dashboardStats.services" />
+      </section>
+
       <t-card :bordered="false" title="最近账单" subtitle="展示最近业务流水" class="recent-invoices-card">
         <template #actions>
           <t-button theme="primary" variant="text" @click="router.push('/admin/finance/invoices')">查看全部</t-button>
@@ -46,6 +60,7 @@
         <t-table
           v-if="recentInvoices.length"
           row-key="id"
+          hover
           :data="recentInvoices"
           :columns="invoiceColumns"
           :pagination="null"
@@ -98,10 +113,13 @@ import { useRouter } from 'vue-router';
 import type { DashboardStats, MonthlyRevenue, RecentInvoice } from '@/api/admin';
 import { adminApi } from '@/api/admin';
 import StatusTag from '@/components/status-tag/index.vue';
-import echarts from '@/utils/echarts';
 import { getChartListColor } from '@/utils/color';
+import echarts from '@/utils/echarts';
 import { fieldValue, formatDateTime, formatMoney } from '@/utils/format';
 
+import QuickActions from './components/QuickActions.vue';
+import ServiceOverview from './components/ServiceOverview.vue';
+import TodoPanel from './components/TodoPanel.vue';
 import TopPanel from './components/TopPanel.vue';
 
 defineOptions({
@@ -131,6 +149,7 @@ const invoiceColumns = [
 const monthLabel = computed(() => monthlyRevenue.value.month_label || '');
 const revenueByProduct = computed(() => monthlyRevenue.value.revenue_by_product || []);
 const dailyRevenue = computed(() => monthlyRevenue.value.daily_revenue || []);
+
 const productChartData = computed(() => {
   const grouped = new Map<string, number>();
 
@@ -146,6 +165,7 @@ const productChartData = computed(() => {
 
 // 饼图只绘制正向收入；退款冲抵单独提示，避免整月净退款时图表空白无解释
 const positiveChartData = computed(() => productChartData.value.filter((item) => item.value > 0));
+const positiveTotal = computed(() => positiveChartData.value.reduce((sum, item) => sum + item.value, 0));
 const refundAdjustment = computed(() =>
   productChartData.value.filter((item) => item.value < 0).reduce((sum, item) => sum - item.value, 0),
 );
@@ -184,6 +204,7 @@ function renderProductChart() {
         center: ['50%', '42%'],
         itemStyle: { borderColor: themeToken('--td-bg-color-container', '#ffffff'), borderWidth: 2 },
         label: { formatter: '{b}\n{d}%', color: themeToken('--td-text-color-secondary', '#5B6B82') },
+        emphasis: { scale: true, scaleSize: 6 },
         data: positiveChartData.value,
       },
     ],
@@ -202,33 +223,61 @@ function renderDailyChart() {
   const axisColor = themeToken('--td-text-color-placeholder', '#606D80');
   const splitColor = themeToken('--td-border-level-1-color', '#E5EAF3');
   const brandColor = themeToken('--td-brand-color', '#165DFF');
+  const successColor = themeToken('--td-success-color-6', '#12B76A');
 
   dailyChart.setOption({
-    color: [brandColor],
+    color: [brandColor, successColor],
     tooltip: {
       trigger: 'axis',
-      valueFormatter: (value: unknown) => formatMoney(value),
     },
-    grid: { left: 56, right: 24, top: 24, bottom: 36 },
+    legend: { bottom: 0, icon: 'roundRect', itemWidth: 10, itemHeight: 10, textStyle: { color: axisColor } },
+    grid: { left: 64, right: 56, top: 32, bottom: 52 },
     xAxis: {
       type: 'category',
-      boundaryGap: false,
+      boundaryGap: true,
       data: dailyRevenue.value.map((item) => item.date || item.day || ''),
-      axisLabel: { color: axisColor },
+      axisLabel: {
+        color: axisColor,
+        formatter: (value: string) => String(value).slice(5),
+      },
       axisLine: { lineStyle: { color: splitColor } },
     },
-    yAxis: {
-      type: 'value',
-      axisLabel: { color: axisColor, formatter: (value: number) => formatMoney(value) },
-      splitLine: { lineStyle: { color: splitColor } },
-    },
+    yAxis: [
+      {
+        type: 'value',
+        name: '收入',
+        nameTextStyle: { color: axisColor },
+        axisLabel: { color: axisColor, formatter: (value: number) => formatMoney(value) },
+        splitLine: { lineStyle: { color: splitColor } },
+      },
+      {
+        type: 'value',
+        name: '新增用户',
+        minInterval: 1,
+        nameTextStyle: { color: axisColor },
+        axisLabel: { color: axisColor },
+        splitLine: { show: false },
+      },
+    ],
     series: [
       {
+        name: '收入',
         type: 'line',
         smooth: true,
         showSymbol: false,
+        yAxisIndex: 0,
         areaStyle: { opacity: 0.12 },
-        data: dailyRevenue.value.map((item) => Number(item.income ?? item.amount ?? 0)),
+        tooltip: { valueFormatter: (value: unknown) => formatMoney(value) },
+        data: dailyRevenue.value.map((item) => Number(item.amount ?? item.income ?? 0)),
+      },
+      {
+        name: '新增用户',
+        type: 'bar',
+        yAxisIndex: 1,
+        barMaxWidth: 14,
+        itemStyle: { borderRadius: [3, 3, 0, 0], opacity: 0.9 },
+        tooltip: { valueFormatter: (value: unknown) => `${Number(value ?? 0)} 人` },
+        data: dailyRevenue.value.map((item) => Number(item.new_users ?? 0)),
       },
     ],
   });
@@ -259,8 +308,12 @@ function disposeCharts() {
   dailyChart = null;
 }
 
-async function loadDashboard() {
-  loading.value = true;
+/**
+ * @param options.silent 静默刷新：不触发整页 loading 遮罩与骨架，仅刷新数据与图表
+ */
+async function loadDashboard(options: { silent?: boolean } = {}) {
+  const silent = options.silent === true;
+  if (!silent) loading.value = true;
   try {
     const [recentInvoicesRes, monthlyRevenueRes, statsRes] = await Promise.all([
       adminApi.dashboardRecentInvoices(),
@@ -291,8 +344,8 @@ onMounted(() => {
 });
 
 onActivated(() => {
-  // keep-alive 命中时(若后续放开保活)重新拉取并渲染
-  loadDashboard();
+  // keep-alive 命中时(若后续放开保活)重新拉取并渲染，静默避免骨架闪烁
+  loadDashboard({ silent: true });
 });
 
 onDeactivated(() => {
@@ -322,6 +375,13 @@ onBeforeUnmount(() => {
   gap: var(--td-comp-margin-l);
 }
 
+.side-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: var(--td-comp-margin-l);
+  align-items: start;
+}
+
 .chart-box {
   width: 100%;
   height: 320px;
@@ -331,12 +391,29 @@ onBeforeUnmount(() => {
   padding: var(--td-comp-paddingTB-xxl) 0;
 }
 
-.chart-refund-note {
+.chart-summary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--td-comp-margin-xl);
   margin-top: var(--td-comp-margin-s);
+}
+
+.chart-summary__item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--td-comp-margin-xs);
   color: var(--td-text-color-placeholder);
   font-size: var(--td-font-size-body-small, 12px);
-  font-variant-numeric: tabular-nums;
-  text-align: center;
+
+  em {
+    font-style: normal;
+  }
+
+  strong {
+    color: var(--td-text-color-primary);
+    font-variant-numeric: tabular-nums;
+  }
 }
 
 .recent-invoices-card :deep(.t-empty) {
@@ -376,7 +453,8 @@ onBeforeUnmount(() => {
 }
 
 @media (width <= 1200px) {
-  .chart-grid {
+  .chart-grid,
+  .side-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 }

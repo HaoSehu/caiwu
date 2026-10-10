@@ -7,6 +7,12 @@ export interface DashboardStats {
     new_invoices?: number | string;
     new_users?: number | string;
   };
+  /** 昨日同口径数据，用于指标卡环比 */
+  yesterday?: {
+    income?: number | string;
+    new_invoices?: number | string;
+    new_users?: number | string;
+  };
   month?: {
     income?: number | string;
     new_invoices?: number | string;
@@ -15,8 +21,19 @@ export interface DashboardStats {
   counts?: {
     active_services?: number | string;
     total_invoices?: number | string;
-    open_tickets?: number | string;
     total_users?: number | string;
+  };
+  /** 待办中心：需人工介入的处理项 */
+  todos?: {
+    unpaid_invoices?: number | string;
+    open_tickets?: number | string;
+    pending_verifications?: number | string;
+    pending_withdrawals?: number | string;
+  };
+  /** 服务与资源概览 */
+  services?: {
+    total?: number | string;
+    expiring_soon?: number | string;
   };
 }
 
@@ -40,9 +57,11 @@ export interface MonthlyRevenue {
   }>;
   daily_revenue?: Array<{
     date?: string;
-    day?: string;
+    day?: string | number;
     income?: number | string;
     amount?: number | string;
+    /** 当日新增用户数，与收入同轴展示 */
+    new_users?: number | string;
   }>;
 }
 

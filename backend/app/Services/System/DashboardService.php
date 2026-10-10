@@ -6,7 +6,9 @@ namespace App\Services\System;
 
 use App\Constants\InvoiceStatus;
 use App\Constants\InvoiceType;
+use App\Constants\ServiceStatus;
 use App\Models\Invoice;
+use App\Models\ReferralWithdrawal;
 use App\Models\Service;
 use App\Models\Ticket;
 use App\Models\User;
@@ -16,6 +18,12 @@ use Illuminate\Support\Facades\Cache;
 
 class DashboardService
 {
+    /** 服务即将到期的观察窗口（天） */
+    private const EXPIRING_SOON_DAYS = 7;
+
+    /** 待认证口径与 AdminVerificationQueryService 汇总保持一致：verification_status = 4 */
+    private const VERIFICATION_STATUS_PENDING = 4;
+
     private const OVERVIEW_RECENT_INVOICES_CACHE_KEY = 'dashboard:overview:recent_invoices';
 
     private const OVERVIEW_RECENT_INVOICES_CACHE_TTL_SECONDS = 30; // 30秒：发票列表
@@ -57,6 +65,7 @@ class DashboardService
     private function buildOverviewStats(): array
     {
         $today = now()->startOfDay();
+        $yesterday = now()->subDay()->startOfDay();
         $month = now()->startOfMonth();
 
         $userStats = User::query()
@@ -84,17 +93,58 @@ class DashboardService
             ->selectRaw('COALESCE(SUM(CASE WHEN status = ? AND paid_at >= ? THEN paid_amount ELSE 0 END), 0) as month_income', [InvoiceStatus::PAID, $month])
             ->first();
 
+        // 昨日同口径数据用于环比；独立 count/sum 查询，避免与上方聚合复用造成口径漂移
+        $yesterdayNewUsers = User::query()
+            ->where('created_at', '>=', $yesterday)
+            ->where('created_at', '<', $today)
+            ->count();
+
+        $yesterdayNewInvoices = Invoice::query()
+            ->where('created_at', '>=', $yesterday)
+            ->where('created_at', '<', $today)
+            ->count();
+
+        $yesterdayIncome = (float) $this->salesIncomeInvoices()
+            ->where('status', InvoiceStatus::PAID)
+            ->where('paid_at', '>=', $yesterday)
+            ->where('paid_at', '<', $today)
+            ->sum('paid_amount');
+
+        $expiringDeadline = now()->addDays(self::EXPIRING_SOON_DAYS);
+
         return [
             'counts' => [
                 'total_users' => (int) ($userStats?->total_users ?? 0),
                 'total_invoices' => (int) ($invoiceCountStats?->total_invoices ?? 0),
                 'active_services' => (int) ($serviceStats?->active_services ?? 0),
+            ],
+            'todos' => [
+                'unpaid_invoices' => Invoice::query()->where('status', InvoiceStatus::UNPAID)->count(),
                 'open_tickets' => (int) ($ticketStats?->open_tickets ?? 0),
+                'pending_verifications' => User::query()
+                    ->where('verification_status', self::VERIFICATION_STATUS_PENDING)
+                    ->count(),
+                'pending_withdrawals' => ReferralWithdrawal::query()
+                    ->where('status', ReferralWithdrawal::STATUS_PENDING)
+                    ->count(),
+            ],
+            'services' => [
+                'total' => Service::query()->count(),
+                'expiring_soon' => Service::query()
+                    ->where('status', ServiceStatus::ACTIVE)
+                    ->where('expires_at', '>=', now())
+                    ->where('expires_at', '<=', $expiringDeadline)
+                    ->count(),
             ],
             'today' => [
                 'new_users' => (int) ($userStats?->today_new_users ?? 0),
                 'new_invoices' => (int) ($invoiceCountStats?->today_new_invoices ?? 0),
                 'income' => (float) ($invoiceIncomeStats?->today_income ?? 0),
+            ],
+            'yesterday' => [
+                'new_users' => $yesterdayNewUsers,
+                'new_invoices' => $yesterdayNewInvoices,
+                'income' => $yesterdayIncome,
             ],
             'month' => [
                 'income' => (float) ($invoiceIncomeStats?->month_income ?? 0),
@@ -208,6 +258,15 @@ class DashboardService
             ->get()
             ->keyBy('date');
 
+        // 本月每日新增用户，与收入趋势同轴对比经营与增长
+        $dailyNewUsers = User::query()
+            ->where('created_at', '>=', $month)
+            ->where('created_at', '<', $month->copy()->addMonth())
+            ->selectRaw('DATE(created_at) as date, COUNT(*) as new_user_count')
+            ->groupByRaw('DATE(created_at)')
+            ->pluck('new_user_count', 'date')
+            ->all();
+
         $dailyRevenue = [];
         for ($d = 1; $d <= $daysInMonth; $d++) {
             $dateStr = $month->copy()->addDays($d - 1)->format('Y-m-d');
@@ -216,6 +275,7 @@ class DashboardService
                 'day' => $d,
                 'amount' => $this->centsToAmount((int) ($dailyPaid[$dateStr]->daily_amount_cents ?? 0)),
                 'count' => (int) ($dailyPaid[$dateStr]->daily_count ?? 0),
+                'new_users' => (int) ($dailyNewUsers[$dateStr] ?? 0),
             ];
         }
 

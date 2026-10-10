@@ -21,12 +21,26 @@ class AdminDashboardStatsResource extends JsonResource
                 'total_users' => (int) data_get($payload, 'counts.total_users', 0),
                 'total_invoices' => (int) data_get($payload, 'counts.total_invoices', 0),
                 'active_services' => (int) data_get($payload, 'counts.active_services', 0),
-                'open_tickets' => (int) data_get($payload, 'counts.open_tickets', 0),
+            ],
+            'todos' => [
+                'unpaid_invoices' => (int) data_get($payload, 'todos.unpaid_invoices', 0),
+                'open_tickets' => (int) data_get($payload, 'todos.open_tickets', 0),
+                'pending_verifications' => (int) data_get($payload, 'todos.pending_verifications', 0),
+                'pending_withdrawals' => (int) data_get($payload, 'todos.pending_withdrawals', 0),
+            ],
+            'services' => [
+                'total' => (int) data_get($payload, 'services.total', 0),
+                'expiring_soon' => (int) data_get($payload, 'services.expiring_soon', 0),
             ],
             'today' => [
                 'new_users' => (int) data_get($payload, 'today.new_users', 0),
                 'new_invoices' => (int) data_get($payload, 'today.new_invoices', 0),
                 'income' => (float) data_get($payload, 'today.income', 0),
+            ],
+            'yesterday' => [
+                'new_users' => (int) data_get($payload, 'yesterday.new_users', 0),
+                'new_invoices' => (int) data_get($payload, 'yesterday.new_invoices', 0),
+                'income' => (float) data_get($payload, 'yesterday.income', 0),
             ],
             'month' => [
                 'income' => (float) data_get($payload, 'month.income', 0),

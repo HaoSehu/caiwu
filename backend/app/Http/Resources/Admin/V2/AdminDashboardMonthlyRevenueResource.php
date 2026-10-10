@@ -55,6 +55,7 @@ class AdminDashboardMonthlyRevenueResource extends JsonResource
                 'day' => (int) ($item['day'] ?? 0),
                 'amount' => (float) ($item['amount'] ?? 0),
                 'count' => (int) ($item['count'] ?? 0),
+                'new_users' => (int) ($item['new_users'] ?? 0),
             ])
             ->values()
             ->all();
