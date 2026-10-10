@@ -1,6 +1,6 @@
 import { INVOICE_STATUS_MAP, INVOICE_TYPE_MAP, toSelectOptions } from '@caiwu/shared/statusConfig';
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import clientApi from '@/api/client';
@@ -12,7 +12,7 @@ import type {
   InvoiceRecord,
 } from '@/types/client';
 import { getErrorMessage } from '@/utils/error';
-import { formatMoney } from '@/utils/format';
+import { formatMoney, formatMoneyText } from '@/utils/format';
 
 import { useRecordList } from './useRecords';
 
@@ -211,6 +211,8 @@ export function useInvoiceDetail() {
   let pollFailureCount = 0;
 
   const invoiceId = computed(() => Number(route.params.id || 0));
+  const loadError = ref(false);
+  const loadErrorText = ref('');
   const payMethods = computed<InvoicePaymentMethod[]>(() =>
     Array.isArray(detail.value?.pay_methods) ? detail.value?.pay_methods : [],
   );
@@ -239,7 +241,7 @@ export function useInvoiceDetail() {
   const estimatedAlipayAmount = computed(() =>
     normalizeMoney(Math.max(payableAmount.value - autoDeductionAmount.value, 0)),
   );
-  const balanceText = computed(() => `¥${formatMoney(balanceAmount.value)}`);
+  const balanceText = computed(() => formatMoneyText(balanceAmount.value));
   const autoDeductionAmountText = computed(() => formatMoney(autoDeductionAmount.value));
   const estimatedAlipayAmountText = computed(() => formatMoney(estimatedAlipayAmount.value));
   const appliedDeductionAmountText = computed(() => formatMoney(appliedDeductionAmount.value));
@@ -409,6 +411,8 @@ export function useInvoiceDetail() {
     }
     const seq = ++detailRequestSeq;
     loading.value = true;
+    loadError.value = false;
+    loadErrorText.value = '';
     try {
       const res = await clientApi.invoiceDetail(validId);
       if (seq !== detailRequestSeq) {
@@ -432,7 +436,10 @@ export function useInvoiceDetail() {
       if (seq !== detailRequestSeq) {
         return;
       }
-      MessagePlugin.error(getErrorMessage(error, '账单详情加载失败'));
+      // 错误交给页面用 DataState 呈现（含重试），此处不再额外弹 toast 造成双重反馈
+      detail.value = null;
+      loadError.value = true;
+      loadErrorText.value = getErrorMessage(error, '账单详情加载失败');
     } finally {
       if (seq === detailRequestSeq) {
         loading.value = false;
@@ -620,10 +627,15 @@ export function useInvoiceDetail() {
     },
   );
 
-  onMounted(async () => {
-    await loadDetail();
-    restoreAlipayPolling();
-  });
+  // 路由参数响应式：同路由换 id（账单↔账单跳转）时组件会被复用，必须靠 watch 重新拉取
+  watch(
+    invoiceId,
+    async () => {
+      await loadDetail();
+      restoreAlipayPolling();
+    },
+    { immediate: true },
+  );
 
   onBeforeUnmount(() => {
     clearPollingTimer();
@@ -636,6 +648,8 @@ export function useInvoiceDetail() {
     paying,
     polling,
     detail,
+    loadError,
+    loadErrorText,
     selectedPayMethod,
     allowBalanceDeduction,
     alipayDialogVisible,

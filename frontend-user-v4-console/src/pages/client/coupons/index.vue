@@ -245,15 +245,13 @@ const couponProductHierarchy = computed(() => {
   const products = Array.isArray(selectedCoupon.value?.products) ? selectedCoupon.value.products : [];
 
   return products
-    .map(
-      (item: CouponProductScopeItem): CouponHierarchyItem => ({
-        productId: Number(item?.id || 0),
-        level1: String(item?.type_label || item?.service_type_label || '--').trim() || '--',
-        level2: String(item?.parent_group_name || item?.second_product_group_name || '--').trim() || '--',
-        level3: String(item?.group_name || item?.third_product_group_name || '--').trim() || '--',
-        productName: String(item?.name || item?.product_name || '--').trim() || '--',
-      }),
-    )
+    .map((item: CouponProductScopeItem): CouponHierarchyItem => ({
+      productId: Number(item?.id || 0),
+      level1: String(item?.type_label || item?.service_type_label || '--').trim() || '--',
+      level2: String(item?.parent_group_name || item?.second_product_group_name || '--').trim() || '--',
+      level3: String(item?.group_name || item?.third_product_group_name || '--').trim() || '--',
+      productName: String(item?.name || item?.product_name || '--').trim() || '--',
+    }))
     .filter((item: CouponHierarchyItem) => item.productId > 0 || item.productName !== '--');
 });
 
@@ -327,7 +325,7 @@ function mergeCouponProductHierarchy(data: CouponHierarchyItem[]): MergedCouponH
 
 .coupon-card-shell {
   background: var(--td-bg-color-container);
-  border: thin solid var(--td-border-color);
+  border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
   box-shadow: var(--td-shadow-1);
 }
@@ -370,7 +368,7 @@ function mergeCouponProductHierarchy(data: CouponHierarchyItem[]): MergedCouponH
   gap: var(--td-comp-margin-m);
   padding: var(--td-comp-paddingTB-l) var(--td-comp-paddingLR-l);
   background: var(--td-bg-color-container);
-  border: thin solid var(--td-border-color);
+  border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
   box-shadow: var(--td-shadow-1);
 }
@@ -454,7 +452,7 @@ function mergeCouponProductHierarchy(data: CouponHierarchyItem[]): MergedCouponH
   margin-top: auto;
   padding-top: var(--td-comp-margin-s);
   color: var(--td-text-color-secondary);
-  border-top: thin solid var(--td-border-color);
+  border-top: thin solid var(--td-component-stroke);
   font: var(--td-font-body-small);
 }
 
@@ -474,7 +472,7 @@ function mergeCouponProductHierarchy(data: CouponHierarchyItem[]): MergedCouponH
   gap: var(--td-comp-margin-s);
   padding: var(--td-comp-paddingTB-l) var(--td-comp-paddingLR-l);
   background: var(--td-bg-color-container);
-  border: thin solid var(--td-border-color);
+  border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-large);
 }
 

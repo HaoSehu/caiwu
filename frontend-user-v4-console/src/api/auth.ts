@@ -28,6 +28,20 @@ function putEnvelope<T>(url: string, data?: Record<string, unknown>) {
   return request.put<ApiEnvelope<T>, ApiEnvelope<T>>(url, data);
 }
 
+/**
+ * 验证码发送载荷。
+ *
+ * `purpose` 必填：后端据此决定校验分支——登录/重置类（login、reset_password）做账号枚举保护，
+ * 绑定类（verify_bound_phone/verify_bound_email/change_email）校验目标必须等于当前已绑定值。
+ * 把 purpose 设为必填是为了让 TS 拦住遗漏（历史上 register/forgot-password 的邮箱分支曾漏传）。
+ */
+export interface SendAccountCodePayload {
+  purpose: string;
+  phone?: string;
+  email?: string;
+  captcha?: unknown;
+}
+
 export const clientAuthApi = {
   login: (data: Record<string, unknown>) => postEnvelope<ClientAuthSessionPayload>('/v2/client/login', data),
   loginByCode: (data: Record<string, unknown>) =>
@@ -58,9 +72,9 @@ export const clientAuthApi = {
   notificationPreferences: () => getEnvelope<ClientNotificationPreferences>('/v2/client/auth/notification-preferences'),
   updateNotificationPreferences: (data: Record<string, unknown>) =>
     putEnvelope<ClientNotificationPreferences>('/v2/client/auth/notification-preferences', data),
-  sendPhoneCode: (data: Record<string, unknown>, config?: RequestConfig) =>
+  sendPhoneCode: (data: SendAccountCodePayload, config?: RequestConfig) =>
     request.post('/v2/client/auth/phone-code', data, config),
-  sendEmailCode: (data: Record<string, unknown>, config?: RequestConfig) =>
+  sendEmailCode: (data: SendAccountCodePayload, config?: RequestConfig) =>
     request.post('/v2/client/auth/email-code', data, config),
   verifyBoundPhoneCode: (data: Record<string, unknown>) =>
     request.post('/v2/client/auth/phone/verify-bound-code', data),

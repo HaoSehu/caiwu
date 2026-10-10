@@ -135,7 +135,9 @@
 
         <template v-else>
           <div class="panel-main">
-            <p class="desktop-balance-line">当前余额<strong>{{ balanceText }}</strong></p>
+            <p class="desktop-balance-line">
+              当前余额<strong>{{ balanceText }}</strong>
+            </p>
             <div class="amount-presets">
               <t-button
                 v-for="item in RECHARGE_PRESET_AMOUNTS"
@@ -263,8 +265,9 @@ import {
 import { DialogPlugin } from 'tdesign-vue-next';
 import { computed, defineAsyncComponent, onMounted, ref } from 'vue';
 
-import { formatMoney, RECHARGE_PRESET_AMOUNTS, useRecharge } from '@/domains/finance/useRecharge';
+import { RECHARGE_PRESET_AMOUNTS, useRecharge } from '@/domains/finance/useRecharge';
 import type { RechargeGatewayOption } from '@/types/client';
+import { formatMoneyText } from '@/utils/format';
 
 const QrcodeVue = defineAsyncComponent(() => import('qrcode.vue'));
 
@@ -316,15 +319,15 @@ const mobilePayHelperText = computed(() => {
 
 const balanceText = computed(() => {
   if (rechargePaid.value) {
-    return `¥${formatMoney(rechargeSummary.cashBalance || userStore.info?.cash_balance || 0)}`;
+    return formatMoneyText(rechargeSummary.cashBalance || userStore.info?.cash_balance || 0);
   }
 
   const storeBalance = userStore.info?.cash_balance;
   if (storeBalance !== undefined && storeBalance !== null && String(storeBalance).trim() !== '') {
-    return `¥${formatMoney(storeBalance)}`;
+    return formatMoneyText(storeBalance);
   }
 
-  return `¥${formatMoney(rechargeSummary.cashBalance || 0)}`;
+  return formatMoneyText(rechargeSummary.cashBalance || 0);
 });
 
 function handleMobilePresetSelect(value: number) {
@@ -401,7 +404,7 @@ onMounted(() => {
 
 .recharge-stage {
   background: var(--td-bg-color-container);
-  border: thin solid var(--td-border-color);
+  border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
   box-shadow: var(--td-shadow-1);
 }
@@ -537,7 +540,7 @@ onMounted(() => {
 }
 
 .recharge-mobile__label {
-  font-size: 1.125rem;
+  font-size: var(--td-font-size-title-large);
   font-weight: 600;
 }
 
@@ -557,7 +560,7 @@ onMounted(() => {
   color: var(--td-text-color-primary);
   cursor: pointer;
   background: var(--td-bg-color-component);
-  border: thin solid var(--td-border-color);
+  border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
   transition:
     border-color @anim-duration-base @anim-time-fn-easing,
@@ -578,7 +581,7 @@ onMounted(() => {
 }
 
 .mobile-select-card__value {
-  font-size: 1.125rem;
+  font-size: var(--td-font-size-title-large);
   font-weight: 600;
 }
 
@@ -586,7 +589,7 @@ onMounted(() => {
   position: absolute;
   top: 0.625rem;
   right: 0.625rem;
-  font-size: 1rem;
+  font-size: var(--td-font-size-body-large);
 }
 
 .recharge-mobile__custom-field {
@@ -603,7 +606,7 @@ onMounted(() => {
   padding: var(--td-comp-paddingTB-s) 0 0;
 
   strong {
-    font-size: 1.125rem;
+    font-size: var(--td-font-size-title-large);
   }
 }
 
@@ -622,7 +625,7 @@ onMounted(() => {
   padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-m);
   color: var(--td-text-color-primary);
   background: var(--td-bg-color-component);
-  border: thin solid var(--td-border-color);
+  border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
 
   &.is-active {
@@ -734,7 +737,7 @@ onMounted(() => {
   padding: var(--td-comp-paddingTB-m);
   overflow: hidden;
   background: var(--td-bg-color-container);
-  border: thin solid var(--td-border-color);
+  border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
   box-shadow: var(--td-shadow-2);
   transition:
@@ -886,7 +889,7 @@ onMounted(() => {
   padding: var(--td-comp-paddingTB-s) 0;
   color: var(--td-text-color-secondary);
   font: var(--td-font-body-small);
-  border-bottom: thin dashed var(--td-border-color);
+  border-bottom: thin dashed var(--td-component-stroke);
 
   strong {
     min-width: 0;
@@ -931,13 +934,13 @@ onMounted(() => {
   }
 }
 
-@media (width <= 30rem) {
+@media (max-width: @screen-xxs-rem) {
   .recharge-mobile {
     gap: var(--td-comp-margin-m);
   }
 }
 
-@media (width <= 22rem) {
+@media (max-width: @screen-xxs-rem) {
   .mobile-amount-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

@@ -14,13 +14,7 @@ export default defineConfig({
     locale: "zh-CN",
   },
   projects: [{ name: "chromium", use: { browserName: "chromium" } }],
-  webServer: {
-    // e2e 构建指向本地后端（.env.e2e → /api 代理到 127.0.0.1:8000），独立产物不覆盖生产 dist
-    command:
-      "npm run build:e2e && npm run preview -- --outDir dist-e2e --port 4173 --strictPort",
-    port: 4173,
-    // 强制自建服务并拒绝复用，避免残留 preview 顶替导致测到过期产物
-    reuseExistingServer: false,
-    timeout: 120_000,
-  },
+  // preview 服务由 scripts/e2e-run.mjs 显式托管：Playwright 自带的 webServer 在 Windows 下
+  // 无法可靠回收 preview 进程树（用例已跑完但命令不退出，一直等 4173 释放），
+  // 与控制台 frontend-user-v4-console 的处理保持一致。入口统一走 npm run test:e2e。
 });

@@ -92,7 +92,9 @@
               <span>{{ formatDateTime(row.paid_at || row.created_at) }}</span>
             </div>
             <div v-if="row.invoice_no" class="record-mobile-card__meta">
-              <span>关联账单：<a class="payment-invoice-link" @click.stop="goToInvoice(row)">{{ row.invoice_no }}</a></span>
+              <span
+                >关联账单：<a class="payment-invoice-link" @click.stop="goToInvoice(row)">{{ row.invoice_no }}</a></span
+              >
             </div>
           </article>
         </div>

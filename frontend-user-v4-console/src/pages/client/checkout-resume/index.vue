@@ -99,12 +99,19 @@ const payloadRows = computed(() => {
     .map((item) => ({ label: item.label, value: String(item.value) }));
 });
 
+/**
+ * 从 URL 读取待使用的券 id。
+ *
+ * 只做格式校验（正整数）：**券的归属、可用性与最终抵扣金额一律以服务端为准**，
+ * 前端不据此做任何价格或权限判断——即便被构造出不属于当前账号的 id，
+ * 服务端建单时也会拒绝或按服务端结果计费。
+ */
 function resolveQueryPendingCouponId() {
   const raw = Array.isArray(route.query.pending_coupon_id)
     ? route.query.pending_coupon_id[0]
     : route.query.pending_coupon_id;
   const id = Number(raw || 0);
-  return Number.isFinite(id) && id > 0 ? id : 0;
+  return Number.isInteger(id) && id > 0 ? id : 0;
 }
 
 function applyPendingCouponFromQuery(payload: PendingWebsiteCheckout | null) {
@@ -195,7 +202,7 @@ onMounted(async () => {
 .checkout-resume-card {
   width: min(100%, 44rem);
   background: var(--td-bg-color-container);
-  border: thin solid var(--td-border-color);
+  border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
   box-shadow: var(--td-shadow-1);
 }
@@ -227,7 +234,7 @@ onMounted(async () => {
   display: grid;
   width: min(100%, 28rem);
   overflow: hidden;
-  border: thin solid var(--td-border-color);
+  border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
 }
 
@@ -236,7 +243,7 @@ onMounted(async () => {
   grid-template-columns: minmax(6rem, 0.4fr) minmax(0, 1fr);
   gap: var(--td-comp-margin-s);
   padding: var(--td-comp-paddingTB-s) var(--td-comp-paddingLR-m);
-  border-bottom: thin solid var(--td-border-color);
+  border-bottom: thin solid var(--td-component-stroke);
 
   &:last-child {
     border-bottom: 0;

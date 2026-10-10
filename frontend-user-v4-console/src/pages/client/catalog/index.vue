@@ -21,7 +21,7 @@ const router = useRouter();
 
 .catalog-card {
   background: var(--td-bg-color-container);
-  border: thin solid var(--td-border-color);
+  border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
   box-shadow: var(--td-shadow-1);
 }

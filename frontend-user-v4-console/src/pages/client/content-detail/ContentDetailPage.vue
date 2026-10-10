@@ -135,7 +135,7 @@ const {
 
 .reader-card {
   background: var(--td-bg-color-container);
-  border: thin solid var(--td-border-color);
+  border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
   box-shadow: var(--td-shadow-1);
 }
@@ -220,7 +220,7 @@ const {
   :deep(th),
   :deep(td) {
     padding: var(--td-comp-paddingTB-s) var(--td-comp-paddingLR-s);
-    border: thin solid var(--td-border-color);
+    border: thin solid var(--td-component-stroke);
     text-align: left;
   }
 
@@ -257,7 +257,7 @@ const {
   color: var(--td-text-color-secondary);
   background: transparent;
   border: 0;
-  border-bottom: thin solid var(--td-border-color);
+  border-bottom: thin solid var(--td-component-stroke);
   cursor: pointer;
   font: var(--td-font-body-small);
   text-align: left;
@@ -267,13 +267,13 @@ const {
   }
 }
 
-@media (width <= 72rem) {
+@media (max-width: @screen-lg-rem) {
   .reader-layout {
     grid-template-columns: 1fr;
   }
 }
 
-@media (width <= 48rem) {
+@media (max-width: @screen-sm-rem) {
   .content-detail-page {
     padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-s);
   }

@@ -934,7 +934,7 @@ onBeforeUnmount(() => {
   margin: 0 auto;
 }
 
-@media (max-width: 960px) {
+@media (max-width: $breakpoint-nav) {
   .container {
     width: calc(100% - 48px);
   }
@@ -964,7 +964,7 @@ onBeforeUnmount(() => {
     180deg,
     rgba(255, 255, 255, 0) 0%,
     rgba(255, 255, 255, 0.72) 60%,
-    #ffffff 100%
+    $bg-color-card 100%
   );
   pointer-events: none;
   z-index: 1;
@@ -994,7 +994,7 @@ onBeforeUnmount(() => {
   transition: opacity 0.8s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-@media (min-width: 769px) {
+@media (min-width: $breakpoint-narrow + 1px) {
   .hero-bg__video--active {
     will-change: opacity;
   }
@@ -1116,12 +1116,12 @@ onBeforeUnmount(() => {
 
 .hero-rail__item:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(22, 93, 255, 0.22);
+  box-shadow: 0 0 0 3px $color-primary-a22;
 }
 
 .hero-rail__item.is-active {
   background: $color-primary;
-  color: #ffffff;
+  color: $text-color-inverse;
   box-shadow: 0 14px 28px rgba(22, 93, 255, 0.28);
   transform: none;
 }
@@ -1131,7 +1131,7 @@ onBeforeUnmount(() => {
 }
 
 .hero-rail__item.is-active .hero-rail__label {
-  color: #ffffff;
+  color: $text-color-inverse;
 }
 
 .hero-rail__ribbon {
@@ -1143,7 +1143,7 @@ onBeforeUnmount(() => {
   height: 20px;
   padding: 0 7px;
   border-radius: 4px;
-  color: #ffffff;
+  color: $text-color-inverse;
   font-size: 11px;
   font-weight: 700;
   line-height: 1;
@@ -1163,7 +1163,7 @@ onBeforeUnmount(() => {
 
 .hero-rail__ribbon--new {
   background: $color-primary;
-  box-shadow: 0 3px 8px rgba(22, 93, 255, 0.22);
+  box-shadow: 0 3px 8px $color-primary-a22;
 }
 
 .hero-rail__item.is-active .hero-rail__ribbon {
@@ -1250,7 +1250,7 @@ onBeforeUnmount(() => {
 
 .hero-dots__item:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(22, 93, 255, 0.22);
+  box-shadow: 0 0 0 3px $color-primary-a22;
 }
 
 .hero-dots__item.is-active::before {
@@ -1321,7 +1321,7 @@ onBeforeUnmount(() => {
 .hero-cta:focus-visible {
   outline: none;
   box-shadow:
-    0 14px 30px rgba(22, 93, 255, 0.34),
+    0 14px 30px $color-primary-a34,
     0 0 0 3px rgba(22, 93, 255, 0.32);
 }
 
@@ -1331,8 +1331,8 @@ onBeforeUnmount(() => {
 
 .hero-cta--primary {
   background: $color-primary;
-  color: #ffffff;
-  box-shadow: 0 14px 30px rgba(22, 93, 255, 0.34);
+  color: $text-color-inverse;
+  box-shadow: 0 14px 30px $color-primary-a34;
 }
 
 .hero-cta--primary:hover {
@@ -1342,17 +1342,17 @@ onBeforeUnmount(() => {
 }
 
 .hero-cta--secondary {
-  background: #ffffff;
+  background: $bg-color-card;
   color: $color-primary;
-  box-shadow: 0 10px 24px rgba(22, 93, 255, 0.12);
-  border: 1px solid rgba(22, 93, 255, 0.24);
+  box-shadow: 0 10px 24px $color-primary-a12;
+  border: 1px solid $color-primary-a24;
 }
 
 .hero-cta--secondary:hover {
   transform: translateY(-2px);
   background: #f5f8ff;
   border-color: rgba(22, 93, 255, 0.44);
-  box-shadow: 0 16px 30px rgba(22, 93, 255, 0.22);
+  box-shadow: 0 16px 30px $color-primary-a22;
 }
 
 .hero-mobile-nav {
@@ -1379,15 +1379,15 @@ onBeforeUnmount(() => {
   margin-top: 32px;
   // 去掉 backdrop-filter：位于实时视频上方时每帧全量重采样，改为近不透明底
   background: rgba(255, 255, 255, 0.94);
-  border: 1px solid rgba(22, 93, 255, 0.1);
+  border: 1px solid $color-primary-a10;
   border-radius: 12px;
-  box-shadow: 0 12px 30px rgba(22, 93, 255, 0.08);
+  box-shadow: 0 12px 30px $color-primary-a08;
 }
 
 .hero-feature {
   position: relative;
   padding: 20px 22px;
-  border-left: 1px solid rgba(22, 93, 255, 0.08);
+  border-left: 1px solid $color-primary-a08;
   cursor: pointer;
   transition:
     background 0.24s cubic-bezier(0.22, 1, 0.36, 1),
@@ -1431,7 +1431,7 @@ onBeforeUnmount(() => {
 .hero-feature:focus-visible {
   outline: none;
   background: rgba(255, 255, 255, 0.86);
-  box-shadow: inset 0 0 0 2px rgba(22, 93, 255, 0.34);
+  box-shadow: inset 0 0 0 2px $color-primary-a34;
 }
 
 .hero-feature__kicker {
@@ -1505,15 +1505,15 @@ onBeforeUnmount(() => {
   .hero-feature:nth-child(4),
   .hero-feature:nth-child(5) {
     border-left: none;
-    border-top: 1px solid rgba(22, 93, 255, 0.08);
+    border-top: 1px solid $color-primary-a08;
   }
 
   .hero-feature:nth-child(5) {
-    border-left: 1px solid rgba(22, 93, 255, 0.08);
+    border-left: 1px solid $color-primary-a08;
   }
 }
 
-@media (max-width: 960px) {
+@media (max-width: $breakpoint-nav) {
   .hero-section {
     padding: 20px 0 28px;
   }
@@ -1584,7 +1584,7 @@ onBeforeUnmount(() => {
   .hero-feature {
     padding: 16px 18px;
     border-left: none !important;
-    border-top: 1px solid rgba(22, 93, 255, 0.08);
+    border-top: 1px solid $color-primary-a08;
   }
 
   .hero-feature:nth-child(-n + 2) {
@@ -1592,7 +1592,7 @@ onBeforeUnmount(() => {
   }
 
   .hero-feature:nth-child(odd) {
-    border-right: 1px solid rgba(22, 93, 255, 0.08);
+    border-right: 1px solid $color-primary-a08;
   }
 
   .hero-feature:last-child:nth-child(odd) {
@@ -1637,11 +1637,11 @@ onBeforeUnmount(() => {
   }
 
   .hero-cta--primary {
-    box-shadow: 0 8px 20px rgba(22, 93, 255, 0.22);
+    box-shadow: 0 8px 20px $color-primary-a22;
   }
 
   .hero-cta--secondary {
-    box-shadow: 0 6px 16px rgba(22, 93, 255, 0.08);
+    box-shadow: 0 6px 16px $color-primary-a08;
   }
 
   .hero-mobile-nav {
@@ -1697,7 +1697,7 @@ onBeforeUnmount(() => {
   .hero-feature {
     padding: 16px 18px;
     border: none !important;
-    border-top: 1px solid rgba(22, 93, 255, 0.08) !important;
+    border-top: 1px solid $color-primary-a08 !important;
   }
 
   .hero-feature:first-child {

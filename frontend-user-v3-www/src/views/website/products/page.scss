@@ -2,7 +2,7 @@
 .shop-wrap {
   display: flex;
   min-height: calc(100vh - 64px);
-  background: #fff;
+  background: $bg-color-card;
 }
 
 .mobile-type-stage {
@@ -12,7 +12,7 @@
 }
 
 .mobile-stage-card {
-  background: #fff;
+  background: $bg-color-card;
   border: 1px solid $divider-color;
   border-radius: 4px;
   box-shadow: 0 10px 26px rgba(15, 23, 42, 0.04);
@@ -48,7 +48,7 @@
   padding: 16px;
   border: 1px solid $divider-color;
   border-radius: 4px;
-  background: #fff;
+  background: $bg-color-card;
   text-align: left;
   cursor: pointer;
   transition:
@@ -58,7 +58,7 @@
 
   &:hover {
     border-color: rgba($color-primary, 0.45);
-    box-shadow: 0 14px 28px rgba(22, 93, 255, 0.08);
+    box-shadow: 0 14px 28px $color-primary-a08;
     transform: translateY(-1px);
   }
 
@@ -67,7 +67,7 @@
     background: linear-gradient(
       180deg,
       rgba($color-primary, 0.08) 0%,
-      #fff 78%
+      $bg-color-card 78%
     );
   }
 }
@@ -113,7 +113,7 @@
 .shop-sidebar {
   width: 200px;
   flex-shrink: 0;
-  background: #fff;
+  background: $bg-color-card;
   border-right: 1px solid $divider-color;
   display: flex;
   flex-direction: column;
@@ -205,11 +205,11 @@
     }
     .item-abbr {
       background: $color-primary;
-      color: #fff;
+      color: $text-color-inverse;
     }
     .item-count {
       background: $color-primary;
-      color: #fff;
+      color: $text-color-inverse;
     }
   }
 }
@@ -301,7 +301,7 @@
   border: 1px solid $color-primary;
   border-radius: 6px;
   background: $color-primary;
-  color: #fff;
+  color: $text-color-inverse;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
@@ -347,7 +347,7 @@
   font-weight: 600;
 }
 
-@media (max-width: 768px) {
+@media (max-width: $breakpoint-narrow) {
   // 移动端配置区底部留白，避免被 sticky footer 遮挡
   .shop-main {
     padding-bottom: 120px;
@@ -387,7 +387,7 @@
   padding: 0 16px;
   border: 1px solid $divider-color;
   border-radius: 4px;
-  background: #fff;
+  background: $bg-color-card;
   color: $text-color-primary;
   display: inline-flex;
   align-items: center;
@@ -503,7 +503,7 @@
   padding: 0 14px;
   border: 1px solid $border-color;
   border-radius: 4px;
-  background: #fff;
+  background: $bg-color-card;
   color: $text-color-secondary;
   font-size: 12px;
   cursor: pointer;
@@ -603,7 +603,7 @@
   padding: 0 16px;
   border: 1px solid $border-color;
   border-radius: 4px;
-  background: #fff;
+  background: $bg-color-card;
   color: $text-color-secondary;
   font-size: 13px;
   cursor: pointer;
@@ -637,7 +637,7 @@
   padding: 0 20px;
   border: 1px solid $border-color;
   border-radius: 4px;
-  background: #fff;
+  background: $bg-color-card;
   color: $text-color-primary;
   font-size: 13px;
   cursor: pointer;
@@ -665,7 +665,7 @@
 .product-intro-card {
   padding: 18px 20px;
   border-bottom: 1px solid $divider-color;
-  background: #fff;
+  background: $bg-color-card;
 
   .config-block-title {
     margin-bottom: 10px;
@@ -719,7 +719,7 @@
   padding: 0 16px;
   border: 1px solid $border-color;
   border-radius: 4px;
-  background: #fff;
+  background: $bg-color-card;
   color: $text-color-primary;
   font-size: 13px;
   cursor: pointer;
@@ -739,7 +739,7 @@
 }
 
 // 移动端配置项是购买主链路的核心触点，热区提升到 ≥40px
-@media (max-width: 960px) {
+@media (max-width: $breakpoint-nav) {
   .opt-btn {
     height: 40px;
     padding: 0 18px;
@@ -796,7 +796,7 @@
   overflow-x: auto;
   border: 1px solid $divider-color;
   border-bottom: 0;
-  background: #fff;
+  background: $bg-color-card;
 }
 
 .desktop-machine-table {
@@ -829,7 +829,7 @@
   padding: 0;
   border: 0;
   border-bottom: 1px solid $divider-color;
-  background: #fff;
+  background: $bg-color-card;
   color: $text-color-primary;
   font-size: 13px;
   text-align: left;
@@ -900,13 +900,13 @@
   height: 16px;
   border: 1px solid $border-color;
   border-radius: 50%;
-  background: #fff;
+  background: $bg-color-card;
   flex-shrink: 0;
 }
 
 .desktop-machine-table-row.active .machine-spec-radio {
   border-color: $color-primary;
-  box-shadow: inset 0 0 0 4px #fff;
+  box-shadow: inset 0 0 0 4px $bg-color-card;
   background: $color-primary;
 }
 
@@ -992,7 +992,7 @@
   border: 0;
   border-bottom: 1px solid rgba($divider-color, 0.9);
   border-radius: 0;
-  background: #fff;
+  background: $bg-color-card;
   color: $text-color-primary;
   display: none;
   align-items: center;
@@ -1069,7 +1069,7 @@
   padding: 14px 16px;
   border: 1px solid $border-color;
   border-radius: 4px;
-  background: #fff;
+  background: $bg-color-card;
   cursor: pointer;
   transition: all $motion-fast ease;
   position: relative;
@@ -1129,7 +1129,7 @@
   width: 16px;
   height: 16px;
   background: $color-primary;
-  color: #fff;
+  color: $text-color-inverse;
   border-radius: 2px;
   font-size: 10px;
   font-weight: 700;
@@ -1162,7 +1162,7 @@
   padding: 0 14px;
   border: 1px solid $border-color;
   border-radius: 4px;
-  background: #fff;
+  background: $bg-color-card;
   color: $text-color-primary;
   font-size: 12px;
   cursor: pointer;
@@ -1186,7 +1186,7 @@
   width: 280px;
   flex-shrink: 0;
   border-left: 1px solid $divider-color;
-  background: #fff;
+  background: $bg-color-card;
   position: sticky;
   top: 64px;
   height: calc(100vh - 64px);
@@ -1214,7 +1214,7 @@
   z-index: 1;
   flex: none;
   padding: 0 16px 16px;
-  background: #fff;
+  background: $bg-color-card;
 }
 
 .cost-header {
@@ -1307,11 +1307,11 @@
     border-radius: 8px;
     background: linear-gradient(
       90deg,
-      rgba(#fff, 0) 0%,
+      rgba($bg-color-card, 0) 0%,
       rgba($color-primary, 0.08) 35%,
-      rgba(#fff, 0.45) 50%,
+      rgba($bg-color-card, 0.45) 50%,
       rgba($color-primary, 0.08) 65%,
-      rgba(#fff, 0) 100%
+      rgba($bg-color-card, 0) 100%
     );
     background-size: 220% 100%;
     pointer-events: none;
@@ -1498,7 +1498,7 @@
   border: none;
   border-radius: 4px;
   background: $color-primary;
-  color: #fff;
+  color: $text-color-inverse;
   font-size: 15px;
   font-weight: 700;
   cursor: pointer;
@@ -1542,7 +1542,7 @@
   gap: 10px;
   padding: 14px 16px 12px;
   border-top: 1px solid $divider-color;
-  background: #fff;
+  background: $bg-color-card;
 }
 
 .allocation-footer-main {
@@ -1687,7 +1687,7 @@
   border: none;
   border-radius: 4px;
   background: $color-primary;
-  color: #fff;
+  color: $text-color-inverse;
   font-size: 15px;
   font-weight: 700;
   cursor: pointer;
@@ -1780,7 +1780,7 @@
   padding: 14px;
   border: 1px solid $divider-color;
   border-radius: 4px;
-  background: #fff;
+  background: $bg-color-card;
 }
 
 .mobile-cost-card-title {
@@ -1791,7 +1791,7 @@
 }
 
 .mobile-cost-table-card {
-  background: #fff;
+  background: $bg-color-card;
 }
 
 .mobile-cost-table-head {
@@ -1918,7 +1918,7 @@
   padding: 0 12px;
   border: 1px solid $border-color;
   border-radius: 4px;
-  background: #fff;
+  background: $bg-color-card;
   color: $color-primary;
   font-size: 12px;
   font-weight: 600;
@@ -1938,7 +1938,7 @@
   padding: 0 14px;
   border: 1px solid $divider-color;
   border-radius: 4px;
-  background: #fff;
+  background: $bg-color-card;
   color: $text-color-primary;
   display: inline-flex;
   align-items: center;
@@ -1975,7 +1975,7 @@
   padding: 0 18px;
   border: none;
   border-left: 3px solid transparent;
-  background: #fff;
+  background: $bg-color-card;
   color: $text-color-primary;
   text-align: left;
   font-size: 15px;
@@ -2086,7 +2086,7 @@
     flex: none;
     width: 100%;
     padding-bottom: 28px;
-    background: #fff;
+    background: $bg-color-card;
   }
 
   .config-block {

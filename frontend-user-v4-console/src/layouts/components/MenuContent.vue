@@ -29,8 +29,6 @@
 import { computed } from 'vue';
 
 import { useNoticeReadStatus } from '@/domains/content/useNoticeReadStatus';
-import type { LocalizedTitle } from '@/locales';
-import { useLocale } from '@/locales/useLocale';
 import { getActive } from '@/router';
 import type { MenuRoute } from '@/types/interface';
 
@@ -49,8 +47,6 @@ const props = withDefaults(
 
 const active = computed(() => getActive());
 
-const { locale } = useLocale();
-
 const list = computed(() => {
   return getMenuList(props.navData);
 });
@@ -65,10 +61,7 @@ const shouldShowIcon = (item: ListItemType) => {
   return props.level === 0 && !!item.icon;
 };
 
-const renderMenuTitle = (title?: LocalizedTitle) => {
-  if (!title) return '';
-  return title[locale.value as keyof LocalizedTitle] || '';
-};
+const renderMenuTitle = (title?: string) => title || '';
 
 function getMenuList(list: MenuRoute[], basePath?: string): MenuRoute[] {
   if (!list || list.length === 0) {
@@ -89,7 +82,7 @@ function getMenuList(list: MenuRoute[], basePath?: string): MenuRoute[] {
 
       return {
         path,
-        title: item.meta?.title as LocalizedTitle | undefined,
+        title: item.meta?.title,
         icon: item.meta?.icon,
         children: getMenuList(item.children, path),
         meta: item.meta,

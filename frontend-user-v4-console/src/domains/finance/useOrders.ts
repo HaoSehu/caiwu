@@ -23,7 +23,9 @@ export function orderProductDisplay(row: Pick<OrderRecord, 'product_full_path' |
 }
 
 export function useOrderList() {
-  const canceling = ref(false);
+  // 取消中的订单 id 集合：按行隔离 loading，避免取消某一行时所有行按钮同时转圈
+  const cancelingIds = ref(new Set<number>());
+  const isCanceling = (id: number | string) => cancelingIds.value.has(Number(id));
   const {
     loading,
     list,
@@ -51,7 +53,7 @@ export function useOrderList() {
       theme: 'warning',
       async onConfirm() {
         dialog.setConfirmLoading(true);
-        canceling.value = true;
+        cancelingIds.value.add(Number(row.id));
         try {
           await clientApi.cancelOrder(row.id);
           MessagePlugin.success('订单已取消');
@@ -60,7 +62,7 @@ export function useOrderList() {
         } catch (error: unknown) {
           MessagePlugin.error(getErrorMessage(error, '取消订单失败'));
         } finally {
-          canceling.value = false;
+          cancelingIds.value.delete(Number(row.id));
           dialog.setConfirmLoading(false);
         }
       },
@@ -69,7 +71,7 @@ export function useOrderList() {
 
   return {
     loading,
-    canceling,
+    isCanceling,
     list,
     total,
     filters,
@@ -89,6 +91,8 @@ export function useOrderDetail() {
   const loading = ref(false);
   const canceling = ref(false);
   const detail = shallowRef<OrderRecord | null>(null);
+  const loadError = ref(false);
+  const loadErrorText = ref('');
 
   // 并发守卫：快速切换订单详情时丢弃晚返回的旧请求结果，避免旧数据覆盖当前路由的最新态。
   let requestSeq = 0;
@@ -102,6 +106,8 @@ export function useOrderDetail() {
     }
     const seq = ++requestSeq;
     loading.value = true;
+    loadError.value = false;
+    loadErrorText.value = '';
     try {
       const res = await clientApi.orderDetail(validId);
       if (seq !== requestSeq) {
@@ -112,7 +118,10 @@ export function useOrderDetail() {
       if (seq !== requestSeq) {
         return;
       }
-      MessagePlugin.error(getErrorMessage(error, '订单详情加载失败'));
+      // 错误交给页面用 DataState 呈现（含重试），此处不再额外弹 toast 造成双重反馈
+      detail.value = null;
+      loadError.value = true;
+      loadErrorText.value = getErrorMessage(error, '订单详情加载失败');
     } finally {
       if (seq === requestSeq) {
         loading.value = false;
@@ -124,6 +133,8 @@ export function useOrderDetail() {
     requestSeq += 1; // 使进行中的旧请求失效
     detail.value = null;
     loading.value = false;
+    loadError.value = false;
+    loadErrorText.value = '';
   }
 
   function cancelOrder(onSuccess?: () => void) {
@@ -158,6 +169,8 @@ export function useOrderDetail() {
     loading,
     canceling,
     detail,
+    loadError,
+    loadErrorText,
     loadDetail,
     invalidateDetail,
     cancelOrder,

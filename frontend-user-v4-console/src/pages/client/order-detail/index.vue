@@ -34,7 +34,14 @@
       </div>
     </div>
 
-    <t-loading :loading="loading" text="数据加载中...">
+    <data-state
+      :loading="loading"
+      :error="loadError"
+      :error-text="loadErrorText"
+      :empty="!detail"
+      description="未找到该订单"
+      @retry="loadDetail(orderId)"
+    >
       <template v-if="detail">
         <!-- 标签页 -->
         <t-card :bordered="false" class="order-detail-tabs-card">
@@ -187,21 +194,22 @@
         </t-card>
       </template>
 
-      <div v-else-if="!loading" class="detail-empty">
+      <template #empty-action>
         <t-button variant="outline" @click="router.push('/client/orders')">返回订单列表</t-button>
-      </div>
-    </t-loading>
+      </template>
+    </data-state>
   </section>
 </template>
 <script setup lang="ts">
 import { INVOICE_STATUS_MAP, ORDER_STATUS_MAP } from '@caiwu/shared/statusConfig';
-import StatusTag from '@shared/user-v3/components/StatusTag.vue';
+import DataState from '@caiwu/shared/user-v3/components/DataState.vue';
+import StatusTag from '@caiwu/shared/user-v3/components/StatusTag.vue';
 import { RefreshIcon } from 'tdesign-icons-vue-next';
-import { computed, onMounted, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { formatMoney, orderProductDisplay, useOrderDetail } from '@/domains/finance/useOrders';
-import { configValueLabelMap, flattenSnapshot } from '@/domains/finance/useRecords';
+import { configValueLabelMap, flattenSnapshot, formatBillingCycle } from '@/domains/finance/useRecords';
 
 const route = useRoute();
 const router = useRouter();
@@ -219,31 +227,22 @@ const pricingSnapshotView = computed(() =>
   flattenSnapshot(detail.value?.config_pricing_snapshot as Record<string, unknown> | undefined),
 );
 
-const { loading, canceling, detail, loadDetail, cancelOrder } = useOrderDetail();
+const { loading, canceling, detail, loadError, loadErrorText, loadDetail, cancelOrder } = useOrderDetail();
 
-const orderId = Number(route.params.id || 0);
-
-const BILLING_CYCLE_MAP: Record<string, string> = {
-  monthly: '月付',
-  quarterly: '季付',
-  semiannually: '半年付',
-  annually: '年付',
-  biennially: '两年付',
-  triennially: '三年付',
-  one_time: '一次性',
-  free: '免费',
-};
+// 路由参数响应式：同路由换 id（详情↔详情跳转）时组件会被复用，必须靠 watch 重新拉取
+const orderId = computed(() => Number(route.params.id || 0));
 
 function billingCycleLabel(value?: string) {
-  if (!value) return '--';
-  return BILLING_CYCLE_MAP[value] || value;
+  return formatBillingCycle(value);
 }
 
-onMounted(() => {
-  if (orderId) {
-    void loadDetail(orderId);
-  }
-});
+watch(
+  orderId,
+  (id) => {
+    void loadDetail(id);
+  },
+  { immediate: true },
+);
 </script>
 <style scoped lang="less">
 .order-breadcrumb {
@@ -305,7 +304,7 @@ onMounted(() => {
   gap: 0.0625rem;
   overflow: hidden;
   background: var(--td-bg-color-component);
-  border: thin solid var(--td-border-color);
+  border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
 }
 
@@ -390,7 +389,7 @@ onMounted(() => {
   color: var(--td-text-color-placeholder);
 }
 
-@media (width <= 40rem) {
+@media (max-width: @screen-xs-rem) {
   .detail-kv-grid {
     grid-template-columns: 1fr;
   }

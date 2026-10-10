@@ -65,9 +65,7 @@ function redirectLogin(msg?: string, requestToken?: string | null) {
   }
   // 与路由守卫口径一致：401 弹回登录页时携带 redirect，登录成功后回到原页面。
   const currentFullPath =
-    typeof window !== 'undefined'
-      ? `${window.location.pathname}${window.location.search}${window.location.hash}`
-      : '';
+    typeof window !== 'undefined' ? `${window.location.pathname}${window.location.search}${window.location.hash}` : '';
   router.push(buildLoginLocation(currentFullPath)).finally(() => {
     redirectingToLogin = false;
   });

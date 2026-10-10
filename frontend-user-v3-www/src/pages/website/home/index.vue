@@ -235,10 +235,10 @@ onBeforeUnmount(() => {
 
   &__retry {
     padding: 6px 16px;
-    border: 1px solid #f04438;
+    border: 1px solid $color-danger;
     border-radius: 6px;
-    background: #fff;
-    color: #f04438;
+    background: $bg-color-card;
+    color: $color-danger;
     font-size: 14px;
     cursor: pointer;
 

@@ -11,7 +11,7 @@
     "lint": "eslint src scripts --ext .js,.ts,.vue",
     "typecheck": "vue-tsc --noEmit -p tsconfig.json",
     "build:e2e": "vite build --mode e2e --outDir dist-e2e",
-    "test:e2e": "playwright test",
+    "test:e2e": "npm run build:e2e && node ./scripts/e2e-run.mjs",
     "check:source-health": "node ./scripts/check-source-health.mjs",
     "verify:refactor": "node ./scripts/verify-refactor.mjs"
   },

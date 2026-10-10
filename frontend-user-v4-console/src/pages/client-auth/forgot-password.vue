@@ -42,7 +42,7 @@
       </t-form-item>
 
       <t-form-item name="password">
-        <div class="client-auth-field">
+        <div class="client-auth-field client-auth-field--password">
           <label class="client-auth-label is-required" for="forgot-password">新密码</label>
           <t-input
             id="forgot-password"
@@ -54,7 +54,7 @@
             placeholder="请输入至少 6 位新密码"
           >
             <template #prefix-icon><lock-on-icon /></template>
-            <template #suffix-icon>
+            <template #suffix>
               <password-toggle v-model="showPassword" />
             </template>
           </t-input>
@@ -62,7 +62,7 @@
       </t-form-item>
 
       <t-form-item name="password_confirmation">
-        <div class="client-auth-field">
+        <div class="client-auth-field client-auth-field--password">
           <label class="client-auth-label is-required" for="forgot-password-confirm">确认新密码</label>
           <t-input
             id="forgot-password-confirm"
@@ -75,7 +75,7 @@
             @enter="submitForm"
           >
             <template #prefix-icon><lock-on-icon /></template>
-            <template #suffix-icon>
+            <template #suffix>
               <password-toggle v-model="showConfirmPassword" />
             </template>
           </t-input>
@@ -201,7 +201,7 @@ async function handleSendCode() {
       if (accountPayload.accountType === 'phone') {
         await clientAuthApi.sendPhoneCode({ phone: accountPayload.phone, purpose: 'reset_password', captcha });
       } else {
-        await clientAuthApi.sendEmailCode({ email: accountPayload.email, captcha });
+        await clientAuthApi.sendEmailCode({ email: accountPayload.email, purpose: 'reset_password', captcha });
       }
     });
 

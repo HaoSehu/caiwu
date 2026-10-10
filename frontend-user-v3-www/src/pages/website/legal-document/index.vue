@@ -75,9 +75,9 @@ function openDocument() {
 .legal-card {
   width: min(760px, 100%);
   padding: 36px 32px;
-  border: 1px solid #e5eaf3;
+  border: 1px solid $border-color;
   border-radius: 20px;
-  background: #fff;
+  background: $bg-color-card;
   box-shadow: 0 24px 48px rgba(15, 23, 42, 0.08);
 }
 

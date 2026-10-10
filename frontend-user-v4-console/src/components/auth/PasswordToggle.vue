@@ -4,9 +4,9 @@
     class="password-toggle"
     :aria-label="modelValue ? '隐藏密码' : '显示密码'"
     :aria-pressed="modelValue"
-    @click="$emit('update:modelValue', !modelValue)"
-    @keydown.enter.prevent="$emit('update:modelValue', !modelValue)"
-    @keydown.space.prevent="$emit('update:modelValue', !modelValue)"
+    @click="$emit('update:model-value', !modelValue)"
+    @keydown.enter.prevent="$emit('update:model-value', !modelValue)"
+    @keydown.space.prevent="$emit('update:model-value', !modelValue)"
   >
     <browse-icon v-if="modelValue" aria-hidden="true" />
     <browse-off-icon v-else aria-hidden="true" />
@@ -16,7 +16,7 @@
 import { BrowseIcon, BrowseOffIcon } from 'tdesign-icons-vue-next';
 
 defineProps<{ modelValue: boolean }>();
-defineEmits<{ 'update:modelValue': [value: boolean] }>();
+defineEmits<{ 'update:model-value': [value: boolean] }>();
 </script>
 <style scoped>
 .password-toggle {

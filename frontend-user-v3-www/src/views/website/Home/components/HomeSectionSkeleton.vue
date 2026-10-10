@@ -163,13 +163,13 @@ defineProps({
 
 .home-section-skeleton {
   padding: 72px 0;
-  background: #ffffff;
+  background: $bg-color-card;
 }
 
 .home-section-skeleton--hero {
   min-height: 640px;
   padding: 120px 0 32px;
-  background: linear-gradient(135deg, #f8fbff 0%, #eef4ff 52%, #ffffff 100%);
+  background: linear-gradient(135deg, #f8fbff 0%, #eef4ff 52%, $bg-color-card 100%);
 }
 
 .home-section-skeleton--solutions,
@@ -245,9 +245,9 @@ defineProps({
 .home-section-skeleton__register {
   position: relative;
   overflow: hidden;
-  border: 1px solid #e5eaf3;
+  border: 1px solid $border-color;
   border-radius: 14px;
-  background: #ffffff;
+  background: $bg-color-card;
   box-shadow: 0 14px 28px rgba(15, 23, 42, 0.05);
 }
 
@@ -305,9 +305,9 @@ defineProps({
 .home-section-skeleton__promo {
   display: block;
   height: 76px;
-  border: 1px solid #e5eaf3;
+  border: 1px solid $border-color;
   border-radius: 12px;
-  background: #ffffff;
+  background: $bg-color-card;
 }
 
 .home-section-skeleton__promo-grid {
@@ -459,7 +459,7 @@ defineProps({
   }
 }
 
-@media (max-width: 960px) {
+@media (max-width: $breakpoint-nav) {
   .container {
     width: calc(100% - 32px);
   }

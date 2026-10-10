@@ -1,19 +1,12 @@
 import { defineStore } from 'pinia';
-import { Color } from 'tvision-color';
 
-import type { TColorSeries } from '@/config/color';
-import { DARK_CHART_COLORS, LIGHT_CHART_COLORS } from '@/config/color';
 import STYLE_CONFIG from '@/config/style';
 import { store } from '@/store';
 import type { ModeType } from '@/types/interface';
-import { generateColorMap, insertThemeStylesheet } from '@/utils/color';
 
 const state: Record<string, any> = {
   ...STYLE_CONFIG,
-  showSettingPanel: false,
   isMobileSidebarVisible: false,
-  colorList: {} as TColorSeries,
-  chartColors: LIGHT_CHART_COLORS,
 };
 
 export type TState = typeof state;
@@ -25,39 +18,17 @@ export const useSettingStore = defineStore('setting', {
     showSidebar: (state) => state.layout !== 'top',
     showSidebarLogo: (state) => state.layout === 'side',
     showHeaderLogo: (state) => state.layout !== 'side',
+    // docs/DESIGN.md §2：系统仅提供浅色（Light）模式
     displayMode: (): ModeType => 'light',
     displaySideMode: (): ModeType => 'light',
   },
   actions: {
     async changeMode(_mode?: ModeType | 'auto') {
-      // docs/DESIGN.md: 系统仅提供浅色（Light）模式，暂时不提供暗黑（Dark）主题
+      // docs/DESIGN.md §2：系统仅提供浅色（Light）模式，暂时不提供暗黑（Dark）主题
       document.documentElement.setAttribute('theme-mode', '');
-      this.chartColors = LIGHT_CHART_COLORS;
     },
     async changeSideMode(_mode?: ModeType) {
       document.documentElement.setAttribute('side-mode', '');
-    },
-    getMediaColor() {
-      return 'light';
-    },
-    changeBrandTheme(brandTheme: string) {
-      const mode = this.displayMode;
-      // 以主题色加显示模式作为键
-      const colorKey = `${brandTheme}[${mode}]`;
-      let colorMap = this.colorList[colorKey];
-      // 如果不存在色阶，就需要计算
-      if (colorMap === undefined) {
-        const [{ colors: newPalette, primary: brandColorIndex }] = Color.getColorGradations({
-          colors: [brandTheme],
-          step: 10,
-          remainInput: false, // 是否保留输入 不保留会矫正不合适的主题色
-        });
-        colorMap = generateColorMap(brandTheme, newPalette, mode, brandColorIndex);
-        this.colorList[colorKey] = colorMap;
-      }
-      // TODO 需要解决不停切换时有反复插入 style 的问题
-      insertThemeStylesheet(brandTheme, colorMap, mode);
-      document.documentElement.setAttribute('theme-color', brandTheme);
     },
     updateConfig(payload: Partial<TState>) {
       for (const key in payload) {
@@ -70,14 +41,11 @@ export const useSettingStore = defineStore('setting', {
         if (key === 'sideMode') {
           this.changeSideMode(payload[key] as ModeType);
         }
-        if (key === 'brandTheme') {
-          this.changeBrandTheme(payload[key]);
-        }
       }
     },
   },
   persist: {
-    pick: [...Object.keys(STYLE_CONFIG), 'colorList', 'chartColors'],
+    pick: [...Object.keys(STYLE_CONFIG)],
   },
 });
 

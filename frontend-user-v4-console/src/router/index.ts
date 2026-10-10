@@ -19,7 +19,7 @@ const defaultRouterList: Array<RouteRecordRaw> = [
     path: '/:pathMatch(.*)*',
     name: '404Page',
     component: () => import('@/pages/result/404/index.vue'),
-    meta: { title: { zh_CN: '页面不存在', en_US: 'Not Found' }, robots: 'noindex,nofollow' },
+    meta: { title: '页面不存在', robots: 'noindex,nofollow' },
   },
 ];
 // 存放固定路由

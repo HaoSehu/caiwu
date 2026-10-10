@@ -13,7 +13,14 @@
       </div>
     </div>
 
-    <t-loading :loading="loading" text="数据加载中...">
+    <data-state
+      :loading="loading"
+      :error="loadError"
+      :error-text="loadErrorText"
+      :empty="!detail"
+      description="未找到账单详情"
+      @retry="loadDetail"
+    >
       <template v-if="detail">
         <section class="pay-shell">
           <main class="pay-main-column">
@@ -144,9 +151,14 @@
                 </div>
                 <div v-if="sessionExpiresAt" class="summary-session">
                   <span class="summary-session__label">
-                    <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" class="summary-session__icon">
-                      <circle cx="8" cy="8" r="6.25" stroke="currentColor" stroke-width="1.25"/>
-                      <path d="M8 4.5V8L10.5 9.5" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/>
+                    <svg
+                      viewBox="0 0 16 16"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                      class="summary-session__icon"
+                    >
+                      <circle cx="8" cy="8" r="6.25" stroke="currentColor" stroke-width="1.25" />
+                      <path d="M8 4.5V8L10.5 9.5" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" />
                     </svg>
                     截止 {{ formattedSessionExpiresAt }}
                   </span>
@@ -185,13 +197,13 @@
                   <strong class="summary-item__value">¥{{ formatMoney(detail.amount) }}</strong>
                 </div>
                 <div v-if="memberDiscountAmount > 0" class="summary-item summary-discount-row">
-                  <span class="summary-item__label">会员折扣{{ memberDiscountLevelName ? `（${memberDiscountLevelName}）` : '' }}</span>
+                  <span class="summary-item__label"
+                    >会员折扣{{ memberDiscountLevelName ? `（${memberDiscountLevelName}）` : '' }}</span
+                  >
                   <strong class="summary-item__value">-¥{{ formatMoney(memberDiscountAmount) }}</strong>
                 </div>
                 <div v-if="couponDiscountAmount > 0" class="summary-item summary-discount-row">
-                  <span class="summary-item__label"
-                    >优惠券减免{{ couponLabel ? `（${couponLabel}）` : '' }}</span
-                  >
+                  <span class="summary-item__label">优惠券减免{{ couponLabel ? `（${couponLabel}）` : '' }}</span>
                   <strong class="summary-item__value">-¥{{ formatMoney(couponDiscountAmount) }}</strong>
                 </div>
                 <div class="summary-item">
@@ -290,8 +302,10 @@
         </section>
       </template>
 
-      <t-empty v-else description="未找到账单详情" />
-    </t-loading>
+      <template #empty-action>
+        <t-button variant="outline" @click="router.push('/client/invoices')">返回账单列表</t-button>
+      </template>
+    </data-state>
 
     <t-dialog
       v-model:visible="alipayDialogVisible"
@@ -327,8 +341,9 @@ import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch 
 
 const QrcodeVue = defineAsyncComponent(() => import('qrcode.vue'));
 
-import { INVOICE_STATUS_MAP } from '@shared/statusConfig';
-import StatusTag from '@shared/user-v3/components/StatusTag.vue';
+import { INVOICE_STATUS_MAP } from '@caiwu/shared/statusConfig';
+import DataState from '@caiwu/shared/user-v3/components/DataState.vue';
+import StatusTag from '@caiwu/shared/user-v3/components/StatusTag.vue';
 
 import { formatMoney, resolveInvoiceNo, useInvoiceDetail } from '@/domains/finance/useInvoices';
 import { flattenSnapshot, formatBillingCycle, resolvePaymentStatusLabel } from '@/domains/finance/useRecords';
@@ -341,6 +356,8 @@ const {
   paying,
   polling,
   detail,
+  loadError,
+  loadErrorText,
   selectedPayMethod,
   allowBalanceDeduction,
   alipayDialogVisible,
@@ -385,9 +402,7 @@ const productPathView = computed(() => productPath(detail.value));
 const memberDiscountAmount = computed(() => Math.max(0, Number(detail.value?.member_discount_amount || 0)));
 const couponDiscountAmount = computed(() => Math.max(0, Number(detail.value?.discount || 0)));
 // 券标识：优先券名（更易读），无券名回退券码
-const couponLabel = computed(() =>
-  String(detail.value?.coupon_name || detail.value?.coupon_code || '').trim(),
-);
+const couponLabel = computed(() => String(detail.value?.coupon_name || detail.value?.coupon_code || '').trim());
 const memberDiscountLevelName = computed(() => {
   const snapshot = detail.value?.member_discount_snapshot;
   return snapshot && typeof snapshot === 'object'
@@ -630,7 +645,7 @@ onBeforeUnmount(() => {
   align-items: stretch;
   padding: var(--td-comp-paddingTB-l) var(--td-comp-paddingLR-l);
   background: var(--td-bg-color-container);
-  border: thin solid var(--td-border-color);
+  border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
   box-shadow: var(--td-shadow-1);
 }
@@ -659,7 +674,7 @@ onBeforeUnmount(() => {
   min-width: 4rem;
   justify-content: center;
   font-weight: 600;
-  border-radius: 62.4375rem;
+  border-radius: var(--td-radius-round);
 }
 
 .overview-session {
@@ -681,7 +696,7 @@ onBeforeUnmount(() => {
     font-variant-numeric: tabular-nums;
     background: var(--td-warning-color-light);
     border: thin solid var(--td-warning-color-3);
-    border-radius: 62.4375rem;
+    border-radius: var(--td-radius-round);
 
     &.is-expired {
       color: var(--td-error-color);
@@ -705,7 +720,7 @@ onBeforeUnmount(() => {
   min-width: 0;
   padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-m);
   background: var(--td-bg-color-component);
-  border: thin solid var(--td-border-color);
+  border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
 
   strong,
@@ -747,7 +762,7 @@ onBeforeUnmount(() => {
   justify-content: center;
   color: var(--td-brand-color);
   background: var(--td-bg-color-container);
-  border: thin solid var(--td-border-color);
+  border: thin solid var(--td-component-stroke);
   border-radius: 50%;
 
   > span {
@@ -792,7 +807,7 @@ onBeforeUnmount(() => {
 .order-info-card,
 .invoice-summary-card {
   background: var(--td-bg-color-container);
-  border: thin solid var(--td-border-color);
+  border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
   box-shadow: var(--td-shadow-1);
 }
@@ -872,7 +887,7 @@ onBeforeUnmount(() => {
   color: var(--td-text-color-primary);
   cursor: pointer;
   background: var(--td-bg-color-container);
-  border: thin solid var(--td-border-color);
+  border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
   transition:
     border-color 0.2s ease,
@@ -962,7 +977,7 @@ onBeforeUnmount(() => {
   > span {
     width: 0.625rem;
     height: 0.625rem;
-    border: thin solid var(--td-border-color);
+    border: thin solid var(--td-component-stroke);
     border-radius: 50%;
   }
 
@@ -985,7 +1000,7 @@ onBeforeUnmount(() => {
   margin-top: var(--td-comp-margin-m);
   padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-m);
   background: var(--td-bg-color-component);
-  border: thin solid var(--td-border-color);
+  border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
 }
 
@@ -1015,7 +1030,7 @@ onBeforeUnmount(() => {
   color: var(--td-text-color-secondary);
   font: var(--td-font-body-small);
   padding-top: var(--td-comp-paddingTB-s);
-  border-top: thin solid var(--td-border-color);
+  border-top: thin solid var(--td-component-stroke);
 }
 
 .pay-actions {
@@ -1038,7 +1053,7 @@ onBeforeUnmount(() => {
   padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-m);
   color: var(--td-text-color-secondary);
   background: var(--td-bg-color-component);
-  border: thin solid var(--td-border-color);
+  border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
 
   > svg {
@@ -1069,7 +1084,7 @@ onBeforeUnmount(() => {
   margin-bottom: var(--td-comp-margin-m);
   padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-m);
   background: var(--td-bg-color-component);
-  border: thin solid var(--td-border-color);
+  border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
 
   > div {
@@ -1104,7 +1119,7 @@ onBeforeUnmount(() => {
   gap: 0.0625rem;
   overflow: hidden;
   background: var(--td-bg-color-component);
-  border: thin solid var(--td-border-color);
+  border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
 }
 
@@ -1151,7 +1166,7 @@ onBeforeUnmount(() => {
       left: 0;
       width: 0.1875rem;
       background: var(--td-brand-color);
-      border-radius: 0.125rem;
+      border-radius: var(--td-radius-small);
       content: '';
     }
   }
@@ -1171,7 +1186,7 @@ onBeforeUnmount(() => {
   min-width: 0;
   padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-m);
   background: var(--td-bg-color-component);
-  border: thin solid var(--td-border-color);
+  border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
 
   strong {
@@ -1209,7 +1224,7 @@ onBeforeUnmount(() => {
   gap: 0.0625rem;
   overflow: hidden;
   background: var(--td-bg-color-component);
-  border: thin solid var(--td-border-color);
+  border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
 }
 
@@ -1250,7 +1265,7 @@ onBeforeUnmount(() => {
   margin-bottom: var(--td-comp-margin-m);
   padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-m);
   background: var(--td-bg-color-component);
-  border: thin solid var(--td-border-color);
+  border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
 
   span {
@@ -1293,7 +1308,7 @@ onBeforeUnmount(() => {
       left: 0;
       width: 0.1875rem;
       background: var(--td-brand-color);
-      border-radius: 0.125rem;
+      border-radius: var(--td-radius-small);
       content: '';
     }
   }
@@ -1305,7 +1320,7 @@ onBeforeUnmount(() => {
   gap: 0.0625rem;
   overflow: hidden;
   background: var(--td-bg-color-component);
-  border: thin solid var(--td-border-color);
+  border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
 }
 
@@ -1337,7 +1352,7 @@ onBeforeUnmount(() => {
   gap: 0.0625rem;
   overflow: hidden;
   background: var(--td-bg-color-component);
-  border: thin solid var(--td-border-color);
+  border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
 
   div {
@@ -1388,13 +1403,13 @@ onBeforeUnmount(() => {
   font-weight: 700;
 
   .currency {
-    font-size: 1.125rem;
+    font-size: var(--td-font-size-title-large);
     font-weight: 600;
     margin-right: 0.125rem;
   }
 
   .amount {
-    font-size: 1.75rem;
+    font-size: var(--td-font-size-headline-medium);
     line-height: 1;
     font-family: var(--td-font-family-number, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
     letter-spacing: -0.02em;
@@ -1409,7 +1424,7 @@ onBeforeUnmount(() => {
   margin-top: var(--td-comp-margin-s);
   padding: 0.375rem 0.625rem;
   background: var(--td-bg-color-component);
-  border: thin solid var(--td-border-color);
+  border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-small);
 }
 
@@ -1418,7 +1433,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 0.25rem;
   color: var(--td-text-color-secondary);
-  font-size: 0.75rem;
+  font-size: var(--td-font-size-body-small);
   line-height: 1.2;
 
   .summary-session__icon {
@@ -1433,7 +1448,7 @@ onBeforeUnmount(() => {
   align-items: center;
   padding: 0.125rem 0.375rem;
   color: var(--td-warning-color);
-  font-size: 0.75rem;
+  font-size: var(--td-font-size-body-small);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   background: var(--td-warning-color-light);
@@ -1464,14 +1479,14 @@ onBeforeUnmount(() => {
 
 .summary-item__label {
   color: var(--td-text-color-secondary);
-  font-size: 0.8125rem;
+  font-size: var(--td-font-size-body-small);
   line-height: 1.4;
   flex-shrink: 0;
 }
 
 .summary-item__value {
   color: var(--td-text-color-primary);
-  font-size: 0.8125rem;
+  font-size: var(--td-font-size-body-small);
   font-weight: 500;
   text-align: right;
   overflow-wrap: anywhere;
@@ -1533,7 +1548,7 @@ onBeforeUnmount(() => {
   }
 }
 
-@media (width <= 60rem) {
+@media (max-width: @screen-md-rem) {
   .payment-overview,
   .payment-flow,
   .pay-shell,

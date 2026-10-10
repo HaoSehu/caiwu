@@ -17,7 +17,8 @@ import type { RouteRecordRaw } from 'vue-router';
 
 import Layout from '@/layouts/index.vue';
 
-const title = (zhCN: string, enUS = zhCN) => ({ zh_CN: zhCN, en_US: enUS });
+// 路由标题统一为纯中文文案（不再走 i18n 多语言对象）；保留 title() 作为声明式包装，避免改写 40 处调用点。
+const title = (value: string) => value;
 const icon = (component: unknown) => shallowRef(component);
 
 export default [
@@ -29,32 +30,32 @@ export default [
     path: '/client/login',
     name: 'ClientLogin',
     component: () => import('@/pages/client-auth/login.vue'),
-    meta: { title: title('用户登录', 'Login'), guest: true, robots: 'noindex,nofollow' },
+    meta: { title: title('用户登录'), guest: true, robots: 'noindex,nofollow' },
   },
   {
     path: '/client/login-as',
     name: 'ClientLoginAs',
     component: () => import('@/pages/client-auth/login-as.vue'),
-    meta: { title: title('代登录', 'Login As'), guest: true, robots: 'noindex,nofollow' },
+    meta: { title: title('代登录'), guest: true, robots: 'noindex,nofollow' },
   },
   {
     path: '/client/register',
     name: 'ClientRegister',
     component: () => import('@/pages/client-auth/register.vue'),
-    meta: { title: title('用户注册', 'Register'), guest: true, robots: 'noindex,nofollow' },
+    meta: { title: title('用户注册'), guest: true, robots: 'noindex,nofollow' },
   },
   {
     path: '/client/forgot-password',
     name: 'ClientForgotPassword',
     component: () => import('@/pages/client-auth/forgot-password.vue'),
-    meta: { title: title('找回密码', 'Forgot Password'), guest: true, robots: 'noindex,nofollow' },
+    meta: { title: title('找回密码'), guest: true, robots: 'noindex,nofollow' },
   },
   {
     path: '/client',
     component: Layout,
     redirect: '/client/dashboard',
     meta: {
-      title: title('用户控制台', 'Client Console'),
+      title: title('用户控制台'),
       requireAuth: true,
       role: 'client',
       robots: 'noindex,nofollow',
@@ -64,14 +65,14 @@ export default [
         path: '/client/overview',
         redirect: '/client/dashboard',
         // single: 侧边栏直接渲染为一级菜单项，省掉“首页 > 控制台”的二次点击
-        meta: { title: title('首页', 'Home'), icon: icon(DashboardIcon), requireAuth: true, orderNo: 10, single: true },
+        meta: { title: title('首页'), icon: icon(DashboardIcon), requireAuth: true, orderNo: 10, single: true },
         children: [
           {
             path: '/client/dashboard',
             name: 'ClientDashboard',
             component: () => import('@/pages/client/dashboard/index.vue'),
             meta: {
-              title: title('控制台', 'Console'),
+              title: title('控制台'),
               icon: icon(DashboardIcon),
               requireAuth: true,
               robots: 'noindex,nofollow',
@@ -83,7 +84,7 @@ export default [
       {
         path: '/client/products',
         redirect: '/client/services',
-        meta: { title: title('产品与服务', 'Products'), icon: icon(ServerIcon), requireAuth: true, orderNo: 20 },
+        meta: { title: title('产品与服务'), icon: icon(ServerIcon), requireAuth: true, orderNo: 20 },
         children: [
           {
             path: '/client/services',
@@ -102,7 +103,7 @@ export default [
       {
         path: '/client/trade',
         redirect: '/client/orders',
-        meta: { title: title('交易记录', 'Trade'), icon: icon(FileIcon), requireAuth: true, orderNo: 30 },
+        meta: { title: title('交易记录'), icon: icon(FileIcon), requireAuth: true, orderNo: 30 },
         children: [
           {
             path: '/client/orders',
@@ -121,7 +122,7 @@ export default [
       {
         path: '/client/wallet',
         redirect: '/client/recharge',
-        meta: { title: title('钱包与充值', 'Wallet'), icon: icon(WalletIcon), requireAuth: true, orderNo: 40 },
+        meta: { title: title('钱包与充值'), icon: icon(WalletIcon), requireAuth: true, orderNo: 40 },
         children: [
           {
             path: '/client/recharge',
@@ -146,7 +147,7 @@ export default [
       {
         path: '/client/promo',
         redirect: '/client/coupons',
-        meta: { title: title('优惠与活动', 'Promotions'), icon: icon(CouponIcon), requireAuth: true, orderNo: 50 },
+        meta: { title: title('优惠与活动'), icon: icon(CouponIcon), requireAuth: true, orderNo: 50 },
         children: [
           {
             path: '/client/coupons',
@@ -165,7 +166,7 @@ export default [
       {
         path: '/client/support',
         redirect: '/client/tickets',
-        meta: { title: title('帮助与支持', 'Help & Support'), icon: icon(ServiceIcon), requireAuth: true, orderNo: 90 },
+        meta: { title: title('帮助与支持'), icon: icon(ServiceIcon), requireAuth: true, orderNo: 90 },
         children: [
           {
             path: '/client/tickets',
@@ -190,7 +191,7 @@ export default [
       {
         path: '/client/account',
         redirect: '/client/verification',
-        meta: { title: title('账户设置', 'Settings'), icon: icon(UserCircleIcon), requireAuth: true, orderNo: 100 },
+        meta: { title: title('账户设置'), icon: icon(UserCircleIcon), requireAuth: true, orderNo: 100 },
         children: [
           {
             path: '/client/verification',

@@ -82,7 +82,7 @@ onBeforeUnmount(() => {
 @use '@/assets/styles/variables' as *;
 
 .partner-section {
-  background: #fff;
+  background: $bg-color-card;
   padding: 72px 0 64px;
 
   &__head {

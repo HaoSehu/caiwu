@@ -1,6 +1,6 @@
 import { SERVICE_STATUS, SERVICE_STATUS_MAP, toSelectOptions } from '@shared/statusConfig';
 import { MessagePlugin } from 'tdesign-vue-next';
-import { computed, onMounted, reactive, ref, shallowRef } from 'vue';
+import { computed, onMounted, reactive, ref, shallowRef, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import clientApi from '@/api/client';
@@ -495,6 +495,21 @@ export function useServiceCenter() {
     hydrateFiltersFromRoute();
     await loadData();
   });
+
+  // URL 的 catalog_type / quick_filter 由外部改变时（例如从仪表盘带参跳入、或在同路由上换参），
+  // 组件会被复用而不重新挂载，需要重新水合筛选并重载。
+  //
+  // 只监听这两个筛选参数本身，而不是整个 route.query：hydrateFiltersFromRoute 对
+  // quick_filter 是无条件赋值，若监听整个 query，任何无关参数变化都会把用户已选的
+  // 快捷筛选静默清空。本 composable 与页面自身都不写 query，因此不会形成回路。
+  watch(
+    () => [route.query.catalog_type, route.query.quick_filter],
+    ([catalogType, quickFilter], [prevCatalogType, prevQuickFilter]) => {
+      if (catalogType === prevCatalogType && quickFilter === prevQuickFilter) return;
+      hydrateFiltersFromRoute();
+      void loadData();
+    },
+  );
 
   return {
     loading,

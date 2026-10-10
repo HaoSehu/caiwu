@@ -7,7 +7,7 @@ const homeRoute: Array<TRouterInfo> = [
   {
     path: '/client/dashboard',
     routeIdx: 0,
-    title: { zh_CN: '控制台', en_US: 'Console' },
+    title: '控制台',
     name: 'ClientDashboard',
     isHome: true,
   },

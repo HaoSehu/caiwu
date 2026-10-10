@@ -5,7 +5,8 @@ import {
   toSelectOptions,
 } from '@caiwu/shared/statusConfig';
 import { MessagePlugin } from 'tdesign-vue-next';
-import { computed, onMounted, reactive, ref, shallowRef } from 'vue';
+import { computed, onMounted, reactive, ref, shallowRef, watch } from 'vue';
+import type { LocationQuery } from 'vue-router';
 import { useRoute, useRouter } from 'vue-router';
 
 import type { ApiEnvelope, ClientFinanceListParams, PagedList } from '@/types/client';
@@ -306,6 +307,18 @@ export function useRecordList<T>(options: RecordListOptions<T>) {
   // 筛选与页码同步到 URL，刷新/回退不丢状态
   restoreFiltersFromQuery();
 
+  // URL 由外部改变（浏览器前进/后退、从别处带 query 跳入同一路由且组件被复用）时，
+  // 需要重新从 query 还原筛选并重载。自身 syncFiltersToQuery 写入的 query 会被
+  // isQueryEqualToFilters 判定为「与当前筛选一致」而跳过，避免每次筛选多打一次请求。
+  watch(
+    () => route.query,
+    (next) => {
+      if (isQueryEqualToFilters(next)) return;
+      restoreFiltersFromQuery();
+      void loadList();
+    },
+  );
+
   function restoreFiltersFromQuery() {
     const query = route.query;
     const page = Number(query.page);
@@ -351,7 +364,7 @@ export function useRecordList<T>(options: RecordListOptions<T>) {
     }
   }
 
-  function syncFiltersToQuery() {
+  function buildQueryFromFilters(): Record<string, string> {
     const next: Record<string, string> = {};
     if (filters.page > 1) next.page = String(filters.page);
     if (filters.page_size !== defaultPageSize) next.page_size = String(filters.page_size);
@@ -365,7 +378,19 @@ export function useRecordList<T>(options: RecordListOptions<T>) {
     // 日期区间独立持久化：quick 仅表达标签语义，日期始终以显式值入库（写入侧复用读取侧的格式校验）
     if (filters.start_date && QUERY_DATE_PATTERN.test(filters.start_date)) next.start_date = filters.start_date;
     if (filters.end_date && QUERY_DATE_PATTERN.test(filters.end_date)) next.end_date = filters.end_date;
+    return next;
+  }
 
+  function isQueryEqualToFilters(query: LocationQuery): boolean {
+    const expected = buildQueryFromFilters();
+    const keys = Object.keys(query);
+    return (
+      keys.length === Object.keys(expected).length && keys.every((key) => String(query[key] ?? '') === expected[key])
+    );
+  }
+
+  function syncFiltersToQuery() {
+    const next = buildQueryFromFilters();
     const current = route.query;
     const currentKeys = Object.keys(current);
     const changed =

@@ -147,7 +147,7 @@
   }
 }
 
-@media (max-width: 960px) {
+@media (max-width: $breakpoint-nav) {
   .route-loading-shell {
     min-height: 52vh;
     padding: 18px 16px;

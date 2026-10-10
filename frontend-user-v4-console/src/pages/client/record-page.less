@@ -7,7 +7,7 @@
 
 .record-card {
   background: var(--td-bg-color-container);
-  border: thin solid var(--td-border-color);
+  border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
   box-shadow: var(--td-shadow-1);
 }
@@ -78,7 +78,7 @@
   color: var(--td-text-color-primary);
   cursor: pointer;
   background: var(--td-bg-color-container);
-  border: 0.0625rem solid var(--td-border-color);
+  border: 0.0625rem solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
   box-shadow: var(--td-shadow-1);
   transition: border-color @anim-duration-base @anim-time-fn-easing;
@@ -161,7 +161,7 @@
 .record-line-list {
   overflow: hidden;
   background: var(--td-bg-color-component);
-  border: thin solid var(--td-border-color);
+  border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
 }
 
@@ -243,7 +243,7 @@
 
 .record-payment-item {
   overflow: hidden;
-  border: thin solid var(--td-border-color);
+  border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
 }
 
@@ -253,7 +253,7 @@
   align-items: center;
   justify-content: space-between;
   padding: var(--td-comp-paddingTB-s) var(--td-comp-paddingLR-m);
-  border-bottom: thin solid var(--td-border-color);
+  border-bottom: thin solid var(--td-component-stroke);
 
   > div {
     display: flex;
@@ -263,7 +263,7 @@
   }
 }
 
-@media (width <= 67.5rem) {
+@media (max-width: @screen-md-rem) {
   .record-toolbar {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

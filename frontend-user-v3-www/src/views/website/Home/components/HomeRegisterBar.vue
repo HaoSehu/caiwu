@@ -108,7 +108,7 @@ function goRegister() {
 
 .register-bar__title {
   margin: 0;
-  color: #ffffff;
+  color: $text-color-inverse;
   font-size: clamp(18px, 2vw, 22px);
   font-weight: 600;
   letter-spacing: 0.01em;
@@ -124,7 +124,7 @@ function goRegister() {
   padding: 0 28px;
   border: none;
   border-radius: 6px;
-  background: #ffffff;
+  background: $bg-color-card;
   color: $color-primary; /* Using blue for primary as per AGENTS.md */
   font-size: 14px;
   font-weight: 600;
@@ -150,7 +150,7 @@ function goRegister() {
   transform: translateY(0);
 }
 
-@media (max-width: 960px) {
+@media (max-width: $breakpoint-nav) {
   .container {
     width: min(100%, calc(100% - 32px));
   }

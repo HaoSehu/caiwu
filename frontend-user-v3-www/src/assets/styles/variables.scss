@@ -19,6 +19,17 @@ $color-info-soft: #f8fafc;
 $color-accent-orange: #dd7a1f;
 $color-accent-orange-soft: rgba(221, 122, 31, 0.14);
 
+// 主色透明档：浅色底、描边、投影统一引用，避免各页散写 rgba(22, 93, 255, x)
+$color-primary-a06: rgba(22, 93, 255, 0.06);
+$color-primary-a08: rgba(22, 93, 255, 0.08);
+$color-primary-a10: rgba(22, 93, 255, 0.1);
+$color-primary-a12: rgba(22, 93, 255, 0.12);
+$color-primary-a20: rgba(22, 93, 255, 0.2);
+$color-primary-a22: rgba(22, 93, 255, 0.22);
+$color-primary-a24: rgba(22, 93, 255, 0.24);
+$color-primary-a30: rgba(22, 93, 255, 0.3);
+$color-primary-a34: rgba(22, 93, 255, 0.34);
+
 // 2. Surface system
 $bg-color: #f5f7fb;
 $bg-color-soft: #f8fafc;

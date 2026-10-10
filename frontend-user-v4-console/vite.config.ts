@@ -282,11 +282,6 @@ export default ({ mode }: ConfigEnv): UserConfig => {
         'dayjs',
         'nprogress',
         'qs',
-        // tvision-color 依赖旧版 @babel/runtime-corejs3@7.18.9，其内部混用 ESM/CJS
-        // （arrayWithoutHoles.js 以 default 方式 import 仅有 CommonJS 导出的 is-array.js），
-        // 浏览器原生 ESM 加载会报 "does not provide an export named 'default'"。
-        // 显式纳入预构建，交由 esbuild 处理 CJS→ESM 互操作。
-        'tvision-color',
       ],
     },
   };

@@ -2,13 +2,11 @@ import type { TabValue } from 'tdesign-vue-next';
 import type { Component, DefineComponent, FunctionalComponent } from 'vue';
 import type { LocationQueryRaw, RouteMeta, RouteRecordName } from 'vue-router';
 
-import type { LocalizedTitle } from '@/locales';
-
 export interface MenuRoute {
   // TODO: menuitem 组件实际支持 string 类型但是类型错误，暂时使用 any 类型避免打包错误待组件类型修复
   path: any;
-  /** 多语言标题对象，如 { zh_CN: '仪表盘', en_US: 'Dashboard' } */
-  title?: LocalizedTitle;
+  /** 菜单标题（纯中文文案） */
+  title?: string;
   name?: string;
   icon?: string | Component | FunctionalComponent | DefineComponent;
   redirect?: string;
@@ -37,8 +35,8 @@ export interface TRouterInfo {
   path: string;
   query?: LocationQueryRaw;
   routeIdx?: number;
-  /** 多语言标题对象，如 { zh_CN: '仪表盘', en_US: 'Dashboard' } */
-  title?: LocalizedTitle;
+  /** 页签标题（纯中文文案） */
+  title?: string;
   name?: RouteRecordName;
   isAlive?: boolean;
   isHome?: boolean;

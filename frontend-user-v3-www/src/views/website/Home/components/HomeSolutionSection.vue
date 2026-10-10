@@ -166,7 +166,7 @@ function onRailKeydown(event) {
 .solution-section__desc {
   max-width: 640px;
   margin: 12px auto 0;
-  color: #5b6b82;
+  color: $text-color-secondary;
   font-size: 14px;
   line-height: 1.8;
 }
@@ -203,7 +203,7 @@ function onRailKeydown(event) {
       rgba(233, 240, 250, 0.65) 70%,
       rgba(220, 230, 245, 0.82) 100%
     ),
-    radial-gradient(circle at 70% 30%, rgba(22, 93, 255, 0.1), transparent 48%);
+    radial-gradient(circle at 70% 30%, $color-primary-a10, transparent 48%);
 
   /* 9.1 Visual Mode: Grain Texture for stage */
   &::before {
@@ -227,7 +227,7 @@ function onRailKeydown(event) {
   align-items: stretch;
   width: min(960px, 100%);
   margin-left: auto;
-  background: #ffffff;
+  background: $bg-color-card;
   border-radius: 12px;
   box-shadow: 0 24px 60px rgba(15, 23, 42, 0.12);
   overflow: hidden;
@@ -249,7 +249,7 @@ function onRailKeydown(event) {
   padding: 16px 24px;
   border: none;
   background: transparent;
-  color: #1f2937;
+  color: $text-color-primary;
   font-size: 14px;
   font-weight: 500;
   text-align: left;
@@ -265,7 +265,7 @@ function onRailKeydown(event) {
 }
 
 .solution-panel__rail-item.is-active {
-  color: #ffffff;
+  color: $text-color-inverse;
   background: $color-primary;
   font-weight: 600;
 }
@@ -276,7 +276,7 @@ function onRailKeydown(event) {
   right: 20px;
   top: 50%;
   transform: translateY(-50%);
-  color: #ffffff;
+  color: $text-color-inverse;
   font-size: 16px;
   font-weight: 400;
 }
@@ -303,7 +303,7 @@ function onRailKeydown(event) {
 
 .solution-panel__section-title {
   margin-top: 24px;
-  color: #1f2937;
+  color: $text-color-primary;
   font-size: 14px;
   font-weight: 600;
   line-height: 1.5;
@@ -332,7 +332,7 @@ function onRailKeydown(event) {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: rgba(22, 93, 255, 0.12);
+  background: $color-primary-a12;
   color: $color-primary;
   font-size: 12px;
   flex-shrink: 0;
@@ -354,8 +354,8 @@ function onRailKeydown(event) {
   padding: 0 20px;
   border: 1px solid #d5dbe8;
   border-radius: 4px;
-  background: #ffffff;
-  color: #1f2937;
+  background: $bg-color-card;
+  color: $text-color-primary;
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -374,14 +374,14 @@ function onRailKeydown(event) {
 .solution-panel__action--primary {
   border-color: $color-primary;
   background: $color-primary;
-  color: #ffffff;
-  box-shadow: 0 8px 18px rgba(22, 93, 255, 0.22);
+  color: $text-color-inverse;
+  box-shadow: 0 8px 18px $color-primary-a22;
 }
 
 .solution-panel__action--primary:hover {
   border-color: $color-primary-hover;
   background: $color-primary-hover;
-  color: #ffffff;
+  color: $text-color-inverse;
 }
 
 .solution-image-enter-active,
@@ -405,7 +405,7 @@ function onRailKeydown(event) {
   }
 }
 
-@media (max-width: 960px) {
+@media (max-width: $breakpoint-nav) {
   .solution-stage {
     padding: 56px 0 48px;
   }

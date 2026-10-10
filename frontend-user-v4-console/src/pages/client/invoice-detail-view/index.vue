@@ -25,7 +25,14 @@
       </div>
     </div>
 
-    <t-loading :loading="loading" text="数据加载中...">
+    <data-state
+      :loading="loading"
+      :error="loadError"
+      :error-text="loadErrorText"
+      :empty="!detail"
+      description="未找到该账单"
+      @retry="loadInvoice"
+    >
       <template v-if="detail">
         <!-- 标签页 -->
         <t-card :bordered="false" class="invoice-detail-tabs-card">
@@ -137,7 +144,9 @@
                   size="small"
                   hover
                 >
-                  <template #amount="{ row }">¥{{ formatMoney(row.amount) }}</template>
+                  <template #amount="{ row }">
+                    <span class="payment-money">¥{{ formatMoney(row.amount) }}</span>
+                  </template>
                   <template #status="{ row }">
                     <status-tag :status-map="PAYMENT_STATUS_MAP" :status="Number(row.status)" />
                   </template>
@@ -150,24 +159,27 @@
         </t-card>
       </template>
 
-      <div v-else-if="!loading" class="detail-empty">
+      <template #empty-action>
         <t-button variant="outline" @click="router.push('/client/invoices')">返回账单列表</t-button>
-      </div>
-    </t-loading>
+      </template>
+    </data-state>
   </section>
 </template>
 <script setup lang="ts">
 import { INVOICE_STATUS_MAP, ORDER_STATUS_MAP, PAYMENT_STATUS_MAP } from '@caiwu/shared/statusConfig';
+import DataState from '@shared/user-v3/components/DataState.vue';
 import StatusTag from '@shared/user-v3/components/StatusTag.vue';
 import { RefreshIcon } from 'tdesign-icons-vue-next';
 import type { PrimaryTableCol } from 'tdesign-vue-next';
-import { computed, onMounted, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import clientApi from '@/api/client';
+import { resolveInvoiceTypeLabel } from '@/domains/finance/constants';
 import { formatMoney, isPayableInvoice } from '@/domains/finance/useInvoices';
 import { formatBillingCycle } from '@/domains/finance/useRecords';
 import type { InvoiceRecord } from '@/types/client';
+import { getErrorMessage } from '@/utils/error';
 
 const route = useRoute();
 const router = useRouter();
@@ -184,7 +196,10 @@ const memberDiscountLevelName = computed(() => {
   return String(snapshot.member_level_name || snapshot.group_name || '').trim();
 });
 
-const invoiceId = Number(route.params.id || 0);
+// 路由参数响应式：同路由换 id 时组件会被复用，必须靠 watch 重新拉取
+const invoiceId = computed(() => Number(route.params.id || 0));
+const loadError = ref(false);
+const loadErrorText = ref('');
 
 function isPayable(row: InvoiceRecord | null) {
   return isPayableInvoice(row);
@@ -195,17 +210,7 @@ function billingCycleLabel(value?: string) {
 }
 
 function typeLabel(type?: string) {
-  const map: Record<string, string> = {
-    new: '新购',
-    normal: '新购',
-    renew: '续费',
-    upgrade: '升降级',
-    recharge: '充值',
-    deduction: '扣款',
-    referral_credit: '推荐奖励',
-    manual: '手工账单',
-  };
-  return type ? map[type] || type : '--';
+  return resolveInvoiceTypeLabel(type);
 }
 
 const paymentRecords = computed(() => {
@@ -222,27 +227,42 @@ const paymentColumns: PrimaryTableCol[] = [
   { colKey: 'payment_no', title: '商家订单号', minWidth: '10rem' },
   { colKey: 'trade_no', title: '第三方订单号', minWidth: '12rem' },
   { colKey: 'gateway', title: '渠道', width: '8rem' },
-  { colKey: 'amount', title: '金额', width: '8rem' },
+  { colKey: 'amount', title: '金额', width: '8rem', align: 'right' },
   { colKey: 'status', title: '状态', width: '8rem' },
   { colKey: 'paid_at', title: '支付时间', minWidth: '12rem' },
 ];
 
 async function loadInvoice() {
-  if (!invoiceId) return;
-  loading.value = true;
-  try {
-    const res = await clientApi.invoiceDetail(invoiceId);
-    detail.value = res.data || null;
-  } catch {
+  const id = invoiceId.value;
+  if (!id) {
     detail.value = null;
+    loadError.value = false;
+    loadErrorText.value = '';
+    return;
+  }
+  loading.value = true;
+  loadError.value = false;
+  loadErrorText.value = '';
+  try {
+    const res = await clientApi.invoiceDetail(id);
+    detail.value = res.data || null;
+  } catch (error: unknown) {
+    // 错误交给 DataState 呈现（含重试），不再静默置空导致用户只看到空态
+    detail.value = null;
+    loadError.value = true;
+    loadErrorText.value = getErrorMessage(error, '账单详情加载失败');
   } finally {
     loading.value = false;
   }
 }
 
-onMounted(() => {
-  void loadInvoice();
-});
+watch(
+  invoiceId,
+  () => {
+    void loadInvoice();
+  },
+  { immediate: true },
+);
 </script>
 <style scoped lang="less">
 .invoice-breadcrumb {
@@ -291,6 +311,13 @@ onMounted(() => {
   }
 }
 
+.payment-money {
+  font: var(--td-font-body-medium);
+  font-weight: 600;
+  color: var(--td-text-color-primary);
+  font-variant-numeric: tabular-nums;
+}
+
 .related-section {
   padding: var(--td-comp-paddingTB-m) 0;
   border-bottom: thin solid var(--td-border-level-1-color);
@@ -322,7 +349,7 @@ onMounted(() => {
   text-align: center;
 }
 
-@media (width <= 40rem) {
+@media (max-width: @screen-xs-rem) {
   .detail-kv-grid {
     grid-template-columns: 1fr;
   }

@@ -40,7 +40,7 @@
       </t-form-item>
 
       <t-form-item name="password">
-        <div class="client-auth-field">
+        <div class="client-auth-field client-auth-field--password">
           <label class="client-auth-label is-required" for="login-password">密码</label>
           <t-input
             id="login-password"
@@ -53,7 +53,7 @@
             @enter="submitForm"
           >
             <template #prefix-icon><lock-on-icon /></template>
-            <template #suffix-icon>
+            <template #suffix>
               <password-toggle v-model="showPassword" />
             </template>
           </t-input>

@@ -90,7 +90,7 @@
                 size="small"
                 theme="danger"
                 variant="text"
-                :loading="canceling"
+                :loading="isCanceling(row.id)"
                 @click="cancelOrder(row)"
               >
                 取消
@@ -152,7 +152,7 @@
                 size="small"
                 theme="danger"
                 variant="text"
-                :loading="canceling"
+                :loading="isCanceling(row.id)"
                 @click.stop="cancelOrder(row)"
               >
                 取消
@@ -198,7 +198,7 @@ const router = useRouter();
 
 const {
   loading,
-  canceling,
+  isCanceling,
   list,
   total,
   filters,

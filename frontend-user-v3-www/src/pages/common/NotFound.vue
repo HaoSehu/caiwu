@@ -34,9 +34,9 @@ const router = useRouter()
 .not-found-card {
   width: min(520px, 100%);
   padding: 40px 32px;
-  border: 1px solid #e5eaf3;
+  border: 1px solid $border-color;
   border-radius: 20px;
-  background: #fff;
+  background: $bg-color-card;
   box-shadow: 0 24px 48px rgba(15, 23, 42, 0.08);
   text-align: center;
 }

@@ -60,9 +60,7 @@
       v-model:visible="showVerificationDialog"
       header="实名认证"
       width="min(32rem, calc(100vw - var(--td-comp-margin-xl)))"
-      :confirm-btn="
-        verificationUrl ? null : { content: '确定', loading: verificationLoading, disabled: !canSubmit }
-      "
+      :confirm-btn="verificationUrl ? null : { content: '确定', loading: verificationLoading, disabled: !canSubmit }"
       cancel-btn="取消"
       destroy-on-close
       @confirm="submitVerification"
@@ -181,7 +179,7 @@ onMounted(async () => {
 .verification-status-card,
 .verification-guide-card {
   background: var(--td-bg-color-container);
-  border: thin solid var(--td-border-color);
+  border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
   box-shadow: var(--td-shadow-1);
 }
@@ -232,7 +230,7 @@ onMounted(async () => {
 .verification-meta-item {
   padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-m);
   background: var(--td-bg-color-container-hover);
-  border: thin solid var(--td-border-color);
+  border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
 
   span {

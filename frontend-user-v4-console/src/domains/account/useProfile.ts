@@ -191,7 +191,7 @@ export function useProfile() {
         if (resetForm.type === 'phone') {
           await clientAuthApi.sendPhoneCode({ phone: profileForm.phone, purpose: 'reset_password', captcha });
         } else {
-          await clientAuthApi.sendEmailCode({ email: profileForm.email, captcha });
+          await clientAuthApi.sendEmailCode({ email: profileForm.email, purpose: 'reset_password', captcha });
         }
       });
       MessagePlugin.success('验证码已发送');
@@ -388,7 +388,9 @@ export function useProfile() {
     }
     try {
       await runWithCaptcha(async (captcha: unknown) => {
-        await clientAuthApi.sendEmailCode({ email: emailForm.email, captcha });
+        // 这里发往的是「新邮箱」，不能用 change_email：后端 EMAIL_BOUND_PURPOSES 含 change_email，
+        // 会校验目标必须等于当前已绑定邮箱，换绑新邮箱时必然 422。
+        await clientAuthApi.sendEmailCode({ email: emailForm.email, purpose: 'bind_email', captcha });
       });
       MessagePlugin.success('验证码已发送');
       emailCountdown.value = 60;

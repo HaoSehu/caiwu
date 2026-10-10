@@ -34,7 +34,7 @@
               'is-outcome': Number(row.change_amount || 0) < 0,
             }"
           >
-            {{ Number(row.change_amount || 0) > 0 ? '+' : '' }}¥{{ formatMoney(row.change_amount || 0) }}
+            {{ Number(row.change_amount || 0) > 0 ? '+' : '' }}{{ formatMoneyText(row.change_amount || 0) }}
           </span>
         </template>
         <template #summary="{ row }">
@@ -61,6 +61,8 @@
   </section>
 </template>
 <script setup lang="ts">
+import { formatMoneyText } from '@/utils/format';
+
 import {
   financeColumns,
   resolveFinanceBusinessLabel,

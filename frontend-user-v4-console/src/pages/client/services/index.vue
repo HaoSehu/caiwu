@@ -39,6 +39,7 @@
           <t-button
             variant="outline"
             class="service-view-toggle"
+            :aria-label="viewMode === 'grid' ? '切换为列表视图' : '切换为卡片视图'"
             @click="setViewMode(viewMode === 'grid' ? 'list' : 'grid')"
           >
             <template #icon>
@@ -200,7 +201,13 @@
                       <span>{{ row.product?.group_name || row.product?.type_label || '云服务' }}</span>
                       <span class="service-table-meta__dot"></span>
                       <span :class="{ empty: !row.remark }">{{ row.remark || '未设置备注' }}</span>
-                      <t-button shape="square" variant="text" size="small" @click="openRemark(row)">
+                      <t-button
+                        shape="square"
+                        variant="text"
+                        size="small"
+                        aria-label="编辑备注"
+                        @click="openRemark(row)"
+                      >
                         <template #icon><edit-icon /></template>
                       </t-button>
                     </div>
@@ -441,7 +448,7 @@ function actionOptions(item: Record<string, any>) {
 
 .service-filter-card {
   background: var(--td-bg-color-container);
-  border: thin solid var(--td-border-color);
+  border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
   box-shadow: var(--td-shadow-1);
 }
@@ -519,7 +526,7 @@ function actionOptions(item: Record<string, any>) {
   left: 0.125rem;
   bottom: 0.125rem;
   color: var(--td-text-color-anti);
-  font-size: 0.6875rem;
+  font-size: var(--td-font-size-body-small);
   font-weight: 700;
   line-height: 1;
   white-space: nowrap;
@@ -534,7 +541,7 @@ function actionOptions(item: Record<string, any>) {
   height: 1.125rem;
   background: var(--td-success-color);
   color: var(--td-text-color-anti);
-  font-size: 0.6875rem;
+  font-size: var(--td-font-size-body-small);
   font-weight: 700;
   line-height: 1;
   border-radius: var(--td-radius-small);
@@ -556,7 +563,7 @@ function actionOptions(item: Record<string, any>) {
   width: 3rem;
   min-width: 3rem;
   height: 3rem;
-  border-radius: 0.75rem;
+  border-radius: var(--td-radius-extraLarge);
   overflow: hidden;
 }
 
@@ -568,7 +575,7 @@ function actionOptions(item: Record<string, any>) {
 
 .service-system-icon__fallback {
   color: var(--td-brand-color);
-  font-size: 1.125rem;
+  font-size: var(--td-font-size-title-large);
   font-weight: 700;
 }
 
@@ -593,7 +600,8 @@ function actionOptions(item: Record<string, any>) {
 
 .service-system-loader__core {
   inset: 0.4375rem;
-  background: radial-gradient(circle, var(--td-error-color-2), transparent);
+  background: var(--td-error-color-2);
+  border-radius: var(--td-radius-circle);
 }
 
 .service-row-body {
@@ -653,7 +661,7 @@ function actionOptions(item: Record<string, any>) {
   display: block;
   max-width: 100%;
   color: var(--td-text-color-primary);
-  font-size: 0.875rem;
+  font-size: var(--td-font-size-body-medium);
   font-weight: 700;
   line-height: 1.3;
   text-align: left;
@@ -670,7 +678,7 @@ function actionOptions(item: Record<string, any>) {
   border-radius: var(--td-radius-small);
   background: var(--td-bg-color-component);
   color: var(--td-text-color-secondary);
-  font-size: 0.6875rem;
+  font-size: var(--td-font-size-body-small);
   font-weight: 600;
 }
 
@@ -688,7 +696,7 @@ function actionOptions(item: Record<string, any>) {
 
 .service-remark-text {
   color: var(--td-text-color-secondary);
-  font-size: 0.6875rem;
+  font-size: var(--td-font-size-body-small);
   line-height: 1.4;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -705,9 +713,9 @@ function actionOptions(item: Record<string, any>) {
   justify-content: center;
   width: 1.5rem;
   height: 1.5rem;
-  border-radius: 0.5rem;
+  border-radius: var(--td-radius-large);
   color: var(--td-text-color-secondary);
-  font-size: 0.8125rem;
+  font-size: var(--td-font-size-body-small);
   transition:
     background-color 0.2s ease,
     color 0.2s ease;
@@ -734,23 +742,23 @@ function actionOptions(item: Record<string, any>) {
 
 .service-action-console {
   color: var(--td-brand-color);
-  font-size: 0.75rem;
+  font-size: var(--td-font-size-body-small);
   font-weight: 600;
   padding: 0 0.6875rem;
   height: 1.875rem;
-  border-radius: 0.625rem;
+  border-radius: var(--td-radius-large);
 }
 
 .service-action-more {
   border: 0.0625rem solid var(--td-component-border);
   background: var(--td-bg-color-container);
   color: var(--td-text-color-secondary);
-  font-size: 0.75rem;
+  font-size: var(--td-font-size-body-small);
   font-weight: 600;
   min-width: 3.25rem;
   height: 1.875rem;
   padding: 0 0.6875rem;
-  border-radius: 0.625rem;
+  border-radius: var(--td-radius-large);
 }
 
 .service-spec-line {
@@ -762,7 +770,7 @@ function actionOptions(item: Record<string, any>) {
   span {
     display: inline-block;
     color: var(--td-text-color-secondary);
-    font-size: 0.75rem;
+    font-size: var(--td-font-size-body-small);
     font-weight: 600;
   }
 }
@@ -770,10 +778,10 @@ function actionOptions(item: Record<string, any>) {
 .service-expire-line {
   margin-top: 0.5rem;
   color: var(--td-text-color-secondary);
-  font-size: 0.75rem;
+  font-size: var(--td-font-size-body-small);
 
   &.warning {
-    color: var(--td-warning-color-9);
+    color: var(--td-warning-color-10);
     font-weight: 600;
   }
 }
@@ -802,7 +810,7 @@ function actionOptions(item: Record<string, any>) {
 
 .service-ip-label {
   color: var(--td-text-color-secondary);
-  font-size: 0.6875rem;
+  font-size: var(--td-font-size-body-small);
 }
 
 .service-ip-button {
@@ -813,7 +821,7 @@ function actionOptions(item: Record<string, any>) {
   border: none;
   background: transparent;
   color: var(--td-text-color-primary);
-  font-size: 0.75rem;
+  font-size: var(--td-font-size-body-small);
   font-weight: 600;
   cursor: pointer;
 
@@ -826,7 +834,7 @@ function actionOptions(item: Record<string, any>) {
 .service-table-card {
   overflow: hidden;
   background: var(--td-bg-color-container);
-  border: thin solid var(--td-border-color);
+  border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
   box-shadow: var(--td-shadow-1);
 }
@@ -840,11 +848,11 @@ function actionOptions(item: Record<string, any>) {
     width: 2.5rem;
     min-width: 2.5rem;
     height: 2.5rem;
-    border-radius: 0.625rem;
+    border-radius: var(--td-radius-large);
   }
 
   .service-system-icon__fallback {
-    font-size: 1rem;
+    font-size: var(--td-font-size-body-large);
   }
 }
 
@@ -864,13 +872,13 @@ function actionOptions(item: Record<string, any>) {
   margin-top: 0.25rem;
   gap: 0.375rem;
   color: var(--td-text-color-secondary);
-  font-size: 0.75rem;
+  font-size: var(--td-font-size-body-small);
 }
 
 .service-table-meta__dot {
   width: 0.25rem;
   height: 0.25rem;
-  background: var(--td-border-color);
+  background: var(--td-component-stroke);
   border-radius: 50%;
 }
 
@@ -878,7 +886,7 @@ function actionOptions(item: Record<string, any>) {
   display: grid;
   gap: 0.25rem;
   color: var(--td-text-color-secondary);
-  font-size: 0.75rem;
+  font-size: var(--td-font-size-body-small);
 }
 
 .service-pagination {
@@ -891,7 +899,7 @@ function actionOptions(item: Record<string, any>) {
   gap: var(--td-comp-margin-s);
   padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-m);
   background: var(--td-bg-color-component);
-  border: thin solid var(--td-border-color);
+  border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
 }
 
@@ -932,7 +940,7 @@ function actionOptions(item: Record<string, any>) {
   }
 }
 
-@media (width <= 67.5rem) {
+@media (max-width: @screen-md-rem) {
   .service-filter-bar {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -942,7 +950,7 @@ function actionOptions(item: Record<string, any>) {
   }
 }
 
-@media (width <= 60rem) {
+@media (max-width: @screen-md-rem) {
   .service-card-grid {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -988,7 +996,7 @@ function actionOptions(item: Record<string, any>) {
     width: 2.5rem;
     min-width: 2.5rem;
     height: 2.5rem;
-    border-radius: 0.625rem;
+    border-radius: var(--td-radius-large);
   }
 
   .service-row-head {
@@ -1000,7 +1008,7 @@ function actionOptions(item: Record<string, any>) {
   }
 
   .service-name-button {
-    font-size: 0.8125rem;
+    font-size: var(--td-font-size-body-small);
   }
 
   .service-action-console,
@@ -1008,7 +1016,7 @@ function actionOptions(item: Record<string, any>) {
     min-width: 3rem;
     height: 2.75rem;
     padding: 0 0.75rem;
-    font-size: 0.6875rem;
+    font-size: var(--td-font-size-body-small);
   }
 
   .service-remark-trigger {
@@ -1021,13 +1029,13 @@ function actionOptions(item: Record<string, any>) {
     margin-top: 0.75rem;
 
     span {
-      font-size: 0.6875rem;
+      font-size: var(--td-font-size-body-small);
     }
   }
 
   .service-expire-line,
   .service-ip-button {
-    font-size: 0.6875rem;
+    font-size: var(--td-font-size-body-small);
   }
 
   .service-row-foot {
@@ -1036,7 +1044,7 @@ function actionOptions(item: Record<string, any>) {
   }
 
   .service-ip-label {
-    font-size: 0.75rem;
+    font-size: var(--td-font-size-body-small);
   }
 
   .service-pagination {

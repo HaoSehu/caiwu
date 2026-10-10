@@ -20,7 +20,6 @@
         </t-layout>
       </t-layout>
     </template>
-    <setting-com />
     <div id="aria-live-region" class="sr-only" aria-live="polite" role="status"></div>
   </div>
 </template>
@@ -37,7 +36,6 @@ import { useSettingStore, useTabsRouterStore } from '@/store';
 import LayoutContent from './components/LayoutContent.vue';
 import LayoutHeader from './components/LayoutHeader.vue';
 import LayoutSideNav from './components/LayoutSideNav.vue';
-import SettingCom from './setting.vue';
 
 const route = useRoute();
 const settingStore = useSettingStore();
@@ -57,8 +55,8 @@ const appendNewRoute = () => {
     meta: { title },
     name,
   } = route;
-  const titleObj = typeof title === 'string' ? { zh_CN: title, en_US: title } : title;
-  tabsRouterStore.appendTabRouterList({ path, query, title: titleObj, name, isAlive: true, meta: route.meta });
+  const tabTitle = typeof title === 'string' ? title : '';
+  tabsRouterStore.appendTabRouterList({ path, query, title: tabTitle, name, isAlive: true, meta: route.meta });
 };
 
 onMounted(() => {

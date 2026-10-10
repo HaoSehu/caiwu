@@ -13,6 +13,19 @@ export function formatMoney(value: unknown): string {
   return amount.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+/**
+ * 带货币符号的金额格式化。
+ *
+ * 负号必须排在 `¥` 之前（`-¥5.00`），不能写成 `¥-5.00`——
+ * 后者是「先拼 ¥ 再让 formatMoney 输出负号」的产物，不符合 docs/DESIGN.md §6 的金额排版。
+ * 凡是取值可能为负（流水 change_amount、折扣、账户余额）的展示位一律用本函数，不要手写 `¥` 前缀。
+ */
+export function formatMoneyText(value: unknown): string {
+  const amount = Number(value ?? 0);
+  if (!Number.isFinite(amount)) return '¥0.00';
+  return `${amount < 0 ? '-' : ''}¥${formatMoney(Math.abs(amount))}`;
+}
+
 const pad = (num: number) => String(num).padStart(2, '0');
 const DASH_RE = /-/g;
 

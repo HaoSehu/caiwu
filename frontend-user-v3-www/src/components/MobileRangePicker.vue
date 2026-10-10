@@ -122,7 +122,7 @@ function step(delta) {
   border: 1px solid $color-primary-border;
   border-radius: 8px;
   overflow: hidden;
-  background: #fff;
+  background: $bg-color-card;
 }
 
 .mrange-btn {
@@ -172,7 +172,7 @@ function step(delta) {
   appearance: none;
   width: 100%;
   height: 4px;
-  background: #e5eaf3;
+  background: $border-color;
   border-radius: 2px;
   cursor: pointer;
 
@@ -187,8 +187,8 @@ function step(delta) {
     height: 18px;
     border-radius: 50%;
     background: $color-primary;
-    border: 2px solid #fff;
-    box-shadow: 0 1px 4px rgba(22, 93, 255, 0.3);
+    border: 2px solid $bg-color-card;
+    box-shadow: 0 1px 4px $color-primary-a30;
     cursor: pointer;
     transition: transform 0.15s;
 
@@ -202,8 +202,8 @@ function step(delta) {
     height: 18px;
     border-radius: 50%;
     background: $color-primary;
-    border: 2px solid #fff;
-    box-shadow: 0 1px 4px rgba(22, 93, 255, 0.3);
+    border: 2px solid $bg-color-card;
+    box-shadow: 0 1px 4px $color-primary-a30;
     cursor: pointer;
   }
 

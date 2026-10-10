@@ -36,7 +36,7 @@
           <t-form-item label="账户ID">
             <div class="profile-id-row">
               <t-input :value="profileForm.id" readonly />
-              <t-button variant="outline" shape="square" @click="copyText(profileForm.id)">
+              <t-button variant="outline" shape="square" aria-label="复制账户ID" @click="copyText(profileForm.id)">
                 <copy-icon />
               </t-button>
             </div>
@@ -160,7 +160,12 @@
       </t-form>
       <t-form v-else label-align="top">
         <t-form-item label="新手机号"
-          ><t-input v-model="phoneForm.phone" type="tel" inputmode="numeric" maxlength="11" placeholder="请输入新手机号"
+          ><t-input
+            v-model="phoneForm.phone"
+            type="tel"
+            inputmode="numeric"
+            maxlength="11"
+            placeholder="请输入新手机号"
         /></t-form-item>
         <t-form-item label="验证码">
           <div class="bind-code-row">
@@ -173,10 +178,7 @@
       </t-form>
       <template #footer>
         <t-button variant="outline" @click="phoneDialogVisible = false">取消</t-button>
-        <t-button
-          v-if="phoneChangeStep === 2 && profileForm.phone"
-          variant="outline"
-          @click="phoneChangeStep = 1"
+        <t-button v-if="phoneChangeStep === 2 && profileForm.phone" variant="outline" @click="phoneChangeStep = 1"
           >上一步</t-button
         >
         <t-button v-if="phoneChangeStep === 1" theme="primary" :loading="profileLoading" @click="goPhoneNextStep"
@@ -211,10 +213,7 @@
       </t-form>
       <template #footer>
         <t-button variant="outline" @click="emailDialogVisible = false">取消</t-button>
-        <t-button
-          v-if="emailChangeStep === 2 && profileForm.email"
-          variant="outline"
-          @click="emailChangeStep = 1"
+        <t-button v-if="emailChangeStep === 2 && profileForm.email" variant="outline" @click="emailChangeStep = 1"
           >上一步</t-button
         >
         <t-button v-if="emailChangeStep === 1" theme="primary" :loading="profileLoading" @click="goEmailNextStep"
@@ -298,7 +297,7 @@ const {
 
 .profile-card {
   background: var(--td-bg-color-container);
-  border: thin solid var(--td-border-color);
+  border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
   box-shadow: var(--td-shadow-1);
 }
@@ -366,7 +365,7 @@ const {
   margin-top: var(--td-comp-margin-l);
   padding-top: var(--td-comp-margin-m);
   color: var(--td-text-color-secondary);
-  border-top: thin dashed var(--td-border-color);
+  border-top: thin dashed var(--td-component-stroke);
   font: var(--td-font-body-small);
 }
 
@@ -385,7 +384,7 @@ const {
   justify-content: space-between;
   padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-m);
   background: var(--td-bg-color-container);
-  border: thin solid var(--td-border-color);
+  border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
 
   p {
@@ -438,7 +437,7 @@ const {
     gap: var(--td-comp-margin-xxs);
     padding: var(--td-comp-paddingTB-xxs) var(--td-comp-paddingLR-xxs);
     background: var(--td-bg-color-container);
-    border: thin solid var(--td-border-color);
+    border: thin solid var(--td-component-stroke);
     border-radius: var(--td-radius-medium);
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;

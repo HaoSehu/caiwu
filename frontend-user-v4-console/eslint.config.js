@@ -146,6 +146,7 @@ export default antfu(
     globalIgnores([
       '**/snapshot*',
       '**/dist',
+      '**/dist-e2e',
       '**/lib',
       '**/es',
       '**/esm',

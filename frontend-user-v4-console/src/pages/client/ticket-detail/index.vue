@@ -297,7 +297,7 @@ async function handleReplyUpload(event: Event) {
 .ticket-meta-card,
 .ticket-conversation-card {
   background: var(--td-bg-color-container);
-  border: thin solid var(--td-border-color);
+  border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
   box-shadow: var(--td-shadow-1);
 }
@@ -393,7 +393,7 @@ async function handleReplyUpload(event: Event) {
   padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-m);
   color: var(--td-text-color-primary);
   background: var(--td-bg-color-container);
-  border: thin solid var(--td-border-color);
+  border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
 
   p {
@@ -406,7 +406,7 @@ async function handleReplyUpload(event: Event) {
     margin: 0;
     padding-left: var(--td-comp-paddingLR-s);
     color: var(--td-text-color-secondary);
-    border-left: var(--td-comp-margin-xxs) solid var(--td-border-color);
+    border-left: var(--td-comp-margin-xxs) solid var(--td-component-stroke);
   }
 }
 
@@ -431,7 +431,7 @@ async function handleReplyUpload(event: Event) {
   overflow: hidden;
   cursor: pointer;
   background: var(--td-bg-color-container);
-  border: thin solid var(--td-border-color);
+  border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
 
   img {
@@ -445,7 +445,7 @@ async function handleReplyUpload(event: Event) {
   display: grid;
   gap: var(--td-comp-margin-s);
   padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-l);
-  border-top: thin solid var(--td-border-color);
+  border-top: thin solid var(--td-component-stroke);
 }
 
 .reply-attachment span {

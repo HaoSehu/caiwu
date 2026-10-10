@@ -18,7 +18,14 @@
       </div>
     </div>
 
-    <t-loading :loading="loading" text="数据加载中...">
+    <data-state
+      :loading="loading"
+      :error="loadError"
+      :error-text="loadErrorText"
+      :empty="!detail"
+      description="未找到该充值记录"
+      @retry="loadPayment"
+    >
       <template v-if="detail">
         <!-- 详情卡片 -->
         <t-card :bordered="false" class="payment-detail-card">
@@ -90,58 +97,71 @@
         </t-card>
       </template>
 
-      <div v-else-if="!loading" class="detail-empty">
+      <template #empty-action>
         <t-button variant="outline" @click="router.push('/client/payments')">返回充值记录</t-button>
-      </div>
-    </t-loading>
+      </template>
+    </data-state>
   </section>
 </template>
 <script setup lang="ts">
-import { INVOICE_STATUS_MAP, PAYMENT_STATUS_MAP } from '@shared/statusConfig';
-import StatusTag from '@shared/user-v3/components/StatusTag.vue';
+import { INVOICE_STATUS_MAP, PAYMENT_STATUS_MAP } from '@caiwu/shared/statusConfig';
+import DataState from '@caiwu/shared/user-v3/components/DataState.vue';
+import StatusTag from '@caiwu/shared/user-v3/components/StatusTag.vue';
 import { RefreshIcon } from 'tdesign-icons-vue-next';
-import { onMounted, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import clientApi from '@/api/client';
+import { resolveInvoiceTypeLabel } from '@/domains/finance/constants';
 import { formatMoney } from '@/domains/finance/useRecords';
 import type { PaymentRecord } from '@/types/client';
+import { getErrorMessage } from '@/utils/error';
 
 const route = useRoute();
 const router = useRouter();
 const loading = ref(false);
 const detail = ref<PaymentRecord | null>(null);
+const loadError = ref(false);
+const loadErrorText = ref('');
 
-const paymentId = Number(route.params.id || 0);
+// 路由参数响应式：同路由换 id 时组件会被复用，必须靠 watch 重新拉取
+const paymentId = computed(() => Number(route.params.id || 0));
 
 async function loadPayment() {
-  if (!paymentId) return;
-  loading.value = true;
-  try {
-    const res = await clientApi.paymentDetail(paymentId);
-    detail.value = res.data || null;
-  } catch {
+  const id = paymentId.value;
+  if (!id) {
     detail.value = null;
+    loadError.value = false;
+    loadErrorText.value = '';
+    return;
+  }
+  loading.value = true;
+  loadError.value = false;
+  loadErrorText.value = '';
+  try {
+    const res = await clientApi.paymentDetail(id);
+    detail.value = res.data || null;
+  } catch (error: unknown) {
+    // 错误交给 DataState 呈现（含重试），不再静默置空导致用户只看到空态
+    detail.value = null;
+    loadError.value = true;
+    loadErrorText.value = getErrorMessage(error, '充值详情加载失败');
   } finally {
     loading.value = false;
   }
 }
 
 function invoiceTypeDisplay(type?: string) {
-  const map: Record<string, string> = {
-    new: '新购',
-    normal: '新购',
-    renew: '续费',
-    upgrade: '升降级',
-    recharge: '充值',
-    deduction: '扣款',
-  };
-  return map[String(type || '')] || type || '--';
+  return resolveInvoiceTypeLabel(type);
 }
 
-onMounted(() => {
-  void loadPayment();
-});
+watch(
+  paymentId,
+  () => {
+    void loadPayment();
+  },
+  { immediate: true },
+);
 </script>
 <style scoped lang="less">
 .payment-breadcrumb {
@@ -196,7 +216,7 @@ onMounted(() => {
   text-align: center;
 }
 
-@media (width <= 40rem) {
+@media (max-width: @screen-xs-rem) {
   .detail-kv-grid {
     grid-template-columns: 1fr;
   }

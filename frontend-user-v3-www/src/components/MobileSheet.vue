@@ -143,7 +143,7 @@ function handleCancel() {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #fff;
+  background: $bg-color-card;
 }
 
 .ms-head {

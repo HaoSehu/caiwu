@@ -206,7 +206,7 @@ const logColumns: PrimaryTableCol[] = [
 .referral-card,
 .referral-stat {
   background: var(--td-bg-color-container);
-  border: thin solid var(--td-border-color);
+  border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
   box-shadow: var(--td-shadow-1);
 }
@@ -264,13 +264,13 @@ const logColumns: PrimaryTableCol[] = [
   align-items: center;
 }
 
-@media (width <= 80rem) {
+@media (max-width: @screen-lg-rem) {
   .referral-stats {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
-@media (width <= 48rem) {
+@media (max-width: @screen-sm-rem) {
   .referral-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

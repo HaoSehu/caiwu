@@ -251,7 +251,7 @@ onMounted(() => {
 
 .ticket-filter-card {
   background: var(--td-bg-color-container);
-  border: thin solid var(--td-border-color);
+  border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
   box-shadow: var(--td-shadow-1);
 }
@@ -381,7 +381,7 @@ onMounted(() => {
   overflow: hidden;
   cursor: pointer;
   background: var(--td-bg-color-container);
-  border: thin solid var(--td-border-color);
+  border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
 
   img {

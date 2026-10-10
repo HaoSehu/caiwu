@@ -208,7 +208,7 @@ function openNotice(item) {
 .news-section {
   position: relative;
   padding: 72px 0 40px;
-  background: #ffffff;
+  background: $bg-color-card;
 }
 
 .news-section__head {
@@ -232,7 +232,7 @@ function openNotice(item) {
   flex-wrap: wrap;
   gap: 6px;
   margin: 10px 0 0;
-  color: #5b6b82;
+  color: $text-color-secondary;
   font-size: 14px;
   line-height: 1.8;
 }
@@ -272,9 +272,9 @@ function openNotice(item) {
 .news-feature {
   display: flex;
   flex-direction: column;
-  border: 1px solid #e5eaf3;
+  border: 1px solid $border-color;
   border-radius: 12px;
-  background: #ffffff;
+  background: $bg-color-card;
   text-align: left;
   cursor: pointer;
   overflow: hidden;
@@ -288,8 +288,8 @@ function openNotice(item) {
 
 .news-feature:hover {
   transform: translateY(-2px);
-  border-color: rgba(22, 93, 255, 0.24);
-  box-shadow: 0 18px 36px rgba(22, 93, 255, 0.1);
+  border-color: $color-primary-a24;
+  box-shadow: 0 18px 36px $color-primary-a10;
 }
 
 .news-feature__cover {
@@ -316,7 +316,7 @@ function openNotice(item) {
 }
 
 .news-feature__cover-text {
-  color: #ffffff;
+  color: $text-color-inverse;
   font-size: 72px;
   font-weight: 800;
   letter-spacing: 0.1em;
@@ -368,7 +368,7 @@ function openNotice(item) {
   flex-direction: column;
   align-items: flex-start;
   padding-right: 12px;
-  border-right: 1px solid #e5eaf3;
+  border-right: 1px solid $border-color;
 }
 
 .news-feature__date strong {
@@ -380,7 +380,7 @@ function openNotice(item) {
 
 .news-feature__date span {
   margin-top: 6px;
-  color: #606d80;
+  color: $text-color-placeholder;
   font-size: 11px;
   letter-spacing: 0.06em;
 }
@@ -402,7 +402,7 @@ function openNotice(item) {
 
 .news-feature__summary {
   margin: 8px 0 0;
-  color: #5b6b82;
+  color: $text-color-secondary;
   font-size: 13px;
   line-height: 1.78;
   display: -webkit-box;
@@ -424,9 +424,9 @@ function openNotice(item) {
   justify-content: space-between;
   gap: 14px;
   padding: 18px 20px;
-  border: 1px solid #e5eaf3;
+  border: 1px solid $border-color;
   border-radius: 8px;
-  background: #ffffff;
+  background: $bg-color-card;
   text-align: left;
   cursor: pointer;
   appearance: none;
@@ -438,13 +438,13 @@ function openNotice(item) {
 }
 
 .news-list__item:hover {
-  border-color: rgba(22, 93, 255, 0.3);
+  border-color: $color-primary-a30;
   transform: translateY(-1px);
-  box-shadow: 0 10px 22px rgba(22, 93, 255, 0.08);
+  box-shadow: 0 10px 22px $color-primary-a08;
 }
 
 .news-list__title {
-  color: #1f2937;
+  color: $text-color-primary;
   font-size: 13px;
   font-weight: 500;
   line-height: 1.6;
@@ -459,7 +459,7 @@ function openNotice(item) {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: #606d80;
+  color: $text-color-placeholder;
   font-size: 12px;
 }
 
@@ -522,7 +522,7 @@ function openNotice(item) {
   min-height: 22px;
   padding: 0 10px;
   border-radius: 4px;
-  background: rgba(22, 93, 255, 0.12);
+  background: $color-primary-a12;
   color: $color-primary;
   font-size: 11px;
   font-weight: 600;
@@ -548,7 +548,7 @@ function openNotice(item) {
 
 .news-promo__desc {
   margin: 8px 0 0;
-  color: #5b6b82;
+  color: $text-color-secondary;
   font-size: 12px;
   line-height: 1.7;
   display: -webkit-box;
@@ -565,7 +565,7 @@ function openNotice(item) {
   width: 30px;
   height: 30px;
   border-radius: 50%;
-  background: rgba(22, 93, 255, 0.1);
+  background: $color-primary-a10;
   color: $color-primary;
   font-size: 12px;
   transition:
@@ -575,7 +575,7 @@ function openNotice(item) {
 
 .news-promo:hover .news-promo__arrow {
   background: $color-primary;
-  color: #ffffff;
+  color: $text-color-inverse;
   transform: translateX(2px);
 }
 
@@ -593,7 +593,7 @@ function openNotice(item) {
   }
 }
 
-@media (max-width: 960px) {
+@media (max-width: $breakpoint-nav) {
   .news-section {
     padding: 48px 0 32px;
   }

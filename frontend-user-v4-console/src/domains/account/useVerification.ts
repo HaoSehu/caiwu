@@ -1,5 +1,5 @@
 import { MessagePlugin } from 'tdesign-vue-next';
-import { computed, onBeforeUnmount, reactive, ref } from 'vue';
+import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { clientAuthApi } from '@/api/auth';
@@ -390,6 +390,15 @@ export function useVerification() {
     delete query.t;
     await router.replace({ path: route.path, query });
   }
+
+  // 实名认证服务商回调会把 verification_callback=1 等参数带回本页。
+  // 只监听 verification_callback：处理完会删掉该参数并 replace，届时因标志位缺失直接返回，不会成环。
+  watch(
+    () => route.query.verification_callback,
+    () => {
+      void handleCallbackQuery();
+    },
+  );
 
   onBeforeUnmount(() => {
     stopPolling();

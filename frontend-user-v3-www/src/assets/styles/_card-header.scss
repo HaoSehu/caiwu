@@ -9,13 +9,13 @@
     gap: 16px;
     padding: 28px 32px;
     border-bottom: 1px solid $border-color;
-    background: linear-gradient(to right, #fff 0%, $bg-color-soft 100%);
+    background: linear-gradient(to right, $bg-color-card 0%, $bg-color-soft 100%);
   }
 
   .card-header__meta {
     padding: 6px 10px;
     border-radius: 999px;
-    background: rgba(22, 93, 255, 0.08);
+    background: $color-primary-a08;
     color: $color-primary;
     font-size: 12px;
     font-weight: 600;

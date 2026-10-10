@@ -83,7 +83,7 @@
               </div>
             </template>
             <t-badge :count="inboxUnread" :offset="[4, 4]" size="small">
-              <t-button theme="default" shape="square" variant="text" title="站内信">
+              <t-button theme="default" shape="square" variant="text" title="站内信" aria-label="站内信">
                 <template #icon><notification-icon /></template>
               </t-button>
             </t-badge>
@@ -118,7 +118,14 @@
   </div>
 </template>
 <script setup lang="ts">
-import { BrowseIcon, ChevronDownIcon, NotificationIcon, PoweroffIcon, UserCircleIcon, WalletIcon } from 'tdesign-icons-vue-next';
+import {
+  BrowseIcon,
+  ChevronDownIcon,
+  NotificationIcon,
+  PoweroffIcon,
+  UserCircleIcon,
+  WalletIcon,
+} from 'tdesign-icons-vue-next';
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import type { PropType } from 'vue';
 import { computed, onMounted, ref } from 'vue';

@@ -1254,7 +1254,7 @@ onBeforeUnmount(() => {
   height: 32px;
   padding: 0 8px;
   background: $color-primary;
-  color: #fff;
+  color: $text-color-inverse;
   font-size: 14px;
   font-weight: 600;
   border-radius: 6px;
@@ -1330,7 +1330,7 @@ onBeforeUnmount(() => {
   left: 0;
   right: 0;
   z-index: 90;
-  background: #ffffff;
+  background: $bg-color-card;
   border-bottom: 1px solid $divider-color;
   box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
   max-height: calc(100vh - 80px);
@@ -1350,7 +1350,7 @@ onBeforeUnmount(() => {
   flex-direction: column;
   padding: 16px 0;
   border-right: 1px solid $divider-color;
-  background: #f8fafc;
+  background: $bg-color-soft;
 }
 
 .mega-type-btn {
@@ -1373,13 +1373,13 @@ onBeforeUnmount(() => {
 
 .mega-type-btn:hover {
   color: $color-primary;
-  background: rgba(22, 93, 255, 0.06);
+  background: $color-primary-a06;
 }
 
 .mega-type-btn.active {
   color: $color-primary;
   font-weight: 600;
-  background: #ffffff;
+  background: $bg-color-card;
   border-right: 2px solid $color-primary;
 }
 
@@ -1405,7 +1405,7 @@ onBeforeUnmount(() => {
 }
 
 .mega-type-more:hover {
-  color: #0e4fcc;
+  color: $color-primary-hover;
 }
 
 .mega-type-heading {
@@ -1566,13 +1566,13 @@ onBeforeUnmount(() => {
   cursor: pointer;
   transition: background 0.16s ease;
   text-decoration: none;
-  color: #1f2937;
+  color: $text-color-primary;
 
   .user-avatar-initial {
     width: 34px;
     height: 34px;
-    background: #165dff;
-    color: #ffffff;
+    background: $color-primary;
+    color: $text-color-inverse;
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -1593,7 +1593,7 @@ onBeforeUnmount(() => {
   }
 
   &:hover {
-    background: rgba(22, 93, 255, 0.06);
+    background: $color-primary-a06;
   }
 
   .header-user-arrow {
@@ -1654,7 +1654,7 @@ onBeforeUnmount(() => {
   }
 
   &:hover {
-    background: rgba(22, 93, 255, 0.06);
+    background: $color-primary-a06;
     color: $color-primary;
 
     .el-icon {
@@ -1706,26 +1706,26 @@ onBeforeUnmount(() => {
   }
 }
 
-@media (max-width: 960px) {
+@media (max-width: $breakpoint-nav) {
   .mobile-user-menu {
     display: block;
   }
 }
 
 .header-user-icon.is-avatar {
-  background: #165dff;
-  color: #ffffff;
+  background: $color-primary;
+  color: $text-color-inverse;
 }
 
 .header-user-icon:hover {
   color: $color-primary;
-  background: rgba(22, 93, 255, 0.06);
+  background: $color-primary-a06;
 }
 
 .header-user-icon.is-avatar:hover {
-  color: #ffffff;
-  background: #0e4fcc;
-  box-shadow: 0 2px 8px rgba(22, 93, 255, 0.3);
+  color: $text-color-inverse;
+  background: $color-primary-hover;
+  box-shadow: 0 2px 8px $color-primary-a30;
 }
 
 .user-avatar-initial {
@@ -1757,7 +1757,7 @@ onBeforeUnmount(() => {
 
 .header-link:hover {
   color: $color-primary;
-  background: rgba(22, 93, 255, 0.06);
+  background: $color-primary-a06;
 }
 
 .header-register,
@@ -1770,13 +1770,13 @@ onBeforeUnmount(() => {
   margin-left: 4px;
   border: none;
   border-radius: 8px;
-  background: #165dff;
-  color: #ffffff;
+  background: $color-primary;
+  color: $text-color-inverse;
   font-size: 13px;
   font-weight: 600;
   text-decoration: none;
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(22, 93, 255, 0.2);
+  box-shadow: 0 4px 12px $color-primary-a20;
   transition:
     transform 0.16s ease,
     box-shadow 0.16s ease,
@@ -1786,7 +1786,7 @@ onBeforeUnmount(() => {
 .header-register:hover,
 .mobile-action-btn.primary:hover {
   transform: translateY(-1px);
-  background: #0e4fcc;
+  background: $color-primary-hover;
   box-shadow: 0 8px 20px rgba(22, 93, 255, 0.28);
 }
 
@@ -1839,18 +1839,18 @@ onBeforeUnmount(() => {
 }
 
 .mobile-user-icon.is-avatar {
-  background: #165dff;
-  color: #ffffff;
+  background: $color-primary;
+  color: $text-color-inverse;
 }
 
 .mobile-user-icon:hover {
   color: $color-primary;
-  background: rgba(22, 93, 255, 0.06);
+  background: $color-primary-a06;
 }
 
 .mobile-user-icon.is-avatar:hover {
-  color: #ffffff;
-  background: #0e4fcc;
+  color: $text-color-inverse;
+  background: $color-primary-hover;
 }
 
 .hamburger {
@@ -1963,7 +1963,7 @@ onBeforeUnmount(() => {
 .mobile-first-level-item.active {
   color: $color-primary;
   font-weight: 600;
-  background: #ffffff;
+  background: $bg-color-card;
 }
 
 .mobile-first-level-item.active::before {
@@ -2113,7 +2113,7 @@ onBeforeUnmount(() => {
   text-align: center;
   font-size: 13px;
   font-weight: 500;
-  color: #ffffff;
+  color: $text-color-inverse;
   background: $color-primary;
   border-radius: 6px;
   text-decoration: none;
@@ -2182,7 +2182,7 @@ onBeforeUnmount(() => {
   height: 40px;
   padding: 0 10px;
   background: $color-primary;
-  color: #fff;
+  color: $text-color-inverse;
   font-size: 16px;
   font-weight: 600;
   border-radius: 8px;
@@ -2340,7 +2340,7 @@ onBeforeUnmount(() => {
   }
 }
 
-@media (max-width: 960px) {
+@media (max-width: $breakpoint-nav) {
   .main-nav,
   .header-actions,
   .mega-menu {

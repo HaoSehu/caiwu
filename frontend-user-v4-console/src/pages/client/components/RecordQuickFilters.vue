@@ -3,7 +3,7 @@
     <t-tag
       v-for="item in options"
       :key="item.key"
-      :variant="modelValue === item.key ? 'outline' : 'light'"
+      variant="light"
       :theme="modelValue === item.key ? 'primary' : 'default'"
       class="quick-filter-tag"
       role="button"
@@ -33,12 +33,12 @@ withDefaults(
 );
 
 const emit = defineEmits<{
-  (event: 'update:modelValue', value: string): void;
+  (event: 'update:model-value', value: string): void;
   (event: 'change', value: string): void;
 }>();
 
 function select(key: string) {
-  emit('update:modelValue', key);
+  emit('update:model-value', key);
   emit('change', key);
 }
 </script>

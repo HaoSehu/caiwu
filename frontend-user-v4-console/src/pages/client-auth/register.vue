@@ -68,7 +68,7 @@
       </t-form-item>
 
       <t-form-item name="password">
-        <div class="client-auth-field">
+        <div class="client-auth-field client-auth-field--password">
           <label class="client-auth-label is-required" for="register-password">登录密码</label>
           <t-input
             id="register-password"
@@ -80,7 +80,7 @@
             placeholder="请输入至少 6 位密码"
           >
             <template #prefix-icon><lock-on-icon /></template>
-            <template #suffix-icon>
+            <template #suffix>
               <password-toggle v-model="showPassword" />
             </template>
           </t-input>
@@ -88,7 +88,7 @@
       </t-form-item>
 
       <t-form-item name="password_confirmation">
-        <div class="client-auth-field">
+        <div class="client-auth-field client-auth-field--password">
           <label class="client-auth-label is-required" for="register-confirm-password">确认密码</label>
           <t-input
             id="register-confirm-password"
@@ -101,7 +101,7 @@
             @enter="submitForm"
           >
             <template #prefix-icon><lock-on-icon /></template>
-            <template #suffix-icon>
+            <template #suffix>
               <password-toggle v-model="showConfirmPassword" />
             </template>
           </t-input>
@@ -240,7 +240,7 @@ async function handleSendCode() {
       if (accountPayload.accountType === 'phone') {
         await clientAuthApi.sendPhoneCode({ phone: accountPayload.phone, purpose: 'register', captcha });
       } else {
-        await clientAuthApi.sendEmailCode({ email: accountPayload.email, captcha });
+        await clientAuthApi.sendEmailCode({ email: accountPayload.email, purpose: 'register', captcha });
       }
     });
 

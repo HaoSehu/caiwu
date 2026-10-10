@@ -49,9 +49,9 @@
 :deep(.t-input) {
   width: 100%;
   min-height: 2.875rem;
-  border-color: var(--auth-field-border);
+  border-color: var(--td-border-level-2-color);
   border-radius: 0.5rem;
-  background: var(--auth-field-bg);
+  background: var(--td-bg-color-container);
   box-shadow: none;
   transition:
     border-color @anim-duration-base @anim-time-fn-easing,
@@ -60,12 +60,12 @@
 }
 
 :deep(.t-input:hover) {
-  border-color: var(--auth-field-hover-border);
+  border-color: var(--td-brand-color-hover);
 }
 
 :deep(.t-input.t-input--focused) {
   border-color: var(--td-brand-color);
-  box-shadow: 0 0 0 2px var(--auth-field-focus-shadow);
+  box-shadow: 0 0 0 2px var(--td-brand-color-focus);
 }
 
 :deep(.t-input__inner) {
@@ -78,7 +78,7 @@
 
 :deep(.t-input__prefix),
 :deep(.t-input__suffix) {
-  color: var(--auth-field-icon);
+  color: var(--td-text-color-placeholder);
 }
 
 :deep(.t-input__prefix .t-icon),
@@ -122,15 +122,15 @@
   height: 3rem;
 }
 
-/* 密码可见性图标 */
-.client-auth-password-icon {
-  cursor: pointer;
-  color: var(--auth-field-icon);
-  transition: color @anim-duration-base @anim-time-fn-easing;
-}
-
-.client-auth-password-icon:hover {
-  color: var(--td-brand-color);
+/* 密码字段的可见性开关：
+   t-input 在 type="password" 时无条件用内置眼睛图标覆盖 suffix-icon 插槽
+   （见 tdesign-vue-next/es/input/input.mjs），而该内置图标是不可聚焦、无无障碍名的 svg。
+   因此把自研开关放进不会被覆盖的 suffix 插槽，并只隐藏内置眼睛图标本身
+   （不能整块隐藏 .t-input__suffix-icon，否则会连带隐藏 clearable 的清除图标），
+   由 PasswordToggle（button + aria-label + 键盘可达）承担切换。 */
+.client-auth-field--password :deep(.t-input__suffix-icon .t-icon-browse-off),
+.client-auth-field--password :deep(.t-input__suffix-icon .t-icon-browse) {
+  display: none;
 }
 
 :deep(.t-button) {

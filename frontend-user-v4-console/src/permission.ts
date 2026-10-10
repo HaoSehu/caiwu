@@ -18,13 +18,7 @@ let fetchingUser = false;
 NProgress.configure({ showSpinner: false });
 
 function resolvePageTitle(raw: unknown) {
-  if (typeof raw === 'string') {
-    return raw;
-  }
-  if (raw && typeof raw === 'object' && 'zh_CN' in raw) {
-    return String((raw as { zh_CN?: string }).zh_CN || '');
-  }
-  return '';
+  return typeof raw === 'string' ? raw : '';
 }
 
 router.beforeEach(async (to, _from, next) => {

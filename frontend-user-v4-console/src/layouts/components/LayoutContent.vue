@@ -48,22 +48,22 @@
                 <t-dropdown-menu>
                   <t-dropdown-item @click="() => handleRefresh(routeItem, index)">
                     <t-icon name="refresh" />
-                    {{ t('layout.tagTabs.refresh') }}
+                    刷新
                   </t-dropdown-item>
                   <t-dropdown-item v-if="index > 1" @click="() => handleCloseAhead(routeItem.path, index)">
                     <t-icon name="arrow-left" />
-                    {{ t('layout.tagTabs.closeLeft') }}
+                    关闭左侧
                   </t-dropdown-item>
                   <t-dropdown-item
                     v-if="index < tabRouters.length - 1"
                     @click="() => handleCloseBehind(routeItem.path, index)"
                   >
                     <t-icon name="arrow-right" />
-                    {{ t('layout.tagTabs.closeRight') }}
+                    关闭右侧
                   </t-dropdown-item>
                   <t-dropdown-item v-if="tabRouters.length > 2" @click="() => handleCloseOther(routeItem.path, index)">
                     <t-icon name="close-circle" />
-                    {{ t('layout.tagTabs.closeOther') }}
+                    关闭其他
                   </t-dropdown-item>
                 </t-dropdown-menu>
               </template>
@@ -84,9 +84,6 @@ import { computed, nextTick, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { prefix } from '@/config/global';
-import type { LocalizedTitle } from '@/locales';
-import { t } from '@/locales';
-import { useLocale } from '@/locales/useLocale';
 import { useSettingStore, useTabsRouterStore } from '@/store';
 import type { TRouterInfo, TTabRemoveOptions } from '@/types/interface';
 
@@ -100,8 +97,6 @@ const settingStore = useSettingStore();
 const tabsRouterStore = useTabsRouterStore();
 const tabRouters = computed(() => tabsRouterStore.tabRouters.filter((route) => route.isAlive || route.isHome));
 const activeTabPath = ref('');
-
-const { locale } = useLocale();
 
 const handleChangeCurrentTab = (path: string) => {
   const { tabRouters } = tabsRouterStore;
@@ -117,10 +112,7 @@ const handleRemove = (options: TTabRemoveOptions) => {
   if ((options.value as string) === route.path) router.push({ path: nextRouter.path, query: nextRouter.query });
 };
 
-const renderTitle = (title?: LocalizedTitle) => {
-  if (!title) return '';
-  return title[locale.value as keyof LocalizedTitle] || '';
-};
+const renderTitle = (title?: string) => title || '';
 const handleRefresh = (route: TRouterInfo, routeIdx: number) => {
   tabsRouterStore.toggleTabRouterAlive(routeIdx);
   nextTick(() => {
@@ -196,7 +188,6 @@ const handleDragend = (options: { currentIndex: number; targetIndex: number }) =
   ];
 };
 </script>
-
 <style lang="less" scoped>
 .tab-item-wrapper {
   display: inline-flex;
@@ -218,7 +209,9 @@ const handleDragend = (options: { currentIndex: number; targetIndex: number }) =
   border-radius: 3px;
   cursor: pointer;
   opacity: 0.6;
-  transition: opacity 0.2s, background-color 0.2s;
+  transition:
+    opacity 0.2s,
+    background-color 0.2s;
 
   &:hover {
     opacity: 1;

@@ -180,7 +180,7 @@ async function handleMarkAllRead() {
 
 .content-card {
   background: var(--td-bg-color-container);
-  border: thin solid var(--td-border-color);
+  border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
   box-shadow: var(--td-shadow-1);
 }
@@ -218,7 +218,7 @@ async function handleMarkAllRead() {
 
 .article-row {
   padding: var(--td-comp-paddingTB-l) 0;
-  border-bottom: thin solid var(--td-border-color);
+  border-bottom: thin solid var(--td-component-stroke);
 
   &:first-child {
     padding-top: 0;
@@ -277,7 +277,7 @@ async function handleMarkAllRead() {
   min-height: var(--td-comp-size-xxl);
   color: var(--td-text-color-primary);
   text-decoration: none;
-  border-bottom: thin solid var(--td-border-color);
+  border-bottom: thin solid var(--td-component-stroke);
 
   &:last-child {
     border-bottom: 0;
@@ -330,7 +330,7 @@ async function handleMarkAllRead() {
   justify-content: flex-end;
 }
 
-@media (width <= 72rem) {
+@media (max-width: @screen-lg-rem) {
   .content-list-layout {
     grid-template-columns: 1fr;
   }
@@ -341,7 +341,7 @@ async function handleMarkAllRead() {
   }
 }
 
-@media (width <= 48rem) {
+@media (max-width: @screen-sm-rem) {
   .hero-card,
   .content-sidebar {
     grid-template-columns: 1fr;

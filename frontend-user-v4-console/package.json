@@ -8,7 +8,9 @@
     "build:test": "vite build --mode test",
     "build": "vue-tsc --noEmit && vite build --mode production",
     "build:type": "vue-tsc --noEmit",
+    "build:e2e": "vite build --mode e2e --outDir dist-e2e",
     "preview": "vite preview",
+    "test:e2e": "npm run build:e2e && node ./scripts/e2e-run.mjs",
     "lint": "eslint --ext .vue,.js,.jsx,.ts,.tsx ./ --max-warnings 0",
     "lint:fix": "eslint --ext .vue,.js,jsx,.ts,.tsx ./ --max-warnings 0 --fix",
     "stylelint": "stylelint src/**/*.{html,vue,css,sass,less}",
@@ -29,9 +31,7 @@
     "qs": "^6.15.0",
     "tdesign-icons-vue-next": "^0.4.4",
     "tdesign-vue-next": "^1.19.1",
-    "tvision-color": "^1.6.0",
     "vue": "^3.5.18",
-    "vue-i18n": "^9.9.1",
     "vue-router": "^4.6.0"
   },
   "devDependencies": {

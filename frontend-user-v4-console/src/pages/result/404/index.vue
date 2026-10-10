@@ -11,7 +11,6 @@
     </div>
   </section>
 </template>
-
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useRouter } from 'vue-router';
@@ -24,7 +23,6 @@ const canGoBack = computed(() => {
   return Boolean(state && typeof state.back === 'string');
 });
 </script>
-
 <style scoped lang="less">
 .client-result-404 {
   display: flex;

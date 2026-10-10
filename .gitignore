@@ -50,6 +50,7 @@ frontend-user-v4-console/*.err.log
 frontend-user-v4-console/*.out.log
 frontend-user-v4-console/playwright-report/
 frontend-user-v4-console/test-results/
+frontend-user-v4-console/dist-e2e/
 frontend-user-v4-console/.auth/
 shared/node_modules/
 

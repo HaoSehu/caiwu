@@ -37,7 +37,7 @@
   /* ---- 顶部卡片 ---- */
   .console-header-card {
     background: var(--td-bg-color-container);
-    border: 0.0625rem solid var(--td-border-color);
+    border: 0.0625rem solid var(--td-component-stroke);
     border-radius: var(--td-radius-medium);
     box-shadow: var(--td-shadow-1);
   }
@@ -154,7 +154,7 @@
     gap: 0;
     padding: 0.625rem 0;
     background: var(--td-bg-color-container);
-    border: 0.0625rem solid var(--td-border-color);
+    border: 0.0625rem solid var(--td-component-stroke);
     border-radius: var(--td-radius-medium);
     box-shadow: var(--td-shadow-1);
     overflow: hidden;
@@ -202,7 +202,7 @@
   .console-panel,
   .console-content .t-card {
     background: var(--td-bg-color-container);
-    border: 0.0625rem solid var(--td-border-color);
+    border: 0.0625rem solid var(--td-component-stroke);
     border-radius: var(--td-radius-medium);
     box-shadow: var(--td-shadow-1);
     overflow: hidden;
@@ -440,7 +440,7 @@
     min-height: 14.75rem;
     padding: 1rem;
     background: var(--td-bg-color-component);
-    border: 0.0625rem solid var(--td-border-color);
+    border: 0.0625rem solid var(--td-component-stroke);
     border-radius: var(--td-radius-medium);
   }
 
@@ -655,7 +655,7 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 0.5rem;
     padding-top: 0.5rem;
-    border-top: 0.0625rem solid var(--td-border-color);
+    border-top: 0.0625rem solid var(--td-component-stroke);
 
     span {
       min-width: 0;
@@ -688,7 +688,7 @@
     padding: 0.875rem;
     cursor: pointer;
     background: var(--td-bg-color-component);
-    border: 0.0625rem solid var(--td-border-color);
+    border: 0.0625rem solid var(--td-component-stroke);
     border-radius: var(--td-radius-medium);
     transition: border-color 0.2s ease, background-color 0.2s ease;
 
@@ -745,7 +745,7 @@
     gap: 0.75rem;
     margin-top: 1rem;
     padding-top: 1rem;
-    border-top: 0.0625rem solid var(--td-border-color);
+    border-top: 0.0625rem solid var(--td-component-stroke);
   }
 
   .security-rules-cards {
@@ -843,7 +843,7 @@
     color: var(--td-brand-color);
     cursor: pointer;
     background: var(--td-bg-color-container);
-    border: 0.0625rem solid var(--td-border-color);
+    border: 0.0625rem solid var(--td-component-stroke);
     border-radius: var(--td-radius-small);
     transition: border-color 0.2s ease, background-color 0.2s ease;
 
@@ -916,7 +916,7 @@
     gap: 1rem;
     padding: 1.125rem;
     background: var(--td-bg-color-component);
-    border: 0.0625rem solid var(--td-border-color);
+    border: 0.0625rem solid var(--td-component-stroke);
     border-radius: var(--td-radius-medium);
   }
 
@@ -938,7 +938,7 @@
     overflow: hidden;
     min-height: 35rem;
     background: var(--td-bg-color-page);
-    border: 0.0625rem solid var(--td-border-color);
+    border: 0.0625rem solid var(--td-component-stroke);
     border-radius: var(--td-radius-default);
   }
 
@@ -992,7 +992,7 @@
       padding: 1rem;
       height: auto;
       min-height: 5rem;
-      border: 0.0625rem solid var(--td-border-color) !important;
+      border: 0.0625rem solid var(--td-component-stroke) !important;
       border-radius: 0.5rem !important;
       background: var(--td-bg-color-component);
       cursor: pointer;
@@ -1026,7 +1026,7 @@
 
   .renew-total-line {
     padding-top: 1rem;
-    border-top: 0.0625rem solid var(--td-border-color);
+    border-top: 0.0625rem solid var(--td-component-stroke);
 
     strong {
       color: var(--td-error-color);
@@ -1046,7 +1046,7 @@
       gap: 0.375rem;
       padding: 0.875rem;
       background: var(--td-bg-color-component);
-      border: 0.0625rem solid var(--td-border-color);
+      border: 0.0625rem solid var(--td-component-stroke);
       border-radius: var(--td-radius-medium);
     }
 
@@ -1075,7 +1075,7 @@
       height: auto;
       min-height: 4.25rem;
       padding: 0.875rem 1rem;
-      border: 0.0625rem solid var(--td-border-color) !important;
+      border: 0.0625rem solid var(--td-component-stroke) !important;
       border-radius: 0.5rem !important;
       background: var(--td-bg-color-component);
     }
@@ -1121,7 +1121,7 @@
     justify-content: space-between;
     margin-top: 1rem;
     padding-top: 1rem;
-    border-top: 0.0625rem solid var(--td-border-color);
+    border-top: 0.0625rem solid var(--td-component-stroke);
 
     span {
       color: var(--td-text-color-secondary);
@@ -1145,7 +1145,7 @@
     }
   }
 
-  @media (width <= 56.25rem) {
+  @media (max-width: @screen-md-rem) {
     .console-header-card .t-card__body {
       flex-direction: column;
       gap: 0.875rem;
@@ -1180,7 +1180,7 @@
       gap: 0.25rem;
       min-height: 3.25rem;
       padding: 0.5rem 0.375rem;
-      border: 0.0625rem solid var(--td-border-color);
+      border: 0.0625rem solid var(--td-component-stroke);
       text-align: center;
       font-size: 0.6875rem;
       line-height: 1.3;

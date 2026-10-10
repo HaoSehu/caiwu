@@ -331,7 +331,7 @@ watch(
 .product-tabs-section {
   position: relative;
   padding: 72px 0 80px;
-  background: #ffffff;
+  background: $bg-color-card;
 }
 
 .product-tabs__head {
@@ -350,7 +350,7 @@ watch(
 .product-tabs__desc {
   max-width: 760px;
   margin: 12px auto 0;
-  color: #5b6b82;
+  color: $text-color-secondary;
   font-size: 14px;
   line-height: 1.8;
 }
@@ -435,9 +435,9 @@ watch(
   gap: 8px;
   min-height: 100px;
   padding: 14px 20px 12px;
-  border: 1px solid #e5eaf3;
+  border: 1px solid $border-color;
   border-radius: 8px;
-  background: #ffffff;
+  background: $bg-color-card;
   text-align: left;
   cursor: pointer;
   appearance: none;
@@ -450,7 +450,7 @@ watch(
 
 .product-card:hover {
   border-color: rgba(22, 93, 255, 0.4);
-  box-shadow: 0 18px 40px rgba(22, 93, 255, 0.12);
+  box-shadow: 0 18px 40px $color-primary-a12;
   transform: translateY(-3px);
 }
 
@@ -472,7 +472,7 @@ watch(
 
 .product-card__desc {
   margin: 0;
-  color: #5b6b82;
+  color: $text-color-secondary;
   font-size: 13px;
   line-height: 1.78;
   display: -webkit-box;
@@ -520,7 +520,7 @@ watch(
   }
 }
 
-@media (max-width: 960px) {
+@media (max-width: $breakpoint-nav) {
   .product-tabs__desc {
     font-size: 13px;
   }

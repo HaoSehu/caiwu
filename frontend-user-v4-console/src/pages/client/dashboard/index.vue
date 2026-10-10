@@ -383,7 +383,12 @@ function resolveProductMeta(item: ServiceOverviewGroup, key: string) {
   // key 为一级菜单 code（分组口径），业务类型另取 product_type 兜底图标。
   const typeKey = String(item.product_type || '').toLowerCase() || key;
   if (typeKey === 'cloud_server' || title.includes('云服务器')) return { icon: ServerIcon, tone: 'is-brand' };
-  if (typeKey === 'physical_machine' || typeKey === 'bare_metal' || title.includes('物理机') || title.includes('裸金属')) {
+  if (
+    typeKey === 'physical_machine' ||
+    typeKey === 'bare_metal' ||
+    title.includes('物理机') ||
+    title.includes('裸金属')
+  ) {
     return { icon: DashboardIcon, tone: 'is-success' };
   }
   if (typeKey === 'game_cloud' || title.includes('游戏云')) return { icon: DashboardIcon, tone: 'is-info' };
@@ -841,7 +846,7 @@ onMounted(() => {
 .dashboard-card {
   height: 100%;
   background: var(--td-bg-color-container);
-  border: thin solid var(--td-border-color);
+  border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
   box-shadow: var(--td-shadow-1);
 }
@@ -908,7 +913,7 @@ onMounted(() => {
   }
 
   &.is-warning {
-    color: var(--td-warning-color-9);
+    color: var(--td-warning-color-10);
   }
 }
 
@@ -925,7 +930,7 @@ onMounted(() => {
 .product-tile,
 .todo-row,
 .quick-link {
-  border: thin solid var(--td-border-color);
+  border: thin solid var(--td-component-stroke);
   background: var(--td-bg-color-container);
   color: var(--td-text-color-primary);
   cursor: pointer;
@@ -1060,7 +1065,7 @@ onMounted(() => {
   height: 12rem;
   gap: var(--td-comp-margin-xxs);
   padding: var(--td-comp-paddingTB-s) 0 var(--td-comp-paddingTB-xl);
-  border-bottom: thin solid var(--td-border-color);
+  border-bottom: thin solid var(--td-component-stroke);
 }
 
 .bar-chart__slot {
@@ -1163,7 +1168,7 @@ onMounted(() => {
   min-height: var(--td-comp-size-xxl);
   color: var(--td-text-color-primary);
   text-decoration: none;
-  border-bottom: thin solid var(--td-border-color);
+  border-bottom: thin solid var(--td-component-stroke);
 
   &:hover {
     color: var(--td-brand-color);
@@ -1253,7 +1258,7 @@ onMounted(() => {
   aspect-ratio: 1;
   width: 100%;
   object-fit: cover;
-  border: thin solid var(--td-border-color);
+  border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
 }
 
@@ -1282,7 +1287,7 @@ onMounted(() => {
   }
 }
 
-@media (width <= 73.75rem) {
+@media (max-width: @screen-lg-rem) {
   .summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1302,7 +1307,7 @@ onMounted(() => {
   }
 }
 
-@media (width <= 56.25rem) {
+@media (max-width: @screen-md-rem) {
   .chart-grid,
   .dashboard-aside {
     grid-template-columns: 1fr;
@@ -1313,7 +1318,7 @@ onMounted(() => {
   }
 }
 
-@media (width <= 40rem) {
+@media (max-width: @screen-xs-rem) {
   .summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: var(--td-comp-margin-s);
@@ -1384,7 +1389,7 @@ onMounted(() => {
   }
 }
 
-@media (width <= 30rem) {
+@media (max-width: @screen-xxs-rem) {
   .quick-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }

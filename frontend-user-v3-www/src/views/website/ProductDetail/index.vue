@@ -665,6 +665,12 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import siteApi from "@/api/site";
 import {
+  applyDetailPageMeta,
+  buildDetailCanonical,
+  resolvePublicSiteUrl,
+} from "@/composables/usePageMeta";
+import { useAppStore } from "@/stores/app";
+import {
   buildWebsiteProductPath,
   resolveWebsiteProductRoutePayloadByDetail,
 } from "@/utils/productRoute";
@@ -684,9 +690,13 @@ import MobileSheet from "@/components/MobileSheet.vue";
 
 const route = useRoute();
 const router = useRouter();
+const appStore = useAppStore();
+
+// 详情页 meta 与 canonical 的公网站点前缀
+const publicSiteUrl = resolvePublicSiteUrl();
 
 // 移动布局阈值与全站 isMobile 断点一致（WebsiteLayout 同为 960）
-const MOBILE_MEDIA_QUERY = "(max-width: 960px)";
+const MOBILE_MEDIA_QUERY = "(max-width: $breakpoint-nav)";
 const isMobile = ref(false);
 const mobileOsDrawer = ref(false);
 const mobileCouponDrawer = ref(false);
@@ -1037,6 +1047,18 @@ async function loadProduct() {
     if (token !== productLoadToken) return;
     product.value = res.data.product || null;
     siblings.value = res.data.product?.siblings || [];
+    // 数据就绪后先覆盖静态 meta：否则商品详情会沿用列表页标题且缺少 description/canonical。
+    // 放在 applyLoadedProduct 之前，确保配置器初始化异常也不影响 SEO 元信息。
+    applyDetailPageMeta({
+      title: res.data.product?.name,
+      description:
+        res.data.product?.description || res.data.product?.summary || "",
+      canonical: buildDetailCanonical(publicSiteUrl, `/products/${pid}`),
+      siteName: appStore.siteName || "",
+      listName: "产品与服务",
+      listUrl: `${publicSiteUrl}/products`,
+      structuredType: "Product",
+    });
     // 注入已加载商品：由 checkout 统一完成默认配置初始化、报价与库存同步
     applyLoadedProduct(res.data.product);
   } catch {
@@ -1118,7 +1140,7 @@ onBeforeUnmount(() => {
   background: $bg-color;
   padding-bottom: 40px;
 
-  @media (max-width: 960px) {
+  @media (max-width: $breakpoint-nav) {
     padding-bottom: 108px;
   }
 }
@@ -1141,7 +1163,7 @@ onBeforeUnmount(() => {
   padding: 0 12px;
   border: 1px solid $border-color-strong;
   border-radius: 4px;
-  background: #fff;
+  background: $bg-color-card;
   color: $text-color-secondary;
   font-size: 13px;
   cursor: pointer;
@@ -1151,8 +1173,8 @@ onBeforeUnmount(() => {
     color 0.15s;
 
   &:hover {
-    border-color: #165dff;
-    color: #165dff;
+    border-color: $color-primary;
+    color: $color-primary;
   }
 
   svg {
@@ -1176,7 +1198,7 @@ onBeforeUnmount(() => {
   padding: 0 14px;
   border: 1px solid $border-color-strong;
   border-radius: 4px;
-  background: #fff;
+  background: $bg-color-card;
   color: $text-color-secondary;
   font-size: 13px;
   cursor: pointer;
@@ -1184,13 +1206,13 @@ onBeforeUnmount(() => {
   transition: all 0.15s;
 
   &:hover {
-    border-color: #165dff;
-    color: #165dff;
+    border-color: $color-primary;
+    color: $color-primary;
   }
   &.active {
-    border-color: #165dff;
-    background: #165dff;
-    color: #fff;
+    border-color: $color-primary;
+    background: $color-primary;
+    color: $text-color-inverse;
     font-weight: 600;
   }
 }
@@ -1209,7 +1231,7 @@ onBeforeUnmount(() => {
   padding: 18px 20px;
   border: 1px solid $border-color;
   border-radius: 4px;
-  background: linear-gradient(135deg, #ffffff 0%, #f5f9ff 100%);
+  background: linear-gradient(135deg, $bg-color-card 0%, #f5f9ff 100%);
 }
 
 .pd-hero-copy {
@@ -1222,8 +1244,8 @@ onBeforeUnmount(() => {
   min-height: 24px;
   padding: 0 10px;
   border-radius: 999px;
-  background: #e8f1ff;
-  color: #165dff;
+  background: $color-primary-soft;
+  color: $color-primary;
   font-size: 12px;
   font-weight: 600;
 }
@@ -1270,7 +1292,7 @@ onBeforeUnmount(() => {
   padding: 0 14px;
   border: 1px solid $border-color-strong;
   border-radius: 4px;
-  background: #fff;
+  background: $bg-color-card;
   color: $text-color-primary;
   font-size: 13px;
   font-weight: 500;
@@ -1289,10 +1311,10 @@ onBeforeUnmount(() => {
   }
 
   &.active {
-    border-color: #165dff;
-    color: #165dff;
+    border-color: $color-primary;
+    color: $color-primary;
     svg {
-      color: #165dff;
+      color: $color-primary;
     }
   }
 }
@@ -1305,12 +1327,12 @@ onBeforeUnmount(() => {
   padding: 12px 16px 0;
   align-items: start;
 
-  @media (max-width: 960px) {
+  @media (max-width: $breakpoint-nav) {
     grid-template-columns: 1fr;
   }
 }
 
-@media (max-width: 960px) {
+@media (max-width: $breakpoint-nav) {
   .pd-hero {
     flex-direction: column;
     align-items: flex-start;
@@ -1329,7 +1351,7 @@ onBeforeUnmount(() => {
 
 /* ===== 配置分组卡片 ===== */
 .cfg-group {
-  background: #fff;
+  background: $bg-color-card;
   border-radius: 4px;
   margin-bottom: 10px;
   border: 1px solid $border-color;
@@ -1369,14 +1391,14 @@ onBeforeUnmount(() => {
   transition: all 0.15s;
 
   &:hover {
-    border-color: #165dff;
-    color: #165dff;
-    background: #fff;
+    border-color: $color-primary;
+    color: $color-primary;
+    background: $bg-color-card;
   }
   &.active {
-    border-color: #165dff;
-    background: #e8f1ff;
-    color: #165dff;
+    border-color: $color-primary;
+    background: $color-primary-soft;
+    color: $color-primary;
     font-weight: 600;
   }
 }
@@ -1437,8 +1459,8 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
 
   &:hover:not(:disabled) {
-    background: #e8f1ff;
-    color: #165dff;
+    background: $color-primary-soft;
+    color: $color-primary;
   }
   &:disabled {
     opacity: 0.38;
@@ -1460,7 +1482,7 @@ onBeforeUnmount(() => {
   font-size: 14px;
   font-weight: 600;
   color: $text-color-primary;
-  background: #fff;
+  background: $bg-color-card;
 
   &:focus-visible {
     outline: 2px solid $color-primary;
@@ -1514,18 +1536,18 @@ onBeforeUnmount(() => {
   transition: all 0.15s;
 
   &:hover {
-    border-color: #165dff;
+    border-color: $color-primary;
   }
   &.active {
-    border-color: #165dff;
-    background: #e8f1ff;
+    border-color: $color-primary;
+    background: $color-primary-soft;
 
     .cycle-name {
-      color: #165dff;
+      color: $color-primary;
       font-weight: 600;
     }
     .cycle-price {
-      color: #165dff;
+      color: $color-primary;
     }
   }
 }
@@ -1547,13 +1569,13 @@ onBeforeUnmount(() => {
   position: sticky;
   top: 80px;
 
-  @media (max-width: 960px) {
+  @media (max-width: $breakpoint-nav) {
     position: static;
   }
 }
 
 .aside-card {
-  background: #fff;
+  background: $bg-color-card;
   border: 1px solid $border-color;
   border-radius: 4px;
   padding: 16px;
@@ -1684,11 +1706,11 @@ onBeforeUnmount(() => {
     border-radius: 8px;
     background: linear-gradient(
       90deg,
-      rgba(#fff, 0) 0%,
-      rgba(#165dff, 0.08) 35%,
-      rgba(#fff, 0.45) 50%,
-      rgba(#165dff, 0.08) 65%,
-      rgba(#fff, 0) 100%
+      rgba($bg-color-card, 0) 0%,
+      rgba($color-primary, 0.08) 35%,
+      rgba($bg-color-card, 0.45) 50%,
+      rgba($color-primary, 0.08) 65%,
+      rgba($bg-color-card, 0) 100%
     );
     background-size: 220% 100%;
     pointer-events: none;
@@ -1822,14 +1844,14 @@ onBeforeUnmount(() => {
 
 .cost-currency {
   font-size: 14px;
-  color: #165dff;
+  color: $color-primary;
   font-weight: 700;
 }
 
 .cost-amount {
   font-size: 26px;
   font-weight: 700;
-  color: #165dff;
+  color: $color-primary;
   line-height: 1;
 }
 
@@ -1846,11 +1868,11 @@ onBeforeUnmount(() => {
     height: 8px;
     border-radius: 999px;
     background:
-      radial-gradient(circle, rgba(#165dff, 0.85) 0 2px, transparent 2.4px) left
+      radial-gradient(circle, rgba($color-primary, 0.85) 0 2px, transparent 2.4px) left
         center / 8px 8px no-repeat,
-      radial-gradient(circle, rgba(#165dff, 0.55) 0 2px, transparent 2.4px)
+      radial-gradient(circle, rgba($color-primary, 0.55) 0 2px, transparent 2.4px)
         center center / 8px 8px no-repeat,
-      radial-gradient(circle, rgba(#165dff, 0.3) 0 2px, transparent 2.4px) right
+      radial-gradient(circle, rgba($color-primary, 0.3) 0 2px, transparent 2.4px) right
         center / 8px 8px no-repeat;
     animation: costLoadingDots 0.95s ease-in-out infinite;
   }
@@ -1862,7 +1884,7 @@ onBeforeUnmount(() => {
   margin-left: 2px;
 }
 
-@media (max-width: 960px) {
+@media (max-width: $breakpoint-nav) {
   .coupon-panel-form {
     grid-template-columns: 1fr;
   }
@@ -1873,8 +1895,8 @@ onBeforeUnmount(() => {
   height: 44px;
   border: none;
   border-radius: 4px;
-  background: #165dff;
-  color: #fff;
+  background: $color-primary;
+  color: $text-color-inverse;
   font-size: 15px;
   font-weight: 700;
   cursor: pointer;
@@ -1913,7 +1935,7 @@ onBeforeUnmount(() => {
 .allocation-footer {
   display: none;
 
-  @media (max-width: 960px) {
+  @media (max-width: $breakpoint-nav) {
     position: fixed;
     left: 0;
     right: 0;
@@ -1954,7 +1976,7 @@ onBeforeUnmount(() => {
   align-items: baseline;
   gap: 2px;
   margin-top: 6px;
-  color: #165dff;
+  color: $color-primary;
 }
 
 .allocation-footer-symbol {
@@ -1993,8 +2015,8 @@ onBeforeUnmount(() => {
   height: 44px;
   border: none;
   border-radius: 10px;
-  background: #165dff;
-  color: #fff;
+  background: $color-primary;
+  color: $text-color-inverse;
   font-size: 15px;
   font-weight: 600;
   cursor: pointer;
@@ -2091,7 +2113,7 @@ onBeforeUnmount(() => {
   }
 }
 
-@media (max-width: 960px) {
+@media (max-width: $breakpoint-nav) {
   .pd-aside {
     position: static;
   }
@@ -2129,7 +2151,7 @@ onBeforeUnmount(() => {
 .pd-mobile-picker-label {
   margin-bottom: 8px;
   font-size: 13px;
-  color: #5b6b82;
+  color: $text-color-secondary;
 }
 
 .pd-mobile-picker-trigger,
@@ -2139,7 +2161,7 @@ onBeforeUnmount(() => {
   padding: 0 14px;
   border: 1px solid $border-color-strong;
   border-radius: 4px;
-  background: #fff;
+  background: $bg-color-card;
   color: $text-color-primary;
   display: inline-flex;
   align-items: center;
@@ -2161,8 +2183,8 @@ onBeforeUnmount(() => {
   }
 
   &:hover:not(:disabled) {
-    border-color: #165dff;
-    color: #165dff;
+    border-color: $color-primary;
+    color: $color-primary;
   }
 
   &:disabled {
@@ -2185,7 +2207,7 @@ onBeforeUnmount(() => {
   padding: 0 14px;
   border: 1px solid #eef2f7;
   border-radius: 6px;
-  background: #fff;
+  background: $bg-color-card;
   color: $text-color-primary;
   font-size: 14px;
   text-align: left;
@@ -2199,9 +2221,9 @@ onBeforeUnmount(() => {
   }
 
   &.is-active {
-    border-color: #165dff;
-    background: #e8f1ff;
-    color: #165dff;
+    border-color: $color-primary;
+    background: $color-primary-soft;
+    color: $color-primary;
     font-weight: 600;
   }
 

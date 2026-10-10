@@ -6,7 +6,7 @@
       type="button"
       class="console-sidebar-item"
       :class="{ 'is-active': activeTab === item.key }"
-      @click="$emit('update:activeTab', item.key)"
+      @click="$emit('update:active-tab', item.key)"
     >
       <component :is="item.icon" />
       <span>{{ item.label }}</span>
@@ -22,6 +22,6 @@ defineProps<{
 }>();
 
 defineEmits<{
-  'update:activeTab': [value: string];
+  'update:active-tab': [value: string];
 }>();
 </script>

@@ -40,13 +40,23 @@ export const clientRoutes: RouteRecordRaw[] = [
         path: 'products/:typeId/:groupId(\\d+)/:childGroupId(\\d+)/:productId(\\d+)',
         name: 'WwwProductsPurchaseWithChild',
         component: lazyRouteView(() => import('@/pages/website/products/index.vue')),
-        meta: { title: '产品与服务', noSitemap: true, robots: 'noindex,nofollow' },
+        meta: {
+          title: '产品与服务',
+          description: '确认产品规格与计费周期，进入控制台完成订单创建。',
+          noSitemap: true,
+          robots: 'noindex,nofollow',
+        },
       },
       {
         path: 'products/:typeId/:groupId(\\d+)/:productId(\\d+)',
         name: 'WwwProductsPurchase',
         component: lazyRouteView(() => import('@/pages/website/products/index.vue')),
-        meta: { title: '产品与服务', noSitemap: true, robots: 'noindex,nofollow' },
+        meta: {
+          title: '产品与服务',
+          description: '确认产品规格与计费周期，进入控制台完成订单创建。',
+          noSitemap: true,
+          robots: 'noindex,nofollow',
+        },
       },
       {
         path: 'products/:id',
@@ -123,7 +133,11 @@ export const clientRoutes: RouteRecordRaw[] = [
         path: ':pathMatch(.*)*',
         name: 'WwwNotFound',
         component: lazyRouteView(() => import('@/pages/common/NotFound.vue')),
-        meta: { title: '404', robots: 'noindex,nofollow' },
+        meta: {
+          title: '404',
+          description: '访问的页面不存在，请通过顶部导航或搜索返回创欧云首页。',
+          robots: 'noindex,nofollow',
+        },
       },
     ],
   },

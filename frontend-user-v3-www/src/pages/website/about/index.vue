@@ -41,7 +41,7 @@ const appStore = useAppStore()
 
 .about-hero {
   padding: 64px 0 32px;
-  background: linear-gradient(180deg, #fff 0%, #f5f8fd 100%);
+  background: linear-gradient(180deg, $bg-color-card 0%, #f5f8fd 100%);
 }
 
 .about-kicker {
@@ -73,7 +73,7 @@ h1 {
   gap: 20px;
 }
 
-@media (max-width: 768px) {
+@media (max-width: $breakpoint-narrow) {
   .about-grid {
     grid-template-columns: 1fr;
   }
@@ -81,9 +81,9 @@ h1 {
 
 .about-card {
   padding: 28px;
-  border: 1px solid #e5eaf3;
+  border: 1px solid $border-color;
   border-radius: 18px;
-  background: #fff;
+  background: $bg-color-card;
   box-shadow: 0 18px 36px rgba(15, 23, 42, 0.06);
 }
 

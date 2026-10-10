@@ -415,8 +415,8 @@ watch(
   inset: 0;
   pointer-events: none;
   background:
-    linear-gradient(90deg, rgba(22, 93, 255, 0.08) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(22, 93, 255, 0.06) 1px, transparent 1px);
+    linear-gradient(90deg, $color-primary-a08 1px, transparent 1px),
+    linear-gradient(180deg, $color-primary-a06 1px, transparent 1px);
   background-size: 64px 64px;
   mask-image: linear-gradient(
     90deg,
@@ -522,7 +522,7 @@ watch(
   background: linear-gradient(
     180deg,
     transparent,
-    rgba(22, 93, 255, 0.22),
+    $color-primary-a22,
     transparent
   );
   content: "";
@@ -563,7 +563,7 @@ watch(
   padding: 0 7px;
   border-radius: 3px;
   background: #ff3d3d;
-  color: #fff;
+  color: $text-color-inverse;
   font-size: 12px;
   font-weight: 700;
   line-height: 1;
@@ -619,16 +619,16 @@ watch(
 }
 
 .seo-action--primary {
-  border: 1px solid #165dff;
-  background: #165dff;
-  color: #fff;
-  box-shadow: 0 12px 24px rgba(22, 93, 255, 0.2);
+  border: 1px solid $color-primary;
+  background: $color-primary;
+  color: $text-color-inverse;
+  box-shadow: 0 12px 24px $color-primary-a20;
 }
 
 .seo-action--primary:hover {
-  border-color: #0e4fcc;
-  background: #0e4fcc;
-  color: #fff;
+  border-color: $color-primary-hover;
+  background: $color-primary-hover;
+  color: $text-color-inverse;
 }
 
 .seo-action--plain {
@@ -638,16 +638,16 @@ watch(
 }
 
 .seo-action--plain:hover {
-  border-color: #165dff;
-  color: #165dff;
+  border-color: $color-primary;
+  color: $color-primary;
 }
 
 .seo-feature-strip {
   position: relative;
   z-index: 2;
   margin-top: -1px;
-  background: #fff;
-  border-bottom: 1px solid #e5eaf3;
+  background: $bg-color-card;
+  border-bottom: 1px solid $border-color;
 }
 
 .seo-feature-strip__inner {
@@ -664,7 +664,7 @@ watch(
   min-width: 0;
   padding: 34px 28px;
   border-left: 1px solid #edf2f7;
-  background: #fff;
+  background: $bg-color-card;
 }
 
 .seo-strip-card:first-child {
@@ -679,9 +679,9 @@ watch(
   margin-top: 2px;
   border-radius: 50%;
   background:
-    radial-gradient(circle at 70% 24%, #ffffff 0 12%, transparent 13%),
-    linear-gradient(135deg, #80aaff 0%, #165dff 100%);
-  box-shadow: 0 8px 18px rgba(22, 93, 255, 0.24);
+    radial-gradient(circle at 70% 24%, $bg-color-card 0 12%, transparent 13%),
+    linear-gradient(135deg, #80aaff 0%, $color-primary 100%);
+  box-shadow: 0 8px 18px $color-primary-a24;
 }
 
 .seo-strip-card h2 {
@@ -708,8 +708,8 @@ watch(
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  background: linear-gradient(135deg, #3477ff 0%, #165dff 100%);
-  color: #fff;
+  background: linear-gradient(135deg, #3477ff 0%, $color-primary 100%);
+  color: $text-color-inverse;
 }
 
 .seo-strip-card--cta .seo-strip-card__icon {
@@ -718,7 +718,7 @@ watch(
 
 .seo-strip-card--cta h2,
 .seo-strip-card--cta p {
-  color: #fff;
+  color: $text-color-inverse;
 }
 
 .seo-strip-card--cta p {
@@ -727,7 +727,7 @@ watch(
 
 .seo-strip-card__link {
   flex: 0 0 auto;
-  color: #fff;
+  color: $text-color-inverse;
   font-size: 13px;
   font-weight: 700;
   text-decoration: none;
@@ -737,7 +737,7 @@ watch(
 .seo-section {
   scroll-margin-top: 84px;
   padding: 68px 0;
-  background: #fff;
+  background: $bg-color-card;
 }
 
 .seo-section--products,
@@ -772,7 +772,7 @@ watch(
 .seo-section__heading a {
   display: inline-flex;
   margin-top: 10px;
-  color: #165dff;
+  color: $color-primary;
   font-size: 14px;
   font-weight: 700;
   text-decoration: none;
@@ -800,7 +800,7 @@ watch(
 }
 
 .seo-category-tabs__tag.is-active {
-  color: #165dff;
+  color: $color-primary;
   font-weight: 700;
 }
 
@@ -834,7 +834,7 @@ watch(
 .seo-product-card:hover,
 .seo-product-card--featured {
   border-color: #e2e8f3;
-  background: #fff;
+  background: $bg-color-card;
   box-shadow: 0 14px 30px rgba(20, 38, 74, 0.07);
   transform: translateY(-2px);
 }
@@ -860,7 +860,7 @@ watch(
   min-height: 22px;
   padding: 0 7px;
   border: 1px solid #b9ceff;
-  color: #165dff;
+  color: $color-primary;
   font-size: 12px;
   line-height: 1;
 }
@@ -913,9 +913,9 @@ watch(
 }
 
 .seo-product-card__actions a.is-primary {
-  border-color: #165dff;
-  background: #165dff;
-  color: #fff;
+  border-color: $color-primary;
+  background: $color-primary;
+  color: $text-color-inverse;
 }
 
 .seo-section--solutions {
@@ -925,7 +925,7 @@ watch(
 }
 
 .seo-section--solutions .seo-section__heading h2 {
-  color: #fff;
+  color: $text-color-inverse;
 }
 
 .seo-section--solutions .seo-section__heading p {
@@ -960,8 +960,8 @@ watch(
 }
 
 .seo-solution-tabs button.is-active {
-  background: #165dff;
-  color: #fff;
+  background: $color-primary;
+  color: $text-color-inverse;
 }
 
 .seo-solution-content {
@@ -972,7 +972,7 @@ watch(
 
 .seo-eyebrow {
   margin: 0;
-  color: #165dff;
+  color: $color-primary;
   font-size: 13px;
   font-weight: 800;
 }
@@ -1014,7 +1014,7 @@ watch(
 .seo-solution-content li .el-icon {
   flex: 0 0 auto;
   margin-top: 2px;
-  color: #165dff;
+  color: $color-primary;
 }
 
 .seo-solution-content__related {
@@ -1027,7 +1027,7 @@ watch(
 }
 
 .seo-solution-content__related a {
-  color: #165dff;
+  color: $color-primary;
   font-weight: 700;
   text-decoration: none;
 }
@@ -1044,7 +1044,7 @@ watch(
   min-width: 0;
   border: 1px solid #e2e8f3;
   border-radius: 4px;
-  background: #fff;
+  background: $bg-color-card;
 }
 
 .seo-process__item {
@@ -1052,7 +1052,7 @@ watch(
 }
 
 .seo-process__item span {
-  color: #165dff;
+  color: $color-primary;
   font-size: 24px;
   font-weight: 800;
 }
@@ -1096,7 +1096,7 @@ watch(
 .seo-faq h3 .el-icon {
   flex: 0 0 auto;
   margin-top: 3px;
-  color: #165dff;
+  color: $color-primary;
 }
 
 .seo-faq p {
@@ -1108,8 +1108,8 @@ watch(
 
 .seo-register {
   padding: 44px 0;
-  background: #165dff;
-  color: #fff;
+  background: $color-primary;
+  color: $text-color-inverse;
 }
 
 .seo-register__inner {
@@ -1147,19 +1147,19 @@ watch(
 }
 
 .seo-action--white {
-  border: 1px solid #fff;
-  background: #fff;
-  color: #165dff;
+  border: 1px solid $bg-color-card;
+  background: $bg-color-card;
+  color: $color-primary;
 }
 
 .seo-action--outline {
   border: 1px solid rgba(255, 255, 255, 0.62);
-  color: #fff;
+  color: $text-color-inverse;
 }
 
 .seo-action--outline:hover {
-  border-color: #fff;
-  color: #fff;
+  border-color: $bg-color-card;
+  color: $text-color-inverse;
 }
 
 @media (max-width: 1080px) {

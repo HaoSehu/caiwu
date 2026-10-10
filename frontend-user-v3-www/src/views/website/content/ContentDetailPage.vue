@@ -113,7 +113,7 @@ import { ArrowRight } from "@element-plus/icons-vue";
 import siteApi from "@/api/site";
 import { renderMarkdown } from "@/utils/markdown";
 import { rewriteApiAssetUrlsInHtml } from "@/utils/apiAssetUrl";
-import { updatePageMeta } from "@/utils/pageMeta";
+import { applyDetailPageMeta, buildDetailCanonical } from "@/composables/usePageMeta";
 import { useAppStore } from "@/stores/app";
 import { getContentConfig } from "./contentConfig";
 
@@ -165,62 +165,27 @@ const publicSiteUrl = String(
 ).replace(/\/+$/, "");
 
 // 文章加载后同步 title/description/canonical 与 Article/BreadcrumbList JSON-LD，
-// 避免动态详情页沿用静态 meta 或缺失 description/canonical（SEO）
+// 避免动态详情页沿用静态 meta 或缺失 description/canonical（SEO）。
+// 通用逻辑已抽到 @/composables/usePageMeta，商品详情页共用同一实现。
 function applyArticleMeta(article) {
-  if (!article || typeof document === "undefined") {
+  if (!article) {
     return;
   }
-  const title = String(article.title || "").trim();
-  const description = String(
-    article.excerpt || article.summary || article.subtitle || "",
-  ).trim();
-  const siteName = appStore.siteName || "";
-  const fullTitle =
-    title && siteName && !title.includes(siteName)
-      ? `${title} - ${siteName}`
-      : title;
-  const canonicalPath = `${config.value.routeBasePath}/${article.id}`.replace(
-    /\/+/g,
-    "/",
+  const canonical = buildDetailCanonical(
+    publicSiteUrl,
+    `${config.value.routeBasePath}/${article.id}`,
   );
-  const canonical = `${publicSiteUrl}${canonicalPath}`;
-  const listName = config.value.pageTitle || "内容";
 
-  updatePageMeta({
-    title: fullTitle,
-    description,
+  applyDetailPageMeta({
+    title: article.title,
+    description: article.excerpt || article.summary || article.subtitle,
     canonical,
-    ogTitle: fullTitle,
-    ogDescription: description,
-    ogUrl: canonical,
-    structuredData: [
-      {
-        "@context": "https://schema.org",
-        "@type": "Article",
-        headline: title,
-        description: description || undefined,
-        url: canonical,
-        datePublished: article.publish_at || article.created_at,
-        dateModified: article.updated_at,
-        publisher: {
-          "@type": "Organization",
-          name: siteName || "创欧云",
-        },
-      },
-      {
-        "@context": "https://schema.org",
-        "@type": "BreadcrumbList",
-        itemListElement: [
-          {
-            "@type": "ListItem",
-            position: 1,
-            name: listName,
-            item: `${publicSiteUrl}${config.value.routeBasePath}`,
-          },
-          { "@type": "ListItem", position: 2, name: title, item: canonical },
-        ],
-      },
-    ],
+    siteName: appStore.siteName || "",
+    listName: config.value.pageTitle || "内容",
+    listUrl: `${publicSiteUrl}${config.value.routeBasePath}`,
+    structuredType: "Article",
+    publishedAt: article.publish_at || article.created_at,
+    updatedAt: article.updated_at,
   });
 }
 
@@ -702,7 +667,7 @@ watch(
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: $breakpoint-narrow) {
   .reader-article {
     padding: 18px 16px 22px;
   }

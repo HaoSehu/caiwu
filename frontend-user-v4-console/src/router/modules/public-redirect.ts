@@ -34,7 +34,7 @@ function openPublicSitePath(path: string) {
   window.location.assign(`${base}${path}`);
 }
 
-const routeTitle = (zhCN: string, enUS = zhCN) => ({ zh_CN: zhCN, en_US: enUS });
+const routeTitle = (value: string) => value;
 
 const EmptyComponent = defineComponent({
   name: 'EmptyRedirect',
