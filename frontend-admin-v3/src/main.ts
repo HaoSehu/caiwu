@@ -3,6 +3,7 @@ import { createApp } from 'vue';
 import TDesign from 'tdesign-vue-next';
 
 import App from './App.vue';
+import { setupGlobalErrorHandling } from './app/runtime/errorHandling';
 import { initAdminSessionActivityTracking } from './app/runtime/session';
 import router from './router';
 import { store } from './store';
@@ -16,6 +17,7 @@ import './permission';
 const app = createApp(App);
 
 initAdminSessionActivityTracking();
+setupGlobalErrorHandling(app);
 
 app.use(TDesign);
 app.use(store);

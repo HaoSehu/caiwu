@@ -265,6 +265,15 @@ export function useListPage<F extends Record<string, any>, T>(options: UseListPa
     },
   });
 
+  // 是否处于「用户主动筛选」状态：用于空态区分「暂无数据」与「未找到匹配结果」，
+  // 避免筛选无结果时被误读为系统里真的没有数据（见 docs/DESIGN.md §4.3）。
+  // 逐键对比 defaultFilters，覆盖各页自定义的筛选键（如日志页的 phone/trace_id、订单页的 upgrade_kind）。
+  const hasActiveFilters = computed(() =>
+    Object.keys(defaultFilters).some(
+      (key) => String(model[key] ?? '') !== String((defaultFilters as Record<string, any>)[key] ?? ''),
+    ),
+  );
+
   if (syncUrl) restoreFiltersFromQuery();
 
   if (immediate) {
@@ -286,6 +295,7 @@ export function useListPage<F extends Record<string, any>, T>(options: UseListPa
     total,
     loading,
     error,
+    hasActiveFilters,
     pagination,
     loadList,
     clearError: () => {

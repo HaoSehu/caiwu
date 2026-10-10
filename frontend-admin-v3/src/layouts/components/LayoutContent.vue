@@ -200,7 +200,6 @@ const handleDragend = (options: { currentIndex: number; targetIndex: number }) =
   ];
 };
 </script>
-
 <style lang="less" scoped>
 .tab-item-wrapper {
   display: inline-flex;
@@ -222,7 +221,9 @@ const handleDragend = (options: { currentIndex: number; targetIndex: number }) =
   border-radius: 3px;
   cursor: pointer;
   opacity: 0.6;
-  transition: opacity 0.2s, background-color 0.2s;
+  transition:
+    opacity 0.2s,
+    background-color 0.2s;
 
   &:hover {
     opacity: 1;

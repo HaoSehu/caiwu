@@ -12,7 +12,7 @@
         </div>
         <!-- 手机端 side 布局：顶栏 logo + 菜单按钮 -->
         <div v-if="isMobileSideHeader" class="header-mobile-logo-bar">
-          <t-button theme="default" shape="square" variant="text" @click="toggleMobileSidebar">
+          <t-button theme="default" shape="square" variant="text" aria-label="切换侧边栏" @click="toggleMobileSidebar">
             <t-icon name="view-list" />
           </t-button>
           <span class="header-mobile-logo" @click="handleNav('/dashboard/base')">
@@ -257,17 +257,16 @@ const submitPassword = async () => {
 };
 
 // 退出登录必须真正清理会话：吊销服务端 token（userStore.logout 内调用后端登出接口）、
-// 清本地 token 与 userInfo、丢弃标签页与已注册的动态路由。只做 router.push 的话 token 仍在，
-// 用户按后退键或手输 /admin/* 会被守卫直接放行，等于没有登出。
+// 清本地 token 与 userInfo、丢弃标签页缓存并重置菜单。
+// 只做 router.push 的话 token 仍在，用户按后退键或手输 /admin/* 会被守卫直接放行，等于没有登出。
+// 管理端路由为静态注册，登出时无法也不需要在路由层撤销；未登录访问一律由守卫拦回登录页。
 // 也不要带 redirect：登出后再把人送回原页面与「退出」的语义相悖。
 const handleLogout = async () => {
-  try {
-    await user.logout();
-  } finally {
-    getTabsRouterStore().removeTabRouterList();
-    await getPermissionStore().restoreRoutes();
-    router.push({ path: '/admin/login' });
-  }
+  // userStore.logout 内部已是完整 try/catch/finally（接口失败也不阻断本地清理），不会再抛出
+  await user.logout();
+  getTabsRouterStore().removeTabRouterList();
+  getPermissionStore().resetMenus();
+  router.push({ path: '/admin/login' });
 };
 </script>
 <style lang="less" scoped>

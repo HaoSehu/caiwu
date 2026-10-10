@@ -6,10 +6,11 @@ import { isFunction } from 'lodash-es';
 let pendingMap = new Map<string, Canceler>();
 
 /**
- * 获取请求Url
- * @param config
+ * 获取请求标识
+ * 必须包含 params：仅用 method+url 会把「同 URL 不同参数」的请求误判为重复并互相取消。
  */
-export const getPendingUrl = (config: AxiosRequestConfig) => [config.method, config.url].join('&');
+export const getPendingUrl = (config: AxiosRequestConfig) =>
+  [config.method, config.url, JSON.stringify(config.params ?? {})].join('&');
 
 /**
  * @description 请求管理器

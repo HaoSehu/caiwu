@@ -12,7 +12,13 @@
         >
           <template #suffix-icon><search-icon /></template>
         </t-input>
-        <t-select v-model="filters.status" class="users-filter-status" clearable placeholder="状态" @change="handleSearch">
+        <t-select
+          v-model="filters.status"
+          class="users-filter-status"
+          clearable
+          placeholder="状态"
+          @change="handleSearch"
+        >
           <t-option label="正常" :value="1" />
           <t-option label="禁用" :value="0" />
         </t-select>
@@ -118,9 +124,10 @@
               </dl>
             </article>
           </div>
-          <t-empty v-else />
+          <t-empty v-else :description="hasActiveFilters ? '未找到匹配结果' : '暂无用户'" />
         </t-loading>
         <t-pagination
+          v-if="total > 0"
           v-model:current="pagination.page"
           v-model:page-size="pagination.page_size"
           class="users-mobile-pagination"
@@ -199,6 +206,7 @@ const {
   handleSearch,
   resetFilters,
   handlePaginationChange,
+  hasActiveFilters,
 } = useListPage<UserFilter, AdminUser>({
   defaultFilters: { keyword: '', status: '' },
   defaultPageSize: 20,

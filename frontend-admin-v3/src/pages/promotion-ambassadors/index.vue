@@ -2,7 +2,9 @@
   <div class="promotion-ambassadors-page">
     <t-card :bordered="false" :loading="loading">
       <template #title>推广大使档位</template>
-      <template #subtitle>共 {{ ambassadors.length }} 个档位 · 新购/续费返利按用户所属档位分别生效，未指派走全局设置</template>
+      <template #subtitle
+        >共 {{ ambassadors.length }} 个档位 · 新购/续费返利按用户所属档位分别生效，未指派走全局设置</template
+      >
       <template #actions>
         <t-space>
           <t-button theme="primary" @click="openCreateDialog">
@@ -55,7 +57,9 @@
               :options="mobileActionOptions"
               @click="handleMobileAction(row, $event)"
             >
-              <t-button class="ambassador-mobile-card__more" variant="text" shape="square" aria-label="更多操作">...</t-button>
+              <t-button class="ambassador-mobile-card__more" variant="text" shape="square" aria-label="更多操作"
+                >...</t-button
+              >
             </t-dropdown>
           </div>
           <dl>

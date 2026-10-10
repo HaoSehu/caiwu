@@ -29,35 +29,33 @@
     <!-- 列表展示：桌面端表格 / 移动端卡片 -->
     <t-card :bordered="false">
       <div v-if="!isMobile" class="table-scroll">
-        <t-table
-          row-key="date"
-          :data="dailyList"
-          :columns="columns"
-          :loading="loading"
-          hover
-          table-layout="fixed"
-        />
+        <t-table row-key="date" :data="dailyList" :columns="columns" :loading="loading" hover table-layout="fixed" />
       </div>
 
       <div v-else class="record-mobile-list">
         <t-loading :loading="loading" size="small">
           <div v-if="dailyList.length" class="record-mobile-stack">
-            <t-card
-              v-for="row in dailyList"
-              :key="row.date"
-              class="mobile-daily-card"
-              :bordered="false"
-            >
+            <t-card v-for="row in dailyList" :key="row.date" class="mobile-daily-card" :bordered="false">
               <div class="mobile-daily-card__head">
                 <strong>{{ row.date }}</strong>
                 <t-tag theme="primary" variant="light">新客：{{ row.new_customers || 0 }}</t-tag>
               </div>
               <div class="mobile-daily-grid">
-                <div><span>新订单</span><strong>{{ row.new_orders || 0 }}</strong></div>
-                <div><span>已支付</span><strong>{{ row.completed_orders || 0 }}</strong></div>
-                <div><span>新工单</span><strong>{{ row.new_tickets || 0 }}</strong></div>
-                <div><span>工单回复</span><strong>{{ row.ticket_replies || 0 }}</strong></div>
-                <div><span>取消请求</span><strong>{{ row.cancel_requests || 0 }}</strong></div>
+                <div>
+                  <span>新订单</span><strong>{{ row.new_orders || 0 }}</strong>
+                </div>
+                <div>
+                  <span>已支付</span><strong>{{ row.completed_orders || 0 }}</strong>
+                </div>
+                <div>
+                  <span>新工单</span><strong>{{ row.new_tickets || 0 }}</strong>
+                </div>
+                <div>
+                  <span>工单回复</span><strong>{{ row.ticket_replies || 0 }}</strong>
+                </div>
+                <div>
+                  <span>取消请求</span><strong>{{ row.cancel_requests || 0 }}</strong>
+                </div>
               </div>
             </t-card>
           </div>

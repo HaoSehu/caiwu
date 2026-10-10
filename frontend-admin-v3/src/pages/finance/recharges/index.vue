@@ -40,7 +40,9 @@
           </template>
           <template #channel="{ row }">
             <div class="stack-cell">
-              <strong>{{ fieldValue(row.gateway_label || row.gateway || toRecord(row.payment).gateway || '第三方支付') }}</strong>
+              <strong>{{
+                fieldValue(row.gateway_label || row.gateway || toRecord(row.payment).gateway || '第三方支付')
+              }}</strong>
               <span>{{ fieldValue(row.trade_no || toRecord(row.payment).trade_no) }}</span>
             </div>
           </template>
@@ -89,7 +91,7 @@
               @action="(value) => handleMobileAction(value, row)"
             />
           </div>
-          <t-empty v-else description="暂无充值记录" />
+          <t-empty v-else :description="hasActiveFilters ? '未找到匹配结果' : '暂无充值记录'" />
         </t-loading>
       </div>
 
@@ -170,6 +172,7 @@ const {
   handlePaginationChange,
   applyQuickFilter,
   dateRange,
+  hasActiveFilters,
 } = useListPage<RechargeFilter, RechargeRecord>({
   defaultFilters: {
     keyword: '',

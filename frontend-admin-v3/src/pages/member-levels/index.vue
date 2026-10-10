@@ -47,7 +47,9 @@
               :options="mobileActionOptions"
               @click="handleMobileAction(row, $event)"
             >
-              <t-button class="member-mobile-card__more" variant="text" shape="square" aria-label="更多操作">...</t-button>
+              <t-button class="member-mobile-card__more" variant="text" shape="square" aria-label="更多操作"
+                >...</t-button
+              >
             </t-dropdown>
           </div>
           <dl>
@@ -89,7 +91,10 @@
       <section v-if="form.id && matrixLoaded" class="discount-matrix-section">
         <div class="discount-matrix-head">
           <strong>产品组价格折扣</strong>
-          <span>按「等级 × 营销组」为新购与续费打折；百分比为折后保留比例（90=九折），未配置不打折；保存等级时一并生效</span>
+          <span
+            >按「等级 ×
+            营销组」为新购与续费打折；百分比为折后保留比例（90=九折），未配置不打折；保存等级时一并生效</span
+          >
         </div>
 
         <div v-if="matrixGroups.length" class="discount-matrix-table">
@@ -150,7 +155,7 @@ import { onMounted, reactive, ref } from 'vue';
 import type { MemberLevelPayload, MemberLevelRecord } from '@/api/admin';
 import { adminApi } from '@/api/admin';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { fieldValue, formatDateTime, formatMoney } from '@/utils/format';
+import { fieldValue, formatDateTime } from '@/utils/format';
 import { required } from '@/utils/formRules';
 import { errorMessage } from '@/utils/userMessage';
 
@@ -306,14 +311,16 @@ async function loadMatrix(levelId: number | string) {
 }
 
 function buildDiscountRules() {
-  return matrixGroups.value
-    // 清空下拉会得到 undefined，必须显式限定有效折扣类型，避免发出缺 discount_type 的规则
-    .filter((item) => item.discountType === 1 || item.discountType === 2)
-    .map((item) => ({
-      marketing_product_group_id: item.id,
-      discount_type: item.discountType,
-      discount_value: Number(item.discountValue || 0),
-    }));
+  return (
+    matrixGroups.value
+      // 清空下拉会得到 undefined，必须显式限定有效折扣类型，避免发出缺 discount_type 的规则
+      .filter((item) => item.discountType === 1 || item.discountType === 2)
+      .map((item) => ({
+        marketing_product_group_id: item.id,
+        discount_type: item.discountType,
+        discount_value: Number(item.discountValue || 0),
+      }))
+  );
 }
 
 function handleDelete(row: MemberLevelRecord) {

@@ -122,6 +122,10 @@ function themeToken(name: string, fallback: string): string {
   return value || fallback;
 }
 
+// canvas 动画不受 CSS 的 prefers-reduced-motion 约束，需在 ECharts 侧显式关闭入场动画。
+const prefersReducedMotion =
+  typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
 function renderProductChart() {
   // 数据为空时容器被 v-if 卸载，须释放实例，避免向脱离文档的节点写入
   if (!positiveChartData.value.length || !productChartRef.value) {
@@ -133,6 +137,7 @@ function renderProductChart() {
     productChart = echarts.init(productChartRef.value);
   }
   productChart.setOption({
+    animation: !prefersReducedMotion,
     color: getChartListColor(),
     tooltip: {
       trigger: 'item',
@@ -168,6 +173,7 @@ function renderDailyChart() {
   const successColor = themeToken('--td-success-color-6', '#12B76A');
 
   dailyChart.setOption({
+    animation: !prefersReducedMotion,
     color: [brandColor, successColor],
     tooltip: {
       trigger: 'axis',

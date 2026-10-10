@@ -19,6 +19,20 @@ if (!host) {
   throw new Error('VITE_API_BASE_URL 必须配置');
 }
 
+/**
+ * 会话失效统一处理：清本地 token 并跳登录页，同时保留当前页面作为 redirect，
+ * 登录后可回到原页面。已在登录页时不再导航，避免 vue-router 冗余导航告警。
+ */
+function redirectToLoginOnAuthFailure() {
+  removeAdminToken();
+  const current = router.currentRoute.value;
+  if (current.path === '/admin/login') return;
+  router.push({
+    path: '/admin/login',
+    query: { redirect: encodeURIComponent(current.fullPath) },
+  });
+}
+
 // 数据处理，方便区分多种处理方式
 const transform: AxiosTransform = {
   // 处理请求数据。如果数据不是预期格式，可直接抛出错误
@@ -58,8 +72,7 @@ const transform: AxiosTransform = {
 
     const message = toUserMessage(data.message, `请求接口错误，错误码：${code}`);
     if (code === 40100) {
-      removeAdminToken();
-      router.push('/admin/login');
+      redirectToLoginOnAuthFailure();
     }
     const apiError = new Error(message) as Error & {
       code?: unknown;
@@ -156,14 +169,11 @@ const transform: AxiosTransform = {
     }
 
     if (status === 401 || responseCode === 40100) {
-      removeAdminToken();
-      if (router.currentRoute.value.path !== '/admin/login') {
-        router.push('/admin/login');
-      }
+      redirectToLoginOnAuthFailure();
       return Promise.reject(error);
     }
 
-    if (!config || !config.requestOptions.retry) return Promise.reject(error);
+    if (!config || !config.requestOptions?.retry) return Promise.reject(error);
 
     const method = String(config.method || 'get').toLowerCase();
     const isIdempotent = method === 'get' || method === 'head';
@@ -185,10 +195,8 @@ const transform: AxiosTransform = {
         resolve(config);
       }, config.requestOptions.retry.delay || 1);
     });
-    // FormData 请求不覆盖 Content-Type，避免损坏文件上传
-    if (!(config.data instanceof FormData)) {
-      config.headers = { ...config.headers, 'Content-Type': ContentTypeEnum.Json };
-    }
+    // 仅重试幂等的 GET/HEAD，原请求头直接复用，不在此改写 Content-Type
+    // （旧实现会强制覆盖为 JSON，破坏 form-urlencoded 等非 JSON 请求）。
     return backoff.then((config) => instance.request(config));
   },
 };

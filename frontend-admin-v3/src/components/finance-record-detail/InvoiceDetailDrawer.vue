@@ -105,14 +105,9 @@
             <div v-if="invoice.trace_id" class="detail-kv-item detail-kv-item--span-2">
               <span class="detail-kv-item__label">链路追踪 (Trace ID)</span>
               <div class="detail-kv-item__value detail-copy-wrap">
-                <span style="font-family: monospace; font-size: 13px;">{{ invoice.trace_id }}</span>
+                <span style="font-family: monospace; font-size: 13px">{{ invoice.trace_id }}</span>
                 <t-tooltip content="复制 Trace ID" placement="top">
-                  <t-button
-                    variant="text"
-                    shape="square"
-                    size="small"
-                    @click="copyText(invoice.trace_id)"
-                  >
+                  <t-button variant="text" shape="square" size="small" @click="copyText(invoice.trace_id)">
                     <template #icon><file-copy-icon /></template>
                   </t-button>
                 </t-tooltip>
@@ -121,14 +116,9 @@
             <div v-if="invoice.refund_trace_id" class="detail-kv-item detail-kv-item--span-2">
               <span class="detail-kv-item__label">退款追踪号</span>
               <div class="detail-kv-item__value detail-copy-wrap">
-                <span style="font-family: monospace; font-size: 13px;">{{ invoice.refund_trace_id }}</span>
+                <span style="font-family: monospace; font-size: 13px">{{ invoice.refund_trace_id }}</span>
                 <t-tooltip content="复制退款追踪" placement="top">
-                  <t-button
-                    variant="text"
-                    shape="square"
-                    size="small"
-                    @click="copyText(invoice.refund_trace_id)"
-                  >
+                  <t-button variant="text" shape="square" size="small" @click="copyText(invoice.refund_trace_id)">
                     <template #icon><file-copy-icon /></template>
                   </t-button>
                 </t-tooltip>
@@ -254,9 +244,7 @@ const items = computed(() => {
 // 折扣分列：券减免与会员折扣来源不同，分别展示（formatMoney 自带 ￥，勿再补币符）
 const couponDiscountAmount = computed(() => Number(invoice.value.discount || 0));
 const memberDiscountAmount = computed(() => Number(invoice.value.member_discount_amount || 0));
-const couponText = computed(() =>
-  String(invoice.value.coupon_name || invoice.value.coupon_code || '').trim(),
-);
+const couponText = computed(() => String(invoice.value.coupon_name || invoice.value.coupon_code || '').trim());
 const memberLevelName = computed(() => {
   const snap = invoice.value.member_discount_snapshot as Record<string, unknown> | null | undefined;
   if (!snap || typeof snap !== 'object') return '';

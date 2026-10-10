@@ -230,11 +230,7 @@
                     :max="form.discount_type === 'percentage' ? 100 : 999999999"
                   />
                 </t-form-item>
-                <t-form-item
-                  label="最低消费金额"
-                  name="min_amount"
-                  help="按会员折扣后的金额判定，与订单原价可能不同"
-                >
+                <t-form-item label="最低消费金额" name="min_amount" help="按会员折扣后的金额判定，与订单原价可能不同">
                   <t-input-number v-model="form.min_amount" :min="0" :decimal-places="2" />
                 </t-form-item>
                 <t-form-item label="最高优惠金额" name="max_discount_amount">
@@ -522,9 +518,7 @@ const lockReason = ref('');
 // percentage 的 discount_value 语义是「折后价实付比例」而非折扣减免比例，
 // 历史上多次被按打折数误填（填 8 用户只付 8%），表单内直接给出刻度提示
 const discountValueHelp = computed(() =>
-  form.discount_type === 'percentage'
-    ? '填 80 表示 8 折，用户实付为折后价的 80%；误填 8 则用户只需付 8%'
-    : '',
+  form.discount_type === 'percentage' ? '填 80 表示 8 折，用户实付为折后价的 80%；误填 8 则用户只需付 8%' : '',
 );
 
 const formRules: Record<string, FormRule[]> = {

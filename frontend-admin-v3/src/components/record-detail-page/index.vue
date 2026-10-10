@@ -2,7 +2,13 @@
   <div class="record-detail-page">
     <!-- 顶部操作条 -->
     <div v-if="showToolbar" class="record-detail-toolbar">
-      <t-button v-if="showBack" variant="text" theme="default" class="record-detail-toolbar__back" @click="emit('back')">
+      <t-button
+        v-if="showBack"
+        variant="text"
+        theme="default"
+        class="record-detail-toolbar__back"
+        @click="emit('back')"
+      >
         <template #icon><chevron-left-icon /></template>
         {{ backText }}
       </t-button>
@@ -56,11 +62,7 @@
 
           <!-- 右侧关键指标卡组 -->
           <div v-if="visibleMetrics.length" class="record-detail-summary__metrics">
-            <div
-              v-for="metric in visibleMetrics"
-              :key="metric.label"
-              class="summary-metric-card"
-            >
+            <div v-for="metric in visibleMetrics" :key="metric.label" class="summary-metric-card">
               <span class="metric-label">{{ metric.label }}</span>
               <strong class="metric-value" :class="{ 'is-primary': metric.primary }">
                 {{ displayValue(metric.value) }}
@@ -149,9 +151,7 @@ const emit = defineEmits<{
   (event: 'update:activeTab', value: string): void;
 }>();
 
-const visibleMetrics = computed(() =>
-  props.metrics.filter((item) => item.show !== false && item.label !== '状态'),
-);
+const visibleMetrics = computed(() => props.metrics.filter((item) => item.show !== false && item.label !== '状态'));
 const visibleTabs = computed(() => props.tabs.filter((item) => item.show !== false));
 const currentTab = computed(() => props.activeTab || visibleTabs.value[0]?.value || 'basic');
 

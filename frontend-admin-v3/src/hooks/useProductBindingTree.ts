@@ -1,7 +1,9 @@
+import { MessagePlugin } from 'tdesign-vue-next';
 import { computed, ref } from 'vue';
 
 import type { ProductBindingRecord } from '@/api/admin';
 import { adminApi } from '@/api/admin';
+import { errorMessage } from '@/utils/userMessage';
 
 function toPlainRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
@@ -504,6 +506,9 @@ export function useProductBindingTree(
     try {
       const response = await adminApi.coupons.productTree();
       treeData.value = Array.isArray(response.tree) ? response.tree : [];
+    } catch (error) {
+      treeData.value = [];
+      MessagePlugin.error(errorMessage(error, '加载商品树失败'));
     } finally {
       treeLoading.value = false;
     }

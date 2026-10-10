@@ -7,7 +7,8 @@ export const marketingProductGroupApi = {
     const response = await request.get<MarketingProductGroupRecord[]>({ url: '/v2/admin/marketing-product-groups' });
     return Array.isArray(response) ? response : [];
   },
-  show: (id: number | string) => request.get<MarketingProductGroupRecord>({ url: `/v2/admin/marketing-product-groups/${id}` }),
+  show: (id: number | string) =>
+    request.get<MarketingProductGroupRecord>({ url: `/v2/admin/marketing-product-groups/${id}` }),
   create: (data: MarketingProductGroupPayload) =>
     request.post<MarketingProductGroupRecord>({ url: '/v2/admin/marketing-product-groups', data }),
   update: (id: number | string, data: MarketingProductGroupPayload) =>

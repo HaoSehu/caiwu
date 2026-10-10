@@ -87,12 +87,15 @@
       :confirm-loading="picking"
       @confirm="submitPick"
     >
-      <t-alert theme="info" message="商品可归属多个营销组；同商品命中多条折扣时自动取最终价最低的一条。" class="pick-alert" />
+      <t-alert
+        theme="info"
+        message="商品可归属多个营销组；同商品命中多条折扣时自动取最终价最低的一条。"
+        class="pick-alert"
+      />
       <product-binding-tree-select v-model="pickProductIds" mode="batch" placeholder="按商品目录勾选商品" />
     </t-dialog>
   </div>
 </template>
-
 <script setup lang="ts">
 import './index.less';
 

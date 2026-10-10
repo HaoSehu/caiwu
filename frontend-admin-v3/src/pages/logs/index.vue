@@ -292,7 +292,7 @@
                 </div>
               </article>
             </div>
-            <t-empty v-else description="暂无日志" />
+            <t-empty v-else :description="hasLogActiveFilters ? '未找到匹配结果' : '暂无日志'" />
           </t-loading>
         </div>
 
@@ -626,6 +626,7 @@ const {
   loadList: logLoadList,
   handleSearch: handleLogSearch,
   handlePaginationChange: handleLogPageChange,
+  hasActiveFilters: hasLogActiveFilters,
 } = useListPage<LogFilter, RecordRow>({
   defaultFilters: DEFAULT_LOG_FILTERS,
   defaultPageSize: 20,

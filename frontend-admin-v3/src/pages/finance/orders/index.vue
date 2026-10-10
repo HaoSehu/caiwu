@@ -124,7 +124,7 @@
               @action="(value) => handleMobileAction(value, row)"
             />
           </div>
-          <t-empty v-else description="暂无订单" />
+          <t-empty v-else :description="hasActiveFilters ? '未找到匹配结果' : '暂无订单'" />
         </t-loading>
       </div>
 
@@ -155,8 +155,8 @@
 import './index.less';
 
 import { ORDER_STATUS_FILTER_OPTIONS, ORDER_STATUS_MAP, ORDER_TYPE_MAP } from '@shared/statusConfig';
-import type { PrimaryTableCol } from 'tdesign-vue-next';
 import { SearchIcon } from 'tdesign-icons-vue-next';
+import type { PrimaryTableCol } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -227,6 +227,7 @@ const {
   handlePaginationChange,
   applyQuickFilter,
   dateRange,
+  hasActiveFilters,
 } = useListPage<Record<string, any>, OrderRecord>({
   defaultFilters: {
     keyword: '',
@@ -329,10 +330,7 @@ function normalizeInvoiceDetailPayload(
   };
 }
 
-const {
-  detailState: invoiceDrawerState,
-  reloadDetail: reloadInvoiceDetail,
-} = useFinanceDetailDrawer({
+const { detailState: invoiceDrawerState, reloadDetail: reloadInvoiceDetail } = useFinanceDetailDrawer({
   fetchDetail: (id) => adminApi.invoices.detail(id),
   errorFallback: '加载账单详情失败',
   normalize: normalizeInvoiceDetailPayload,

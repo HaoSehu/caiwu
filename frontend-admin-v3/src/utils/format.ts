@@ -15,14 +15,17 @@ export function formatDateTime(value?: unknown): string {
   )}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
-/** 金额格式化：¥X.XX，空值视为 0 */
+/** 金额格式化：¥X.XX，空值视为 0，非有限数值返回 '-' */
 export function formatMoney(value?: unknown): string {
-  return `¥${Number(value || 0).toFixed(2)}`;
+  const amount = Number(value ?? 0);
+  if (!Number.isFinite(amount)) return '-';
+  return `¥${amount.toFixed(2)}`;
 }
 
-/** 大额金额紧凑格式化：≥1 万折算为「万」单位，用于指标卡等窄容器展示 */
+/** 大额金额紧凑格式化：≥1 万折算为「万」单位，用于指标卡等窄容器展示；非有限数值返回 '-' */
 export function formatCompactMoney(value?: unknown): string {
-  const amount = Number(value || 0);
+  const amount = Number(value ?? 0);
+  if (!Number.isFinite(amount)) return '-';
   if (Math.abs(amount) >= 10000) {
     return `¥${(amount / 10000).toFixed(2)}万`;
   }

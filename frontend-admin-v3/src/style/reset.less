@@ -1,13 +1,16 @@
 // 对部分样式进行重置
+// 管理端仅提供浅色模式（见 docs/DESIGN.md §2）：固定 light，
+// 否则深色系统下原生控件/滚动条会跟随系统变暗，与 index.html 的 color-scheme=light 冲突。
 html {
-  color-scheme: light dark;
+  color-scheme: light;
 }
 
 body {
   background: var(--td-bg-color-page);
   color: var(--td-text-color-secondary);
   font: var(--td-font-body-medium);
-  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", var(--td-font-family);
+  // 字体统一由 theme.css 的 --td-font-family 单点控制，不额外前置第三方字体族。
+  font-family: var(--td-font-family);
   -webkit-font-smoothing: antialiased;
   padding: 0;
   margin: 0;

@@ -411,7 +411,14 @@
           @mouseenter="onVideoCardEnter($event)"
           @mouseleave="onVideoCardLeave($event)"
         >
-          <video class="video-drawer-card__video" :src="resolveHeroVideoSrc(opt.value)" muted loop playsinline preload="metadata"></video>
+          <video
+            class="video-drawer-card__video"
+            :src="resolveHeroVideoSrc(opt.value)"
+            muted
+            loop
+            playsinline
+            preload="metadata"
+          ></video>
           <div class="video-drawer-card__overlay">
             <check-circle-filled-icon v-if="videoDrawerCurrentSrc === opt.value" class="video-drawer-card__check" />
             <span class="video-drawer-card__name">{{ opt.filename || opt.value.split('/').pop() }}</span>
@@ -917,9 +924,10 @@ async function loadSettings() {
   try {
     const maps = Object.fromEntries(
       await Promise.all(
-        activeGroups.value.map(
-          async (group): Promise<[string, Record<string, unknown>]> => [group, await loadSettingsGroup(group)],
-        ),
+        activeGroups.value.map(async (group): Promise<[string, Record<string, unknown>]> => [
+          group,
+          await loadSettingsGroup(group),
+        ]),
       ),
     );
     allFields.value.forEach((field) => {

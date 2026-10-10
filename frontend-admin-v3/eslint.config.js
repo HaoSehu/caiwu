@@ -102,7 +102,10 @@ export default antfu(
 
       rules: {
         'vue/component-name-in-template-casing': ['error', 'kebab-case'],
-        'vue/custom-event-name-casing': ['error', 'kebab-case'],
+        // Vue 3 的 v-model 约定事件名必须是 update:modelValue / update:xxx（camelCase），
+        // 改成 kebab-case 会让 v-model 失效，因此对 update: 前缀事件豁免本规则。
+        // 注意：该选项的普通字符串会被当作字面量转义，正则需写成 /.../ 形式。
+        'vue/custom-event-name-casing': ['error', 'kebab-case', { ignores: ['/^update:/'] }],
         'vue/block-order': [
           'error',
           {

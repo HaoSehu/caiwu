@@ -2,7 +2,6 @@ import 'nprogress/nprogress.css'; // progress bar style
 
 import NProgress from 'nprogress'; // progress bar
 import { MessagePlugin } from 'tdesign-vue-next';
-import type { RouteRecordRaw } from 'vue-router';
 
 import { hasPermissionInList } from '@/constants/permissions';
 import router from '@/router';
@@ -30,15 +29,12 @@ router.beforeEach(async (to, from, next) => {
       return;
     }
     try {
-      // 仅在动态路由未构建时拉取用户信息，避免每次导航都请求接口
-      // （刷新或首次登录后 routesBuilt=false；后续跳转 routesBuilt=true 直接复用缓存）
-      if (!permissionStore.routesBuilt || !userStore.userInfo?.name) {
+      // 仅在菜单未构建时拉取用户信息，避免每次导航都请求接口
+      // （刷新或首次登录后 menuBuilt=false；后续跳转 menuBuilt=true 直接复用缓存）
+      if (!permissionStore.menuBuilt || !userStore.userInfo?.name) {
         await userStore.getUserInfo();
-
-        const routeList = await permissionStore.buildAsyncRoutes(userStore.userInfo?.permissions || []);
-        routeList.forEach((item: RouteRecordRaw) => {
-          router.addRoute(item);
-        });
+        // 管理端路由为静态注册，此处只按权限重建菜单；页面级鉴权由下方 meta.permission 校验承担
+        await permissionStore.setupMenus(userStore.userInfo?.permissions || []);
 
         if (to.name === PAGE_NOT_FOUND_ROUTE.name) {
           // 动态添加路由后，此处应当重定向到fullPath，否则会加载404页面内容
@@ -112,7 +108,7 @@ router.afterEach((to) => {
       userStore.resetLocalSession();
     }
     const permissionStore = getPermissionStore();
-    permissionStore.restoreRoutes();
+    permissionStore.resetMenus();
   }
   NProgress.done();
 });

@@ -12,7 +12,13 @@
         >
           <template #suffix-icon><search-icon /></template>
         </t-input>
-        <t-select v-model="filters.status" class="service-filter-status" clearable placeholder="主机状态" @change="handleSearch">
+        <t-select
+          v-model="filters.status"
+          class="service-filter-status"
+          clearable
+          placeholder="主机状态"
+          @change="handleSearch"
+        >
           <t-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value" />
         </t-select>
         <div class="service-filter-actions">
@@ -24,9 +30,7 @@
       <div v-if="!isMobile && selectedRowKeys.length" class="service-batch-bar">
         <span>已选 {{ selectedRowKeys.length }} 个服务</span>
         <t-space size="small">
-          <t-button variant="outline" @click="openHostnameDialog">
-            批量主机名
-          </t-button>
+          <t-button variant="outline" @click="openHostnameDialog"> 批量主机名 </t-button>
           <t-button variant="text" @click="clearSelection">清空选择</t-button>
         </t-space>
       </div>
@@ -223,9 +227,9 @@ const {
   loading,
   pagination,
   loadList,
-    handleSearch,
-    resetFilters,
-    handlePaginationChange,
+  handleSearch,
+  resetFilters,
+  handlePaginationChange,
 } = useListPage<ServiceFilter, ServiceRecord>({
   defaultFilters: { keyword: '', status: '' },
   defaultPageSize: 20,

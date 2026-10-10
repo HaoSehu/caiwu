@@ -83,11 +83,10 @@ async function handleLogin() {
       password: formData.value.password,
     });
     MessagePlugin.success('登录成功');
-    // 先构建权限路由，无仪表盘权限角色也能落到其首个可访问页面而非 403
-    if (!permissionStore.routesBuilt || !userStore.userInfo?.name) {
+    // 先构建权限菜单，无仪表盘权限角色也能落到其首个可访问页面而非 403
+    if (!permissionStore.menuBuilt || !userStore.userInfo?.name) {
       try {
-        const routeList = await permissionStore.buildAsyncRoutes(userStore.userInfo?.permissions || []);
-        routeList.forEach((item) => router.addRoute(item));
+        await permissionStore.setupMenus(userStore.userInfo?.permissions || []);
       } catch {
         errorMessage.value = '菜单初始化失败，请刷新页面重试';
         MessagePlugin.error(errorMessage.value);
@@ -127,7 +126,9 @@ async function handleLogin() {
 </script>
 <style lang="less" scoped>
 .login-container {
+  // 100dvh 让移动端地址栏收起/展开时高度不跳变；100vh 作为旧内核回退。
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;

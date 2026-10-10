@@ -122,7 +122,7 @@
               @action="(value) => handleStaffMobileAction(value, row)"
             />
           </div>
-          <t-empty v-else />
+          <t-empty v-else :description="hasActiveFilters ? '未找到匹配结果' : '暂无员工'" />
         </t-loading>
         <t-pagination
           v-if="total > 0"
@@ -240,10 +240,18 @@ interface StaffFilter {
   role_id: number | string | '';
 }
 
-const { filters, list, total, loading, pagination, loadList, handleSearch, resetFilters, handlePaginationChange } = useListPage<
-  StaffFilter,
-  StaffRecord
->({
+const {
+  filters,
+  list,
+  total,
+  loading,
+  pagination,
+  loadList,
+  handleSearch,
+  resetFilters,
+  handlePaginationChange,
+  hasActiveFilters,
+} = useListPage<StaffFilter, StaffRecord>({
   defaultFilters: { keyword: '', status: '', role_id: '' },
   defaultPageSize: 20,
   onError: (error) => MessagePlugin.error(errorMessage(error, '加载员工列表失败')),

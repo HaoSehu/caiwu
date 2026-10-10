@@ -2,7 +2,6 @@ import { defineStore } from 'pinia';
 
 import { adminAuthApi } from '@/api/auth';
 import { getAdminToken, removeAdminToken, setAdminToken } from '@/app/runtime/session';
-import { usePermissionStore } from '@/store';
 import type { UserInfo } from '@/types/interface';
 
 const InitUserInfo: UserInfo = {
@@ -35,11 +34,13 @@ export const useUserStore = defineStore('user', {
       this.token = res.token;
       const admin = res.admin || {};
       const role = typeof admin.role === 'string' && admin.role ? admin.role : '';
+      // 后端字段先展开，再由本地归一化字段覆盖：
+      // 否则后端显式返回 permissions: undefined 时会把兜底的 [] 覆盖掉。
       this.userInfo = {
+        ...admin,
         name: admin.nickname || admin.username || admin.email || '管理员',
         roles: role ? [role] : [],
         permissions: admin.permissions || [],
-        ...admin,
       };
     },
     syncTokenFromSession() {
@@ -59,10 +60,10 @@ export const useUserStore = defineStore('user', {
       const admin = res.admin || {};
       const role = typeof admin.role === 'string' && admin.role ? admin.role : '';
       this.userInfo = {
+        ...admin,
         name: admin.nickname || admin.username || admin.email || '管理员',
         roles: role ? [role] : [],
         permissions: admin.permissions || [],
-        ...admin,
       };
       // 与 Cookie 中的最新 token 保持一致，避免 localStorage 残留旧值
       this.syncTokenFromSession();
@@ -90,13 +91,11 @@ export const useUserStore = defineStore('user', {
     },
   },
   persist: {
-    afterHydrate: () => {
-      const permissionStore = usePermissionStore();
-      permissionStore.initRoutes();
-    },
     key: 'user',
     // token 单一由 Cookie/session 管理（setAdminToken），避免与 localStorage 双存储不同步。
     // 仅持久化 userInfo，减少刷新后重复请求 getUserInfo。
+    // 菜单不在 hydration 阶段构建：此时没有权限数据，只会得到空菜单，
+    // 交由 permission.ts 守卫在拿到 userInfo 后调用 permissionStore.setupMenus 构建。
     pick: ['userInfo'],
   },
 });

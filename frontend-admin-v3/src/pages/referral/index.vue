@@ -54,7 +54,13 @@
           >
             <template #suffix-icon><search-icon /></template>
           </t-input>
-          <t-select v-model="rewardFilters.status" class="referral-filter-status" clearable placeholder="奖励状态" @change="handleRewardSearch">
+          <t-select
+            v-model="rewardFilters.status"
+            class="referral-filter-status"
+            clearable
+            placeholder="奖励状态"
+            @change="handleRewardSearch"
+          >
             <t-option v-for="item in rewardStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
           </t-select>
           <div class="referral-filter-actions">

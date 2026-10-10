@@ -45,7 +45,9 @@
             <div class="stack-cell">
               <strong>{{ invoiceTitle(row) }}</strong>
               <span v-if="row.order?.id">
-                订单：<t-link theme="primary" hover="color" @click.stop="goToOrder(row.order.id)">{{ row.order.order_no || row.order.id }}</t-link>
+                订单：<t-link theme="primary" hover="color" @click.stop="goToOrder(row.order.id)">{{
+                  row.order.order_no || row.order.id
+                }}</t-link>
               </span>
               <span v-else>{{ fieldValue(row.summary?.highlight || row.order_no) }}</span>
             </div>
@@ -117,7 +119,7 @@
               @action="(value) => handleMobileAction(value, row)"
             />
           </div>
-          <t-empty v-else description="暂无账单" />
+          <t-empty v-else :description="hasActiveFilters ? '未找到匹配结果' : '暂无账单'" />
         </t-loading>
       </div>
 
@@ -206,6 +208,7 @@ const {
   handlePaginationChange,
   applyQuickFilter,
   dateRange,
+  hasActiveFilters,
 } = useListPage<InvoiceFilter, InvoiceRecord>({
   defaultFilters: {
     keyword: '',

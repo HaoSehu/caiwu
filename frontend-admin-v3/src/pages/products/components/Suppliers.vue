@@ -338,9 +338,7 @@
       新增 {{ supplierBatchResult.created_count || 0 }}，更新 {{ supplierBatchResult.updated_count || 0 }}，跳过
       {{ supplierBatchResult.skipped_count || 0 }}
       <ul v-if="supplierBatchSkippedSummary.length" class="supplier-batch-skipped">
-        <li v-for="item in supplierBatchSkippedSummary" :key="item.reason">
-          {{ item.reason }} × {{ item.count }}
-        </li>
+        <li v-for="item in supplierBatchSkippedSummary" :key="item.reason">{{ item.reason }} × {{ item.count }}</li>
       </ul>
     </div>
   </t-dialog>
@@ -457,7 +455,6 @@ import {
   productGroupOptionKey,
   productGroupOptionLabel,
   productGroupPayload,
-  providerTypeFallbackLabels,
   toPlainRecord,
 } from '../composables/useProductShared';
 

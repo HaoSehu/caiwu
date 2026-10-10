@@ -1,6 +1,11 @@
 import { request } from '@/utils/request';
 
-import type { MemberLevelGroupDiscountMatrix, MemberLevelGroupDiscountRule, MemberLevelPayload, MemberLevelRecord } from './types';
+import type {
+  MemberLevelGroupDiscountMatrix,
+  MemberLevelGroupDiscountRule,
+  MemberLevelPayload,
+  MemberLevelRecord,
+} from './types';
 
 interface MemberLevelListResponse {
   list?: MemberLevelRecord[];
@@ -17,6 +22,8 @@ export const memberLevelsApi = {
   delete: (id: number | string) => request.delete({ url: `/v2/admin/member-levels/${id}` }),
   groupDiscounts: (id: number | string) =>
     request.get<MemberLevelGroupDiscountMatrix>({ url: `/v2/admin/member-levels/${id}/group-discounts` }),
-  syncGroupDiscounts: (id: number | string, rules: Array<MemberLevelGroupDiscountRule & { marketing_product_group_id: number | string }>) =>
-    request.put({ url: `/v2/admin/member-levels/${id}/group-discounts`, data: { rules } }),
+  syncGroupDiscounts: (
+    id: number | string,
+    rules: Array<MemberLevelGroupDiscountRule & { marketing_product_group_id: number | string }>,
+  ) => request.put({ url: `/v2/admin/member-levels/${id}/group-discounts`, data: { rules } }),
 };

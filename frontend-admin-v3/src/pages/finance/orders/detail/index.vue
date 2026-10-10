@@ -27,11 +27,7 @@
         >
           查看关联账单
         </t-button>
-        <t-button
-          v-if="order.user_id"
-          variant="outline"
-          @click="router.push(`/admin/users/${order.user_id}`)"
-        >
+        <t-button v-if="order.user_id" variant="outline" @click="router.push(`/admin/users/${order.user_id}`)">
           查看用户资料
         </t-button>
         <t-button
@@ -56,12 +52,7 @@
               <div class="detail-kv-item__value detail-copy-wrap">
                 <strong>{{ fieldValue(order.order_no) }}</strong>
                 <t-tooltip content="复制订单号" placement="top">
-                  <t-button
-                    variant="text"
-                    shape="square"
-                    size="small"
-                    @click="copyText(order.order_no || '')"
-                  >
+                  <t-button variant="text" shape="square" size="small" @click="copyText(order.order_no || '')">
                     <template #icon><file-copy-icon /></template>
                   </t-button>
                 </t-tooltip>
@@ -160,7 +151,9 @@
               <div class="detail-kv-item__value detail-inline-action">
                 <div>
                   <strong>{{ userName(order.user) }}</strong>
-                  <span v-if="order.user_id" style="color: var(--td-text-color-placeholder); margin-left: 6px;">(#{{ order.user_id }})</span>
+                  <span v-if="order.user_id" style="color: var(--td-text-color-placeholder); margin-left: 6px"
+                    >(#{{ order.user_id }})</span
+                  >
                 </div>
                 <t-button
                   v-if="order.user_id"
@@ -210,14 +203,9 @@
             <div v-if="order.trace_id" class="detail-kv-item detail-kv-item--span-2">
               <span class="detail-kv-item__label">链路追踪号 (Trace ID)</span>
               <div class="detail-kv-item__value detail-copy-wrap">
-                <span style="font-family: monospace; font-size: 13px;">{{ order.trace_id }}</span>
+                <span style="font-family: monospace; font-size: 13px">{{ order.trace_id }}</span>
                 <t-tooltip content="复制 Trace ID" placement="top">
-                  <t-button
-                    variant="text"
-                    shape="square"
-                    size="small"
-                    @click="copyText(order.trace_id || '')"
-                  >
+                  <t-button variant="text" shape="square" size="small" @click="copyText(order.trace_id || '')">
                     <template #icon><file-copy-icon /></template>
                   </t-button>
                 </t-tooltip>
@@ -242,7 +230,9 @@
           <div class="detail-kv-grid">
             <div class="detail-kv-item detail-kv-item--span-2">
               <span class="detail-kv-item__label">产品名称</span>
-              <strong class="detail-kv-item__value">{{ fieldValue(order.product_name || toRecord(order.product).name) }}</strong>
+              <strong class="detail-kv-item__value">{{
+                fieldValue(order.product_name || toRecord(order.product).name)
+              }}</strong>
             </div>
             <div class="detail-kv-item detail-kv-item--span-2">
               <span class="detail-kv-item__label">产品完整路径</span>
@@ -302,7 +292,7 @@
               <div class="payment-item__head">
                 <div>
                   <strong>{{ fieldValue(payment.payment_no) }}</strong>
-                  <span style="font-size: 12px; color: var(--td-text-color-placeholder);">
+                  <span style="font-size: 12px; color: var(--td-text-color-placeholder)">
                     第三方单号：{{ fieldValue(payment.trade_no) }}
                   </span>
                 </div>
@@ -322,7 +312,9 @@
                   </div>
                   <div class="detail-kv-item">
                     <span class="detail-kv-item__label">支付时间</span>
-                    <strong class="detail-kv-item__value">{{ formatDateTime(payment.paid_at || payment.created_at) }}</strong>
+                    <strong class="detail-kv-item__value">{{
+                      formatDateTime(payment.paid_at || payment.created_at)
+                    }}</strong>
                   </div>
                   <div class="detail-kv-item">
                     <span class="detail-kv-item__label">Trace ID</span>
@@ -377,13 +369,7 @@ import { adminApi } from '@/api/admin';
 import InvoiceDetailDrawer from '@/components/finance-record-detail/InvoiceDetailDrawer.vue';
 import type { RecordDetailMetric, RecordDetailTab } from '@/components/record-detail-page/index.vue';
 import RecordDetailPage from '@/components/record-detail-page/index.vue';
-import {
-  copyToClipboard,
-  fieldValue,
-  formatBillingCycle,
-  formatDateTime,
-  formatMoney,
-} from '@/utils/format';
+import { copyToClipboard, fieldValue, formatBillingCycle, formatDateTime, formatMoney } from '@/utils/format';
 import { errorMessage } from '@/utils/userMessage';
 
 defineOptions({
@@ -467,9 +453,7 @@ const paymentStateSummary = computed(() => {
 });
 
 const summaryMetrics = computed<RecordDetailMetric[]>(() => {
-  const metrics: RecordDetailMetric[] = [
-    { label: '订单金额', value: formatMoney(order.value.amount), primary: true },
-  ];
+  const metrics: RecordDetailMetric[] = [{ label: '订单金额', value: formatMoney(order.value.amount), primary: true }];
 
   if (hasCouponDiscount.value || hasMemberDiscount.value) {
     const totalDiscount = Number(order.value.discount || 0) + Number(order.value.member_discount_amount || 0);

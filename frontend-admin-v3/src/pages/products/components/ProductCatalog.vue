@@ -170,7 +170,12 @@
           <div class="table-toolbar-actions">
             <template v-if="selectedProductKeys.length">
               <t-button size="small" variant="outline" @click="openBatchCategoryDialog">批量归类</t-button>
-              <t-button size="small" variant="outline" :loading="splitProductPreviewLoading" @click="openSplitProductDialog">
+              <t-button
+                size="small"
+                variant="outline"
+                :loading="splitProductPreviewLoading"
+                @click="openSplitProductDialog"
+              >
                 拆分商品
               </t-button>
               <t-button size="small" variant="outline" @click="openProvisionHostnameDialog">批量主机名</t-button>

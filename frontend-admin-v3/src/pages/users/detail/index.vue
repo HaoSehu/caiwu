@@ -47,11 +47,7 @@
             >
               {{ Number(user.status) === 1 ? '正常' : '禁用' }}
             </t-tag>
-            <t-tag
-              :theme="isVerified ? 'success' : 'warning'"
-              variant="light"
-              class="identity-status-tag"
-            >
+            <t-tag :theme="isVerified ? 'success' : 'warning'" variant="light" class="identity-status-tag">
               {{ isVerified ? '已实名' : '未实名' }}
             </t-tag>
           </div>
@@ -582,12 +578,7 @@
       </t-form>
     </t-dialog>
 
-    <t-drawer
-      v-model:visible="serviceDrawer.visible"
-      size="680px"
-      :footer="false"
-      @close="closeServiceDrawer"
-    >
+    <t-drawer v-model:visible="serviceDrawer.visible" size="680px" :footer="false" @close="closeServiceDrawer">
       <template #header>
         <div class="drawer-header">
           <t-button variant="text" size="small" class="drawer-header__back" @click="closeServiceDrawer">
@@ -940,7 +931,7 @@ import {
 import { ChevronLeftIcon, FileCopyIcon, SearchIcon } from 'tdesign-icons-vue-next';
 import type { FormInstanceFunctions, FormRule, PageInfo, PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
-import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import type { ProductBindingRecord } from '@/api/admin';
@@ -950,6 +941,7 @@ import { productApi } from '@/api/product';
 import { supplierApi } from '@/api/supplier';
 import type { AdminUser, ManualPaymentGateway, PageParams } from '@/api/user';
 import { userApi } from '@/api/user';
+import InvoiceDetailDrawer from '@/components/finance-record-detail/InvoiceDetailDrawer.vue';
 import ProductBindingTreeSelect from '@/components/product-binding-tree-select/index.vue';
 import { AdminPermissions } from '@/constants/permissions';
 import { copyToClipboard, fieldValue, formatDateTime, formatMoney } from '@/utils/format';
@@ -957,7 +949,6 @@ import { phoneRule, required } from '@/utils/formRules';
 import { hasAdminPermission } from '@/utils/permission';
 import { errorMessage } from '@/utils/userMessage';
 
-import InvoiceDetailDrawer from '@/components/finance-record-detail/InvoiceDetailDrawer.vue';
 import OrdersTab from './components/OrdersTab.vue';
 import RechargesTab from './components/RechargesTab.vue';
 
@@ -1100,7 +1091,6 @@ const invoiceDrawer = reactive({
   detail: { invoice: {}, payments: [], items: [], logs: [] } as Row,
 });
 const canLoginAs = computed(() => hasAdminPermission(AdminPermissions.USER_LOGIN_AS));
-const canRecharge = computed(() => hasAdminPermission(AdminPermissions.USER_RECHARGE));
 const canManualInvoice = computed(() => hasAdminPermission(AdminPermissions.INVOICE_MANUAL_ENTRY));
 const ordersTabRef = ref<InstanceType<typeof OrdersTab>>();
 const rechargesTabRef = ref<InstanceType<typeof RechargesTab>>();
@@ -1412,6 +1402,8 @@ async function loadDetail() {
     stats.value = response.stats || {};
     referral.value = response.referral || {};
     syncEditForm();
+  } catch (error) {
+    MessagePlugin.error(errorMessage(error, '加载用户详情失败'));
   } finally {
     detailLoading.value = false;
   }
@@ -1460,6 +1452,8 @@ async function loadPageState(
     state.page = Number(response.page || state.page);
     state.pageSize = Number(response.page_size || state.pageSize);
     loadedTabs[loadedKey] = true;
+  } catch (error) {
+    MessagePlugin.error(errorMessage(error, '加载列表数据失败'));
   } finally {
     state.loading = false;
   }
@@ -1908,9 +1902,20 @@ function waitForLoginAsReady(targetWindow: Window, targetUrl: string) {
   const targetOrigin = new URL(targetUrl, window.location.origin).origin;
 
   return new Promise<void>((resolve, reject) => {
-    const timer = window.setTimeout(() => {
+    let settled = false;
+    const cleanup = () => {
+      window.clearTimeout(timer);
       window.removeEventListener('message', handleMessage);
-      reject(new Error('客户端代登录窗口未完成初始化'));
+    };
+    const settle = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      fn();
+    };
+
+    const timer = window.setTimeout(() => {
+      settle(() => reject(new Error('客户端代登录窗口未完成初始化')));
     }, LOGIN_AS_READY_TIMEOUT_MS);
 
     function handleMessage(event: MessageEvent) {
@@ -1922,12 +1927,16 @@ function waitForLoginAsReady(targetWindow: Window, targetUrl: string) {
         return;
       }
 
-      window.clearTimeout(timer);
-      window.removeEventListener('message', handleMessage);
-      resolve();
+      settle(resolve);
     }
 
     window.addEventListener('message', handleMessage);
+
+    // 组件在等待期间卸载时立即摘除监听与定时器，避免悬挂监听；
+    // 同时 reject 让调用方走既有的失败分支，不会对已关闭的窗口继续投递消息。
+    onBeforeUnmount(() => {
+      settle(() => reject(new Error('页面已离开，代登录流程已取消')));
+    });
   });
 }
 
@@ -1940,6 +1949,8 @@ async function openServiceDrawer(row: Row) {
     const detail = await userApi.serviceDetail(userId.value, row.id);
     serviceDrawer.detail = normalizeServiceDetail(detail);
     patchServiceListItem(detail);
+  } catch (error) {
+    MessagePlugin.error(errorMessage(error, '加载实例详情失败'));
   } finally {
     serviceDrawer.loading = false;
   }

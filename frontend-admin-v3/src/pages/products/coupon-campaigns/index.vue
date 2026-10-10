@@ -12,7 +12,13 @@
         >
           <template #suffix-icon><search-icon /></template>
         </t-input>
-        <t-select v-model="filters.status" class="campaigns-filter-status" clearable placeholder="状态" @change="handleSearch">
+        <t-select
+          v-model="filters.status"
+          class="campaigns-filter-status"
+          clearable
+          placeholder="状态"
+          @change="handleSearch"
+        >
           <t-option value="1" label="运行中" />
           <t-option value="0" label="已停用" />
         </t-select>

@@ -12,7 +12,12 @@
         >
           <template #suffix-icon><search-icon /></template>
         </t-input>
-        <t-select v-model="quickStatus" class="verification-filter-status" placeholder="状态筛选" @change="handleQuickStatusChange">
+        <t-select
+          v-model="quickStatus"
+          class="verification-filter-status"
+          placeholder="状态筛选"
+          @change="handleQuickStatusChange"
+        >
           <t-option label="全部" value="all" />
           <t-option label="待认证" value="pending" />
           <t-option label="成功" value="success" />
@@ -409,6 +414,8 @@ async function openDetail(row: VerificationRecord) {
   detail.value = { ...row };
   try {
     detail.value = await adminApi.verifications.detail(row.id);
+  } catch (error) {
+    MessagePlugin.error(errorMessage(error, '加载实名详情失败'));
   } finally {
     detailLoading.value = false;
   }
@@ -423,6 +430,8 @@ async function openHistory(row: VerificationRecord) {
     const response = await adminApi.verifications.history(row.id);
     historyTitle.value = response.user_name ? `历史记录(${response.user_name})` : historyTitle.value;
     historyList.value = response.list?.length ? response.list : [row];
+  } catch (error) {
+    MessagePlugin.error(errorMessage(error, '加载历史记录失败'));
   } finally {
     historyLoading.value = false;
   }

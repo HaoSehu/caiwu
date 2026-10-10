@@ -16,7 +16,7 @@ import type { RouteRecordRaw } from 'vue-router';
 
 import { hasPermissionInList } from '@/constants/permissions';
 import type { LocalizedTitle } from '@/locales';
-import router, { homepageRouterList } from '@/router';
+import { homepageRouterList } from '@/router';
 import { store } from '@/store';
 import type { MenuRoute } from '@/types/interface';
 
@@ -247,11 +247,12 @@ const ADMIN_MENU_GROUPS: MenuGroupConfig[] = [
 export const usePermissionStore = defineStore('permission', {
   state: () => ({
     whiteListRouters: ['/admin/login'] as string[],
-    // 分组构建后按菜单形态消费（Layout 侧栏/头部）；RouteRecordRaw 结构仅用于注册
+    // 按权限过滤后的菜单树（Layout 侧栏 / 头部消费）。
+    // 注意：管理端路由全部在 router/index.ts 静态注册，本 store 不注册也不撤销路由；
+    // 页面级鉴权由 permission.ts 的守卫按 meta.permission 逐次校验。
     routers: [] as MenuRoute[],
-    removeRoutes: [] as RouteRecordRaw[],
-    asyncRoutes: [] as RouteRecordRaw[],
-    routesBuilt: false,
+    // 菜单是否已按当前权限构建完成；用于避免每次导航都重复拉取用户信息
+    menuBuilt: false,
   }),
   getters: {
     // 已按权限过滤的菜单树上第一个可访问页面，供登录后跳转兜底
@@ -266,41 +267,24 @@ export const usePermissionStore = defineStore('permission', {
     },
   },
   actions: {
-    async initRoutes(permissions: string[] = []) {
-      const accessedRouters = this.asyncRoutes;
-
-      // 菜单展示业务分组；真实路由仍使用 homepageRouterList 注册，不改变历史路径。
-      // asyncRoutes 经 pinia UnwrapRef 展开后与 RouteRecordRaw 不完全等价，先收敛再分组
-      this.routers = buildGroupedMenuRouters(
-        cloneDeep([...homepageRouterList, ...(accessedRouters as RouteRecordRaw[])]),
-        permissions,
-      ) as unknown as MenuRoute[];
-      // 在菜单只展示动态路由和首页
-      // this.routers = [...homepageRouterList, ...accessedRouters];
-      // 在菜单只展示动态路由
-      // this.routers = [...accessedRouters];
+    /** 依据权限过滤并构建菜单树（路由本身静态注册，与权限过滤无关）。 */
+    buildMenus(permissions: string[] = []) {
+      this.routers = buildGroupedMenuRouters(cloneDeep(homepageRouterList), permissions) as unknown as MenuRoute[];
     },
-    async buildAsyncRoutes(permissions: string[] = []): Promise<RouteRecordRaw[]> {
+    /** 登录/刷新后拿到用户信息时调用；构建失败复位标记以便下次重试，避免永久停留在空菜单。 */
+    async setupMenus(permissions: string[] = []) {
       try {
-        this.asyncRoutes = [];
-        this.routesBuilt = true;
-        await this.initRoutes(permissions);
-        return this.asyncRoutes as RouteRecordRaw[];
+        this.buildMenus(permissions);
+        this.menuBuilt = true;
       } catch (error) {
-        // 构建失败时复位标记，允许下次登录/刷新时重建，避免永久停留在空菜单
-        this.routesBuilt = false;
-        throw new Error("Can't build routes", { cause: error });
+        this.menuBuilt = false;
+        throw new Error("Can't build menus", { cause: error });
       }
     },
-    async restoreRoutes() {
-      // 不需要在此额外调用initRoutes更新侧边导肮内容，在登录后asyncRoutes为空会调用
-      this.asyncRoutes.forEach((item) => {
-        if (item.name) {
-          router.removeRoute(item.name);
-        }
-      });
-      this.asyncRoutes = [];
-      this.routesBuilt = false;
+    /** 清理菜单与标记（登出、或落地登录页时调用）。路由为静态注册，此处无需也无法撤销。 */
+    resetMenus() {
+      this.routers = [];
+      this.menuBuilt = false;
     },
   },
 });
