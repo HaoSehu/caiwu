@@ -69,8 +69,6 @@ class NotificationService
 
     public const TEMPLATE_CREDIT_INVOICE_CREATED = '100020';
 
-    public const TEMPLATE_ADMIN_ORDER_CREATED = '100021';
-
     public const TEMPLATE_ADMIN_ORDER_PAID = '100022';
 
     public const TEMPLATE_TICKET_OPENED = '100023';

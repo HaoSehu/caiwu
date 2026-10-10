@@ -17,6 +17,7 @@ use App\Services\System\SettingService;
 use App\Services\Upstream\Contracts\ProvidesConsoleRuntime;
 use App\Services\Upstream\ProviderRegistry;
 use App\Services\Upstream\ProviderResolver;
+use App\Support\Concerns\ResolvesBinding;
 use App\Support\Money;
 use App\Support\ServiceHostname;
 use App\Support\ServiceListPresentation;
@@ -32,6 +33,8 @@ use Illuminate\Support\Facades\Log;
  */
 class ServiceTransformService
 {
+    use ResolvesBinding;
+
     private const CONSOLE_MODE_NAT = 'nat';
 
     // 上游面板 config_options 中属于"范围/滑块"类型的 option_type，这些类型不从 sub_options 推断规格值
@@ -1019,11 +1022,6 @@ class ServiceTransformService
         }
 
         return 0;
-    }
-
-    private function bindingResolver(): PluginBindingResolver
-    {
-        return $this->bindingResolver ??= app(PluginBindingResolver::class);
     }
 
     private function providerResolver(): ProviderResolver

@@ -24,6 +24,7 @@ use App\Http\Requests\Admin\V2\User\ShowUserInvoiceRequest;
 use App\Http\Requests\Admin\V2\User\ShowUserRequest;
 use App\Http\Requests\Admin\V2\User\StoreManualInvoiceRequest;
 use App\Http\Requests\Admin\V2\User\StoreManualOrderRequest;
+use App\Http\Requests\Admin\V2\User\StoreManualReversalRequest;
 use App\Http\Requests\Admin\V2\User\StoreUserRequest;
 use App\Http\Requests\Admin\V2\User\UpdateUserRequest;
 use App\Http\Requests\Admin\V2\User\UpdateUserStatusRequest;
@@ -40,12 +41,14 @@ use App\Http\Resources\Admin\V2\AdminUserOperationLogResource;
 use App\Http\Resources\Admin\V2\AdminUserRechargeRecordResource;
 use App\Http\Resources\Admin\V2\AdminUserTicketResource;
 use App\Models\AdminUser;
+use App\Models\Order;
 use App\Models\User;
 use App\Services\Admin\V2\AdminManualEntryV2Service;
 use App\Services\Admin\V2\AdminUserActionV2Service;
 use App\Services\Auth\AuthService;
 use App\Services\Finance\OrderV2QueryService;
 use App\Services\Finance\RechargePaymentService;
+use App\Services\ProductCatalog\ProductFullPathResolver;
 use App\Services\User\UserService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -59,6 +62,7 @@ class UserController extends Controller
         private readonly UserService $users,
         private readonly AuthService $auth,
         private readonly RechargePaymentService $payments,
+        private readonly ProductFullPathResolver $productFullPathResolver,
     ) {}
 
     public function index(ListUsersRequest $request): JsonResponse
@@ -246,7 +250,7 @@ class UserController extends Controller
 
         return $this->paginate(
             $this->orderQueries->paginateAdminOrders($filters),
-            AdminOrderSummaryResource::class,
+            fn (Order $order): array => (new AdminOrderSummaryResource($order, $this->productFullPathResolver))->resolve()
         );
     }
 
@@ -277,6 +281,20 @@ class UserController extends Controller
         $actor = $this->resolveAdminActor($request);
 
         $result = $this->manualEntries->createManualOrder($user, $request->payload(), [
+            'operator_id' => $actor['id'],
+            'operator_name' => $actor['name'],
+            'trace_id' => (string) $request->header('X-Request-Id', ''),
+            'ip_address' => (string) $request->ip(),
+        ]);
+
+        return $this->success(AdminActionResultResource::make($result)->resolve(), (string) $result['message']);
+    }
+
+    public function storeManualReversal(StoreManualReversalRequest $request, User $user, int $invoice): JsonResponse
+    {
+        $actor = $this->resolveAdminActor($request);
+
+        $result = $this->manualEntries->reverseManualInvoice($user, $invoice, $request->payload(), [
             'operator_id' => $actor['id'],
             'operator_name' => $actor['name'],
             'trace_id' => (string) $request->header('X-Request-Id', ''),

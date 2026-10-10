@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Console\Commands\Concerns\RefusesLegacyMigrationExecution;
 use App\Services\System\CatalogMigrationService;
 use Illuminate\Console\Command;
 
 abstract class CatalogMigrateBaseCommand extends Command
 {
+    use RefusesLegacyMigrationExecution;
+
     abstract protected function sourceTable(): string;
 
     abstract protected function targetTable(): string;

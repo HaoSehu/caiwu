@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Console\Commands\Concerns\RefusesLegacyMigrationExecution;
 use App\Services\System\ServiceMigrationService;
 use Illuminate\Console\Command;
 
 class ReconcileServiceDomainCommand extends Command
 {
+    use RefusesLegacyMigrationExecution;
+
     protected $signature = 'migrate:service:reconcile {--json : 以 JSON 输出结果}';
 
     protected $description = '执行服务实例域迁移后的总对账';

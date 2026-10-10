@@ -14,6 +14,7 @@ use App\Models\Product;
 use App\Models\Service;
 use App\Models\Supplier;
 use App\Models\User;
+use App\Services\ClientServiceConsole\ServiceOverviewService;
 use App\Services\Finance\CheckoutService;
 use App\Services\Finance\CouponService;
 use App\Services\Finance\InvoiceRefundService;
@@ -1007,6 +1008,9 @@ class ServiceRenewService
             }
         });
 
+        // 续费成功事务已提交（状态/到期时间/金额等概览字段更新），事务外失效该用户概览缓存，避免最长 120s 脏读。
+        $this->forgetServiceOverviewCache((int) $service->user_id);
+
         $updatedService = $service->fresh(['product.supplier']) ?? $service;
         $this->serviceBindingWriter()->syncServiceState($updatedService, $updatedService->product, $provisionData);
         $this->recordRenewInvoiceAttempt($updatedService, $updatedService->product, $invoice, $provisionData, 'success', null, [
@@ -1744,6 +1748,20 @@ class ServiceRenewService
                 'email' => $email,
                 'message' => $exception->getMessage(),
             ]);
+        }
+    }
+
+    /**
+     * 失效用户端「服务概览」缓存（V4-02）。
+     *
+     * 续费成功会改变服务的状态/到期时间/金额，这些都属于概览输出字段，
+     * 必须在事务提交后清除该用户概览缓存，否则最长 120s 内用户仍看到续费前的旧概览。
+     * 使用 app() 延迟解析：本服务在测试中经 new 直接实例化，避免新增构造依赖。
+     */
+    private function forgetServiceOverviewCache(int $userId): void
+    {
+        if ($userId > 0) {
+            app(ServiceOverviewService::class)->forgetGroupedOverviewCache($userId);
         }
     }
 }

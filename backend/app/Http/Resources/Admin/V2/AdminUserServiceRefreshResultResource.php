@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Resources\Admin\V2;
 
-use App\Http\Resources\Admin\V2\Concerns\StripsSensitiveResourceData;
+use App\Http\Resources\Concerns\StripsSensitiveResourceData;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 

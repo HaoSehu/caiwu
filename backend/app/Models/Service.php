@@ -413,11 +413,4 @@ class Service extends Model
     {
         return $query->where('status', 1);
     }
-
-    public function scopeExpiringSoon($query, int $days = 7)
-    {
-        return $query->where('status', 1)
-            ->where('auto_renew', 1)
-            ->where('expires_at', '<=', now()->addDays($days));
-    }
 }

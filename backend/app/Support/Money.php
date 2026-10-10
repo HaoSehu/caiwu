@@ -45,6 +45,41 @@ final class Money
         return self::round((float) ($a ?? 0) * (float) ($b ?? 0));
     }
 
+    /**
+     * 金额转整数分（half-up，与 round()/number_format() 既有口径逐字节一致）。
+     *
+     * 整数分收敛（V2-10）的入口：资金链路以分为单位做加减乘与比较，避免 float
+     * 中间值误差；仅在边界处做 分 ↔ 元 转换，DB/API 落点仍是两位小数。
+     */
+    public static function toCents(mixed $value): int
+    {
+        return (int) round(self::round($value) * 100);
+    }
+
+    /**
+     * 整数分转元（保持 2 位小数的 float 表示，与既有金额列/签名一致）。
+     */
+    public static function fromCents(int $cents): float
+    {
+        return round($cents / 100, self::SCALE);
+    }
+
+    /**
+     * 以分为单位比较两个金额：前者小于/等于/大于后者分别返回 -1 / 0 / 1。
+     */
+    public static function compare(mixed $a, mixed $b): int
+    {
+        return self::toCents($a) <=> self::toCents($b);
+    }
+
+    /**
+     * 以分为单位判断金额相等（0.1 + 0.2 与 0.3 视为相等）。
+     */
+    public static function equals(mixed $a, mixed $b): bool
+    {
+        return self::compare($a, $b) === 0;
+    }
+
     public static function format(mixed $value): string
     {
         return number_format(self::round($value), 2, '.', '');

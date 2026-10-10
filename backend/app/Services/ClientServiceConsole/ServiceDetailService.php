@@ -368,6 +368,9 @@ class ServiceDetailService
 
         $this->forgetDetailCaches($service);
 
+        // 实例名称属于服务概览输出字段（items.name），改名后同步失效该用户概览缓存。
+        app(ServiceOverviewService::class)->forgetGroupedOverviewCache((int) $service->user_id);
+
         $this->operationLogService->writeServiceConsoleLog($service, 'service.console.name.update', [
             'category' => 'service',
             'summary' => $cleanServiceName !== '' ? '更新实例名称' : '清空实例名称',
@@ -452,6 +455,10 @@ class ServiceDetailService
             'provision_data' => $provisionData,
         ])->save();
         $this->serviceBindingWriter()->syncServiceState($service, null, $provisionData);
+
+        // 上游同步会改写概览输出字段（name/status/expires_at），必须失效该用户的服务概览缓存，
+        // 否则客户端在 120 秒 TTL 内仍看到同步前的旧状态。
+        app(ServiceOverviewService::class)->forgetGroupedOverviewCache((int) $service->user_id);
     }
 
     private function resolveConsoleSyncedSuspendedReason(Service $service, int $resolvedStatus): ?string

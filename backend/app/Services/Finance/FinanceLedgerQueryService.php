@@ -18,9 +18,9 @@ use App\Models\Service;
 use App\Models\User;
 use App\Services\Integrations\Plugins\PluginBindingResolver;
 use App\Support\AdminPrivacy;
+use App\Support\Concerns\FiltersDateRange;
 use App\Support\ServiceHostname;
 use App\Support\VersionedJson;
-use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -28,6 +28,8 @@ use Illuminate\Support\Facades\Cache;
 
 class FinanceLedgerQueryService
 {
+    use FiltersDateRange;
+
     private const SUMMARY_CACHE_TTL_SECONDS = 30;
 
     public function paginateForClient(User $user, array $filters, int $perPage): array
@@ -461,33 +463,6 @@ class FinanceLedgerQueryService
                             })));
             });
         });
-    }
-
-    private function applyDateFilter(Builder $query, array $filters): void
-    {
-        $start = trim((string) ($filters['start_date'] ?? ''));
-        $end = trim((string) ($filters['end_date'] ?? ''));
-
-        if ($start === '' && $end === '') {
-            return;
-        }
-
-        if ($start !== '' && $end !== '') {
-            $query->whereBetween('created_at', [
-                CarbonImmutable::parse($start)->startOfDay(),
-                CarbonImmutable::parse($end)->endOfDay(),
-            ]);
-
-            return;
-        }
-
-        if ($start !== '') {
-            $query->where('created_at', '>=', CarbonImmutable::parse($start)->startOfDay());
-
-            return;
-        }
-
-        $query->where('created_at', '<=', CarbonImmutable::parse($end)->endOfDay());
     }
 
     private function attachContextResolvers(Builder $query): void

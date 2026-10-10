@@ -10,6 +10,7 @@ use App\Models\MemberLevelGroupDiscount;
 use App\Models\User;
 use App\Models\UserReferral;
 use App\Support\CacheKey;
+use App\Support\Concerns\NormalizesNullableString;
 use App\Support\SchemaMetadataCache;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Cache;
@@ -22,6 +23,8 @@ use Illuminate\Support\Facades\DB;
  */
 class MemberLevelService
 {
+    use NormalizesNullableString;
+
     private const LIST_CACHE_TTL_SECONDS = 300; // 5分钟：会员等级不频繁变化，可适当延长
 
     /**
@@ -104,13 +107,6 @@ class MemberLevelService
             'status' => (int) (($data['status'] ?? $level?->status ?? 1) ? 1 : 0),
             'remark' => $this->normalizeNullableString($data['remark'] ?? $level?->remark),
         ];
-    }
-
-    private function normalizeNullableString(mixed $value): ?string
-    {
-        $value = trim((string) $value);
-
-        return $value !== '' ? $value : null;
     }
 
     private function buildListCacheKey(bool $enabledOnly): string

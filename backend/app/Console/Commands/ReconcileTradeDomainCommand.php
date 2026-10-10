@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Console\Commands\Concerns\RefusesLegacyMigrationExecution;
 use App\Services\System\TradeMigrationService;
 use Illuminate\Console\Command;
 
 class ReconcileTradeDomainCommand extends Command
 {
+    use RefusesLegacyMigrationExecution;
+
     protected $signature = 'migrate:trade:reconcile {--json : 以 JSON 输出结果}';
 
     protected $description = '执行交易与支付域迁移后的总对账';

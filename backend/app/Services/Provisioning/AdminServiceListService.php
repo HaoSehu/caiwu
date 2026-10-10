@@ -9,6 +9,7 @@ use App\Models\Invoice;
 use App\Models\Service;
 use App\Services\Integrations\Plugins\PluginBindingResolver;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
+use App\Support\Concerns\ResolvesBinding;
 use App\Support\SchemaMetadataCache;
 use App\Support\ServiceHostname;
 use App\Support\ServiceListPresentation;
@@ -18,6 +19,8 @@ use Illuminate\Support\Facades\DB;
 
 class AdminServiceListService
 {
+    use ResolvesBinding;
+
     public function __construct(
         private readonly ?ProductDisplayNameResolver $productDisplayNameResolver = null,
         private ?PluginBindingResolver $bindingResolver = null,
@@ -361,11 +364,6 @@ class AdminServiceListService
         }
 
         return is_array($decoded) ? $decoded : [];
-    }
-
-    private function bindingResolver(): PluginBindingResolver
-    {
-        return $this->bindingResolver ??= app(PluginBindingResolver::class);
     }
 
     private function resolvePrimaryInvoice(Service $service): ?Invoice

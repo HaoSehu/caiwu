@@ -10,7 +10,9 @@ use App\Http\Requests\Admin\V2\CouponProductGroup\ListCouponProductGroupProducts
 use App\Http\Requests\Admin\V2\CouponProductGroup\ListCouponProductGroupsRequest;
 use App\Http\Resources\Admin\V2\CouponProductGroupResource;
 use App\Http\Resources\Admin\V2\CouponProductResource;
+use App\Models\Product;
 use App\Services\ProductCatalog\CouponProductGroupQueryService;
+use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -18,6 +20,7 @@ class CouponProductGroupController extends Controller
 {
     public function __construct(
         private readonly CouponProductGroupQueryService $queryService,
+        private readonly ProductDisplayNameResolver $displayNameResolver,
     ) {}
 
     public function index(ListCouponProductGroupsRequest $request): JsonResponse
@@ -56,7 +59,7 @@ class CouponProductGroupController extends Controller
                 $request->pageNumber(),
                 $request->pageSize()
             ),
-            CouponProductResource::class
+            fn (Product $product): array => (new CouponProductResource($product, $this->displayNameResolver))->resolve()
         );
     }
 
@@ -75,7 +78,9 @@ class CouponProductGroupController extends Controller
         $data = [];
 
         foreach ($result as $groupKey => $products) {
-            $data[$groupKey] = CouponProductResource::collection($products)->resolve($request);
+            $data[$groupKey] = collect($products)
+                ->map(fn (Product $product): array => (new CouponProductResource($product, $this->displayNameResolver))->resolve($request))
+                ->all();
         }
 
         return $this->success($data);

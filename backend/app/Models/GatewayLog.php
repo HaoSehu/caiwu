@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\EnsuresTraceId;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class GatewayLog extends Model
 {
+    use EnsuresTraceId;
+
     protected $fillable = [
         'gateway',
         'plugin_id',

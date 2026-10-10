@@ -7,11 +7,12 @@ namespace App\Services\Finance;
 use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
 use App\Models\Payment;
-use Carbon\CarbonImmutable;
-use Illuminate\Database\Eloquent\Builder;
+use App\Support\Concerns\FiltersDateRange;
 
 class ClientPaymentQueryService
 {
+    use FiltersDateRange;
+
     public function __construct(
         private readonly RechargePaymentService $payments,
     ) {}
@@ -160,36 +161,5 @@ class ClientPaymentQueryService
             PaymentGatewayCode::WECHAT => PaymentGatewayCode::label($gateway),
             default => $gateway,
         };
-    }
-
-    /**
-     * @param  Builder<Payment>  $query
-     * @param  array<string, mixed>  $filters
-     */
-    private function applyDateFilter($query, array $filters): void
-    {
-        $start = trim((string) ($filters['start_date'] ?? ''));
-        $end = trim((string) ($filters['end_date'] ?? ''));
-
-        if ($start === '' && $end === '') {
-            return;
-        }
-
-        if ($start !== '' && $end !== '') {
-            $query->whereBetween('created_at', [
-                CarbonImmutable::parse($start)->startOfDay(),
-                CarbonImmutable::parse($end)->endOfDay(),
-            ]);
-
-            return;
-        }
-
-        if ($start !== '') {
-            $query->where('created_at', '>=', CarbonImmutable::parse($start)->startOfDay());
-
-            return;
-        }
-
-        $query->where('created_at', '<=', CarbonImmutable::parse($end)->endOfDay());
     }
 }

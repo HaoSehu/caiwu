@@ -16,7 +16,10 @@ use App\Http\Resources\Site\V2\SiteProductQuoteResource;
 use App\Http\Resources\Site\V2\SiteProductStockResource;
 use App\Http\Resources\Site\V2\SiteProductSummaryResource;
 use App\Http\Resources\Site\V2\SiteProductTypeResource;
+use App\Models\Product;
 use App\Models\User;
+use App\Services\ProductCatalog\ProductDisplayNameResolver;
+use App\Services\ProductCatalog\ProductSiteService;
 use App\Services\ProductCatalog\ProductV2QueryService;
 use App\Services\Site\SiteProductQuoteService;
 use App\Services\Site\SiteProductReadService;
@@ -31,6 +34,8 @@ class ProductController extends Controller
         private readonly ProductV2QueryService $products,
         private readonly SiteProductReadService $siteProductReadService,
         private readonly SiteProductQuoteService $siteProductQuoteService,
+        private readonly ProductDisplayNameResolver $displayNameResolver,
+        private readonly ProductSiteService $productSiteService,
     ) {}
 
     public function types(ListProductTypesRequest $request): JsonResponse
@@ -48,14 +53,18 @@ class ProductController extends Controller
     {
         return $this->paginate(
             $this->products->paginateSiteProducts($request->validated()),
-            SiteProductSummaryResource::class
+            fn (Product $product): array => (new SiteProductSummaryResource($product, $this->displayNameResolver))->resolve()
         );
     }
 
     public function show(ShowProductRequest $request, int $product): JsonResponse
     {
         return $this->success([
-            'product' => (new SiteProductDetailResource($this->products->findSiteProduct($product)))->resolve(),
+            'product' => (new SiteProductDetailResource(
+                $this->products->findSiteProduct($product),
+                $this->displayNameResolver,
+                $this->productSiteService,
+            ))->resolve(),
         ]);
     }
 

@@ -17,6 +17,7 @@ use App\Models\Supplier;
 use App\Models\Ticket;
 use App\Models\User;
 use App\Services\ClientServiceConsole\ServiceDetailService;
+use App\Services\ClientServiceConsole\ServiceOverviewService;
 use App\Services\Finance\FinanceLedgerWriter;
 use App\Services\Integrations\Plugins\PluginBindingResolver;
 use App\Services\Integrations\Plugins\ServiceUpstreamBindingWriter;
@@ -362,6 +363,8 @@ trait HandlesAdminUserServices
             );
         }
         app(ServiceDetailService::class)->forgetDetailCaches($service);
+        // 服务名称/金额等概览字段可能已变化，事务提交后同步失效该用户概览缓存。
+        app(ServiceOverviewService::class)->forgetGroupedOverviewCache((int) $user->id);
 
         if ($newCustomHostname !== 'skip' && $previousCustomHostname !== $newCustomHostname) {
             try {
@@ -471,35 +474,11 @@ trait HandlesAdminUserServices
     }
 
     /**
-     * 用户服务模块状态
-     */
-    public function serviceModuleStatus(User $user, int $serviceId, string $type = 'host'): array
-    {
-        return $this->clientServiceConsoleService->getModuleStatusForUser($user, $serviceId, $type);
-    }
-
-    /**
-     * 用户服务重装系统选项
-     */
-    public function serviceReinstallOptions(User $user, int $serviceId, bool $forceRefresh = false): array
-    {
-        return $this->clientServiceConsoleService->getReinstallOptionsForUser($user, $serviceId, $forceRefresh);
-    }
-
-    /**
      * 用户服务重置密码
      */
     public function serviceResetPassword(User $user, int $serviceId, array $data, array $context = []): array
     {
         return $this->clientServiceConsoleService->resetPasswordForUser($user, $serviceId, $data, $context);
-    }
-
-    /**
-     * 用户服务重装系统
-     */
-    public function serviceReinstall(User $user, int $serviceId, array $data, array $context = []): array
-    {
-        return $this->clientServiceConsoleService->reinstallForUser($user, $serviceId, $data, $context);
     }
 
     /**
@@ -791,6 +770,9 @@ trait HandlesAdminUserServices
             );
         }
 
+        // 管理员手工开通的服务已落库（概览新增该项），事务提交后失效该用户概览缓存。
+        app(ServiceOverviewService::class)->forgetGroupedOverviewCache((int) $user->id);
+
         try {
             $invoice = $service->invoice ?? $service->order?->invoice;
             $this->operationLogService->write(
@@ -976,6 +958,9 @@ trait HandlesAdminUserServices
             // PAID 订单若需释放库存占用，由管理员显式取消订单，不再回补快照。
             $service->delete();
         });
+
+        // 服务记录已删除（概览移除该项），事务提交后失效该用户概览缓存。
+        app(ServiceOverviewService::class)->forgetGroupedOverviewCache((int) $user->id);
 
         try {
             $this->operationLogService->write(

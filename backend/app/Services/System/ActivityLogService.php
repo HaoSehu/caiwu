@@ -9,7 +9,9 @@ use App\Models\AdminUser;
 use App\Models\User;
 use App\Support\ActivityLogStream;
 use App\Support\PayloadLimiter;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Throwable;
 
 /**
  * activity_logs 唯一在线真源的统一写入入口。
@@ -65,6 +67,53 @@ class ActivityLogService
             'ip_address' => null,
             'stream' => $stream,
             'trace_id' => $this->contextTraceId($context),
+        ]);
+    }
+
+    /**
+     * 与 log() 相同（当前请求的操作者），但审计写入失败不得阻断业务：仅记录告警。
+     */
+    public function logSafely(
+        string $module,
+        string $action,
+        string $description,
+        ?string $subjectType = null,
+        ?int $subjectId = null,
+        array $context = [],
+    ): void {
+        try {
+            $this->log($module, $action, $description, $subjectType, $subjectId, $context);
+        } catch (Throwable $exception) {
+            $this->warnWriteFailure($module, $action, $exception);
+        }
+    }
+
+    /**
+     * 与 logSystem() 相同（系统动作），但审计写入失败不得阻断业务：仅记录告警。
+     */
+    public function logSystemSafely(
+        string $module,
+        string $action,
+        string $description,
+        ?string $subjectType = null,
+        ?int $subjectId = null,
+        array $context = [],
+        ?string $stream = null,
+    ): void {
+        try {
+            $this->logSystem($module, $action, $description, $subjectType, $subjectId, $context, $stream);
+        } catch (Throwable $exception) {
+            $this->warnWriteFailure($module, $action, $exception);
+        }
+    }
+
+    private function warnWriteFailure(string $module, string $action, Throwable $exception): void
+    {
+        Log::warning('[审计] 活动日志写入失败，已跳过本条记录', [
+            'module' => $module,
+            'action' => $action,
+            'message' => $exception->getMessage(),
+            'exception' => $exception::class,
         ]);
     }
 

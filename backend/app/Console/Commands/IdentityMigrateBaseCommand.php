@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Console\Commands\Concerns\RefusesLegacyMigrationExecution;
 use App\Services\System\IdentityMigrationService;
 use Illuminate\Console\Command;
 
@@ -14,6 +15,8 @@ use Illuminate\Console\Command;
  */
 abstract class IdentityMigrateBaseCommand extends Command
 {
+    use RefusesLegacyMigrationExecution;
+
     abstract protected function sourceTable(): string;
 
     abstract protected function targetTable(): string;

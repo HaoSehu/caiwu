@@ -195,9 +195,15 @@ class DatabaseEngineeringService
     }
 
     /**
+     * 核心关系规范化。默认执行写入；`$dryRun` 为真时只按相同谓词统计将影响的行数，
+     * 不执行任何 DDL/DML（列可空化是 ALTER，MySQL 会隐式提交，无法用事务回滚）。
+     *
+     * 注意：dry-run 在归一化前的原始数据上独立计数，孤儿清除与 trace_id 回填等项
+     * 相对真实执行会略偏大（真实执行中前面的归一化会减少后续行基数），属安全方向的上界估算。
+     *
      * @return array<string, int>
      */
-    public function normalizeCoreRelations(): array
+    public function normalizeCoreRelations(bool $dryRun = false): array
     {
         $summary = [
             'services_order_id_zero_to_null' => 0,
@@ -216,6 +222,40 @@ class DatabaseEngineeringService
             'payments_orphan_user_or_invoice_reported' => 0,
             'trace_ids_backfilled' => 0,
         ];
+
+        // dry-run：与真实执行使用同一组谓词，仅做计数，不写入、不改结构。
+        if ($dryRun) {
+            $summary['services_order_id_zero_to_null'] = $this->countEquals('services', 'order_id', 0);
+            $summary['services_invoice_id_zero_to_null'] = $this->countEquals('services', 'invoice_id', 0);
+            $summary['payments_order_id_zero_to_null'] = $this->countEquals('payments', 'order_id', 0);
+            $summary['payments_invoice_id_zero_to_null'] = $this->countEquals('payments', 'invoice_id', 0);
+            $summary['invoices_order_id_zero_to_null'] = $this->countEquals('invoices', 'order_id', 0);
+
+            $summary['invoice_items_deleted_orphans'] = $this->countOrphans('invoice_items', 'invoice_id', 'invoices', 'id');
+            $summary['payment_callbacks_deleted_orphans'] = $this->countOrphans('payment_callbacks', 'payment_id', 'payments', 'id');
+            $summary['user_accounts_deleted_orphans'] = $this->countOrphans('user_accounts', 'user_id', 'users', 'id');
+            $summary['ticket_replies_deleted_orphans'] = $this->countOrphans('ticket_replies', 'ticket_id', 'tickets', 'id');
+
+            $summary['services_deleted_orphan_user_or_product'] =
+                $this->countOrphans('services', 'user_id', 'users', 'id')
+                + $this->countOrphans('services', 'product_id', 'products', 'id');
+            $summary['services_cleared_orphan_invoice_id'] = $this->countOrphans('services', 'invoice_id', 'invoices', 'id');
+            $summary['invoices_cleared_orphan_order_id'] = $this->countOrphans('invoices', 'order_id', 'orders', 'id');
+            $summary['invoices_deleted_orphan_user_or_product'] =
+                $this->countOrphans('invoices', 'user_id', 'users', 'id')
+                + $this->countOrphans('invoices', 'product_id', 'products', 'id');
+            $summary['payments_orphan_user_or_invoice_reported'] =
+                $this->countOrphans('payments', 'user_id', 'users', 'id')
+                + $this->countOrphans('payments', 'invoice_id', 'invoices', 'id');
+
+            $summary['trace_ids_backfilled'] =
+                $this->countMissingTraceId('invoices')
+                + $this->countMissingTraceId('payments')
+                + $this->countMissingTraceId('services')
+                + $this->countMissingTraceId('account_transactions');
+
+            return $summary;
+        }
 
         DB::transaction(function () use (&$summary): void {
             $this->ensureNullableUnsignedBigInt('services', 'order_id');
@@ -279,59 +319,6 @@ class DatabaseEngineeringService
                 $this->backfillTraceIds('services') +
                 $this->backfillTraceIds('account_transactions');
         });
-
-        return $summary;
-    }
-
-    /**
-     * @return array<string, int>
-     */
-    public function archiveLogs(int $retainDays, int $chunkSize, bool $dryRun = false): array
-    {
-        $retainDays = max($retainDays, 1);
-        $chunkSize = max($chunkSize, 1);
-        $cutoff = now()->subDays($retainDays);
-
-        $targets = [
-            'operation_logs' => 'created_at',
-            'message_logs' => 'created_at',
-            'automation_logs' => 'created_at',
-        ];
-
-        $summary = [];
-
-        foreach ($targets as $table => $column) {
-            if (! Schema::hasTable($table) || ! Schema::hasColumn($table, $column)) {
-                $summary[$table] = 0;
-
-                continue;
-            }
-
-            if ($dryRun) {
-                $summary[$table] = DB::table($table)->where($column, '<', $cutoff)->count();
-
-                continue;
-            }
-
-            $deleted = 0;
-
-            do {
-                $ids = DB::table($table)
-                    ->where($column, '<', $cutoff)
-                    ->orderBy('id')
-                    ->limit($chunkSize)
-                    ->pluck('id');
-
-                $count = $ids->count();
-                if ($count === 0) {
-                    break;
-                }
-
-                $deleted += DB::table($table)->whereIn('id', $ids->all())->delete();
-            } while ($count === $chunkSize);
-
-            $summary[$table] = $deleted;
-        }
 
         return $summary;
     }

@@ -418,13 +418,18 @@ class CouponCampaignService
         throw_if(trim((string) ($payload['name'] ?? '')) === '', new BusinessException('活动名称不能为空'));
         throw_if($weekdays === [], new BusinessException('至少选择一个发放星期'));
         throw_if($triggerTime === '', new BusinessException('发放时间不能为空'));
-        throw_if(! in_array($discountType, ['fixed', 'percentage'], true), new BusinessException('优惠类型不正确'));
+        throw_if(! in_array($discountType, ['fixed', 'percentage', 'override'], true), new BusinessException('优惠类型不正确'));
         throw_if(! in_array($discountScope, ['first_month', 'recurring', 'renew'], true), new BusinessException('优惠阶段不正确'));
         throw_if($discountValue <= 0, new BusinessException('优惠值必须大于 0'));
         throw_if($issueQuantity <= 0, new BusinessException('发放数量必须大于 0'));
 
         if ($discountType === 'percentage') {
             throw_if($discountValue > 100, new BusinessException('折扣百分比不能大于 100'));
+        }
+
+        // 覆盖价券：discount_value 即覆盖价，最低 0.01（与券模板封顶口径一致）
+        if ($discountType === 'override') {
+            throw_if($discountValue < 0.01, new BusinessException('覆盖价不能小于 0.01'));
         }
 
         if ($maxDiscountAmount !== null && $maxDiscountAmount !== '') {
@@ -578,6 +583,10 @@ class CouponCampaignService
             return Money::trimZero(number_format($discountValue / 10, 1, '.', '')).' 折优惠';
         }
 
+        if ($discountType === 'override') {
+            return '一口价 ¥'.Money::format($discountValue);
+        }
+
         return '优惠券';
     }
 
@@ -586,6 +595,7 @@ class CouponCampaignService
         return match ($discountType) {
             'fixed' => '满减券',
             'percentage' => '折扣券',
+            'override' => '覆盖价券',
             default => '优惠券',
         };
     }

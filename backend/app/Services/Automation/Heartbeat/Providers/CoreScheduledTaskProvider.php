@@ -203,6 +203,20 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
                 manualTriggerable: true,
             ),
             $this->task(
+                key: 'stale-record-prune',
+                title: '过期记录清理',
+                category: '系统维护',
+                description: '每天清理过期即无价值的记录：过期/闲置 API 令牌、密码重置令牌与超期失败任务（保留 30 天）。直接删除不归档，与 02:00 日志归档错峰。',
+                triggers: [ScheduleRule::cron('30 3 * * *')],
+                handler: fn (): array => $this->runArtisan('db:prune-stale-records', [
+                    '--execute' => true,
+                    '--json' => true,
+                ]),
+                timeout: 600,
+                lockTtlSeconds: 900,
+                manualTriggerable: true,
+            ),
+            $this->task(
                 key: 'log-capacity-snapshot',
                 title: '日志容量快照',
                 category: '系统维护',

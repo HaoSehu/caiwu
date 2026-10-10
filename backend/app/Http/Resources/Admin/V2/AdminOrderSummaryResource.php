@@ -8,7 +8,6 @@ use App\Constants\OrderStatus;
 use App\Constants\OrderType;
 use App\Models\Order;
 use App\Models\Payment;
-use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Services\ProductCatalog\ProductFullPathResolver;
 use App\Support\AdminPrivacy;
 use Illuminate\Http\Request;
@@ -16,6 +15,14 @@ use Illuminate\Http\Resources\Json\JsonResource;
 
 class AdminOrderSummaryResource extends JsonResource
 {
+    /**
+     * 依赖显式注入（B6：Resource 不再经 app() 服务定位器隐式解析，调用方负责传入）。
+     */
+    public function __construct($resource, protected readonly ProductFullPathResolver $productFullPathResolver)
+    {
+        parent::__construct($resource);
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -111,12 +118,12 @@ class AdminOrderSummaryResource extends JsonResource
 
     protected function productName(Order $order): string
     {
-        return app(ProductFullPathResolver::class)->nameForOrder($order);
+        return $this->productFullPathResolver->nameForOrder($order);
     }
 
     protected function productPath(Order $order): string
     {
-        return app(ProductFullPathResolver::class)->pathForOrder($order);
+        return $this->productFullPathResolver->pathForOrder($order);
     }
 
     protected function money(mixed $value): string
@@ -147,10 +154,5 @@ class AdminOrderSummaryResource extends JsonResource
             ])
             ->values()
             ->all();
-    }
-
-    protected function displayResolver(): ProductDisplayNameResolver
-    {
-        return app(ProductDisplayNameResolver::class);
     }
 }

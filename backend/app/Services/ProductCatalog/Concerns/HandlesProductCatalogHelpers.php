@@ -7,11 +7,14 @@ namespace App\Services\ProductCatalog\Concerns;
 use App\Exceptions\BusinessException;
 use App\Models\Product;
 use App\Support\CacheKey;
+use App\Support\Concerns\NormalizesNullableString;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 trait HandlesProductCatalogHelpers
 {
+    use NormalizesNullableString;
+
     private const ADMIN_SUMMARY_CACHE_KEY = 'catalog:admin_summary:v1';
 
     private const SITE_CATALOG_CACHE_KEY = 'catalog:site:v1';
@@ -152,13 +155,6 @@ trait HandlesProductCatalogHelpers
     private function normalizeConfigOptions(mixed $configOptions): array
     {
         return is_array($configOptions) ? $configOptions : [];
-    }
-
-    private function normalizeNullableString(mixed $value): ?string
-    {
-        $value = trim((string) $value);
-
-        return $value !== '' ? $value : null;
     }
 
     private function normalizeNullableInt(mixed $value): ?int

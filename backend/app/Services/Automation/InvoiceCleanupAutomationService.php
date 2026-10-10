@@ -76,53 +76,58 @@ class InvoiceCleanupAutomationService
         $ttlSeconds = CheckoutSecurityService::paymentSessionTtlSeconds();
         $threshold = now()->subSeconds($ttlSeconds);
 
-        $invoices = Invoice::query()
+        $count = 0;
+
+        // 与订单/充值单清理同口径：分批装载，避免账单积压时一次性载入全表撑爆内存、拖长事务。
+        // 这里用 chunkById 而非 chunk：清理会把命中的账单状态改为 CANCELLED，使其从 UNPAID
+        // 结果集中消失；若用基于 offset 的 chunk，结果集收缩会导致分页偏移漂移、漏处理后续账单。
+        // chunkById 以主键 id 为游标（id > 上一批最大值）推进，可安全规避该问题。
+        // 分块大小 100 与既有订单/充值单清理保持一致。
+        Invoice::query()
             ->with(['product'])
             ->where('status', InvoiceStatus::UNPAID)
             ->where('created_at', '<=', $threshold)
-            ->get();
+            ->chunkById(100, function ($invoices) use (&$count, $ttlSeconds): void {
+                foreach ($invoices as $invoice) {
+                    // 管理员手动开通产生的挂账账单按 due_date 计费，不受 5 分钟支付会话窗口约束
+                    if ($this->isAdminManualInvoice($invoice)) {
+                        continue;
+                    }
 
-        $count = 0;
+                    // D6A-01：系统生成的续费账单（自动续费扣款账单、到期前定时建单）按 due_date 计费，
+                    // 到期前/逾期 1、3、5 天的提醒与催收链路都依赖这张账单存活；
+                    // 创建 5 分钟即被取消会导致催收提醒永不可达、用户账单"闪现即消失"。
+                    // 续费账单不走 5 分钟支付会话，豁免本轮清理。
+                    if ((string) $invoice->type === InvoiceType::RENEW) {
+                        continue;
+                    }
 
-        foreach ($invoices as $invoice) {
-            // 管理员手动开通产生的挂账账单按 due_date 计费，不受 5 分钟支付会话窗口约束
-            if ($this->isAdminManualInvoice($invoice)) {
-                continue;
-            }
+                    try {
+                        $updated = $this->checkoutService->cancelExpiredUnpaidInvoice($invoice, [
+                            'actor_type' => 'system',
+                            'actor_name' => 'schedule:invoice-cleanup',
+                            'reason' => 'payment_window_expired',
+                        ]);
 
-            // D6A-01：系统生成的续费账单（自动续费扣款账单、到期前定时建单）按 due_date 计费，
-            // 到期前/逾期 1、3、5 天的提醒与催收链路都依赖这张账单存活；
-            // 创建 5 分钟即被取消会导致催收提醒永不可达、用户账单"闪现即消失"。
-            // 续费账单不走 5 分钟支付会话，豁免本轮清理。
-            if ((string) $invoice->type === InvoiceType::RENEW) {
-                continue;
-            }
+                        if ((int) $updated->status !== InvoiceStatus::CANCELLED) {
+                            continue;
+                        }
 
-            try {
-                $updated = $this->checkoutService->cancelExpiredUnpaidInvoice($invoice, [
-                    'actor_type' => 'system',
-                    'actor_name' => 'schedule:invoice-cleanup',
-                    'reason' => 'payment_window_expired',
-                ]);
-
-                if ((int) $updated->status !== InvoiceStatus::CANCELLED) {
-                    continue;
+                        Log::info('[定时任务] 超时未支付账单自动关闭', [
+                            'invoice_id' => $invoice->id,
+                            'invoice_no' => $invoice->invoice_no,
+                            'expire_after_seconds' => $ttlSeconds,
+                            'age_minutes' => $invoice->created_at ? $invoice->created_at->diffInMinutes(now()) : null,
+                        ]);
+                        $count++;
+                    } catch (\Throwable $exception) {
+                        Log::warning('[定时任务] 账单自动关闭失败', [
+                            'invoice_id' => $invoice->id,
+                            'message' => $exception->getMessage(),
+                        ]);
+                    }
                 }
-
-                Log::info('[定时任务] 超时未支付账单自动关闭', [
-                    'invoice_id' => $invoice->id,
-                    'invoice_no' => $invoice->invoice_no,
-                    'expire_after_seconds' => $ttlSeconds,
-                    'age_minutes' => $invoice->created_at ? $invoice->created_at->diffInMinutes(now()) : null,
-                ]);
-                $count++;
-            } catch (\Throwable $exception) {
-                Log::warning('[定时任务] 账单自动关闭失败', [
-                    'invoice_id' => $invoice->id,
-                    'message' => $exception->getMessage(),
-                ]);
-            }
-        }
+            });
 
         return $count;
     }

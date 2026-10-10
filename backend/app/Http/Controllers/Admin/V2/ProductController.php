@@ -27,6 +27,7 @@ use App\Http\Resources\Admin\V2\AdminProductSummaryResource;
 use App\Http\Resources\Admin\V2\AdminProductSummaryStatsResource;
 use App\Models\Product;
 use App\Services\Admin\V2\AdminCatalogActionV2Service;
+use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Services\ProductCatalog\ProductV2QueryService;
 use Illuminate\Http\JsonResponse;
 
@@ -35,13 +36,14 @@ class ProductController extends Controller
     public function __construct(
         private readonly ProductV2QueryService $products,
         private readonly AdminCatalogActionV2Service $actions,
+        private readonly ProductDisplayNameResolver $displayNameResolver,
     ) {}
 
     public function index(ListProductsRequest $request): JsonResponse
     {
         return $this->paginate(
             $this->products->paginateAdminProducts($request->validated()),
-            AdminProductSummaryResource::class
+            fn (Product $product): array => (new AdminProductSummaryResource($product, $this->displayNameResolver))->resolve()
         );
     }
 
@@ -53,7 +55,7 @@ class ProductController extends Controller
     public function show(ShowProductRequest $request, int $product): JsonResponse
     {
         return $this->success([
-            'product' => (new AdminProductDetailResource($this->products->findAdminProduct($product)))->resolve(),
+            'product' => (new AdminProductDetailResource($this->products->findAdminProduct($product), $this->displayNameResolver))->resolve(),
         ]);
     }
 
@@ -69,7 +71,7 @@ class ProductController extends Controller
         $product = $this->actions->createProduct($request->validated());
 
         return $this->success([
-            'product' => AdminProductDetailResource::make($this->products->findAdminProduct((int) $product->id))->resolve(),
+            'product' => AdminProductDetailResource::make($this->products->findAdminProduct((int) $product->id), $this->displayNameResolver)->resolve(),
         ], '商品创建成功');
     }
 
@@ -78,7 +80,7 @@ class ProductController extends Controller
         $product = $this->actions->updateProduct($product, $request->validated());
 
         return $this->success([
-            'product' => AdminProductDetailResource::make($this->products->findAdminProduct((int) $product->id))->resolve(),
+            'product' => AdminProductDetailResource::make($this->products->findAdminProduct((int) $product->id), $this->displayNameResolver)->resolve(),
         ], '商品更新成功');
     }
 
@@ -94,7 +96,7 @@ class ProductController extends Controller
         $restored = $this->actions->restoreProduct($product);
 
         return $this->success([
-            'product' => AdminProductDetailResource::make($this->products->findAdminProduct((int) $restored->id))->resolve(),
+            'product' => AdminProductDetailResource::make($this->products->findAdminProduct((int) $restored->id), $this->displayNameResolver)->resolve(),
         ], '商品已恢复');
     }
 

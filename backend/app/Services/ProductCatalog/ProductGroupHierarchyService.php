@@ -9,12 +9,15 @@ use App\Models\FirstProductGroup;
 use App\Models\Product;
 use App\Models\SecondProductGroup;
 use App\Models\ThirdProductGroup;
+use App\Support\Concerns\NormalizesNullableString;
 use App\Support\SchemaMetadataCache;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
 
 class ProductGroupHierarchyService
 {
+    use NormalizesNullableString;
+
     public function tablesReady(): bool
     {
         return SchemaMetadataCache::hasTable('first_product_groups')
@@ -184,7 +187,7 @@ class ProductGroupHierarchyService
         $payload = [
             'name' => $label !== '' ? $label : $code,
             'slug' => $slug,
-            'icon' => $this->nullableString($item['icon'] ?? null),
+            'icon' => $this->normalizeNullableString($item['icon'] ?? null),
             'sort_order' => $sortOrder > 0 ? $sortOrder : $this->productTypeSortOrder($code),
             'is_visible' => (bool) ($item['is_hidden'] ?? false) ? 0 : 1,
             'is_system' => (bool) ($item['is_builtin'] ?? false) ? 1 : 0,
@@ -274,12 +277,5 @@ class ProductGroupHierarchyService
     private function normalizeProductTypeCode(mixed $value): string
     {
         return trim((string) $value);
-    }
-
-    private function nullableString(mixed $value): ?string
-    {
-        $value = trim((string) $value);
-
-        return $value !== '' ? $value : null;
     }
 }

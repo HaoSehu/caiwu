@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\EnsuresTraceId;
 use Illuminate\Database\Eloquent\Model;
 
 class PaymentCallback extends Model
 {
+    use EnsuresTraceId;
+
     protected $fillable = [
         'payment_id',
         'plugin_id',

@@ -30,9 +30,4 @@ class UserNotification extends Model
     {
         return $this->belongsTo(User::class, 'user_id');
     }
-
-    public function scopeUnread($query)
-    {
-        return $query->whereNull('read_at');
-    }
 }

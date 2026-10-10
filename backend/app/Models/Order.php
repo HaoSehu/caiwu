@@ -174,11 +174,6 @@ class Order extends Model
         return $this->hasMany(RechargeRecord::class);
     }
 
-    public function referralReward(): HasOne
-    {
-        return $this->hasOne(ReferralReward::class);
-    }
-
     public static function generateOrderNo(?CarbonInterface $time = null, ?string $suffix = null): string
     {
         if ($suffix !== null) {
@@ -186,11 +181,6 @@ class Order extends Model
         }
 
         return OrderInvoiceNoGenerator::generatePair($time)['order_no'];
-    }
-
-    public function scopeOfStatus($query, int $status)
-    {
-        return $query->where('status', $status);
     }
 
     private function encodeSnapshotArray(?array $value): ?string

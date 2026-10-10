@@ -5,6 +5,7 @@ namespace App\Services\Content;
 use App\Exceptions\BusinessException;
 use App\Models\ContentArticle;
 use App\Models\ContentCategory;
+use App\Support\Concerns\NormalizesNullableString;
 use App\Support\ContentExcerpt;
 use App\Support\ContentPublishedCacheVersion;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -16,6 +17,8 @@ use Illuminate\Support\Str;
 
 class ContentArticleService
 {
+    use NormalizesNullableString;
+
     private const PUBLISHED_OVERVIEW_CACHE_TTL_SECONDS = 300; // 5分钟：文章列表不频繁变化
 
     private const PUBLISHED_CATEGORIES_CACHE_TTL_SECONDS = 600; // 10分钟：分类信息更稳定
@@ -400,13 +403,6 @@ class ContentArticleService
         }
 
         return $candidate;
-    }
-
-    private function normalizeNullableString(mixed $value): ?string
-    {
-        $value = trim((string) $value);
-
-        return $value !== '' ? $value : null;
     }
 
     private function publishedCacheKey(string $suffix): string

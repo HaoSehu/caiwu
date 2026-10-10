@@ -8,7 +8,6 @@ use App\Http\Requests\Client\V2\Ticket\ReplyRequest;
 use App\Http\Requests\Client\V2\Ticket\ServiceOptionsRequest;
 use App\Http\Requests\Client\V2\Ticket\StoreRequest;
 use App\Http\Requests\Client\V2\Ticket\UploadImageRequest;
-use App\Models\Ticket;
 use App\Services\Ticket\TicketService;
 use App\Traits\ApiResponse;
 use Illuminate\Http\Request;
@@ -61,14 +60,14 @@ class TicketWorkflowController extends Controller
 
     public function show(Request $request, int $id)
     {
-        $ticket = Ticket::where('user_id', $request->user()->id)->findOrFail($id);
+        $ticket = $this->ticketService->findForUser((int) $request->user()->id, $id);
 
         return $this->success($this->ticketService->detail($ticket));
     }
 
     public function reply(ReplyRequest $request, int $id)
     {
-        $ticket = Ticket::where('user_id', $request->user()->id)->findOrFail($id);
+        $ticket = $this->ticketService->findForUser((int) $request->user()->id, $id);
         $data = $request->validated();
         $reply = $this->ticketService->clientReply(
             $ticket,
@@ -83,7 +82,7 @@ class TicketWorkflowController extends Controller
 
     public function recall(Request $request, int $id, int $replyId)
     {
-        $ticket = Ticket::where('user_id', $request->user()->id)->findOrFail($id);
+        $ticket = $this->ticketService->findForUser((int) $request->user()->id, $id);
         $this->ticketService->recallReply($ticket, $replyId, $request->user()->id);
 
         return $this->success(null, '消息已撤回');
@@ -91,7 +90,7 @@ class TicketWorkflowController extends Controller
 
     public function close(Request $request, int $id)
     {
-        $ticket = Ticket::where('user_id', $request->user()->id)->findOrFail($id);
+        $ticket = $this->ticketService->findForUser((int) $request->user()->id, $id);
         $this->ticketService->clientClose($ticket, $request->user()->id);
 
         return $this->success(null, '工单已关闭');
@@ -99,7 +98,7 @@ class TicketWorkflowController extends Controller
 
     public function reopen(Request $request, int $id)
     {
-        $ticket = Ticket::where('user_id', $request->user()->id)->findOrFail($id);
+        $ticket = $this->ticketService->findForUser((int) $request->user()->id, $id);
         $updated = $this->ticketService->reopen($ticket, [
             'operator_type' => 'client',
             'operator_id' => (int) $request->user()->id,

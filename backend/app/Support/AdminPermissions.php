@@ -53,6 +53,17 @@ class AdminPermissions
 
     public const PRODUCT_SYNC = 'product.sync';
 
+    // 券生命周期权限与商品目录解耦：运营只读岗可用 coupon.list，
+    // 日常运营面 coupon.manage，定向发放与预留的高额发放独立审计。
+    // 面额阈值体系后置，coupon.high_value_grant 先注册预留（暂不挂校验入口）。
+    public const COUPON_LIST = 'coupon.list';
+
+    public const COUPON_MANAGE = 'coupon.manage';
+
+    public const COUPON_GRANT = 'coupon.grant';
+
+    public const COUPON_HIGH_VALUE_GRANT = 'coupon.high_value_grant';
+
     public const SUPPLIER_LIST = 'supplier.list';
 
     public const SUPPLIER_DETAIL = 'supplier.detail';
@@ -98,6 +109,9 @@ class AdminPermissions
     public const REFERRAL_LIST = 'referral.list';
 
     public const FINANCE_REPORT = 'finance.report';
+
+    // 专用权限码：补录红字冲抵属资金纠错写入，默认不下发任何内置角色，仅 super_admin 可授权
+    public const FINANCE_MANUAL_REVERSAL = 'finance.manual_reversal';
 
     public const FINANCE_WITHDRAW = 'finance.withdraw';
 
@@ -259,6 +273,9 @@ class AdminPermissions
             self::TICKET_MANAGE => [self::TICKET_LIST, self::TICKET_REPLY],
             self::PRODUCT_MANAGE => [self::PRODUCT_LIST],
             self::PRODUCT_SYNC => [self::PRODUCT_LIST],
+            self::COUPON_MANAGE => [self::COUPON_LIST],
+            self::COUPON_GRANT => [self::COUPON_LIST],
+            self::COUPON_HIGH_VALUE_GRANT => [self::COUPON_LIST],
             self::SUPPLIER_DETAIL => [self::SUPPLIER_LIST],
             self::SUPPLIER_MANAGE => [self::SUPPLIER_LIST, self::SUPPLIER_DETAIL],
             self::SUPPLIER_SYNC => [self::SUPPLIER_LIST, self::SUPPLIER_DETAIL],

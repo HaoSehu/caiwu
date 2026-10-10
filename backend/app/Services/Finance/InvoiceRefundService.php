@@ -70,7 +70,7 @@ class InvoiceRefundService
                     );
 
                     // 充值账单到账时余额已同步增加、补录账单为系统外收款凭证：
-                    // 两者退回余额都没有对应的资金流出，等于凭空增加余额，必须走原路退款或红字冲抵。
+                    // 两者退回余额都没有对应的资金流出，等于凭空增加余额，不得退回余额（需红字冲抵等其它方式）。
                     throw_if(
                         in_array((string) $lockedInvoice->type, [InvoiceType::RECHARGE, InvoiceType::MANUAL], true),
                         new BusinessException('充值/补录账单不支持退回余额')
@@ -132,12 +132,10 @@ class InvoiceRefundService
                         $refundReason = '后台退回用户余额';
                     }
 
-                    $refundMethod = trim((string) ($payload['refund_method'] ?? 'balance')) ?: 'balance';
-                    $refundMethodLabel = trim((string) ($payload['refund_method_label'] ?? ''));
-
-                    if ($refundMethodLabel === '') {
-                        $refundMethodLabel = $refundMethod === 'original' ? '原路退款' : '退回余额';
-                    }
+                    // 退款口径（2026-10-10 裁决）：暂时不提供原路退款——支付插件层无退款能力与契约，
+                    // 只保留余额退回，refund_method 恒为 balance，不产生「原路退款」标签。
+                    $refundMethod = 'balance';
+                    $refundMethodLabel = trim((string) ($payload['refund_method_label'] ?? '')) ?: '退回余额';
 
                     $balanceAfter = $this->setUserBalance($lockedUser, $this->getUserBalance($lockedUser) + $refundAmount);
                     $transaction = $this->financeLedgerWriter->createBalanceLog(

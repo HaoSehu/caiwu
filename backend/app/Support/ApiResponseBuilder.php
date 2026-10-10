@@ -31,11 +31,24 @@ class ApiResponseBuilder
         ], $status ?? self::httpStatusForErrorCode($code), [], self::JSON_ENCODING_OPTIONS);
     }
 
-    public static function pagination(LengthAwarePaginator $paginator, ?string $resourceClass = null, array $extra = []): array
+    /**
+     * 分页信封单点生成。
+     *
+     * @param  string|callable(mixed): mixed|null  $resourceClass  资源类名；或逐项变换回调
+     *                                                             （B6：Resource 依赖显式注入时，
+     *                                                             调用方用回调构造实例，不再经集合单参构造）
+     * @param  array<string, mixed>  $extra
+     * @return array<string, mixed>
+     */
+    public static function pagination(LengthAwarePaginator $paginator, string|callable|null $resourceClass = null, array $extra = []): array
     {
-        $list = $resourceClass
-            ? $resourceClass::collection($paginator->items())->resolve()
-            : $paginator->items();
+        if (is_callable($resourceClass)) {
+            $list = collect($paginator->items())->map($resourceClass)->values()->all();
+        } elseif (is_string($resourceClass) && $resourceClass !== '') {
+            $list = $resourceClass::collection($paginator->items())->resolve();
+        } else {
+            $list = $paginator->items();
+        }
 
         return array_merge([
             'list' => $list,

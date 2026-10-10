@@ -6,6 +6,7 @@ use App\Constants\ServiceStatus;
 use App\Constants\UserNotificationType;
 use App\Models\AutomationLog;
 use App\Models\Service;
+use App\Services\ClientServiceConsole\ServiceOverviewService;
 use App\Services\Notification\UserNotificationService;
 use App\Services\System\NotificationService;
 use App\Services\System\SettingService;
@@ -83,6 +84,9 @@ class ServiceLifecycleAutomationService
             if (! $suspended) {
                 continue;
             }
+
+            // 到期暂停事务已提交，服务状态变化影响概览状态计数，事务外失效该用户概览缓存。
+            app(ServiceOverviewService::class)->forgetGroupedOverviewCache((int) $service->user_id);
 
             Log::info('[定时任务] 服务到期自动暂停', [
                 'service_id' => $service->id,
@@ -236,6 +240,9 @@ class ServiceLifecycleAutomationService
             if (! $suspendedAt instanceof Carbon) {
                 continue;
             }
+
+            // 到期取消事务已提交，服务状态变化影响概览状态计数，事务外失效该用户概览缓存。
+            app(ServiceOverviewService::class)->forgetGroupedOverviewCache((int) $service->user_id);
 
             Log::info('[定时任务] 服务超保留期自动取消', [
                 'service_id' => $service->id,

@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace App\Http\Resources\Admin\V2;
 
+use App\Http\Resources\Concerns\StripsSensitiveResourceData;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 class AdminSupplierRemoteProductsResource extends JsonResource
 {
+    use StripsSensitiveResourceData;
+
     /**
      * @return array<string, mixed>
      */
@@ -77,20 +80,5 @@ class AdminSupplierRemoteProductsResource extends JsonResource
         }
 
         return $sanitized;
-    }
-
-    private function isSensitiveKey(mixed $key): bool
-    {
-        if (! is_string($key)) {
-            return false;
-        }
-
-        foreach (['password', 'secret', 'api_key', 'token', 'raw_response', 'third_party_response'] as $needle) {
-            if (str_contains(strtolower($key), $needle)) {
-                return true;
-            }
-        }
-
-        return false;
     }
 }

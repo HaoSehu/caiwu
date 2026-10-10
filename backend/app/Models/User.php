@@ -315,11 +315,6 @@ class User extends Authenticatable
         return $this->hasMany(ReferralReward::class, 'referrer_user_id');
     }
 
-    public function referralWithdrawals(): HasMany
-    {
-        return $this->hasMany(ReferralWithdrawal::class);
-    }
-
     public function services(): HasMany
     {
         return $this->hasMany(Service::class);
@@ -340,11 +335,6 @@ class User extends Authenticatable
         return $this->hasMany(Payment::class);
     }
 
-    public function accountTransactions(): HasMany
-    {
-        return $this->hasMany(AccountTransaction::class, 'user_id');
-    }
-
     public function rechargeRecords(): HasMany
     {
         return $this->hasMany(RechargeRecord::class);
@@ -358,11 +348,6 @@ class User extends Authenticatable
     public function tickets(): HasMany
     {
         return $this->hasMany(Ticket::class);
-    }
-
-    public function verificationHistories(): HasMany
-    {
-        return $this->hasMany(VerificationHistory::class);
     }
 
     // -------- 作用域 --------

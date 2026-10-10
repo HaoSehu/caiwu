@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace App\Http\Resources\Admin\V2;
 
+use App\Http\Resources\Concerns\StripsSensitiveResourceData;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 class AdminInvoiceSummaryResource extends JsonResource
 {
+    use StripsSensitiveResourceData;
+
     /**
      * @return array<string, mixed>
      */
@@ -124,36 +127,5 @@ class AdminInvoiceSummaryResource extends JsonResource
             ->map(fn (array $item): array => $this->stripSensitiveKeys($item))
             ->values()
             ->all();
-    }
-
-    /**
-     * @param  array<string, mixed>  $payload
-     * @return array<string, mixed>
-     */
-    protected function stripSensitiveKeys(array $payload): array
-    {
-        $clean = [];
-
-        foreach ($payload as $key => $value) {
-            $normalized = strtolower((string) $key);
-            if ($this->isSensitiveKey($normalized)) {
-                continue;
-            }
-
-            $clean[$key] = is_array($value) ? $this->stripSensitiveKeys($value) : $value;
-        }
-
-        return $clean;
-    }
-
-    protected function isSensitiveKey(string $key): bool
-    {
-        foreach (['password', 'secret', 'api_key', 'raw_response', 'third_party_response'] as $needle) {
-            if (str_contains($key, $needle)) {
-                return true;
-            }
-        }
-
-        return false;
     }
 }

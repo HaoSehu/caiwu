@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Resources\Admin\V2;
 
+use App\Http\Resources\Concerns\StripsSensitiveResourceData;
 use App\Support\SensitiveDataSanitizer;
 use App\Support\TextSanitizer;
 use Illuminate\Http\Request;
@@ -11,6 +12,8 @@ use Illuminate\Http\Resources\Json\JsonResource;
 
 class AdminScheduleOverviewResource extends JsonResource
 {
+    use StripsSensitiveResourceData;
+
     private const TASK_LIMIT = 50;
 
     private const LOG_LIMIT = 20;
@@ -195,30 +198,5 @@ class AdminScheduleOverviewResource extends JsonResource
         $text = trim(preg_replace('/\s+/u', ' ', $text) ?? $text);
 
         return TextSanitizer::truncateWithEllipsis($text, self::TEXT_LIMIT);
-    }
-
-    private function isSensitiveKey(string $key): bool
-    {
-        $normalized = strtolower(trim($key));
-
-        foreach ([
-            'password',
-            'secret',
-            'api_key',
-            'raw_response',
-            'third_party_response',
-            'token',
-            'authorization',
-            'cookie',
-            'signature',
-            'private_key',
-            'public_key',
-        ] as $needle) {
-            if (str_contains($normalized, $needle)) {
-                return true;
-            }
-        }
-
-        return false;
     }
 }

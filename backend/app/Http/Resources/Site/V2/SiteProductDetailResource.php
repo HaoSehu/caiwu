@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Resources\Site\V2;
 
 use App\Constants\ProductType;
+use App\Http\Resources\Concerns\StripsSensitiveResourceData;
 use App\Models\Product;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Services\ProductCatalog\ProductSiteService;
@@ -14,6 +15,8 @@ use Illuminate\Http\Resources\Json\JsonResource;
 
 class SiteProductDetailResource extends JsonResource
 {
+    use StripsSensitiveResourceData;
+
     private const BILLING_CYCLES = [
         'monthly' => '月付',
         'quarterly' => '季付',
@@ -22,15 +25,26 @@ class SiteProductDetailResource extends JsonResource
     ];
 
     /**
+     * 依赖显式注入（B6：Resource 不再经 app() 服务定位器隐式解析，调用方负责传入）。
+     */
+    public function __construct(
+        $resource,
+        private readonly ProductDisplayNameResolver $displayNameResolver,
+        private readonly ProductSiteService $productSiteService,
+    ) {
+        parent::__construct($resource);
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function toArray(Request $request): array
     {
         /** @var Product $product */
         $product = $this->resource;
-        $display = app(ProductDisplayNameResolver::class)->resolveForProduct($product);
+        $display = $this->displayNameResolver->resolveForProduct($product);
         $hierarchy = ProductGroupHierarchyFields::fromProduct($product);
-        $cpuModelPayload = app(ProductSiteService::class)->cpuModelPayloadForProduct($product);
+        $cpuModelPayload = $this->productSiteService->cpuModelPayloadForProduct($product);
         $productType = (string) ($hierarchy['product_type'] ?? $hierarchy['service_type_code'] ?? $product->product_type ?? '');
         $pricing = $this->pricing($product);
         $primaryCycle = $this->primaryCycle($pricing);
@@ -245,18 +259,5 @@ class SiteProductDetailResource extends JsonResource
         }
 
         return $clean;
-    }
-
-    private function isSensitiveKey(string $key): bool
-    {
-        $normalized = strtolower($key);
-
-        foreach (['password', 'secret', 'api_key', 'raw_response', 'third_party_response'] as $needle) {
-            if (str_contains($normalized, $needle)) {
-                return true;
-            }
-        }
-
-        return false;
     }
 }

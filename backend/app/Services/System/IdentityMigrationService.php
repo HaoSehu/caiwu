@@ -187,11 +187,6 @@ class IdentityMigrationService
         );
     }
 
-    public function targetTableHasRows(string $table): bool
-    {
-        return $this->targetCount($table) > 0;
-    }
-
     /**
      * @param  list<string>|null  $columns
      * @return array<int, object>

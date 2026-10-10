@@ -6,11 +6,14 @@ namespace App\Http\Resources\Admin\V2;
 
 use App\Constants\OrderStatus;
 use App\Constants\OrderType;
+use App\Http\Resources\Concerns\StripsSensitiveResourceData;
 use App\Models\Order;
 use Illuminate\Http\Request;
 
 class AdminOrderDetailResource extends AdminOrderSummaryResource
 {
+    use StripsSensitiveResourceData;
+
     /**
      * @return array<string, mixed>
      */
@@ -91,42 +94,5 @@ class AdminOrderDetailResource extends AdminOrderSummaryResource
             'discount_type' => (string) ($coupon?->discount_type ?? ($snapshot['discount_type'] ?? '')),
             'discount_value' => (string) ($coupon?->discount_value ?? ($snapshot['discount_value'] ?? '')),
         ];
-    }
-
-    /**
-     * @param  array<string, mixed>  $payload
-     * @return array<string, mixed>
-     */
-    private function stripSensitiveKeys(array $payload): array
-    {
-        $clean = [];
-
-        foreach ($payload as $key => $value) {
-            $normalized = strtolower((string) $key);
-            if ($this->isSensitiveKey($normalized)) {
-                continue;
-            }
-
-            if (is_array($value)) {
-                $clean[$key] = $this->stripSensitiveKeys($value);
-
-                continue;
-            }
-
-            $clean[$key] = $value;
-        }
-
-        return $clean;
-    }
-
-    private function isSensitiveKey(string $key): bool
-    {
-        foreach (['password', 'secret', 'api_key', 'raw_response', 'third_party_response', 'token'] as $needle) {
-            if (str_contains($key, $needle)) {
-                return true;
-            }
-        }
-
-        return false;
     }
 }

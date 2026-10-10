@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\EnsuresTraceId;
 use Illuminate\Database\Eloquent\Model;
 
 class ReferralWithdrawal extends Model
 {
+    use EnsuresTraceId;
+
     public const METHOD_BALANCE = 'balance';
 
     public const METHOD_ALIPAY = 'alipay';

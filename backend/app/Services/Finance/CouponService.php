@@ -13,7 +13,6 @@ use App\Constants\UserCouponStatus;
 use App\Exceptions\BusinessException;
 use App\Jobs\SyncInvoiceCouponUsageJob;
 use App\Models\Coupon;
-use App\Models\FirstProductGroup;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Product;
@@ -54,8 +53,11 @@ class CouponService
      * 允许的折扣类型。请求层（Store/UpdateCouponRequest）已限制，此处再校验一次：
      * calculateDiscountAmount 对未知类型返回 0，会被判「当前优惠券不可用」，
      * 落库即成永久不可用的死券，故服务层必须与请求层同口径拦截。
+     *
+     * override（覆盖价券，G-1）：discount_value 即「覆盖价」——用户实付金额，
+     * 最低应收 0.01（与现有封顶 amount-0.01 一致，不产生 0 元账单）。
      */
-    private const DISCOUNT_TYPES = ['fixed', 'percentage'];
+    private const DISCOUNT_TYPES = ['fixed', 'percentage', 'override'];
 
     private const USED_ORDER_STATUSES = [
         OrderStatus::PAID,
@@ -290,215 +292,6 @@ class CouponService
         });
     }
 
-    public function adminProductTree(): array
-    {
-        $groups = FirstProductGroup::query()
-            ->select(['id', 'code', 'name', 'product_type', 'sort_order', 'is_visible'])
-            ->with([
-                'secondProductGroups' => fn ($query) => $query
-                    ->select(['id', 'first_product_group_id', 'name', 'sort_order', 'is_visible'])
-                    ->orderBy('sort_order')
-                    ->orderBy('id'),
-                'secondProductGroups.thirdProductGroups' => fn ($query) => $query
-                    ->select(['id', 'second_product_group_id', 'name', 'sort_order', 'is_visible'])
-                    ->orderBy('sort_order')
-                    ->orderBy('id'),
-            ])
-            ->orderBy('sort_order')
-            ->orderBy('id')
-            ->get();
-
-        $productsByGroup = Product::query()
-            ->select([
-                'id',
-                'product_group_id',
-                'service_type_code',
-                'product_type',
-                'custom_display_name',
-                'pricing',
-                'status',
-                'sort_order',
-                'purchase_requires',
-                'config_options',
-            ])
-            ->orderBy('sort_order')
-            ->orderBy('id')
-            ->get()
-            ->groupBy(fn (Product $product) => (int) ($product->product_group_id ?? 0));
-
-        $firstGroupTypePayload = static function (FirstProductGroup $firstGroup): array {
-            $productType = ProductType::businessValueForFirstGroup($firstGroup, (string) $firstGroup->code);
-            $productTypeLabel = ProductType::businessLabelOf($productType);
-
-            return [
-                'first_product_group_code' => (string) $firstGroup->code,
-                'product_type' => $productType,
-                'product_type_label' => $productTypeLabel,
-                'service_type_code' => $productType,
-                'service_type_label' => $productTypeLabel,
-            ];
-        };
-
-        $buildProductNodes = function (int $effectiveGroupId, string $fullName) use ($productsByGroup): array {
-            return collect($productsByGroup->get($effectiveGroupId, collect()))
-                ->map(function (Product $product) use ($fullName) {
-                    $displayPayload = $this->resolveProductDisplayNameResolver()->resolveForProduct($product);
-                    $customDisplayName = trim((string) ($displayPayload['custom_display_name'] ?? ''));
-                    $cpuMemorySlugDisplay = trim((string) ($displayPayload['cpu_memory_slug_display'] ?? ''));
-                    $productSpecDisplay = trim((string) ($displayPayload['product_spec_display'] ?? ''));
-                    $cpuMemoryDisplay = trim((string) ($displayPayload['cpu_memory_display'] ?? ''));
-                    $combinedDisplayName = trim((string) ($displayPayload['combined_display_name'] ?? ''));
-                    $defaultDisplayName = '未配置规格 #'.(int) $product->id;
-                    $displayName = $customDisplayName
-                        ?: ($cpuMemorySlugDisplay ?: ($productSpecDisplay ?: ($cpuMemoryDisplay ?: ($combinedDisplayName ?: $defaultDisplayName))));
-
-                    return [
-                        'id' => (int) $product->id,
-                        'label' => $displayName,
-                        'node_type' => 'product',
-                        'leaf' => true,
-                        'disabled' => false,
-                        'product_name' => $displayName,
-                        'display_name' => $displayName,
-                        'product_display_name' => $displayName,
-                        'custom_display_name' => $customDisplayName,
-                        'cpu_memory_display' => $cpuMemoryDisplay,
-                        'cpu_memory_slug_display' => $cpuMemorySlugDisplay,
-                        'product_spec_display' => $productSpecDisplay,
-                        'combined_display_name' => $combinedDisplayName,
-                        'effective_product_group_full_name' => $fullName,
-                        'primary_price' => $this->resolvePrimaryPrice((array) $product->pricing),
-                        'status' => (int) ($product->status ?? 0),
-                        'sort_order' => (int) ($product->sort_order ?? 0),
-                    ];
-                })
-                ->values()
-                ->all();
-        };
-
-        $buildThirdNode = function ($thirdGroup, $firstGroup, $secondGroup, array $path) use ($buildProductNodes, $firstGroupTypePayload): array {
-            $thirdId = (int) ($thirdGroup->id ?? 0);
-            $currentPath = [...$path, trim((string) $thirdGroup->name)];
-            $categoryFullName = implode(' / ', array_values(array_filter($currentPath, fn ($item) => trim((string) $item) !== '')));
-
-            return [
-                'id' => 'group-'.$thirdId,
-                'label' => (string) $thirdGroup->name,
-                'node_type' => 'third_product_group',
-                'first_product_group_id' => (int) $firstGroup->id,
-                'first_product_group_name' => (string) $firstGroup->name,
-                ...$firstGroupTypePayload($firstGroup),
-                'second_product_group_id' => (int) $secondGroup->id,
-                'second_product_group_name' => (string) $secondGroup->name,
-                'third_product_group_id' => $thirdId,
-                'third_product_group_name' => (string) $thirdGroup->name,
-                'effective_product_group_id' => $thirdId,
-                'effective_product_group_level' => 3,
-                'effective_product_group_full_name' => $categoryFullName,
-                'leaf' => false,
-                'disabled' => false,
-                'children' => $buildProductNodes($thirdId, $categoryFullName),
-            ];
-        };
-
-        $buildSecondNode = function ($secondGroup, $firstGroup, array $path) use ($buildThirdNode, $buildProductNodes, $firstGroupTypePayload): array {
-            $secondId = (int) ($secondGroup->id ?? 0);
-            $currentPath = [...$path, trim((string) $secondGroup->name)];
-            $categoryFullName = implode(' / ', array_values(array_filter($currentPath, fn ($item) => trim((string) $item) !== '')));
-            $children = collect($secondGroup->thirdProductGroups ?? [])
-                ->map(fn ($thirdGroup) => $buildThirdNode($thirdGroup, $firstGroup, $secondGroup, $currentPath))
-                ->values()
-                ->all();
-
-            $directProducts = $buildProductNodes($secondId, $categoryFullName);
-
-            if ($children !== [] && $directProducts !== []) {
-                // 有三级分组时，直属产品归入虚拟"其他"分组，避免产品与分类同级显示
-                $otherPath = [...$currentPath, '其他'];
-                $otherFullName = implode(' / ', array_values(array_filter($otherPath, fn ($item) => trim((string) $item) !== '')));
-                $children[] = [
-                    'id' => 'group-'.$secondId.'-other',
-                    'label' => '其他',
-                    'node_type' => 'third_product_group',
-                    'first_product_group_id' => (int) $firstGroup->id,
-                    'first_product_group_name' => (string) $firstGroup->name,
-                    ...$firstGroupTypePayload($firstGroup),
-                    'second_product_group_id' => $secondId,
-                    'second_product_group_name' => (string) $secondGroup->name,
-                    'third_product_group_id' => null,
-                    'third_product_group_name' => '其他',
-                    'effective_product_group_id' => $secondId,
-                    'effective_product_group_level' => 3,
-                    'effective_product_group_full_name' => $otherFullName,
-                    'leaf' => false,
-                    'disabled' => false,
-                    'children' => $directProducts,
-                ];
-            }
-
-            return [
-                'id' => 'group-'.$secondId,
-                'label' => (string) $secondGroup->name,
-                'node_type' => 'second_product_group',
-                'first_product_group_id' => (int) $firstGroup->id,
-                'first_product_group_name' => (string) $firstGroup->name,
-                ...$firstGroupTypePayload($firstGroup),
-                'second_product_group_id' => $secondId,
-                'second_product_group_name' => (string) $secondGroup->name,
-                'third_product_group_id' => null,
-                'third_product_group_name' => null,
-                'effective_product_group_id' => $secondId,
-                'effective_product_group_level' => 2,
-                'effective_product_group_full_name' => $categoryFullName,
-                'leaf' => false,
-                'disabled' => false,
-                'children' => [...$children, ...($children === [] ? $directProducts : [])],
-            ];
-        };
-
-        $buildFirstNode = function (FirstProductGroup $firstGroup) use ($buildSecondNode, $firstGroupTypePayload): array {
-            $path = [trim((string) $firstGroup->name)];
-            $children = collect($firstGroup->secondProductGroups ?? [])
-                ->map(fn ($secondGroup) => $buildSecondNode($secondGroup, $firstGroup, $path))
-                ->values()
-                ->all();
-
-            return [
-                'id' => 'first-'.$firstGroup->id,
-                'label' => (string) $firstGroup->name,
-                'node_type' => 'first_product_group',
-                'first_product_group_id' => (int) $firstGroup->id,
-                'first_product_group_name' => (string) $firstGroup->name,
-                ...$firstGroupTypePayload($firstGroup),
-                'leaf' => false,
-                'disabled' => false,
-                'children' => $children,
-            ];
-        };
-
-        return $groups->map(fn (FirstProductGroup $group) => $buildFirstNode($group))->values()->all();
-    }
-
-    /**
-     * @return array{cycle: string, amount: string}
-     */
-    private function resolvePrimaryPrice(array $pricing): array
-    {
-        foreach ($pricing as $cycle => $amount) {
-            if ((float) $amount > 0) {
-                return [
-                    'cycle' => (string) $cycle,
-                    'amount' => number_format((float) $amount, 2, '.', ''),
-                ];
-            }
-        }
-
-        return [
-            'cycle' => '',
-            'amount' => '0.00',
-        ];
-    }
-
     public function paginateForUser(User $user, array $filters, int $page = 1, int $pageSize = 15): array
     {
         if (! $this->hasCouponsTable()) {
@@ -599,6 +392,16 @@ class CouponService
             'used_up' => $this->countPublicCouponsByStatus(clone $baseQuery, 'used_up'),
             'expired' => $this->countPublicCouponsByStatus(clone $baseQuery, 'expired'),
         ];
+    }
+
+    /**
+     * 客户端领取入口：先验券表可用，再取券模板（V5-02：查询与闸门自控制器下沉）。
+     */
+    public function resolveClaimableCoupon(int $couponId): Coupon
+    {
+        $this->assertCouponsTableAvailable();
+
+        return Coupon::query()->findOrFail($couponId);
     }
 
     public function claimPublicCoupon(User $user, Coupon $coupon): array
@@ -780,11 +583,6 @@ class CouponService
         ])->save();
 
         return $payload;
-    }
-
-    public function reserveOwnedCouponForOrder(?int $userCouponId, int $userId, Product $product, string $billingCycle, float $amount, string $orderType = 'new'): ?array
-    {
-        return $this->reserveOwnedCouponForInvoice($userCouponId, $userId, $product, $billingCycle, $amount, $orderType);
     }
 
     public function releaseInvoiceCoupon(Invoice $invoice): void
@@ -2195,6 +1993,11 @@ class CouponService
             throw_if($discountValue > 100, new BusinessException('折扣百分比不能大于 100'));
         }
 
+        // 覆盖价券：覆盖价即用户实付，最低 0.01（与封顶 amount-0.01 同口径，不产生 0 元账单）
+        if ($discountType === 'override') {
+            throw_if($discountValue < 0.01, new BusinessException('覆盖价不能小于 0.01'));
+        }
+
         if ($maxDiscountAmount !== null && $maxDiscountAmount !== '') {
             $maxDiscountAmount = round((float) $maxDiscountAmount, 2);
             throw_if($maxDiscountAmount < 0, new BusinessException('最高优惠金额不能小于 0'));
@@ -2279,6 +2082,15 @@ class CouponService
             $discountRate = max(min($discountValue, 100), 0);
             // 金额乘除收敛到 Money 分位精度，避免多级折扣叠加时 float 中间值分位漂移
             $discountAmount = Money::round($amount * (100 - $discountRate) / 100);
+        }
+
+        if ($discountType === 'override') {
+            // 覆盖价券：discount_value 即用户实付（应付 = 覆盖价）。
+            // 减免额 = 原价 - 覆盖价；覆盖价 ≥ 原价时无优惠（返回 0 被判不可用）。
+            // 末尾统一封顶 min(..., amount-0.01) 将最低应收收敛到 0.01，不产生 0 元账单。
+            $discountAmount = max($amount - $discountValue, 0);
+
+            return Money::round(min($discountAmount, max($amount - 0.01, 0)));
         }
 
         if ($coupon->max_discount_amount !== null && $coupon->max_discount_amount > 0) {
@@ -2548,6 +2360,10 @@ class CouponService
             return Money::trimZero(number_format($discountValue / 10, 1, '.', '')).' 折优惠';
         }
 
+        if ($discountType === 'override') {
+            return '一口价 ¥'.Money::format($discountValue);
+        }
+
         return '优惠券';
     }
 
@@ -2556,6 +2372,7 @@ class CouponService
         return match ($discountType) {
             'fixed' => '满减券',
             'percentage' => '折扣券',
+            'override' => '覆盖价券',
             default => '优惠券',
         };
     }

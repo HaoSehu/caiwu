@@ -18,6 +18,7 @@ use App\Models\Refund;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Services\ProductCatalog\ProductFullPathResolver;
 use App\Support\AdminPrivacy;
+use App\Support\Concerns\FiltersDateRange;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
@@ -25,6 +26,8 @@ use Illuminate\Support\Facades\DB;
 
 class AdminFinanceQueryService
 {
+    use FiltersDateRange;
+
     private const UPGRADE_KIND_LABELS = [
         'traffic_package' => '流量包',
     ];
@@ -60,7 +63,7 @@ class AdminFinanceQueryService
         }
 
         $this->applyKeywordFilter($query, trim((string) ($filters['keyword'] ?? '')));
-        $this->applyDateFilter($query, 'created_at', $filters);
+        $this->applyDateFilter($query, $filters, 'created_at');
 
         $paginator = $query->orderByDesc('id')->paginate($perPage);
         $paginator->setCollection(
@@ -121,7 +124,7 @@ class AdminFinanceQueryService
             });
         }
 
-        $this->applyDateFilter($query, 'created_at', $filters);
+        $this->applyDateFilter($query, $filters, 'created_at');
 
         $paginator = $query->orderByDesc('id')->paginate($perPage);
         $paginator->setCollection(
@@ -264,7 +267,7 @@ class AdminFinanceQueryService
         }
 
         $this->applyKeywordFilter($query, trim((string) ($filters['keyword'] ?? '')));
-        $this->applyDateFilter($query, 'created_at', $filters);
+        $this->applyDateFilter($query, $filters, 'created_at');
 
         $paginator = $query->orderByDesc('id')->paginate($perPage);
         $paginator->setCollection(
@@ -445,33 +448,6 @@ class AdminFinanceQueryService
                         ->orWhere('domain', 'like', "%{$keyword}%");
                 });
         });
-    }
-
-    private function applyDateFilter(Builder $query, string $column, array $filters): void
-    {
-        $start = trim((string) ($filters['start_date'] ?? ''));
-        $end = trim((string) ($filters['end_date'] ?? ''));
-
-        if ($start === '' && $end === '') {
-            return;
-        }
-
-        if ($start !== '' && $end !== '') {
-            $query->whereBetween($column, [
-                CarbonImmutable::parse($start)->startOfDay(),
-                CarbonImmutable::parse($end)->endOfDay(),
-            ]);
-
-            return;
-        }
-
-        if ($start !== '') {
-            $query->where($column, '>=', CarbonImmutable::parse($start)->startOfDay());
-
-            return;
-        }
-
-        $query->where($column, '<=', CarbonImmutable::parse($end)->endOfDay());
     }
 
     private function transformOrder(Order $order): array

@@ -111,6 +111,10 @@ class PluginProviderRegistry
     }
 
     /**
+     * 控制台命令注册不在 boot 期统计：Provider 注册阶段调用 Artisan::all() 会提前触发
+     * Kernel::bootstrap()，导致应用命令未注册（2026-10-10 已实证并回退）；
+     * 改由只读命令 `plugins:audit-registrations` 在控制台启动完成后做注册后置审计。
+     *
      * @param  array{routes:int,schedules:int,middleware:int,middleware_groups:int}  $baseline
      */
     private function assertNoSystemLevelRegistration(PluginManifest $manifest, Router $router, Schedule $schedule, array $baseline): void

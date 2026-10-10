@@ -22,6 +22,7 @@ use App\Services\ProductCatalog\Concerns\HandlesProductCatalogHelpers;
 use App\Services\Upstream\Contracts\ProvidesConsoleCatalog;
 use App\Services\Upstream\ProviderResolver;
 use App\Support\CacheKey;
+use App\Support\Concerns\ResolvesBinding;
 use App\Support\ProductGroupHierarchyFields;
 use App\Support\SchemaMetadataCache;
 use App\Support\TextSanitizer;
@@ -36,6 +37,7 @@ use Illuminate\Support\Str;
 class ProductSyncService
 {
     use HandlesProductCatalogHelpers;
+    use ResolvesBinding;
 
     private const IMPORT_PRICING_MONTHS = [
         'monthly' => 1,
@@ -2205,11 +2207,6 @@ class ProductSyncService
             'source' => 'scheduled_stock_sync',
             'synced_at' => now()->format('Y-m-d H:i:s'),
         ]);
-    }
-
-    private function bindingResolver(): PluginBindingResolver
-    {
-        return $this->bindingResolver ??= app(PluginBindingResolver::class);
     }
 
     private function queryOpenStockReservations(array $productIds, int $excludeOrderId = 0): array

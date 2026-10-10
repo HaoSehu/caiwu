@@ -190,7 +190,8 @@ class ServeBackendStackCommand extends Command
                 ...$phpProcessArgs,
                 $artisan,
                 'queue:work',
-                '--queue='.(string) config('queue.caiwu_business_queues', 'provision,referral,notification,coupon,default'),
+                // 与 queue:drain 的分组口径一致：business 组不含 provision（provision 单独成组，避免长任务队头阻塞）。
+                '--queue='.(string) config('queue.caiwu_business_queues', 'referral,notification,coupon,default'),
                 '--sleep=1',
                 '--tries='.(string) config('queue.caiwu_worker_tries', 3),
                 '--timeout='.max(

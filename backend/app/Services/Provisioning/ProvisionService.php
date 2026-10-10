@@ -9,6 +9,7 @@ use App\Models\Order;
 use App\Models\Product;
 use App\Models\Service;
 use App\Models\Supplier;
+use App\Services\ClientServiceConsole\ServiceOverviewService;
 use App\Services\Integrations\Plugins\PluginBindingResolver;
 use App\Services\Integrations\Plugins\ServiceUpstreamBindingWriter;
 use App\Services\Integrations\Plugins\UpstreamBindingWriter;
@@ -156,6 +157,9 @@ class ProvisionService
 
         $invoice->forceFill(['service_id' => $service->id])->save();
 
+        // 新服务记录已落库（概览会新增该服务），事务外失效该用户概览缓存，避免最长 120s 脏读。
+        $this->forgetServiceOverviewCache((int) $invoice->user_id);
+
         return $service;
     }
 
@@ -243,6 +247,8 @@ class ProvisionService
                     'provision_error' => null,
                 ]),
             ])->save();
+            // 上游开通成功，服务状态/到期时间/名称等概览字段已更新，失效该用户概览缓存。
+            $this->forgetServiceOverviewCache((int) $order->user_id);
             $this->serviceBindingWriter()->recordProvisionAttempt(
                 $service,
                 $order->product,
@@ -377,6 +383,9 @@ class ProvisionService
             'service_snapshot' => $this->buildServiceSnapshot($service),
         ])->save();
 
+        // 服务记录首次创建（概览计数/列表随之变化），失效该用户概览缓存。
+        $this->forgetServiceOverviewCache((int) $order->user_id);
+
         return $service;
     }
 
@@ -398,6 +407,23 @@ class ProvisionService
             'service_id' => $service->id,
             'service_snapshot' => $this->buildServiceSnapshot($service),
         ])->save();
+
+        // 服务被置为待开通，概览的状态计数随之变化，失效该用户概览缓存。
+        $this->forgetServiceOverviewCache((int) $order->user_id);
+    }
+
+    /**
+     * 失效用户端「服务概览」缓存。
+     *
+     * 服务概览按 userId 维度缓存 120s，任何会改变该用户服务集合/状态/到期/名称的写入
+     * 都必须在写入提交后清除对应缓存，否则用户会读到过期概览（V4-02）。
+     * 使用 app() 延迟解析：本服务在测试中经 new 直接实例化，避免新增构造依赖。
+     */
+    private function forgetServiceOverviewCache(int $userId): void
+    {
+        if ($userId > 0) {
+            app(ServiceOverviewService::class)->forgetGroupedOverviewCache($userId);
+        }
     }
 
     private function shouldAutoProvision(Product $product): bool

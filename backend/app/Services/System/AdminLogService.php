@@ -47,6 +47,12 @@ class AdminLogService
     // 防止恶意/误传超大 page 触发全表结果集进入 PHP 内存。
     public const API_CANDIDATE_MAX_ROWS = 10000;
 
+    /**
+     * V9-02 冻结边界（最后一条存量 schedule_run_logs.created_at）的请求内记忆化。
+     * false = 尚未计算；null = 无存量行（表缺失或为空）。
+     */
+    private Carbon|false|null $scheduleRunLogFreezeBoundaryMemo = false;
+
     /** 核心静态任务元数据：title 与 log_keywords 同时收录，供日志展示与文件日志反查。 */
     private const TASK_META = [
         'refresh-hosting-panel-auth' => [
@@ -358,18 +364,15 @@ class AdminLogService
 
     public function getTaskLogs(array $filters, int $page, int $perPage): array
     {
-        if (SchemaMetadataCache::hasTable('schedule_run_logs') && ScheduleRunLog::query()->exists()) {
-            $fileEntries = $this->buildFileTaskLogEntries($filters);
-            if ($fileEntries->isEmpty()) {
-                $logs = $this->buildScheduleRunTaskLogQuery($filters)
-                    ->orderByDesc('started_at')
-                    ->paginate($perPage, $this->scheduleRunLogListColumns(), 'page', $page);
-                $logs->setCollection(
-                    $logs->getCollection()->map(fn (ScheduleRunLog $log): array => $this->mapScheduleRunTaskLogEntry($log))
-                );
+        if ($this->legacyScheduleRunLogsCanStandalone($filters)) {
+            $logs = $this->buildScheduleRunTaskLogQuery($filters)
+                ->orderByDesc('started_at')
+                ->paginate($perPage, $this->scheduleRunLogListColumns(), 'page', $page);
+            $logs->setCollection(
+                $logs->getCollection()->map(fn (ScheduleRunLog $log): array => $this->mapScheduleRunTaskLogEntry($log))
+            );
 
-                return $this->buildPaginatorPayload($logs);
-            }
+            return $this->buildPaginatorPayload($logs);
         }
 
         $entries = $this->buildTaskLogEntries($filters);
@@ -385,11 +388,7 @@ class AdminLogService
             $this->buildFileLogSummaryCacheKey('task', $filters),
             now()->addSeconds(self::FILE_LOG_SUMMARY_CACHE_TTL_SECONDS),
             function () use ($filters) {
-                if (
-                    SchemaMetadataCache::hasTable('schedule_run_logs')
-                    && ScheduleRunLog::query()->exists()
-                    && $this->buildFileTaskLogEntries($filters)->isEmpty()
-                ) {
+                if ($this->legacyScheduleRunLogsCanStandalone($filters)) {
                     $summary = $this->buildScheduleRunTaskLogQuery($filters)
                         ?->selectRaw('COUNT(*) as total')
                         ->selectRaw('COUNT(DISTINCT task_name) as tasks')
@@ -827,18 +826,87 @@ class AdminLogService
     {
         $scheduleEntries = $this->buildScheduleRunTaskLogEntries($filters);
 
-        // 当 schedule_run_logs 表存在并已有记录时，ScheduleRunLogService 同时会往 activity_logs
-        // (module=cron) 写一条镜像记录，二者代表同一次执行。此时跳过 activity_logs cron 源，
-        // 避免同一任务运行在列表中出现两行。
-        $cronActivityEntries = SchemaMetadataCache::hasTable('schedule_run_logs') && ScheduleRunLog::query()->exists()
-            ? collect()
-            : $this->buildCronActivityTaskLogEntries($filters);
+        // V9-02 收敛（2026-10-10）：schedule_run_logs 已停写（见 ScheduleRunLogService::record）。
+        // 存量行与 activity_logs(module=cron) 审计镜像在历史窗口内是同次执行的重复记录
+        // （镜像写入位于 run_logs 之后，最多相差数秒），可能只写了一半。
+        // 因此以「最后一条存量行 + 60 秒」为冻结边界：
+        //   - 边界前的镜像行一律以存量行为准，从列表中剔除，避免任务重复展示；
+        //   - 边界后的镜像行是本表停写后的真实新执行，必须纳入。
+        // 60 秒容忍窗口用于吸收「先写 run_logs、后写镜像」的秒级写入偏差。
+        $freezeBoundary = $this->scheduleRunLogFreezeBoundary();
+        $cronActivityEntries = $this->buildCronActivityTaskLogEntries($filters)
+            ->filter(function (array $entry) use ($freezeBoundary): bool {
+                if ($freezeBoundary === null) {
+                    return true;
+                }
 
-        return $scheduleEntries
-            ->merge($cronActivityEntries)
-            ->merge($this->buildFileTaskLogEntries($filters))
+                $entryTime = strtotime((string) ($entry['time'] ?? '')) ?: 0;
+
+                return $entryTime > $freezeBoundary->copy()->addSeconds(60)->getTimestamp();
+            });
+
+        // 三源条目均为普通数组；scheduleEntries 在无存量行时是空 Eloquent 集合
+        // （Eloquent\Collection::map 对空集合不转基础集合），直接 merge 会对数组条目
+        // 调用 getKey() 致命，必须统一转基础集合后再合并。
+        return collect($scheduleEntries)
+            ->merge(collect($cronActivityEntries))
+            ->merge(collect($this->buildFileTaskLogEntries($filters)))
             ->sortByDesc(fn (array $item) => (string) ($item['time'] ?? $item['created_at'] ?? ''))
             ->values();
+    }
+
+    /**
+     * V9-02：存量 schedule_run_logs 能否独立代表任务日志（走直连分页快路径）。
+     *
+     * 仅当同时满足：存在存量行、过滤窗口内无文件日志条目、且全表无晚于冻结边界
+     * 的审计镜像行。任一不满足即回退多源合并（存量行 + 冻结后镜像 + 文件日志）。
+     */
+    private function legacyScheduleRunLogsCanStandalone(array $filters): bool
+    {
+        $boundary = $this->scheduleRunLogFreezeBoundary();
+        if ($boundary === null) {
+            return false;
+        }
+
+        if ($this->buildFileTaskLogEntries($filters)->isNotEmpty()) {
+            return false;
+        }
+
+        return ! $this->hasCronMirrorAfterFreeze($boundary);
+    }
+
+    /**
+     * 冻结边界 = 最后一条存量 schedule_run_logs.created_at；表缺失或为空时返回 null。
+     * 请求内记忆化，避免同一请求多次 MAX 查询。
+     */
+    private function scheduleRunLogFreezeBoundary(): ?Carbon
+    {
+        if ($this->scheduleRunLogFreezeBoundaryMemo !== false) {
+            return $this->scheduleRunLogFreezeBoundaryMemo;
+        }
+
+        if (! SchemaMetadataCache::hasTable('schedule_run_logs')) {
+            return $this->scheduleRunLogFreezeBoundaryMemo = null;
+        }
+
+        $latest = ScheduleRunLog::query()->max('created_at');
+
+        return $this->scheduleRunLogFreezeBoundaryMemo = $latest !== null ? Carbon::parse((string) $latest) : null;
+    }
+
+    /**
+     * V9-02：是否存在晚于冻结边界的审计镜像行（即停写后的新执行）。
+     */
+    private function hasCronMirrorAfterFreeze(Carbon $boundary): bool
+    {
+        if (! SchemaMetadataCache::hasTable('activity_logs')) {
+            return false;
+        }
+
+        return ActivityLog::query()
+            ->where('module', 'cron')
+            ->where('created_at', '>', $boundary->copy()->addSeconds(60))
+            ->exists();
     }
 
     private function buildFileTaskLogEntries(array $filters): Collection

@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\EnsuresTraceId;
 use Illuminate\Database\Eloquent\Model;
 
 class ReferralReward extends Model
 {
+    use EnsuresTraceId;
+
     public const STATUS_FROZEN = 0;
 
     public const STATUS_REWARDED = 1;

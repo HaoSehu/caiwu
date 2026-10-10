@@ -5,6 +5,7 @@ namespace App\Services\Content;
 use App\Exceptions\BusinessException;
 use App\Models\ContentArticle;
 use App\Models\ContentCategory;
+use App\Support\Concerns\NormalizesNullableString;
 use App\Support\ContentPublishedCacheVersion;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
@@ -12,6 +13,8 @@ use Illuminate\Support\Str;
 
 class ContentCategoryService
 {
+    use NormalizesNullableString;
+
     /**
      * @return Collection<int, ContentCategory>
      */
@@ -71,31 +74,6 @@ class ContentCategoryService
     }
 
     /**
-     * @return Collection<int, ContentCategory>
-     */
-    public function publicList(string $contentType, bool $onlyPublishedArticles = true): Collection
-    {
-        $query = ContentCategory::query()
-            ->ofType($contentType)
-            ->enabled()
-            ->withCount(['articles' => function ($builder) use ($onlyPublishedArticles, $contentType) {
-                $builder->where('content_type', $contentType);
-
-                if ($onlyPublishedArticles) {
-                    $builder->published();
-                }
-            }])
-            ->orderBy('sort_order')
-            ->orderBy('id');
-
-        if ($onlyPublishedArticles) {
-            $query->having('articles_count', '>', 0);
-        }
-
-        return $query->get();
-    }
-
-    /**
      * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
@@ -150,13 +128,6 @@ class ContentCategoryService
         }
 
         return $candidate;
-    }
-
-    private function normalizeNullableString(mixed $value): ?string
-    {
-        $value = trim((string) $value);
-
-        return $value !== '' ? $value : null;
     }
 
     private function bumpPublishedCacheVersion(): void

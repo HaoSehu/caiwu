@@ -16,8 +16,6 @@ class ScheduleRunLogService
     /** 活动镜像 summary 整体编码上限：超大结果数组降级为摘要，撑大 activity_logs 的元凶之一 */
     private const CRON_MIRROR_SUMMARY_MAX_BYTES = 4096;
 
-    private ?bool $scheduleRunLogTableReady = null;
-
     private ?bool $activityLogTableReady = null;
 
     private static bool $mutexDegradedWarningEmitted = false;
@@ -46,15 +44,9 @@ class ScheduleRunLogService
             $finishedAt = Carbon::now();
             $durationMs = $endMs - $startMs;
 
-            $this->storeRunLog([
-                'task_name' => $taskName,
-                'status' => 'success',
-                'duration_ms' => $durationMs,
-                'summary' => is_array($result) ? $result : null,
-                'started_at' => $startedAt,
-                'finished_at' => $finishedAt,
-            ]);
-
+            // V9-02 收敛（2026-10-10）：schedule_run_logs 已停写。每次执行只保留
+            // 「心跳台账 schedule_task_runs + activity_logs 审计镜像」两层；
+            // 存量 run_logs 行由日志中心只读展示并随归档自然清退。
             $this->storeCronActivityLog($taskName, 'success', $durationMs, is_array($result) ? $result : null, null, $context);
 
             $hookService->runMany([
@@ -72,15 +64,7 @@ class ScheduleRunLogService
             $finishedAt = Carbon::now();
             $durationMs = $endMs - $startMs;
 
-            $this->storeRunLog([
-                'task_name' => $taskName,
-                'status' => 'failed',
-                'duration_ms' => $durationMs,
-                'error_msg' => mb_substr($e->getMessage(), 0, 2000),
-                'started_at' => $startedAt,
-                'finished_at' => $finishedAt,
-            ]);
-
+            // V9-02 收敛：失败路径同样只落审计镜像，不再写 schedule_run_logs。
             $this->storeCronActivityLog($taskName, 'failed', $durationMs, null, $e->getMessage(), $context);
 
             $hookService->runMany([
@@ -139,42 +123,18 @@ class ScheduleRunLogService
         }
     }
 
-    private function storeRunLog(array $attributes): void
-    {
-        if (! $this->scheduleRunLogTableIsReady()) {
-            return;
-        }
-
-        try {
-            ScheduleRunLog::query()->create($attributes);
-        } catch (Throwable $exception) {
-            Log::warning('[定时任务] 运行日志写入失败，已跳过本次日志记录', [
-                'task_name' => $attributes['task_name'] ?? null,
-                'status' => $attributes['status'] ?? null,
-                'message' => $exception->getMessage(),
-                'exception' => $exception::class,
-            ]);
-        }
-    }
-
     private function scheduleRunLogTableIsReady(): bool
     {
-        if ($this->scheduleRunLogTableReady !== null) {
-            return $this->scheduleRunLogTableReady;
-        }
-
         try {
-            $this->scheduleRunLogTableReady = Schema::hasTable((new ScheduleRunLog)->getTable());
+            return Schema::hasTable((new ScheduleRunLog)->getTable());
         } catch (Throwable $exception) {
             Log::warning('[定时任务] 运行日志表检查失败，已跳过本次日志记录', [
                 'message' => $exception->getMessage(),
                 'exception' => $exception::class,
             ]);
 
-            $this->scheduleRunLogTableReady = false;
+            return false;
         }
-
-        return $this->scheduleRunLogTableReady;
     }
 
     private function activityLogTableIsReady(): bool
@@ -223,8 +183,22 @@ class ScheduleRunLogService
         ]);
     }
 
+    /**
+     * 存量读源：V9-02 收敛（2026-10-10）停写后，schedule_run_logs 仅用于历史查看，
+     * 新执行请读 activity_logs(module=cron) 审计镜像或心跳台账 schedule_task_runs。
+     */
     public function getScheduleStatus(int $page = 1, int $perPage = 20, array $filters = []): array
     {
+        if (! $this->scheduleRunLogTableIsReady()) {
+            return [
+                'items' => [],
+                'total' => 0,
+                'page' => $page,
+                'per_page' => $perPage,
+                'last_page' => 1,
+            ];
+        }
+
         $query = ScheduleRunLog::query()->orderByDesc('id');
 
         if (! empty($filters['task_name'])) {
@@ -255,7 +229,8 @@ class ScheduleRunLogService
     }
 
     /**
-     * cron summary 只在 schedule_run_logs 缺失时作为活动镜像 fallback 展示。
+     * cron 执行摘要随审计镜像写入 activity_logs.context；V9-02 收敛后任务日志视图
+     * 直接消费该镜像，是执行结果的唯一数据库来源。
      * 复用统一的 PayloadLimiter::limit：叶子先限宽，整体编码超限时降级为
      * 「截断标记 + 原始字节 + 哈希 + 预览」，不再把整段结果塞进 activity_logs.context。
      *

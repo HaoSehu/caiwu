@@ -90,6 +90,11 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
         Route::post('/users/{user}/manual-orders', [UserController::class, 'storeManualOrder']);
     });
 
+    // 补录红字冲抵：已入账补录账单的纠错通道，独立权限码把关，与 invoice.manage/补录权限隔离。
+    Route::middleware(['permission:'.AdminPermissions::FINANCE_MANUAL_REVERSAL])->group(function (): void {
+        Route::post('/users/{user}/invoices/{invoice}/manual-reversal', [UserController::class, 'storeManualReversal']);
+    });
+
     Route::middleware(['permission:'.AdminPermissions::FINANCE_REPORT])->group(function (): void {
         Route::get('/finance/new-customer-daily-summary', [FinanceMenuController::class, 'newCustomerDailySummary']);
         Route::get('/finance/product-income-summary', [FinanceMenuController::class, 'productIncomeSummary']);
@@ -180,10 +185,6 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
         Route::get('/coupon-product-groups/{group}/children', [CouponProductGroupController::class, 'children']);
         Route::get('/coupon-product-groups/{group}/products', [CouponProductGroupController::class, 'products']);
         Route::post('/coupon-product-groups/batch-products', [CouponProductGroupController::class, 'batchProducts']);
-        Route::get('/coupons/summary', [CouponController::class, 'summary']);
-        Route::get('/coupons', [CouponController::class, 'index']);
-        Route::get('/coupon-campaigns/summary', [CouponCampaignController::class, 'summary']);
-        Route::get('/coupon-campaigns', [CouponCampaignController::class, 'index']);
 
         Route::get('/product-groups', [ProductGroupController::class, 'index']);
         Route::get('/product-groups/tree', [ProductGroupController::class, 'tree']);
@@ -196,6 +197,28 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
         Route::get('/products/{product}/owners', [ProductController::class, 'owners']);
         Route::get('/products/{product}', [ProductController::class, 'show']);
         Route::get('/services', [ServiceController::class, 'index']);
+    });
+
+    // 券读取与商品目录解耦：只读岗持 coupon.list 即可查看券/活动列表与汇总
+    Route::middleware(['permission:'.AdminPermissions::COUPON_LIST])->group(function (): void {
+        Route::get('/coupons/summary', [CouponController::class, 'summary']);
+        Route::get('/coupons', [CouponController::class, 'index']);
+        Route::get('/coupon-campaigns/summary', [CouponCampaignController::class, 'summary']);
+        Route::get('/coupon-campaigns', [CouponCampaignController::class, 'index']);
+    });
+
+    // 券与活动生命周期写操作迁入 coupon.manage（原与商品目录共用 PRODUCT_MANAGE）；
+    // 定向发放 coupon.grant / 高额发放 coupon.high_value_grant 暂预留常量、无独立路由入口
+    Route::middleware(['permission:'.AdminPermissions::COUPON_MANAGE])->group(function (): void {
+        Route::post('/coupons', [CouponController::class, 'store']);
+        Route::put('/coupons/{coupon}', [CouponController::class, 'update']);
+        Route::delete('/coupons/{coupon}', [CouponController::class, 'destroy']);
+        Route::patch('/coupons/{coupon}/status', [CouponController::class, 'updateStatus']);
+        Route::post('/coupon-campaigns', [CouponCampaignController::class, 'store']);
+        Route::put('/coupon-campaigns/{couponCampaign}', [CouponCampaignController::class, 'update']);
+        Route::delete('/coupon-campaigns/{couponCampaign}', [CouponCampaignController::class, 'destroy']);
+        Route::patch('/coupon-campaigns/{couponCampaign}/status', [CouponCampaignController::class, 'updateStatus']);
+        Route::post('/coupon-campaigns/{couponCampaign}/tasks', [CouponCampaignController::class, 'runTask']);
     });
 
     Route::middleware(['permission:'.AdminPermissions::PRODUCT_MANAGE])->group(function (): void {
@@ -215,12 +238,6 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
         Route::put('/marketing-product-groups/{marketingProductGroup}', [MarketingProductGroupController::class, 'update']);
         Route::delete('/marketing-product-groups/{marketingProductGroup}', [MarketingProductGroupController::class, 'destroy']);
         Route::put('/marketing-product-groups/{marketingProductGroup}/products', [MarketingProductGroupController::class, 'syncProducts']);
-        Route::post('/coupons', [CouponController::class, 'store']);
-        Route::put('/coupons/{coupon}', [CouponController::class, 'update']);
-        Route::delete('/coupons/{coupon}', [CouponController::class, 'destroy']);
-        Route::post('/coupon-campaigns', [CouponCampaignController::class, 'store']);
-        Route::put('/coupon-campaigns/{couponCampaign}', [CouponCampaignController::class, 'update']);
-        Route::delete('/coupon-campaigns/{couponCampaign}', [CouponCampaignController::class, 'destroy']);
         Route::post('/products', [ProductController::class, 'store']);
         Route::put('/products/{product}', [ProductController::class, 'update']);
         Route::delete('/products/{product}', [ProductController::class, 'destroy']);
@@ -232,9 +249,6 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
         Route::post('/products/category-batches', [ProductController::class, 'batchUpdateCategory']);
         Route::post('/products/provision-hostname-batches', [ProductController::class, 'batchUpdateProvisionHostname']);
         Route::patch('/products/{product}/status', [ProductController::class, 'updateStatus']);
-        Route::patch('/coupons/{coupon}/status', [CouponController::class, 'updateStatus']);
-        Route::patch('/coupon-campaigns/{couponCampaign}/status', [CouponCampaignController::class, 'updateStatus']);
-        Route::post('/coupon-campaigns/{couponCampaign}/tasks', [CouponCampaignController::class, 'runTask']);
     });
 
     Route::middleware(['permission:'.AdminPermissions::PRODUCT_SYNC])->group(function (): void {

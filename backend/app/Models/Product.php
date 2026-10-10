@@ -253,11 +253,6 @@ class Product extends Model
         return $query->where('product_type', ProductType::normalizeBusinessValue($type));
     }
 
-    public function scopeInProductGroupTree(Builder $query, int $groupId): Builder
-    {
-        return $this->scopeInCurrentProductGroup($query, $groupId);
-    }
-
     public function scopeInFirstProductGroup(Builder $query, int $groupId): Builder
     {
         if ($groupId <= 0) {

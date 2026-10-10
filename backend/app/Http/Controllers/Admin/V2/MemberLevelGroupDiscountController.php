@@ -24,10 +24,7 @@ class MemberLevelGroupDiscountController extends Controller
     public function index(MemberLevel $memberLevel): JsonResponse
     {
         $groups = $this->marketingGroups->list();
-        $rules = MemberLevelGroupDiscount::query()
-            ->where('member_level_id', $memberLevel->id)
-            ->get()
-            ->keyBy('marketing_product_group_id');
+        $rules = $this->marketingGroups->discountsForLevel($memberLevel);
 
         return $this->success([
             'member_level' => [
@@ -37,6 +34,7 @@ class MemberLevelGroupDiscountController extends Controller
             ],
             'groups' => collect($groups)->map(function (mixed $group) use ($rules): array {
                 /** @var MarketingProductGroup $group */
+                /** @var MemberLevelGroupDiscount|null $rule */
                 $rule = $rules->get($group->id);
 
                 return [

@@ -244,9 +244,4 @@ class ProductCatalogService
     {
         return $this->siteService->siteProductsByGroupIds($groupIds);
     }
-
-    public function siteCatalog(): Collection
-    {
-        return $this->siteService->siteCatalog();
-    }
 }

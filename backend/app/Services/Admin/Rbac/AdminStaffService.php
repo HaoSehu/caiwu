@@ -10,6 +10,7 @@ use App\Models\Role;
 use App\Services\System\OperationLogService;
 use App\Services\User\AdminRoleBridgeService;
 use App\Support\AdminPermissions;
+use App\Support\Concerns\NormalizesNullableString;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
@@ -17,6 +18,8 @@ use Illuminate\Support\Facades\Hash;
 
 class AdminStaffService
 {
+    use NormalizesNullableString;
+
     private const ROLE_OPTIONS_LIMIT = 100;
 
     public function __construct(
@@ -72,8 +75,8 @@ class AdminStaffService
             $staff = AdminUser::query()->create([
                 'username' => trim((string) $data['username']),
                 'password' => (string) $data['password'],
-                'nickname' => $this->nullableString($data['nickname'] ?? null),
-                'email' => $this->nullableString($data['email'] ?? null),
+                'nickname' => $this->normalizeNullableString($data['nickname'] ?? null),
+                'email' => $this->normalizeNullableString($data['email'] ?? null),
                 'role_id' => (int) $data['role_id'],
                 'status' => (int) ($data['status'] ?? 1),
             ]);
@@ -139,7 +142,7 @@ class AdminStaffService
 
         $updated = DB::transaction(function () use ($staff, $data, $targetStatus): AdminUser {
             $updates = [
-                'nickname' => $this->nullableString($data['nickname'] ?? null),
+                'nickname' => $this->normalizeNullableString($data['nickname'] ?? null),
                 'role_id' => (int) $data['role_id'],
                 'status' => $targetStatus,
             ];
@@ -149,7 +152,7 @@ class AdminStaffService
             }
 
             if (array_key_exists('email', $data)) {
-                $updates['email'] = $this->nullableString($data['email'] ?? null);
+                $updates['email'] = $this->normalizeNullableString($data['email'] ?? null);
             }
 
             $staff->update($updates);
@@ -269,13 +272,6 @@ class AdminStaffService
             ->get()
             ->filter(fn (AdminUser $admin) => in_array(AdminPermissions::ALL, $admin->resolvedPermissions(), true))
             ->isEmpty();
-    }
-
-    private function nullableString(mixed $value): ?string
-    {
-        $value = trim((string) $value);
-
-        return $value !== '' ? $value : null;
     }
 
     private function roleHasAllPermission(int $roleId): bool

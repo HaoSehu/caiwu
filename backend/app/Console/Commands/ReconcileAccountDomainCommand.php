@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Console\Commands\Concerns\RefusesLegacyMigrationExecution;
 use App\Services\System\AccountMigrationService;
 use Illuminate\Console\Command;
 
 class ReconcileAccountDomainCommand extends Command
 {
+    use RefusesLegacyMigrationExecution;
+
     protected $signature = 'migrate:account:reconcile {--json : 以 JSON 输出结果}';
 
     protected $description = '执行账户账本与返佣域迁移后的总对账';

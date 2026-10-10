@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Console\Commands\Concerns\RefusesLegacyMigrationExecution;
 use App\Services\System\IdentityMigrationService;
 use Illuminate\Console\Command;
 
 class ReconcileIdentityDomainCommand extends Command
 {
+    use RefusesLegacyMigrationExecution;
+
     protected $signature = 'migrate:identity:reconcile {--json : 以 JSON 输出结果}';
 
     protected $description = '执行身份与权限域迁移后的总对账';

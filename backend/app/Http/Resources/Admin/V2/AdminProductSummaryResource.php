@@ -15,13 +15,21 @@ use Illuminate\Http\Resources\Json\JsonResource;
 class AdminProductSummaryResource extends JsonResource
 {
     /**
+     * 依赖显式注入（B6：Resource 不再经 app() 服务定位器隐式解析，调用方负责传入）。
+     */
+    public function __construct($resource, private readonly ProductDisplayNameResolver $displayNameResolver)
+    {
+        parent::__construct($resource);
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function toArray(Request $request): array
     {
         /** @var Product $product */
         $product = $this->resource;
-        $display = app(ProductDisplayNameResolver::class)->resolveForProduct($product);
+        $display = $this->displayNameResolver->resolveForProduct($product);
         $hierarchy = ProductGroupHierarchyFields::fromProduct($product);
         $productType = (string) ($hierarchy['product_type'] ?? $hierarchy['service_type_code'] ?? $product->product_type ?? '');
         $pricing = (array) ($product->pricing ?? []);

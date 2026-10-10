@@ -53,7 +53,7 @@ class ScheduleTaskService
                 'artisan_path' => $artisanPath,
                 'schedule_source' => base_path('routes/console.php'),
                 'queue_driver' => (string) config('queue.default', 'sync'),
-                'business_queue' => (string) config('queue.caiwu_business_queues', 'provision,referral,notification,coupon,default'),
+                'business_queue' => (string) config('queue.caiwu_business_queues', 'referral,notification,coupon,default'),
                 'automation_queue' => (string) config('queue.caiwu_schedule_queue', 'automation'),
                 'queue_connection' => $jobsConnection,
                 'jobs_table' => $jobsTable,
@@ -229,7 +229,8 @@ class ScheduleTaskService
     {
         $quotedPhp = $this->quoteShellArgument($phpBinary);
         $quotedArtisan = $this->quoteShellArgument($artisanPath);
-        $businessQueues = (string) config('queue.caiwu_business_queues', 'provision,referral,notification,coupon,default');
+        $provisionQueues = (string) config('queue.caiwu_provision_queues', 'provision');
+        $businessQueues = (string) config('queue.caiwu_business_queues', 'referral,notification,coupon,default');
         $automationQueue = (string) config('queue.caiwu_schedule_queue', 'automation');
         $queueWorkerTries = (int) config('queue.caiwu_worker_tries', 3);
         $queueWorkerTimeout = max(
@@ -267,6 +268,12 @@ class ScheduleTaskService
                 'title' => '本地调度入口（独立 Relay）',
                 'description' => '本地需要同时运行 HTTP 和调度时使用；VNC Relay 另行运行 vnc:relay。',
                 'command' => "{$quotedPhp} {$quotedArtisan} app:serve --with-schedule --without-vnc",
+            ],
+            [
+                'key' => 'queue_work_provision',
+                'title' => '开通队列 Worker',
+                'description' => '独立消费 provision 队列，避免上游开通类长任务队头阻塞通知、返佣等业务队列。',
+                'command' => "{$quotedPhp} {$quotedArtisan} queue:work --queue={$provisionQueues} --sleep=1 --tries={$queueWorkerTries} --timeout={$queueWorkerTimeout}",
             ],
             [
                 'key' => 'queue_work_business',

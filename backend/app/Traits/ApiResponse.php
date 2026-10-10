@@ -20,7 +20,11 @@ trait ApiResponse
         return ApiResponseBuilder::error($code, $message, $data);
     }
 
-    protected function paginate(LengthAwarePaginator $paginator, ?string $resourceClass = null, array $extra = []): JsonResponse
+    /**
+     * @param  string|callable(mixed): mixed|null  $resourceClass  资源类名；或逐项变换回调
+     * @param  array<string, mixed>  $extra
+     */
+    protected function paginate(LengthAwarePaginator $paginator, string|callable|null $resourceClass = null, array $extra = []): JsonResponse
     {
         return $this->success(ApiResponseBuilder::pagination($paginator, $resourceClass, $extra));
     }

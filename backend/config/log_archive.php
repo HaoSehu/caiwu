@@ -33,6 +33,14 @@ return [
         'activity_logs' => '系统与业务活动日志',
         'message_logs' => '短信/邮件统一消息日志',
         'schedule_run_logs' => 'Laravel 调度运行日志',
+        // 调度运行台账是全库最大日志表，需与其它日志同样支持归档；
+        // 归档按 created_at 保留 90 天、归档文件保留 180 天，人工重跑血缘均在窗口内。
+        'schedule_task_runs' => '调度任务运行台账（心跳/手动重跑，超期归档）',
+        // tick 槽位每分钟最多一行（slot_started_at 唯一），读取方只取最新一条或当分钟槽位，
+        // 超期行无任何依赖，随日志同窗口归档。
+        'schedule_ticks' => '心跳调度 tick 槽位（每分钟一行，超期归档）',
+        // 上游开通尝试审计：运行时只写不读（人工排查用），超期归档不破坏任何链路。
+        'service_provision_attempts' => '上游开通尝试审计（只写不读，超期归档）',
         'integration_plugin_runtime_logs' => '插件运行日志',
         'gateway_logs' => '支付网关交互日志（明细已按日移文件，库行按 90 天归档）',
     ],
@@ -45,8 +53,6 @@ return [
         'invoices',
         'invoice_items',
         'failed_jobs',
-        // 运行台账是人工重跑和审计追溯的长期记录，不得随普通日志在线删除。
-        'schedule_task_runs',
         // 自动化幂等状态（recordOnce/markExecuted）不参与普通归档。
         'automation_logs',
     ],

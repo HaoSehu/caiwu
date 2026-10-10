@@ -12,10 +12,13 @@ use App\Models\Supplier;
 use App\Services\Integrations\Plugins\PluginBindingResolver;
 use App\Services\Integrations\Support\ProviderErrorMapper;
 use App\Services\Upstream\ProviderKey;
+use App\Support\Concerns\ResolvesBinding;
 use Illuminate\Support\Facades\Log;
 
 final class ZjmfProvisionService
 {
+    use ResolvesBinding;
+
     private const UPSTREAM_HTTP_CODE_META_KEY = '_zjmf_upstream_http_code';
 
     private const RANGE_TYPES = [4, 7, 9, 11, 14, 15, 16, 17, 18, 19];
@@ -395,11 +398,6 @@ final class ZjmfProvisionService
         }
 
         throw new BusinessException('商品上游绑定不存在，无法自动开通');
-    }
-
-    private function bindingResolver(): PluginBindingResolver
-    {
-        return $this->bindingResolver ??= app(PluginBindingResolver::class);
     }
 
     private function buildConfigOptionMap(Product $product, array $configSnapshot): array

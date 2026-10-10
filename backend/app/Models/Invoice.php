@@ -226,11 +226,6 @@ class Invoice extends Model
         return OrderInvoiceNoGenerator::deriveInvoiceNoFromOrderNo($orderNo) ?? self::generateInvoiceNo();
     }
 
-    public function scopeUnpaid($query)
-    {
-        return $query->where('status', 0);
-    }
-
     public function syncInvoiceItemProjection(): void
     {
         if (! $this->exists || ! SchemaMetadataCache::hasTable('invoice_items')) {

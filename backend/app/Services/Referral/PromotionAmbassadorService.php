@@ -8,6 +8,7 @@ use App\Exceptions\BusinessException;
 use App\Models\PromotionAmbassador;
 use App\Models\User;
 use App\Support\CacheKey;
+use App\Support\Concerns\NormalizesNullableString;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -20,6 +21,8 @@ use Illuminate\Support\Facades\DB;
  */
 class PromotionAmbassadorService
 {
+    use NormalizesNullableString;
+
     private const LIST_CACHE_TTL_SECONDS = 300; // 5分钟：大使档位不频繁变化，可适当延长
 
     /**
@@ -106,13 +109,6 @@ class PromotionAmbassadorService
                 array_key_exists('remark', $data) ? $data['remark'] : $ambassador?->remark
             ),
         ];
-    }
-
-    private function normalizeNullableString(mixed $value): ?string
-    {
-        $value = trim((string) $value);
-
-        return $value !== '' ? $value : null;
     }
 
     private function buildListCacheKey(bool $enabledOnly): string

@@ -16,6 +16,8 @@ use App\Models\Product;
 use App\Models\Service;
 use App\Models\User;
 use App\Services\Finance\InvoiceService;
+use App\Services\System\ActivityLogService;
+use App\Support\Money;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -35,6 +37,7 @@ class AdminManualEntryV2Service
 
     public function __construct(
         private readonly InvoiceService $invoices,
+        private readonly ActivityLogService $activityLogService,
     ) {}
 
     /**
@@ -226,6 +229,147 @@ class AdminManualEntryV2Service
             });
         } catch (LockTimeoutException) {
             throw new BusinessException('该实例或相同交易号的补录正在处理中，请稍候重试');
+        }
+    }
+
+    /**
+     * 补录账单红字冲抵（B2 批次 2 最小实现）：已入账补录账单的唯一纠错通道。
+     *
+     * 口径（设计文档 §3）：
+     * - 复用现有 refund 类型生成负数红字账单（amount/paid_amount 取负），origin_invoice_id 关联原单；
+     * - 同原单至多一张有效红字：命名锁串行化 + 事务内按 (origin_invoice_id, type=refund) 复查幂等，
+     *   重放不产生第二张（返回既有红字单）；
+     * - 不触碰原单、不删行、不动余额与台账（补录账单为系统外收款的纯记账凭证，本就无余额流水）；
+     * - 审计：生成与执行各写一条 activity_logs。
+     *
+     * @param  array<string, mixed>  $payload
+     * @param  array<string, mixed>  $context
+     * @return array<string, mixed>
+     */
+    public function reverseManualInvoice(User $user, int $invoiceId, array $payload, array $context): array
+    {
+        $reason = trim((string) ($payload['remark'] ?? ''));
+        throw_if($reason === '', new BusinessException('请填写红字冲抵原因'));
+
+        try {
+            return Cache::lock('lock:admin:manual-reversal:'.$invoiceId, 15)->block(3, function () use ($user, $invoiceId, $payload, $context, $reason): array {
+                return DB::transaction(function () use ($user, $invoiceId, $payload, $context, $reason): array {
+                    $original = Invoice::query()->lockForUpdate()->find($invoiceId);
+                    throw_if(! $original instanceof Invoice, new BusinessException('账单不存在'));
+                    throw_if((int) $original->user_id !== (int) $user->id, new BusinessException('账单与用户不匹配'));
+                    throw_if(
+                        (string) $original->type !== InvoiceType::MANUAL || (int) ($original->order_id ?? 0) > 0,
+                        new BusinessException('仅支持对补录账单发起红字冲抵')
+                    );
+                    throw_if(
+                        (int) $original->status !== InvoiceStatus::PAID,
+                        new BusinessException('当前账单状态不支持红字冲抵')
+                    );
+
+                    // 同一原单至多一张有效红字：事务内复查（锁外并发由命名锁串行化）。
+                    $existing = Invoice::query()
+                        ->where('origin_invoice_id', (int) $original->id)
+                        ->where('type', InvoiceType::REFUND)
+                        ->first();
+                    if ($existing instanceof Invoice) {
+                        return [
+                            'id' => (int) $existing->id,
+                            'status' => 'completed',
+                            'message' => '该补录账单已红字冲抵，未重复生成',
+                            'detail' => [
+                                'type' => 'manual_invoice_reversal',
+                                'already_reversed' => true,
+                                'invoice' => [
+                                    'id' => (int) $original->id,
+                                    'invoice_no' => (string) $original->invoice_no,
+                                ],
+                                'reversal_invoice' => [
+                                    'id' => (int) $existing->id,
+                                    'invoice_no' => (string) $existing->invoice_no,
+                                    'amount' => number_format((float) $existing->amount, 2, '.', ''),
+                                ],
+                            ],
+                        ];
+                    }
+
+                    $reversibleAmount = round((float) ($original->paid_amount ?: $original->amount), 2);
+                    $reversalAmount = round((float) ($payload['amount'] ?? $reversibleAmount), 2);
+                    throw_if($reversalAmount <= 0, new BusinessException('红字冲抵金额必须大于 0'));
+                    throw_if($reversalAmount - $reversibleAmount > 0.00001, new BusinessException('红字冲抵金额超过原单入账金额'));
+
+                    $operatorName = (string) ($context['operator_name'] ?? '');
+
+                    $reversal = Invoice::query()->create([
+                        'invoice_no' => Invoice::generateInvoiceNo(),
+                        'user_id' => (int) $original->user_id,
+                        'origin_invoice_id' => (int) $original->id,
+                        'type' => InvoiceType::REFUND,
+                        'amount' => Money::format(-$reversalAmount),
+                        'paid_amount' => Money::format(-$reversalAmount),
+                        'status' => InvoiceStatus::PAID,
+                        'paid_at' => now(),
+                        'due_date' => null,
+                        'config_snapshot' => [
+                            'reversal_type' => 'manual_reversal',
+                            'reversal_of' => (string) $original->invoice_no,
+                            'origin_invoice_no' => (string) $original->invoice_no,
+                            'reason' => $reason,
+                            'operator_id' => (int) ($context['operator_id'] ?? 0),
+                            'operator_name' => $operatorName,
+                        ],
+                        'remark' => $reason,
+                        'operator' => $operatorName !== '' ? $operatorName : null,
+                        'trace_id' => (string) ($context['trace_id'] ?? $original->trace_id ?? ''),
+                    ]);
+                    $this->invoices->syncProjection($reversal);
+
+                    $auditContext = [
+                        'origin_invoice_no' => (string) $original->invoice_no,
+                        'reversal_invoice_no' => (string) $reversal->invoice_no,
+                        'reversal_amount' => number_format($reversalAmount, 2, '.', ''),
+                        'reason' => $reason,
+                        'operator_name' => $operatorName,
+                        'trace_id' => (string) ($context['trace_id'] ?? ''),
+                    ];
+                    $this->activityLogService->logSafely(
+                        'finance',
+                        'finance.manual_reversal.created',
+                        '补录红字冲抵单已生成：'.$reversal->invoice_no,
+                        'invoice',
+                        (int) $reversal->id,
+                        $auditContext,
+                    );
+                    $this->activityLogService->logSafely(
+                        'finance',
+                        'finance.manual_reversal.executed',
+                        '补录账单 '.$original->invoice_no.' 已完成红字冲抵',
+                        'invoice',
+                        (int) $original->id,
+                        $auditContext,
+                    );
+
+                    return [
+                        'id' => (int) $reversal->id,
+                        'status' => 'completed',
+                        'message' => '红字冲抵成功',
+                        'detail' => [
+                            'type' => 'manual_invoice_reversal',
+                            'already_reversed' => false,
+                            'invoice' => [
+                                'id' => (int) $original->id,
+                                'invoice_no' => (string) $original->invoice_no,
+                            ],
+                            'reversal_invoice' => [
+                                'id' => (int) $reversal->id,
+                                'invoice_no' => (string) $reversal->invoice_no,
+                                'amount' => number_format((float) $reversal->amount, 2, '.', ''),
+                            ],
+                        ],
+                    ];
+                });
+            });
+        } catch (LockTimeoutException) {
+            throw new BusinessException('红字冲抵正在处理中，请稍候重试');
         }
     }
 

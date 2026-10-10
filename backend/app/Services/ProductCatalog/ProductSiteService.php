@@ -14,14 +14,11 @@ use App\Support\Money;
 use App\Support\ProductGroupHierarchyFields;
 use App\Support\SiteProductGroupQuery;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Cache;
 
 class ProductSiteService
 {
     use HandlesProductCatalogHelpers;
-
-    private const SITE_CATALOG_CACHE_TTL_SECONDS = 900; // 优化：从 300s 提升到 900s（15分钟）
 
     /**
      * @var array<int, array{cpu_model_name: string, cpu_base_frequency: string, cpu_turbo_frequency: string}>|null
@@ -291,36 +288,6 @@ class ProductSiteService
             })
             ->values()
             ->all();
-    }
-
-    public function siteCatalog(): Collection
-    {
-        $visibleProductTypes = ProductType::visibleValues();
-
-        if ($visibleProductTypes === []) {
-            return collect();
-        }
-
-        return Cache::remember(
-            self::SITE_CATALOG_CACHE_KEY,
-            now()->addSeconds(self::SITE_CATALOG_CACHE_TTL_SECONDS),
-            fn () => SiteProductGroupQuery::visibleSecondGroups()
-                ->select('second_product_groups.*')
-                ->with([
-                    'firstProductGroup',
-                    'thirdProductGroups' => fn ($query) => $query
-                        ->where('is_visible', 1)
-                        ->with(['products' => fn ($productQuery) => $productQuery
-                            ->where('status', 1)
-                            ->orderBy('sort_order')
-                            ->orderBy('id')])
-                        ->orderBy('sort_order')
-                        ->orderBy('id'),
-                ])
-                ->orderBy('sort_order')
-                ->orderBy('id')
-                ->get()
-        );
     }
 
     private function transformSiteRootGroup(SecondProductGroup $group): array

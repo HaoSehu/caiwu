@@ -23,7 +23,7 @@ class StoreCouponCampaignRequest extends AdminFormRequest
             'trigger_time' => ['required', 'string', 'regex:/^\\d{2}:\\d{2}(:\\d{2})?$/'],
             'issue_quantity' => ['required', 'integer', 'min:1'],
             'valid_duration_hours' => ['nullable', 'integer', 'min:1', 'max:87600'],
-            'discount_type' => ['required', Rule::in(['fixed', 'percentage'])],
+            'discount_type' => ['required', Rule::in(['fixed', 'percentage', 'override'])],
             'discount_scope' => ['required', Rule::in(['first_month', 'recurring', 'renew'])],
             'discount_value' => ['required', 'numeric', 'min:0.01'],
             'min_amount' => ['nullable', 'numeric', 'min:0'],

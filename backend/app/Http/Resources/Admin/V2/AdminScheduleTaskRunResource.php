@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Resources\Admin\V2;
 
+use App\Http\Resources\Concerns\StripsSensitiveResourceData;
 use App\Models\ScheduleTaskRun;
 use App\Support\SensitiveDataSanitizer;
 use App\Support\TextSanitizer;
@@ -13,6 +14,8 @@ use Illuminate\Http\Resources\Json\JsonResource;
 
 class AdminScheduleTaskRunResource extends JsonResource
 {
+    use StripsSensitiveResourceData;
+
     private const MAX_DEPTH = 3;
 
     private const MAX_ITEMS = 20;
@@ -108,30 +111,5 @@ class AdminScheduleTaskRunResource extends JsonResource
         }
 
         return array_is_list($value) ? array_values($result) : $result;
-    }
-
-    private function isSensitiveKey(string $key): bool
-    {
-        $normalized = strtolower(trim($key));
-
-        foreach ([
-            'password',
-            'secret',
-            'api_key',
-            'raw_response',
-            'third_party_response',
-            'token',
-            'authorization',
-            'cookie',
-            'signature',
-            'private_key',
-            'public_key',
-        ] as $needle) {
-            if (str_contains($normalized, $needle)) {
-                return true;
-            }
-        }
-
-        return false;
     }
 }

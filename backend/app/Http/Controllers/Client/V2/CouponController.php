@@ -4,9 +4,7 @@ namespace App\Http\Controllers\Client\V2;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Client\V2\Coupon\ListCouponsRequest;
-use App\Models\Coupon;
 use App\Services\Finance\CouponService;
-use App\Support\SchemaMetadataCache;
 
 class CouponController extends Controller
 {
@@ -57,11 +55,7 @@ class CouponController extends Controller
 
     public function claim(ListCouponsRequest $request, int $couponId)
     {
-        if (! SchemaMetadataCache::hasTable('coupons')) {
-            return $this->error(42200, '当前系统未启用优惠券功能');
-        }
-
-        $coupon = Coupon::query()->findOrFail($couponId);
+        $coupon = $this->couponService->resolveClaimableCoupon($couponId);
 
         return $this->success(
             $this->couponService->claimPublicCoupon($request->user(), $coupon),

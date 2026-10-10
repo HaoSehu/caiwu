@@ -18,7 +18,7 @@ class ListCouponsRequest extends AdminFormRequest
             'pageSize' => ['prohibited'],
             'keyword' => ['nullable', 'string', 'max:100'],
             'status' => ['nullable', 'in:0,1,expired'],
-            'discount_type' => ['nullable', Rule::in(['fixed', 'percentage'])],
+            'discount_type' => ['nullable', Rule::in(['fixed', 'percentage', 'override'])],
             'distribution_type' => ['nullable', Rule::in(['public', 'private'])],
             'discount_scope' => ['nullable', Rule::in(['first_month', 'recurring', 'renew'])],
         ];

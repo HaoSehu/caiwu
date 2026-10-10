@@ -19,13 +19,15 @@ use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Services\ProductCatalog\ProductFullPathResolver;
 use App\Services\System\OperationLogService;
 use App\Support\AdminPrivacy;
-use Carbon\CarbonImmutable;
+use App\Support\Concerns\FiltersDateRange;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class InvoiceService
 {
+    use FiltersDateRange;
+
     public function __construct(
         private readonly PaymentCallbackProjector $callbackProjector,
         private readonly TradeLifecycleService $tradeLifecycleService,
@@ -232,7 +234,14 @@ class InvoiceService
             $query->where('user_id', $filters['user_id']);
         }
         if (isset($filters['status']) && $filters['status'] !== '') {
-            $query->where('status', $filters['status']);
+            if ((int) $filters['status'] === InvoiceStatus::PARTIAL_PAID) {
+                // 派生展示态筛选：库内仍为待支付，按「已付金额介于 (0, amount)」命中。
+                $query->where('status', InvoiceStatus::UNPAID)
+                    ->where('paid_amount', '>', 0)
+                    ->whereColumn('paid_amount', '<', 'amount');
+            } else {
+                $query->where('status', $filters['status']);
+            }
         }
         if (! empty($filters['type'])) {
             $type = $filters['type'];
@@ -327,6 +336,7 @@ class InvoiceService
             'payable_amount' => number_format(max((float) $invoice->amount - (float) ($invoice->paid_amount ?? 0), 0), 2, '.', ''),
             'status' => (int) $displayStatus['status'],
             'status_label' => (string) $displayStatus['status_label'],
+            'is_partial_paid' => $displayStatus['is_partial_paid'],
             'raw_status' => (int) $invoice->status,
             'raw_status_label' => InvoiceStatus::$labels[$invoice->status] ?? (string) $invoice->status,
             'billing_cycle' => (string) ($invoice->billing_cycle ?? ''),
@@ -363,33 +373,6 @@ class InvoiceService
             'logs' => $this->buildInvoiceLogs($invoice, $scene),
             'can_cancel' => in_array((int) $invoice->status, [InvoiceStatus::UNPAID], true),
         ];
-    }
-
-    private function applyDateFilter($query, array $filters): void
-    {
-        $start = trim((string) ($filters['start_date'] ?? ''));
-        $end = trim((string) ($filters['end_date'] ?? ''));
-
-        if ($start === '' && $end === '') {
-            return;
-        }
-
-        if ($start !== '' && $end !== '') {
-            $query->whereBetween('created_at', [
-                CarbonImmutable::parse($start)->startOfDay(),
-                CarbonImmutable::parse($end)->endOfDay(),
-            ]);
-
-            return;
-        }
-
-        if ($start !== '') {
-            $query->where('created_at', '>=', CarbonImmutable::parse($start)->startOfDay());
-
-            return;
-        }
-
-        $query->where('created_at', '<=', CarbonImmutable::parse($end)->endOfDay());
     }
 
     private function adminUserPayload(?User $user): ?array
@@ -466,6 +449,7 @@ class InvoiceService
             'payable_amount' => number_format(max((float) $invoice->amount - (float) ($invoice->paid_amount ?? 0), 0), 2, '.', ''),
             'status' => (int) $displayStatus['status'],
             'status_label' => (string) $displayStatus['status_label'],
+            'is_partial_paid' => $displayStatus['is_partial_paid'],
             'billing_cycle' => (string) ($invoice->billing_cycle ?? ''),
             'quantity' => (int) ($invoice->quantity ?? 1),
             'summary' => $this->buildInvoiceSummary($invoice, $scene),
@@ -566,6 +550,7 @@ class InvoiceService
             'payable_amount' => number_format(max((float) $invoice->amount - (float) ($invoice->paid_amount ?? 0), 0), 2, '.', ''),
             'status' => (int) $displayStatus['status'],
             'status_label' => (string) $displayStatus['status_label'],
+            'is_partial_paid' => $displayStatus['is_partial_paid'],
             'raw_status' => (int) $invoice->status,
             'raw_status_label' => InvoiceStatus::$labels[$invoice->status] ?? (string) $invoice->status,
             'billing_cycle' => (string) ($invoice->billing_cycle ?? ''),
@@ -878,18 +863,39 @@ class InvoiceService
         return $payment->gatewayKey();
     }
 
+    /**
+     * 派生展示状态：状态机值域不变（0/1/4/5），仅在待支付基础上派生「部分已付」。
+     *
+     * 派生条件（设计文档《财务B2能力设计-部分核销与红字冲抵》§2.2）：账单仍为待支付，
+     * 且 0 < paid_amount < amount。已退款派生优先（支付单已退款或账单已退款）。
+     *
+     * @return array{status: int, status_label: string, is_partial_paid: bool}
+     */
     private function resolveInvoiceDisplayStatus(Invoice $invoice, ?array $paymentSummary): array
     {
         if (($paymentSummary['status'] ?? null) === PaymentStatus::REFUNDED || (int) $invoice->status === InvoiceStatus::REFUNDED) {
             return [
                 'status' => InvoiceStatus::REFUNDED,
                 'status_label' => '已退款',
+                'is_partial_paid' => false,
+            ];
+        }
+
+        $paidAmount = round((float) ($invoice->paid_amount ?? 0), 2);
+        $totalAmount = round((float) $invoice->amount, 2);
+
+        if ((int) $invoice->status === InvoiceStatus::UNPAID && $totalAmount > 0 && $paidAmount > 0 && $paidAmount < $totalAmount) {
+            return [
+                'status' => InvoiceStatus::PARTIAL_PAID,
+                'status_label' => '部分已付',
+                'is_partial_paid' => true,
             ];
         }
 
         return [
             'status' => (int) $invoice->status,
             'status_label' => InvoiceStatus::$labels[$invoice->status] ?? (string) $invoice->status,
+            'is_partial_paid' => false,
         ];
     }
 
@@ -948,9 +954,10 @@ class InvoiceService
 
         if ($refundMethodLabel === '') {
             $refundMethod = trim((string) ($refund['refund_method'] ?? ''));
+            // 退款口径（2026-10-10 裁决）：只保留余额退回，原路退款不提供。
+            // 存量历史记录若曾标记 original，按普通「已退款」展示，不再输出「原路退款」。
             $refundMethodLabel = match ($refundMethod) {
                 'balance' => '退回余额',
-                'original' => '原路退款',
                 default => '已退款',
             };
         }
@@ -1214,7 +1221,9 @@ class InvoiceService
         $syncBusinessFlow = (bool) ($payload['sync_business_flow'] ?? false);
         $traceId = trim((string) ($context['trace_id'] ?? ''));
 
-        $updatedInvoice = DB::transaction(function () use ($invoice, $paidAt, $requestedAmount, $traceId, $paymentGateway, $tradeNo, $remark, $context): Invoice {
+        $isFullPayment = false;
+
+        $updatedInvoice = DB::transaction(function () use ($invoice, $paidAt, $requestedAmount, $traceId, $paymentGateway, $tradeNo, $remark, $context, &$isFullPayment): Invoice {
             $lockedInvoice = Invoice::query()
                 ->lockForUpdate()
                 ->with('order')
@@ -1227,24 +1236,31 @@ class InvoiceService
 
             $payableAmount = round((float) $lockedInvoice->amount - (float) ($lockedInvoice->paid_amount ?? 0), 2);
             throw_if($payableAmount <= 0, new BusinessException('当前账单无需再入账'));
-            throw_if(abs($requestedAmount - $payableAmount) > 0.00001, new BusinessException('当前仅支持按账单应付金额全额入账'));
+            throw_if($requestedAmount <= 0, new BusinessException('入账金额必须大于 0'));
+            throw_if($requestedAmount - $payableAmount > 0.00001, new BusinessException('入账金额不能超过账单应付金额'));
+            // 部分核销（B2 批次 1）：每次入账独立成 payments 行并累加 paid_amount；
+            // 仅当本次结清剩余应付时才走 markInvoicePaid 终态（触发履约/服务开通，语义不变）。
+            $isFullPayment = abs($requestedAmount - $payableAmount) <= 0.00001;
 
-            Payment::query()
-                ->where('invoice_id', $lockedInvoice->id)
-                ->where('status', PaymentStatus::PENDING)
-                ->lockForUpdate()
-                ->get()
-                ->each(function (Payment $payment) use ($traceId): void {
-                    $callbackRaw = (array) ($payment->callback_raw ?? []);
-                    $callbackRaw['closed_reason'] = 'invoice_paid_manually';
-                    $callbackRaw['trace_id'] = $traceId !== '' ? $traceId : (string) ($payment->trace_id ?? '');
+            // 仅全额入账时关闭同账单待支付支付单：部分核销保留待支付窗口（补付入口二期开放）。
+            if ($isFullPayment) {
+                Payment::query()
+                    ->where('invoice_id', $lockedInvoice->id)
+                    ->where('status', PaymentStatus::PENDING)
+                    ->lockForUpdate()
+                    ->get()
+                    ->each(function (Payment $payment) use ($traceId): void {
+                        $callbackRaw = (array) ($payment->callback_raw ?? []);
+                        $callbackRaw['closed_reason'] = 'invoice_paid_manually';
+                        $callbackRaw['trace_id'] = $traceId !== '' ? $traceId : (string) ($payment->trace_id ?? '');
 
-                    $payment->forceFill([
-                        'status' => PaymentStatus::CANCELLED,
-                        'callback_raw' => $callbackRaw,
-                    ])->save();
-                    $this->callbackProjector->syncProjection($payment);
-                });
+                        $payment->forceFill([
+                            'status' => PaymentStatus::CANCELLED,
+                            'callback_raw' => $callbackRaw,
+                        ])->save();
+                        $this->callbackProjector->syncProjection($payment);
+                    });
+            }
 
             // 补一条 manual Payment 审计记录，保留 trade_no 与入账信息，供财务对账追溯。
             $manualPayment = new Payment([
@@ -1254,7 +1270,7 @@ class InvoiceService
                 'invoice_id' => (int) $lockedInvoice->id,
                 'gateway' => PaymentGatewayCode::MANUAL,
                 'trade_no' => $tradeNo !== '' ? $tradeNo : null,
-                'amount' => $lockedInvoice->amount,
+                'amount' => number_format($requestedAmount, 2, '.', ''),
                 'status' => PaymentStatus::SUCCESS,
                 'paid_at' => $paidAt,
                 'remark' => $remark !== '' ? $remark : null,
@@ -1267,21 +1283,28 @@ class InvoiceService
                     'operator_name' => (string) ($context['operator_name'] ?? ''),
                     'remark' => $remark,
                     'trade_no' => $tradeNo,
+                    'partial' => ! $isFullPayment,
                 ],
             ]);
             $manualPayment->allowNonThirdPartyGateway = true;
             $manualPayment->save();
             $this->callbackProjector->syncProjection($manualPayment);
 
-            $lockedInvoice = $this->tradeLifecycleService->markInvoicePaid($lockedInvoice, [
-                'paid_at' => $paidAt,
-                'trace_id' => $traceId,
-            ]);
+            if ($isFullPayment) {
+                $lockedInvoice = $this->tradeLifecycleService->markInvoicePaid($lockedInvoice, [
+                    'paid_amount' => number_format(round((float) ($lockedInvoice->paid_amount ?? 0) + $requestedAmount, 2), 2, '.', ''),
+                    'paid_at' => $paidAt,
+                    'trace_id' => $traceId,
+                ]);
+            } else {
+                // 部分核销只做投影累加（账单+订单 paid_amount），不改变状态、不触发履约。
+                $this->tradeLifecycleService->reservePaidProjection($lockedInvoice, $requestedAmount);
+            }
 
             return $lockedInvoice->fresh(['order', 'items', 'payments']) ?? $lockedInvoice;
         });
 
-        if ($syncBusinessFlow) {
+        if ($syncBusinessFlow && $isFullPayment) {
             // app() 延迟解析：本类经 InvoicePaidOrchestrator -> ServiceRenewService 反向依赖自身，
             // 构造器注入会形成容器环，与既有回调链路的解法保持一致。
             app(InvoicePaidOrchestrator::class)->handlePaidInvoice($updatedInvoice, $traceId !== '' ? 'manual:'.$traceId : 'manual:invoice:'.$updatedInvoice->id);
@@ -1296,6 +1319,8 @@ class InvoiceService
             detail: [
                 'invoice_no' => (string) $updatedInvoice->invoice_no,
                 'paid_amount' => number_format((float) $updatedInvoice->paid_amount, 2, '.', ''),
+                'entry_amount' => number_format($requestedAmount, 2, '.', ''),
+                'partial' => ! $isFullPayment,
                 'paid_at' => $paidAt->format('Y-m-d H:i:s'),
                 'payment_gateway' => $paymentGateway,
                 'trade_no' => trim((string) ($payload['trade_no'] ?? '')),

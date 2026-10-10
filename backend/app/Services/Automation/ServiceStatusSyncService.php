@@ -9,11 +9,13 @@ use App\Exceptions\BusinessException;
 use App\Models\Product;
 use App\Models\Service;
 use App\Models\Supplier;
+use App\Services\ClientServiceConsole\ServiceOverviewService;
 use App\Services\Integrations\Plugins\PluginBindingResolver;
 use App\Services\Integrations\Plugins\ServiceUpstreamBindingWriter;
 use App\Services\Integrations\Support\ProviderErrorMapper;
 use App\Services\Upstream\Contracts\ProvidesStatusSync;
 use App\Services\Upstream\ProviderResolver;
+use App\Support\Concerns\ResolvesBinding;
 use App\Support\SchemaMetadataCache;
 use App\Support\ServiceHostname;
 use Carbon\Carbon;
@@ -24,6 +26,8 @@ use Illuminate\Support\Facades\Log;
 
 class ServiceStatusSyncService
 {
+    use ResolvesBinding;
+
     private const DEFAULT_SERVICE_CHUNK_SIZE = 100;
 
     private const DEFAULT_SUPPLIER_REQUEST_CHUNK_SIZE = 10;
@@ -61,7 +65,7 @@ class ServiceStatusSyncService
         ];
 
         Service::query()
-            ->select(['services.id', 'services.name', 'services.domain', 'services.status', 'services.provision_data', 'services.expires_at', 'services.product_id'])
+            ->select(['services.id', 'services.user_id', 'services.name', 'services.domain', 'services.status', 'services.provision_data', 'services.expires_at', 'services.product_id'])
             ->join('products', 'services.product_id', '=', 'products.id')
             ->whereIn('services.status', [
                 ServiceStatus::PENDING,
@@ -96,7 +100,7 @@ class ServiceStatusSyncService
         }
 
         Service::query()
-            ->select(['services.id', 'services.name', 'services.domain', 'services.status', 'services.provision_data', 'services.expires_at', 'services.product_id'])
+            ->select(['services.id', 'services.user_id', 'services.name', 'services.domain', 'services.status', 'services.provision_data', 'services.expires_at', 'services.product_id'])
             ->join('products', 'services.product_id', '=', 'products.id')
             ->whereIn('services.status', [
                 ServiceStatus::PENDING,
@@ -689,6 +693,12 @@ class ServiceStatusSyncService
 
         $service->refresh()->loadMissing('product.supplier');
         $this->bindingWriter()->syncServiceState($service, $service->product, $provisionData);
+
+        // 上游同步回写了状态/到期时间/名称等概览字段，事务外失效该用户概览缓存，避免最长 120s 脏读。
+        $userId = (int) ($service->user_id ?? 0);
+        if ($userId > 0) {
+            app(ServiceOverviewService::class)->forgetGroupedOverviewCache($userId);
+        }
     }
 
     private function markSyncFailure(Service $service, string $message): void
@@ -768,11 +778,6 @@ class ServiceStatusSyncService
                 $subQuery->whereNotIn('sub.provider_key', $normalizedExcluded);
             }
         });
-    }
-
-    private function bindingResolver(): PluginBindingResolver
-    {
-        return $this->bindingResolver ??= app(PluginBindingResolver::class);
     }
 
     private function bindingWriter(): ServiceUpstreamBindingWriter

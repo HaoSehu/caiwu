@@ -17,6 +17,19 @@ use Illuminate\Http\Resources\Json\JsonResource;
 class AdminSupplierResource extends JsonResource
 {
     /**
+     * 依赖显式注入（B6：Resource 不再经 app() 服务定位器隐式解析，调用方负责传入）。
+     * 供应商卡渲染与 provider 描述符解析由调用方（AdminConfigurationV2QueryService）注入。
+     */
+    public function __construct(
+        $resource,
+        private readonly PluginBindingResolver $bindingResolver,
+        private readonly ProviderRegistry $providerRegistry,
+        private readonly SupplierPluginCardRenderer $cardRenderer,
+    ) {
+        parent::__construct($resource);
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function toArray(Request $request): array
@@ -51,7 +64,7 @@ class AdminSupplierResource extends JsonResource
             'notes' => $this->notes,
             'created_at' => optional($this->created_at)?->format('Y-m-d H:i:s'),
             'updated_at' => optional($this->updated_at)?->format('Y-m-d H:i:s'),
-            'card' => app(SupplierPluginCardRenderer::class)->render($this->resource, [
+            'card' => $this->cardRenderer->render($this->resource, [
                 'binding' => $binding,
             ]),
         ];
@@ -62,7 +75,7 @@ class AdminSupplierResource extends JsonResource
      */
     private function bindingProjection(): array
     {
-        return app(PluginBindingResolver::class)->supplierBindingProjection($this->resource);
+        return $this->bindingResolver->supplierBindingProjection($this->resource);
     }
 
     /**
@@ -106,7 +119,7 @@ class AdminSupplierResource extends JsonResource
      */
     private function visibleProviderConfig(string $providerKey, array $providerConfig): array
     {
-        $descriptor = app(ProviderRegistry::class)->descriptor($providerKey);
+        $descriptor = $this->providerRegistry->descriptor($providerKey);
         $fields = (array) ($descriptor?->supplierForm['fields'] ?? []);
         $visible = [];
 
@@ -136,7 +149,7 @@ class AdminSupplierResource extends JsonResource
      */
     private function providerCredentialValues(string $providerKey, array $providerConfig): array
     {
-        $descriptor = app(ProviderRegistry::class)->descriptor($providerKey);
+        $descriptor = $this->providerRegistry->descriptor($providerKey);
         $fields = (array) ($descriptor?->supplierForm['fields'] ?? []);
         $values = [];
 
@@ -162,6 +175,6 @@ class AdminSupplierResource extends JsonResource
             return '';
         }
 
-        return app(ProviderRegistry::class)->descriptor($providerKey)?->label ?? $providerKey;
+        return $this->providerRegistry->descriptor($providerKey)?->label ?? $providerKey;
     }
 }

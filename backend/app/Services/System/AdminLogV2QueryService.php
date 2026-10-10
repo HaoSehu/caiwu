@@ -474,6 +474,41 @@ class AdminLogV2QueryService
      */
     private function scheduleDetail(string $channel, string $log): ?array
     {
+        // V9-02 收敛（2026-10-10）后任务日志新增来源为 activity_logs(module=cron) 审计镜像，
+        // 列表 id 形如 activity-{id}；此处按来源分别解析，保证镜像条目详情可达。
+        if (str_starts_with($log, 'activity-') && SchemaMetadataCache::hasTable('activity_logs')) {
+            $activityId = $this->stripLogPrefix($log, 'activity-');
+            $activity = ActivityLog::query()->where('module', 'cron')->find($activityId);
+            if (! $activity instanceof ActivityLog) {
+                return null;
+            }
+
+            $contextValue = $activity->getAttribute('context');
+            $context = is_array($contextValue) ? $contextValue : [];
+            $taskKey = trim((string) ($context['task_key'] ?? ''));
+            $status = trim((string) $activity->action);
+
+            return [
+                'id' => 'activity-'.$activity->id,
+                'channel' => $channel,
+                'source' => 'activity_logs',
+                'fields' => [
+                    'id' => 'activity-'.$activity->id,
+                    'task_name' => $taskKey,
+                    'task_key' => $taskKey,
+                    'status' => $status,
+                    'duration_ms' => isset($context['duration_ms']) ? (int) $context['duration_ms'] : null,
+                    'started_at' => null,
+                    'finished_at' => $this->dateValue($activity, 'created_at'),
+                    'created_at' => $this->dateValue($activity, 'created_at'),
+                    'error_msg' => (string) ($context['error_message'] ?? ''),
+                ],
+                'message' => trim((string) $activity->description),
+                'context' => ['summary' => $context['summary'] ?? []],
+                'created_at' => $this->dateValue($activity, 'created_at'),
+            ];
+        }
+
         $id = $this->stripLogPrefix($log, 'schedule-');
         $model = ScheduleRunLog::query()->find($id);
         if (! $model instanceof ScheduleRunLog) {

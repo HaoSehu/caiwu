@@ -13,9 +13,17 @@ use Illuminate\Http\Resources\Json\JsonResource;
 /** @mixin Product */
 class CouponProductResource extends JsonResource
 {
+    /**
+     * 依赖显式注入（B6：Resource 不再经 app() 服务定位器隐式解析，调用方负责传入）。
+     */
+    public function __construct($resource, private readonly ProductDisplayNameResolver $displayNameResolver)
+    {
+        parent::__construct($resource);
+    }
+
     public function toArray(Request $request): array
     {
-        $displayName = app(ProductDisplayNameResolver::class)->resolveForProduct($this->resource);
+        $displayName = $this->displayNameResolver->resolveForProduct($this->resource);
         $productDisplayName = $this->firstFilled([
             $displayName['custom_display_name'] ?? '',
             $displayName['cpu_memory_slug_display'] ?? '',

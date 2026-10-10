@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Services\Integrations\Plugins\PluginBindingResolver;
 use App\Services\Integrations\Plugins\ServiceUpstreamBindingWriter;
 use App\Services\System\OperationLogService;
+use App\Support\Concerns\ResolvesBinding;
 use App\Support\SensitiveDataSanitizer;
 use Illuminate\Support\Facades\Cache;
 
@@ -20,6 +21,8 @@ use Illuminate\Support\Facades\Cache;
  */
 class ServicePowerService
 {
+    use ResolvesBinding;
+
     private const REINSTALL_OPTIONS_CACHE_TTL_SECONDS = 604800;
 
     public function __construct(
@@ -107,11 +110,6 @@ class ServicePowerService
         $projection = $this->bindingResolver()->serviceProvisionProjection($service);
 
         return $projection === [] ? $legacy : array_replace($legacy, $projection);
-    }
-
-    private function bindingResolver(): PluginBindingResolver
-    {
-        return $this->bindingResolver ??= app(PluginBindingResolver::class);
     }
 
     private function bindingWriter(): ServiceUpstreamBindingWriter

@@ -36,6 +36,9 @@ class AdminConfigurationV2QueryService
     public function __construct(
         private readonly IntegrationPluginService $pluginService,
         private readonly SettingService $settingService,
+        private readonly PluginBindingResolver $bindingResolver,
+        private readonly ProviderRegistry $providerRegistry,
+        private readonly SupplierPluginCardRenderer $cardRenderer,
     ) {}
 
     /**
@@ -172,6 +175,20 @@ class AdminConfigurationV2QueryService
     }
 
     /**
+     * 供应商总数/启用/停用聚合（V5-02：自控制器下沉）。
+     *
+     * @return array{total: int, active: int, inactive: int}
+     */
+    public function supplierStatusSummary(): array
+    {
+        return [
+            'total' => Supplier::query()->count(),
+            'active' => Supplier::query()->where('status', 1)->count(),
+            'inactive' => Supplier::query()->where('status', 0)->count(),
+        ];
+    }
+
+    /**
      * @param  array<string, mixed>  $filters
      * @return array<string, mixed>
      */
@@ -203,11 +220,28 @@ class AdminConfigurationV2QueryService
             ->paginate($pageSize);
 
         return [
-            'list' => AdminSupplierResource::collection($paginator->items())->resolve(),
+            'list' => collect($paginator->items())
+                ->map(fn (Supplier $supplier): array => $this->presentSupplier($supplier))
+                ->all(),
             'total' => $paginator->total(),
             'page' => $paginator->currentPage(),
             'page_size' => $paginator->perPage(),
         ];
+    }
+
+    /**
+     * 供应商输出统一入口（B6：依赖显式传入 Resource，Resource 不再自行解析服务）。
+     *
+     * @return array<string, mixed>
+     */
+    private function presentSupplier(Supplier $supplier): array
+    {
+        return AdminSupplierResource::make(
+            $supplier,
+            $this->bindingResolver,
+            $this->providerRegistry,
+            $this->cardRenderer,
+        )->resolve();
     }
 
     /**
@@ -216,7 +250,7 @@ class AdminConfigurationV2QueryService
     public function supplierDetail(Supplier $supplier): array
     {
         return [
-            'supplier' => AdminSupplierResource::make($supplier)->resolve(),
+            'supplier' => $this->presentSupplier($supplier),
         ];
     }
 
@@ -237,7 +271,7 @@ class AdminConfigurationV2QueryService
         });
 
         return [
-            'supplier' => AdminSupplierResource::make($supplier->refresh())->resolve(),
+            'supplier' => $this->presentSupplier($supplier->refresh()),
         ];
     }
 
@@ -265,7 +299,7 @@ class AdminConfigurationV2QueryService
         }
 
         return [
-            'supplier' => AdminSupplierResource::make($supplier->refresh())->resolve(),
+            'supplier' => $this->presentSupplier($supplier->refresh()),
         ];
     }
 
@@ -408,7 +442,7 @@ class AdminConfigurationV2QueryService
         }
 
         $providerKey = trim((string) ($binding['provider_key'] ?? ''));
-        $descriptor = app(ProviderRegistry::class)->descriptor($providerKey);
+        $descriptor = $this->providerRegistry->descriptor($providerKey);
         $fields = (array) ($descriptor?->supplierForm['fields'] ?? []);
         $field = collect($fields)->first(function (mixed $item) use ($secretKey): bool {
             return is_array($item)
@@ -437,7 +471,7 @@ class AdminConfigurationV2QueryService
         $supplier->update(['status' => $enabled ? 1 : 0]);
 
         return $this->actionResult((int) $supplier->id, $enabled ? 'enabled' : 'disabled', '状态已更新', [
-            'supplier' => AdminSupplierResource::make($supplier->refresh())->resolve(),
+            'supplier' => $this->presentSupplier($supplier->refresh()),
         ]);
     }
 
@@ -641,7 +675,7 @@ class AdminConfigurationV2QueryService
     {
         $binding = $this->supplierBindingProjection($supplier, includeSecrets: true);
         $providerKey = trim((string) ($binding['provider_key'] ?? ''));
-        $descriptor = app(ProviderRegistry::class)->descriptor($providerKey);
+        $descriptor = $this->providerRegistry->descriptor($providerKey);
         $fields = (array) ($descriptor?->supplierForm['fields'] ?? []);
         $providerConfig = (array) ($binding['provider_config'] ?? []);
 

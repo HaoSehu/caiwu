@@ -26,9 +26,13 @@ class UpdateCouponRequest extends AdminFormRequest
                 Rule::unique('coupons', 'code')->ignore($coupon?->id),
             ],
             'description' => ['nullable', 'string', 'max:255'],
-            'discount_type' => ['required', Rule::in(['fixed', 'percentage'])],
+            'discount_type' => ['required', Rule::in(['fixed', 'percentage', 'override'])],
             'discount_scope' => ['required', Rule::in(['first_month', 'recurring', 'renew'])],
-            'discount_value' => ['required', 'numeric', 'min:0'],
+            // override（覆盖价券）discount_value 即覆盖价，最低 0.01，与封顶 amount-0.01 同口径
+            'discount_value' => [
+                'required', 'numeric', 'min:0',
+                Rule::when($this->input('discount_type') === 'override', ['min:0.01']),
+            ],
             'distribution_type' => ['required', Rule::in(['public', 'private'])],
             'min_amount' => ['nullable', 'numeric', 'min:0'],
             'max_discount_amount' => ['nullable', 'numeric', 'min:0'],

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Resources\Admin\V2;
 
 use App\Constants\ProductType;
+use App\Http\Resources\Concerns\StripsSensitiveResourceData;
 use App\Models\Product;
 use App\Models\ProductUpstreamBinding;
 use App\Models\Supplier;
@@ -18,6 +19,16 @@ use Illuminate\Support\Collection;
 
 class AdminProductDetailResource extends JsonResource
 {
+    use StripsSensitiveResourceData;
+
+    /**
+     * 依赖显式注入（B6：Resource 不再经 app() 服务定位器隐式解析，调用方负责传入）。
+     */
+    public function __construct($resource, private readonly ProductDisplayNameResolver $displayNameResolver)
+    {
+        parent::__construct($resource);
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -25,7 +36,7 @@ class AdminProductDetailResource extends JsonResource
     {
         /** @var Product $product */
         $product = $this->resource;
-        $display = app(ProductDisplayNameResolver::class)->resolveForProduct($product);
+        $display = $this->displayNameResolver->resolveForProduct($product);
         $hierarchy = ProductGroupHierarchyFields::fromProduct($product);
         $productType = (string) ($hierarchy['product_type'] ?? $hierarchy['service_type_code'] ?? $product->product_type ?? '');
         $purchaseRequires = $this->removeSensitiveKeys((array) ($product->purchase_requires ?? []));
@@ -195,19 +206,6 @@ class AdminProductDetailResource extends JsonResource
         }
 
         return $clean;
-    }
-
-    private function isSensitiveKey(string $key): bool
-    {
-        $normalized = strtolower($key);
-
-        foreach (['password', 'secret', 'api_key', 'raw_response', 'third_party_response'] as $needle) {
-            if (str_contains($normalized, $needle)) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     private function trimConfigOptions(mixed $configOptions): array

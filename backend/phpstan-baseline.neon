@@ -2787,31 +2787,19 @@ parameters:
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$display_name\.$#'
 			identifier: property.notFound
-			count: 5
+			count: 1
 			path: app/Services/Finance/AdminOrderNotificationService.php
 
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$email\.$#'
 			identifier: property.notFound
-			count: 5
-			path: app/Services/Finance/AdminOrderNotificationService.php
-
-		-
-			message: '#^Cannot access property \$invoice_no on null\.$#'
-			identifier: property.nonObject
 			count: 1
 			path: app/Services/Finance/AdminOrderNotificationService.php
 
 		-
 			message: '#^Cannot call method format\(\) on string\.$#'
 			identifier: method.nonObject
-			count: 5
-			path: app/Services/Finance/AdminOrderNotificationService.php
-
-		-
-			message: '#^Expression on left side of \?\? is always null\.$#'
-			identifier: nullCoalesce.expr
-			count: 1
+			count: 2
 			path: app/Services/Finance/AdminOrderNotificationService.php
 
 		-
@@ -2823,25 +2811,13 @@ parameters:
 		-
 			message: '#^Using nullsafe property access "\?\-\>email" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
-			count: 5
-			path: app/Services/Finance/AdminOrderNotificationService.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Services/Finance/AdminOrderNotificationService.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>invoice_no" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Services/Finance/AdminOrderNotificationService.php
 
 		-
 			message: '#^Using nullsafe property access "\?\-\>trade_no" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
-			count: 2
+			count: 1
 			path: app/Services/Finance/AdminOrderNotificationService.php
 
 		-
@@ -3147,24 +3123,6 @@ parameters:
 		-
 			message: '#^Offset ''combined_display…'' on array\{product_display_name\: string, product_spec_display\: string, custom_display_name\: string, cpu_memory_display\: string, cpu_memory_slug_display\: string, combined_display_name\: string, instance_spec_text\: string, cpu_display\: string, \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
-			count: 2
-			path: app/Services/Finance/CouponService.php
-
-		-
-			message: '#^Offset ''cpu_memory_display'' on array\{product_display_name\: string, product_spec_display\: string, custom_display_name\: string, cpu_memory_display\: string, cpu_memory_slug_display\: string, combined_display_name\: string, instance_spec_text\: string, cpu_display\: string, \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'
-			identifier: nullCoalesce.offset
-			count: 1
-			path: app/Services/Finance/CouponService.php
-
-		-
-			message: '#^Offset ''cpu_memory_slug…'' on array\{product_display_name\: string, product_spec_display\: string, custom_display_name\: string, cpu_memory_display\: string, cpu_memory_slug_display\: string, combined_display_name\: string, instance_spec_text\: string, cpu_display\: string, \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'
-			identifier: nullCoalesce.offset
-			count: 1
-			path: app/Services/Finance/CouponService.php
-
-		-
-			message: '#^Offset ''custom_display_name'' on array\{product_display_name\: string, product_spec_display\: string, custom_display_name\: string, cpu_memory_display\: string, cpu_memory_slug_display\: string, combined_display_name\: string, instance_spec_text\: string, cpu_display\: string, \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'
-			identifier: nullCoalesce.offset
 			count: 1
 			path: app/Services/Finance/CouponService.php
 
@@ -3172,12 +3130,6 @@ parameters:
 			message: '#^Offset ''product_display_name'' on array\{product_display_name\: string, product_spec_display\: string, custom_display_name\: string, cpu_memory_display\: string, cpu_memory_slug_display\: string, combined_display_name\: string, instance_spec_text\: string, cpu_display\: string, \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
 			count: 2
-			path: app/Services/Finance/CouponService.php
-
-		-
-			message: '#^Offset ''product_spec_display'' on array\{product_display_name\: string, product_spec_display\: string, custom_display_name\: string, cpu_memory_display\: string, cpu_memory_slug_display\: string, combined_display_name\: string, instance_spec_text\: string, cpu_display\: string, \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'
-			identifier: nullCoalesce.offset
-			count: 1
 			path: app/Services/Finance/CouponService.php
 
 		-
@@ -4521,12 +4473,6 @@ parameters:
 		-
 			message: '#^Constant App\\Services\\ProductCatalog\\ProductSiteService\:\:SITE_PRODUCT_STOCK_CACHE_TTL_SECONDS is unused\.$#'
 			identifier: classConstant.unused
-			count: 1
-			path: app/Services/ProductCatalog/ProductSiteService.php
-
-		-
-			message: '#^Method App\\Services\\ProductCatalog\\ProductSiteService\:\:siteCatalog\(\) should return Illuminate\\Database\\Eloquent\\Collection but returns Illuminate\\Support\\Collection\<\(int\|string\), mixed\>\.$#'
-			identifier: return.type
 			count: 1
 			path: app/Services/ProductCatalog/ProductSiteService.php
 

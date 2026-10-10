@@ -98,6 +98,19 @@ class MarketingProductGroupService
     }
 
     /**
+     * 当前等级已配置的折扣规则（按营销组 ID 键控；V5-02：自控制器下沉）。
+     *
+     * @return \Illuminate\Support\Collection<int, MemberLevelGroupDiscount>
+     */
+    public function discountsForLevel(MemberLevel $memberLevel): \Illuminate\Support\Collection
+    {
+        return MemberLevelGroupDiscount::query()
+            ->where('member_level_id', $memberLevel->id)
+            ->get()
+            ->keyBy('marketing_product_group_id');
+    }
+
+    /**
      * 整包替换某等级的矩阵规则；空数组即清空该等级全部折扣。
      *
      * @param  array<int, array{marketing_product_group_id: int, discount_type: int, discount_value: float}>  $rules

@@ -10,7 +10,9 @@ use App\Http\Requests\Site\V2\ProductGroup\ListProductGroupProductsRequest;
 use App\Http\Requests\Site\V2\ProductGroup\ListProductGroupsRequest;
 use App\Http\Resources\Site\V2\SiteProductCardResource;
 use App\Http\Resources\Site\V2\SiteProductGroupResource;
+use App\Models\Product;
 use App\Services\ProductCatalog\ProductCatalogService;
+use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Services\ProductCatalog\ProductGroupV2QueryService;
 use Illuminate\Http\JsonResponse;
 
@@ -19,6 +21,7 @@ class ProductGroupController extends Controller
     public function __construct(
         private readonly ProductGroupV2QueryService $productGroups,
         private readonly ProductCatalogService $catalog,
+        private readonly ProductDisplayNameResolver $displayNameResolver,
     ) {}
 
     public function index(ListProductGroupsRequest $request): JsonResponse
@@ -50,7 +53,7 @@ class ProductGroupController extends Controller
 
         return $this->paginate(
             $this->productGroups->paginateSiteProducts($group, (int) $payload['level'], $payload),
-            SiteProductCardResource::class
+            fn (Product $product): array => (new SiteProductCardResource($product, $this->displayNameResolver))->resolve()
         );
     }
 }

@@ -356,6 +356,16 @@ class TicketService
     }
 
     /**
+     * 客户端工单归属查询：仅允许读取本人工单（V5-02：查询逻辑自控制器下沉）。
+     */
+    public function findForUser(int $userId, int $ticketId): Ticket
+    {
+        return Ticket::query()
+            ->where('user_id', $userId)
+            ->findOrFail($ticketId);
+    }
+
+    /**
      * 客户端列表
      */
     public function clientList(int $userId, array $filters, int $perPage): LengthAwarePaginator

@@ -12,11 +12,12 @@ use App\Models\Coupon;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Services\ProductCatalog\ProductFullPathResolver;
-use Carbon\CarbonImmutable;
-use Illuminate\Database\Eloquent\Builder;
+use App\Support\Concerns\FiltersDateRange;
 
 class ClientOrderQueryService
 {
+    use FiltersDateRange;
+
     public function __construct(
         private readonly OrderService $orders,
         private readonly ProductFullPathResolver $productFullPathResolver,
@@ -212,37 +213,6 @@ class ClientOrderQueryService
         $base['config_pricing_snapshot'] = (array) ($order->config_pricing_snapshot ?? []);
 
         return $base;
-    }
-
-    /**
-     * @param  Builder<Order>  $query
-     * @param  array<string, mixed>  $filters
-     */
-    private function applyDateFilter($query, array $filters): void
-    {
-        $start = trim((string) ($filters['start_date'] ?? ''));
-        $end = trim((string) ($filters['end_date'] ?? ''));
-
-        if ($start === '' && $end === '') {
-            return;
-        }
-
-        if ($start !== '' && $end !== '') {
-            $query->whereBetween('created_at', [
-                CarbonImmutable::parse($start)->startOfDay(),
-                CarbonImmutable::parse($end)->endOfDay(),
-            ]);
-
-            return;
-        }
-
-        if ($start !== '') {
-            $query->where('created_at', '>=', CarbonImmutable::parse($start)->startOfDay());
-
-            return;
-        }
-
-        $query->where('created_at', '<=', CarbonImmutable::parse($end)->endOfDay());
     }
 
     /**

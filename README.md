@@ -96,7 +96,7 @@ graph TB
 - **分层调用**：Controller 保持薄层，业务收敛到 Service；第三方与上游调用只走插件目录或 `Services/Upstream` 专用层，业务控制器不直接 `Http::*`。
 - **路由统一**：业务接口统一为 `/api/v2/admin|client|site/*`，管理端走 `auth:sanctum` + `ensure.admin` + 权限码，用户端走 `auth:sanctum` + `ensure.client`，回调入口带独立签名与限流。
 - **幂等与一致**：支付回调、订单创建、返利计算等关键业务依赖 Redis 锁与唯一约束保证幂等；财务、订单、余额、返佣、开通、回调均要求事务、幂等与审计字段。
-- **并发兜底**：生产每分钟 `schedule:run` 并行消费业务队列（`provision,referral,notification,coupon,default`）与 `automation` 队列，各自独立互斥；VNC Relay 独立常驻，不影响心跳、支付、新购或续费；支付回调查询全程限流防重放。
+- **并发兜底**：生产每分钟 `schedule:run` 并行消费开通队列（`provision`）、业务队列（`referral,notification,coupon,default`）与 `automation` 队列，各自独立互斥；VNC Relay 独立常驻，不影响心跳、支付、新购或续费；支付回调查询全程限流防重放。
 
 ## ✅ 工程与安全基线
 

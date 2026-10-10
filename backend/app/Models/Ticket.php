@@ -35,9 +35,4 @@ class Ticket extends Model
     {
         return $this->belongsTo(AdminUser::class, 'assignee_id');
     }
-
-    public function scopeOpen($query)
-    {
-        return $query->whereIn('status', [0, 1, 2]);
-    }
 }

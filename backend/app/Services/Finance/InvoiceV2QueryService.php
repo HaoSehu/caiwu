@@ -9,12 +9,14 @@ use App\Constants\InvoiceType;
 use App\Constants\PaymentStatus;
 use App\Models\Invoice;
 use App\Models\Product;
-use Carbon\CarbonImmutable;
+use App\Support\Concerns\FiltersDateRange;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 
 class InvoiceV2QueryService
 {
+    use FiltersDateRange;
+
     public function __construct(
         private readonly InvoiceService $invoices,
     ) {}
@@ -85,6 +87,11 @@ class InvoiceV2QueryService
                 $builder->whereHas('payments', fn (Builder $paymentQuery): Builder => $paymentQuery->where('status', PaymentStatus::REFUNDED))
                     ->orWhere('status', InvoiceStatus::REFUNDED);
             });
+        } elseif ($statusFilter !== null && $statusFilter !== '' && (int) $statusFilter === InvoiceStatus::PARTIAL_PAID) {
+            // 派生展示态「部分已付」：库内仍为待支付，按已付金额介于 (0, 应付) 命中。
+            $query->where('status', InvoiceStatus::UNPAID)
+                ->where('paid_amount', '>', 0)
+                ->whereColumn('paid_amount', '<', 'amount');
         } elseif ($statusFilter !== null && $statusFilter !== '') {
             $query->where('status', (int) $statusFilter);
         }
@@ -109,36 +116,6 @@ class InvoiceV2QueryService
         }
 
         $this->applyDateFilter($query, $filters);
-    }
-
-    /**
-     * @param  array<string, mixed>  $filters
-     */
-    private function applyDateFilter(Builder $query, array $filters): void
-    {
-        $start = trim((string) ($filters['start_date'] ?? ''));
-        $end = trim((string) ($filters['end_date'] ?? ''));
-
-        if ($start === '' && $end === '') {
-            return;
-        }
-
-        if ($start !== '' && $end !== '') {
-            $query->whereBetween('created_at', [
-                CarbonImmutable::parse($start)->startOfDay(),
-                CarbonImmutable::parse($end)->endOfDay(),
-            ]);
-
-            return;
-        }
-
-        if ($start !== '') {
-            $query->where('created_at', '>=', CarbonImmutable::parse($start)->startOfDay());
-
-            return;
-        }
-
-        $query->where('created_at', '<=', CarbonImmutable::parse($end)->endOfDay());
     }
 
     /**

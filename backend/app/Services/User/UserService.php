@@ -464,7 +464,14 @@ class UserService
                     ->orWhereHas('order', fn ($orderQuery) => $orderQuery->where('status', OrderStatus::REFUNDED));
             });
         } elseif (isset($filters['status']) && $filters['status'] !== '') {
-            $query->where('status', $filters['status']);
+            if ((int) $filters['status'] === InvoiceStatus::PARTIAL_PAID) {
+                // 派生展示态「部分已付」：库内仍为待支付，按已付金额介于 (0, 应付) 命中。
+                $query->where('status', InvoiceStatus::UNPAID)
+                    ->where('paid_amount', '>', 0)
+                    ->whereColumn('paid_amount', '<', 'amount');
+            } else {
+                $query->where('status', $filters['status']);
+            }
         }
         if (! empty($filters['type'])) {
             $type = (string) $filters['type'];

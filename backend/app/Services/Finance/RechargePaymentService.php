@@ -10,10 +10,12 @@ use App\Constants\PaymentStatus;
 use App\Exceptions\BusinessException;
 use App\Models\Invoice;
 use App\Models\Payment;
+use App\Models\RechargeRecord;
 use App\Models\User;
 use App\Services\Integrations\Payments\PaymentGatewayManager;
 use App\Services\Integrations\Payments\PaymentGatewayOperationService;
 use App\Services\Integrations\Plugins\PaymentGatewayBindingResolver;
+use App\Services\System\ActivityLogService;
 use App\Services\System\OperationLogService;
 use App\Services\User\AccountService;
 use Carbon\CarbonImmutable;
@@ -41,11 +43,12 @@ class RechargePaymentService
         private FinanceDocumentService $financeDocumentService,
         private FinanceLedgerWriter $financeLedgerWriter,
         private PaymentCallbackProjector $callbackProjector,
+        private ActivityLogService $activityLogService,
         private ?PaymentGatewayBindingResolver $paymentGatewayBindingResolver = null,
     ) {}
 
     /**
-     * 管理员余额调整（正数充值 / 负数扣费），幂等键 10 分钟占位。
+     * 管理员余额调整（正数充值 / 负数扣费），幂等键必填、10 分钟占位。
      *
      * @return array<string, mixed>
      */
@@ -54,33 +57,32 @@ class RechargePaymentService
         throw_if($amount == 0, new BusinessException('调整金额不能为 0'));
 
         $idempotencyKey = trim((string) ($context['idempotency_key'] ?? ''));
-        $lockKey = '';
-        if ($idempotencyKey !== '') {
-            $lockKey = 'lock:admin:balance-adjust:'.$user->id.':'.md5($idempotencyKey);
-            if (! Cache::add($lockKey, 1, 600)) {
-                // 幂等命中留痕：区分“已入账重放”与“误重试”，不动资金
-                app(OperationLogService::class)->write(
-                    userId: ((int) ($context['operator_id'] ?? 0)) ?: null,
-                    userType: 'admin',
-                    action: 'balance.adjust.duplicate_blocked',
-                    module: 'finance',
-                    targetId: (int) $user->id,
-                    detail: [
-                        'user_id' => (int) $user->id,
-                        'idempotency_key' => $idempotencyKey,
-                        'amount' => number_format($amount, 2, '.', ''),
-                        'operator_name' => trim((string) ($context['operator_name'] ?? '')),
-                        'trace_id' => trim((string) ($context['trace_id'] ?? '')),
-                    ],
-                    ipAddress: (string) ($context['ip_address'] ?? '') ?: null,
-                );
+        throw_if($idempotencyKey === '', new BusinessException('余额调整缺少幂等键（idempotency_key），已拒绝执行'));
 
-                throw new BusinessException('相同充值请求已提交，请勿重复操作');
-            }
+        $lockKey = 'lock:admin:balance-adjust:'.$user->id.':'.md5($idempotencyKey);
+        if (! Cache::add($lockKey, 1, 600)) {
+            // 幂等命中留痕：区分“已入账重放”与“误重试”，不动资金
+            app(OperationLogService::class)->write(
+                userId: ((int) ($context['operator_id'] ?? 0)) ?: null,
+                userType: 'admin',
+                action: 'balance.adjust.duplicate_blocked',
+                module: 'finance',
+                targetId: (int) $user->id,
+                detail: [
+                    'user_id' => (int) $user->id,
+                    'idempotency_key' => $idempotencyKey,
+                    'amount' => number_format($amount, 2, '.', ''),
+                    'operator_name' => trim((string) ($context['operator_name'] ?? '')),
+                    'trace_id' => trim((string) ($context['trace_id'] ?? '')),
+                ],
+                ipAddress: (string) ($context['ip_address'] ?? '') ?: null,
+            );
+
+            throw new BusinessException('相同充值请求已提交，请勿重复操作');
         }
 
         try {
-            return DB::transaction(function () use ($user, $amount, $remark, $context): array {
+            $result = DB::transaction(function () use ($user, $amount, $remark, $context): array {
                 $lockedUser = User::query()->lockForUpdate()->findOrFail($user->id);
                 $currentBalance = $this->getUserBalance($lockedUser);
                 $newBalance = $currentBalance + $amount;
@@ -142,12 +144,32 @@ class RechargePaymentService
             });
         } catch (\Throwable $exception) {
             // 入账失败释放幂等占位，允许修正后重试；成功则保留占位拦截同键重放。
-            if ($lockKey !== '') {
-                Cache::forget($lockKey);
-            }
+            Cache::forget($lockKey);
 
             throw $exception;
         }
+
+        // S1-3：余额调整成功路径补 activity_logs 审计行（写入失败不阻断已完成的资金调整）。
+        $invoice = $result['invoice'] ?? null;
+        $rechargeRecord = $result['recharge_record'] ?? null;
+
+        $this->activityLogService->logSafely(
+            'finance',
+            'balance.adjust.completed',
+            sprintf('管理员余额%s成功：¥%s', $amount > 0 ? '增加' : '扣减', number_format(abs($amount), 2, '.', '')),
+            'user',
+            (int) $user->id,
+            array_filter([
+                'amount' => number_format($amount, 2, '.', ''),
+                'operator_name' => trim((string) ($context['operator_name'] ?? $context['operator'] ?? '')),
+                'invoice_no' => $invoice instanceof Invoice ? (string) $invoice->invoice_no : '',
+                'recharge_record_id' => $rechargeRecord instanceof RechargeRecord ? (int) $rechargeRecord->id : null,
+                'idempotency_key' => $idempotencyKey,
+                'trace_id' => trim((string) ($context['trace_id'] ?? '')),
+            ], static fn (mixed $value): bool => $value !== null && $value !== ''),
+        );
+
+        return $result;
     }
 
     /**
@@ -322,6 +344,22 @@ class RechargePaymentService
                 'callback_raw' => $callbackRaw,
             ])->save();
             $this->callbackProjector->syncProjection($lockedPayment);
+
+            // S1-3：充值取消成功路径补 activity_logs 审计行（写入失败不阻断取消动作本身）。
+            $this->activityLogService->logSystemSafely(
+                'finance',
+                'recharge.cancelled',
+                '充值单超时取消：'.(string) $lockedPayment->payment_no,
+                'payment',
+                (int) $lockedPayment->id,
+                [
+                    'payment_no' => (string) $lockedPayment->payment_no,
+                    'user_id' => (int) $lockedPayment->user_id,
+                    'amount' => number_format((float) $lockedPayment->amount, 2, '.', ''),
+                    'closed_reason' => (string) ($context['reason'] ?? 'payment_window_expired'),
+                    'trace_id' => (string) ($context['trace_id'] ?? ($lockedPayment->trace_id ?? '')),
+                ],
+            );
 
             return $lockedPayment;
         });

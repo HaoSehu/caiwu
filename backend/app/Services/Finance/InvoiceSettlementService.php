@@ -10,6 +10,7 @@ use App\Constants\PaymentStatus;
 use App\Exceptions\BusinessException;
 use App\Models\Invoice;
 use App\Models\Payment;
+use App\Services\System\ActivityLogService;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -40,6 +41,7 @@ class InvoiceSettlementService
         private FinanceDocumentService $financeDocumentService,
         private CheckoutSecurityService $checkoutSecurityService,
         private TradeLifecycleService $tradeLifecycleService,
+        private ActivityLogService $activityLogService,
     ) {}
 
     /**
@@ -59,7 +61,7 @@ class InvoiceSettlementService
         string $timeoutMessage,
     ): array {
         return $this->withLock($lockKey, 30, function () use ($payment, $tradeNo, $payload, $logLabel, $closeReason, $abnormalStatusMessage) {
-            return DB::transaction(function () use ($payment, $tradeNo, $payload, $logLabel, $closeReason, $abnormalStatusMessage) {
+            $settlement = DB::transaction(function () use ($payment, $tradeNo, $payload, $logLabel, $closeReason, $abnormalStatusMessage) {
                 $lockedPayment = Payment::query()
                     ->lockForUpdate()
                     ->with(['invoice.order'])
@@ -177,6 +179,10 @@ class InvoiceSettlementService
                     'payment_no' => (string) $lockedPayment->payment_no,
                 ];
             });
+
+            $this->writeSettlementAudit($settlement, $tradeNo, $payload, $logLabel);
+
+            return $settlement;
         }, $timeoutMessage);
     }
 
@@ -224,6 +230,37 @@ class InvoiceSettlementService
         }
 
         $this->financeDocumentService->recordThirdPartyPayment($payment, $invoice);
+    }
+
+    /**
+     * S1-3：网关支付入账成功路径补 activity_logs 审计行（写入失败不阻断已完成的入账）。
+     *
+     * @param  array<string, mixed>  $settlement
+     * @param  array<string, mixed>  $payload
+     */
+    private function writeSettlementAudit(array $settlement, string $tradeNo, array $payload, string $logLabel): void
+    {
+        $invoice = $settlement['invoice'] ?? null;
+
+        if (($settlement['dispatch'] ?? false) !== true || ! $invoice instanceof Invoice) {
+            return;
+        }
+
+        $this->activityLogService->logSystemSafely(
+            'finance',
+            'payment.callback.settled',
+            '网关支付入账成功：账单 '.$invoice->invoice_no,
+            'invoice',
+            (int) $invoice->id,
+            [
+                'invoice_no' => (string) $invoice->invoice_no,
+                'payment_no' => (string) ($settlement['payment_no'] ?? ''),
+                'trade_no' => $tradeNo,
+                'amount' => number_format((float) $invoice->amount, 2, '.', ''),
+                'trace_id' => (string) ($payload['trace_id'] ?? ''),
+                'channel' => $logLabel,
+            ],
+        );
     }
 
     /**

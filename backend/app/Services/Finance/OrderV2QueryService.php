@@ -7,12 +7,14 @@ namespace App\Services\Finance;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\Product;
-use Carbon\CarbonImmutable;
+use App\Support\Concerns\FiltersDateRange;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 
 class OrderV2QueryService
 {
+    use FiltersDateRange;
+
     /**
      * @param  array<string, mixed>  $filters
      */
@@ -132,7 +134,7 @@ class OrderV2QueryService
         }
 
         $this->applyKeywordFilter($query, trim((string) ($filters['keyword'] ?? '')));
-        $this->applyDateFilter($query, 'created_at', $filters);
+        $this->applyDateFilter($query, $filters, 'created_at');
     }
 
     private function applyKeywordFilter(Builder $query, string $keyword): void
@@ -158,36 +160,6 @@ class OrderV2QueryService
                         ->orWhere('domain', 'like', "%{$keyword}%");
                 });
         });
-    }
-
-    /**
-     * @param  array<string, mixed>  $filters
-     */
-    private function applyDateFilter(Builder $query, string $column, array $filters): void
-    {
-        $start = trim((string) ($filters['start_date'] ?? ''));
-        $end = trim((string) ($filters['end_date'] ?? ''));
-
-        if ($start === '' && $end === '') {
-            return;
-        }
-
-        if ($start !== '' && $end !== '') {
-            $query->whereBetween($column, [
-                CarbonImmutable::parse($start)->startOfDay(),
-                CarbonImmutable::parse($end)->endOfDay(),
-            ]);
-
-            return;
-        }
-
-        if ($start !== '') {
-            $query->where($column, '>=', CarbonImmutable::parse($start)->startOfDay());
-
-            return;
-        }
-
-        $query->where($column, '<=', CarbonImmutable::parse($end)->endOfDay());
     }
 
     /**
