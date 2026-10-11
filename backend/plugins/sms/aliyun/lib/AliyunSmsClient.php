@@ -152,6 +152,274 @@ class AliyunSmsClient
         ];
     }
 
+    /**
+     * 运营商模板列表（短信模板管理机制 2026-10-11）。
+     *
+     * ⚠️ 联调标注：QuerySmsTemplateList 响应结构与 TemplateStatus 取值
+     * （0=审核中 1=通过 2=拒绝）需真实凭据联调核对；分页循环待联调确认上限。
+     *
+     * @return array{success: bool, message?: string, templates?: array<int, array<string, mixed>>}
+     */
+    public function querySmsTemplates(): array
+    {
+        $accessKeyId = (string) ($this->config['access_key'] ?? '');
+        $accessKeySecret = (string) ($this->config['secret_key'] ?? '');
+        if ($accessKeyId === '' || $accessKeySecret === '') {
+            return ['success' => false, 'message' => '短信接口配置不完整'];
+        }
+
+        $result = $this->request(self::SMS_ENDPOINT, [
+            'Action' => 'QuerySmsTemplateList',
+            'PageIndex' => 1,
+            'PageSize' => 50,
+        ], $accessKeyId, $accessKeySecret);
+
+        if (! is_array($result)) {
+            return ['success' => false, 'message' => $this->resolveCurlFailureMessage()];
+        }
+
+        if (($result['Code'] ?? '') !== 'OK') {
+            return ['success' => false, 'message' => $this->resolveFailureMessage($result['Message'] ?? '', (string) ($result['Code'] ?? ''))];
+        }
+
+        $list = is_array($result['SmsTemplateList'] ?? null) ? $result['SmsTemplateList'] : [];
+        $templates = [];
+        foreach ($list as $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+
+            $templates[] = [
+                'provider_template_id' => (string) ($item['TemplateCode'] ?? ''),
+                'provider_sign' => (string) ($item['SignName'] ?? ''),
+                'content' => (string) ($item['TemplateContent'] ?? ''),
+                'variables' => self::extractVariables((string) ($item['TemplateContent'] ?? '')),
+                'status' => $this->normalizeTemplateStatus((string) ($item['TemplateStatus'] ?? '')),
+                'reject_reason' => (string) ($item['Reason'] ?? ''),
+            ];
+        }
+
+        return ['success' => true, 'templates' => $templates];
+    }
+
+    /**
+     * 提交模板审核（AddSmsTemplate）。payload {title, content, remark} 对齐
+     * ZJMF createCnTemplate。本地 {{var}}/{var} 语法在本层翻译为阿里云 ${var}。
+     * 返回 TemplateCode（审核异步，状态经 QuerySmsTemplate 回查）。
+     *
+     * ⚠️ 联调标注：TemplateType 0=验证码 1=通知短信；需真实凭据联调核对。
+     *
+     * @return array{success: bool, message?: string, provider_template_id?: string, status?: string, content?: string, variables?: array<int, string>}
+     */
+    public function addSmsTemplate(string $title, string $content, string $remark): array
+    {
+        $accessKeyId = (string) ($this->config['access_key'] ?? '');
+        $accessKeySecret = (string) ($this->config['secret_key'] ?? '');
+        if ($accessKeyId === '' || $accessKeySecret === '') {
+            return ['success' => false, 'message' => '短信接口配置不完整'];
+        }
+
+        $translated = $this->translateLocalSyntax($content);
+
+        $result = $this->request(self::SMS_ENDPOINT, [
+            'Action' => 'AddSmsTemplate',
+            'TemplateType' => strpos($content, '验证码') !== false ? 0 : 1,
+            'TemplateName' => $title,
+            'TemplateContent' => $translated,
+            'Remark' => $remark !== '' ? $remark : '业务系统自动提交',
+        ], $accessKeyId, $accessKeySecret);
+
+        if (! is_array($result)) {
+            return ['success' => false, 'message' => $this->resolveCurlFailureMessage()];
+        }
+
+        if (($result['Code'] ?? '') !== 'OK') {
+            return ['success' => false, 'message' => $this->resolveFailureMessage($result['Message'] ?? '', (string) ($result['Code'] ?? ''))];
+        }
+
+        $providerTemplateId = (string) ($result['TemplateCode'] ?? '');
+
+        return [
+            'success' => true,
+            'provider_template_id' => $providerTemplateId,
+            'status' => $providerTemplateId !== '' ? 'pending' : '',
+            'content' => $translated,
+            'variables' => self::extractVariables($translated),
+        ];
+    }
+
+    /**
+     * 修改模板并重新提审（ModifySmsTemplate）——对齐 ZJMF putCnTemplate。
+     *
+     * ⚠️ 联调标注：ModifySmsTemplate 参数与响应需真实凭据联调核对。
+     *
+     * @return array{success: bool, message?: string, status?: string}
+     */
+    public function modifySmsTemplate(string $providerTemplateId, string $content): array
+    {
+        $accessKeyId = (string) ($this->config['access_key'] ?? '');
+        $accessKeySecret = (string) ($this->config['secret_key'] ?? '');
+        if ($accessKeyId === '' || $accessKeySecret === '') {
+            return ['success' => false, 'message' => '短信接口配置不完整'];
+        }
+
+        $translated = $this->translateLocalSyntax($content);
+
+        $result = $this->request(self::SMS_ENDPOINT, [
+            'Action' => 'ModifySmsTemplate',
+            'TemplateCode' => $providerTemplateId,
+            'TemplateContent' => $translated,
+            'TemplateName' => '业务模板修改',
+            'Remark' => '业务系统修改重新提审',
+        ], $accessKeyId, $accessKeySecret);
+
+        if (! is_array($result)) {
+            return ['success' => false, 'message' => $this->resolveCurlFailureMessage()];
+        }
+
+        if (($result['Code'] ?? '') !== 'OK') {
+            return ['success' => false, 'message' => $this->resolveFailureMessage($result['Message'] ?? '', (string) ($result['Code'] ?? ''))];
+        }
+
+        return ['success' => true, 'status' => 'pending'];
+    }
+
+    /**
+     * 删除运营商侧模板（DeleteSmsTemplate）——对齐 ZJMF deleteCnTemplate。
+     *
+     * ⚠️ 联调标注：需真实凭据联调核对。
+     *
+     * @return array{success: bool, message?: string}
+     */
+    public function removeSmsTemplate(string $providerTemplateId): array
+    {
+        $accessKeyId = (string) ($this->config['access_key'] ?? '');
+        $accessKeySecret = (string) ($this->config['secret_key'] ?? '');
+        if ($accessKeyId === '' || $accessKeySecret === '') {
+            return ['success' => false, 'message' => '短信接口配置不完整'];
+        }
+
+        $result = $this->request(self::SMS_ENDPOINT, [
+            'Action' => 'DeleteSmsTemplate',
+            'TemplateCode' => $providerTemplateId,
+        ], $accessKeyId, $accessKeySecret);
+
+        if (! is_array($result)) {
+            return ['success' => false, 'message' => $this->resolveCurlFailureMessage()];
+        }
+
+        if (($result['Code'] ?? '') !== 'OK') {
+            return ['success' => false, 'message' => $this->resolveFailureMessage($result['Message'] ?? '', (string) ($result['Code'] ?? ''))];
+        }
+
+        return ['success' => true];
+    }
+
+    /**
+     * 插件默认模板种子（对齐 ZJMF install() 返回 smsTemplate.php 的机制），
+     * 平台侧落为 draft 草稿。文案为运营商原生 ${var} 语法。
+     *
+     * @return array<string, mixed>
+     */
+    public function defaultTemplates(): array
+    {
+        $seed = [
+            ['账单支付提醒', '${username},您已成功支付账单号#${invoiceid},账单金额${total}.', '账单支付成功通知'],
+            ['账单支付逾期', '${username},您的账单【${invoiceid}】已逾期,金额${total},请及时支付', '账单逾期提醒'],
+            ['提交工单', '${username},您的工单：【${subject}】正在处理中，请耐心等待', '工单受理通知'],
+            ['工单回复', '${username}，您的工单【${subject}】有新回复', '工单回复通知'],
+            ['发送验证码', '验证码${code},5分钟内有效,请勿泄漏于他人', '登录/注册验证码'],
+            ['登录短信提醒', '${username}，您于${time}在IP${address}登录.如不是您的登录,请立即更改密码.', '登录安全提醒'],
+            ['服务到期提醒', '${username}，您的产品${product_name}(主机名${hostname})将于${product_end_time}到期.请及时续费', '续费提醒'],
+        ];
+
+        $defaults = [];
+        foreach ($seed as [$title, $content, $remark]) {
+            $defaults[] = [
+                'title' => $title,
+                'content' => $content,
+                'remark' => $remark,
+                'variables' => self::extractVariables($content),
+            ];
+        }
+
+        return ['defaults' => $defaults];
+    }
+
+    /**
+     * 回查模板审核状态（QuerySmsTemplate）。
+     *
+     * ⚠️ 联调标注：需真实凭据联调核对响应字段。
+     *
+     * @return array{success: bool, message?: string, status?: string, reject_reason?: string}
+     */
+    public function queryTemplateStatus(string $providerTemplateId): array
+    {
+        $accessKeyId = (string) ($this->config['access_key'] ?? '');
+        $accessKeySecret = (string) ($this->config['secret_key'] ?? '');
+        if ($accessKeyId === '' || $accessKeySecret === '') {
+            return ['success' => false, 'message' => '短信接口配置不完整'];
+        }
+
+        $result = $this->request(self::SMS_ENDPOINT, [
+            'Action' => 'QuerySmsTemplate',
+            'TemplateCode' => $providerTemplateId,
+        ], $accessKeyId, $accessKeySecret);
+
+        if (! is_array($result)) {
+            return ['success' => false, 'message' => $this->resolveCurlFailureMessage()];
+        }
+
+        if (($result['Code'] ?? '') !== 'OK') {
+            return ['success' => false, 'message' => $this->resolveFailureMessage($result['Message'] ?? '', (string) ($result['Code'] ?? ''))];
+        }
+
+        return [
+            'success' => true,
+            'status' => $this->normalizeTemplateStatus((string) ($result['TemplateStatus'] ?? '')),
+            'reject_reason' => (string) ($result['Reason'] ?? ''),
+        ];
+    }
+
+    /**
+     * 本地 {{var}}/{{#var}}…{{/var}}/{var} 语法 → 阿里云 ${var} 语法。
+     */
+    private function translateLocalSyntax(string $content): string
+    {
+        $withoutSections = preg_replace('/\{\{\s*#\w+\s*\}\}|\{\{\s*\/\w+\s*\}\}/u', '', $content) ?? $content;
+
+        return (string) preg_replace_callback(
+            '/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}|\{([a-zA-Z0-9_]+)\}/u',
+            static fn (array $matches): string => '${'.($matches[1] !== '' && $matches[1] !== null ? $matches[1] : (string) $matches[2]).'}',
+            $withoutSections
+        );
+    }
+
+    /**
+     * 阿里云 TemplateStatus → 统一审核状态。
+     * ⚠️ 取值映射（0=审核中 1=通过 2=拒绝）需联调核对。
+     */
+    private function normalizeTemplateStatus(string $templateStatus): string
+    {
+        return match ($templateStatus) {
+            '1' => 'approved',
+            '2' => 'rejected',
+            default => 'pending',
+        };
+    }
+
+    /**
+     * 从运营商模板原文提取变量名（${var}）。
+     *
+     * @return array<int, string>
+     */
+    public static function extractVariables(string $content): array
+    {
+        preg_match_all('/\$\{([a-zA-Z0-9_]+)\}/u', $content, $matches);
+
+        return array_values(array_unique((array) ($matches[1] ?? [])));
+    }
+
     private function request(string $url, array $params, string $accessKeyId, string $accessKeySecret, string $phone = ''): array|false
     {
         $this->lastCurlError = null;
