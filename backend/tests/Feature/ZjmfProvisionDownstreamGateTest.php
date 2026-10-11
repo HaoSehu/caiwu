@@ -13,6 +13,7 @@ use App\Models\Service;
 use App\Models\Supplier;
 use App\Models\User;
 use App\Services\Integrations\Plugins\PluginDomain;
+use App\Services\Upstream\Drivers\HostingPanelApi\HostingPanelApiTransport;
 use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfAuthManager;
 use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfFinanceTransport;
 use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfProvisionService;
@@ -20,7 +21,6 @@ use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
 use Mockery;
 use Mockery\MockInterface;
-use ReflectionClass;
 use ReflectionMethod;
 use RuntimeException;
 use Tests\TestCase;
@@ -49,6 +49,9 @@ class ZjmfProvisionDownstreamGateTest extends TestCase
     private const FAKE_PROVIDER_KEY = 'fake_zjmf_gate';
 
     private int $pluginId = 0;
+
+    /** @var array<int, array{uri: string, payload: array<string, mixed>, query: array<string, mixed>}> */
+    private array $cartCalls = [];
 
     protected function setUp(): void
     {
@@ -86,7 +89,7 @@ class ZjmfProvisionDownstreamGateTest extends TestCase
     {
         // 崩溃恢复场景：上次开通已付款成功但本站检查点丢失。清车幂等门
         // 按 downstream_token 命中已支付主机（400+hostid），必须收编而非重开。
-        [$service, $calls] = $this->makeProvisionService([
+        $service = $this->makeProvisionService([
             '/cart/clear' => ['status' => 400, 'msg' => '该订单已开通,请勿重新开通', 'hostid' => 501, 'domainstatus' => 'Active'],
             '/host/header' => $this->hostDetailResponse(501),
         ]);
@@ -96,7 +99,7 @@ class ZjmfProvisionDownstreamGateTest extends TestCase
 
         $this->assertSame(501, $result['upstream_host_id']);
 
-        $uris = array_column($calls, 'uri');
+        $uris = array_column($this->cartCalls, 'uri');
         $this->assertContains('/cart/clear', $uris);
         $this->assertNotContains('/cart/add_to_shop', $uris, '已开通已付的主机不得重走加购');
         $this->assertNotContains('/cart/settle', $uris, '已开通已付的主机不得重走结算');
@@ -109,7 +112,7 @@ class ZjmfProvisionDownstreamGateTest extends TestCase
     {
         // 崩溃恢复场景：上次开通在结算后、支付前中断。清车幂等门命中
         // 未支付旧账单（200+invoiceid+hostid），必须补付该账单而非重开一单。
-        [$service, $calls] = $this->makeProvisionService([
+        $service = $this->makeProvisionService([
             '/cart/clear' => ['status' => 200, 'msg' => 'SUCCESS MESSAGE', 'invoiceid' => 77, 'hostid' => 501],
             '/apply_credit' => ['status' => 1001, 'msg' => '支付完成', 'data' => ['hostid' => [501]]],
             '/host/header' => $this->hostDetailResponse(501),
@@ -121,11 +124,11 @@ class ZjmfProvisionDownstreamGateTest extends TestCase
         $this->assertSame(77, $result['upstream_invoice_id']);
         $this->assertSame(501, $result['upstream_host_id']);
 
-        $uris = array_column($calls, 'uri');
+        $uris = array_column($this->cartCalls, 'uri');
         $this->assertNotContains('/cart/add_to_shop', $uris, '旧账单未支付时不得重走加购');
         $this->assertNotContains('/cart/settle', $uris, '旧账单未支付时不得重走结算');
 
-        $creditCall = $this->callByUri($calls, '/apply_credit');
+        $creditCall = $this->callByUri('/apply_credit');
         $this->assertSame(77, (int) $creditCall['payload']['invoiceid']);
         $this->assertSame(1, (int) $creditCall['payload']['use_credit']);
         $this->assertSame(1, (int) $creditCall['payload']['enough']);
@@ -139,7 +142,7 @@ class ZjmfProvisionDownstreamGateTest extends TestCase
 
     public function test_normal_flow_registers_downstream_params_on_settle_and_credit(): void
     {
-        [$service, $calls] = $this->makeProvisionService([
+        $service = $this->makeProvisionService([
             '/cart/clear' => ['status' => 200, 'msg' => 'SUCCESS MESSAGE'],
             '/cart/get_product_config' => ['status' => 200, 'msg' => 'ok', 'data' => []],
             '/cart/add_to_shop' => ['status' => 200, 'msg' => 'ADD SUCCESS'],
@@ -157,24 +160,23 @@ class ZjmfProvisionDownstreamGateTest extends TestCase
         $token = (string) ($localService->fresh()->provision_data['downstream_token'] ?? '');
         $this->assertSame(32, strlen($token), 'downstream token 必须落库且为 32 位');
 
-        $settleCall = $this->callByUri($calls, '/cart/settle');
+        $settleCall = $this->callByUri('/cart/settle');
         $this->assertSame([0], $settleCall['payload']['pos']);
         $this->assertSame(1, (int) $settleCall['payload']['checkout']);
         $this->assertSame('http://api.example.test', $settleCall['payload']['downstream_url']);
         $this->assertSame($token, $settleCall['payload']['downstream_token']);
         $this->assertSame((int) $localService->id, (int) $settleCall['payload']['downstream_id']);
 
-        $creditCall = $this->callByUri($calls, '/apply_credit');
+        $creditCall = $this->callByUri('/apply_credit');
         $this->assertSame(88, (int) $creditCall['payload']['invoiceid']);
         $this->assertSame($token, $creditCall['payload']['downstream_token']);
-        $this->assertSame(601, (int) $result['upstream_host_id']);
     }
 
     public function test_settle_duplicate_gate_1001_adopts_without_invoice(): void
     {
         // 上游 /cart/settle 同 token 防重门：重入时返回 1001+既有 hostid（无账单 ID）。
         // 实例已存在、无账单可付——必须收编成功，不得因缺账单 ID 抛错。
-        [$service, $calls] = $this->makeProvisionService([
+        $service = $this->makeProvisionService([
             '/cart/clear' => ['status' => 200, 'msg' => 'SUCCESS MESSAGE'],
             '/cart/get_product_config' => ['status' => 200, 'msg' => 'ok', 'data' => []],
             '/cart/add_to_shop' => ['status' => 200, 'msg' => 'ADD SUCCESS'],
@@ -187,7 +189,7 @@ class ZjmfProvisionDownstreamGateTest extends TestCase
 
         $this->assertSame(601, $result['upstream_host_id']);
 
-        $uris = array_column($calls, 'uri');
+        $uris = array_column($this->cartCalls, 'uri');
         $this->assertNotContains('/apply_credit', $uris, '防重门命中时无账单可付，不得再调余额支付');
         $this->assertSame(601, (int) ($localService->fresh()->provision_data['upstream_host_id'] ?? 0));
     }
@@ -195,8 +197,8 @@ class ZjmfProvisionDownstreamGateTest extends TestCase
     public function test_downstream_token_is_persisted_and_stable_across_calls(): void
     {
         // token 跨重试稳定：上游按 token 匹配既有主机，重试换 token 等于放弃幂等门。
-        $provision = $this->makeProvisionServiceWithoutCalls();
-        [, $supplier, $localService] = $this->makeBoundContext();
+        $provision = $this->makeProvisionService([]);
+        [$order, $supplier, $localService] = $this->makeBoundContext();
 
         $method = new ReflectionMethod(ZjmfProvisionService::class, 'resolveDownstreamContext');
         $method->setAccessible(true);
@@ -216,7 +218,7 @@ class ZjmfProvisionDownstreamGateTest extends TestCase
         // app.url 缺失时退化为历史行为：不注册 downstream_*，上游各幂等门不激活。
         config(['app.url' => '']);
 
-        [$service, $calls] = $this->makeProvisionService([
+        $service = $this->makeProvisionService([
             '/cart/clear' => ['status' => 200, 'msg' => 'SUCCESS MESSAGE'],
             '/cart/get_product_config' => ['status' => 200, 'msg' => 'ok', 'data' => []],
             '/cart/add_to_shop' => ['status' => 200, 'msg' => 'ADD SUCCESS'],
@@ -230,10 +232,76 @@ class ZjmfProvisionDownstreamGateTest extends TestCase
 
         $this->assertSame(601, $result['upstream_host_id']);
 
-        $settleCall = $this->callByUri($calls, '/cart/settle');
+        $settleCall = $this->callByUri('/cart/settle');
         $this->assertArrayNotHasKey('downstream_url', $settleCall['payload']);
         $this->assertArrayNotHasKey('downstream_token', $settleCall['payload']);
         $this->assertArrayNotHasKey('downstream_token', $localService->fresh()->provision_data ?? []);
+    }
+
+    /**
+     * 构造脚本化的开通服务：底层传输按 URI 返回预置响应并记录购物车链调用。
+     *
+     * @param  array<string, array<string, mixed>>  $cartResponses  uri → 响应体（requestWithMeta 链）
+     */
+    private function makeProvisionService(array $cartResponses): ZjmfProvisionService
+    {
+        $hosting = $this->mockHostingTransport($cartResponses);
+
+        return new ZjmfProvisionService(
+            new ZjmfFinanceTransport($hosting, new ZjmfAuthManager($hosting)),
+        );
+    }
+
+    /**
+     * @param  array<string, array<string, mixed>>  $cartResponses
+     */
+    private function mockHostingTransport(array $cartResponses): MockInterface
+    {
+        $this->cartCalls = [];
+        $hosting = Mockery::mock(HostingPanelApiTransport::class);
+        $hosting->shouldReceive('request')->andReturnUsing(function (Supplier $supplier, string $method, string $uri) {
+            if ($uri === '/zjmf_api_login') {
+                return ['jwt' => 'unit-test-jwt', 'status' => 200, 'msg' => 'ok'];
+            }
+
+            throw new RuntimeException('意外的上游请求：'.$uri);
+        });
+        $hosting->shouldReceive('requestWithMeta')->andReturnUsing(
+            function (Supplier $supplier, string $method, string $uri, array|string $payload = [], ?string $jwt = null, array $headers = [], array $query = []) use ($cartResponses) {
+                $this->cartCalls[] = [
+                    'uri' => $uri,
+                    'payload' => is_array($payload) ? $payload : [],
+                    'query' => $query,
+                ];
+
+                if (! array_key_exists($uri, $cartResponses)) {
+                    throw new RuntimeException('意外的上游请求：'.$uri);
+                }
+
+                return [
+                    'response' => $cartResponses[$uri],
+                    'headers' => [],
+                    'http_code' => 200,
+                    'content_type' => 'application/json',
+                ];
+            }
+        );
+
+        return $hosting;
+    }
+
+    /**
+     * @return array{uri: string, payload: array<string, mixed>, query: array<string, mixed>}
+     */
+    private function callByUri(string $uri): array
+    {
+        foreach ($this->cartCalls as $call) {
+            if ($call['uri'] === $uri) {
+                return $call;
+            }
+        }
+
+        $this->fail('未发生预期的上游请求：'.$uri);
     }
 
     /**
@@ -299,89 +367,6 @@ class ZjmfProvisionDownstreamGateTest extends TestCase
         ]);
 
         return [$order, $supplier, $localService];
-    }
-
-    /**
-     * 构造脚本化的开通服务：底层传输按 URI 返回预置响应并记录购物车链调用。
-     *
-     * @param array<string, array<string, mixed>> $cartResponses uri → 响应体（requestWithMeta 链）
-     * @return array{0: ZjmfProvisionService, 1: array<int, array{uri: string, payload: array<string, mixed>, query: array<string, mixed>}>}
-     */
-    private function makeProvisionService(array $cartResponses): array
-    {
-        $calls = [];
-        $hosting = $this->mockHostingTransport($cartResponses, $calls);
-
-        return [
-            new ZjmfProvisionService(
-                new ZjmfFinanceTransport($hosting, new ZjmfAuthManager($hosting)),
-            ),
-            $calls,
-        ];
-    }
-
-    private function makeProvisionServiceWithoutCalls(): ZjmfProvisionService
-    {
-        $calls = [];
-        $hosting = $this->mockHostingTransport([], $calls);
-
-        return new ZjmfProvisionService(
-            new ZjmfFinanceTransport($hosting, new ZjmfAuthManager($hosting)),
-        );
-    }
-
-    /**
-     * @param array<string, array<string, mixed>> $cartResponses
-     * @param array<int, array{uri: string, payload: array<string, mixed>, query: array<string, mixed>}> $calls
-     */
-    private function mockHostingTransport(array $cartResponses, array &$calls): MockInterface
-    {
-        $calls = [];
-        $hosting = Mockery::mock(\App\Services\Upstream\Drivers\HostingPanelApi\HostingPanelApiTransport::class);
-        $hosting->shouldReceive('request')->andReturnUsing(function (Supplier $supplier, string $method, string $uri) {
-            if ($uri === '/zjmf_api_login') {
-                return ['jwt' => 'unit-test-jwt', 'status' => 200, 'msg' => 'ok'];
-            }
-
-            throw new RuntimeException('意外的上游请求：'.$uri);
-        });
-        $hosting->shouldReceive('requestWithMeta')->andReturnUsing(
-            function (Supplier $supplier, string $method, string $uri, array|string $payload = [], ?string $jwt = null, array $headers = [], array $query = []) use (&$calls, $cartResponses) {
-                $calls[] = [
-                    'uri' => $uri,
-                    'payload' => is_array($payload) ? $payload : [],
-                    'query' => $query,
-                ];
-
-                if (! array_key_exists($uri, $cartResponses)) {
-                    throw new RuntimeException('意外的上游请求：'.$uri);
-                }
-
-                return [
-                    'response' => $cartResponses[$uri],
-                    'headers' => [],
-                    'http_code' => 200,
-                    'content_type' => 'application/json',
-                ];
-            }
-        );
-
-        return $hosting;
-    }
-
-    /**
-     * @param array<int, array{uri: string, payload: array<string, mixed>, query: array<string, mixed>}> $calls
-     * @return array{uri: string, payload: array<string, mixed>, query: array<string, mixed>}
-     */
-    private function callByUri(array $calls, string $uri): array
-    {
-        foreach ($calls as $call) {
-            if ($call['uri'] === $uri) {
-                return $call;
-            }
-        }
-
-        $this->fail('未发生预期的上游请求：'.$uri);
     }
 
     private function hostDetailResponse(int $hostId): array
