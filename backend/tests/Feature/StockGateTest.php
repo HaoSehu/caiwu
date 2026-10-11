@@ -16,6 +16,7 @@ use App\Models\SecondProductGroup;
 use App\Models\Supplier;
 use App\Models\ThirdProductGroup;
 use App\Models\User;
+use App\Services\ClientServiceConsole\ServiceUpgradeService;
 use App\Services\Finance\CheckoutSecurityService;
 use App\Services\Finance\CheckoutService;
 use App\Services\Integrations\Plugins\PluginDomain;
@@ -337,6 +338,41 @@ class StockGateTest extends TestCase
         } catch (BusinessException $exception) {
             $this->assertNotInstanceOf(UpstreamStockShortageException::class, $exception);
         }
+    }
+
+    public function test_upgrade_rejection_calibrates_target_product_from_snapshot_meta(): void
+    {
+        // 升级校准接线回归：升级单 product_id 是服务当前旧商品，目标商品只在
+        // config_pricing_snapshot.meta.product_id——校准必须归零目标商品，
+        // 误归零旧商品会错杀在售库存（P0 修正回归）。
+        $serviceClass = ServiceUpgradeService::class;
+
+        $syncMock = $this->createMock(ProductSyncService::class);
+        $syncMock->expects($this->once())
+            ->method('markUpstreamStockShortage')
+            ->with($this->identicalTo(991));
+        $this->app->instance(ProductSyncService::class, $syncMock);
+
+        $order = new Order;
+        $order->config_pricing_snapshot = ['meta' => ['product_id' => '991', 'kind' => 'host_upgrade']];
+
+        $method = new ReflectionMethod($serviceClass, 'calibrateTargetStockForUpgrade');
+        $method->setAccessible(true);
+        $method->invoke(app($serviceClass), $order, new UpstreamStockShortageException('超出库存'));
+
+        // 非库存类失败不触发校准
+        $idleMock = $this->createMock(ProductSyncService::class);
+        $idleMock->expects($this->never())->method('markUpstreamStockShortage');
+        $this->app->instance(ProductSyncService::class, $idleMock);
+        $method->invoke(app($serviceClass), $order, new BusinessException('参数错误'));
+
+        // meta 缺失时静默跳过（>0 守卫）
+        $guardMock = $this->createMock(ProductSyncService::class);
+        $guardMock->expects($this->never())->method('markUpstreamStockShortage');
+        $this->app->instance(ProductSyncService::class, $guardMock);
+        $orderWithoutMeta = new Order;
+        $orderWithoutMeta->config_pricing_snapshot = ['meta' => []];
+        $method->invoke(app($serviceClass), $orderWithoutMeta, new UpstreamStockShortageException('超出库存'));
     }
 
     private function boundSupplierId(Product $product): int

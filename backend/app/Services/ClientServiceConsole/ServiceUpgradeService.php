@@ -453,18 +453,7 @@ class ServiceUpgradeService
 
             return $service->fresh(['product.supplier', 'order']) ?? $service;
         } catch (\Throwable $exception) {
-            // 升级目标商品被上游以「库存不足/已下架」类文案拒绝（UpstreamStockShortageException，
-            // 由 ZjmfNetworkService 上游失败出口分类）：与开通链路（ProvisionService）同款校准，
-            // 快照归零 + 售罄覆盖，阻断假快照继续招单付款后卡升级。留痕逻辑不受影响。
-            // 注意：升级单 product_id 是服务当前旧商品（ensureHostUpgradeOrderForInvoice 从
-            // 账单复制），目标商品只存在于 config_pricing_snapshot.meta.product_id（与本方法
-            // 355 行同源），校准必须归零目标商品，误归零旧商品会错杀在售库存。
-            if ($exception instanceof UpstreamStockShortageException) {
-                $targetProductId = (int) data_get($order->config_pricing_snapshot ?? [], 'meta.product_id', 0);
-                if ($targetProductId > 0) {
-                    $this->productSyncService()->markUpstreamStockShortage($targetProductId);
-                }
-            }
+            $this->calibrateTargetStockForUpgrade($order, $exception);
 
             $provisionData = DB::transaction(function () use ($service, $exception): array {
                 $provisionData = $this->serviceProvisionData($service);
@@ -546,6 +535,28 @@ class ServiceUpgradeService
     private function serviceBindingWriter(): ServiceUpstreamBindingWriter
     {
         return $this->serviceBindingWriter ??= app(ServiceUpstreamBindingWriter::class);
+    }
+
+    /**
+     * 升级被上游以「库存不足/已下架」类文案拒绝（UpstreamStockShortageException，由
+     * ZjmfNetworkService 上游失败出口分类）后，与开通链路（ProvisionService）同款校准：
+     * 快照归零 + 售罄覆盖，阻断假快照继续招单付款后卡升级。
+     * 注意：升级单 product_id 是服务当前旧商品（ensureHostUpgradeOrderForInvoice 从
+     * 账单复制），目标商品只存在于 config_pricing_snapshot.meta.product_id（与
+     * processPaidUpgradeOrderLocked 履约主路径同源），校准必须归零目标商品，
+     * 误归零旧商品会错杀在售库存。meta 缺失时静默跳过（能进入上游购买路径的
+     * 履约请求已由前置 throw_if 保证 meta 有效，此处守卫仅防老数据）。
+     */
+    private function calibrateTargetStockForUpgrade(Order $order, \Throwable $exception): void
+    {
+        if (! $exception instanceof UpstreamStockShortageException) {
+            return;
+        }
+
+        $targetProductId = (int) data_get($order->config_pricing_snapshot ?? [], 'meta.product_id', 0);
+        if ($targetProductId > 0) {
+            $this->productSyncService()->markUpstreamStockShortage($targetProductId);
+        }
     }
 
     private function productSyncService(): ProductSyncService

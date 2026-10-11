@@ -840,6 +840,22 @@ class ProductSyncService
      */
     public function markUpstreamStockShortage(int $productId): void
     {
+        try {
+            $this->doMarkUpstreamStockShortage($productId);
+        } catch (\Throwable $exception) {
+            // 售罄校准必须 best-effort：调用方（开通/升级的失败 catch）在其后还有
+            // upgrade_error/provision_error 留痕逻辑，校准自身失败不得中断留痕；
+            // 覆盖缺失窗口内假 qty 可能被浏览回写，等下次上游拒绝时重新触发校准。
+            Log::warning('[商品库存] 售罄校准执行失败', [
+                'product_id' => $productId,
+                'message' => $exception->getMessage(),
+                'exception' => $exception::class,
+            ]);
+        }
+    }
+
+    private function doMarkUpstreamStockShortage(int $productId): void
+    {
         $product = Product::query()->find($productId);
 
         if (! $product instanceof Product) {
@@ -868,7 +884,7 @@ class ProductSyncService
         $store->forget($cacheKey);
         $store->forget($cacheKey.':stale');
 
-        Log::info('[商品库存] 上游开通库存不足，本地快照已归零并写售罄覆盖', [
+        Log::info('[商品库存] 上游拒绝库存不足/已下架，本地快照已归零并写售罄覆盖', [
             'product_id' => $productId,
             'supplier_id' => $supplierId,
             'upstream_product_id' => $supplierProductId,
