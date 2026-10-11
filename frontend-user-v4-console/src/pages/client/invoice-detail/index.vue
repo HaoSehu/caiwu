@@ -3,7 +3,7 @@
     <div class="pay-toolbar">
       <t-button variant="outline" @click="router.push('/client/invoices')">返回账单</t-button>
       <div class="pay-toolbar__actions">
-        <t-button variant="outline" :loading="loading" @click="loadDetail">
+        <t-button variant="outline" :loading="loading" @click="() => loadDetail()">
           <template #icon><refresh-icon /></template>
           刷新详情
         </t-button>
@@ -19,7 +19,7 @@
       :error-text="loadErrorText"
       :empty="!detail"
       description="未找到账单详情"
-      @retry="loadDetail"
+      @retry="() => loadDetail()"
     >
       <template v-if="detail">
         <section class="pay-shell">
@@ -291,7 +291,7 @@
                 <t-button v-else-if="selectedPayMethod === 'free'" theme="primary" size="large" disabled>
                   零元账单无需操作
                 </t-button>
-                <t-button variant="outline" size="large" :disabled="paying || loading" @click="loadDetail"
+                <t-button variant="outline" size="large" :disabled="paying || loading" @click="() => loadDetail()"
                   >刷新</t-button
                 >
               </div>
@@ -343,12 +343,12 @@ import { resolvePaymentStatusLabel } from '@/domains/finance/useRecords';
 
 import {
   isNewPurchaseInvoice,
+  orderBillingCycle,
   paymentMethodIcon,
   paymentOptionKey,
   renewFlowItems,
   renewServiceId,
   renewServiceName,
-  orderBillingCycle,
   useInvoiceDetailHelpers,
 } from './composables/useInvoiceDetailHelpers';
 

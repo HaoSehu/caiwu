@@ -50,15 +50,6 @@ function paidInvoiceDetailPayload() {
 test('账单余额支付成功：仅保留一条成功提示并跳回账单列表，不叠加「已支付」守卫提示', async ({ page }) => {
   await mockAuthenticatedSession(page);
 
-  // 布防：守卫提示若在支付链路中弹出（3s 内），waitFor 立即兑现为 true；
-  // 不弹则等满超时返回 false。不能用 toBeHidden——toast 数秒后自动消失，会让该断言恒真。
-  const guardToastAppeared = page
-    .getByText('该账单已支付，无需再次支付')
-    .first()
-    .waitFor({ state: 'visible', timeout: 3_000 })
-    .then(() => true)
-    .catch(() => false);
-
   let payCompleted = false;
   await page.route('**/api/v2/client/invoices/1/pay/balance', (route) => {
     payCompleted = true;
@@ -101,21 +92,23 @@ test('账单余额支付成功：仅保留一条成功提示并跳回账单列�
   await page.getByRole('button', { name: '支付', exact: true }).click();
   await page.getByRole('button', { name: '确定' }).click();
 
-  // 成功提示出现并跳回账单列表；守卫提示不得曾经出现
+  // 成功提示出现并跳回账单列表；守卫提示不得曾经出现。
+  // 布防后移到成功提示可见之后：守卫 toast 严格出现在该时刻与跳转完成之间，
+  // 且生命周期 3s 远长于布防到断言 join 的间隔，已弹出也会被 waitFor 立即观察到。
+  // 不能用 toBeHidden——toast 数秒后自动消失，会让该断言恒真。
   await expect(page.getByText('账单已支付', { exact: true })).toBeVisible();
+  const guardToastAppeared = page
+    .getByText('该账单已支付，无需再次支付')
+    .first()
+    .waitFor({ state: 'visible', timeout: 2_000 })
+    .then(() => true)
+    .catch(() => false);
   await expect(page).toHaveURL(/\/client\/invoices$/);
   expect(await guardToastAppeared).toBe(false);
 });
 
 test('账单支付宝扫码成功：轮询到已支付后仅保留一条成功提示并跳回列表', async ({ page }) => {
   await mockAuthenticatedSession(page);
-
-  const guardToastAppeared = page
-    .getByText('该账单已支付，无需再次支付')
-    .first()
-    .waitFor({ state: 'visible', timeout: 3_000 })
-    .then(() => true)
-    .catch(() => false);
 
   let payCompleted = false;
   let statusCalls = 0;
@@ -175,6 +168,13 @@ test('账单支付宝扫码成功：轮询到已支付后仅保留一条成功�
   await refreshButton.click();
 
   await expect(page.getByText('账单已支付', { exact: true })).toBeVisible();
+  // 布防时机与覆盖窗口的论证同上一用例
+  const guardToastAppeared = page
+    .getByText('该账单已支付，无需再次支付')
+    .first()
+    .waitFor({ state: 'visible', timeout: 2_000 })
+    .then(() => true)
+    .catch(() => false);
   await expect(page).toHaveURL(/\/client\/invoices$/);
   expect(await guardToastAppeared).toBe(false);
 });
