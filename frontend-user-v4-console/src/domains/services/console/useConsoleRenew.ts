@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router';
 
 import clientApi from '@/api/client';
 import { formatMoney } from '@/domains/services/useServiceCenter';
-import type { CouponOption, RenewCycleOption, ServiceRenewPreview } from '@/types/client';
+import type { CouponOption, RenewCouponBindingInfo, RenewCycleOption, ServiceRenewPreview } from '@/types/client';
 
 import { resolveErrorMessage } from './useConsoleCore';
 
@@ -31,6 +31,12 @@ export function useConsoleRenew(options: UseConsoleRenewOptions) {
   const renewCoupons = computed<CouponOption[]>(() =>
     Array.isArray(renewData.value?.available_coupons) ? renewData.value.available_coupons : [],
   );
+
+  // 服务绑定持续优惠（新购 recurring 券快照）：续费自动按优惠价，不提供手选券
+  const renewCouponBinding = computed<RenewCouponBindingInfo | null>(() => {
+    const binding = renewData.value?.renew_coupon_binding;
+    return binding && typeof binding === 'object' ? binding : null;
+  });
 
   async function loadRenewPreview() {
     renewLoading.value = true;
@@ -107,6 +113,7 @@ export function useConsoleRenew(options: UseConsoleRenewOptions) {
     renewForm,
     renewAmount,
     renewCoupons,
+    renewCouponBinding,
     openRenewDialog,
     handleRenewCycleChange,
     handleRenewCouponChange,

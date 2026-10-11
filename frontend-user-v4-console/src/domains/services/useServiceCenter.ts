@@ -7,6 +7,7 @@ import clientApi from '@/api/client';
 import { localStorageKeys, readLocalStorage, writeLocalStorage } from '@/utils/storage';
 import type {
   CouponOption,
+  RenewCouponBindingInfo,
   ServiceCatalogTypeOption,
   ServiceInstance,
   ServiceOverviewGroup,
@@ -42,7 +43,7 @@ const DEFAULT_SERVICE_STATUS_SCOPE = 'active_pending';
 const DEFAULT_SERVICE_STATUS = DEFAULT_SERVICE_STATUS_SCOPE;
 const MOBILE_VIEW_MODE_QUERY = '(max-width: 48rem)';
 const DEFAULT_SERVICE_STATUS_OPTION = {
-  label: '默认分类（已开通 / 开通中）',
+  label: '默认分类（运行中 / 开通中）',
   value: DEFAULT_SERVICE_STATUS_SCOPE,
 };
 
@@ -267,6 +268,12 @@ export function useServiceCenter() {
   const availableRenewCoupons = computed(() =>
     Array.isArray(renewData.value?.available_coupons) ? (renewData.value.available_coupons as CouponOption[]) : [],
   );
+
+  // 服务绑定持续优惠（新购 recurring 券快照）：续费自动按优惠价，不提供手选券
+  const renewCouponBinding = computed(() => {
+    const binding = renewData.value?.renew_coupon_binding;
+    return binding && typeof binding === 'object' ? (binding as RenewCouponBindingInfo) : null;
+  });
 
   async function loadOverview() {
     overviewLoading.value = true;
@@ -534,6 +541,7 @@ export function useServiceCenter() {
     metricCards,
     selectedRenewAmount,
     availableRenewCoupons,
+    renewCouponBinding,
     loadOverview,
     loadList,
     loadData,

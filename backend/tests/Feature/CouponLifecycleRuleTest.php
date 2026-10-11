@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Constants\InvoiceStatus;
+use App\Constants\ServiceStatus;
 use App\Exceptions\BusinessException;
 use App\Models\Coupon;
 use App\Models\CouponCampaign;
 use App\Models\Invoice;
 use App\Models\Product;
+use App\Models\Service;
 use App\Models\User;
 use App\Models\UserCoupon;
 use App\Services\Finance\CouponCampaignService;
@@ -25,6 +27,340 @@ use Tests\TestCase;
 class CouponLifecycleRuleTest extends TestCase
 {
     use DatabaseTransactions;
+
+    /**
+     * P2-6：仅新客首单 × 仅老客 语义互斥，创建时直接拦截。
+     */
+    public function test_create_coupon_rejects_first_order_only_with_only_old_client(): void
+    {
+        $this->expectException(BusinessException::class);
+        $this->expectExceptionMessage('「仅首单」与「仅老客」互斥');
+
+        app(CouponService::class)->createCoupon([
+            'name' => '互斥定向券'.uniqid(),
+            'code' => 'OO'.uniqid(),
+            'distribution_type' => 'public',
+            'discount_type' => 'fixed',
+            'discount_scope' => 'first_month',
+            'discount_value' => 5,
+            'first_order_only' => true,
+            'only_old_client' => true,
+            'status' => 1,
+        ], ['operator' => 'tester']);
+    }
+
+    /**
+     * P2-6：仅老客券——无成交账单的用户使用被拒。
+     */
+    public function test_only_old_client_rejects_user_without_paid_order(): void
+    {
+        [$user, $userCoupon, $product] = $this->targetingFixture(['only_old_client' => true]);
+
+        $this->expectException(BusinessException::class);
+        $this->expectExceptionMessage('仅限老客户使用');
+
+        app(CouponService::class)->previewOwnedCoupon(
+            (int) $userCoupon->id,
+            (int) $user->id,
+            $product,
+            'monthly',
+            100.0,
+            'new'
+        );
+    }
+
+    /**
+     * P2-6：已有成交账单（PAID 新购）的老客可正常使用。
+     */
+    public function test_only_old_client_allows_user_with_paid_order(): void
+    {
+        [$user, $userCoupon, $product] = $this->targetingFixture(['only_old_client' => true]);
+        $this->createInvoice($user, $userCoupon, $product, InvoiceStatus::PAID, 'new');
+
+        $payload = app(CouponService::class)->previewOwnedCoupon(
+            (int) $userCoupon->id,
+            (int) $user->id,
+            $product,
+            'monthly',
+            100.0,
+            'new'
+        );
+
+        $this->assertIsArray($payload);
+        $this->assertSame('5.00', (string) ($payload['discount_amount'] ?? ''));
+    }
+
+    /**
+     * P2-6：领取侧同口径——新用户不能领取仅老客公开券。
+     */
+    public function test_claim_rejects_only_old_client_public_coupon_for_new_user(): void
+    {
+        $user = User::factory()->create();
+        $coupon = app(CouponService::class)->createCoupon([
+            'name' => '仅老客公开券'.uniqid(),
+            'code' => 'OLDP'.uniqid(),
+            'distribution_type' => 'public',
+            'discount_type' => 'fixed',
+            'discount_scope' => 'first_month',
+            'discount_value' => 5,
+            'only_old_client' => true,
+            'status' => 1,
+        ], ['operator' => 'tester']);
+
+        $this->expectException(BusinessException::class);
+        $this->expectExceptionMessage('仅限老客户领取');
+
+        app(CouponService::class)->claimPublicCoupon($user, Coupon::query()->findOrFail((int) $coupon['id']));
+    }
+
+    /**
+     * P2-4：前置持有条件——用户名下无任一指定产品的运行中服务时使用被拒。
+     */
+    public function test_requires_product_ids_reject_user_without_active_service(): void
+    {
+        $holderProduct = Product::query()->create([
+            'name' => '前置持有商品'.uniqid(),
+            'product_type' => 'cloud_host',
+            'status' => 1,
+            'pricing' => ['monthly' => '50.00'],
+            'setup_fee' => '0.00',
+            'config_options' => [],
+            'purchase_requires' => [],
+            'stock' => -1,
+            'auto_setup' => 0,
+        ]);
+        [$user, $userCoupon, $product] = $this->targetingFixture([], [
+            'requires_product_ids' => [$holderProduct->id],
+        ]);
+
+        $this->expectException(BusinessException::class);
+        $this->expectExceptionMessage('需持有指定产品');
+
+        app(CouponService::class)->previewOwnedCoupon(
+            (int) $userCoupon->id,
+            (int) $user->id,
+            $product,
+            'monthly',
+            100.0,
+            'new'
+        );
+    }
+
+    /**
+     * P2-4：名下持有任一指定产品的运行中服务即可使用。
+     */
+    public function test_requires_product_ids_allow_user_with_active_service(): void
+    {
+        $holderProduct = Product::query()->create([
+            'name' => '前置持有商品'.uniqid(),
+            'product_type' => 'cloud_host',
+            'status' => 1,
+            'pricing' => ['monthly' => '50.00'],
+            'setup_fee' => '0.00',
+            'config_options' => [],
+            'purchase_requires' => [],
+            'stock' => -1,
+            'auto_setup' => 0,
+        ]);
+        [$user, $userCoupon, $product] = $this->targetingFixture([], [
+            'requires_product_ids' => [$holderProduct->id],
+        ]);
+        Service::query()->create([
+            'user_id' => (int) $user->id,
+            'product_id' => (int) $holderProduct->id,
+            'billing_cycle' => 'monthly',
+            'amount' => 50.00,
+            'status' => ServiceStatus::ACTIVE,
+            'expires_at' => now()->addMonth(),
+        ]);
+
+        $payload = app(CouponService::class)->previewOwnedCoupon(
+            (int) $userCoupon->id,
+            (int) $user->id,
+            $product,
+            'monthly',
+            100.0,
+            'new'
+        );
+
+        $this->assertIsArray($payload);
+    }
+
+    /**
+     * P3-11：is_discount=0 且本单已享受会员折扣减免 → 券不应用。
+     */
+    public function test_is_discount_exclusive_blocks_coupon_with_member_discount(): void
+    {
+        [$user, $userCoupon, $product] = $this->targetingFixture(['is_discount' => false]);
+
+        $this->expectException(BusinessException::class);
+        $this->expectExceptionMessage('不可与会员折扣同时使用');
+
+        app(CouponService::class)->previewOwnedCoupon(
+            (int) $userCoupon->id,
+            (int) $user->id,
+            $product,
+            'monthly',
+            100.0,
+            'new',
+            true
+        );
+    }
+
+    /**
+     * P3-11：无会员折扣减免时互斥券照常应用；默认可叠加券不受 memberDiscountApplied 影响。
+     */
+    public function test_is_discount_exclusive_allows_without_member_discount(): void
+    {
+        [$user, $userCoupon, $product] = $this->targetingFixture(['is_discount' => false]);
+
+        $payload = app(CouponService::class)->previewOwnedCoupon(
+            (int) $userCoupon->id,
+            (int) $user->id,
+            $product,
+            'monthly',
+            100.0,
+            'new',
+            false
+        );
+
+        $this->assertIsArray($payload);
+        $this->assertSame('5.00', (string) ($payload['discount_amount'] ?? ''));
+    }
+
+    /**
+     * 活动生成的券继承定向规则（only_old_client/is_discount/requires_product_ids 透传链路）：
+     * 新用户领取活动生成的仅老客券后，使用侧校验必须生效。
+     */
+    public function test_campaign_generated_coupon_inherits_targeting_rules(): void
+    {
+        $user = User::factory()->create();
+        $campaign = app(CouponCampaignService::class)->createCampaign([
+            'name' => '定向活动'.uniqid(),
+            'weekdays' => [(int) now()->dayOfWeek],
+            'trigger_time' => '00:00',
+            'issue_quantity' => 2,
+            'discount_type' => 'fixed',
+            'discount_scope' => 'first_month',
+            'discount_value' => 5,
+            'only_old_client' => true,
+            'is_discount' => false,
+            'status' => 1,
+        ], ['operator' => 'tester']);
+
+        // 触发到期发放（活动配置为今天 + 00:00，必然到期；DatabaseTransactions 回滚无残留）
+        app(CouponCampaignService::class)->dispatchDueCampaigns(CarbonImmutable::now(), ['operator' => 'tester']);
+
+        $generatedCoupon = Coupon::query()
+            ->where('coupon_campaign_id', (int) $campaign['id'])
+            ->orderByDesc('id')
+            ->firstOrFail();
+
+        $this->assertTrue((bool) $generatedCoupon->only_old_client, '活动生成的券必须继承仅老客规则');
+        $this->assertFalse((bool) $generatedCoupon->is_discount, '活动生成的券必须继承叠加开关');
+    }
+
+    /**
+     * 定向/叠加规则用例的公共夹具。
+     *
+     * @param  array<string, mixed>  $couponOverrides
+     * @param  array<string, mixed>  $extraPayload
+     * @return array{0: User, 1: UserCoupon, 2: Product}
+     */
+    private function targetingFixture(array $couponOverrides = [], array $extraPayload = []): array
+    {
+        $user = User::factory()->create();
+        $product = Product::query()->create([
+            'name' => '定向规则商品'.uniqid(),
+            'product_type' => 'cloud_host',
+            'status' => 1,
+            'pricing' => ['monthly' => '100.00'],
+            'setup_fee' => '0.00',
+            'config_options' => [],
+            'purchase_requires' => [],
+            'stock' => -1,
+            'auto_setup' => 0,
+        ]);
+        $coupon = app(CouponService::class)->createCoupon([
+            'name' => '定向券'.uniqid(),
+            'code' => 'TG'.uniqid(),
+            'distribution_type' => 'private',
+            'user_ids' => [(int) $user->id],
+            'discount_type' => 'fixed',
+            'discount_scope' => 'first_month',
+            'discount_value' => 5,
+            'min_amount' => 0,
+            'status' => 1,
+            ...$couponOverrides,
+            ...$extraPayload,
+        ], ['operator' => 'tester']);
+        $userCoupon = UserCoupon::query()
+            ->where('user_id', (int) $user->id)
+            ->where('coupon_id', (int) $coupon['id'])
+            ->firstOrFail();
+
+        return [$user, $userCoupon, $product];
+    }
+
+    /**
+     * 首单券 × 仅续费 是静默死配置：创建/更新时直接拦截（P3-8 修复回归）。
+     */
+    public function test_create_coupon_rejects_first_order_only_with_renew_scope(): void
+    {
+        $this->expectException(BusinessException::class);
+        $this->expectExceptionMessage('首单券不支持「仅续费」');
+
+        app(CouponService::class)->createCoupon([
+            'name' => '死配置券'.uniqid(),
+            'code' => 'DEAD'.uniqid(),
+            'distribution_type' => 'public',
+            'discount_type' => 'fixed',
+            'discount_scope' => 'renew',
+            'discount_value' => 5,
+            'first_order_only' => true,
+            'status' => 1,
+        ], ['operator' => 'tester']);
+    }
+
+    /**
+     * 首单券 × 持续优惠（新购+续费）是合法组合：新购侧可正常使用，不得误拦。
+     */
+    public function test_create_coupon_allows_first_order_only_with_recurring_scope(): void
+    {
+        $coupon = app(CouponService::class)->createCoupon([
+            'name' => '首单持续券'.uniqid(),
+            'code' => 'FIRST'.uniqid(),
+            'distribution_type' => 'public',
+            'discount_type' => 'fixed',
+            'discount_scope' => 'recurring',
+            'discount_value' => 5,
+            'first_order_only' => true,
+            'status' => 1,
+        ], ['operator' => 'tester']);
+
+        $this->assertTrue((bool) Coupon::query()->findOrFail($coupon['id'])->first_order_only);
+    }
+
+    /**
+     * 活动配置侧同口径拦截：避免到定时发放时才失败（发放失败导致当日批次丢失）。
+     */
+    public function test_create_campaign_rejects_first_order_only_with_renew_scope(): void
+    {
+        $this->expectException(BusinessException::class);
+        $this->expectExceptionMessage('首单券不支持「仅续费」');
+
+        app(CouponCampaignService::class)->createCampaign([
+            'name' => '死配置活动'.uniqid(),
+            'weekdays' => [1],
+            'trigger_time' => '09:00',
+            'issue_quantity' => 10,
+            'discount_type' => 'fixed',
+            'discount_scope' => 'renew',
+            'discount_value' => 5,
+            'first_order_only' => true,
+            'status' => 1,
+        ], ['operator' => 'tester']);
+    }
 
     public function test_first_order_eligibility_ignores_recharge_and_unpaid_invoices(): void
     {

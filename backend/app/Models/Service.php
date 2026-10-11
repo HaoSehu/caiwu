@@ -47,6 +47,7 @@ class Service extends Model
         'user_id', 'product_id', 'order_id', 'invoice_id', 'name', 'domain',
         'billing_cycle', 'amount', 'locked_pricing', 'status', 'provision_data',
         'expires_at', 'auto_renew', 'suspended_reason', 'trace_id',
+        'renew_coupon_id', 'renew_coupon_snapshot',
     ];
 
     protected function casts(): array
@@ -56,6 +57,50 @@ class Service extends Model
             'locked_pricing' => 'array',
             'provision_data' => 'array',
             'expires_at' => 'datetime',
+            'renew_coupon_id' => 'integer',
+            'renew_coupon_snapshot' => 'array',
+        ];
+    }
+
+    public function getRenewCouponSnapshotAttribute(mixed $value): ?array
+    {
+        if (is_array($value)) {
+            return $value;
+        }
+
+        if (is_string($value) && $value !== '') {
+            $decoded = json_decode($value, true);
+
+            return is_array($decoded) ? $decoded : [];
+        }
+
+        return null;
+    }
+
+    /**
+     * 续费持续优惠绑定（新购使用 discount_scope=recurring 券后落下的快照权利）。
+     * 快照驱动：续费折算只读本快照，券后续停用/删除不影响已绑定服务。
+     */
+    public function renewCouponBinding(): ?array
+    {
+        $snapshot = $this->renew_coupon_snapshot;
+
+        if ($snapshot === null || $snapshot === [] || (int) ($this->renew_coupon_id ?? 0) <= 0) {
+            return null;
+        }
+
+        $maxDiscountAmount = $snapshot['max_discount_amount'] ?? null;
+
+        return [
+            'coupon_id' => (int) $this->renew_coupon_id,
+            'coupon_code' => (string) ($snapshot['coupon_code'] ?? ''),
+            'coupon_name' => (string) ($snapshot['coupon_name'] ?? ''),
+            'discount_type' => (string) ($snapshot['discount_type'] ?? ''),
+            'discount_value' => (float) ($snapshot['discount_value'] ?? 0),
+            'max_discount_amount' => $maxDiscountAmount !== null ? (float) $maxDiscountAmount : null,
+            'discount_label' => (string) ($snapshot['discount_label'] ?? ''),
+            'bound_invoice_no' => (string) ($snapshot['bound_invoice_no'] ?? ''),
+            'bound_at' => (string) ($snapshot['bound_at'] ?? ''),
         ];
     }
 

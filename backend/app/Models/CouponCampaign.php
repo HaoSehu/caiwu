@@ -4,6 +4,11 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * @property array<int, int>|null $requires_product_ids 前置持有条件（生成券继承）
+ * @property bool $only_old_client 仅老客（生成券继承）
+ * @property bool $is_discount 与会员折扣叠加开关（生成券继承）
+ */
 class CouponCampaign extends Model
 {
     protected $fillable = [
@@ -20,7 +25,10 @@ class CouponCampaign extends Model
         'max_discount_amount',
         'billing_cycles',
         'product_ids',
+        'requires_product_ids',
         'first_order_only',
+        'only_old_client',
+        'is_discount',
         'per_user_limit',
         'status',
         'sort_order',
@@ -40,7 +48,10 @@ class CouponCampaign extends Model
             'max_discount_amount' => 'decimal:2',
             'billing_cycles' => 'array',
             'product_ids' => 'array',
+            'requires_product_ids' => 'array',
             'first_order_only' => 'boolean',
+            'only_old_client' => 'boolean',
+            'is_discount' => 'boolean',
             'issue_quantity' => 'integer',
             'valid_duration_hours' => 'integer',
             'per_user_limit' => 'integer',

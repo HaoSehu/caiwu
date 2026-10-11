@@ -5,11 +5,14 @@ namespace App\Services\Provisioning;
 use App\Constants\ServiceStatus;
 use App\Exceptions\BusinessException;
 use App\Exceptions\UpstreamStockShortageException;
+use App\Jobs\SendTemplateEmailJob;
+use App\Models\AutomationLog;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\Service;
 use App\Models\Supplier;
+use App\Models\User;
 use App\Services\ClientServiceConsole\ServiceOverviewService;
 use App\Services\Integrations\Plugins\PluginBindingResolver;
 use App\Services\Integrations\Plugins\ServiceUpstreamBindingWriter;
@@ -17,12 +20,15 @@ use App\Services\Integrations\Plugins\UpstreamBindingWriter;
 use App\Services\Integrations\Support\ProviderErrorMapper;
 use App\Services\ProductCatalog\ProductCatalogService;
 use App\Services\ProductCatalog\ProductSyncService;
+use App\Services\System\NotificationService;
 use App\Services\System\SettingService;
 use App\Services\Upstream\Contracts\ProvidesProvisioning;
 use App\Services\Upstream\ProviderResolver;
 use App\Support\BillingCycle;
+use App\Support\BillingCycleLabels;
 use App\Support\Money;
 use App\Support\ProductProvisionHostname;
+use App\Support\SchemaMetadataCache;
 use App\Support\ServiceHostname;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
@@ -168,6 +174,8 @@ class ProvisionService
 
         $invoice->forceFill(['service_id' => $service->id])->save();
 
+        $this->applyRenewCouponBinding($service, $invoice);
+
         // 新服务记录已落库（概览会新增该服务），事务外失效该用户概览缓存，避免最长 120s 脏读。
         $this->forgetServiceOverviewCache((int) $invoice->user_id);
 
@@ -280,6 +288,8 @@ class ProvisionService
                 ]
             );
 
+            $this->notifyClientServiceActivated($order, $service, (array) $hostDetail);
+
             $order->forceFill([
                 'service_id' => $service->id,
                 'service_snapshot' => $this->buildServiceSnapshot($service),
@@ -341,6 +351,51 @@ class ProvisionService
         }
     }
 
+    /**
+     * 产品开通成功客户通知（模板 100005）。
+     * retryFailedProvision 与队列重试可能多次进入成功分支，以 AutomationLog 幂等；
+     * 发送失败仅告警，不影响开通结果。管理员手工开通（manualProvisionService）不走本方法。
+     */
+    private function notifyClientServiceActivated(Order $order, Service $service, array $hostDetail): void
+    {
+        $user = User::query()->find((int) $order->user_id);
+        $email = trim((string) ($user?->email ?? ''));
+        if ($email === '') {
+            return;
+        }
+
+        if (! AutomationLog::recordOnce(
+            'provisioning-notify', 'service_activated', 'service', (int) $service->id, 'activated'
+        )) {
+            return;
+        }
+
+        try {
+            SendTemplateEmailJob::dispatch($email, NotificationService::TEMPLATE_SERVICE_ACTIVATED, [
+                'display_name' => trim((string) ($user?->display_name ?? '')) !== '' ? (string) $user->display_name : $email,
+                'service_name' => (string) ($service->name ?: $order->display_product_name),
+                'hostname' => (string) ($service->domain ?? $hostDetail['domain'] ?? ''),
+                'product_main_ip' => (string) ($hostDetail['dedicatedip'] ?? ''),
+                'product_username' => (string) ($hostDetail['username'] ?? ''),
+                'operating_system' => (string) ($hostDetail['os'] ?? ''),
+                'activated_at' => now()->format('Y-m-d H:i:s'),
+                'expires_at' => $service->expires_at instanceof Carbon
+                    ? $service->expires_at->format('Y-m-d H:i:s')
+                    : '-',
+                'billing_cycle_label' => BillingCycleLabels::label((string) ($order->billing_cycle ?? '')),
+            ]);
+        } catch (\Throwable $exception) {
+            AutomationLog::forgetRecord(
+                'provisioning-notify', 'service_activated', 'service', (int) $service->id, 'activated'
+            );
+            Log::warning('[自动开通] 客户通知派发失败', [
+                'order_id' => (int) $order->id,
+                'service_id' => (int) $service->id,
+                'message' => $exception->getMessage(),
+            ]);
+        }
+    }
+
     private function ensureLocalService(Order $order): Service
     {
         if ($order->service) {
@@ -394,10 +449,49 @@ class ProvisionService
             'service_snapshot' => $this->buildServiceSnapshot($service),
         ])->save();
 
+        $this->applyRenewCouponBinding($service, $order->invoice instanceof Invoice ? $order->invoice : null);
+
         // 服务记录首次创建（概览计数/列表随之变化），失效该用户概览缓存。
         $this->forgetServiceOverviewCache((int) $order->user_id);
 
         return $service;
+    }
+
+    /**
+     * 新购使用「持续优惠」（discount_scope=recurring）券时，把优惠参数快照绑定到服务：
+     * 后续每次续费由 ServiceRenewService 按快照自动折算（对齐营销口径「续费按优惠价持续，
+     * 不恢复原价」）。快照驱动——券后续停用/删除不影响已绑定服务；非 recurring 券不绑定
+     * （首单券/续费券为一次性权利，已有 user_coupon 状态机管理）。
+     */
+    private function applyRenewCouponBinding(Service $service, ?Invoice $invoice): void
+    {
+        if (! $invoice instanceof Invoice || ! SchemaMetadataCache::hasColumn('services', 'renew_coupon_id')) {
+            return;
+        }
+
+        if ((int) ($invoice->coupon_id ?? 0) <= 0) {
+            return;
+        }
+
+        $couponSnapshot = (array) ($invoice->coupon_snapshot ?? []);
+        if ((string) ($couponSnapshot['discount_scope'] ?? '') !== 'recurring') {
+            return;
+        }
+
+        $service->forceFill([
+            'renew_coupon_id' => (int) $invoice->coupon_id,
+            'renew_coupon_snapshot' => array_filter([
+                'coupon_id' => (int) $invoice->coupon_id,
+                'coupon_code' => (string) ($couponSnapshot['code'] ?? ''),
+                'coupon_name' => (string) ($couponSnapshot['name'] ?? ''),
+                'discount_type' => (string) ($couponSnapshot['discount_type'] ?? ''),
+                'discount_value' => (float) ($couponSnapshot['discount_value'] ?? 0),
+                'max_discount_amount' => $couponSnapshot['max_discount_amount'] ?? null,
+                'discount_label' => (string) ($couponSnapshot['discount_label'] ?? ''),
+                'bound_invoice_no' => (string) ($invoice->invoice_no ?? ''),
+                'bound_at' => now()->format('Y-m-d H:i:s'),
+            ], fn ($value) => $value !== '' && $value !== null),
+        ])->save();
     }
 
     private function isAdminManualOrder(Order $order): bool
@@ -1043,12 +1137,7 @@ class ProvisionService
 
     private function resolveServiceStatusFromUpstream(array $hostDetail): int
     {
-        return match (strtolower(trim((string) ($hostDetail['domainstatus'] ?? '')))) {
-            'active' => ServiceStatus::ACTIVE,
-            'suspended' => ServiceStatus::SUSPENDED,
-            'cancelled', 'deleted' => ServiceStatus::CANCELLED,
-            default => ServiceStatus::PENDING,
-        };
+        return ServiceStatus::fromUpstreamDomainStatus($hostDetail['domainstatus'] ?? '');
     }
 
     private function resolveServiceExpiry(array $hostDetail, Order $order): ?Carbon

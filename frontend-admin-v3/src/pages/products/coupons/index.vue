@@ -235,7 +235,11 @@
                 <t-form-item label="最低消费金额" name="min_amount" help="按会员折扣后的金额判定，与订单原价可能不同">
                   <t-input-number v-model="form.min_amount" :min="0" :decimal-places="2" />
                 </t-form-item>
-                <t-form-item label="最高优惠金额" name="max_discount_amount">
+                <t-form-item
+                  label="最高优惠金额"
+                  name="max_discount_amount"
+                  help="限制单笔订单的减免金额上限；覆盖价券不适用（覆盖价即实付）"
+                >
                   <t-input-number
                     v-model="form.max_discount_amount"
                     :min="0"
@@ -243,10 +247,18 @@
                     placeholder="留空表示不限制"
                   />
                 </t-form-item>
-                <t-form-item label="总发放次数上限" name="total_usage_limit">
+                <t-form-item
+                  label="总发放次数上限"
+                  name="total_usage_limit"
+                  help="限制该券可被领取/直发的总张数；每张券仅可核销一次（退款后不返还）。「持续优惠」券绑定服务后每次续费会继续累计已使用次数，已使用数可能超过发放数"
+                >
                   <t-input-number v-model="form.total_usage_limit" :min="0" placeholder="留空表示不限" />
                 </t-form-item>
-                <t-form-item label="每人可用次数" name="per_user_limit">
+                <t-form-item
+                  label="每人可用次数"
+                  name="per_user_limit"
+                  help="按该用户名下未取消的用券账单数计数（含待支付与已退款）；每人每券最多持有一张，设 1 可在退款后也禁止再次使用"
+                >
                   <t-input-number v-model="form.per_user_limit" :min="0" placeholder="留空表示不限" />
                 </t-form-item>
                 <t-form-item label="排序值" name="sort_order">
@@ -259,8 +271,18 @@
                     <span>启用</span>
                   </div>
                 </t-form-item>
-                <t-form-item label="仅限首单可用" name="first_order_only">
+                <t-form-item label="仅限首单可用" name="first_order_only" help="面向从未成交的用户；与「仅老客」互斥">
                   <t-switch v-model="form.first_order_only" />
+                </t-form-item>
+                <t-form-item label="仅老客可用" name="only_old_client" help="面向已有成交订单的用户；与「仅限首单」互斥">
+                  <t-switch v-model="form.only_old_client" />
+                </t-form-item>
+                <t-form-item
+                  label="与会员折扣叠加"
+                  name="is_discount"
+                  help="开启：券按会员折后价继续打折（默认）；关闭：本单已有会员折扣减免时该券不生效，二选一"
+                >
+                  <t-switch v-model="form.is_discount" />
                 </t-form-item>
               </div>
             </section>
@@ -304,6 +326,13 @@
                     v-model="form.product_ids"
                     mode="batch"
                     placeholder="按分类批量选择适用商品，留空表示全站商品可用"
+                  />
+                </t-form-item>
+                <t-form-item label="需持有商品" name="requires_product_ids" class="form-span-2">
+                  <product-binding-tree-select
+                    v-model="form.requires_product_ids"
+                    mode="batch"
+                    placeholder="用户名下须持有任一所选商品的运行中服务才能领/用，留空表示不限制"
                   />
                 </t-form-item>
               </div>
@@ -436,7 +465,10 @@ interface CouponForm {
   max_discount_amount: number | null;
   billing_cycles: string[];
   product_ids: number[];
+  requires_product_ids: number[];
   first_order_only: boolean;
+  only_old_client: boolean;
+  is_discount: boolean;
   user_ids: number[];
   total_usage_limit: number | null;
   per_user_limit: number | null;
@@ -573,7 +605,10 @@ function createDefaultForm(): CouponForm {
     max_discount_amount: null,
     billing_cycles: [],
     product_ids: [],
+    requires_product_ids: [],
     first_order_only: false,
+    only_old_client: false,
+    is_discount: true,
     user_ids: [],
     total_usage_limit: null,
     per_user_limit: null,
@@ -726,7 +761,12 @@ async function openCouponDialog(row?: CouponRecord) {
         : Number(row.max_discount_amount_raw || 0);
     form.billing_cycles = Array.isArray(row.billing_cycles) ? [...row.billing_cycles] : [];
     form.product_ids = Array.isArray(row.product_ids) ? row.product_ids.map(Number).filter(Boolean) : [];
+    form.requires_product_ids = Array.isArray(row.requires_product_ids)
+      ? row.requires_product_ids.map(Number).filter(Boolean)
+      : [];
     form.first_order_only = Boolean(row.first_order_only);
+    form.only_old_client = Boolean(row.only_old_client);
+    form.is_discount = row.is_discount === undefined ? true : Boolean(row.is_discount);
     form.user_ids = Array.isArray(row.user_ids) ? row.user_ids.map(Number).filter(Boolean) : [];
     form.total_usage_limit =
       row.total_usage_limit === null || row.total_usage_limit === undefined ? null : Number(row.total_usage_limit || 0);
@@ -756,7 +796,10 @@ function buildPayload(): CouponPayload {
     max_discount_amount: form.max_discount_amount === null ? null : Number(form.max_discount_amount || 0),
     billing_cycles: form.billing_cycles,
     product_ids: form.product_ids.map(Number).filter((id) => id > 0),
+    requires_product_ids: form.requires_product_ids.map(Number).filter((id) => id > 0),
     first_order_only: Boolean(form.first_order_only),
+    only_old_client: Boolean(form.only_old_client),
+    is_discount: Boolean(form.is_discount),
     user_ids: form.distribution_type === 'private' ? form.user_ids.map(Number).filter((id) => id > 0) : [],
     total_usage_limit: form.total_usage_limit === null ? null : Number(form.total_usage_limit || 0),
     per_user_limit: form.per_user_limit === null ? null : Number(form.per_user_limit || 0),
