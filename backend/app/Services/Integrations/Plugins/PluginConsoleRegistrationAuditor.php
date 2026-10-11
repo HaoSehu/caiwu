@@ -22,16 +22,25 @@ class PluginConsoleRegistrationAuditor
      * 收集注册来源位于插件根目录下的控制台命令。
      *
      * @param  iterable<string, Command>  $commands  命令名 => 命令实例
+     * @param  array<int, string>  $allowlist  已在插件清单 extra.console_commands 声明的命令类，视为受控豁免
      * @return list<array{name: string, class: string, file: string}>
      */
-    public function violationsFor(iterable $commands, string $pluginsRoot): array
+    public function violationsFor(iterable $commands, string $pluginsRoot, array $allowlist = []): array
     {
+        $allowlisted = array_values(array_filter(array_map(
+            static fn (mixed $class): string => trim((string) $class),
+            $allowlist,
+        )));
         $violations = [];
 
         foreach ($commands as $name => $command) {
             $file = (new ReflectionClass($command))->getFileName();
 
             if ($file === false || ! $this->isUnderRoot($file, $pluginsRoot)) {
+                continue;
+            }
+
+            if (in_array($command::class, $allowlisted, true)) {
                 continue;
             }
 

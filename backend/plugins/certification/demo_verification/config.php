@@ -11,6 +11,8 @@ return [
         'key' => 'demo_verification',
         'name' => 'Demo 实名认证',
         'version' => '1.0.0',
+        // 显式 demo 标记：管理端按此识别示例插件（demo_ 前缀启发式仅作兼容兜底）。
+        'demo' => true,
         'entry' => DemoVerificationPlugin::class,
         'capabilities' => ['personal', 'scan_url', 'query_status', 'verify_callback', 'fee_config'],
     ],

@@ -11,6 +11,8 @@ return [
         'key' => 'demo_mail',
         'name' => 'Demo 邮件',
         'version' => '1.0.0',
+        // 显式 demo 标记：管理端按此识别示例插件（demo_ 前缀启发式仅作兼容兜底）。
+        'demo' => true,
         'entry' => DemoMailPlugin::class,
         'capabilities' => ['html', 'smtp_like'],
     ],

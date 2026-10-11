@@ -31,7 +31,7 @@ class PluginRegistrationAuditCommandTest extends TestCase
         if ($exitCode === 0) {
             $this->assertStringContainsString('审计通过', $output);
         } else {
-            $this->assertStringContainsString('违反插件边界', $output);
+            $this->assertStringContainsString('extra.console_commands', $output);
         }
     }
 }

@@ -34,6 +34,7 @@ class AdminIntegrationPluginSummaryResource extends JsonResource
             'updated_at' => $item['updated_at'] ?? null,
             'binding_counts' => is_array($item['binding_counts'] ?? null) ? $item['binding_counts'] : [],
             'business_reference_count' => (int) ($item['business_reference_count'] ?? 0),
+            'has_update' => (bool) ($item['has_update'] ?? false),
             'latest_runtime_log' => $this->runtimeLog($item['latest_runtime_log'] ?? null),
             'manifest_missing' => (bool) ($item['manifest_missing'] ?? false),
         ];

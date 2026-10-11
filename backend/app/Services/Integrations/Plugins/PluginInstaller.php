@@ -19,6 +19,7 @@ use App\Services\Upstream\ProviderRegistry;
 use App\Services\Upstream\ProviderResolver;
 use App\Services\Verification\VerificationDriverManager;
 use App\Support\SchemaMetadataCache;
+use Illuminate\Console\Command;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -38,6 +39,7 @@ class PluginInstaller
     {
         $manifest = $this->scanner->requireManifest($domain, $slug);
         $this->assertManifestExecutable($manifest);
+        $this->assertKeyAvailable($domain, $manifest);
 
         $plugin = DB::transaction(function () use ($manifest): IntegrationPlugin {
             return IntegrationPlugin::query()->updateOrCreate(
@@ -64,6 +66,148 @@ class PluginInstaller
         SchemaMetadataCache::flush();
 
         return $plugin;
+    }
+
+    /**
+     * 插件升级：文件版本（version/manifest_hash）与库内记录不一致时，由管理员显式同步。
+     *
+     * 与 install 的差异：
+     * - 拒绝变更 plugin_key（业务注册键被绑定表 resolver 与历史支付记录引用）；
+     * - 启用中的插件必须先满足新 schema 的必填配置，且任务声明要过全局 key 冲突校验；
+     * - 已启用且声明 provider 时重新激活（activate 幂等，同类跳过）；
+     * - 返回新旧 schema 的结构化 diff，供管理端展示变更内容。
+     *
+     * @return array{plugin: IntegrationPlugin, diff: array<string, array<int, string>>, previous_version: string}
+     */
+    public function upgrade(IntegrationPlugin $plugin): array
+    {
+        $manifest = $this->scanner->requireManifest((string) $plugin->domain, (string) $plugin->slug);
+        $this->assertManifestExecutable($manifest);
+
+        if ((string) $plugin->plugin_key !== $manifest->key) {
+            throw new BusinessException(
+                "插件业务 key 不可变更 [{$plugin->plugin_key} → {$manifest->key}]，绑定表与历史记录按 key 关联；如需更换请新增插件替代",
+                42200,
+            );
+        }
+
+        $previousSchema = is_array($plugin->config_schema_json) ? $plugin->config_schema_json : [];
+        $previousVersion = (string) ($plugin->version ?? '');
+
+        if ($plugin->isEnabled()) {
+            $this->configRepository->assertConfigReady($plugin, $manifest);
+        }
+
+        DB::transaction(function () use ($plugin, $manifest): void {
+            $this->assertScheduledTaskInstancesValid($manifest, $plugin->isEnabled());
+
+            $plugin->forceFill([
+                'plugin_key' => $manifest->key,
+                'name' => $manifest->name,
+                'version' => $manifest->version,
+                'provider_class' => $manifest->providerClass,
+                'entry_class' => $manifest->entryClass,
+                'capabilities_json' => $manifest->capabilities,
+                'config_schema_json' => $manifest->configSchema,
+                'manifest_hash' => $this->scanner->manifestContentHash($manifest->domain, $manifest->slug),
+            ])->save();
+        });
+
+        $this->forgetDomainRuntime($manifest->domain);
+
+        if ($plugin->isEnabled() && $manifest->providerClass !== null) {
+            try {
+                $this->providerRegistry->activate($manifest);
+            } catch (\Throwable $exception) {
+                // 升级元数据已提交；provider 激活失败与 enable 的补偿语义一致，
+                // 由 bootEnabledProviders 在后续进程逐次重试并记录 error，这里保留原始错误上抛。
+                Log::error('[插件] 升级后 Provider 激活失败', [
+                    'domain' => $manifest->domain,
+                    'slug' => $manifest->slug,
+                    'provider' => $manifest->providerClass,
+                    'message' => $exception->getMessage(),
+                    'exception' => $exception::class,
+                ]);
+
+                throw new BusinessException('插件升级完成，但 Provider 激活失败，请检查系统日志', 42200);
+            }
+        }
+
+        return [
+            'plugin' => $plugin->fresh('config') ?? $plugin,
+            'diff' => $this->schemaDiff($previousSchema, $manifest->configSchema),
+            'previous_version' => $previousVersion,
+        ];
+    }
+
+    /**
+     * 同域内 plugin_key 必须唯一（库层有 domain+plugin_key 唯一键，install/updateOrCreate
+     * 撞键会以裸 QueryException 500 暴露）；这里预检换成可读的业务提示。
+     */
+    private function assertKeyAvailable(string $domain, PluginManifest $manifest): void
+    {
+        if (! SchemaMetadataCache::hasTable('integration_plugins')) {
+            return;
+        }
+
+        $existing = IntegrationPlugin::query()
+            ->where('domain', $domain)
+            ->where('plugin_key', $manifest->key)
+            ->where('slug', '<>', $manifest->slug)
+            ->first(['slug']);
+
+        if ($existing instanceof IntegrationPlugin) {
+            throw new BusinessException(
+                "业务 key [{$manifest->key}] 已被同域插件 [{$existing->slug}] 使用",
+                42200,
+            );
+        }
+    }
+
+    /**
+     * 新旧 config schema 的结构化对比（按 key 对齐；changed 只比较影响行为的字段，
+     * label/title 等纯展示字段变化不列入，避免每次升级都产生噪音 diff）。
+     *
+     * @param  array<int, array<string, mixed>>  $previousSchema
+     * @param  array<int, array<string, mixed>>  $nextSchema
+     * @return array{added: array<int, string>, removed: array<int, string>, changed: array<int, string>}
+     */
+    private function schemaDiff(array $previousSchema, array $nextSchema): array
+    {
+        $signature = static function (array $item): array {
+            ksort($item);
+
+            return [
+                'type' => (string) ($item['type'] ?? 'text'),
+                'required' => (bool) ($item['required'] ?? false),
+                'secret' => (bool) ($item['secret'] ?? false),
+                'options' => is_array($item['options'] ?? null) ? $item['options'] : null,
+                'default' => array_key_exists('default', $item) ? $item['default'] : null,
+            ];
+        };
+
+        $previousKeys = [];
+        foreach ($previousSchema as $item) {
+            if (trim((string) ($item['key'] ?? '')) !== '') {
+                $previousKeys[trim((string) $item['key'])] = $signature($item);
+            }
+        }
+
+        $nextKeys = [];
+        foreach ($nextSchema as $item) {
+            if (trim((string) ($item['key'] ?? '')) !== '') {
+                $nextKeys[trim((string) $item['key'])] = $signature($item);
+            }
+        }
+
+        return [
+            'added' => array_values(array_diff(array_keys($nextKeys), array_keys($previousKeys))),
+            'removed' => array_values(array_diff(array_keys($previousKeys), array_keys($nextKeys))),
+            'changed' => array_values(array_filter(
+                array_keys(array_intersect_key($nextKeys, $previousKeys)),
+                static fn (string $key): bool => $nextKeys[$key] != $previousKeys[$key],
+            )),
+        ];
     }
 
     public function enable(IntegrationPlugin $plugin): IntegrationPlugin
@@ -289,6 +433,33 @@ class PluginInstaller
 
                 $method = ScheduleDeclarationNormalizer::methodName($definition);
                 $this->assertPublicHookMethod($class, $method ?: 'handle');
+            }
+        }
+
+        $this->assertConsoleCommandDeclarationsValid($manifest);
+    }
+
+    /**
+     * 插件控制台命令的受控注册面：默认禁止插件 Provider 注册命令（插件边界），
+     * 确有运维需要的命令必须在清单 extra.console_commands 显式声明——
+     * 声明后由 `plugins:audit-registrations` 视为已豁免，未声明的插件来源命令一律报违规。
+     */
+    private function assertConsoleCommandDeclarationsValid(PluginManifest $manifest): void
+    {
+        foreach (ScheduleDeclarationNormalizer::list($manifest->extra['console_commands'] ?? []) as $definition) {
+            $class = ScheduleDeclarationNormalizer::className($definition);
+            if ($class === '') {
+                throw new BusinessException('插件控制台命令声明缺少 class', 42200);
+            }
+
+            $this->assertPluginClassInsideDirectory($manifest, $class, '控制台命令');
+
+            if (! class_exists($class)) {
+                throw new BusinessException("插件声明的控制台命令类不存在 [{$class}]", 42200);
+            }
+
+            if (! is_subclass_of($class, Command::class)) {
+                throw new BusinessException("插件控制台命令必须继承 Illuminate\Console\Command [{$class}]", 42200);
             }
         }
     }

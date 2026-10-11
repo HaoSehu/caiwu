@@ -8,6 +8,19 @@ use App\Services\Integrations\Plugins\PluginDomain;
 use App\Services\Integrations\Plugins\PluginRuntimeRegistry;
 use Illuminate\Support\Facades\Log;
 
+/**
+ * captcha 域的平台适配层（事实契约）。
+ *
+ * captcha 是六个插件域中唯一没有独立 adapter 类的域：本类即平台侧 adapter，
+ * 把插件 action 协议（captcha.config / captcha.script / captcha.verify）包装成
+ * 核心登录风控链路消费的语义（isEnabled/getCaptchaId/getScriptContent/verify）。
+ * 插件必须逐字实现这三个 action 的语义与配置键（captcha_id/captcha_key），
+ * captcha 为单启用域（PluginDomain::singleEnabledDomains）。
+ *
+ * 已内置完整降级链：插件异常全部捕获、验签失败降级 fallback 脚本、脚本代理路径固定，
+ * 因此 2026-10-11 架构审查裁决暂不抽象独立 CaptchaDriverInterface——待出现第二个
+ * 语义分歧的厂商需求时，再在本类收口接口化，避免为单一实现预建抽象层。
+ */
 class GeeTestService
 {
     private const SCRIPT_PROXY_PATH = '/api/v2/client/auth/captcha-script';

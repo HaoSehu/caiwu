@@ -322,6 +322,10 @@ class PluginScanner
         ));
 
         $extra = is_array($payload['extra'] ?? null) ? $payload['extra'] : [];
+        // info.demo 显式标记示例插件（管理端按此跳过列表/安装/升级），透传进 extra 供统一消费。
+        if (($payload['demo'] ?? null) === true && ! array_key_exists('demo', $extra)) {
+            $extra['demo'] = true;
+        }
 
         return new PluginManifest(
             domain: $domain,

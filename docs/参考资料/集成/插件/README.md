@@ -14,7 +14,7 @@
 | 邮件发送      | `mail`         | `backend/plugins/mail`          | `PluginMailDriver` → `MailDriver`                  |
 | 短信发送      | `sms`          | `backend/plugins/sms`           | `PluginSmsDriver` → `SmsDriver`                    |
 | 上游开通/控制 | `upstream`     | `backend/plugins/servers`       | `PluginUpstreamDriver` → `UpstreamDriver`          |
-| 功能扩展      | `addons`       | `backend/plugins/addons`        | 受控 addon action、调度任务和 hook                 |
+| 功能扩展      | `addons`       | `backend/plugins/addons`        | 调度任务和 hook（受控 addon action 通道未开放，不要声明 admin/client/public entry） |
 
 `domain` 是后台 API 和数据库里使用的领域名；物理目录沿用ZJMF 财务的 `gateways/certification/mail/sms/servers` 风格，并按当前插件体系扩展了 `captcha/addons`。插件入口类不直接实现平台契约，入口类提供 `execute(array $request): array`，平台通过 `PluginRuntimeRegistry` 和领域 adapter 转换为内部契约。
 
@@ -37,10 +37,12 @@ backend/plugins/{domain-directory}/{slug}/
 
 加载顺序由 `PluginFileLoader` 控制：
 
-1. 递归加载 `lib/`、`logic/`、`controller/` 下 PHP 文件。
-2. 如果存在 `vendor/autoload.php`，加载插件依赖。
-3. 加载插件根目录 PHP 文件，跳过 `config.php`。
-4. 兼容加载 `src/`，用于旧结构过渡。
+1. require 前对 `lib/`、`logic/`、`controller/` 与根目录 PHP 文件做声明类预检（token 级解析，不执行代码）：拒绝声明进 `App\`、`Illuminate\` 核心命名空间，拒绝声明进其他插件命名空间，拒绝插件内重复声明与进程内已加载类冲突。坏声明以 `BusinessException` 拒绝安装/启用/运行，不会触发不可捕获的类冲突 fatal。
+2. 递归加载 `lib/`、`logic/`、`controller/` 下 PHP 文件。
+3. 如果存在 `vendor/autoload.php`，加载插件依赖。
+4. 加载插件根目录 PHP 文件，跳过 `config.php`。
+
+插件类命名空间约定：入口类必须位于插件命名空间根部（如 `Caiwu\Plugins\Gateways\AliPay\AliPayPlugin`），其余类都在该前缀之下。旧的 `src/` 目录兼容加载已移除（zjmf_finance 已迁入 `lib/`）。
 
 ## config.php 规范
 
@@ -318,7 +320,7 @@ return [
 | `supplier_plugin_bindings`        | 供应商到上游插件账号、地址、密钥和运行环境的绑定。                                 |
 | `product_upstream_bindings`       | 商品到上游商品 ID、配置模板和开通策略的绑定。                                      |
 | `service_upstream_bindings`       | 服务实例到上游实例 ID、供应商绑定和状态快照的绑定。                                |
-| `integration_plugin_runtime_logs` | 每次插件 action 的 domain、plugin、binding、actor、耗时、状态和脱敏请求/响应摘要。 |
+| `integration_plugin_runtime_logs` | 每次插件 action 的 domain、plugin、binding、actor、耗时、状态和完整请求/响应摘要。 |
 
 运行规则：
 
@@ -326,7 +328,8 @@ return [
 - 插件全局配置进入 `integration_plugin_configs`，绑定级覆盖配置进入对应绑定表，二者不能互相反写。
 - 支付、通知、上游等平台服务必须从绑定解析器读取插件，不再新增 `selection_setting`、`syncLegacySettings()` 或 settings fallback。
 - 插件运行日志由 `PluginRuntimeRegistry::execute()` 统一写入，插件内部不要自建业务运行日志表。
-- 敏感字段只允许进入加密列或脱敏摘要，禁止写入 runtime log 的明文字段。
+- 插件运行日志按项目规则保留完整信息、不做脱敏（见工作规则「不在日志做脱敏，都需要显示完整信息」）；调用方不想入日志的字段应在传入 `context`/`payload` 前自行裁剪。运行日志只是摘要有长度截断（`PayloadLimiter`），没有脱敏。（2026-10-11 裁决：维持明文。）
+- 探测类动作（`payment.is_enabled` / `payment.matches_merchant`）的**成功**结果不落运行日志且在同请求内 memo 短路（`PluginProbeMemo`，scoped 生命周期）——列表/匹配类调用高频幂等，成功行是纯噪音；失败仍完整落库。（2026-10-11 遗留收尾）
 
 ## 定时任务与调度 Hooks
 
@@ -551,9 +554,20 @@ php artisan schedule:list
 5. 点击启用，后端校验必填配置并更新插件状态。
 6. 业务运行时从 `PluginRuntimeRegistry` 执行插件动作，或通过平台 adapter 注册为支付、实名、短信、邮件、上游等内部契约。
 
-安装和启用时会额外校验 `info.extra.scheduled_tasks` 和 `info.extra.schedule_hooks` 中声明的类是否存在、是否实现对应契约，坏声明会在这一步直接报错，而不是等到心跳运行时静默跳过。
+安装和启用时会额外校验 `info.extra.scheduled_tasks`、`info.extra.schedule_hooks` 与 `info.extra.console_commands` 中声明的类是否存在、是否实现对应契约，坏声明会在这一步直接报错，而不是等到心跳运行时静默跳过。
 
-`demo_*` 插件不在管理端列表展示，也不允许通过管理端安装；开发调试请直接用 `PluginInstaller` 或测试辅助方法。
+`demo_*` 插件不在管理端列表展示，也不允许通过管理端安装或升级；推荐在 `info` 中显式声明 `'demo' => true`（管理端以此为准识别），`demo_` 前缀启发式仅作未改造插件的兼容兜底。开发调试请直接用 `PluginInstaller` 或测试辅助方法。
+
+### 升级
+
+插件文件更新后（版本或清单内容变化），管理端插件列表会标记「有可用更新」（库内 `manifest_hash` 与磁盘清单哈希不一致，字段 `has_update`），管理员调用 `POST /v2/admin/integration-plugins/{plugin}/upgrade` 显式同步登记：
+
+- 业务 key（`info.key`）不可变更：绑定表 resolver 与历史记录按 key 关联，变更 key 的清单升级会被拒绝；
+- 启用中的插件必须先满足新 schema 的必填配置（否则升级报缺配置项），定时任务声明要过全局 key 冲突校验；
+- 返回新旧 schema 的结构化 diff（`added`/`removed`/`changed`），`changed` 只比较影响行为的字段（type/required/secret/options/default），纯展示字段变化不产生噪音；
+- 已启用且声明 provider 的插件会重新激活 provider（幂等，同类跳过）。
+
+未升级时运行时行为不变：manifest_hash 不一致只记 warning（篡改告警），登记信息保持安装时快照。
 
 ### 卸载
 
@@ -564,6 +578,7 @@ php artisan schedule:list
 ## 安全边界
 
 - 插件不能自行注册管理端菜单、权限、迁移和任意路由。
+- 插件 Provider 不得注册系统级组件：路由、调度、全局中间件在启用时由基线快照守卫；事件监听、模型 Observer、Gate/Policy、View Composer、RateLimiter 同属禁止项（暂靠 code review 把关）；控制台命令确有运维需要时，必须在清单 `info.extra.console_commands` 显式声明（类须存在、位于插件目录内、继承 `Illuminate\Console\Command`），`plugins:audit-registrations` 对未声明的插件来源命令报违规（已声明视为受控豁免）。
 - 支付回调、订单履约、账务入账、服务开通仍由平台服务层控制。
 - 第三方调用必须封装在插件服务或平台 driver 中，不放 Controller。
 - 回调类可放 `controller/`，但平台路由必须统一做签名、幂等、日志和审计。
@@ -650,4 +665,11 @@ php artisan schedule:list
 ```bash
 cd frontend-admin-v3
 npm.cmd run build
+```
+
+插件边界审计（控制台命令注册面，CI/本地验证链通用）：
+
+```bash
+cd backend
+composer audit:plugins
 ```
