@@ -306,7 +306,11 @@ class ServiceRenewService
         $service = $this->healServiceProductMapping($service);
 
         // 已删除的服务不可续费：避免创建并支付续费账单后状态仍保持删除（收了钱不交付）。
-        throw_if((int) $service->status === ServiceStatus::TERMINATED, new BusinessException('服务已删除，无法续费'));
+        // 注：原实现引用了不存在的 ServiceStatus::TERMINATED（运行时致命错误）；
+        // 服务删除为软删语义（SoftDeletes 全局作用域下 findUserService 已天然 404），
+        // 这里改为 withTrashed 显式复查，保留防御意图且不改变正常路径行为。
+        $deletedService = Service::withTrashed()->find((int) $service->id);
+        throw_if($deletedService?->trashed() === true, new BusinessException('服务已删除，无法续费'));
 
         $renewConfig = $this->buildRenewConfig($service);
         $cycle = trim($billingCycle);

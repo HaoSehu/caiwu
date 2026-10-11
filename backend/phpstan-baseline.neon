@@ -298,30 +298,6 @@ parameters:
 			message: '#^Access to an undefined property App\\Models\\AdminUser\|App\\Models\\User\:\:\$name\.$#'
 			identifier: property.notFound
 			count: 1
-			path: app/Http/Controllers/Admin/V2/SettingController.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Http/Controllers/Admin/V2/SettingController.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Http/Controllers/Admin/V2/SettingController.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>username" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Http/Controllers/Admin/V2/SettingController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\AdminUser\|App\\Models\\User\:\:\$name\.$#'
-			identifier: property.notFound
-			count: 1
 			path: app/Http/Controllers/Admin/V2/SupplierController.php
 
 		-

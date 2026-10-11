@@ -25,7 +25,6 @@ use App\Services\System\SettingService;
 use App\Services\Upstream\Contracts\ProvidesProvisioning;
 use App\Services\Upstream\ProviderResolver;
 use App\Support\BillingCycle;
-use App\Support\BillingCycleLabels;
 use App\Support\Money;
 use App\Support\ProductProvisionHostname;
 use App\Support\SchemaMetadataCache;
@@ -359,7 +358,8 @@ class ProvisionService
     private function notifyClientServiceActivated(Order $order, Service $service, array $hostDetail): void
     {
         $user = User::query()->find((int) $order->user_id);
-        $email = trim((string) ($user?->email ?? ''));
+        // phpstan 严格规则：?-> 左侧已是可空访问，?? 兜底无需再写 nullsafe
+        $email = trim((string) ($user->email ?? ''));
         if ($email === '') {
             return;
         }
@@ -372,17 +372,17 @@ class ProvisionService
 
         try {
             SendTemplateEmailJob::dispatch($email, NotificationService::TEMPLATE_SERVICE_ACTIVATED, [
-                'display_name' => trim((string) ($user?->display_name ?? '')) !== '' ? (string) $user->display_name : $email,
+                'display_name' => trim((string) ($user->display_name ?? '')) !== '' ? (string) $user->display_name : $email,
                 'service_name' => (string) ($service->name ?: $order->display_product_name),
                 'hostname' => (string) ($service->domain ?? $hostDetail['domain'] ?? ''),
                 'product_main_ip' => (string) ($hostDetail['dedicatedip'] ?? ''),
                 'product_username' => (string) ($hostDetail['username'] ?? ''),
                 'operating_system' => (string) ($hostDetail['os'] ?? ''),
                 'activated_at' => now()->format('Y-m-d H:i:s'),
-                'expires_at' => $service->expires_at instanceof Carbon
-                    ? $service->expires_at->format('Y-m-d H:i:s')
+                'expires_at' => $service->expires_at !== null
+                    ? Carbon::parse($service->expires_at)->format('Y-m-d H:i:s')
                     : '-',
-                'billing_cycle_label' => BillingCycleLabels::label((string) ($order->billing_cycle ?? '')),
+                'billing_cycle_label' => $this->resolveBillingCycleLabel((string) ($order->billing_cycle ?? '')),
             ]);
         } catch (\Throwable $exception) {
             AutomationLog::forgetRecord(
@@ -1137,7 +1137,32 @@ class ProvisionService
 
     private function resolveServiceStatusFromUpstream(array $hostDetail): int
     {
-        return ServiceStatus::fromUpstreamDomainStatus($hostDetail['domainstatus'] ?? '');
+        // 与 ServiceStatusSyncService::resolveServiceStatusFromUpstream 同口径
+        // （原实现引用了不存在的 ServiceStatus::fromUpstreamDomainStatus）
+        return match (strtolower(trim((string) ($hostDetail['domainstatus'] ?? '')))) {
+            'active' => ServiceStatus::ACTIVE,
+            'suspended' => ServiceStatus::SUSPENDED,
+            'cancelled', 'deleted' => ServiceStatus::CANCELLED,
+            default => ServiceStatus::PENDING,
+        };
+    }
+
+    /**
+     * 计费周期中文标签（与 BillingAutomationService::resolveCycleLabel 同口径，
+     * 供开通成功通知使用；原实现引用了不存在的 BillingCycleLabels 类）。
+     */
+    private function resolveBillingCycleLabel(string $cycle): string
+    {
+        return [
+            'monthly' => '月付',
+            'quarterly' => '季付',
+            'semiannually' => '半年付',
+            'annually' => '年付',
+            'biennially' => '两年付',
+            'triennially' => '三年付',
+            'one_time' => '一次性',
+            'onetime' => '一次性',
+        ][$cycle] ?? $cycle;
     }
 
     private function resolveServiceExpiry(array $hostDetail, Order $order): ?Carbon

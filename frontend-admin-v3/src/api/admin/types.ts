@@ -661,6 +661,12 @@ export interface CouponPayload {
   billing_cycles: string[];
   product_ids: number[];
   first_order_only: boolean;
+  /** 优惠券定向增强：仅持有这些商品的用户可用 */
+  requires_product_ids?: number[];
+  /** 老客户专享（绑定既有客户判定口径） */
+  only_old_client?: boolean;
+  /** 折扣标记（覆盖价场景） */
+  is_discount?: boolean;
   user_ids: number[];
   total_usage_limit: number | null;
   per_user_limit: number | null;
@@ -736,6 +742,12 @@ export interface CouponCampaignPayload {
   billing_cycles: string[];
   product_ids: number[];
   first_order_only: boolean;
+  /** 优惠券定向增强：仅持有这些商品的用户可领 */
+  requires_product_ids?: number[];
+  /** 老客户专享（绑定既有客户判定口径） */
+  only_old_client?: boolean;
+  /** 折扣标记（覆盖价场景） */
+  is_discount?: boolean;
   per_user_limit: number | null;
   status: number;
   sort_order: number;
