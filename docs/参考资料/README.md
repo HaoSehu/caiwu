@@ -11,6 +11,7 @@
 | 数据库 | [DATABASE.md](../DATABASE.md)                                           | generated    | 由实库结构导出的数据库快照。       |
 | 数据库 | [本地 IDC 数据迁移流程](数据库/本地IDC数据迁移流程.md)                  | current      | 旧数据迁移的操作流程。             |
 | 集成   | [本地对接说明](集成/本地对接说明.md)                                    | needs-review | 上游本地联调入口与边界。           |
+| 集成   | [魔方财务同系统对接 API](集成/魔方财务同系统对接API.md)                 | current      | ZJMF 3.5.8 解密库全量对接接口参考。 |
 | 集成   | [插件开发](集成/插件/README.md)                                         | current      | 插件目录、扩展点与示例。           |
 | 集成   | [demo-ali-pay](集成/插件/demo-ali-pay.md)                               | current      | 支付网关插件示例。                 |
 | 集成   | [kanghostx 源码说明](../../backend/plugins/servers/kanghostx/README.md) | current      | 服务器插件的源码旁维护说明。       |

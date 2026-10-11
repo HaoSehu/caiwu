@@ -162,6 +162,11 @@ docs/_local/
 # docs 目录仅跟踪参考资料，其余内容不入库
 docs/*
 !docs/参考资料/
+# 2026-10-11 裁决 C：设计/工程规范与执行计划体系纳入版本管理（防修订丢失）
+!docs/DESIGN.md
+!docs/FRONTEND.md
+!docs/catalog.json
+!docs/执行计划/
 
 
 # Codex CLI：本地代理人格模板与工具配置，非项目定制
@@ -181,3 +186,6 @@ AGENTS.md
 
 backend/.env.testing
 backend/storage/app/installer/
+
+# WorkBuddy 项目会话数据（本地保留，不入库）
+.workbuddy/
