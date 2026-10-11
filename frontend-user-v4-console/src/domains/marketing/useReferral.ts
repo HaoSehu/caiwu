@@ -1,6 +1,6 @@
 import { ACCOUNT_TRANSACTION_EVENT_MAP, getStatusLabel } from '@shared/statusConfig';
 import { MessagePlugin } from 'tdesign-vue-next';
-import { computed, onActivated, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 
 import { clientAuthApi } from '@/api/auth';
 import clientApi from '@/api/client';
@@ -63,6 +63,7 @@ function resolveList<T>(list: T[] | undefined) {
 export function useReferral() {
   const userStore = useUserStore();
   const loading = ref(false);
+  const loadError = ref(false);
   const activeTab = ref<'rewards' | 'withdrawals' | 'logs' | 'direct'>('direct');
   const bindDialogVisible = ref(false);
   const withdrawSubmitting = ref(false);
@@ -72,6 +73,22 @@ export function useReferral() {
   const accountLogs = ref<ReferralAccountLogRecord[]>([]);
   const withdrawals = ref<ReferralWithdrawalRecord[]>([]);
   const directReferrals = ref<ReferralUserBrief[]>([]);
+
+  // 四张表分页状态（后端已分页，前端接 t-pagination；DESIGN.md §4.5）
+  const REFERRAL_PAGE_SIZE = 10;
+  const rewardsPagination = reactive({ page: 1, total: 0 });
+  const accountLogsPagination = reactive({ page: 1, total: 0 });
+  const withdrawalsPagination = reactive({ page: 1, total: 0 });
+  const directReferralsPagination = reactive({ page: 1, total: 0 });
+
+  function toTablePagination(p: { page: number; total: number }) {
+    if (p.total <= REFERRAL_PAGE_SIZE) return null;
+    return { current: p.page, total: p.total, pageSize: REFERRAL_PAGE_SIZE, showPageSize: false };
+  }
+  const rewardsTablePagination = computed(() => toTablePagination(rewardsPagination));
+  const accountLogsTablePagination = computed(() => toTablePagination(accountLogsPagination));
+  const withdrawalsTablePagination = computed(() => toTablePagination(withdrawalsPagination));
+  const directReferralsTablePagination = computed(() => toTablePagination(directReferralsPagination));
   const alipayAccount = reactive<ClientAlipayAccount & { is_bound: boolean }>({
     real_name: '',
     account: '',
@@ -121,25 +138,119 @@ export function useReferral() {
     }
   }
 
+  // 竞态防护：快速翻页/翻页与 loadAll 并发时，慢的旧响应不得覆盖新数据（对齐 useConsoleTabs 的 requestSeq 模式）
+  let rewardsRequestSeq = 0;
+  let accountLogsRequestSeq = 0;
+  let withdrawalsRequestSeq = 0;
+  let directReferralsRequestSeq = 0;
+
+  function safeTotal(value: unknown) {
+    const total = Number(value || 0);
+    return Number.isFinite(total) ? total : 0;
+  }
+
+  async function loadRewardsPage(page = 1) {
+    const requestSeq = ++rewardsRequestSeq;
+    try {
+      const res = await clientApi.referralRewards({ page, page_size: REFERRAL_PAGE_SIZE });
+      if (requestSeq !== rewardsRequestSeq) return;
+      rewards.value = resolveList(res.data?.list);
+      rewardsPagination.page = page;
+      rewardsPagination.total = safeTotal(res.data?.total);
+    } catch (error: unknown) {
+      if (requestSeq !== rewardsRequestSeq) return;
+      throw error; // 交由调用方处理：loadAll → 整页失败态；handleXxxPageChange → toast
+    }
+  }
+
+  async function loadAccountLogsPage(page = 1) {
+    const requestSeq = ++accountLogsRequestSeq;
+    try {
+      const res = await clientApi.referralAccountLogs({ page, page_size: REFERRAL_PAGE_SIZE });
+      if (requestSeq !== accountLogsRequestSeq) return;
+      accountLogs.value = resolveList(res.data?.list);
+      accountLogsPagination.page = page;
+      accountLogsPagination.total = safeTotal(res.data?.total);
+    } catch (error: unknown) {
+      if (requestSeq !== accountLogsRequestSeq) return;
+      throw error;
+    }
+  }
+
+  async function loadWithdrawalsPage(page = 1) {
+    const requestSeq = ++withdrawalsRequestSeq;
+    try {
+      const res = await clientApi.referralWithdrawals({ page, page_size: REFERRAL_PAGE_SIZE });
+      if (requestSeq !== withdrawalsRequestSeq) return;
+      withdrawals.value = resolveList(res.data?.list);
+      withdrawalsPagination.page = page;
+      withdrawalsPagination.total = safeTotal(res.data?.total);
+    } catch (error: unknown) {
+      if (requestSeq !== withdrawalsRequestSeq) return;
+      throw error;
+    }
+  }
+
+  async function loadDirectReferralsPage(page = 1) {
+    const requestSeq = ++directReferralsRequestSeq;
+    try {
+      const res = await clientApi.referralDirectReferrals({ page, page_size: REFERRAL_PAGE_SIZE });
+      if (requestSeq !== directReferralsRequestSeq) return;
+      directReferrals.value = resolveList(res.data?.list);
+      directReferralsPagination.page = page;
+      directReferralsPagination.total = safeTotal(res.data?.total);
+    } catch (error: unknown) {
+      if (requestSeq !== directReferralsRequestSeq) return;
+      throw error;
+    }
+  }
+
   async function loadAll() {
     loading.value = true;
+    loadError.value = false;
     try {
-      const [overviewRes, rewardsRes, logsRes, withdrawalsRes, directRes] = await Promise.all([
-        clientApi.referralOverview(),
-        clientApi.referralRewards({ page: 1, page_size: 10 }),
-        clientApi.referralAccountLogs({ page: 1, page_size: 10 }),
-        clientApi.referralWithdrawals({ page: 1, page_size: 10 }),
-        clientApi.referralDirectReferrals({ page: 1, page_size: 10 }),
+      await Promise.all([
+        clientApi.referralOverview().then((res) => Object.assign(overview, res.data || {})),
+        loadRewardsPage(1),
+        loadAccountLogsPage(1),
+        loadWithdrawalsPage(1),
+        loadDirectReferralsPage(1),
       ]);
-      Object.assign(overview, overviewRes.data || {});
-      rewards.value = resolveList(rewardsRes.data?.list);
-      accountLogs.value = resolveList(logsRes.data?.list);
-      withdrawals.value = resolveList(withdrawalsRes.data?.list);
-      directReferrals.value = resolveList(directRes.data?.list);
     } catch (error: unknown) {
+      loadError.value = true;
       MessagePlugin.error(getErrorMessage(error, '推广大使数据加载失败'));
     } finally {
       loading.value = false;
+    }
+  }
+
+  // 翻页失败需给用户反馈（loadAll 的失败走整页失败态，这里兜 toast）
+  async function handleRewardsPageChange(info: unknown) {
+    try {
+      await loadRewardsPage(Number((info as { current?: number })?.current || 1));
+    } catch (error: unknown) {
+      MessagePlugin.error(getErrorMessage(error, '加载奖励记录失败'));
+    }
+  }
+  async function handleAccountLogsPageChange(info: unknown) {
+    try {
+      await loadAccountLogsPage(Number((info as { current?: number })?.current || 1));
+    } catch (error: unknown) {
+      MessagePlugin.error(getErrorMessage(error, '加载账户明细失败'));
+    }
+  }
+  async function handleWithdrawalsPageChange(info: unknown) {
+    try {
+      await loadWithdrawalsPage(Number((info as { current?: number })?.current || 1));
+    } catch (error: unknown) {
+      MessagePlugin.error(getErrorMessage(error, '加载提现记录失败'));
+    }
+  }
+  async function handleDirectReferralsPageChange(info: unknown) {
+    try {
+      await loadDirectReferralsPage(Number((info as { current?: number })?.current || 1));
+    } catch (error: unknown) {
+      MessagePlugin.error(getErrorMessage(error, '加载直推列表失败'));
     }
   }
 
@@ -200,29 +311,30 @@ export function useReferral() {
     }
   }
 
-  let mounted = false;
-
+  // 注：keep-alive 复用重拉（onActivated）已移除——当前工程 keep-alive include 按组件名匹配，
+  // 页面无组件名注入实际不会被缓存（2026-10-11 裁决 A）；每次进入页面由 onMounted 全量拉取兜底。
   onMounted(() => {
-    mounted = true;
     void Promise.all([loadAll(), loadAlipayAccount()]);
-  });
-
-  // keep-alive 复用页面时重新拉取，避免管理端修改返利比例后用户端仍显示旧值
-  onActivated(() => {
-    if (mounted) {
-      void loadAll();
-    }
   });
 
   return {
     userStore,
     loading,
+    loadError,
     activeTab,
     overview,
     rewards,
     accountLogs,
     withdrawals,
     directReferrals,
+    rewardsTablePagination,
+    accountLogsTablePagination,
+    withdrawalsTablePagination,
+    directReferralsTablePagination,
+    handleRewardsPageChange,
+    handleAccountLogsPageChange,
+    handleWithdrawalsPageChange,
+    handleDirectReferralsPageChange,
     alipayAccount,
     withdrawForm,
     bindForm,

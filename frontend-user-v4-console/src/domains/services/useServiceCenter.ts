@@ -4,6 +4,7 @@ import { computed, onMounted, reactive, ref, shallowRef, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import clientApi from '@/api/client';
+import { localStorageKeys, readLocalStorage, writeLocalStorage } from '@/utils/storage';
 import type {
   CouponOption,
   ServiceCatalogTypeOption,
@@ -37,7 +38,6 @@ export const OS_ICON_MAP: Record<string, string> = {
   xen: '/img/os/XenServer.svg',
 };
 
-const SERVICE_VIEW_MODE_STORAGE_KEY = 'client-services-view-mode';
 const DEFAULT_SERVICE_STATUS_SCOPE = 'active_pending';
 const DEFAULT_SERVICE_STATUS = DEFAULT_SERVICE_STATUS_SCOPE;
 const MOBILE_VIEW_MODE_QUERY = '(max-width: 48rem)';
@@ -47,7 +47,7 @@ const DEFAULT_SERVICE_STATUS_OPTION = {
 };
 
 type ServiceListParams = Record<string, string | number>;
-type TdesignTagTheme = 'primary' | 'success' | 'warning' | 'danger';
+type TdesignTagTheme = 'default' | 'primary' | 'success' | 'warning' | 'danger';
 type ServiceLike = Partial<ServiceInstance> & Record<string, unknown>;
 interface StatusMapEntry {
   label?: string;
@@ -162,7 +162,8 @@ export function resolveTdesignStatusTheme(item: ServiceLike): TdesignTagTheme {
   if (tone === 'success') return 'success';
   if (tone === 'warning') return 'warning';
   if (tone === 'danger') return 'danger';
-  return 'primary';
+  // 未知 tone 兜底 default，避免品牌蓝被误读为正常状态
+  return 'default';
 }
 
 export function useServiceCenter() {
@@ -318,16 +319,13 @@ export function useServiceCenter() {
     const nextMode = normalizeViewMode(value);
     if (viewMode.value === nextMode) return;
     viewMode.value = nextMode;
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(SERVICE_VIEW_MODE_STORAGE_KEY, nextMode);
-    }
+    writeLocalStorage(localStorageKeys.serviceViewMode, nextMode);
   }
 
   function restoreViewMode() {
-    if (typeof window === 'undefined') return;
-    const stored = normalizeViewMode(window.localStorage.getItem(SERVICE_VIEW_MODE_STORAGE_KEY));
+    const stored = normalizeViewMode(readLocalStorage(localStorageKeys.serviceViewMode));
     // 手机端强制卡片视图，忽略历史偏好
-    const isMobile = window.matchMedia(MOBILE_VIEW_MODE_QUERY).matches;
+    const isMobile = typeof window !== 'undefined' && window.matchMedia(MOBILE_VIEW_MODE_QUERY).matches;
     viewMode.value = isMobile ? 'grid' : stored;
   }
 

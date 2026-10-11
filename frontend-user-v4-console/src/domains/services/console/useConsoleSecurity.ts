@@ -111,7 +111,7 @@ export function useConsoleSecurity(options: UseConsoleSecurityOptions) {
     return String(payload?.message || '').trim() || fallback;
   }
 
-  async function loadSecurityGroups(fresh = false) {
+  async function loadSecurityGroups(fresh = false): Promise<boolean> {
     securityState.loading = true;
     try {
       const res = await clientApi.serviceSecurityGroups(serviceId.value, fresh ? { fresh: true } : undefined);
@@ -132,8 +132,10 @@ export function useConsoleSecurity(options: UseConsoleSecurityOptions) {
         activeSecurityGroupId.value = 0;
         securityState.rules = [];
       }
+      return true;
     } catch (error: unknown) {
       securityState.error = resolveErrorMessage(error, '加载安全组失败');
+      return false;
     } finally {
       securityState.loading = false;
     }
@@ -223,9 +225,9 @@ export function useConsoleSecurity(options: UseConsoleSecurityOptions) {
     if (!group.id) return;
     const dialog = DialogPlugin.confirm({
       header: '删除安全组',
-      body: `确认删除安全组“${group.name || group.id}”吗？`,
-      theme: 'warning',
-      confirmBtn: '确定',
+      body: `确定删除安全组“${group.name || group.id}”吗？删除后其规则随之失效，且不可恢复。`,
+      theme: 'danger',
+      confirmBtn: { content: '删除', theme: 'danger' },
       cancelBtn: '取消',
       onConfirm: async () => {
         dialog.setConfirmLoading(true);
@@ -285,9 +287,9 @@ export function useConsoleSecurity(options: UseConsoleSecurityOptions) {
     if (!rule.id || !activeSecurityGroupId.value) return;
     const dialog = DialogPlugin.confirm({
       header: '删除规则',
-      body: '确认删除该安全组规则吗？',
-      theme: 'warning',
-      confirmBtn: '确定',
+      body: '确定删除该安全组规则吗？删除后对应端口/来源的访问控制立即失效，且不可恢复。',
+      theme: 'danger',
+      confirmBtn: { content: '删除', theme: 'danger' },
       cancelBtn: '取消',
       onConfirm: async () => {
         dialog.setConfirmLoading(true);

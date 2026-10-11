@@ -65,17 +65,26 @@
   }
 }
 
+// 移动优先：仅桌面（≥992px）需要保护性最小宽度，避免窄屏溢出（原先默认 760px + 媒体查询撤销的写法脆弱）
 .t-layout.t-layout--with-sider {
   > .t-layout {
     flex: 1;
-    min-width: 760px;
+    min-width: 0;
+  }
+}
+
+@media (min-width: @screen-md-min) {
+  .t-layout.t-layout--with-sider {
+    > .t-layout {
+      min-width: 760px;
+    }
   }
 }
 
 @media (max-width: @screen-sm-max) {
   .t-layout.t-layout--with-sider {
     > .t-layout {
-      min-width: 0;
+      flex: 1;
     }
   }
 
@@ -248,10 +257,6 @@
         margin-left: 0;
       }
     }
-  }
-
-  &-side-nav-dark {
-    color: var(--td-font-white-1) !important;
   }
 
   &-side-nav-placeholder {

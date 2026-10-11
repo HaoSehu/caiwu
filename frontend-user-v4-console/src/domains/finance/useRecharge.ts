@@ -280,7 +280,10 @@ export function useRecharge() {
     }
   }
 
-  function startAutoPolling(interval = 2000) {
+  let pollingInterval = 2000;
+
+  function startAutoPolling(interval = pollingInterval) {
+    pollingInterval = interval;
     clearPollingTimer();
     pollFailureCount = 0;
     if (!paymentPayload.value?.payment_no || !paymentPayload.value?.poll_token) return;
@@ -459,6 +462,8 @@ export function useRecharge() {
     }
   });
 
+  // 注：keep-alive 暂停/恢复钩子已移除——当前工程 keep-alive include 按组件名匹配，
+  // 页面无组件名注入实际不会被缓存（2026-10-11 裁决 A）；页面离开走 onBeforeUnmount 清理 timer。
   onBeforeUnmount(() => {
     clearPollingTimer();
   });

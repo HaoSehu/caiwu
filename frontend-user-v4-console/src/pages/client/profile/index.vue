@@ -103,15 +103,21 @@
       :header="passwordMode === 'old' ? '编辑登录密码' : '验证码重置密码'"
       width="min(30rem, calc(100vw - 2rem))"
     >
-      <t-form v-if="passwordMode === 'old'" label-align="top">
-        <t-form-item label="原密码"><t-input v-model="passwordForm.oldPassword" type="password" /></t-form-item>
-        <t-form-item label="新密码"><t-input v-model="passwordForm.newPassword" type="password" /></t-form-item>
-        <t-form-item label="确认密码"><t-input v-model="passwordForm.confirmPassword" type="password" /></t-form-item>
+      <t-form v-if="passwordMode === 'old'" ref="passwordFormRef" label-align="top">
+        <t-form-item label="原密码" name="oldPassword" :rules="requiredBlur('请输入原密码')">
+          <t-input v-model="passwordForm.oldPassword" type="password" />
+        </t-form-item>
+        <t-form-item label="新密码" name="newPassword" :rules="newPasswordRules">
+          <t-input v-model="passwordForm.newPassword" type="password" />
+        </t-form-item>
+        <t-form-item label="确认密码" name="confirmPassword" :rules="confirmPasswordRulesOld">
+          <t-input v-model="passwordForm.confirmPassword" type="password" />
+        </t-form-item>
         <t-button variant="text" theme="primary" class="password-forgot" @click="togglePasswordMode"
           >忘记原密码？</t-button
         >
       </t-form>
-      <t-form v-else label-align="top">
+      <t-form v-else ref="resetFormRef" label-align="top">
         <t-tabs v-if="profileForm.phone && profileForm.email" v-model="resetForm.type" theme="normal">
           <t-tab-panel value="phone" label="手机验证" />
           <t-tab-panel value="email" label="邮箱验证" />
@@ -121,7 +127,7 @@
         <t-form-item label="验证对象"
           ><t-input :value="resetForm.type === 'phone' ? profileForm.phone : profileForm.email" readonly
         /></t-form-item>
-        <t-form-item label="验证码">
+        <t-form-item label="验证码" name="code" :rules="requiredBlur('请输入验证码')">
           <div class="bind-code-row">
             <t-input v-model="resetForm.code" placeholder="请输入 6 位验证码" maxlength="6" inputmode="numeric" />
             <t-button variant="outline" :disabled="resetCountdown > 0" @click="sendResetCode">
@@ -129,20 +135,26 @@
             </t-button>
           </div>
         </t-form-item>
-        <t-form-item label="新密码"
-          ><t-input v-model="resetForm.password" type="password" placeholder="至少 6 位"
-        /></t-form-item>
-        <t-form-item label="确认密码"><t-input v-model="resetForm.confirmPassword" type="password" /></t-form-item>
+        <t-form-item label="新密码" name="password" :rules="newPasswordRules">
+          <t-input
+            v-model="resetForm.password"
+            type="password"
+            placeholder="至少 6 位"
+          />
+        </t-form-item>
+        <t-form-item label="确认密码" name="confirmPassword" :rules="confirmPasswordRulesReset">
+          <t-input v-model="resetForm.confirmPassword" type="password" />
+        </t-form-item>
         <t-button variant="text" theme="primary" class="password-forgot" @click="togglePasswordMode"
           >使用原密码修改</t-button
         >
       </t-form>
       <template #footer>
         <t-button variant="outline" @click="passwordDialogVisible = false">取消</t-button>
-        <t-button v-if="passwordMode === 'old'" theme="primary" :loading="profileLoading" @click="changePassword"
+        <t-button v-if="passwordMode === 'old'" theme="primary" :loading="profileLoading" @click="confirmPasswordChange"
           >确定</t-button
         >
-        <t-button v-else theme="primary" :loading="profileLoading" @click="submitResetPassword">确定</t-button>
+        <t-button v-else theme="primary" :loading="profileLoading" @click="confirmResetPassword">确定</t-button>
       </template>
     </t-dialog>
 
@@ -158,15 +170,16 @@
           </div>
         </t-form-item>
       </t-form>
-      <t-form v-else label-align="top">
-        <t-form-item label="新手机号"
-          ><t-input
+      <t-form v-else ref="phoneFormRef" label-align="top">
+        <t-form-item label="新手机号" name="phone" :rules="phoneRules">
+          <t-input
             v-model="phoneForm.phone"
             type="tel"
             inputmode="numeric"
             maxlength="11"
             placeholder="请输入新手机号"
-        /></t-form-item>
+          />
+        </t-form-item>
         <t-form-item label="验证码">
           <div class="bind-code-row">
             <t-input v-model="phoneForm.code" placeholder="请输入 6 位验证码" maxlength="6" inputmode="numeric" />
@@ -184,7 +197,7 @@
         <t-button v-if="phoneChangeStep === 1" theme="primary" :loading="profileLoading" @click="goPhoneNextStep"
           >下一步</t-button
         >
-        <t-button v-else theme="primary" :loading="profileLoading" @click="submitPhoneChange">确定</t-button>
+        <t-button v-else theme="primary" :loading="profileLoading" @click="confirmPhoneChange">确定</t-button>
       </template>
     </t-dialog>
 
@@ -200,8 +213,10 @@
           </div>
         </t-form-item>
       </t-form>
-      <t-form v-else label-align="top">
-        <t-form-item label="新邮箱"><t-input v-model="emailForm.email" placeholder="请输入新邮箱" /></t-form-item>
+      <t-form v-else ref="emailFormRef" label-align="top">
+        <t-form-item label="新邮箱" name="email" :rules="emailRules">
+          <t-input v-model="emailForm.email" placeholder="请输入新邮箱" />
+        </t-form-item>
         <t-form-item label="验证码">
           <div class="bind-code-row">
             <t-input v-model="emailForm.code" placeholder="请输入 6 位验证码" maxlength="6" />
@@ -219,13 +234,15 @@
         <t-button v-if="emailChangeStep === 1" theme="primary" :loading="profileLoading" @click="goEmailNextStep"
           >下一步</t-button
         >
-        <t-button v-else theme="primary" :loading="profileLoading" @click="submitEmailChange">确定</t-button>
+        <t-button v-else theme="primary" :loading="profileLoading" @click="confirmEmailChange">确定</t-button>
       </template>
     </t-dialog>
   </section>
 </template>
 <script setup lang="ts">
 import { CopyIcon } from 'tdesign-icons-vue-next';
+import type { FormInstanceFunctions, FormRule } from 'tdesign-vue-next';
+import { ref } from 'vue';
 
 import { useProfile } from '@/domains/account/useProfile';
 
@@ -276,6 +293,68 @@ const {
   saveNotificationPreferences,
   handleProfileTabChange,
 } = useProfile();
+
+// ── M15：blur 即时校验（DESIGN.md §4.6：blur 触发 + 提交前汇总拦截） ──
+const passwordFormRef = ref<FormInstanceFunctions>();
+const resetFormRef = ref<FormInstanceFunctions>();
+const phoneFormRef = ref<FormInstanceFunctions>();
+const emailFormRef = ref<FormInstanceFunctions>();
+
+const requiredBlur = (message: string): FormRule[] => [{ required: true, message, trigger: 'blur' }];
+
+const newPasswordRules: FormRule[] = [
+  ...requiredBlur('请输入新密码'),
+  { min: 6, message: '密码至少 6 位', trigger: 'blur' },
+];
+const confirmPasswordRulesOld: FormRule[] = [
+  ...requiredBlur('请再次输入新密码'),
+  {
+    validator: (val: unknown) => !val || val === passwordForm.newPassword,
+    message: '两次输入的密码不一致',
+    trigger: 'blur',
+  },
+];
+const confirmPasswordRulesReset: FormRule[] = [
+  ...requiredBlur('请再次输入新密码'),
+  {
+    validator: (val: unknown) => !val || val === resetForm.password,
+    message: '两次输入的密码不一致',
+    trigger: 'blur',
+  },
+];
+const phoneRules: FormRule[] = [
+  ...requiredBlur('请输入新手机号'),
+  { pattern: /^1\d{10}$/, message: '手机号格式不正确', trigger: 'blur' },
+];
+const emailRules: FormRule[] = [
+  ...requiredBlur('请输入新邮箱'),
+  { pattern: /^\S+@\S+\.\S+$/, message: '邮箱格式不正确', trigger: 'blur' },
+];
+
+async function validateForm(formRef: FormInstanceFunctions | undefined) {
+  if (!formRef) return true;
+  return (await formRef.validate()) === true;
+}
+
+async function confirmPasswordChange() {
+  if (!(await validateForm(passwordFormRef.value))) return;
+  await changePassword();
+}
+
+async function confirmResetPassword() {
+  if (!(await validateForm(resetFormRef.value))) return;
+  await submitResetPassword();
+}
+
+async function confirmPhoneChange() {
+  if (!(await validateForm(phoneFormRef.value))) return;
+  await submitPhoneChange();
+}
+
+async function confirmEmailChange() {
+  if (!(await validateForm(emailFormRef.value))) return;
+  await submitEmailChange();
+}
 </script>
 <style scoped lang="less">
 .profile-page {

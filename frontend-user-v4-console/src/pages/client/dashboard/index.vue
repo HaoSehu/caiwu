@@ -1,6 +1,12 @@
 <template>
   <section class="client-dashboard">
-    <loading-state :loading="loading" text="数据加载中...">
+    <data-state
+      v-if="loadError && !loading"
+      error
+      error-text="控制台数据加载失败，请重试"
+      @retry="loadDashboard"
+    />
+    <loading-state v-else :loading="loading" text="数据加载中...">
       <div class="summary-grid">
         <t-card class="account-card dashboard-card" :bordered="false">
           <div class="account-card__user">
@@ -39,12 +45,11 @@
           class="metric-card dashboard-card"
           :bordered="false"
           role="region"
-          :aria-label="`${item.label}：${item.value} ${item.unit}，${item.note}`"
+          :aria-label="`${item.label}：${item.value}，${item.note}`"
         >
           <div class="metric-card__label">{{ item.label }}</div>
           <div class="metric-card__value" :class="{ 'is-warning': item.warning }">
             {{ item.value }}
-            <span>{{ item.unit }}</span>
           </div>
           <div class="metric-card__note">{{ item.note }}</div>
         </t-card>
@@ -88,8 +93,12 @@
                 </div>
               </template>
 
-              <t-loading :loading="!invoicesLoaded" text="加载中">
-                <div v-if="monthlyBarsHasData" class="bar-chart bar-chart--monthly" aria-label="今年月度消费">
+              <t-loading :loading="!invoicesLoaded" text="加载中...">
+                <div v-if="invoicesLoadFailed" class="chart-load-failed">
+                  <span>图表数据加载失败</span>
+                  <t-button theme="primary" variant="text" size="small" @click="loadConsumptionCharts">重试</t-button>
+                </div>
+                <div v-else-if="monthlyBarsHasData" class="bar-chart bar-chart--monthly" aria-label="今年月度消费">
                   <t-tooltip
                     v-for="bar in monthlyBars"
                     :key="bar.key"
@@ -126,8 +135,12 @@
                 </div>
               </template>
 
-              <t-loading :loading="!balanceLogsLoaded" text="加载中">
-                <div v-if="dailyBarsHasData" class="bar-chart bar-chart--daily" aria-label="近 7 天每日消费">
+              <t-loading :loading="!balanceLogsLoaded" text="加载中...">
+                <div v-if="balanceLogsLoadFailed" class="chart-load-failed">
+                  <span>图表数据加载失败</span>
+                  <t-button theme="primary" variant="text" size="small" @click="loadConsumptionCharts">重试</t-button>
+                </div>
+                <div v-else-if="dailyBarsHasData" class="bar-chart bar-chart--daily" aria-label="近 7 天每日消费">
                   <t-tooltip v-for="bar in dailyBars" :key="bar.date" :content="bar.tooltip" placement="top" show-arrow>
                     <div
                       class="bar-chart__slot"
@@ -250,6 +263,7 @@
   </section>
 </template>
 <script setup lang="ts">
+import DataState from '@shared/user-v3/components/DataState.vue';
 import LoadingState from '@shared/user-v3/components/LoadingState.vue';
 import {
   CouponIcon,
@@ -275,19 +289,19 @@ import { useSiteBrandingStore } from '@/app/stores/siteBranding';
 import { useNoticeReadStatus } from '@/domains/content/useNoticeReadStatus';
 import { useUserStore } from '@/store';
 import type {
-  BalanceLog,
   ClientUserInfo,
   ContentArticleRecord,
   CouponSummary,
   FinanceLedgerSummary,
-  InvoiceRecord,
   ReferralOverviewPayload,
   ServiceOverviewGroup,
   ServiceOverviewPayload,
   TicketRecord,
 } from '@/types/client';
 import { getErrorMessage } from '@/utils/error';
-import { formatMoney, formatShortDateTime as formatDate } from '@/utils/format';
+import { formatMoney, formatMoneyText, formatShortDateTime as formatDate } from '@/utils/format';
+
+import { resolvePagedList, toNumber, toDateText, useDashboardSecondary } from './composables/useDashboardSecondary';
 
 interface ProductCard {
   key: string;
@@ -305,14 +319,22 @@ const userStore = useUserStore();
 const siteBranding = useSiteBrandingStore();
 const { unreadCount, fetchUnreadCount } = useNoticeReadStatus();
 
+const {
+  balanceLogsLoadFailed,
+  invoicesLoadFailed,
+  balanceLogsDaily,
+  paidInvoices,
+  balanceLogsLoaded,
+  invoicesLoaded,
+  recentHelpArticles,
+  loadConsumptionCharts,
+  loadSecondaryData,
+} = useDashboardSecondary(fetchUnreadCount);
+
 const loading = ref(false);
+const loadError = ref(false);
 const activeNoticeTab = ref<'notice' | 'help'>('notice');
-const balanceLogsDaily = ref<BalanceLog[]>([]);
-const paidInvoices = ref<InvoiceRecord[]>([]);
-const balanceLogsLoaded = ref(false);
-const invoicesLoaded = ref(false);
 const recentNotices = ref<ContentArticleRecord[]>([]);
-const recentHelpArticles = ref<ContentArticleRecord[]>([]);
 const recentTickets = ref<TicketRecord[]>([]);
 const financeSummary = ref<FinanceLedgerSummary>({
   cash_balance: '0.00',
@@ -340,28 +362,6 @@ function isHandledError(error: unknown): error is { __handled: boolean } {
   return typeof error === 'object' && error !== null && '__handled' in error && Boolean(error.__handled);
 }
 
-function toNumber(value: unknown) {
-  const normalized = Number(value);
-  return Number.isFinite(normalized) ? normalized : 0;
-}
-
-function toDateText(value: Date) {
-  const year = value.getFullYear();
-  const month = String(value.getMonth() + 1).padStart(2, '0');
-  const day = String(value.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
-function last7DaysRange() {
-  const now = new Date();
-  const start = new Date(now);
-  start.setDate(start.getDate() - 6);
-  return {
-    start_date: toDateText(start),
-    end_date: toDateText(now),
-  };
-}
-
 function currentMonthRange() {
   const now = new Date();
   const start = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -370,12 +370,6 @@ function currentMonthRange() {
     start_date: toDateText(start),
     end_date: toDateText(end),
   };
-}
-
-function resolvePagedList<T>(payload: { list?: T[] } | T[] | null | undefined): T[] {
-  if (Array.isArray(payload)) return payload;
-  if (Array.isArray(payload?.list)) return payload.list;
-  return [];
 }
 
 function resolveProductMeta(item: ServiceOverviewGroup, key: string) {
@@ -420,22 +414,19 @@ const summaryCards = computed(() => [
   {
     key: 'balance',
     label: '账户余额',
-    value: formatMoney(financeSummary.value.cash_balance),
-    unit: '元',
+    value: formatMoneyText(financeSummary.value.cash_balance),
     note: `ID: ${userIdText.value}`,
   },
   {
     key: 'recharge',
     label: '本月充值',
-    value: formatMoney(financeSummary.value.recharge_in),
-    unit: '元',
+    value: formatMoneyText(financeSummary.value.recharge_in),
     note: '财务入账汇总',
   },
   {
     key: 'payment',
     label: '本月消费',
-    value: formatMoney(financeSummary.value.invoice_payment_out),
-    unit: '元',
+    value: formatMoneyText(financeSummary.value.invoice_payment_out),
     note: '本月账单支出',
     warning: true,
   },
@@ -679,27 +670,9 @@ const quickLinks = [
   { label: '推广大使', path: '/client/referral', icon: GiftIcon },
 ];
 
-// 分页穷尽拉取：图表聚合依赖全量数据，单页截断会导致金额少算（上限防失控）
-async function fetchAllPagedList<T>(
-  fetcher: (params: { page: number; page_size: number }) => Promise<{ data: { list?: T[] } | T[] | null | undefined }>,
-  extraParams: Record<string, unknown> = {},
-  maxPages = 20,
-): Promise<T[]> {
-  // 后端各列表接口 page_size 上限为 100（invoices 校验 max:100 且服务端再截断），取最小公约值
-  const pageSize = 100;
-  const rows: T[] = [];
-  for (let page = 1; page <= maxPages; page += 1) {
-    const res = await fetcher({ page, page_size: pageSize, ...extraParams });
-    const list = resolvePagedList(res.data);
-    rows.push(...list);
-    if (list.length < pageSize) break;
-  }
-  return rows;
-}
-
 async function loadDashboard() {
   loading.value = true;
-  const currentYear = new Date().getFullYear();
+  loadError.value = false;
 
   try {
     await userStore.getUserInfo().catch(() => {});
@@ -720,6 +693,13 @@ async function loadDashboard() {
       clientApi.groupedOverview(),
       clientApi.referralOverview(),
     ]);
+
+    // 首屏全部失败时让 DataState 失败态可达（否则页面静默渲染全 0 数据）
+    const results = [noticesRes, ticketsRes, financeRes, couponsRes, serviceOverviewRes, referralRes];
+    if (results.every((result) => result.status === 'rejected')) {
+      const firstError = (results.find((result) => result.status === 'rejected') as PromiseRejectedResult).reason;
+      throw firstError instanceof Error ? firstError : new Error('控制台数据加载失败');
+    }
 
     // 处理首屏数据
     if (noticesRes.status === 'fulfilled') {
@@ -759,48 +739,10 @@ async function loadDashboard() {
     // 首屏核心数据加载完成（总览卡片 + 产品概览 + 待办项）
     loading.value = false;
 
-    // 次屏延迟加载：图表数据、帮助文章、未读数
-    // 这些数据不阻塞首屏显示，提升感知速度
-    async function loadSecondaryData() {
-      try {
-        const [helpRes, _unreadRes, balanceLogsRows, paidInvoicesRows] = await Promise.allSettled([
-          clientApi.helpArticles({ page: 1, page_size: 10 }),
-          fetchUnreadCount(true),
-          fetchAllPagedList<BalanceLog>((params) => clientApi.balanceLogs({ ...last7DaysRange(), ...params }), {}, 10),
-          fetchAllPagedList<InvoiceRecord>(
-            (params) =>
-              clientApi.invoices({
-                status: 1,
-                start_date: `${currentYear}-01-01`,
-                end_date: `${currentYear}-12-31`,
-                ...params,
-              }),
-            {},
-            20,
-          ),
-        ]);
-
-        if (helpRes.status === 'fulfilled') {
-          recentHelpArticles.value = resolvePagedList(helpRes.value.data);
-        }
-        if (balanceLogsRows.status === 'fulfilled') {
-          balanceLogsDaily.value = balanceLogsRows.value;
-          balanceLogsLoaded.value = true;
-        }
-
-        if (paidInvoicesRows.status === 'fulfilled') {
-          paidInvoices.value = paidInvoicesRows.value;
-          invoicesLoaded.value = true;
-        }
-      } catch (error) {
-        // 静默失败，不影响首屏显示
-        console.error('Failed to load secondary data:', error);
-      }
-    }
-
     void loadSecondaryData();
   } catch (error: unknown) {
     loading.value = false;
+    loadError.value = true;
     if (!isHandledError(error)) {
       MessagePlugin.error(getErrorMessage(error, '控制台数据加载失败'));
     }
@@ -811,587 +753,4 @@ onMounted(() => {
   void loadDashboard();
 });
 </script>
-<style scoped lang="less">
-.client-dashboard {
-  // padding 由 Starter 布局层统一提供
-}
-
-.summary-grid {
-  display: grid;
-  grid-template-columns: minmax(22rem, 2fr) repeat(4, minmax(10rem, 1fr));
-  gap: var(--td-comp-margin-m);
-}
-
-.dashboard-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(18rem, 24%);
-  gap: var(--td-comp-margin-m);
-  margin-top: var(--td-comp-margin-m);
-}
-
-.dashboard-main,
-.dashboard-aside {
-  display: flex;
-  flex-direction: column;
-  gap: var(--td-comp-margin-m);
-  min-width: 0;
-}
-
-.chart-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--td-comp-margin-m);
-}
-
-.dashboard-card {
-  height: 100%;
-  background: var(--td-bg-color-container);
-  border: thin solid var(--td-component-stroke);
-  border-radius: var(--td-radius-medium);
-  box-shadow: var(--td-shadow-1);
-}
-
-.account-card__user {
-  display: flex;
-  gap: var(--td-comp-margin-m);
-  align-items: flex-start;
-}
-
-.account-card__main {
-  min-width: 0;
-
-  h2 {
-    margin: 0;
-    overflow: hidden;
-    color: var(--td-text-color-primary);
-    font: var(--td-font-title-medium);
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  p {
-    margin: var(--td-comp-margin-xs) 0 0;
-    color: var(--td-text-color-secondary);
-    font: var(--td-font-body-medium);
-  }
-}
-
-.account-card__tags,
-.account-card__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--td-comp-margin-s);
-  margin-top: var(--td-comp-margin-m);
-}
-
-.metric-card__label,
-.metric-card__note,
-.card-meta,
-.chart-summary {
-  color: var(--td-text-color-secondary);
-  font: var(--td-font-body-small);
-}
-
-.chart-card__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--td-comp-margin-s);
-  align-items: center;
-  justify-content: flex-end;
-}
-
-.metric-card__value {
-  margin-top: var(--td-comp-margin-xs);
-  color: var(--td-text-color-primary);
-  font: var(--td-font-headline-medium);
-  font-variant-numeric: tabular-nums;
-
-  span {
-    margin-left: var(--td-comp-margin-xs);
-    color: var(--td-text-color-secondary);
-    font: var(--td-font-body-medium);
-  }
-
-  &.is-warning {
-    color: var(--td-warning-color-10);
-  }
-}
-
-.metric-card__note {
-  margin-top: var(--td-comp-margin-xs);
-}
-
-.product-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--td-comp-margin-s);
-}
-
-.product-tile,
-.todo-row,
-.quick-link {
-  border: thin solid var(--td-component-stroke);
-  background: var(--td-bg-color-container);
-  color: var(--td-text-color-primary);
-  cursor: pointer;
-  text-decoration: none;
-  transition:
-    border-color @anim-duration-base @anim-time-fn-easing,
-    background-color @anim-duration-base @anim-time-fn-easing,
-    color @anim-duration-base @anim-time-fn-easing;
-
-  &:focus-visible {
-    outline: var(--td-size-1) solid var(--td-brand-color);
-    outline-offset: calc(var(--td-size-1) * 0.5);
-  }
-
-  &:active {
-    background: var(--td-bg-color-secondarycontainer);
-    border-color: var(--td-brand-color);
-  }
-}
-
-.product-tile {
-  display: flex;
-  gap: var(--td-comp-margin-s);
-  align-items: center;
-  min-width: 0;
-  padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-m);
-  text-align: left;
-  border-radius: var(--td-radius-medium);
-
-  &:hover {
-    border-color: var(--td-brand-color);
-    background: var(--td-brand-color-light);
-  }
-}
-
-.product-tile__icon,
-.todo-row__icon,
-.quick-link svg {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--td-text-color-secondary);
-}
-
-.product-tile__icon,
-.todo-row__icon {
-  width: 2.5rem;
-  height: 2.5rem;
-  border-radius: var(--td-radius-medium);
-  color: var(--td-text-color-secondary);
-  background: var(--td-bg-color-component);
-
-  &.is-brand {
-    color: var(--td-text-color-anti);
-    background: var(--td-brand-color);
-  }
-
-  &.is-info {
-    color: var(--td-text-color-anti);
-    background: var(--td-brand-color-7);
-  }
-
-  &.is-success {
-    color: var(--td-text-color-anti);
-    background: var(--td-success-color);
-  }
-
-  &.is-warning {
-    color: var(--td-text-color-anti);
-    background: var(--td-warning-color);
-  }
-
-  &.is-muted {
-    color: var(--td-text-color-secondary);
-    background: var(--td-bg-color-component);
-  }
-}
-
-.product-tile__content {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: var(--td-comp-margin-xxs);
-  min-width: 0;
-
-  strong,
-  span {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  strong {
-    color: var(--td-text-color-primary);
-    font: var(--td-font-body-medium);
-  }
-
-  span {
-    color: var(--td-text-color-secondary);
-    font: var(--td-font-body-small);
-  }
-}
-
-.chart-card {
-  min-height: 23rem;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.chart-card :deep(.t-loading__parent),
-.chart-card :deep(.t-card__body) {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  min-height: 0;
-}
-
-.chart-card :deep(.t-loading__parent) {
-  justify-content: flex-end;
-}
-
-.message-row,
-.todo-row {
-  display: flex;
-  align-items: center;
-}
-
-.bar-chart {
-  display: flex;
-  align-items: flex-end;
-  height: 12rem;
-  gap: var(--td-comp-margin-xxs);
-  padding: var(--td-comp-paddingTB-s) 0 var(--td-comp-paddingTB-xl);
-  border-bottom: thin solid var(--td-component-stroke);
-}
-
-.bar-chart__slot {
-  position: relative;
-  display: flex;
-  flex: 1;
-  align-items: flex-end;
-  justify-content: center;
-  height: 100%;
-  min-width: 0;
-}
-
-.bar-chart__bar {
-  width: 68%;
-  min-height: 0;
-  background: var(--td-brand-color);
-  border-radius: var(--td-radius-medium) var(--td-radius-medium) 0 0;
-}
-
-.bar-chart__label {
-  position: absolute;
-  bottom: calc(var(--td-comp-margin-l) * -1);
-  color: var(--td-text-color-secondary);
-  font: var(--td-font-body-small);
-}
-
-.bar-chart--daily {
-  height: 12rem;
-}
-
-.bar-chart--daily .bar-chart__slot {
-  cursor: pointer;
-}
-
-.bar-chart--daily .bar-chart__bar {
-  width: 50%;
-}
-
-.bar-chart--monthly {
-  height: 16rem;
-  padding-top: var(--td-comp-paddingTB-l);
-}
-
-.bar-chart--monthly .bar-chart__slot {
-  cursor: pointer;
-}
-
-.bar-chart--monthly .bar-chart__col {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-end;
-  width: 60%;
-  min-height: 0;
-}
-
-.bar-chart--monthly .bar-chart__bar {
-  width: 100%;
-  flex: 1;
-  min-height: 0;
-}
-
-.bar-chart__value {
-  position: absolute;
-  bottom: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  padding-bottom: var(--td-comp-margin-xxs);
-  color: var(--td-text-color-secondary);
-  font: var(--td-font-body-small);
-  white-space: nowrap;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
-
-.bar-chart__slot:hover .bar-chart__value,
-.bar-chart__slot:focus-within .bar-chart__value {
-  opacity: 1;
-}
-
-.chart-summary {
-  strong {
-    color: var(--td-text-color-primary);
-  }
-}
-
-.message-tabs {
-  margin-top: calc(var(--td-comp-margin-s) * -1);
-}
-
-.message-list,
-.todo-list {
-  display: flex;
-  flex-direction: column;
-}
-
-.message-row {
-  gap: var(--td-comp-margin-s);
-  min-height: var(--td-comp-size-xxl);
-  color: var(--td-text-color-primary);
-  text-decoration: none;
-  border-bottom: thin solid var(--td-component-stroke);
-
-  &:hover {
-    color: var(--td-brand-color);
-  }
-}
-
-.message-row__title {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.message-row__time {
-  color: var(--td-text-color-secondary);
-  font: var(--td-font-body-small);
-}
-
-.todo-row {
-  justify-content: space-between;
-  width: 100%;
-  padding: var(--td-comp-paddingTB-s) 0;
-  border-width: 0 0 thin;
-  text-align: left;
-
-  &:hover {
-    color: var(--td-brand-color);
-    border-color: var(--td-brand-color);
-  }
-}
-
-.todo-row__left {
-  display: flex;
-  gap: var(--td-comp-margin-s);
-  align-items: center;
-  min-width: 0;
-}
-
-.todo-row__count {
-  color: var(--td-text-color-secondary);
-  font: var(--td-font-title-small);
-
-  &.is-alert {
-    color: var(--td-error-color-8);
-  }
-}
-
-.todo-row__alert-icon {
-  margin-right: var(--td-comp-margin-xxs);
-  font-size: var(--td-font-size-body-medium);
-  vertical-align: middle;
-}
-
-.quick-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--td-comp-margin-s);
-}
-
-.quick-link {
-  display: flex;
-  flex-direction: column;
-  gap: var(--td-comp-margin-xs);
-  align-items: center;
-  justify-content: center;
-  min-height: 5rem;
-  padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-s);
-  text-align: center;
-  text-decoration: none;
-  border-radius: var(--td-radius-medium);
-
-  &:hover {
-    border-color: var(--td-brand-color);
-    background: var(--td-brand-color-light);
-  }
-}
-
-.support-box {
-  display: grid;
-  grid-template-columns: minmax(6rem, 32%) minmax(0, 1fr);
-  gap: var(--td-comp-margin-m);
-  align-items: center;
-}
-
-.support-box__qr {
-  aspect-ratio: 1;
-  width: 100%;
-  object-fit: cover;
-  border: thin solid var(--td-component-stroke);
-  border-radius: var(--td-radius-medium);
-}
-
-.support-box__qr--empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--td-text-color-secondary);
-  background: var(--td-bg-color-component);
-}
-
-.support-box__content {
-  display: flex;
-  flex-direction: column;
-  gap: var(--td-comp-margin-s);
-  min-width: 0;
-
-  strong {
-    color: var(--td-text-color-primary);
-    font: var(--td-font-body-medium);
-  }
-
-  span {
-    color: var(--td-text-color-secondary);
-    font: var(--td-font-body-small);
-  }
-}
-
-@media (max-width: @screen-lg-rem) {
-  .summary-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .account-card {
-    grid-column: 1 / -1;
-  }
-
-  .dashboard-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .dashboard-aside {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    align-items: stretch;
-  }
-}
-
-@media (max-width: @screen-md-rem) {
-  .chart-grid,
-  .dashboard-aside {
-    grid-template-columns: 1fr;
-  }
-
-  .product-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: @screen-xs-rem) {
-  .summary-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--td-comp-margin-s);
-  }
-
-  .dashboard-grid {
-    margin-top: var(--td-comp-margin-s);
-  }
-
-  .dashboard-main,
-  .dashboard-aside {
-    gap: var(--td-comp-margin-s);
-  }
-
-  .account-card__user {
-    gap: var(--td-comp-margin-s);
-  }
-
-  .account-card__main h2 {
-    font: var(--td-font-title-small);
-  }
-
-  .account-card__tags,
-  .account-card__actions {
-    margin-top: var(--td-comp-margin-s);
-  }
-
-  .account-card__actions {
-    flex-direction: column;
-
-    :deep(.t-button) {
-      width: 100%;
-      margin-left: 0;
-    }
-  }
-
-  .metric-card__value {
-    font: var(--td-font-title-large);
-  }
-
-  .chart-card__actions {
-    justify-content: flex-start;
-  }
-
-  .quick-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: var(--td-comp-margin-xs);
-  }
-
-  .quick-link {
-    min-height: 4.25rem;
-    padding: var(--td-comp-paddingTB-s) var(--td-comp-paddingLR-xs);
-
-    span {
-      overflow: hidden;
-      max-width: 100%;
-      font: var(--td-font-body-small);
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-  }
-
-  .message-row {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: var(--td-comp-margin-xxs);
-    padding: var(--td-comp-paddingTB-s) 0;
-  }
-}
-
-@media (max-width: @screen-xxs-rem) {
-  .quick-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-</style>
+<style src="./index.less" lang="less" scoped></style>

@@ -182,7 +182,7 @@ onMounted(() => {
   flex-shrink: 0;
   width: 2.5rem;
   height: 2.5rem;
-  border-radius: var(--td-radius-large);
+  border-radius: var(--td-radius-medium);
   background: var(--td-brand-color);
   color: var(--td-text-color-anti);
   font-size: var(--td-font-size-title-medium);
@@ -223,7 +223,7 @@ onMounted(() => {
   width: 100%;
   padding: 2rem 2rem 1.875rem;
   border: 1px solid var(--td-component-stroke);
-  border-radius: var(--td-radius-large);
+  border-radius: var(--td-radius-medium);
   background: var(--td-bg-color-container);
   box-shadow: var(--td-shadow-1);
 }
@@ -310,22 +310,16 @@ onMounted(() => {
   margin-top: 2rem;
   padding: 0 1.375rem;
   border: 1px solid var(--td-component-stroke);
-  border-radius: var(--td-radius-medium);
+  border-radius: var(--td-radius-default);
   background: var(--td-bg-color-container);
-  box-shadow: var(--td-shadow-1);
   color: var(--td-brand-color);
   font-size: var(--td-font-size-body-medium);
   font-weight: 600;
   text-decoration: none;
-  transition:
-    transform @anim-duration-base @anim-time-fn-easing,
-    box-shadow @anim-duration-base @anim-time-fn-easing,
-    border-color @anim-duration-base @anim-time-fn-easing;
+  transition: border-color @anim-duration-base @anim-time-fn-easing;
 }
 
 .auth-guide__cta:hover {
-  transform: translateY(-1px);
-  box-shadow: var(--td-shadow-2);
   border-color: var(--td-brand-color-hover);
 }
 
@@ -377,7 +371,6 @@ onMounted(() => {
   .auth-brand__mark {
     width: 2.25rem;
     height: 2.25rem;
-    border-radius: var(--td-radius-medium);
     font-size: var(--td-font-size-body-large);
   }
 
@@ -387,7 +380,6 @@ onMounted(() => {
 
   .auth-card {
     padding: 1.625rem 1.25rem 1.375rem;
-    border-radius: var(--td-radius-large);
   }
 
   .auth-card__head {

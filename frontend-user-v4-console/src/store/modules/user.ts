@@ -4,6 +4,7 @@ import { clientAuthApi } from '@/api/auth';
 import { getClientToken, removeClientToken, setClientToken } from '@/app/runtime/session';
 import { store } from '@/store';
 import type { ClientAuthSessionPayload, ClientUserInfo } from '@/types/client';
+import { localStorageKeys, removeLocalStorage } from '@/utils/storage';
 
 const initUserInfo: ClientUserInfo = {
   name: '',
@@ -39,9 +40,7 @@ export const useUserStore = defineStore('user', {
     },
     clearLocalSession() {
       removeClientToken();
-      if (typeof window !== 'undefined') {
-        window.localStorage.removeItem('client_user');
-      }
+      removeLocalStorage(localStorageKeys.clientUser);
       this.token = '';
       this.profileHydrated = false;
       this.userInfo = { ...initUserInfo };

@@ -18,7 +18,18 @@
         v-else-if="natState.supported === false"
         :description="natState.message || '当前实例暂不支持 NAT 转发'"
       />
-      <t-table v-else row-key="id" :data="natState.list" :columns="natColumns" :pagination="null" size="small">
+      <t-table
+        v-else
+        row-key="id"
+        :data="natState.list"
+        :columns="natColumns"
+        :loading="natState.loading"
+        :pagination="null"
+        size="small"
+      >
+        <template #empty>
+          <t-empty description="暂无端口转发" />
+        </template>
         <template #operation="{ row }">
           <t-button
             v-if="row.can_delete !== false"

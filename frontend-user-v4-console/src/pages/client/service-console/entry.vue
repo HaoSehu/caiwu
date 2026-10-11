@@ -11,6 +11,7 @@ import { useRoute, useRouter } from 'vue-router';
 import clientApi from '@/api/client';
 import { isNatConsole } from '@/domains/services/console/useConsoleCore';
 import type { ConsoleServiceDetail } from '@/types/client';
+import { getErrorMessage } from '@/utils/error';
 
 const route = useRoute();
 const router = useRouter();
@@ -32,8 +33,8 @@ onMounted(async () => {
       name: isNatConsole(service) ? 'ClientNatConsole' : 'ClientComputeConsole',
       params: { id: String(id) },
     });
-  } catch {
-    MessagePlugin.error('实例控制台加载失败');
+  } catch (error: unknown) {
+    MessagePlugin.error(getErrorMessage(error, '实例控制台加载失败'));
     await router.replace({ name: 'ClientServices' });
   } finally {
     loading.value = false;

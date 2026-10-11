@@ -49,7 +49,7 @@ function openProducts() {
   h1 {
     margin: 0;
     color: var(--td-text-color-primary);
-    font: var(--td-font-headline-medium);
+    font: var(--td-font-title-large);
   }
 
   p {

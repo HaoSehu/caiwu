@@ -28,10 +28,10 @@
         :empty="!loading && !loadError && !list.length"
         :error="!loading && loadError"
         :error-text="loadErrorText"
-        description="暂无工单记录"
+        :description="hasActiveFilters ? '未检索到匹配结果，请调整筛选条件' : '暂无工单记录'"
         @retry="loadTickets"
       >
-        <template #empty-action>
+        <template v-if="!hasActiveFilters" #empty-action>
           <t-button theme="primary" @click="openCreateDialog">提交工单</t-button>
         </template>
         <div class="ticket-table-shell">
@@ -141,7 +141,7 @@
             placeholder="请详细描述您遇到的问题"
           />
         </t-form-item>
-        <t-form-item label="添加附件">
+        <t-form-item label="上传附件">
           <div class="ticket-attachment-box">
             <label class="upload-trigger">
               <input type="file" accept=".jpg,.jpeg,.png,.webp" multiple @change="handleCreateUpload" />
@@ -157,7 +157,14 @@
                 @click="previewUploadFile(file)"
               >
                 <img :src="file.url || file.path" alt="附件" />
-                <span @click.stop="removeUploadFile(index)">删除</span>
+                <span
+                  role="button"
+                  tabindex="0"
+                  aria-label="删除该附件"
+                  @click.stop="removeUploadFile(index)"
+                  @keydown.enter.stop.prevent="removeUploadFile(index)"
+                  @keydown.space.stop.prevent="removeUploadFile(index)"
+                >删除</span>
               </button>
             </div>
           </div>
@@ -178,7 +185,7 @@
 import DataState from '@shared/user-v3/components/DataState.vue';
 import { AddIcon } from 'tdesign-icons-vue-next';
 import type { PrimaryTableCol } from 'tdesign-vue-next';
-import { onMounted } from 'vue';
+import { computed, onMounted } from 'vue';
 
 import {
   formatTicketTime,
@@ -219,6 +226,9 @@ const {
   submitTicket,
   openDetail,
 } = useTicketList();
+
+// 是否存在生效筛选：空态区分“暂无数据”与“未检索到匹配结果”（DESIGN.md §4.3）
+const hasActiveFilters = computed(() => filters.keyword.trim() !== '' || filters.status !== undefined);
 
 const columns: PrimaryTableCol[] = [
   { colKey: 'subject', title: '标题', minWidth: '18rem' },

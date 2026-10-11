@@ -4,6 +4,7 @@ import { MessagePlugin } from 'tdesign-vue-next';
 import { getClientToken, removeClientToken } from '@/app/runtime/session';
 import router from '@/router';
 import { buildLoginLocation } from '@/utils/loginRedirect';
+import { localStorageKeys, removeLocalStorage } from '@/utils/storage';
 
 let lastErrorMsg = '';
 let lastErrorTimer: ReturnType<typeof setTimeout> | null = null;
@@ -55,9 +56,7 @@ function redirectLogin(msg?: string, requestToken?: string | null) {
 
   redirectingToLogin = true;
   removeClientToken();
-  if (typeof window !== 'undefined') {
-    window.localStorage.removeItem('client_user');
-  }
+  removeLocalStorage(localStorageKeys.clientUser);
   // HTTP 401（凭证失效）由拦截器静默弹回，补一次提示避免用户困惑；
   // 业务 40100（含中文 message）由调用方自行提示，不在此重复。
   if (msg && !/[\u4E00-\u9FA5]/.test(msg)) {

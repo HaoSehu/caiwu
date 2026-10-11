@@ -1,3 +1,4 @@
+import { withDefaultSystemDisk } from '@caiwu/shared/finance';
 import {
   ACCOUNT_TRANSACTION_EVENT_MAP,
   getStatusLabel,
@@ -182,6 +183,14 @@ export function flattenSnapshot(
   return result;
 }
 
+/**
+ * 计价配置明细展平视图（带默认系统盘兜底）。
+ * 兜底常量与补行逻辑收敛在 shared/finance，本端只保留各自的展平实现。
+ */
+export function pricingSnapshotItems(snapshot: unknown): { label: string; value: string }[] {
+  return flattenSnapshot(withDefaultSystemDisk(snapshot));
+}
+
 export function configValueLabelMap(row: AnyRecord | null | undefined): Record<string, string> {
   const snapshot = toRecord(row?.config_pricing_snapshot);
   const items = Array.isArray(snapshot.items) ? snapshot.items : [];
@@ -303,6 +312,16 @@ export function useRecordList<T>(options: RecordListOptions<T>) {
   });
 
   const hasRows = computed(() => list.value.length > 0);
+
+  // 是否存在生效筛选（关键词/状态/类型/日期）：用于空态区分“暂无数据”与“未检索到匹配结果”（DESIGN.md §4.3）
+  const hasActiveFilters = computed(
+    () =>
+      filters.keyword.trim() !== '' ||
+      filters.status !== '' ||
+      filters.type !== '' ||
+      filters.start_date !== '' ||
+      filters.end_date !== '',
+  );
 
   // 筛选与页码同步到 URL，刷新/回退不丢状态
   restoreFiltersFromQuery();
@@ -501,6 +520,7 @@ export function useRecordList<T>(options: RecordListOptions<T>) {
     total,
     filters,
     hasRows,
+    hasActiveFilters,
     loadError,
     loadErrorText,
     loadList,

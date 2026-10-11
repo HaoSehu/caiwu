@@ -301,25 +301,21 @@ export function useServiceConsole() {
       activeTab.value = DEFAULT_TAB;
       return;
     }
+    // 懒加载成功后才置位 loadedTabs：失败时下次切换自动重拉，避免标签永久停留在错误态
     if (tab === 'monitor' && !loadedTabs.monitor) {
-      loadedTabs.monitor = true;
-      await loadMonitor();
+      if (await loadMonitor()) loadedTabs.monitor = true;
     }
     if (tab === 'security' && !loadedTabs.security) {
-      loadedTabs.security = true;
-      await loadSecurityGroups();
+      if (await loadSecurityGroups()) loadedTabs.security = true;
     }
     if (tab === 'nat' && !loadedTabs.nat) {
-      loadedTabs.nat = true;
-      await loadNatForwardings();
+      if (await loadNatForwardings()) loadedTabs.nat = true;
     }
     if (tab === 'logs' && !loadedTabs.logs) {
-      loadedTabs.logs = true;
-      await loadLogs();
+      if (await loadLogs()) loadedTabs.logs = true;
     }
     if (tab === 'finance' && !loadedTabs.finance) {
-      loadedTabs.finance = true;
-      await loadFinanceLogs();
+      if (await loadFinanceLogs()) loadedTabs.finance = true;
     }
   });
 

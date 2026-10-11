@@ -124,9 +124,6 @@ const onExpanded = (value: MenuValue[]) => {
   expanded.value = unionMenuValues(value, expanded.value).filter((item) => !currentOperationMenu.includes(item));
 };
 
-const sideMode = computed(() => {
-  return theme === 'dark';
-});
 const sideNavCls = computed(() => {
   return [
     `${prefix}-sidebar-layout`,
@@ -142,17 +139,11 @@ const brandLogoCls = computed(() => {
     'client-side-brand',
     {
       'client-side-brand--collapsed': collapsed.value,
-      'client-side-brand--dark': sideMode.value,
     },
   ];
 });
 const versionCls = computed(() => {
-  return [
-    `version-container`,
-    {
-      [`${prefix}-side-nav-dark`]: sideMode.value,
-    },
-  ];
+  return [`version-container`];
 });
 const menuCls = computed(() => {
   return [

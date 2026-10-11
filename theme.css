@@ -106,7 +106,8 @@
   --td-bg-color-specialcomponent: #fff;
   --td-text-color-primary: var(--td-font-gray-1);
   --td-text-color-secondary: var(--td-font-gray-2);
-  --td-text-color-placeholder: var(--td-font-gray-3);
+  /* 占位文字对齐 DESIGN.md §3.1 的 #606D80（白底对比度 5.4:1，满足 WCAG AA 4.5:1） */
+  --td-text-color-placeholder: #606d80;
   --td-text-color-disabled: var(--td-font-gray-4);
   --td-text-color-anti: #fff;
   --td-text-color-brand: var(--td-brand-color-6);
@@ -115,12 +116,9 @@
   --td-component-stroke: var(--td-gray-color-2);
   --td-border-level-2-color: var(--td-gray-color-3);
   --td-component-border: var(--td-gray-color-3);
-  --td-shadow-1: 0 1px 10px rgba(0, 0, 0, 0.05), 0 4px 5px rgba(0, 0, 0, 0.08), 0 2px 4px -1px rgba(0, 0, 0, 0.12);
-  --td-shadow-2: 0 3px 14px 2px rgba(0, 0, 0, 0.05), 0 8px 10px 1px rgba(0, 0, 0, 0.06), 0 5px 5px -3px rgba(0, 0, 0, 0.1);
-  --td-shadow-3: 0 6px 30px 5px rgba(0, 0, 0, 0.05), 0 16px 24px 2px rgba(0, 0, 0, 0.04), 0 8px 10px -5px rgba(0, 0, 0, 0.08);
   --td-scrollbar-color: rgba(0, 0, 0, 0.1);
   --td-scrollbar-hover-color: rgba(0, 0, 0, 0.3);
-  --td-scroll-track-color: #d3b3b3;
+  --td-scroll-track-color: var(--td-gray-color-2);
 }
 
 :root[theme-mode='dark'] {
@@ -251,6 +249,7 @@
   --td-comp-paddingLR-l: 20px;
   --td-comp-paddingLR-xl: 24px;
   --td-comp-paddingLR-xxl: 28px;
+  /* 投影三级唯一来源（DESIGN.md §3.4）；light 主块内的 TDesign 默认复杂投影已删除，避免双定义歧义 */
   --td-shadow-1: 0 1px 2px rgba(25, 35, 50, 0.06);
   --td-shadow-2: 0 2px 6px rgba(25, 35, 50, 0.08);
   --td-shadow-3: 0 4px 12px rgba(25, 35, 50, 0.1);
@@ -269,28 +268,6 @@
   color: currentColor;
 }
 
-#app .t-card,
-#app .t-card__body,
-#app .t-card__header,
-#app .t-table,
-#app .t-table td,
-#app .t-table th,
-#app .t-layout,
-#app .t-layout__sider,
-#app .t-layout__content,
-#app .t-layout__header,
-#app .t-layout__footer,
-#app .t-menu,
-#app .t-menu__item,
-#app .t-tabs__nav-item,
-#app .t-input,
-#app .t-select,
-#app .t-textarea,
-#app [class*='-container'],
-#app [class*='-wrapper'] {
-  border-radius: 0 !important;
-}
-
 #app .t-layout,
 #app .t-layout__header,
 #app .t-layout__sider,
@@ -301,7 +278,6 @@
 
 #app .t-card {
   border: 1px solid var(--td-component-stroke);
-  box-shadow: none;
 }
 
 #app .t-card__body {
@@ -313,7 +289,7 @@
 }
 
 #app .t-table th {
-  background: #f8fafc;
+  background: var(--td-bg-color-secondarycontainer);
   color: var(--td-text-color-secondary);
   font-weight: 600;
 }
@@ -367,7 +343,7 @@
 
 #app .t-button--variant-text:hover {
   border-color: transparent;
-  background: #f3f8ff;
+  background: var(--td-brand-color-1);
 }
 
 #app .t-input,
@@ -455,7 +431,7 @@
 
 #app .t-default-menu .t-menu__item:hover:not(.t-is-active, .t-is-disabled),
 #app .t-default-menu .t-submenu__title:hover {
-  background: #f3f8ff;
+  background: var(--td-brand-color-1);
   color: var(--td-brand-color);
 }
 
@@ -560,7 +536,6 @@
 #app .referral-page .t-table {
   background: transparent;
   border: 0;
-  border-radius: 0;
   box-shadow: none;
 }
 
@@ -620,7 +595,7 @@
 #app .client-services .service-table-card tr:hover td,
 #app .client-tickets .ticket-table-shell tr:hover td,
 #app .referral-page .t-table tr:hover td {
-  background: #f8fbff !important;
+  background: var(--td-brand-color-1) !important;
 }
 
 #app .tdesign-starter-layout-tabs-nav {
@@ -869,21 +844,6 @@
   #app .t-drawer .t-textarea {
     width: 100%;
   }
-}
-
-#app [class*='-page'],
-#app [class*='-panel'],
-#app [class*='-card'],
-#app [class*='-filter'],
-#app [class*='-preview'],
-#app [class*='-section'] {
-  border-radius: 0 !important;
-}
-
-#app [class*='-card'],
-#app [class*='-panel'],
-#app [class*='-preview'] {
-  box-shadow: none !important;
 }
 
 #app .metric-grid,

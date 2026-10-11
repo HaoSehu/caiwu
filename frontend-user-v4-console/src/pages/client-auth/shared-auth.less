@@ -50,7 +50,6 @@
   width: 100%;
   min-height: 2.875rem;
   border-color: var(--td-border-level-2-color);
-  border-radius: 0.5rem;
   background: var(--td-bg-color-container);
   box-shadow: none;
   transition:
@@ -73,7 +72,7 @@
 }
 
 :deep(.t-input__inner::placeholder) {
-  color: rgb(147 162 184 / 96%);
+  color: var(--td-text-color-placeholder);
 }
 
 :deep(.t-input__prefix),
@@ -134,7 +133,6 @@
 }
 
 :deep(.t-button) {
-  border-radius: 0.5rem;
   font-weight: 500;
 }
 
@@ -145,11 +143,6 @@
 :deep(.t-button--variant-base.t-button--theme-primary) {
   height: 3rem;
   letter-spacing: 0.02em;
-  box-shadow: 0 0.625rem 1.25rem rgb(22 93 255 / 14%);
-}
-
-:deep(.t-button--variant-base.t-button--theme-primary:hover) {
-  box-shadow: 0 0.75rem 1.5rem rgb(22 93 255 / 18%);
 }
 
 :deep(.t-form__error) {

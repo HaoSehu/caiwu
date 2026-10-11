@@ -62,7 +62,8 @@ export const MONITOR_CHART_TOP = 14;
 export const MONITOR_CHART_BOTTOM = 116;
 export const MONITOR_AXIS_SEGMENTS = 3;
 
-const monitorPalette = ['#165dff', '#12b76a', '#f59e0b', '#7b61ff'];
+// 图表系列色严格取自 theme.css 官方 token 色值：brand-6 / success-6 / warning-6 / brand-4（裁决 2026-10-11：不引入体系外紫色）
+const monitorPalette = ['#165dff', '#12b76a', '#f59e0b', '#5f9eff'];
 
 export function useConsoleMonitor(monitorState: { charts: MonitorChartRecord[] }) {
   const monitorChartViews = computed(() =>
@@ -300,8 +301,23 @@ export function useConsoleMonitor(monitorState: { charts: MonitorChartRecord[] }
     };
   }
 
+  // 模板内同一 chart 会多次查询 active point（M16）：用 computed 缓存「当前活跃图表的解析结果」，
+  // 模板侧改用 resolveActiveMonitorPointCached(chart)，每次渲染每张图最多计算一次。
+  const activeMonitorPointEntry = computed(() => {
+    const active = activeMonitorPoint.value;
+    if (!active) return null;
+    const chart = monitorChartViews.value.find((item) => item.key === active.chartKey);
+    if (!chart) return null;
+    return { chartKey: chart.key, point: resolveActiveMonitorPoint(chart) };
+  });
+
+  function resolveActiveMonitorPointCached(chart: MonitorChartView): ActiveMonitorPoint | null {
+    const entry = activeMonitorPointEntry.value;
+    return entry && entry.chartKey === chart.key ? entry.point : null;
+  }
+
   function resolveMonitorTooltipStyle(chart: MonitorChartView) {
-    const activePoint = resolveActiveMonitorPoint(chart);
+    const activePoint = resolveActiveMonitorPointCached(chart);
     if (!activePoint) return { display: 'none' };
     const minY = Math.min(
       ...activePoint.seriesPoints.map((point) => Number(point.y)).filter((value) => Number.isFinite(value)),
@@ -318,7 +334,7 @@ export function useConsoleMonitor(monitorState: { charts: MonitorChartRecord[] }
     activeMonitorPoint,
     handleMonitorPointerMove,
     clearMonitorPointer,
-    resolveActiveMonitorPoint,
+    resolveActiveMonitorPointCached,
     resolveMonitorTooltipStyle,
   };
 }

@@ -52,7 +52,7 @@
         <info-cell label="区域" :value="serviceRegion" strong />
         <info-cell label="CPU" :value="findSpecValue(['CPU', '核心'])" strong />
         <info-cell label="内存" :value="findSpecValue(['内存', 'RAM'])" strong />
-        <info-cell label="系统盘" :value="findSpecValue(['系统盘'])" strong />
+        <info-cell label="系统盘" :value="findSpecValue(['系统盘'], DEFAULT_SYSTEM_DISK_LABEL)" strong />
         <info-cell label="带宽" :value="bandwidthText" strong />
         <info-cell label="IP数量" :value="serviceIpCount" strong />
         <info-cell label="数据盘" :value="findSpecValue(['数据盘'])" strong />
@@ -179,6 +179,7 @@
   </t-dialog>
 </template>
 <script setup lang="ts">
+import { DEFAULT_SYSTEM_DISK_LABEL } from '@caiwu/shared/finance';
 import { BrowseIcon, BrowseOffIcon, CopyIcon } from 'tdesign-icons-vue-next';
 import { computed, ref } from 'vue';
 

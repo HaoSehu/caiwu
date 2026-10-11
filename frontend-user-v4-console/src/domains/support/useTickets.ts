@@ -64,8 +64,10 @@ export function resolveTicketStatusLabel(value: unknown) {
 export function resolveTicketTagTheme(value: unknown) {
   if (Number(value) === 3) return 'default';
   if (Number(value) === 2) return 'success';
-  if (Number(value) === 1) return 'warning';
-  return 'primary';
+  // 开启（待处理）与客户回复均属待处理类状态，按 DESIGN.md §4.2 映射 warning
+  if (Number(value) === 0 || Number(value) === 1) return 'warning';
+  // 未知状态兜底 default，避免品牌蓝被误读为正常流转
+  return 'default';
 }
 
 export function resolvePriorityLabel(value: unknown) {

@@ -30,6 +30,8 @@ declare global {
 
 let captchaConfigPromise: Promise<GeeTestConfig> | null = null;
 let geetestScriptPromise: Promise<typeof window.initGeetest4> | null = null;
+// 活跃消费者计数：最后一个消费者卸载时释放 gt4.js 节点与全局句柄，避免登录类页面反复进出造成脚本残留
+let geetestConsumers = 0;
 
 const defaultConfig: GeeTestConfig = {
   enabled: false,
@@ -135,7 +137,15 @@ function loadGeeTestScript(src: string, cacheKey = '') {
   return geetestScriptPromise;
 }
 
+function releaseGeeTestScript() {
+  if (typeof window === 'undefined') return;
+  document.querySelector<HTMLScriptElement>('script[data-geetest-script="gt4"]')?.remove();
+  window.initGeetest4 = undefined;
+  geetestScriptPromise = null;
+}
+
 export function useGeeTestCaptcha(options: Record<string, unknown> = {}) {
+  geetestConsumers += 1;
   const loading = ref(false);
   const ready = ref(false);
   const enabled = ref(false);
@@ -322,6 +332,11 @@ export function useGeeTestCaptcha(options: Record<string, unknown> = {}) {
     verifiedResult = null;
     rejectPending(new Error('行为验证已取消'));
     captchaObj?.destroy?.();
+    captchaObj = null;
+    geetestConsumers -= 1;
+    if (geetestConsumers <= 0) {
+      releaseGeeTestScript();
+    }
   });
 
   return {

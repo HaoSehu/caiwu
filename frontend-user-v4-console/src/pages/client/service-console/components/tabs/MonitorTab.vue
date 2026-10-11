@@ -68,15 +68,15 @@
                     :stroke="series.color"
                     :stroke-width="series.lineWidth"
                   />
-                  <g v-if="resolveActiveMonitorPoint(chart)" class="monitor-chart-pointer">
+                  <g v-if="resolveActiveMonitorPointCached(chart)" class="monitor-chart-pointer">
                     <line
-                      :x1="resolveActiveMonitorPoint(chart)?.x"
+                      :x1="resolveActiveMonitorPointCached(chart)?.x"
                       :y1="MONITOR_CHART_TOP"
-                      :x2="resolveActiveMonitorPoint(chart)?.x"
+                      :x2="resolveActiveMonitorPointCached(chart)?.x"
                       :y2="MONITOR_CHART_BOTTOM"
                     />
                     <template
-                      v-for="seriesPoint in resolveActiveMonitorPoint(chart)?.seriesPoints || []"
+                      v-for="seriesPoint in resolveActiveMonitorPointCached(chart)?.seriesPoints || []"
                       :key="`${seriesPoint.key}-point`"
                     >
                       <circle
@@ -92,13 +92,13 @@
                   </g>
                 </svg>
                 <div
-                  v-if="resolveActiveMonitorPoint(chart)"
+                  v-if="resolveActiveMonitorPointCached(chart)"
                   class="monitor-tooltip"
                   :style="resolveMonitorTooltipStyle(chart)"
                 >
-                  <strong>{{ resolveActiveMonitorPoint(chart)?.time }}</strong>
+                  <strong>{{ resolveActiveMonitorPointCached(chart)?.time }}</strong>
                   <span
-                    v-for="seriesPoint in resolveActiveMonitorPoint(chart)?.seriesPoints || []"
+                    v-for="seriesPoint in resolveActiveMonitorPointCached(chart)?.seriesPoints || []"
                     :key="seriesPoint.key"
                     class="monitor-tooltip-row"
                   >
@@ -149,7 +149,7 @@ const {
   monitorChartViews,
   handleMonitorPointerMove,
   clearMonitorPointer,
-  resolveActiveMonitorPoint,
+  resolveActiveMonitorPointCached,
   resolveMonitorTooltipStyle,
 } = useConsoleMonitor(monitorState);
 </script>

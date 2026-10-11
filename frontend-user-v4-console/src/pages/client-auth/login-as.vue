@@ -69,7 +69,7 @@ const resultTitle = computed(() => {
 const resultSubtitle = computed(() => {
   if (status.value === 'success') return '已完成身份切换，正在进入客户端控制台。';
   if (status.value === 'error') return '代登录链路无效、已过期，或当前请求已被拒绝。';
-  return '正在校验代登录凭证，请稍候。';
+  return '正在校验代登录凭证...';
 });
 
 function resolveOpenerOrigin() {

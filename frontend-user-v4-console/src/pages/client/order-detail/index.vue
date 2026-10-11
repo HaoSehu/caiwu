@@ -209,7 +209,12 @@ import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { formatMoney, orderProductDisplay, useOrderDetail } from '@/domains/finance/useOrders';
-import { configValueLabelMap, flattenSnapshot, formatBillingCycle } from '@/domains/finance/useRecords';
+import {
+  configValueLabelMap,
+  flattenSnapshot,
+  formatBillingCycle,
+  pricingSnapshotItems,
+} from '@/domains/finance/useRecords';
 
 const route = useRoute();
 const router = useRouter();
@@ -223,9 +228,7 @@ const configSnapshotView = computed(() => {
   if (!row) return [];
   return flattenSnapshot(row.config_snapshot as Record<string, unknown> | undefined, configValueLabelMap(row));
 });
-const pricingSnapshotView = computed(() =>
-  flattenSnapshot(detail.value?.config_pricing_snapshot as Record<string, unknown> | undefined),
-);
+const pricingSnapshotView = computed(() => pricingSnapshotItems(detail.value?.config_pricing_snapshot));
 
 const { loading, canceling, detail, loadError, loadErrorText, loadDetail, cancelOrder } = useOrderDetail();
 

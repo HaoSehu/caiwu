@@ -128,6 +128,7 @@ export function useInvoiceList() {
     total,
     filters,
     hasRows,
+    hasActiveFilters,
     loadError,
     loadErrorText,
     loadList,
@@ -148,9 +149,9 @@ export function useInvoiceList() {
     const dialog = DialogPlugin.confirm({
       header: '取消账单',
       body: '确定取消该账单？取消后不可恢复，使用的优惠券会退回账户；新产品购买的库存将被释放。',
-      confirmBtn: '确定',
+      confirmBtn: { content: '确定', theme: 'danger' },
       cancelBtn: '取消',
-      theme: 'warning',
+      theme: 'danger',
       async onConfirm() {
         dialog.setConfirmLoading(true);
         canceling.value = true;
@@ -176,6 +177,7 @@ export function useInvoiceList() {
     total,
     filters,
     hasRows,
+    hasActiveFilters,
     loadError,
     loadErrorText,
     loadList,
@@ -400,7 +402,11 @@ export function useInvoiceDetail() {
   // 详情并发守卫：快速切换账单/重复刷新时，旧请求晚返回不得覆盖当前路由的最新态。
   let detailRequestSeq = 0;
 
-  async function loadDetail() {
+  /**
+   * skipStatusNotice：调用方已明确知道账单变为非待支付（支付成功、取消成功）时传 true，
+   * 跳过守卫的状态提示，避免与调用方刚弹的成功提示叠加成双重反馈。
+   */
+  async function loadDetail(options: { skipStatusNotice?: boolean } = {}) {
     const validId = Number(invoiceId.value);
     if (!Number.isInteger(validId) || validId <= 0) {
       // 无效 ID（0/负数/NaN）：失效进行中的请求并复位详情与加载态，避免调用接口。
@@ -423,7 +429,9 @@ export function useInvoiceDetail() {
       syncPayMethod();
       if (detail.value && !isPayableInvoice(detail.value)) {
         resetPaymentPayload();
-        MessagePlugin.info(resolveNonPayableInvoiceMessage(Number(detail.value.status)));
+        if (!options.skipStatusNotice) {
+          MessagePlugin.info(resolveNonPayableInvoiceMessage(Number(detail.value.status)));
+        }
         await router.replace({
           path: '/client/invoices',
         });
@@ -462,7 +470,8 @@ export function useInvoiceDetail() {
           await clientApi.cancelInvoice(invoiceId.value);
           MessagePlugin.success('账单已取消');
           resetPaymentPayload();
-          await loadDetail();
+          // 取消成功是本次操作的结果，刷新详情时不再弹"该账单已取消"提示
+          await loadDetail({ skipStatusNotice: true });
           dialog.hide();
         } catch (error: unknown) {
           MessagePlugin.error(getErrorMessage(error, '取消账单失败'));
@@ -490,7 +499,8 @@ export function useInvoiceDetail() {
       resetPaymentPayload();
       await refreshClientInfo();
       detail.value = res.data?.invoice || detail.value;
-      await loadDetail();
+      // 支付成功是本次操作的结果，刷新详情时不再弹"该账单已支付"提示
+      await loadDetail({ skipStatusNotice: true });
     } catch (error: unknown) {
       MessagePlugin.error(getErrorMessage(error, '余额支付失败'));
     } finally {
@@ -584,7 +594,8 @@ export function useInvoiceDetail() {
         MessagePlugin.success('账单已支付');
         await refreshClientInfo();
         detail.value = payload.invoice || detail.value;
-        await loadDetail();
+        // 支付成功是本次操作的结果，刷新详情时不再弹"该账单已支付"提示
+        await loadDetail({ skipStatusNotice: true });
       } else if (!silent) {
         MessagePlugin.info(payload.message || '当前仍未支付成功');
       }
@@ -637,6 +648,8 @@ export function useInvoiceDetail() {
     { immediate: true },
   );
 
+  // 注：keep-alive 暂停/恢复钩子已移除——当前工程 keep-alive include 按组件名匹配，
+  // 页面无组件名注入实际不会被缓存（2026-10-11 裁决 A）；页面离开走 onBeforeUnmount 清理 timer。
   onBeforeUnmount(() => {
     clearPollingTimer();
   });

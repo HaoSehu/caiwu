@@ -468,7 +468,7 @@ onBeforeUnmount(() => {
   margin-bottom: 1rem;
 
   :deep(.t-tabs__nav-item) {
-    font-size: 0.9375rem;
+    font-size: var(--td-font-size-body-medium);
   }
 }
 

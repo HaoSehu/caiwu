@@ -86,6 +86,12 @@ export function useConsoleTabs(options: UseConsoleTabsOptions) {
   const financeState = reactive(createEmptyFinanceState());
   const loadedTabs = reactive({ monitor: false, security: false, nat: false, logs: false, finance: false });
 
+  // 竞态防护：快速切换监控范围/翻页时，慢的旧响应不得覆盖新数据（对齐 useRecords.ts 的 requestSeq 模式）
+  let monitorRequestSeq = 0;
+  let natRequestSeq = 0;
+  let logsRequestSeq = 0;
+  let financeRequestSeq = 0;
+
   function resetLazyTabs() {
     loadedTabs.monitor = false;
     loadedTabs.security = false;
@@ -95,29 +101,36 @@ export function useConsoleTabs(options: UseConsoleTabsOptions) {
   }
 
   async function loadMonitor(force = false) {
+    const requestSeq = ++monitorRequestSeq;
     monitorState.loading = true;
     monitorState.error = '';
     try {
       const params: Record<string, unknown> = { range: monitorState.range };
       if (force) params.fresh = 1;
       const res = await clientApi.serviceMonitorBatch(serviceId.value, params, { timeout: 12000 });
+      if (requestSeq !== monitorRequestSeq) return false;
       const payload = res.data || {};
       monitorState.supported = payload.supported !== false;
       monitorState.message = String(payload.message || '');
       monitorState.window = payload.range || null;
       monitorState.charts = Array.isArray(payload.charts) ? payload.charts : [];
+      return true;
     } catch (error: unknown) {
+      if (requestSeq !== monitorRequestSeq) return false;
       monitorState.error = resolveErrorMessage(error, '加载监控数据失败');
+      return false;
     } finally {
-      monitorState.loading = false;
+      if (requestSeq === monitorRequestSeq) monitorState.loading = false;
     }
   }
 
   async function loadNatForwardings() {
+    const requestSeq = ++natRequestSeq;
     natState.loading = true;
     natState.error = '';
     try {
       const res = await clientApi.serviceNatForwardings(serviceId.value);
+      if (requestSeq !== natRequestSeq) return false;
       const payload = res.data || {};
       natState.supported = payload.supported !== false;
       natState.message = String(payload.message || '');
@@ -125,10 +138,13 @@ export function useConsoleTabs(options: UseConsoleTabsOptions) {
       natState.can_create = Boolean(payload.can_create);
       natState.protocols = Array.isArray(payload.protocols) ? payload.protocols : [];
       natState.list = Array.isArray(payload.list) ? payload.list : [];
+      return true;
     } catch (error: unknown) {
+      if (requestSeq !== natRequestSeq) return false;
       natState.error = resolveErrorMessage(error, '加载 NAT 转发失败');
+      return false;
     } finally {
-      natState.loading = false;
+      if (requestSeq === natRequestSeq) natState.loading = false;
     }
   }
 
@@ -181,9 +197,9 @@ export function useConsoleTabs(options: UseConsoleTabsOptions) {
 
     const dialog = DialogPlugin.confirm({
       header: '删除端口转发',
-      body: `确认删除端口转发“${String(forwarding.name || forwardingId)}”吗？`,
-      theme: 'warning',
-      confirmBtn: '确定',
+      body: `确定删除端口转发“${String(forwarding.name || forwardingId)}”吗？删除后相关流量将不再转发，且不可恢复。`,
+      theme: 'danger',
+      confirmBtn: { content: '删除', theme: 'danger' },
       cancelBtn: '取消',
       onConfirm: async () => {
         dialog.setConfirmLoading(true);
@@ -205,12 +221,14 @@ export function useConsoleTabs(options: UseConsoleTabsOptions) {
   }
 
   async function loadLogs() {
+    const requestSeq = ++logsRequestSeq;
     logsState.loading = true;
     try {
       const params: Record<string, unknown> = { page: logsState.page, page_size: logsState.page_size };
       if (logsState.category) params.category = logsState.category;
       if (logsState.keyword.trim()) params.keyword = logsState.keyword.trim();
       const res = await clientApi.serviceOperationLogs(serviceId.value, params);
+      if (requestSeq !== logsRequestSeq) return false;
       const payload: PagedList<ServiceOperationLogRecord> & { summary?: ServiceOperationLogSummary } = res.data || {
         list: [],
         total: 0,
@@ -218,14 +236,18 @@ export function useConsoleTabs(options: UseConsoleTabsOptions) {
       logsState.list = Array.isArray(payload.list) ? payload.list : [];
       logsState.total = Number(payload.total || 0);
       logsState.summary = { ...logsState.summary, ...(payload.summary || {}) };
+      return true;
     } catch (error: unknown) {
+      if (requestSeq !== logsRequestSeq) return false;
       MessagePlugin.error(resolveErrorMessage(error, '加载操作日志失败'));
+      return false;
     } finally {
-      logsState.loading = false;
+      if (requestSeq === logsRequestSeq) logsState.loading = false;
     }
   }
 
   async function loadFinanceLogs() {
+    const requestSeq = ++financeRequestSeq;
     financeState.loading = true;
     try {
       const params: Record<string, unknown> = {
@@ -238,15 +260,19 @@ export function useConsoleTabs(options: UseConsoleTabsOptions) {
         clientApi.financeLedger(params),
         clientApi.financeLedgerSummary({ tab: 'invoices', service_id: serviceId.value }),
       ]);
+      if (requestSeq !== financeRequestSeq) return false;
       const listPayload: PagedList<FinanceLedgerRecord> = listRes.data || { list: [], total: 0 };
       const summaryPayload = summaryRes.data || {};
       financeState.list = Array.isArray(listPayload.list) ? listPayload.list : [];
       financeState.total = Number(listPayload.total || 0);
       financeState.summary = { ...financeState.summary, ...summaryPayload };
+      return true;
     } catch (error: unknown) {
+      if (requestSeq !== financeRequestSeq) return false;
       MessagePlugin.error(resolveErrorMessage(error, '加载财务日志失败'));
+      return false;
     } finally {
-      financeState.loading = false;
+      if (requestSeq === financeRequestSeq) financeState.loading = false;
     }
   }
 

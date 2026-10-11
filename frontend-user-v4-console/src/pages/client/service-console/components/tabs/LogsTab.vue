@@ -9,7 +9,18 @@
         <span>今日 {{ logsState.summary.today_total || 0 }} 条</span>
         <span v-if="logsState.summary.latest_created_at">最近 {{ logsState.summary.latest_created_at }}</span>
       </div>
-      <t-table row-key="id" :data="logsState.list" :columns="logColumns" :pagination="null" size="small" />
+      <t-table
+        row-key="id"
+        :data="logsState.list"
+        :columns="logColumns"
+        :loading="logsState.loading"
+        :pagination="null"
+        size="small"
+      >
+        <template #empty>
+          <t-empty :description="logsState.total > 0 ? '未找到匹配结果' : '暂无操作日志'" />
+        </template>
+      </t-table>
       <div v-if="logsState.total > 0" class="console-pagination">
         <t-pagination
           v-model="logsState.page"

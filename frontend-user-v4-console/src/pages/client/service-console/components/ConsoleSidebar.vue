@@ -6,6 +6,7 @@
       type="button"
       class="console-sidebar-item"
       :class="{ 'is-active': activeTab === item.key }"
+      :aria-current="activeTab === item.key ? 'true' : undefined"
       @click="$emit('update:active-tab', item.key)"
     >
       <component :is="item.icon" />

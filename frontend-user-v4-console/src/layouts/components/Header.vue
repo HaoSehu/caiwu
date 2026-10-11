@@ -489,16 +489,6 @@ onMounted(() => {
   }
 }
 
-.t-menu--dark {
-  .t-head-menu__inner {
-    border-bottom: 1px solid var(--td-gray-color-10);
-  }
-
-  .header-user-account {
-    color: rgb(255 255 255 / 55%);
-  }
-}
-
 @media (max-width: @screen-sm-max) {
   .header-page-brand,
   .header-user-balance {

@@ -61,6 +61,72 @@ test('订单详情：接口失败时展示可重试的错误态，点「重新�
   await expect(retry).toBeHidden();
 });
 
+test('订单详情：配置单缺系统盘参数时补默认系统盘行（Linux 30G / Windows 40G）', async ({ page }) => {
+  await mockAuthenticatedSession(page);
+
+  // 完整配置单（含 os）但无 system_disk_size：商品未配系统盘项时的真实快照形态
+  const orderWithPricing = {
+    ...E2E_ORDER,
+    config_pricing_snapshot: {
+      base_amount: '128.00',
+      config_amount: '0.00',
+      total_amount: '128.00',
+      items: [
+        { field: 'area', label: '区域', value: 'hk', value_label: '香港', amount: '0.00' },
+        { field: 'os', label: '操作系统', value: 'centos7', value_label: 'CentOS 7', amount: '0.00' },
+        { field: 'cpu', label: 'CPU', value: '2', value_label: '2核', amount: '0.00' },
+        { field: 'memory', label: '内存', value: '2048', value_label: '2G', amount: '0.00' },
+        { field: 'bw', label: '带宽', value: '10', value_label: '10Mbps', amount: '0.00' },
+        { field: 'data_disk_size', label: '数据盘', value: '50', value_label: '50G', amount: '0.00' },
+      ],
+    },
+  };
+  const payload = JSON.stringify(envelope(orderWithPricing));
+  await page.route('**/api/v2/client/orders/*', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: payload });
+  });
+
+  await page.goto('/client/orders/1', { waitUntil: 'domcontentloaded' });
+  await expect(page.getByText('E2E-ORDER-0001')).toBeVisible();
+
+  // 计价明细在「产品配置」tab 的「配置定价」块
+  await page.getByText('产品配置', { exact: true }).click();
+  await expect(page.getByText('配置定价')).toBeVisible();
+  await expect(page.getByText('系统盘', { exact: true })).toBeVisible();
+  await expect(page.getByText('Linux 30G / Windows 40G')).toBeVisible();
+});
+
+test('订单详情：快照已携带系统盘时不重复追加默认行', async ({ page }) => {
+  await mockAuthenticatedSession(page);
+
+  const orderWithSystemDisk = {
+    ...E2E_ORDER,
+    config_pricing_snapshot: {
+      base_amount: '128.00',
+      config_amount: '0.00',
+      total_amount: '128.00',
+      items: [
+        { field: 'area', label: '区域', value: 'hk', value_label: '香港', amount: '0.00' },
+        { field: 'os', label: '操作系统', value: 'centos7', value_label: 'CentOS 7', amount: '0.00' },
+        { field: 'system_disk_size', label: '系统盘', value: '40', value_label: '40G', amount: '0.00' },
+        { field: 'memory', label: '内存', value: '2048', value_label: '2G', amount: '0.00' },
+      ],
+    },
+  };
+  const payload = JSON.stringify(envelope(orderWithSystemDisk));
+  await page.route('**/api/v2/client/orders/*', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: payload });
+  });
+
+  await page.goto('/client/orders/1', { waitUntil: 'domcontentloaded' });
+  await page.getByText('产品配置', { exact: true }).click();
+
+  // 真实行原样展示（带金额段），且不出现默认值文本、不出现重复「系统盘」行
+  await expect(page.getByText('40G / 金额 ¥0.00')).toBeVisible();
+  await expect(page.getByText('Linux 30G / Windows 40G')).toBeHidden();
+  await expect(page.getByText('系统盘', { exact: true })).toHaveCount(1);
+});
+
 test('订单详情：关键设计令牌在运行时可解析（未定义令牌会让引用它的整条声明失效）', async ({ page }) => {
   await mockAuthenticatedSession(page);
   await mockOrderDetail(page, () => false);

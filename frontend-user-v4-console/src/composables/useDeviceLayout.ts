@@ -3,10 +3,10 @@ import { useBreakpoints } from '@vueuse/core';
 /**
  * 控制台三档响应式布局
  *
- * 断点与 `src/style/variables.less` 中的 `@screen-sm-rem / @screen-md-rem / @screen-lg-rem` 对齐：
+ * 断点与 `src/style/variables.less` 中的 `@screen-sm / @screen-md / @screen-lg` 对齐：
  * - mobile:  < 48rem  (768px)
- * - tablet:  48rem ~ 64rem (768px ~ 1024px)
- * - desktop: ≥ 64rem (1024px)
+ * - tablet:  48rem ~ 62rem (768px ~ 991.98px)
+ * - desktop: ≥ 62rem (992px)
  * - wide:    ≥ 75rem (1200px)
  *
  * 用法：
@@ -18,9 +18,9 @@ import { useBreakpoints } from '@vueuse/core';
  * 纯样式切换仍优先用 CSS `@media` 引用 `@screen-*-rem` 变量。
  */
 const BREAKPOINTS = {
-  mobile: 48 * 16, // 48rem → 768px
-  tablet: 64 * 16, // 64rem → 1024px
-  wide: 75 * 16, // 75rem → 1200px
+  mobile: 48 * 16, // 48rem → 768px（@screen-sm）
+  tablet: 62 * 16, // 62rem → 992px（@screen-md / @screen-md-rem 三方对齐，原 1024px，2026-10-11 裁决 B）
+  wide: 75 * 16, // 75rem → 1200px（@screen-lg）
 } as const;
 
 export function useDeviceLayout() {

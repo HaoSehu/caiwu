@@ -1,5 +1,7 @@
 import { createSessionDriver, initSessionActivityTracking } from '@caiwu/shared/runtime';
 
+import { localStorageKeys, removeLocalStorage } from '@/utils/storage';
+
 const driver = createSessionDriver({
   tokenKey: 'client_token',
   lastActiveKey: 'client_last_active_at',
@@ -20,10 +22,7 @@ export function removeClientToken() {
 
 export function clearClientSessionArtifacts() {
   driver.removeToken();
-
-  if (typeof window !== 'undefined') {
-    window.localStorage.removeItem('client_user');
-  }
+  removeLocalStorage(localStorageKeys.clientUser);
 }
 
 export function isClientLoggedIn() {

@@ -193,7 +193,7 @@ onMounted(async () => {
   h1 {
     margin: var(--td-comp-margin-xs) 0 0;
     color: var(--td-text-color-primary);
-    font: var(--td-font-headline-medium);
+    font: var(--td-font-title-large);
   }
 
   p {

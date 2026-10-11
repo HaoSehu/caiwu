@@ -35,10 +35,10 @@
         :empty="!loading && !loadError && !hasRows"
         :error="!loading && loadError"
         :error-text="loadErrorText"
-        description="暂无账单记录"
+        :description="hasActiveFilters ? '未检索到匹配结果，请调整筛选条件' : '暂无账单记录'"
         @retry="loadList"
       >
-        <template #empty-action>
+        <template v-if="!hasActiveFilters" #empty-action>
           <t-button theme="primary" @click="router.push('/client/catalog')">去产品目录选购</t-button>
         </template>
         <t-table class="record-table" row-key="id" :data="list" :columns="columns" :pagination="null" hover>
@@ -179,6 +179,7 @@ const {
   total,
   filters,
   hasRows,
+  hasActiveFilters,
   loadError,
   loadErrorText,
   loadList,

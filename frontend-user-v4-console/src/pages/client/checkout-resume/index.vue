@@ -34,6 +34,7 @@ import { useRoute, useRouter } from 'vue-router';
 
 import clientApi from '@/api/client';
 import { formatBillingCycle } from '@/domains/finance/useRecords';
+import { getErrorMessage } from '@/utils/error';
 import type { PendingWebsiteCheckout } from '@/utils/websiteCheckout';
 import {
   clearPendingWebsiteCheckout,
@@ -176,7 +177,7 @@ async function resumeCheckout() {
     await router.replace(invoiceId > 0 ? `/client/invoices/${invoiceId}/pay` : '/client/invoices');
   } catch (error) {
     status.value = 'error';
-    errorMessage.value = error instanceof Error ? error.message : '账单创建失败，请稍后重试';
+    errorMessage.value = getErrorMessage(error, '账单创建失败，请稍后重试');
   }
 }
 
@@ -218,7 +219,7 @@ onMounted(async () => {
   h1 {
     margin: 0;
     color: var(--td-text-color-primary);
-    font: var(--td-font-headline-medium);
+    font: var(--td-font-title-large);
   }
 
   p {
