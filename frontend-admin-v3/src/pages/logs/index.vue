@@ -327,6 +327,19 @@
                 <strong>{{ alert.value }}</strong>
               </div>
               <span v-if="alert.detail" class="schedule-env-item__detail">{{ alert.detail }}</span>
+              <div v-if="alert.actions === 'queue'" class="schedule-env-item__actions">
+                <t-button size="small" variant="outline" @click="openQueueJobs(alert.queueKind)"> 查看 </t-button>
+                <t-button
+                  v-if="canManageQueueJobs"
+                  size="small"
+                  variant="outline"
+                  theme="danger"
+                  :disabled="Number(alert.value) === 0"
+                  @click="openClearQueue(alert.queueKind)"
+                >
+                  清空
+                </t-button>
+              </div>
             </article>
           </div>
         </t-card>
@@ -520,6 +533,31 @@
       :drawer-size="drawerSize"
       @close="closeDetailDrawer"
     />
+
+    <queue-jobs-drawer
+      :visible="queueDrawerVisible"
+      :queue="queueDrawerKind"
+      :can-manage="canManageQueueJobs"
+      :drawer-size="queueDrawerSize"
+      :refresh-token="queueRefreshToken"
+      @close="queueDrawerVisible = false"
+      @changed="loadScheduleOverview"
+      @clear="openClearQueue(queueDrawerKind)"
+    />
+
+    <t-dialog
+      :visible="clearQueueDialogVisible"
+      :header="clearQueueDialogTitle"
+      theme="danger"
+      width="460px"
+      :confirm-btn="{ content: '确认清空', theme: 'danger', loading: clearingQueue }"
+      :close-on-overlay-click="false"
+      @close="clearQueueDialogVisible = false"
+      @confirm="confirmClearQueue"
+    >
+      <p class="clear-queue-hint">{{ clearQueueDialogHint }}</p>
+      <t-input v-model="clearQueueConfirmText" clearable placeholder="请输入 立即清空" />
+    </t-dialog>
   </div>
 </template>
 <script setup lang="ts">
@@ -541,6 +579,7 @@ import { fieldValue, formatDateTime } from '@/utils/format';
 import { errorMessage } from '@/utils/userMessage';
 
 import LogDetailDrawer from './components/LogDetailDrawer.vue';
+import QueueJobsDrawer from './components/QueueJobsDrawer.vue';
 
 type LogTab = 'runtime' | 'admin-logins' | 'api' | 'sms' | 'email' | 'tasks' | 'gateway';
 type LogsTab = LogTab | 'schedules' | 'cleanup';
@@ -572,6 +611,15 @@ const currentLog = ref<RecordRow | null>(null);
 const scheduleOverview = ref<Record<string, unknown>>({ tasks: [], recent_logs: [] });
 const cleanupOverview = ref<Record<string, unknown>>({ database: {}, file: {}, supported_cleanup_types: [] });
 const lastCleanupResult = ref<Record<string, unknown> | null>(null);
+
+type QueueKind = 'pending' | 'failed';
+const queueDrawerVisible = ref(false);
+const queueDrawerKind = ref<QueueKind>('pending');
+const queueRefreshToken = ref(0);
+const clearQueueDialogVisible = ref(false);
+const clearQueueKind = ref<QueueKind>('pending');
+const clearQueueConfirmText = ref('');
+const clearingQueue = ref(false);
 
 interface LogFilter {
   keyword: string;
@@ -891,6 +939,8 @@ const scheduleEnvAlerts = computed(() => {
     value: string;
     detail?: string;
     theme: 'success' | 'warning' | 'danger';
+    actions?: 'queue';
+    queueKind?: QueueKind;
   }> = [];
 
   const mutex = scheduleMutex.value;
@@ -925,6 +975,8 @@ const scheduleEnvAlerts = computed(() => {
       value: String(pendingJobs),
       detail: env.queue_runtime_mode ? `队列模式：${env.queue_runtime_mode}` : undefined,
       theme: pendingJobs > 50 ? 'danger' : pendingJobs > 10 ? 'warning' : 'success',
+      actions: 'queue',
+      queueKind: 'pending',
     });
   }
 
@@ -936,6 +988,8 @@ const scheduleEnvAlerts = computed(() => {
       value: String(failedJobs),
       detail: failedJobs > 0 ? 'failed_jobs 表累计失败记录，建议排查后重试或清理' : undefined,
       theme: failedJobs > 0 ? 'danger' : 'success',
+      actions: 'queue',
+      queueKind: 'failed',
     });
   }
 
@@ -954,7 +1008,15 @@ const scheduleEnvAlerts = computed(() => {
 });
 const canViewSchedules = computed(() => hasPermission(AdminPermissions.SCHEDULE_VIEW));
 const canTriggerSchedules = computed(() => hasPermission(AdminPermissions.SCHEDULE_TRIGGER));
+const canManageQueueJobs = computed(() => hasPermission(AdminPermissions.SCHEDULE_QUEUE_MANAGE));
 const canManageLogCleanup = computed(() => hasPermission(AdminPermissions.LOG_MANAGE));
+const queueDrawerSize = computed(() => (isMobile.value ? '100%' : '960px'));
+const clearQueueDialogTitle = computed(() => (clearQueueKind.value === 'pending' ? '清空待处理队列' : '清空失败队列'));
+const clearQueueDialogHint = computed(() =>
+  clearQueueKind.value === 'pending'
+    ? '将删除 jobs 表中的全部待处理任务，任务不会再次执行，删除后无法恢复。'
+    : '将清空 failed_jobs 表中的全部失败记录，删除后无法恢复。',
+);
 const cleanupSubmitDisabled = computed(
   () =>
     cleanupSubmitting.value ||
@@ -1068,6 +1130,45 @@ async function loadScheduleOverview() {
     MessagePlugin.error(errorMessage(error, '定时任务状态加载失败'));
   } finally {
     scheduleLoading.value = false;
+  }
+}
+
+function openQueueJobs(kind: QueueKind | undefined) {
+  queueDrawerKind.value = kind === 'failed' ? 'failed' : 'pending';
+  queueDrawerVisible.value = true;
+}
+
+function openClearQueue(kind: QueueKind | undefined) {
+  if (!canManageQueueJobs.value) {
+    MessagePlugin.warning('当前账号缺少 schedule.queue_manage 权限');
+    return;
+  }
+  clearQueueKind.value = kind === 'failed' ? 'failed' : 'pending';
+  clearQueueConfirmText.value = '';
+  clearQueueDialogVisible.value = true;
+}
+
+async function confirmClearQueue() {
+  const confirmText = clearQueueConfirmText.value.trim();
+  if (confirmText !== '立即清空') {
+    MessagePlugin.warning('确认文本必须为 立即清空');
+    return;
+  }
+  clearingQueue.value = true;
+  try {
+    const response = await adminApi.schedules.clearQueueJobs(clearQueueKind.value, confirmText);
+    const detail = (response as { detail?: { queue?: { deleted_count?: number } } }).detail;
+    const deletedCount = Number(detail?.queue?.deleted_count || 0);
+    const kindLabel = clearQueueKind.value === 'pending' ? '待处理队列' : '失败队列';
+    MessagePlugin.success(`${kindLabel}已清空，共删除 ${deletedCount} 条任务`);
+    clearQueueDialogVisible.value = false;
+    clearQueueConfirmText.value = '';
+    queueRefreshToken.value += 1;
+    await loadScheduleOverview();
+  } catch (error) {
+    MessagePlugin.error(errorMessage(error, '队列清空失败'));
+  } finally {
+    clearingQueue.value = false;
   }
 }
 

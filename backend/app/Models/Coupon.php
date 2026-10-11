@@ -6,6 +6,13 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * @property int $id
+ * @property string $code
+ * @property array<int, int>|null $requires_product_ids 前置持有条件：用户名下须持有任一指定产品的运行中服务
+ * @property bool $only_old_client 仅老客可领/用（与 first_order_only 互斥）
+ * @property bool $is_discount 与会员折扣叠加开关：true=可叠加（默认） false=互斥
+ */
 class Coupon extends Model
 {
     protected $fillable = [
@@ -21,7 +28,10 @@ class Coupon extends Model
         'max_discount_amount',
         'billing_cycles',
         'product_ids',
+        'requires_product_ids',
         'first_order_only',
+        'only_old_client',
+        'is_discount',
         'total_usage_limit',
         'per_user_limit',
         'used_count',
@@ -45,7 +55,10 @@ class Coupon extends Model
             'discount_scope' => 'string',
             'billing_cycles' => 'array',
             'product_ids' => 'array',
+            'requires_product_ids' => 'array',
             'first_order_only' => 'boolean',
+            'only_old_client' => 'boolean',
+            'is_discount' => 'boolean',
             'total_usage_limit' => 'integer',
             'per_user_limit' => 'integer',
             'used_count' => 'integer',

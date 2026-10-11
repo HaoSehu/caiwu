@@ -116,6 +116,24 @@ class AdminConfigurationV2QueryService
     }
 
     /**
+     * 显式升级插件登记，返回详情 + 新旧 schema 结构化 diff。
+     *
+     * @return array<string, mixed>
+     */
+    public function upgradePlugin(IntegrationPlugin $plugin): array
+    {
+        $result = $this->pluginService->upgrade($plugin);
+
+        return [
+            'plugin' => AdminIntegrationPluginDetailResource::make(
+                $this->pluginService->detail($plugin->fresh('config') ?? $plugin)
+            )->resolve(),
+            'previous_version' => $result['previous_version'],
+            'upgrade_diff' => $result['diff'],
+        ];
+    }
+
+    /**
      * @param  array<string, mixed>  $config
      * @return array<string, mixed>
      */
@@ -481,6 +499,10 @@ class AdminConfigurationV2QueryService
      */
     public function runSupplierTask(Supplier $supplier, string $type, array $payload): array
     {
+        // context 携带完整绑定投影（含 api_key、web_session_cookie 等敏感字段）是刻意设计：
+        // 插件运行日志按项目规则保留完整信息、不做脱敏（AGENTS.md：不在管理员端做脱敏，
+        // 不在日志做脱敏，都需要显示完整信息），供审计与故障定位直接取用。
+        // 2026-10-11 插件架构审查复核裁决：维持明文，勿在未取得新裁决前改成本地脱敏。
         $binding = app(PluginBindingResolver::class)->supplierBindingProjection($supplier, includeSecrets: true);
         $providerKey = trim((string) ($binding['provider_key'] ?? ''));
         if ($providerKey === '') {

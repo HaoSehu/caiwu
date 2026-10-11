@@ -13,6 +13,7 @@ use App\Services\Integrations\Plugins\Adapters\PluginPaymentGateway;
 use App\Services\Integrations\Plugins\Adapters\PluginSmsDriver;
 use App\Services\Integrations\Plugins\Adapters\PluginUpstreamDriver;
 use App\Services\Integrations\Plugins\Adapters\PluginVerificationDriver;
+use App\Services\Integrations\Plugins\Support\PluginProbeMemo;
 use App\Services\Mail\Contracts\MailDriver;
 use App\Services\Sms\Contracts\SmsDriver;
 use App\Services\Upstream\Contracts\UpstreamDriver;
@@ -27,6 +28,13 @@ class PluginRuntimeRegistry
 {
     /** 支付回调验签动作：未认证入口，验签失败不落 runtime log */
     private const VERIFY_NOTIFY_ACTION = 'payment.verify_notify';
+
+    /**
+     * 探测类动作：高频幂等，只服务列表/匹配判断（如结账页渲染一次可用网关列表，
+     * 就会对每个网关各执行一次 is_enabled）。请求内 memo 短路 + 成功结果不落运行日志；
+     * 失败照常落库保留诊断链路。
+     */
+    private const PROBE_ACTIONS = ['payment.is_enabled', 'payment.matches_merchant'];
 
     /** 运行日志 meta 存储上限：叶子字符串与整体编码分别限宽，防止上游大报文撑爆日志表 */
     private const RUNTIME_META_MAX_BYTES = 16384;
@@ -71,7 +79,37 @@ class PluginRuntimeRegistry
             throw new BusinessException('插件未安装或未启用', 42200);
         }
 
+        if (in_array($resolvedAction, self::PROBE_ACTIONS, true)) {
+            $memo = $this->container->make(PluginProbeMemo::class);
+            $memoKey = $this->probeMemoKey($resolvedDomain, $resolvedIdentifier, $resolvedAction, $payload);
+            $cached = $memo->get($memoKey);
+            if ($cached !== null) {
+                return $cached;
+            }
+
+            $response = $this->executePlugin($plugin, $resolvedAction, $payload, $context);
+            if (($response['success'] ?? false) === true) {
+                $memo->put($memoKey, $response);
+            }
+
+            return $response;
+        }
+
         return $this->executePlugin($plugin, $resolvedAction, $payload, $context);
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function probeMemoKey(string $domain, string $identifier, string $action, array $payload): string
+    {
+        try {
+            $payloadHash = md5((string) json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
+        } catch (\JsonException) {
+            $payloadHash = md5(serialize($payload));
+        }
+
+        return implode('|', [$domain, $identifier, $action, $payloadHash]);
     }
 
     /**
@@ -167,6 +205,11 @@ class PluginRuntimeRegistry
             return;
         }
 
+        // 运行日志按项目规则保留完整信息、不做脱敏（AGENTS.md：不在管理员端做脱敏，
+        // 不在日志做脱敏，都需要显示完整信息）；PayloadLimiter 只限量、不脱敏，
+        // 因此 payload/context 中出现 api_key、web_session_cookie 等敏感字段属预期行为
+        // （如 AdminConfigurationV2QueryService::runSupplierTask 传入的绑定投影）。
+        // 调用方若不想让某字段入日志，应在传入前自行裁剪；如需改变该语义须先取得项目裁决。
         try {
             IntegrationPluginRuntimeLog::query()->create([
                 'trace_id' => $traceId !== '' ? $traceId : null,
@@ -211,6 +254,12 @@ class PluginRuntimeRegistry
      */
     private function shouldSkipRuntimeLog(string $action, ?array $response): bool
     {
+        // 探测类动作的成功结果是纯噪音（每次列表渲染每个网关一条），不落运行日志；
+        // 失败仍完整落库。memo 命中的短路发生在 execute() 入口，本就不会走到这里。
+        if (in_array($action, self::PROBE_ACTIONS, true) && ($response['success'] ?? false) === true) {
+            return true;
+        }
+
         if ($action !== self::VERIFY_NOTIFY_ACTION) {
             return false;
         }

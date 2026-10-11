@@ -11,6 +11,14 @@
             {{ cycle.billing_cycle_label }} · ¥{{ formatMoney(cycle.amount) }}
           </t-radio-button>
         </t-radio-group>
+        <div v-if="renewCouponBinding" class="renew-coupon-row">
+          <span>持续优惠</span>
+          <span class="renew-binding-tip">
+            {{ renewCouponBinding.coupon_name || renewCouponBinding.coupon_code || '持续优惠' }}（{{
+              renewCouponBinding.discount_label || '优惠价'
+            }}）已生效，每次续费均按优惠价计算
+          </span>
+        </div>
         <div v-if="renewCoupons.length" class="renew-coupon-row">
           <span>续费优惠</span>
           <t-select
@@ -55,6 +63,7 @@ const {
   renewForm,
   renewAmount,
   renewCoupons,
+  renewCouponBinding,
   formatMoney,
   handleRenewCycleChange,
   handleRenewCouponChange,

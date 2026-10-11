@@ -788,9 +788,21 @@ const appStore = useAppStore();
 // 详情页 meta 与 canonical 的公网站点前缀
 const publicSiteUrl = resolvePublicSiteUrl();
 
-// 移动布局阈值与全站 isMobile 断点一致（WebsiteLayout 同为 960）
-const MOBILE_MEDIA_QUERY = "(max-width: $breakpoint-nav)";
-const isMobile = ref(false);
+// 移动布局阈值与全站 isMobile 断点一致（variables.scss $breakpoint-nav = 992px）。
+// 注意：SCSS 变量无法进入 script 字符串，历史上这里写死 "$breakpoint-nav" 导致
+// matchMedia 解析失败、isMobile 恒为 false，移动端从未进入 JS 移动态，故此处
+// 用 JS 常量与 variables.scss 保持同步，修改断点时两处必须同时更新。
+const MOBILE_BREAKPOINT = 992;
+const MOBILE_MEDIA_QUERY = `(max-width: ${MOBILE_BREAKPOINT}px)`;
+
+// 声明时即初始化（与 WebsiteLayout 同策略）：避免移动端首帧先渲染桌面分支
+// （el-select 等）再切移动 picker 的一帧闪变；onMounted 中的 updateMobileState
+// 保留用于挂载后同步与 matchMedia change 监听
+const isMobile = ref(
+  typeof window === "undefined" || typeof window.matchMedia !== "function"
+    ? false
+    : window.matchMedia(MOBILE_MEDIA_QUERY).matches,
+);
 const mobileOsDrawer = ref(false);
 const mobileCouponDrawer = ref(false);
 let mobileMediaQuery = null;
@@ -2313,7 +2325,7 @@ onBeforeUnmount(() => {
   justify-content: center;
 }
 
-/* ===== 移动端选择器（≤960px 替换 el-select） ===== */
+/* ===== 移动端选择器（≤992px 替换 el-select） ===== */
 .pd-mobile-picker-row {
   display: grid;
   grid-template-columns: 1fr 1fr;

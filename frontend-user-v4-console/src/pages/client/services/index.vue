@@ -299,6 +299,14 @@
             </t-radio-button>
           </t-radio-group>
 
+          <div v-if="renewCouponBinding" class="renew-coupon-row">
+            <span>持续优惠</span>
+            <span>
+              {{ renewCouponBinding.coupon_name || renewCouponBinding.coupon_code || '持续优惠' }}（{{
+                renewCouponBinding.discount_label || '优惠价'
+              }}）已生效，每次续费均按优惠价计算
+            </span>
+          </div>
           <div v-if="availableRenewCoupons.length" class="renew-coupon-row">
             <span>续费优惠</span>
             <t-select
@@ -438,6 +446,7 @@ const {
   catalogTypeOptions,
   selectedRenewAmount,
   availableRenewCoupons,
+  renewCouponBinding,
   loadList,
   loadData,
   handleSearch,

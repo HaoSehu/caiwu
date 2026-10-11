@@ -129,16 +129,21 @@ class IntegrationDriverBindingResolver
             return '';
         }
 
+        // Review 🟡4（孤儿绑定防御）：绑定行 status=1 但对应插件已停用时不得
+        // 参与解析（历史上出现过插件停用而绑定行未翻转的不一致数据），join
+        // 插件表强制校验启用状态，让解析自动落到下一个启用的绑定/配置默认。
         $binding = DB::table('integration_plugin_bindings')
-            ->where('domain', $domain)
-            ->where('bindable_type', 'setting')
-            ->where('bindable_id', 0)
-            ->where('binding_key', $bindingKey)
-            ->where('status', 1)
-            ->orderByDesc('status')
-            ->orderBy('priority')
-            ->orderByDesc('id')
-            ->first(['provider_key']);
+            ->join('integration_plugins', 'integration_plugins.id', '=', 'integration_plugin_bindings.plugin_id')
+            ->where('integration_plugin_bindings.domain', $domain)
+            ->where('integration_plugin_bindings.bindable_type', 'setting')
+            ->where('integration_plugin_bindings.bindable_id', 0)
+            ->where('integration_plugin_bindings.binding_key', $bindingKey)
+            ->where('integration_plugin_bindings.status', 1)
+            ->where('integration_plugins.status', 1)
+            ->orderByDesc('integration_plugin_bindings.status')
+            ->orderBy('integration_plugin_bindings.priority')
+            ->orderByDesc('integration_plugin_bindings.id')
+            ->first(['integration_plugin_bindings.provider_key']);
 
         return trim((string) ($binding->provider_key ?? ''));
     }

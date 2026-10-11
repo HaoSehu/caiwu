@@ -250,8 +250,18 @@
               <t-form-item label="每人可用次数" name="per_user_limit">
                 <t-input-number v-model="form.per_user_limit" :min="1" />
               </t-form-item>
-              <t-form-item label="仅限首单可用" name="first_order_only">
+              <t-form-item label="仅限首单可用" name="first_order_only" help="与「仅老客」互斥">
                 <t-switch v-model="form.first_order_only" />
+              </t-form-item>
+              <t-form-item label="仅老客可领" name="only_old_client" help="面向已有成交订单的用户；与「仅限首单」互斥">
+                <t-switch v-model="form.only_old_client" />
+              </t-form-item>
+              <t-form-item
+                label="与会员折扣叠加"
+                name="is_discount"
+                help="开启：券按会员折后价继续打折（默认）；关闭：本单已有会员折扣减免时该券不生效"
+              >
+                <t-switch v-model="form.is_discount" />
               </t-form-item>
             </div>
           </section>
@@ -273,6 +283,13 @@
                   v-model="form.product_ids"
                   mode="batch"
                   placeholder="按分类批量选择适用商品，留空表示全站商品可用"
+                />
+              </t-form-item>
+              <t-form-item label="需持有商品" name="requires_product_ids" class="form-span-2">
+                <product-binding-tree-select
+                  v-model="form.requires_product_ids"
+                  mode="batch"
+                  placeholder="用户名下须持有任一所选商品的运行中服务才能领/用，留空表示不限制"
                 />
               </t-form-item>
             </div>
@@ -331,7 +348,10 @@ interface CampaignForm {
   max_discount_amount: number | null;
   billing_cycles: string[];
   product_ids: number[];
+  requires_product_ids: number[];
   first_order_only: boolean;
+  only_old_client: boolean;
+  is_discount: boolean;
   per_user_limit: number | null;
   status: number;
   sort_order: number;
@@ -430,7 +450,10 @@ function createDefaultForm(): CampaignForm {
     max_discount_amount: null,
     billing_cycles: [],
     product_ids: [],
+    requires_product_ids: [],
     first_order_only: false,
+    only_old_client: false,
+    is_discount: true,
     per_user_limit: 1,
     status: 1,
     sort_order: 0,
@@ -491,7 +514,12 @@ async function openCampaignDialog(row?: CouponCampaignRecord) {
         : Number(row.max_discount_amount_raw || 0);
     form.billing_cycles = Array.isArray(row.billing_cycles) ? [...row.billing_cycles] : [];
     form.product_ids = Array.isArray(row.product_ids) ? row.product_ids.map(Number).filter(Boolean) : [];
+    form.requires_product_ids = Array.isArray(row.requires_product_ids)
+      ? row.requires_product_ids.map(Number).filter(Boolean)
+      : [];
     form.first_order_only = Boolean(row.first_order_only);
+    form.only_old_client = Boolean(row.only_old_client);
+    form.is_discount = row.is_discount === undefined ? true : Boolean(row.is_discount);
     form.per_user_limit =
       row.per_user_limit === null || row.per_user_limit === undefined ? null : Number(row.per_user_limit || 0);
     form.status = Number(row.status ?? 1);
@@ -517,7 +545,10 @@ function buildPayload(): CouponCampaignPayload {
     max_discount_amount: form.max_discount_amount === null ? null : Number(form.max_discount_amount || 0),
     billing_cycles: form.billing_cycles,
     product_ids: form.product_ids.map(Number).filter((id) => id > 0),
+    requires_product_ids: form.requires_product_ids.map(Number).filter((id) => id > 0),
     first_order_only: Boolean(form.first_order_only),
+    only_old_client: Boolean(form.only_old_client),
+    is_discount: Boolean(form.is_discount),
     per_user_limit: form.per_user_limit === null ? null : Number(form.per_user_limit || 0),
     status: Number(form.status ?? 1),
     sort_order: Number(form.sort_order || 0),

@@ -31,7 +31,7 @@
             class="main-nav__link"
             :class="{ 'is-active': isNavActive(item) }"
             @mouseenter="handleNavHover(item)"
-            @focus="item.menuId && openMegaMenu(item.menuId)"
+            @focus="item.menuId && canHoverMegaMenu && openMegaMenu(item.menuId)"
             :aria-haspopup="item.menuId ? 'true' : undefined"
             :aria-expanded="
               item.menuId ? activeMenuId === item.menuId : undefined
@@ -865,10 +865,21 @@ const mobileExpandedType = ref("");
 const mobileMenuToggleRef = ref(null);
 const headerScrolled = ref(false);
 const isMobile = ref(
-  typeof window === "undefined" ? false : window.innerWidth <= 960,
+  // 992 对齐控制台 useDeviceLayout 的 tablet 上限，跨端跳转时导航形态一致
+  typeof window === "undefined" ? false : window.innerWidth <= 992,
 );
 const logoLoadFailed = ref(false);
 const footerLogoLoadFailed = ref(false);
+
+// mega menu 依赖 hover/focus 悬停语义，仅在具备鼠标悬停能力的设备启用：
+// 触屏设备（hover: none）tap 一级导航会同时触发 mouseenter/focus 与路由跳转，
+// 弹层与跳转叠加行为混乱，此时直接跳转列表页（993~1180 平板区间同样受益）
+const canHoverMegaMenu =
+  typeof window === "undefined"
+    ? false
+    : Boolean(
+        window.matchMedia?.("(hover: hover) and (pointer: fine)")?.matches,
+      );
 
 const userAvatarInitial = computed(() => {
   if (!userStore.isLoggedIn) return "";
@@ -997,7 +1008,7 @@ function closeMegaMenu() {
 }
 
 function handleNavHover(item) {
-  if (item.menuId) {
+  if (item.menuId && canHoverMegaMenu) {
     // 延迟打开，避免鼠标快速滑过导航时触发菜单与接口拉取
     clearTimeout(megaMenuOpenTimer);
     megaMenuOpenTimer = setTimeout(() => {
@@ -1127,7 +1138,7 @@ function handleScroll() {
 
 function handleResize() {
   if (typeof window === "undefined") return;
-  const nextMobile = window.innerWidth <= 960;
+  const nextMobile = window.innerWidth <= 992;
   if (nextMobile === isMobile.value) return;
   isMobile.value = nextMobile;
   if (!isMobile.value) {
@@ -1207,7 +1218,7 @@ onBeforeUnmount(() => {
   position: sticky;
   top: 0;
   z-index: 100;
-  height: 64px;
+  height: $navbar-height;
   background: rgba(255, 255, 255, 0.96);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
@@ -1236,7 +1247,7 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
   min-width: 0;
   width: 148px;
-  height: 64px;
+  height: $navbar-height;
 }
 
 .logo-image {
@@ -1274,7 +1285,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 3px;
   padding: 0 20px;
-  height: 64px;
+  height: $navbar-height;
   color: #374151;
   font-size: 14px;
   font-weight: 500;
@@ -1326,7 +1337,7 @@ onBeforeUnmount(() => {
 
 .mega-menu {
   position: fixed;
-  top: 64px;
+  top: $navbar-height;
   left: 0;
   right: 0;
   z-index: 90;
@@ -1894,7 +1905,7 @@ onBeforeUnmount(() => {
 
 .mobile-menu-mask {
   position: fixed;
-  top: 64px;
+  top: $navbar-height;
   right: 0;
   bottom: 0;
   left: 0;
@@ -1904,7 +1915,7 @@ onBeforeUnmount(() => {
 
 .mobile-menu-panel {
   position: fixed;
-  top: 64px;
+  top: $navbar-height;
   left: 0;
   right: 0;
   bottom: 0;
@@ -2037,13 +2048,14 @@ onBeforeUnmount(() => {
 }
 
 .mobile-second-level-arrow {
-  color: #000000;
+  color: $text-color-primary;
   transition: transform 0.2s ease;
   transform: rotate(0deg);
 }
 
+// chevron 默认朝下，展开态旋转 180° 朝上，符合展开/收起方向语义
 .mobile-second-level-arrow.expanded {
-  transform: rotate(90deg);
+  transform: rotate(180deg);
 }
 
 .mobile-third-level-list {
@@ -2322,7 +2334,7 @@ onBeforeUnmount(() => {
     padding: 0 12px;
   }
 
-  // 961~1180 收起桌面登录入口时，同步切换为用户图标，避免该区间未登录用户无登录入口
+  // 993~1180 收起桌面登录入口时，同步切换为用户图标，避免该区间未登录用户无登录入口
   .user-menu {
     display: none;
   }

@@ -2,6 +2,18 @@
   "version": 1,
   "records": [
     {
+      "path": "执行计划/进行中/优惠券持续优惠服务绑定-2026-10-11.md",
+      "status": "active",
+      "summary": "P1-1 持续优惠对齐 ZJMF recurring 口径：services 快照绑定列迁移、新购开通落绑定、续费 resolveRenewCoupon 快照折算（与手选券互斥）、computeDiscountFromSnapshot 单一折算真源、v4-console 续费弹窗持续优惠提示、回归 5 例。",
+      "review_by": "2026-11-11"
+    },
+    {
+      "path": "执行计划/进行中/优惠券定向与叠加规则增强-2026-10-11.md",
+      "status": "active",
+      "summary": "P2-4/P2-6/P3-11/P3-13 四项：requires_product_ids 前置持有条件（领取/使用双侧）、only_old_client 仅老客（与首单互斥拦截）、is_discount 叠加开关（memberDiscountApplied 贯穿报价/结账/续费）、周期白名单实测后不扩展；迁移双库、测试 8 例、全量 672 过。",
+      "review_by": "2026-11-11"
+    },
+    {
       "path": "执行计划/已完成/数据库结构整改-2026-10-10.md",
       "status": "completed",
       "summary": "实库结构审查整改（提交 28c716fb）：product_groups 残留清除、前缀重复索引、营销域外键、item_type 归一、状态列默认值显式化与生成物重刷；资金存量核实报告与挂账项在内。",

@@ -115,7 +115,9 @@ onMounted(() => {
 // 登录壳层严格走 TDesign 令牌，仅提供浅色一种形态（docs/DESIGN.md §2）。
 // 表单样式在 pages/client-auth/shared-auth.less 中直接引用 --td-* 令牌，不再经别名中转。
 .auth-shell {
+  // dvh 兜底：移动端地址栏收缩时避免底部裁切（与 layout.less 的双写策略一致）
   min-height: 100vh;
+  min-height: 100dvh;
   background: var(--td-bg-color-page);
   color: var(--td-text-color-primary);
 }
@@ -125,6 +127,7 @@ onMounted(() => {
   flex-direction: column;
   width: min(85rem, calc(100% - 4.5rem));
   min-height: 100vh;
+  min-height: 100dvh;
   margin: 0 auto;
   padding: 1.75rem 0 1.5rem;
 }

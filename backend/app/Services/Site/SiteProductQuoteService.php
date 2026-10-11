@@ -44,7 +44,10 @@ class SiteProductQuoteService
         $memberDiscount = $userId > 0
             ? $this->memberGroupDiscountService->applyForProduct($userId, (int) $product->id, $catalogAmount)
             : null;
+        $memberDiscountAmount = round((float) ($memberDiscount['discount_amount'] ?? 0), 2);
         $couponBaseAmount = max((float) ($memberDiscount['final_amount'] ?? $catalogAmount), 0.0);
+        // P3-11 叠加开关：本单实际享受会员折扣减免且券声明互斥（is_discount=0）时，券不参与
+        $memberDiscountApplied = $memberDiscountAmount > 0;
         $coupon = $userId > 0
             ? $this->couponService->previewOwnedCoupon(
                 isset($validated['user_coupon_id']) ? (int) $validated['user_coupon_id'] : null,
@@ -52,7 +55,8 @@ class SiteProductQuoteService
                 $product,
                 $billingCycle,
                 $couponBaseAmount,
-                'new'
+                'new',
+                $memberDiscountApplied
             )
             : null;
         $availableCoupons = $userId > 0
@@ -61,11 +65,11 @@ class SiteProductQuoteService
                 $product,
                 $billingCycle,
                 $couponBaseAmount,
-                'new'
+                'new',
+                $memberDiscountApplied
             )
             : [];
 
-        $memberDiscountAmount = (float) ($memberDiscount['discount_amount'] ?? 0);
         $discountAmount = (float) ($coupon['discount_amount'] ?? 0);
         $quote['subtotal_amount'] = number_format($catalogAmount, 2, '.', '');
         $quote['member_level_id'] = $memberDiscount['level_id'] ?? null;

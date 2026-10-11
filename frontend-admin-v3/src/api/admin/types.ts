@@ -264,6 +264,28 @@ export interface ScheduleOverview {
   recent_logs?: Record<string, unknown>[];
 }
 
+export interface QueueJobListParams {
+  queue: 'pending' | 'failed';
+  page?: number;
+  page_size?: number;
+}
+
+export interface QueueJobItem {
+  id: number;
+  kind: 'pending' | 'failed';
+  queue?: string;
+  display_name?: string;
+  state?: string;
+  attempts?: number;
+  max_tries?: number | null;
+  uuid?: string;
+  available_at?: string | null;
+  reserved_at?: string | null;
+  created_at?: string | null;
+  failed_at?: string | null;
+  exception?: string | null;
+}
+
 // ─── Logs ─────────────────────────────────────────────────────
 export interface LogListParams {
   page?: number;

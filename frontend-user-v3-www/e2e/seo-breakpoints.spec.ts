@@ -77,8 +77,8 @@ test("404 路由带 description 且保持 noindex", async ({ page }) => {
   expect(robots).toContain("noindex");
 });
 
-test("960/768 阈值视口首页无横向溢出", async ({ page }) => {
-  for (const width of [960, 768]) {
+test("992/768 阈值视口首页无横向溢出", async ({ page }) => {
+  for (const width of [992, 768]) {
     await page.setViewportSize({ width, height: 800 });
     await page.goto("/", { waitUntil: "domcontentloaded" });
     await page.waitForTimeout(400);

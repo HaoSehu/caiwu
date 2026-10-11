@@ -11,6 +11,8 @@ return [
         'key' => 'demo_pay',
         'name' => 'Demo 支付网关',
         'version' => '1.0.0',
+        // 显式 demo 标记：管理端按此识别示例插件（demo_ 前缀启发式仅作兼容兜底）。
+        'demo' => true,
         'entry' => DemoPayPlugin::class,
         'capabilities' => ['precreate', 'query', 'notify_verify'],
     ],

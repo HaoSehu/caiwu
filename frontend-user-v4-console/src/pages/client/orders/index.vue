@@ -60,13 +60,19 @@
           <template #discount="{ row }">
             <div class="stack-cell">
               <strong v-if="couponDiscountOf(row) > 0" class="order-money"
-                >券 ¥{{ formatMoney(couponDiscountOf(row)) }}</strong
+                >券 ¥{{ formatMoney(couponDiscountOf(row))
+                }}{{ row.coupon_name || row.coupon_code ? `（${row.coupon_name || row.coupon_code}）` : '' }}</strong
+              >
+              <span v-else-if="row.coupon_name || row.coupon_code" :title="row.coupon_name || row.coupon_code"
+                >优惠券：{{ row.coupon_name || row.coupon_code }}</span
               >
               <span v-if="memberDiscountOf(row) > 0">会员 ¥{{ formatMoney(memberDiscountOf(row)) }}</span>
-              <span v-if="couponDiscountOf(row) <= 0 && memberDiscountOf(row) <= 0">--</span>
+              <span
+                v-if="couponDiscountOf(row) <= 0 && memberDiscountOf(row) <= 0 && !row.coupon_name && !row.coupon_code"
+                >--</span
+              >
             </div>
           </template>
-          <template #coupon="{ row }">{{ row.coupon_name || row.coupon_code || '--' }}</template>
           <template #status="{ row }">
             <status-tag :status-map="ORDER_STATUS_MAP" :status="Number(row.status)" />
           </template>
@@ -214,7 +220,9 @@ const {
   cancelOrder,
 } = useOrderList();
 
-// 优惠券减免与会员折扣来源不同，列表内分列展示，避免混成一个数字无法区分
+// 优惠券减免与会员折扣来源不同，列表内分列展示，避免混成一个数字无法区分。
+// 2026-10-11 D-C1：优惠券名称并入"优惠"堆叠单元格（省一个独立列的横向宽度），
+// 释放约 10rem，1366 宽度笔记本上减少横向滚动概率。
 function couponDiscountOf(row: Record<string, unknown>): number {
   return Number(row.discount || 0);
 }
@@ -227,8 +235,7 @@ const columns: PrimaryTableCol[] = [
   { colKey: 'order', title: '订单号', minWidth: '12rem' },
   { colKey: 'product', title: '产品/服务', minWidth: '12rem' },
   { colKey: 'amount', title: '金额', width: '9rem', align: 'right' },
-  { colKey: 'discount', title: '优惠', width: '10rem', align: 'right' },
-  { colKey: 'coupon', title: '优惠券', minWidth: '10rem', ellipsis: true },
+  { colKey: 'discount', title: '优惠', minWidth: '12rem', align: 'right' },
   { colKey: 'status', title: '状态', width: '8rem' },
   { colKey: 'created_at', title: '创建时间', minWidth: '12rem' },
   { colKey: 'operation', title: '操作', width: '12rem', fixed: 'right', align: 'right' },

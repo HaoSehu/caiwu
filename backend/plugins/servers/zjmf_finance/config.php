@@ -16,6 +16,7 @@ use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfInventoryAndServiceSyncHook;
 use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfInventoryAndServiceSyncTask;
 use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfScheduledAuthRefreshHook;
 use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfScheduledAuthRefreshTask;
+use Caiwu\Plugins\Servers\ZjmfFinance\Commands\RestoreZjmfBillingCommand;
 use Caiwu\Plugins\Servers\ZjmfFinance\Providers\ZjmfFinanceServiceProvider;
 use Caiwu\Plugins\Servers\ZjmfFinance\ZjmfFinancePlugin;
 
@@ -44,6 +45,11 @@ return [
             'scheduled_tasks' => [
                 ZjmfScheduledAuthRefreshTask::class,
                 ZjmfInventoryAndServiceSyncTask::class,
+            ],
+            // 受控控制台命令声明：Provider 注册命令默认违反插件边界，
+            // 显式声明后由安装校验与 plugins:audit-registrations 视为已豁免。
+            'console_commands' => [
+                RestoreZjmfBillingCommand::class,
             ],
             'schedule_hooks' => [
                 'plugins.zjmf_finance.auth_refresh' => [

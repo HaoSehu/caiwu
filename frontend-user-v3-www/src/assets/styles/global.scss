@@ -158,11 +158,12 @@ ol {
   box-shadow: none !important;
 }
 
-.el-button--primary:hover,
-.el-button--primary:focus {
+.el-button--primary:hover {
   background: $color-primary-hover !important;
   border-color: $color-primary-hover !important;
 }
+// focus 不再复用 hover 深色底，避免点击后按钮"卡"在 hover 态；
+// 键盘可见焦点由全局 :focus-visible outline 兜底（WCAG 2.4.7）
 
 .el-button--default,
 .el-button.is-plain {
@@ -172,9 +173,7 @@ ol {
 }
 
 .el-button--default:hover,
-.el-button--default:focus,
-.el-button.is-plain:hover,
-.el-button.is-plain:focus {
+.el-button.is-plain:hover {
   border-color: $color-primary !important;
   color: $color-primary !important;
   background: $bg-color-card !important;
@@ -499,8 +498,7 @@ ol {
     align-items: flex-start;
   }
 
-  .client-page-actions,
-  .client-metric-strip {
+  .client-page-actions {
     width: 100%;
   }
 }
@@ -508,10 +506,6 @@ ol {
 @include meta.load-css("record-list");
 
 @media (max-width: $breakpoint-nav) {
-  .client-metric-strip {
-    grid-template-columns: 1fr;
-  }
-
   .site-shell-container {
     width: min(100%, calc(100% - 28px));
   }

@@ -565,6 +565,15 @@ export interface ReferralWithdrawalApplyResult {
   [key: string]: unknown;
 }
 
+export interface RenewCouponBindingInfo {
+  coupon_id?: number | string;
+  coupon_code?: string;
+  coupon_name?: string;
+  discount_type?: string;
+  discount_label?: string;
+  [key: string]: unknown;
+}
+
 export interface ServiceRenewPreview {
   expires_at?: string;
   auto_renew?: number | string;
@@ -574,6 +583,7 @@ export interface ServiceRenewPreview {
   selected_user_coupon_id?: number | string;
   cycles?: RenewCycleOption[];
   available_coupons?: CouponOption[];
+  renew_coupon_binding?: RenewCouponBindingInfo | null;
   [key: string]: unknown;
 }
 

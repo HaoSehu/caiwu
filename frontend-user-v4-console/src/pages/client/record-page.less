@@ -292,6 +292,12 @@
   .record-pagination {
     justify-content: flex-start;
     overflow-x: auto;
+
+    // 每页条数选择器在手机端属低频操作且占宽度，隐藏后页码区更宽松（2026-10-11 M-C4）
+    // 本文件被页面 scoped 引入，TDesign 内部元素需 :deep() 穿透
+    :deep(.t-pagination__select) {
+      display: none;
+    }
   }
 
   .record-table {

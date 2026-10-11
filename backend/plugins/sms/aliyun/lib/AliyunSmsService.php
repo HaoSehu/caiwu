@@ -36,6 +36,78 @@ class AliyunSmsService
             return $this->handleFetchSignsAction($action, $config);
         }
 
+        if ($action === 'sms.templates.pull') {
+            $result = $this->client($config)->querySmsTemplates();
+
+            return [
+                'success' => (bool) ($result['success'] ?? false),
+                'action' => $action,
+                'message' => ($result['success'] ?? false) ? '' : (string) ($result['message'] ?? '拉取失败'),
+                'data' => $result['success'] ?? false
+                    ? ['templates' => $result['templates'] ?? [], 'synced_at' => date('Y-m-d H:i:s')]
+                    : [],
+            ];
+        }
+
+        if ($action === 'sms.templates.push') {
+            $result = $this->client($config)->addSmsTemplate(
+                (string) ($payload['title'] ?? ''),
+                (string) ($payload['content'] ?? ''),
+                (string) ($payload['remark'] ?? '')
+            );
+
+            return [
+                'success' => (bool) ($result['success'] ?? false),
+                'action' => $action,
+                'message' => ($result['success'] ?? false) ? '已提交运营商审核' : (string) ($result['message'] ?? '提交失败'),
+                'data' => $result,
+            ];
+        }
+
+        if ($action === 'sms.templates.update') {
+            $result = $this->client($config)->modifySmsTemplate(
+                (string) ($payload['provider_template_id'] ?? ''),
+                (string) ($payload['content'] ?? '')
+            );
+
+            return [
+                'success' => (bool) ($result['success'] ?? false),
+                'action' => $action,
+                'message' => ($result['success'] ?? false) ? '已重新提交审核' : (string) ($result['message'] ?? '修改失败'),
+                'data' => $result,
+            ];
+        }
+
+        if ($action === 'sms.templates.delete') {
+            $result = $this->client($config)->removeSmsTemplate((string) ($payload['provider_template_id'] ?? ''));
+
+            return [
+                'success' => (bool) ($result['success'] ?? false),
+                'action' => $action,
+                'message' => ($result['success'] ?? false) ? '运营商侧模板已删除' : (string) ($result['message'] ?? '删除失败'),
+                'data' => $result,
+            ];
+        }
+
+        if ($action === 'sms.templates.defaults') {
+            return [
+                'success' => true,
+                'action' => $action,
+                'data' => $this->client($config)->defaultTemplates(),
+            ];
+        }
+
+        if ($action === 'sms.templates.status') {
+            $result = $this->client($config)->queryTemplateStatus((string) ($payload['provider_template_id'] ?? ''));
+
+            return [
+                'success' => (bool) ($result['success'] ?? false),
+                'action' => $action,
+                'message' => ($result['success'] ?? false) ? '' : (string) ($result['message'] ?? '回查失败'),
+                'data' => $result,
+            ];
+        }
+
         if ($action === 'sms.verify_code_template') {
             return [
                 'success' => true,

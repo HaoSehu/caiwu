@@ -302,7 +302,11 @@ import { MessagePlugin } from 'tdesign-vue-next';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
-import type { NotificationTemplateItem, NotificationTemplateTestSendResponse, SettingItem } from '@/api/admin';
+import type {
+  NotificationTemplateItem,
+  NotificationTemplateTestSendResponse,
+  SettingItem,
+} from '@/api/admin';
 import { adminApi } from '@/api/admin';
 import apiCatalogData from '@/data/apiCatalog.generated.json';
 import { useMediaQuery } from '@/hooks/useMediaQuery';

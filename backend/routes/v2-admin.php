@@ -299,6 +299,7 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
         Route::get('/schedules/overview', [ScheduleTaskController::class, 'overview']);
         Route::get('/schedule-runs', [ScheduleTaskController::class, 'index']);
         Route::get('/schedule-runs/{run}', [ScheduleTaskController::class, 'show']);
+        Route::get('/schedule-queue-jobs', [ScheduleTaskController::class, 'queueJobs']);
     });
 
     Route::middleware(['permission:'.AdminPermissions::SCHEDULE_TRIGGER])->group(function (): void {
@@ -307,6 +308,13 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
 
     Route::middleware(['permission:'.AdminPermissions::SCHEDULE_RETRY])->group(function (): void {
         Route::post('/schedule-runs/{run}/retry', [ScheduleTaskController::class, 'retry']);
+    });
+
+    Route::middleware(['permission:'.AdminPermissions::SCHEDULE_QUEUE_MANAGE])->group(function (): void {
+        Route::delete('/schedule-queue-jobs/{queue}/{jobId}', [ScheduleTaskController::class, 'deleteQueueJob'])
+            ->where(['queue' => 'pending|failed', 'jobId' => '[0-9]+']);
+        Route::delete('/schedule-queue-jobs/{queue}', [ScheduleTaskController::class, 'clearQueueJobs'])
+            ->where('queue', 'pending|failed');
     });
 
     // 站点首页外观独立于文章内容管理：横幅与视频由 site.* 把关，避免内容管理员越权修改首页
@@ -414,11 +422,21 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
 
     Route::middleware(['permission:'.AdminPermissions::SETTINGS_VIEW])->group(function (): void {
         Route::get('/notification-templates', [SettingController::class, 'notificationTemplates']);
+        Route::get('/notification-templates/sms/provider-template/list', [SettingController::class, 'listSmsProviderTemplates']);
         Route::get('/settings', [SettingController::class, 'index']);
     });
 
     Route::middleware(['permission:'.AdminPermissions::SETTINGS_MANAGE])->group(function (): void {
         Route::post('/notification-templates/test-send', [SettingController::class, 'testNotificationTemplate']);
+        Route::post('/notification-templates/sms/provider-sync', [SettingController::class, 'syncSmsProviderTemplates'])->middleware('throttle:20,1');
+        Route::post('/notification-templates/sms/provider-template/import-defaults', [SettingController::class, 'importDefaultSmsProviderTemplates'])->middleware('throttle:20,1');
+        Route::post('/notification-templates/sms/provider-template/submit-all', [SettingController::class, 'submitAllSmsProviderTemplates'])->middleware('throttle:20,1');
+        Route::post('/notification-templates/sms/provider-template', [SettingController::class, 'createSmsProviderTemplate']);
+        Route::post('/notification-templates/sms/provider-template/{id}/update', [SettingController::class, 'updateSmsProviderTemplate']);
+        Route::post('/notification-templates/sms/provider-template/{id}/submit', [SettingController::class, 'submitSmsProviderTemplateForReview'])->middleware('throttle:20,1');
+        Route::post('/notification-templates/sms/provider-template/{id}/refresh', [SettingController::class, 'refreshSmsProviderTemplateById'])->middleware('throttle:20,1');
+        Route::post('/notification-templates/sms/provider-template/{id}/deletion', [SettingController::class, 'deleteSmsProviderTemplate']);
+        Route::post('/notification-templates/sms/{code}/provider-link', [SettingController::class, 'linkSmsProviderTemplate']);
         Route::post('/settings', [SettingController::class, 'update']);
     });
 

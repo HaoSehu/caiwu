@@ -9,6 +9,7 @@ use App\Constants\InvoiceStatus;
 use App\Constants\InvoiceType;
 use App\Constants\OrderStatus;
 use App\Constants\ProductType;
+use App\Constants\ServiceStatus;
 use App\Constants\UserCouponStatus;
 use App\Exceptions\BusinessException;
 use App\Jobs\SyncInvoiceCouponUsageJob;
@@ -16,6 +17,7 @@ use App\Models\Coupon;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Product;
+use App\Models\Service;
 use App\Models\User;
 use App\Models\UserCoupon;
 use App\Services\ProductCatalog\InstanceSpecCatalogService;
@@ -27,6 +29,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class CouponService
@@ -36,17 +39,25 @@ class CouponService
         private readonly ?InstanceSpecCatalogService $instanceSpecCatalogService = null,
     ) {}
 
+    /**
+     * 视为「已消耗」的账单状态：已支付 = 核销完成；已退款 = 全额退款落地后券不返还
+     * （防「购-付-退」循环薅券，取消路径不受影响仍回落可复用）。
+     * 占用拦截、展示状态、核销计数（used_count）、删除拦截共用本判定。
+     */
     private const USED_INVOICE_STATUSES = [
         InvoiceStatus::PAID,
+        InvoiceStatus::REFUNDED,
     ];
 
     /**
      * 使持有券不可再次使用的账单状态：待支付=结算占用（挂账）；已支付=已核销，
-     * 或已核销但异步同步尚未完成。列表排除、分组归属、展示状态、占用拦截四处共用。
+     * 或已核销但异步同步尚未完成；已退款=退款后券已消耗（同步未完成的窗口内同样拦截）。
+     * 列表排除、分组归属、展示状态、占用拦截四处共用。
      */
     private const COUPON_BLOCKING_INVOICE_STATUSES = [
         InvoiceStatus::UNPAID,
         InvoiceStatus::PAID,
+        InvoiceStatus::REFUNDED,
     ];
 
     /**
@@ -441,7 +452,7 @@ class CouponService
         ];
     }
 
-    public function availableCouponsForCheckout(int $userId, Product $product, string $billingCycle, float $amount, string $orderType = 'new'): array
+    public function availableCouponsForCheckout(int $userId, Product $product, string $billingCycle, float $amount, string $orderType = 'new', ?bool $memberDiscountApplied = null): array
     {
         if (! $this->hasCouponsTable() || ! $this->hasUserCouponsTable()) {
             return [];
@@ -477,9 +488,9 @@ class CouponService
         }
 
         return $userCoupons
-            ->map(function (UserCoupon $userCoupon) use ($product, $billingCycle, $amount, $userId, $orderType) {
+            ->map(function (UserCoupon $userCoupon) use ($product, $billingCycle, $amount, $userId, $orderType, $memberDiscountApplied) {
                 try {
-                    $payload = $this->buildOwnedCouponPayload($userCoupon, $product, $billingCycle, $amount, $userId, $orderType);
+                    $payload = $this->buildOwnedCouponPayload($userCoupon, $product, $billingCycle, $amount, $userId, $orderType, $memberDiscountApplied);
 
                     return [
                         'id' => (int) $userCoupon->id,
@@ -494,7 +505,19 @@ class CouponService
                         'billing_cycle_text' => (string) ($payload['billing_cycle_text'] ?? ''),
                         'validity_text' => (string) ($payload['validity_text'] ?? ''),
                     ];
-                } catch (\Throwable) {
+                } catch (BusinessException) {
+                    // 业务性不适用（门槛/周期/范围/首单限制等）：静默剔除属预期行为
+                    return null;
+                } catch (\Throwable $exception) {
+                    // 非业务异常（DB/数据异常等）不得静默吞掉成「无可用券」，留告警排查线索
+                    Log::warning('[优惠券] 结账可用券构建失败，已跳过该券', [
+                        'user_coupon_id' => (int) $userCoupon->id,
+                        'coupon_id' => (int) ($userCoupon->coupon_id ?? 0),
+                        'user_id' => $userId,
+                        'error' => $exception->getMessage(),
+                        'exception' => $exception::class,
+                    ]);
+
                     return null;
                 }
             })
@@ -503,7 +526,7 @@ class CouponService
             ->all();
     }
 
-    public function previewOwnedCoupon(?int $userCouponId, int $userId, Product $product, string $billingCycle, float $amount, string $orderType = 'new'): ?array
+    public function previewOwnedCoupon(?int $userCouponId, int $userId, Product $product, string $billingCycle, float $amount, string $orderType = 'new', ?bool $memberDiscountApplied = null): ?array
     {
         if (! $this->hasCouponsTable() || ! $this->hasUserCouponsTable()) {
             return null;
@@ -522,10 +545,10 @@ class CouponService
 
         throw_if(! $userCoupon, new BusinessException('优惠券不存在或已失效'));
 
-        return $this->buildOwnedCouponPayload($userCoupon, $product, $billingCycle, $amount, $userId, $orderType);
+        return $this->buildOwnedCouponPayload($userCoupon, $product, $billingCycle, $amount, $userId, $orderType, $memberDiscountApplied);
     }
 
-    public function reserveOwnedCouponForInvoice(?int $userCouponId, int $userId, Product $product, string $billingCycle, float $amount, string $orderType = 'new'): ?array
+    public function reserveOwnedCouponForInvoice(?int $userCouponId, int $userId, Product $product, string $billingCycle, float $amount, string $orderType = 'new', ?bool $memberDiscountApplied = null): ?array
     {
         if (! $this->hasUserCouponsTable()) {
             return null;
@@ -577,7 +600,7 @@ class CouponService
             new BusinessException('优惠券已使用')
         );
 
-        $payload = $this->buildOwnedCouponPayload($userCoupon, $product, $billingCycle, $amount, $userId, $orderType);
+        $payload = $this->buildOwnedCouponPayload($userCoupon, $product, $billingCycle, $amount, $userId, $orderType, $memberDiscountApplied);
         $userCoupon->forceFill([
             'reserved_until' => now()->addMinutes(10),
         ])->save();
@@ -601,6 +624,11 @@ class CouponService
         SyncInvoiceCouponUsageJob::dispatch($invoiceId)->onQueue('coupon');
     }
 
+    /**
+     * 按账单重算持有券占用（幂等）：
+     * - 名下存在 PAID/REFUNDED 账单 → 券置 USED（退款不返还，防「购-付-退」循环薅券）；
+     * - 取消（CANCELLED）/无有效账单 → 回落 OWNED 可复用（取消不消耗优惠资格）。
+     */
     public function syncInvoiceCouponUsage(Invoice $invoice): void
     {
         $couponId = (int) ($invoice->coupon_id ?? 0);
@@ -637,6 +665,8 @@ class CouponService
                     }
 
                     $lastUsedAt = $this->resolveUserCouponLastUsedAt($userCouponId);
+                    // USED_INVOICE_STATUSES 含 PAID 与 REFUNDED：已支付=核销；已退款=退款后券
+                    // 视为已消耗不返还（取消 CANCELLED 不在此列，取消账单仍可回落复用）
                     $hasActivePaidInvoice = Invoice::query()
                         ->where('user_coupon_id', $userCouponId)
                         ->whereIn('status', self::USED_INVOICE_STATUSES)
@@ -1118,7 +1148,10 @@ class CouponService
                 $productIds
             ))),
             'product_scope_text' => $this->formatProductScopeText($productIds, $productNameMap),
+            'requires_product_ids' => $this->normalizeProductIds((array) ($coupon->requires_product_ids ?? [])),
             'first_order_only' => (bool) $coupon->first_order_only,
+            'only_old_client' => (bool) ($coupon->only_old_client ?? false),
+            'is_discount' => (bool) ($coupon->is_discount ?? true),
             'total_usage_limit' => $coupon->total_usage_limit ? (int) $coupon->total_usage_limit : null,
             'per_user_limit' => $coupon->per_user_limit ? (int) $coupon->per_user_limit : null,
             'used_count' => (int) ($coupon->used_count ?? 0),
@@ -1537,7 +1570,7 @@ class CouponService
         ];
     }
 
-    private function buildOwnedCouponPayload(UserCoupon $userCoupon, Product $product, string $billingCycle, float $amount, ?int $userId = null, string $orderType = 'new'): array
+    private function buildOwnedCouponPayload(UserCoupon $userCoupon, Product $product, string $billingCycle, float $amount, ?int $userId = null, string $orderType = 'new', ?bool $memberDiscountApplied = null): array
     {
         $coupon = $userCoupon->coupon;
         throw_if(! $coupon instanceof Coupon, new BusinessException('优惠券不存在或已失效'));
@@ -1556,6 +1589,28 @@ class CouponService
             ! $this->isCouponScopeAllowedForOrderType((string) ($coupon->discount_scope ?? 'first_month'), $orderType),
             new BusinessException($orderType === 'renew' ? '该优惠券不支持续费使用' : '该优惠券仅支持续费使用')
         );
+
+        // 仅老客：需已有成交订单（购买/续费账单已支付，与首单资格同口径）
+        if ((bool) $coupon->only_old_client) {
+            throw_if(
+                ! $userId || ! $this->hasUserPlacedOrder((int) $userId),
+                new BusinessException('该优惠券仅限老客户使用')
+            );
+        }
+
+        // 前置持有条件：用户名下须持有任一指定产品的运行中服务
+        $requiresProductIds = $this->normalizeProductIds((array) ($coupon->requires_product_ids ?? []));
+        if ($requiresProductIds !== []) {
+            throw_if(
+                ! $userId || ! $this->userHoldsAnyProduct((int) $userId, $requiresProductIds),
+                new BusinessException('需持有指定产品后才能使用该优惠券')
+            );
+        }
+
+        // 与会员折扣互斥（is_discount=0 且本单已享受会员折扣减免 → 券不应用，对齐 ZJMF is_discount=0）
+        if ($memberDiscountApplied === true && ! (bool) ($coupon->is_discount ?? true)) {
+            throw new BusinessException('该优惠券不可与会员折扣同时使用，请二选一');
+        }
 
         $normalizedProductIds = $this->normalizeProductIds((array) ($coupon->product_ids ?? []));
         if ($normalizedProductIds !== []) {
@@ -1635,6 +1690,24 @@ class CouponService
         throw_if((int) $coupon->status !== CouponStatus::ACTIVE, new BusinessException('优惠券已停用'));
         throw_if($coupon->starts_at && $coupon->starts_at->gt($now), new BusinessException('优惠券尚未开始领取'));
         throw_if($coupon->expires_at && $coupon->expires_at->lt($now), new BusinessException('优惠券已过期'));
+
+        // 仅老客：需已有成交订单（与使用侧同口径，防领了用不了）
+        if ((bool) $coupon->only_old_client) {
+            throw_if(
+                ! $this->hasUserPlacedOrder($userId),
+                new BusinessException('该优惠券仅限老客户领取')
+            );
+        }
+
+        // 前置持有条件：与使用侧同口径
+        $requiresProductIds = $this->normalizeProductIds((array) ($coupon->requires_product_ids ?? []));
+        if ($requiresProductIds !== []) {
+            throw_if(
+                ! $this->userHoldsAnyProduct($userId, $requiresProductIds),
+                new BusinessException('需持有指定产品后才能领取该优惠券')
+            );
+        }
+
         throw_if(
             UserCoupon::query()->where('coupon_id', $coupon->id)->where('user_id', $userId)->exists(),
             new BusinessException('你已经领取过这张优惠券')
@@ -1653,6 +1726,11 @@ class CouponService
         if ($userIds === []) {
             throw new BusinessException('私有优惠券必须选择至少一个用户');
         }
+
+        // 锁券模板行：与 claimPublicCoupon 的锁对象对齐（claim 锁同一行），串行化
+        // 「管理端定向发放」与「用户广场领取」的 total_usage_limit 计数，消除两事务
+        // 分别锁不同行导致的快照计数超发窗口。
+        Coupon::query()->whereKey($coupon->id)->lockForUpdate()->firstOrFail();
 
         $existing = UserCoupon::query()
             ->where('coupon_id', $coupon->id)
@@ -2017,6 +2095,30 @@ class CouponService
             ? (bool) $coupon->first_order_only
             : (bool) ($payload['first_order_only'] ?? false);
 
+        $onlyOldClient = $isUpdate && ! array_key_exists('only_old_client', $payload)
+            ? (bool) $coupon->only_old_client
+            : (bool) ($payload['only_old_client'] ?? false);
+
+        // is_discount 缺省=可叠加（与历史数据/现状口径一致）；显式提交 false 才互斥
+        $isDiscount = $isUpdate && ! array_key_exists('is_discount', $payload)
+            ? (bool) ($coupon->is_discount ?? true)
+            : (bool) ($payload['is_discount'] ?? true);
+
+        // 首单券 × 仅续费 是静默死配置：首单资格要求用户无任何成交订单，而续费必然
+        // 发生在成交之后，组合后该券在续费场景永远不可用。创建/更新时直接拦截。
+        if ($firstOrderOnly && $discountScope === 'renew') {
+            throw new BusinessException('首单券不支持「仅续费」优惠阶段：续费必然发生在首单之后，二者组合的券永远无法使用');
+        }
+
+        // 仅新客首单 × 仅老客 是语义互斥：两者用户集合不相交
+        if ($firstOrderOnly && $onlyOldClient) {
+            throw new BusinessException('「仅首单」与「仅老客」互斥：首单券面向从未成交的用户，仅老客面向已有成交订单的用户');
+        }
+
+        $requiresProductIds = $isUpdate && ! array_key_exists('requires_product_ids', $payload)
+            ? $this->normalizeProductIds((array) ($coupon->requires_product_ids ?? []))
+            : $this->normalizeProductIds((array) ($payload['requires_product_ids'] ?? []));
+
         $totalUsageLimit = $isUpdate && ! array_key_exists('total_usage_limit', $payload)
             ? $coupon->total_usage_limit
             : $this->normalizePositiveInteger($payload['total_usage_limit'] ?? null);
@@ -2053,7 +2155,10 @@ class CouponService
             'max_discount_amount' => $maxDiscountAmount,
             'billing_cycles' => $billingCycles,
             'product_ids' => $productIds,
+            'requires_product_ids' => $requiresProductIds,
             'first_order_only' => $firstOrderOnly,
+            'only_old_client' => $onlyOldClient,
+            'is_discount' => $isDiscount,
             'total_usage_limit' => $totalUsageLimit,
             'per_user_limit' => $perUserLimit,
             'status' => $status,
@@ -2070,9 +2175,28 @@ class CouponService
 
     private function calculateDiscountAmount(Coupon $coupon, float $amount): float
     {
+        return $this->computeDiscountFromSnapshot([
+            'discount_type' => $coupon->discount_type,
+            'discount_value' => $coupon->discount_value,
+            'max_discount_amount' => $coupon->max_discount_amount,
+        ], $amount);
+    }
+
+    /**
+     * 按优惠参数快照计算减免额（券模板与服务端持续优惠绑定的单一折算真源）。
+     *
+     * - fixed：立减 discount_value；
+     * - percentage：discount_value 为折扣率（90=9 折），减免 = amount×(100-率)/100；
+     * - override：discount_value 即用户实付（覆盖价），减免 = amount-覆盖价；
+     * - 统一封顶 min(减免, max_discount_amount[若配置], amount-0.01)——最低应收 0.01，不产生 0 元账单。
+     *
+     * @param  array<string, mixed>  $snapshot  discount_type/discount_value/max_discount_amount
+     */
+    public function computeDiscountFromSnapshot(array $snapshot, float $amount): float
+    {
         $discountAmount = 0.0;
-        $discountType = trim((string) $coupon->discount_type);
-        $discountValue = (float) ($coupon->discount_value ?? 0);
+        $discountType = trim((string) ($snapshot['discount_type'] ?? ''));
+        $discountValue = (float) ($snapshot['discount_value'] ?? 0);
 
         if ($discountType === 'fixed') {
             $discountAmount = $discountValue;
@@ -2093,8 +2217,9 @@ class CouponService
             return Money::round(min($discountAmount, max($amount - 0.01, 0)));
         }
 
-        if ($coupon->max_discount_amount !== null && $coupon->max_discount_amount > 0) {
-            $discountAmount = min($discountAmount, (float) $coupon->max_discount_amount);
+        $maxDiscountAmount = $snapshot['max_discount_amount'] ?? null;
+        if ($maxDiscountAmount !== null && (float) $maxDiscountAmount > 0) {
+            $discountAmount = min($discountAmount, (float) $maxDiscountAmount);
         }
 
         return Money::round(min($discountAmount, max($amount - 0.01, 0)));
@@ -2110,6 +2235,24 @@ class CouponService
             ->where('user_id', $userId)
             ->whereIn('type', [InvoiceType::NEW_PURCHASE, 'normal', InvoiceType::RENEW])
             ->whereIn('status', self::USED_INVOICE_STATUSES)
+            ->exists();
+    }
+
+    /**
+     * 用户名下是否持有任一指定产品的运行中服务（前置持有条件，P2-4）。
+     *
+     * @param  array<int, int>  $productIds
+     */
+    private function userHoldsAnyProduct(int $userId, array $productIds): bool
+    {
+        if ($userId <= 0 || $productIds === []) {
+            return false;
+        }
+
+        return Service::query()
+            ->where('user_id', $userId)
+            ->whereIn('product_id', $productIds)
+            ->where('status', ServiceStatus::ACTIVE)
             ->exists();
     }
 
@@ -2130,7 +2273,7 @@ class CouponService
     }
 
     /**
-     * 该持有券是否已有已支付账单（核销已完成，或已完成但异步同步尚未回写 user_coupon）。
+     * 该持有券是否已有已支付/已退款账单（核销已完成、退款后已消耗，或状态已变但异步同步尚未回写 user_coupon）。
      * 与 userCouponHasPendingInvoice 成对，供占用拦截与展示层使用同一判定。
      */
     private function userCouponHasUsedInvoice(int $userCouponId, int $userId): bool

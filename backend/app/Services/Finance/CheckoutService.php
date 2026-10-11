@@ -288,7 +288,8 @@ class CheckoutService
                     $couponBaseAmount = max((float) ($memberDiscount['final_amount'] ?? $amount), 0);
 
                     $couponPayload = $this->couponService->reserveOwnedCouponForInvoice(
-                        $userCouponId, $userId, $product, $billingCycle, $couponBaseAmount, InvoiceType::NEW_PURCHASE
+                        $userCouponId, $userId, $product, $billingCycle, $couponBaseAmount, InvoiceType::NEW_PURCHASE,
+                        $memberDiscountAmount > 0
                     );
                     $discountAmount = (float) ($couponPayload['discount_amount'] ?? 0);
                     $payableAmount = max($couponBaseAmount - $discountAmount, 0);

@@ -20,6 +20,8 @@ return [
         'key' => 'demo_servers',
         'name' => 'Demo 上游服务',
         'version' => '1.0.0',
+        // 显式 demo 标记：管理端按此识别示例插件（demo_ 前缀启发式仅作兼容兜底）。
+        'demo' => true,
         'entry' => DemoServersPlugin::class,
         'capabilities' => [
             ProvidesConsoleAccess::class,

@@ -14,26 +14,17 @@ return [
         'name' => 'Demo Style 功能扩展',
         'version' => '1.0.0',
         'entry' => DemoStylePlugin::class,
+        // 显式 demo 标记：管理端列表/安装/升级按此识别示例插件（demo_ 前缀启发式仅作兼容兜底）。
+        'demo' => true,
         'capabilities' => [
-            'addon.admin_page',
-            'addon.client_page',
-            'addon.public_assets',
             'addon.schedule_hook',
             'addon.scheduled_task',
         ],
         'extra' => [
-            'admin_entry' => [
-                'title' => '样式演示后台页',
-                'action' => 'addon.admin.index',
-            ],
-            'client_entry' => [
-                'title' => '样式演示用户页',
-                'action' => 'addon.client.index',
-            ],
-            'public_entry' => [
-                'title' => '样式演示公开资源',
-                'action' => 'addon.public.assets',
-            ],
+            // 2026-10-11 收口：addons 域当前仅支持调度扩展（schedule_hooks/scheduled_tasks）。
+            // 原声明的 admin_entry/client_entry/public_entry（addon.admin.index 等）自始没有
+            // 平台消费方（无路由、无渲染），属死扩展点，已删除；受控 addon action 通道
+            // 如未来立项，须带权限码、白名单与审计后再恢复。
             'schedule_hooks' => [
                 'addons.demo_style.refresh' => [
                     DemoStyleHook::class,

@@ -106,6 +106,21 @@ class IntegrationPluginService
         return $this->detail($plugin);
     }
 
+    /**
+     * 显式升级：把库内登记（version/schema/manifest_hash）同步到磁盘上的新版插件。
+     * 返回结构化 schema diff，供管理端在确认升级时展示变更内容。
+     *
+     * @return array{plugin: IntegrationPlugin, diff: array<string, array<int, string>>, previous_version: string}
+     */
+    public function upgrade(IntegrationPlugin $plugin): array
+    {
+        if ($this->isDemoManifest($this->scanner->requireManifest((string) $plugin->domain, (string) $plugin->slug))) {
+            throw new BusinessException('示例插件仅供开发调试，不支持在管理端升级', 42200);
+        }
+
+        return $this->installer->upgrade($plugin);
+    }
+
     public function detail(IntegrationPlugin $plugin): array
     {
         $currentPlugin = $plugin->fresh('config') ?? $plugin;
@@ -360,6 +375,7 @@ class IntegrationPluginService
             'binding_counts' => $referenceCounts,
             'business_reference_count' => array_sum($referenceCounts),
             'latest_runtime_log' => $this->resolvedLatestRuntimeLog($plugin, $latestRuntimeLogsByPluginId),
+            'has_update' => $plugin instanceof IntegrationPlugin && $this->hasUpdate($plugin),
             'manifest_missing' => false,
         ];
     }
@@ -400,12 +416,34 @@ class IntegrationPluginService
             'binding_counts' => $referenceCounts,
             'business_reference_count' => array_sum($referenceCounts),
             'latest_runtime_log' => $this->resolvedLatestRuntimeLog($plugin, $latestRuntimeLogsByPluginId),
+            'has_update' => false,
             'manifest_missing' => true,
         ];
     }
 
+    /**
+     * 磁盘插件文件与安装时记录的清单哈希是否不一致（有可用更新/文件被改动）。
+     * 只读探测，不判断版本号大小——哈希不一致即提示，由管理员结合版本号决定是否升级。
+     */
+    private function hasUpdate(IntegrationPlugin $plugin): bool
+    {
+        $recorded = trim((string) ($plugin->manifest_hash ?? ''));
+        if ($recorded === '') {
+            return false;
+        }
+
+        $current = $this->scanner->manifestContentHash((string) $plugin->domain, (string) $plugin->slug);
+
+        return $current !== null && ! hash_equals($recorded, $current);
+    }
+
     private function isDemoManifest(PluginManifest $manifest): bool
     {
+        // 优先采用清单显式声明（info.demo），demo_ 前缀启发式仅作未改造插件的兼容兜底。
+        if (($manifest->extra['demo'] ?? false) === true) {
+            return true;
+        }
+
         foreach ([$manifest->slug, $manifest->key] as $identifier) {
             $normalized = strtolower(trim($identifier));
             if ($normalized === 'demo' || str_starts_with($normalized, 'demo_') || str_starts_with($normalized, 'demo-')) {

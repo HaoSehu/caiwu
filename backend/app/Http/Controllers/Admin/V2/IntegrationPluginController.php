@@ -14,6 +14,7 @@ use App\Http\Requests\Admin\V2\IntegrationPlugin\ScanIntegrationPluginsRequest;
 use App\Http\Requests\Admin\V2\IntegrationPlugin\ShowIntegrationPluginRequest;
 use App\Http\Requests\Admin\V2\IntegrationPlugin\UpdateIntegrationPluginConfigRequest;
 use App\Http\Requests\Admin\V2\IntegrationPlugin\UpdateIntegrationPluginStatusRequest;
+use App\Http\Requests\Admin\V2\IntegrationPlugin\UpgradeIntegrationPluginRequest;
 use App\Http\Resources\Admin\V2\AdminActionResultResource;
 use App\Models\AdminUser;
 use App\Models\IntegrationPlugin;
@@ -83,6 +84,21 @@ class IntegrationPluginController extends Controller
         return $this->success(
             $this->queryService->installPlugin($request->domain(), $request->slug()),
             '插件安装成功'
+        );
+    }
+
+    public function upgrade(UpgradeIntegrationPluginRequest $request, IntegrationPlugin $plugin)
+    {
+        $result = $this->queryService->upgradePlugin($plugin);
+
+        $diff = is_array($result['upgrade_diff'] ?? null) ? $result['upgrade_diff'] : [];
+        $changeCount = count($diff['added'] ?? []) + count($diff['removed'] ?? []) + count($diff['changed'] ?? []);
+
+        return $this->success(
+            $result,
+            $changeCount > 0
+                ? "插件已升级至 {$result['plugin']['version']}，配置结构变化 {$changeCount} 处"
+                : '插件已同步，配置结构无变化'
         );
     }
 

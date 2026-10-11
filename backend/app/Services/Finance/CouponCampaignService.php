@@ -370,7 +370,10 @@ class CouponCampaignService
             'billing_cycle_text' => $this->formatBillingCycleText($rawBillingCycles),
             'product_ids' => $productIds,
             'product_scope_text' => $this->formatProductScopeText($productIds, $productNameMap),
+            'requires_product_ids' => $this->normalizeProductIds((array) ($campaign->requires_product_ids ?? [])),
             'first_order_only' => (bool) $campaign->first_order_only,
+            'only_old_client' => (bool) ($campaign->only_old_client ?? false),
+            'is_discount' => (bool) ($campaign->is_discount ?? true),
             'per_user_limit' => $campaign->per_user_limit ? (int) $campaign->per_user_limit : null,
             'status' => (int) ($campaign->status ?? CouponStatus::ACTIVE),
             'status_label' => CouponStatus::$labels[(int) ($campaign->status ?? CouponStatus::ACTIVE)] ?? '未知',
@@ -423,6 +426,18 @@ class CouponCampaignService
         throw_if($discountValue <= 0, new BusinessException('优惠值必须大于 0'));
         throw_if($issueQuantity <= 0, new BusinessException('发放数量必须大于 0'));
 
+        // 首单券 × 仅续费 是静默死配置（与券模板同口径）：活动生成的券同样会被
+        // CouponService::normalizeAdminCouponPayload 拦截，提前在活动配置侧报错，
+        // 避免到定时发放时才失败（发放失败会导致当日批次丢失）。
+        if ((bool) ($payload['first_order_only'] ?? false) && $discountScope === 'renew') {
+            throw new BusinessException('首单券不支持「仅续费」优惠阶段：续费必然发生在首单之后，二者组合的券永远无法使用');
+        }
+
+        // 仅新客首单 × 仅老客 语义互斥（与券模板同口径）
+        if ((bool) ($payload['first_order_only'] ?? false) && (bool) ($payload['only_old_client'] ?? false)) {
+            throw new BusinessException('「仅首单」与「仅老客」互斥：首单券面向从未成交的用户，仅老客面向已有成交订单的用户');
+        }
+
         if ($discountType === 'percentage') {
             throw_if($discountValue > 100, new BusinessException('折扣百分比不能大于 100'));
         }
@@ -453,7 +468,10 @@ class CouponCampaignService
             'max_discount_amount' => $maxDiscountAmount,
             'billing_cycles' => $this->normalizeBillingCycles((array) ($payload['billing_cycles'] ?? [])),
             'product_ids' => $this->normalizeProductIds((array) ($payload['product_ids'] ?? [])),
+            'requires_product_ids' => $this->normalizeProductIds((array) ($payload['requires_product_ids'] ?? [])),
             'first_order_only' => (bool) ($payload['first_order_only'] ?? false),
+            'only_old_client' => (bool) ($payload['only_old_client'] ?? false),
+            'is_discount' => (bool) ($payload['is_discount'] ?? true),
             'per_user_limit' => $this->normalizePositiveInteger($payload['per_user_limit'] ?? null),
             'status' => (int) ($payload['status'] ?? ($campaign?->status ?? CouponStatus::ACTIVE)),
             'sort_order' => max((int) ($payload['sort_order'] ?? 0), 0),
@@ -483,7 +501,10 @@ class CouponCampaignService
             'max_discount_amount' => $campaign->max_discount_amount !== null ? (float) $campaign->max_discount_amount : null,
             'billing_cycles' => $this->normalizeBillingCycles((array) ($campaign->billing_cycles ?? [])),
             'product_ids' => $this->normalizeProductIds((array) ($campaign->product_ids ?? [])),
+            'requires_product_ids' => $this->normalizeProductIds((array) ($campaign->requires_product_ids ?? [])),
             'first_order_only' => (bool) ($campaign->first_order_only ?? false),
+            'only_old_client' => (bool) ($campaign->only_old_client ?? false),
+            'is_discount' => (bool) ($campaign->is_discount ?? true),
             'total_usage_limit' => (int) ($campaign->issue_quantity ?? 0),
             'per_user_limit' => $campaign->per_user_limit ? (int) $campaign->per_user_limit : null,
             'status' => CouponStatus::ACTIVE,

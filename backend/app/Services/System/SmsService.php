@@ -4,6 +4,7 @@ namespace App\Services\System;
 
 use App\Models\MessageLog;
 use App\Models\Setting;
+use App\Models\SmsProviderTemplate;
 use App\Services\Integrations\Plugins\IntegrationDriverBindingResolver;
 use App\Services\Integrations\Plugins\PluginConfigRepository;
 use App\Services\Sms\Contracts\ProvidesVerifyCodeTemplate;
@@ -11,6 +12,7 @@ use App\Services\Sms\Contracts\SmsDriver;
 use App\Services\Sms\Data\SmsMessageRequest;
 use App\Services\Sms\Data\SmsSendRequest;
 use App\Services\Sms\SmsDriverManager;
+use App\Services\Sms\SmsTemplateResolver;
 use App\Services\System\Concerns\InteractsWithMessageLogs;
 use App\Support\SmsTemplateCatalog;
 use Illuminate\Support\Facades\Log;
@@ -26,6 +28,7 @@ class SmsService
         private ?IntegrationDriverBindingResolver $driverBindingResolver = null,
         private ?PluginConfigRepository $pluginConfigRepository = null,
         private ?NotificationTemplateService $notificationTemplateService = null,
+        private ?SmsTemplateResolver $templateResolver = null,
     ) {
         $this->driverManager = $driverManager;
     }
@@ -151,9 +154,13 @@ class SmsService
             throw new \RuntimeException('短信模板内容为空');
         }
 
-        $providerTemplateId = $this->resolveProviderTemplateId($templateCode, $template, $options);
+        // 解析顺序（短信模板管理机制 2026-10-11）：driver 必须先于映射解析——
+        // 映射按 plugin_key=driverKey 过滤；driver 未配置时跳过映射层走旧回落链。
         $driver = $this->resolveDriverForLog();
         $provider = $driver?->key() ?? 'unconfigured';
+        $mapping = $this->resolveProviderMapping($templateCode, $driver);
+        $providerTemplateId = $this->resolveProviderTemplateId($templateCode, $template, $options, $mapping);
+        $sendVariables = $this->validatedMappingVariables($templateCode, $mapping, $renderParams);
         $logParams = $this->buildLogParams($renderParams, $providerTemplateId);
         $logContent = $this->renderTemplateText($contentTemplate, $logParams);
         $logContext = $this->createSmsLog(
@@ -174,6 +181,7 @@ class SmsService
             $result = $driver->sendMessage(new SmsMessageRequest($phone, $providerTemplateId, $content, [
                 'business_template_code' => $templateCode,
                 'provider_template_id' => $providerTemplateId,
+                'template_variables' => $sendVariables,
             ]));
 
             $this->updateMessageLog($logContext, [
@@ -215,11 +223,22 @@ class SmsService
      * @param  array<string, mixed>  $template
      * @param  array<string, mixed>  $options
      */
-    private function resolveProviderTemplateId(string $templateCode, array $template, array $options): string
-    {
+    private function resolveProviderTemplateId(
+        string $templateCode,
+        array $template,
+        array $options,
+        ?SmsProviderTemplate $mapping = null,
+    ): string {
         $explicit = trim((string) ($options['provider_template_id'] ?? ''));
         if ($explicit !== '') {
             return $explicit;
+        }
+
+        // 映射层（短信模板管理机制 2026-10-11）：同步所得的 approved 映射比
+        // 人工旧列更新鲜，优先级插在显式指定之后、旧列之前（决策日志已记）。
+        $mapped = trim((string) ($mapping->provider_template_id ?? ''));
+        if ($mapped !== '') {
+            return $mapped;
         }
 
         $stored = trim((string) ($template['provider_template_id'] ?? ''));
@@ -233,6 +252,64 @@ class SmsService
         }
 
         return $templateCode;
+    }
+
+    /**
+     * 业务码在当前绑定 driver 下的 approved 运营商模板映射行。
+     */
+    private function resolveProviderMapping(string $templateCode, ?SmsDriver $driver): ?SmsProviderTemplate
+    {
+        if ($driver === null) {
+            return null;
+        }
+
+        return $this->templateResolver()->resolve($templateCode, $driver->key());
+    }
+
+    /**
+     * 命中映射时，用运营商模板声明的变量与渲染参数求交集校验。
+     *
+     * 声明变量缺失 → fail-fast：避免带着残缺 TemplateParam 打运营商换回
+     * isv.TEMPLATE_MISSING_PARAMETERS 之类含糊错误。多出的渲染参数不阻断，
+     * 由插件侧按声明变量过滤后构造 TemplateParam。
+     *
+     * @param  array<string, string>  $renderParams
+     * @return array<string, string> 声明变量 → 渲染值（传给插件构造 TemplateParam）
+     */
+    private function validatedMappingVariables(string $templateCode, ?SmsProviderTemplate $mapping, array $renderParams): array
+    {
+        if ($mapping === null) {
+            return [];
+        }
+
+        $declared = array_values(array_filter(
+            array_map('strval', (array) ($mapping->variables_json ?? [])),
+            static fn (string $name): bool => $name !== ''
+        ));
+
+        if ($declared === []) {
+            return [];
+        }
+
+        $missing = array_values(array_diff($declared, array_keys($renderParams)));
+        if ($missing !== []) {
+            throw new \RuntimeException(
+                '短信模板 '.$templateCode.' 挂接的运营商模板缺少变量：'.implode('、', $missing)
+                .'，请检查模板文案或重新挂接'
+            );
+        }
+
+        $variables = [];
+        foreach ($declared as $name) {
+            $variables[$name] = (string) $renderParams[$name];
+        }
+
+        return $variables;
+    }
+
+    private function templateResolver(): SmsTemplateResolver
+    {
+        return $this->templateResolver ??= app(SmsTemplateResolver::class);
     }
 
     private function notificationTemplates(): NotificationTemplateService

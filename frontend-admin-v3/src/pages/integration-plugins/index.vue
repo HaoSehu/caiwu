@@ -29,6 +29,7 @@
               >
                 {{ pluginStatusText(plugin) }}
               </t-tag>
+              <t-tag v-if="plugin.has_update" theme="warning" variant="light">有可用更新</t-tag>
             </div>
             <p>{{ plugin.slug }} / {{ plugin.key }}</p>
             <div class="plugin-meta">
@@ -54,6 +55,15 @@
           </t-button>
           <template v-else>
             <t-button variant="outline" @click="openConfig(plugin)">{{ canManagePlugins ? '管理' : '查看' }}</t-button>
+            <t-button
+              v-if="canManagePlugins && plugin.has_update"
+              theme="primary"
+              variant="outline"
+              :loading="actionLoading === actionKey(plugin, 'upgrade')"
+              @click="upgradePlugin(plugin)"
+            >
+              同步升级
+            </t-button>
             <t-button
               v-if="plugin.is_enabled && canManagePlugins"
               theme="warning"
@@ -377,6 +387,7 @@ import type {
   IntegrationPluginConfigSchema,
   IntegrationPluginDomain,
   IntegrationPluginRecord,
+  IntegrationPluginUpgradeResponse,
 } from '@/api/admin/plugins';
 import { pluginsApi } from '@/api/admin/plugins';
 import SecretInput from '@/components/secret-input/index.vue';
@@ -518,6 +529,43 @@ async function installPlugin(plugin: IntegrationPluginRecord) {
     await loadPlugins();
     if (installed.id) openConfig(installed);
   });
+}
+
+async function upgradePlugin(plugin: IntegrationPluginRecord) {
+  if (!canManagePlugins.value) return;
+  if (!plugin.id) return;
+
+  // 升级只同步版本/配置结构登记，不改已保存的配置值；结构变化在结果消息中反馈。
+  const dialog = DialogPlugin.confirm({
+    header: '同步升级插件',
+    body: `把插件「${plugin.name}」的版本与配置结构登记同步为磁盘上的最新内容？已保存的配置值不会被改动。`,
+    confirmBtn: { content: '同步升级', theme: 'primary' },
+    async onConfirm() {
+      dialog.destroy();
+      await runAction(plugin, 'upgrade', async () => {
+        const result = await pluginsApi.upgrade(plugin.id as string | number);
+        MessagePlugin.success(upgradeResultMessage(plugin, result));
+        await loadPlugins();
+        if (configVisible.value && String(currentPlugin.value?.id ?? '') === String(plugin.id)) {
+          await openConfig(plugin);
+        }
+      });
+    },
+  });
+}
+
+function upgradeResultMessage(plugin: IntegrationPluginRecord, result: IntegrationPluginUpgradeResponse): string {
+  const diff = result.upgrade_diff || {};
+  const added = (diff.added || []).length;
+  const removed = (diff.removed || []).length;
+  const changed = (diff.changed || []).length;
+  const version = result.plugin?.version || plugin.version || '?';
+
+  if (added + removed + changed === 0) {
+    return `已同步至 v${version}，配置结构无变化`;
+  }
+
+  return `已同步至 v${version}，配置结构变化 ${added + removed + changed} 处（新增 ${added}、移除 ${removed}、调整 ${changed}）`;
 }
 
 async function enablePlugin(plugin: IntegrationPluginRecord) {

@@ -1384,53 +1384,46 @@
     <MobileSheet
       v-model="mobileCouponDrawer"
       size="42%"
-      title="优惠券"
+      title="选择优惠券"
       confirm-text="关闭"
       @confirm="mobileCouponDrawer = false"
     >
       <div class="mobile-coupon-sheet-body">
-        <div class="coupon-panel">
-          <div class="coupon-panel-head">
-            <span class="coupon-panel-title">选择优惠券</span>
-            <button
-              v-if="appliedCoupon"
-              type="button"
-              class="coupon-clear-btn"
-              @click="clearCoupon"
-            >
-              移除
-            </button>
-          </div>
-          <div class="coupon-panel-form">
-            <el-select
-              :model-value="selectedCouponId || undefined"
-              clearable
-              placeholder="请选择优惠券"
-              @change="handleCouponChange"
-            >
-              <el-option
-                v-for="item in availableCoupons"
-                :key="item.id"
-                :label="`${item.name} · ${item.discount_label}`"
-                :value="item.id"
-              />
-            </el-select>
-          </div>
-          <div v-if="appliedCoupon" class="coupon-panel-tip">
-            {{ appliedCoupon.name }}，{{
+        <div v-if="appliedCoupon" class="mobile-coupon-applied">
+          <span class="mobile-coupon-applied__text">{{
+            appliedCoupon.name }}，{{
               appliedCoupon.discount_label
-            }}，本次已减免 ¥{{ appliedCoupon.discount_amount }}
-          </div>
-          <div
-            v-else-if="!availableCoupons.length"
-            class="coupon-panel-tip coupon-panel-tip--muted"
+            }}，本次已减免 ¥{{ appliedCoupon.discount_amount }}</span>
+          <button
+            type="button"
+            class="coupon-clear-btn"
+            @click="removeMobileCoupon"
           >
-            {{
-              selectedProduct
-                ? "当前暂无可用优惠券，登录后如有优惠券会自动展示在这里。"
-                : "请选择商品后查看可用优惠券。"
-            }}
-          </div>
+            移除
+          </button>
+        </div>
+        <button
+          v-for="item in availableCoupons"
+          :key="item.id"
+          type="button"
+          class="mobile-coupon-option"
+          :class="{ 'is-active': selectedCouponId === item.id }"
+          :aria-pressed="selectedCouponId === item.id"
+          @click="applyMobileCoupon(item.id)"
+        >
+          <span class="mobile-coupon-option__label">{{
+            item.name }} · {{ item.discount_label }}</span>
+          <span class="mobile-coupon-option__mark" aria-hidden="true">✓</span>
+        </button>
+        <div
+          v-if="!availableCoupons.length"
+          class="coupon-panel-tip coupon-panel-tip--muted"
+        >
+          {{
+            selectedProduct
+              ? "当前暂无可用优惠券，登录后如有优惠券会自动展示在这里。"
+              : "请选择商品后查看可用优惠券。"
+          }}
         </div>
       </div>
     </MobileSheet>
@@ -1842,6 +1835,18 @@ const allocationFooterAnchored = ref(false);
 let allocationFooterObserver = null;
 let allocationFooterResizeObserver = null;
 
+// 移动端优惠券改用底部抽屉内的选项卡片（替代 el-select 桌面 popper），
+// 与地区/CPU/内存等选择器保持同一交互范式；点选即应用并收起抽屉
+function applyMobileCoupon(id) {
+  handleCouponChange(id);
+  mobileCouponDrawer.value = false;
+}
+
+function removeMobileCoupon() {
+  clearCoupon();
+  mobileCouponDrawer.value = false;
+}
+
 // 会员折扣 + 优惠券合计让利，用于浮动合计条与费用明细的折扣文案
 const totalDiscountAmount = computed(() => {
   const member = memberDiscountAmount.value;
@@ -1885,6 +1890,12 @@ function setupAllocationFooterObserver() {
     allocationFooterResizeObserver = new ResizeObserver(([entry]) => {
       const height = Math.ceil(entry?.contentRect?.height || 0);
       if (height > 0) {
+        // 变量写到 .shop-wrap（allocation-footer 的父级）：fixed 结算栏高度变化时，
+        // 同级 .shop-wrap 的 padding-bottom 避让与 .shop-main 内部留白都能联动读取
+        allocationFooterEl.value?.parentElement?.style.setProperty(
+          "--allocation-footer-height",
+          `${height}px`,
+        );
         allocationFooterEl.value?.style.setProperty(
           "--allocation-footer-height",
           `${height}px`,

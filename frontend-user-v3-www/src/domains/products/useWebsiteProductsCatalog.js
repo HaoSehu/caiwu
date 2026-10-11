@@ -12,7 +12,8 @@ import {
   readWebsiteProductRouteParams,
 } from "@/utils/productRoute";
 
-const MOBILE_BREAKPOINT = 960;
+// 992 对齐控制台 useDeviceLayout 的 tablet 上限，保证 960~992 区间两端形态一致
+const MOBILE_BREAKPOINT = 992;
 
 // 进行中的目录请求去重（site.js 的 catalogCache 负责结果缓存）
 const catalogPendingMap = new Map();

@@ -20,6 +20,8 @@ use Tests\TestCase;
  *
  * P0 修复回归：reserve 除已支付账单兜底外，还必须拦截同券待支付（UNPAID）占用，
  * 且释放回落 OWNED 时不得清掉其他待支付账单刚写入的预留。
+ * 退款口径（2026-10-11）：全额退款（REFUNDED）视为已消耗——券置 USED 不回落，
+ * 占用拦截与列表排除同口径；取消（CANCELLED）仍回落可复用。
  * 使用 DatabaseTransactions：所有写入在测试结束后回滚，不污染 idc_test 现有数据。
  */
 class CouponReserveGuardTest extends TestCase
@@ -155,6 +157,49 @@ class CouponReserveGuardTest extends TestCase
         return [$user, $userCoupon, $product];
     }
 
+    /**
+     * 全额退款落地（PAID -> REFUNDED）：券视为已消耗置 USED，不回落 OWNED。
+     * 防「购-付-退」循环薅券；取消（CANCELLED）路径仍回落可复用
+     * （见 TradeLifecycleEquivalenceTest::test_order_cancel_cascades_invoice_and_coupon）。
+     */
+    public function test_refunded_invoice_marks_coupon_used_instead_of_reverting(): void
+    {
+        [$user, $userCoupon, $product] = $this->fixture();
+
+        $invoice = $this->createInvoice($user, $userCoupon, $product, InvoiceStatus::REFUNDED);
+
+        app(CouponService::class)->syncInvoiceCouponUsage($invoice);
+
+        $userCoupon->refresh();
+        $this->assertSame(UserCouponStatus::USED, (int) $userCoupon->status);
+        $this->assertNotNull($userCoupon->used_at);
+        $this->assertNull($userCoupon->reserved_until);
+    }
+
+    /**
+     * 退款已落地但异步核销同步尚未完成（券仍 OWNED、预留已过期）：
+     * 占用拦截必须把已退款账单与已支付账单同口径拦截（USED_INVOICE_STATUSES 含 REFUNDED）。
+     */
+    public function test_reserve_rejects_coupon_that_already_has_refunded_invoice(): void
+    {
+        [$user, $userCoupon, $product] = $this->fixture();
+
+        $this->createInvoice($user, $userCoupon, $product, InvoiceStatus::REFUNDED);
+        $userCoupon->forceFill(['reserved_until' => now()->subMinutes(11)])->save();
+
+        $this->expectException(BusinessException::class);
+        $this->expectExceptionMessage('优惠券已使用');
+
+        app(CouponService::class)->reserveOwnedCouponForInvoice(
+            (int) $userCoupon->id,
+            (int) $user->id,
+            $product,
+            'monthly',
+            20.0,
+            'new'
+        );
+    }
+
     private function createInvoice(User $user, UserCoupon $userCoupon, Product $product, int $status): Invoice
     {
         return Invoice::query()->create([
@@ -165,10 +210,10 @@ class CouponReserveGuardTest extends TestCase
             'user_coupon_id' => (int) $userCoupon->id,
             'type' => 'new',
             'amount' => '15.00',
-            'paid_amount' => $status === InvoiceStatus::PAID ? '15.00' : '0.00',
+            'paid_amount' => in_array($status, [InvoiceStatus::PAID, InvoiceStatus::REFUNDED], true) ? '15.00' : '0.00',
             'billing_cycle' => 'monthly',
             'status' => $status,
-            'paid_at' => $status === InvoiceStatus::PAID ? now() : null,
+            'paid_at' => in_array($status, [InvoiceStatus::PAID, InvoiceStatus::REFUNDED], true) ? now() : null,
             'due_date' => now()->addDay(),
         ]);
     }

@@ -41,6 +41,9 @@
     "analyse": [
       "@php vendor/bin/phpstan analyse --memory-limit=1G"
     ],
+    "audit:plugins": [
+      "@php artisan plugins:audit-registrations"
+    ],
     "post-autoload-dump": [
       "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
       "@php artisan package:discover --ansi"

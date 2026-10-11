@@ -56,6 +56,7 @@ export interface IntegrationPluginRecord {
   business_reference_count?: number;
   delete_mode?: 'delete' | 'disable_archive' | 'not_installed' | string;
   manifest_missing?: boolean;
+  has_update?: boolean;
   latest_runtime_log?: IntegrationPluginRuntimeLog | null;
 }
 
@@ -94,6 +95,18 @@ export interface IntegrationPluginActionResult {
   task_id?: string;
   message?: string;
   detail?: Record<string, unknown>;
+}
+
+export interface IntegrationPluginUpgradeDiff {
+  added?: string[];
+  removed?: string[];
+  changed?: string[];
+}
+
+export interface IntegrationPluginUpgradeResponse {
+  plugin?: V2IntegrationPluginRecord;
+  previous_version?: string;
+  upgrade_diff?: IntegrationPluginUpgradeDiff;
 }
 
 export interface IntegrationPluginListResponse {
@@ -160,6 +173,10 @@ export const pluginsApi = {
 
     return normalizeV2PluginRecord(detail.plugin);
   },
+  upgrade: (id: number | string) =>
+    request.post<IntegrationPluginUpgradeResponse>({
+      url: `/v2/admin/integration-plugins/${id}/upgrade`,
+    }),
   detail: async (id: number | string) => {
     const [detail, schema] = await Promise.all([
       request.get<V2IntegrationPluginDetailResponse>({ url: `/v2/admin/integration-plugins/${id}` }),

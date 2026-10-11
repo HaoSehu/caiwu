@@ -125,6 +125,15 @@ export const loginAlertApi = {
 
 export const schedulesApi = {
   overview: () => request.get<ScheduleOverview>({ url: '/v2/admin/schedules/overview' }),
+  queueJobs: (params: { queue: 'pending' | 'failed'; page?: number; page_size?: number }) =>
+    request.get<Record<string, unknown>>({ url: '/v2/admin/schedule-queue-jobs', params }),
+  deleteQueueJob: (queue: 'pending' | 'failed', jobId: number | string) =>
+    request.delete<Record<string, unknown>>({ url: `/v2/admin/schedule-queue-jobs/${queue}/${jobId}` }),
+  clearQueueJobs: (queue: 'pending' | 'failed', confirmText: string) =>
+    request.delete<Record<string, unknown>>({
+      url: `/v2/admin/schedule-queue-jobs/${queue}`,
+      data: { confirm_text: confirmText },
+    }),
   trigger: (data: { task: string }) =>
     request.post<Record<string, unknown>>({ url: '/v2/admin/schedule-triggers', data }).then((response) => {
       const detail = (response as { detail?: { task?: Record<string, unknown> } }).detail;
