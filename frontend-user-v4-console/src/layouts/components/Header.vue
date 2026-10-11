@@ -15,7 +15,8 @@
             :aria-label="sidebarButtonTitle"
             @click="changeCollapsed"
           >
-            <t-icon class="collapsed-icon" name="view-list" />
+            <!-- 移动端用标准汉堡图标（开关抽屉），桌面保留 view-list（折叠侧栏） -->
+            <t-icon class="collapsed-icon" :name="isMobile ? 'menu' : 'view-list'" />
           </t-button>
           <span class="header-page-brand">{{ siteBranding.siteName }}</span>
         </div>
@@ -28,8 +29,9 @@
           <t-popup
             v-model:visible="inboxVisible"
             trigger="click"
-            placement="bottom-right"
+            :placement="isMobile ? 'bottom' : 'bottom-right'"
             :overlay-inner-style="{ padding: 0 }"
+            overlay-class-name="inbox-popup"
             destroy-on-close
             @visible-change="handleInboxVisible"
           >
@@ -371,7 +373,8 @@ onMounted(() => {
       right: 0;
       z-index: 10;
       width: auto;
-      transition: all 0.3s;
+      // 仅过渡位移相关属性，避免 all 带来的全量合成开销与误过渡
+      transition: left 0.3s cubic-bezier(0.38, 0, 0.24, 1);
 
       &-compact {
         left: 64px;
@@ -641,6 +644,42 @@ onMounted(() => {
   .t-dropdown__item-text {
     display: flex;
     align-items: center;
+  }
+}
+
+// 移动端站内信：确定性贴底定位（近全宽底部面板），替代 340px 迷你弹层的双重滚动。
+// overlayClassName 挂在 popper 外层 .t-popup 元素上（源码 popup.mjs：class 合并
+// [prefixCls, overlayClassName]），定位由 @popperjs/core 写内联 transform——
+// 此处用 !important 固化为 fixed 贴底，不再依赖 popper 位移计算，机型间行为一致。
+// popup content 在组件作用域外，必须放非 scoped 块。
+@media (max-width: @screen-sm-max) {
+  .t-popup.inbox-popup {
+    position: fixed !important;
+    top: auto !important;
+    right: 8px !important;
+    bottom: 8px !important;
+    left: 8px !important;
+    transform: none !important;
+  }
+
+  .t-popup.inbox-popup .t-popup__content {
+    width: 100%;
+  }
+
+  .t-popup.inbox-popup .inbox-panel {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: none;
+    max-height: calc(70dvh - 16px);
+    border-radius: var(--td-radius-large) var(--td-radius-large) 0 0;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+
+    .inbox-panel__list {
+      flex: 1 1 auto;
+      max-height: none;
+      -webkit-overflow-scrolling: touch;
+    }
   }
 }
 </style>

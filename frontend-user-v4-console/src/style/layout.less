@@ -108,6 +108,14 @@
   }
 }
 
+// 移动端侧栏抽屉打开时锁定布局滚动容器：滚动发生在 .tdesign-starter-layout 而非 body，
+// 仅锁 body 无效（SideNav.vue 负责切换该类）
+body.client-mobile-sidebar-locked {
+  .@{starter-prefix}-layout {
+    overflow: hidden;
+  }
+}
+
 .t-default-menu.t-menu--dark {
   background: var(--td-gray-color-13);
 }

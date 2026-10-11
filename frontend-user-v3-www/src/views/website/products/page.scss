@@ -348,9 +348,10 @@
 }
 
 @media (max-width: $breakpoint-narrow) {
-  // 移动端配置区底部留白，避免被 sticky footer 遮挡
+  // 配置区自身仅保留常规余量；fixed 结算栏的避让由 .shop-wrap 的动态
+  // padding-bottom（--allocation-footer-height 联动）承担，避免 footer 增高时遮挡配置区
   .shop-main {
-    padding-bottom: 120px;
+    padding-bottom: 28px;
   }
 
   .config-area > :last-child {
@@ -2047,7 +2048,73 @@
 }
 
 .mobile-coupon-sheet-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   padding: 16px 14px calc(18px + env(safe-area-inset-bottom, 0px));
+}
+
+// 移动端优惠券选项卡片：替代桌面式 el-select popper，触控目标 ≥52px
+.mobile-coupon-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  padding: 12px 14px;
+  border: 1px solid $divider-color;
+  border-radius: 8px;
+  background: $bg-color-card;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color $motion-fast ease,
+    background-color $motion-fast ease;
+
+  &.is-active {
+    border-color: $color-primary;
+    background: $color-primary-a06;
+  }
+}
+
+.mobile-coupon-option__label {
+  min-width: 0;
+  overflow: hidden;
+  color: $text-color-primary;
+  font-size: 14px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-coupon-option__mark {
+  flex-shrink: 0;
+  color: $color-primary;
+  font-weight: 700;
+  visibility: hidden;
+}
+
+.mobile-coupon-option.is-active .mobile-coupon-option__mark {
+  visibility: visible;
+}
+
+.mobile-coupon-applied {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid $color-primary-border;
+  border-radius: 8px;
+  background: $color-primary-soft;
+}
+
+.mobile-coupon-applied__text {
+  min-width: 0;
+  color: $text-color-primary;
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 .mobile-intro-sheet-body {
@@ -2072,7 +2139,11 @@
   .shop-wrap {
     flex-direction: column;
     background: #f7f8fa;
-    padding-bottom: 108px;
+    // 避让随 fixed 结算栏实际高度联动（含 safe-area），footer 增高时不再遮挡配置区
+    padding-bottom: calc(
+      var(--allocation-footer-height, 136px) +
+        env(safe-area-inset-bottom, 0px) + 16px
+    );
   }
 
   .shop-body {

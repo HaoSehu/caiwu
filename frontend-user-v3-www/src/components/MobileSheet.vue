@@ -177,6 +177,11 @@ function handleCancel() {
   cursor: pointer;
   text-align: left;
 
+  // 移动端无 hover，提供按压态反馈
+  &:active {
+    opacity: 0.55;
+  }
+
   &--primary {
     color: $color-primary;
     font-weight: 600;

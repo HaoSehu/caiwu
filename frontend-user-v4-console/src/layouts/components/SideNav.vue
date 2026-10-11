@@ -43,7 +43,7 @@
 <script setup lang="ts">
 import type { MenuValue } from 'tdesign-vue-next';
 import type { PropType } from 'vue';
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { useSiteBrandingStore } from '@/app/stores/siteBranding';
@@ -173,6 +173,7 @@ watch(
 onMounted(() => {
   getExpanded();
   siteBranding.fetchSiteConfig();
+  document.addEventListener('keydown', handleSidebarEscKeydown);
 });
 
 const goHome = () => {
@@ -213,9 +214,35 @@ function closeMobileSidebar() {
   });
 }
 
+// 移动端抽屉打开时锁定布局滚动容器（滚动发生在 .tdesign-starter-layout 而非 body），
+// 避免遮罩下主内容跟随手指滚动产生“抽屉没盖住”的失控感
+watch(
+  () => settingStore.isMobileSidebarVisible,
+  (visible) => {
+    if (typeof document === 'undefined') return;
+    const locked = Boolean(visible && isMobile.value);
+    document.body.classList.toggle('client-mobile-sidebar-locked', locked);
+  },
+  { immediate: true },
+);
+
+// 遮罩 z-index 高于 header，汉堡无法二次点击；补 Esc 作为键盘/外接键盘关闭路径
+function handleSidebarEscKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape') {
+    closeMobileSidebar();
+  }
+}
+
 function handleMenuChange() {
   closeMobileSidebar();
 }
+
+onBeforeUnmount(() => {
+  document.removeEventListener('keydown', handleSidebarEscKeydown);
+  if (typeof document !== 'undefined') {
+    document.body.classList.remove('client-mobile-sidebar-locked');
+  }
+});
 </script>
 <style lang="less" scoped>
 // 移动端抽屉遮罩淡入淡出，避免开关时生硬闪现

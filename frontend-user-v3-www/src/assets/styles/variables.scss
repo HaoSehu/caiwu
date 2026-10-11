@@ -67,7 +67,9 @@ $base-margin: 16px;
 $base-border-radius: 14px;
 $sm-border-radius: 10px;
 $lg-border-radius: 16px;
-$breakpoint-nav: 960px;
+// 移动形态断点：992 对齐控制台 useDeviceLayout 的 tablet 上限（2026-10-11 X1 裁决），
+// CSS 与 JS（WebsiteLayout / useWebsiteProductsCatalog / router scrollBehavior）共用此值
+$breakpoint-nav: 992px;
 $breakpoint-narrow: 768px;
 
 // 7. Shadow
