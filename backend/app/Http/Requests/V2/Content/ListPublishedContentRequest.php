@@ -21,6 +21,9 @@ class ListPublishedContentRequest extends FormRequest
             'category_id' => ['sometimes', 'integer', Rule::exists('content_categories', 'id')],
             'content_category_id' => ['sometimes', 'integer', Rule::exists('content_categories', 'id')],
             'is_recommended' => ['sometimes', 'integer', Rule::in([0, 1])],
+            // M8 知识库标签检索：tag_ids 逗号分隔多值（如 1,2），tag_mode any=命中任一 / all=同时命中全部
+            'tag_ids' => ['sometimes', 'string', 'regex:/^\d{1,10}(,\d{1,10})*$/'],
+            'tag_mode' => ['sometimes', 'string', Rule::in(['any', 'all'])],
             'page' => ['sometimes', 'integer', 'min:1'],
             'page_size' => ['sometimes', 'integer', 'min:1', 'max:50'],
             'pageSize' => ['prohibited'],
@@ -38,7 +41,22 @@ class ListPublishedContentRequest extends FormRequest
             'category_id',
             'content_category_id',
             'is_recommended',
+            'tag_ids',
+            'tag_mode',
         ]);
+
+        // M8：tag_ids 归一为 int 数组（空串视为未传），tag_mode 缺省 any
+        if (isset($filters['tag_ids'])) {
+            $tagIds = array_values(array_filter(array_map('intval', explode(',', (string) $filters['tag_ids']))));
+            if ($tagIds === []) {
+                unset($filters['tag_ids']);
+            } else {
+                $filters['tag_ids'] = $tagIds;
+            }
+        }
+        if (isset($filters['tag_mode']) && ! in_array($filters['tag_mode'], ['any', 'all'], true)) {
+            $filters['tag_mode'] = 'any';
+        }
 
         if (empty($filters['category_id']) && ! empty($filters['content_category_id'])) {
             $filters['category_id'] = (int) $filters['content_category_id'];

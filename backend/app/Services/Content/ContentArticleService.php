@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Services\Content;
 
 use App\Exceptions\BusinessException;
@@ -9,6 +11,7 @@ use App\Support\Concerns\NormalizesNullableString;
 use App\Support\ContentExcerpt;
 use App\Support\ContentPublishedCacheVersion;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
@@ -22,6 +25,10 @@ class ContentArticleService
     private const PUBLISHED_OVERVIEW_CACHE_TTL_SECONDS = 300; // 5分钟：文章列表不频繁变化
 
     private const PUBLISHED_CATEGORIES_CACHE_TTL_SECONDS = 600; // 10分钟：分类信息更稳定
+
+    public function __construct(
+        private readonly ContentTagService $contentTagService,
+    ) {}
 
     /**
      * @return array<string, int>
@@ -98,6 +105,12 @@ class ContentArticleService
 
             $article = ContentArticle::query()->create($payload);
 
+            // M8：tag_ids 缺省=不绑定；传入即校验存在性并写入 pivot（diff 语义对空数组=清空）
+            $this->contentTagService->syncArticleTags(
+                (int) $article->id,
+                $this->resolveTagIds($data),
+            );
+
             return $article->load([
                 'contentCategory',
                 'creator:id,username,nickname',
@@ -126,6 +139,12 @@ class ContentArticleService
             }
 
             $article->update($payload);
+
+            // M8：字段缺省=不改动既有绑定；显式传入（含空数组）按 diff 全量同步
+            $this->contentTagService->syncArticleTags(
+                (int) $article->id,
+                $this->resolveTagIds($data),
+            );
 
             return $article->refresh()->load([
                 'contentCategory',
@@ -174,6 +193,9 @@ class ContentArticleService
         if (($filters['is_recommended'] ?? null) !== null && $filters['is_recommended'] !== '') {
             $query->where('is_recommended', (int) $filters['is_recommended']);
         }
+
+        // M8：按标签检索（tag_ids 逗号分隔多值 + tag_mode=any|all），仅命中未删文章的 pivot
+        $this->applyTagFilter($query, $filters);
 
         return $query
             ->select($this->publishedListColumns())
@@ -361,6 +383,62 @@ class ContentArticleService
             'remark' => $this->normalizeNullableString($data['remark'] ?? $article?->remark),
             'trace_id' => $this->normalizeNullableString($data['trace_id'] ?? $article?->trace_id),
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<int, int>|null null=调用方未携带 tag_ids（不改动绑定语义）
+     */
+    private function resolveTagIds(array $data): ?array
+    {
+        if (! array_key_exists('tag_ids', $data) || $data['tag_ids'] === null) {
+            return null;
+        }
+
+        $raw = $data['tag_ids'];
+        $ids = is_array($raw) ? $raw : explode(',', (string) $raw);
+
+        return array_values(array_filter(array_map(intval(...), $ids), fn (int $id): bool => $id > 0));
+    }
+
+    /**
+     * M8 前台标签检索：any=命中任一标签；all=逐标签 whereExists 交集。
+     *
+     * @param  array<string, mixed>  $filters
+     */
+    private function applyTagFilter(Builder $query, array $filters): void
+    {
+        $raw = $filters['tag_ids'] ?? null;
+        if ($raw === null || $raw === '') {
+            return;
+        }
+
+        $tagIds = array_values(array_unique(array_filter(
+            array_map(intval(...), is_array($raw) ? $raw : explode(',', (string) $raw)),
+            fn (int $id): bool => $id > 0,
+        )));
+        throw_if($tagIds === [], new BusinessException('tag_ids 参数不正确'));
+
+        $mode = ($filters['tag_mode'] ?? 'any') === 'all' ? 'all' : 'any';
+
+        if ($mode === 'any') {
+            $query->whereIn('id', function ($sub) use ($tagIds): void {
+                $sub->select('article_id')
+                    ->from('content_article_tags')
+                    ->whereIn('tag_id', $tagIds);
+            });
+
+            return;
+        }
+
+        foreach ($tagIds as $tagId) {
+            $query->whereExists(function ($sub) use ($tagId): void {
+                $sub->selectRaw(1)
+                    ->from('content_article_tags')
+                    ->whereColumn('content_article_tags.article_id', 'content_articles.id')
+                    ->where('tag_id', $tagId);
+            });
+        }
     }
 
     private function resolvePublishAt(mixed $value, int $status): ?Carbon

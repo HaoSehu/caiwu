@@ -29,6 +29,7 @@ use App\Services\System\OperationLogService;
 use App\Services\System\SettingService;
 use App\Services\Upstream\Contracts\ProvidesRenewal;
 use App\Services\Upstream\ProviderResolver;
+use App\Services\Verification\VerificationGateService;
 use App\Support\BillingCycle;
 use App\Support\Money;
 use App\Support\OrderInvoiceNoGenerator;
@@ -76,6 +77,7 @@ class ServiceRenewService
         private InvoiceRefundService $invoiceRefundService,
         private ?PluginBindingResolver $bindingResolver = null,
         private ?MemberGroupDiscountService $memberGroupDiscountService = null,
+        private ?VerificationGateService $verificationGate = null,
     ) {}
 
     /**
@@ -211,6 +213,12 @@ class ServiceRenewService
      */
     public function createRenewInvoiceForUser(User $user, int $serviceId, string $billingCycle, int $userCouponId = 0, array $context = [], bool $rejectBlockingPaidInvoice = false): Invoice
     {
+        // M11 未实名限制：用户主动续费受 renewal scope 约束（自动续费为系统履约行为不受限，
+        // 以 $rejectBlockingPaidInvoice 区分手动/自动路径）。Gate 未注入或未启用时零影响。
+        if ($rejectBlockingPaidInvoice && $this->verificationGate instanceof VerificationGateService) {
+            $this->verificationGate->ensureCan($user, VerificationGateService::SCOPE_RENEWAL);
+        }
+
         $service = $this->findUserService($user, $serviceId);
         $service = $this->healServiceProductMapping($service);
 

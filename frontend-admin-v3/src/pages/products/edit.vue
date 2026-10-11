@@ -197,6 +197,14 @@
                 </div>
                 <t-empty v-else description="暂无配置项" />
               </div>
+
+              <!-- 配置联动规则（M7） -->
+              <ConfigLinkageRulesEditor
+                ref="linkageEditorRef"
+                v-model="linkageRulesText"
+                :config-options="form.config_options"
+                @touched="linkageTouched = true"
+              />
             </section>
           </t-form>
         </div>
@@ -305,6 +313,7 @@ import {
   providerTypeFallbackLabels,
   toPlainRecord,
 } from './composables/useProductShared';
+import ConfigLinkageRulesEditor from './linkage/ConfigLinkageRulesEditor.vue';
 
 // --- Router ---
 const route = useRoute();
@@ -440,6 +449,12 @@ const configOptionForm = reactive({
 });
 const configOptionSubItemRows = ref<ConfigOptionSubItemFormRow[]>([]);
 
+// --- 配置联动规则（M7） ---
+const linkageEditorRef = ref<InstanceType<typeof ConfigLinkageRulesEditor>>();
+const linkageRulesText = ref('');
+// 用户未触碰该区块时不提交字段（= 不改动原值）；触碰后清空文本则提交 null（= 显式清空）
+const linkageTouched = ref(false);
+
 // --- Lifecycle ---
 onMounted(async () => {
   await Promise.all([loadCategories(), loadSuppliers()]);
@@ -494,6 +509,10 @@ async function loadProductDetail() {
       console_template: normalizeConsoleTemplate(detail.console_template),
       config_options: normalizeConfigOptions(detail.config_options),
     });
+    const linkageRules = detail.config_linkage_rules;
+    if (Array.isArray(linkageRules) && linkageRules.length) {
+      linkageRulesText.value = JSON.stringify(linkageRules, null, 2);
+    }
     if (form.supplier_id) {
       loadSupplierProducts(form.supplier_id);
     }
@@ -860,10 +879,26 @@ async function submit() {
     MessagePlugin.warning('请至少填写一个大于 0 的计费周期价格');
     return;
   }
+  // 配置联动规则：用户触碰过该区块才提交字段；本地预检失败则阻断保存
+  let linkageRulesPayload: unknown;
+  if (linkageTouched.value) {
+    if (!linkageEditorRef.value?.validate()) {
+      activeSection.value = 'config';
+      return;
+    }
+    const linkageText = linkageRulesText.value.trim();
+    try {
+      linkageRulesPayload = linkageText ? JSON.parse(linkageText) : null;
+    } catch {
+      activeSection.value = 'config';
+      MessagePlugin.error('联动规则不是合法的 JSON，请检查格式');
+      return;
+    }
+  }
   submitting.value = true;
   try {
     const group = findProductGroupByCascaderValue(categoryOptions.value, form.selected_product_group_key);
-    const payload = {
+    const payload: Record<string, unknown> = {
       custom_display_name: resolveCustomDisplayNamePayload(),
       ...productGroupPayload(group),
       pricing: {
@@ -881,6 +916,9 @@ async function submit() {
       },
       config_options: serializeConfigOptions(form.config_options),
     };
+    if (linkageTouched.value) {
+      payload.config_linkage_rules = linkageRulesPayload;
+    }
     if (isEdit.value) {
       await productApi.update(productId.value, payload);
       MessagePlugin.success('商品已更新');

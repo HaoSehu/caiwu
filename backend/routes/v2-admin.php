@@ -35,9 +35,23 @@ use App\Http\Controllers\Admin\V2\StaffController;
 use App\Http\Controllers\Admin\V2\SupplierController;
 use App\Http\Controllers\Admin\V2\SystemReadinessController;
 use App\Http\Controllers\Admin\V2\TicketController;
+use App\Http\Controllers\Admin\V2\CarePlanController;
+use App\Http\Controllers\Admin\V2\ContentTagController;
+use App\Http\Controllers\Admin\V2\InvoiceMergeController;
+use App\Http\Controllers\Admin\V2\MassSendController;
+use App\Http\Controllers\Admin\V2\SalesCommissionController;
+use App\Http\Controllers\Admin\V2\SalesCommissionPlanController;
+use App\Http\Controllers\Admin\V2\SalesCommissionSettlementController;
+use App\Http\Controllers\Admin\V2\SalesOwnerController;
+use App\Http\Controllers\Admin\V2\ServiceTransferController;
+use App\Http\Controllers\Admin\V2\TicketDepartmentController;
+use App\Http\Controllers\Admin\V2\TicketPresetReplyCategoryController;
+use App\Http\Controllers\Admin\V2\TicketPresetReplyController;
+use App\Http\Controllers\Admin\V2\TicketTransferController;
 use App\Http\Controllers\Admin\V2\UserController;
 use App\Http\Controllers\Admin\V2\UserServiceController;
 use App\Http\Controllers\Admin\V2\VerificationController;
+use App\Http\Controllers\Admin\V2\VerificationRestrictionController;
 use App\Support\AdminPermissions;
 use Illuminate\Support\Facades\Route;
 
@@ -465,5 +479,132 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
         Route::post('/referral-withdrawals/{withdrawal}/approvals', [ReferralWithdrawalController::class, 'approve']);
         Route::post('/referral-withdrawals/{withdrawal}/rejections', [ReferralWithdrawalController::class, 'reject']);
         Route::post('/referral-withdrawals/{withdrawal}/payment-confirmations', [ReferralWithdrawalController::class, 'confirmPayment']);
+    });
+
+    // ── 功能模块扩展（2026-10-11 设计方案，并行实施集成）──
+
+    // M1 账单合并：合并/拆分（invoice.manage）、子账单清单（invoice.detail）
+    Route::middleware(['permission:'.AdminPermissions::INVOICE_MANAGE])->group(function (): void {
+        Route::post('/invoices/merge', [InvoiceMergeController::class, 'merge']);
+        Route::post('/invoices/{invoice}/unmerge', [InvoiceMergeController::class, 'unmerge']);
+    });
+    Route::middleware(['permission:'.AdminPermissions::INVOICE_DETAIL])->group(function (): void {
+        Route::get('/invoices/{invoice}/merge-items', [InvoiceMergeController::class, 'mergeItems']);
+    });
+
+    // M3 工单部门：列表对 ticket.reply 开放（转派对话框与预设回复侧栏需要；manage 蕴含 reply），
+    // CRUD 与成员设置仍要求 ticket.manage
+    Route::middleware(['permission:'.AdminPermissions::TICKET_REPLY])->group(function (): void {
+        Route::get('/ticket-departments', [TicketDepartmentController::class, 'index']);
+    });
+
+    // M3 工单部门：CRUD + 成员全量设置（ticket.manage）
+    Route::middleware(['permission:'.AdminPermissions::TICKET_MANAGE])->group(function (): void {
+        Route::post('/ticket-departments', [TicketDepartmentController::class, 'store']);
+        Route::put('/ticket-departments/{department}', [TicketDepartmentController::class, 'update']);
+        Route::delete('/ticket-departments/{department}', [TicketDepartmentController::class, 'destroy']);
+        Route::put('/ticket-departments/{department}/staff', [TicketDepartmentController::class, 'updateStaff']);
+    });
+
+    // M2 预设回复：分类 CRUD（ticket.manage）
+    Route::middleware(['permission:'.AdminPermissions::TICKET_MANAGE])->group(function (): void {
+        Route::get('/ticket-preset-reply-categories', [TicketPresetReplyCategoryController::class, 'index']);
+        Route::post('/ticket-preset-reply-categories', [TicketPresetReplyCategoryController::class, 'store']);
+        Route::put('/ticket-preset-reply-categories/{category}', [TicketPresetReplyCategoryController::class, 'update']);
+        Route::delete('/ticket-preset-reply-categories/{category}', [TicketPresetReplyCategoryController::class, 'destroy']);
+        Route::post('/ticket-preset-replies', [TicketPresetReplyController::class, 'store']);
+        Route::put('/ticket-preset-replies/{presetReply}', [TicketPresetReplyController::class, 'update']);
+        Route::delete('/ticket-preset-replies/{presetReply}', [TicketPresetReplyController::class, 'destroy']);
+    });
+
+    // M2 预设回复：客服使用列表/渲染 + M3 转派（ticket.reply）
+    Route::middleware(['permission:'.AdminPermissions::TICKET_REPLY])->group(function (): void {
+        Route::get('/ticket-preset-replies', [TicketPresetReplyController::class, 'index']);
+        Route::get('/ticket-preset-replies/{presetReply}/render', [TicketPresetReplyController::class, 'render']);
+        Route::post('/tickets/{ticket}/transfer', [TicketTransferController::class, 'store']);
+    });
+
+    // M5 内部销售提成：列表（sales_commission.list）
+    Route::middleware(['permission:'.AdminPermissions::SALES_COMMISSION_LIST])->group(function (): void {
+        Route::get('/sales-commissions', [SalesCommissionController::class, 'index']);
+        Route::get('/sales-commission-plans', [SalesCommissionPlanController::class, 'index']);
+        Route::get('/sales-commission-plans/{plan}', [SalesCommissionPlanController::class, 'show']);
+        Route::get('/sales-commission-settlements', [SalesCommissionSettlementController::class, 'index']);
+        Route::get('/sales-commission-settlements/{settlement}', [SalesCommissionSettlementController::class, 'show']);
+    });
+
+    // M5 方案管理与归属设置（sales_commission.manage）
+    Route::middleware(['permission:'.AdminPermissions::SALES_COMMISSION_MANAGE])->group(function (): void {
+        Route::post('/sales-commission-plans', [SalesCommissionPlanController::class, 'store']);
+        Route::put('/sales-commission-plans/{plan}', [SalesCommissionPlanController::class, 'update']);
+        Route::delete('/sales-commission-plans/{plan}', [SalesCommissionPlanController::class, 'destroy']);
+        Route::post('/users/{user}/sales-owner', [SalesOwnerController::class, 'store']);
+    });
+
+    // M5 结算批次（sales_commission.settle，默认不下发内置角色）
+    Route::middleware(['permission:'.AdminPermissions::SALES_COMMISSION_SETTLE])->group(function (): void {
+        Route::post('/sales-commission-settlements', [SalesCommissionSettlementController::class, 'store']);
+        Route::post('/sales-commission-settlements/{settlement}/approvals', [SalesCommissionSettlementController::class, 'approve']);
+        Route::post('/sales-commission-settlements/{settlement}/rejections', [SalesCommissionSettlementController::class, 'reject']);
+    });
+
+    // M6 服务转移：列表（service_transfer.list）
+    Route::middleware(['permission:'.AdminPermissions::SERVICE_TRANSFER_LIST])->group(function (): void {
+        Route::get('/service-transfers', [ServiceTransferController::class, 'index']);
+        Route::get('/service-transfers/{transfer}', [ServiceTransferController::class, 'show']);
+    });
+
+    // M6 服务转移：代发起/复核（service_transfer.manage）
+    Route::middleware(['permission:'.AdminPermissions::SERVICE_TRANSFER_MANAGE])->group(function (): void {
+        Route::post('/service-transfers', [ServiceTransferController::class, 'initiate']);
+        Route::post('/service-transfers/{transfer}/approve', [ServiceTransferController::class, 'approve'])
+            ->middleware('throttle:20,1,admin-service-transfer-approve');
+        Route::post('/service-transfers/{transfer}/reject', [ServiceTransferController::class, 'reject']);
+    });
+
+    // M8 知识库标签：列表（content.list）、写操作（content.manage）
+    Route::middleware(['permission:'.AdminPermissions::CONTENT_LIST])->group(function (): void {
+        Route::get('/content-tags', [ContentTagController::class, 'index']);
+    });
+    Route::middleware(['permission:'.AdminPermissions::CONTENT_MANAGE])->group(function (): void {
+        Route::post('/content-tags', [ContentTagController::class, 'store']);
+        Route::put('/content-tags/{tag}', [ContentTagController::class, 'update']);
+        Route::delete('/content-tags/{tag}', [ContentTagController::class, 'destroy']);
+    });
+
+    // M9 批量群发：动作（mass_send.manage，先注册避免遮蔽）
+    Route::middleware(['permission:'.AdminPermissions::MASS_SEND_MANAGE])->group(function (): void {
+        Route::post('/mass-sends/preview', [MassSendController::class, 'preview']);
+        Route::post('/mass-sends', [MassSendController::class, 'store']);
+        Route::put('/mass-sends/{id}', [MassSendController::class, 'update']);
+        Route::delete('/mass-sends/{id}', [MassSendController::class, 'destroy']);
+        Route::post('/mass-sends/{id}/send', [MassSendController::class, 'send']);
+        Route::post('/mass-sends/{id}/cancel', [MassSendController::class, 'cancel']);
+    });
+    Route::middleware(['permission:'.AdminPermissions::MASS_SEND_LIST])->group(function (): void {
+        Route::get('/mass-sends', [MassSendController::class, 'index']);
+        Route::get('/mass-sends/{id}', [MassSendController::class, 'show']);
+        Route::get('/mass-sends/{id}/targets', [MassSendController::class, 'targets']);
+    });
+
+    // M12 客户关怀计划：写操作与手动触发（care_plan.manage）
+    Route::middleware(['permission:'.AdminPermissions::CARE_PLAN_MANAGE])->group(function (): void {
+        Route::post('/care-plans', [CarePlanController::class, 'store']);
+        Route::put('/care-plans/{id}', [CarePlanController::class, 'update']);
+        Route::delete('/care-plans/{id}', [CarePlanController::class, 'destroy']);
+        Route::post('/care-plans/{id}/trigger', [CarePlanController::class, 'trigger']);
+    });
+    Route::middleware(['permission:'.AdminPermissions::CARE_PLAN_LIST])->group(function (): void {
+        Route::get('/care-plans', [CarePlanController::class, 'index']);
+        Route::get('/care-plans/{id}', [CarePlanController::class, 'show']);
+        Route::get('/care-plans/{id}/runs', [CarePlanController::class, 'runs']);
+    });
+
+    // M11 未实名自动限制：配置读写（settings.view / settings.manage）
+    Route::middleware(['permission:'.AdminPermissions::SETTINGS_VIEW])->group(function (): void {
+        Route::get('/settings/verification-restrictions', [VerificationRestrictionController::class, 'show']);
+    });
+    Route::middleware(['permission:'.AdminPermissions::SETTINGS_MANAGE])->group(function (): void {
+        Route::put('/settings/verification-restrictions', [VerificationRestrictionController::class, 'update']);
     });
 });

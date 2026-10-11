@@ -63,6 +63,35 @@ export interface ProductRecord {
   [key: string]: unknown;
 }
 
+/** M7 配置联动规则 · 效果（show/hide/disable/price_adjust） */
+export interface ConfigLinkageEffect {
+  type: 'show' | 'hide' | 'disable' | 'price_adjust' | string;
+  target: string;
+  /** price_adjust 专用：fixed/percent/set */
+  mode?: string;
+  /** price_adjust 专用：数值 */
+  value?: number;
+  /** price_adjust 可选：仅作用于目标字段的某个子选项 */
+  scope?: { sub_option_id?: string };
+  [key: string]: unknown;
+}
+
+/** M7 配置联动规则 · 条件 */
+export interface ConfigLinkageCondition {
+  field: string;
+  op: 'eq' | 'neq' | 'in' | 'notin' | 'gt' | 'gte' | 'lt' | 'lte' | 'between' | string;
+  value: unknown;
+  [key: string]: unknown;
+}
+
+/** M7 配置联动规则（products.config_linkage_rules） */
+export interface ConfigLinkageRule {
+  id: string;
+  when: { all: ConfigLinkageCondition[] };
+  effects: ConfigLinkageEffect[];
+  [key: string]: unknown;
+}
+
 export interface ProductTypeRecord {
   value: string;
   label: string;
@@ -283,6 +312,13 @@ function normalizeV2ProductDetail(response: V2ProductDetailResponse): ProductRec
     console_template: String(configuration.console_template || ''),
     config_options: Array.isArray(configuration.config_options) ? configuration.config_options : [],
     product_options: Array.isArray(configuration.config_options) ? configuration.config_options : [],
+    // M7 配置联动规则原样透传（null / 数组），供商品编辑回显。
+    // 兼容两种回显位置：product 顶层或 configuration 内（AdminProductDetailResource 当前未输出，待后端补充）。
+    config_linkage_rules: Array.isArray(product.config_linkage_rules)
+      ? (product.config_linkage_rules as ConfigLinkageRule[])
+      : Array.isArray(configuration.config_linkage_rules)
+        ? (configuration.config_linkage_rules as ConfigLinkageRule[])
+        : null,
     purchase_requires: {
       require_verification: Boolean(purchaseRequirements.require_verification),
       require_phone: Boolean(purchaseRequirements.require_phone),

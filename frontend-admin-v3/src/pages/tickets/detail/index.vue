@@ -7,6 +7,15 @@
           返回工单列表
         </t-button>
         <t-button
+          v-if="detail && !isClosed(detail.status) && canReply"
+          theme="default"
+          variant="outline"
+          @click="openTransferDialog"
+        >
+          <template #icon><swap-icon /></template>
+          转派
+        </t-button>
+        <t-button
           v-if="detail && !isClosed(detail.status)"
           theme="danger"
           variant="outline"
@@ -108,28 +117,53 @@
             />
 
             <div class="composer-actions">
-              <t-upload
-                v-model="uploadFiles"
-                theme="image"
-                accept="image/jpeg,image/png,image/webp"
-                multiple
-                :max="MAX_TICKET_IMAGES"
-                :auto-upload="true"
-                :size-limit="{ size: 5, unit: 'MB', message: '单张图片不能超过 5MB' }"
-                :request-method="handleUpload"
-                :before-upload="beforeUpload"
-                :on-remove="handleUploadRemove"
-                :on-preview="handleUploadPreview"
+              <t-select
+                v-if="canReply"
+                v-model="presetReplyId"
+                class="preset-reply-select"
+                clearable
+                filterable
+                :loading="presetReplyLoading"
+                placeholder="插入预设回复"
+                @change="applyPresetReply"
               >
-                <t-button variant="outline" :disabled="replyUploadDisabled || replyLoading">
-                  <template #icon><upload-icon /></template>
-                  上传图片
-                </t-button>
-              </t-upload>
+                <t-option
+                  v-for="item in availablePresetReplies"
+                  :key="item.id"
+                  :label="item.title"
+                  :value="item.id"
+                />
+              </t-select>
 
-              <t-button theme="primary" :loading="replyLoading" :disabled="replySubmitDisabled" @click="handleReply">
-                发送
-              </t-button>
+              <div class="composer-actions__right">
+                <t-upload
+                  v-model="uploadFiles"
+                  theme="image"
+                  accept="image/jpeg,image/png,image/webp"
+                  multiple
+                  :max="MAX_TICKET_IMAGES"
+                  :auto-upload="true"
+                  :size-limit="{ size: 5, unit: 'MB', message: '单张图片不能超过 5MB' }"
+                  :request-method="handleUpload"
+                  :before-upload="beforeUpload"
+                  :on-remove="handleUploadRemove"
+                  :on-preview="handleUploadPreview"
+                >
+                  <t-button variant="outline" :disabled="replyUploadDisabled || replyLoading">
+                    <template #icon><upload-icon /></template>
+                    上传图片
+                  </t-button>
+                </t-upload>
+
+                <t-button
+                  theme="primary"
+                  :loading="replyLoading"
+                  :disabled="replySubmitDisabled"
+                  @click="handleReply"
+                >
+                  发送
+                </t-button>
+              </div>
             </div>
           </section>
 
@@ -221,6 +255,51 @@
       </t-empty>
     </t-loading>
 
+    <t-dialog
+      v-model:visible="transferDialogVisible"
+      header="工单转派"
+      width="560px"
+      :confirm-btn="{ content: '确认转派', theme: 'primary' }"
+      :confirm-loading="transferLoading"
+      @confirm="handleTransfer"
+    >
+      <t-form ref="transferFormRef" :data="transferForm" :rules="transferRules" label-align="top">
+        <t-form-item label="目标部门" name="to_department_id">
+          <t-select
+            v-model="transferForm.to_department_id"
+            :loading="transferDepartmentsLoading"
+            filterable
+            placeholder="选择转派目标部门"
+          >
+            <t-option
+              v-for="department in transferDepartmentOptions"
+              :key="department.id"
+              :label="department.name"
+              :value="department.id"
+            />
+          </t-select>
+        </t-form-item>
+        <t-form-item label="指定处理人（可选，不选按部门分派模式自动分派）" name="to_assignee_id">
+          <t-select v-model="transferForm.to_assignee_id" clearable filterable placeholder="留空则自动分派">
+            <t-option
+              v-for="admin in adminUsers"
+              :key="admin.id"
+              :label="adminOptionLabel(admin)"
+              :value="admin.id"
+            />
+          </t-select>
+        </t-form-item>
+        <t-form-item label="转派原因（可选）" name="reason">
+          <t-textarea
+            v-model="transferForm.reason"
+            :autosize="{ minRows: 3, maxRows: 5 }"
+            :maxlength="255"
+            placeholder="记录转派原因，便于追溯"
+          />
+        </t-form-item>
+      </t-form>
+    </t-dialog>
+
     <t-dialog v-model:visible="previewVisible" header="图片预览" width="720px" :footer="false">
       <img v-if="previewUrl" class="preview-image" :src="previewUrl" alt="图片预览" />
       <div class="preview-dialog-actions">
@@ -235,14 +314,20 @@
 <script setup lang="ts">
 import './index.less';
 
-import { ChevronLeftIcon, CloseCircleIcon, UploadIcon } from 'tdesign-icons-vue-next';
+import { ChevronLeftIcon, CloseCircleIcon, SwapIcon, UploadIcon } from 'tdesign-icons-vue-next';
+import type { FormInstanceFunctions, FormRule } from 'tdesign-vue-next';
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import type { TicketAdminUser, TicketAttachment, TicketDetail, TicketReply } from '@/api/admin';
 import { adminApi } from '@/api/admin';
+import type { TicketDepartmentRecord, TicketPresetReplyRecord } from '@/api/admin/ticket';
+import { ticketsApi } from '@/api/admin/ticket';
+import { AdminPermissions, hasPermissionInList } from '@/constants/permissions';
+import { useUserStore } from '@/store';
 import { formatDateTime } from '@/utils/format';
+import { required } from '@/utils/formRules';
 import { errorMessage } from '@/utils/userMessage';
 
 const MAX_TICKET_IMAGES = 9;
@@ -267,6 +352,7 @@ type ConversationMessage = TicketReply & {
 
 const route = useRoute();
 const router = useRouter();
+const userStore = useUserStore();
 
 const detailLoading = ref(false);
 const detail = ref<TicketDetail | null>(null);
@@ -283,6 +369,31 @@ const previewUrl = ref('');
 const quoteReply = ref<{ id: number | string; sender_name: string; content: string } | null>(null);
 const replyForm = reactive({ content: '' });
 const linkedServicePasswordVisible = ref(false);
+
+// —— 转派（M3） ——
+const canReply = hasPermissionInList(
+  (userStore.userInfo as { permissions?: string[] } | null)?.permissions || [],
+  AdminPermissions.TICKET_REPLY,
+);
+const transferDialogVisible = ref(false);
+const transferLoading = ref(false);
+const transferFormRef = ref<FormInstanceFunctions>();
+const transferDepartments = ref<TicketDepartmentRecord[]>([]);
+const transferDepartmentsLoading = ref(false);
+const transferForm = reactive<{
+  to_department_id: number | null;
+  to_assignee_id: number | string | null;
+  reason: string;
+}>({ to_department_id: null, to_assignee_id: null, reason: '' });
+const transferRules: Record<string, FormRule[]> = {
+  to_department_id: [required('请选择转派目标部门')],
+};
+
+// —— 预设回复（M2） ——
+const presetReplyId = ref<number | null>(null);
+const presetReplyLoading = ref(false);
+const presetReplyApplying = ref(false);
+const presetReplies = ref<TicketPresetReplyRecord[]>([]);
 
 const priorityOptions = [
   { label: '低', value: 1 },
@@ -366,6 +477,24 @@ const currentAssigneeId = computed(() => (detail.value?.assignee_id ? String(det
 const replyUploadDisabled = computed(() => replyAttachments.value.length >= MAX_TICKET_IMAGES);
 const replySubmitDisabled = computed(
   () => replyLoading.value || (!replyForm.content.trim() && replyAttachments.value.length === 0),
+);
+// v2Detail 增量返回 department_id（M3），类型未同步时按扩展字段读取
+const ticketDepartmentId = computed(() => {
+  const ext = detail.value as (TicketDetail & { department_id?: number | null }) | null;
+  return ext?.department_id != null ? Number(ext.department_id) : null;
+});
+// 客服可用模板：通用（无部门）+ 本工单所属部门
+const availablePresetReplies = computed(() =>
+  presetReplies.value.filter(
+    (item) =>
+      Number(item.is_enabled) === 1 &&
+      (item.department_id == null || ticketDepartmentId.value === null || Number(item.department_id) === ticketDepartmentId.value),
+  ),
+);
+const transferDepartmentOptions = computed(() =>
+  transferDepartments.value
+    .filter((item) => Number(item.is_enabled) === 1)
+    .map((item) => ({ id: item.id, name: item.name })),
 );
 
 function resolveTicketId() {
@@ -589,6 +718,7 @@ function resetReplyDraft() {
   quoteReply.value = null;
   replyAttachments.value = [];
   uploadFiles.value = [];
+  presetReplyId.value = null;
 }
 
 function beforeUpload(file: UploadFileLike) {
@@ -654,7 +784,87 @@ function previewAttachment(attachment: TicketAttachment) {
   previewVisible.value = true;
 }
 
+async function loadPresetReplies() {
+  if (!canReply || presetReplies.value.length > 0) return;
+  presetReplyLoading.value = true;
+  try {
+    presetReplies.value = await ticketsApi.presetReplies.list({ is_enabled: 1 });
+  } catch (error) {
+    MessagePlugin.error(errorMessage(error, '加载预设回复失败'));
+  } finally {
+    presetReplyLoading.value = false;
+  }
+}
+
+async function applyPresetReply(value: unknown) {
+  const replyId = value == null ? null : Number(value);
+  presetReplyId.value = replyId;
+  if (!replyId || !detail.value?.id || presetReplyApplying.value) return;
+
+  presetReplyApplying.value = true;
+  try {
+    // 服务端渲染占位符（{{user_email}} 等）并累计使用次数，返回后插入回复输入框
+    const rendered = await ticketsApi.presetReplies.render(replyId, detail.value.id);
+    const renderedContent = rendered.content || '';
+    if (replyForm.content.trim()) {
+      replyForm.content = `${replyForm.content.trimEnd()}\n${renderedContent}`;
+    } else {
+      replyForm.content = renderedContent;
+    }
+    // 插入成功后清空选中值，同一模板可连续二次插入
+    presetReplyId.value = null;
+  } catch (error) {
+    MessagePlugin.error(errorMessage(error, '渲染预设回复失败'));
+  } finally {
+    presetReplyApplying.value = false;
+  }
+}
+
+async function openTransferDialog() {
+  transferForm.to_department_id = ticketDepartmentId.value;
+  transferForm.to_assignee_id = null;
+  transferForm.reason = '';
+  transferDialogVisible.value = true;
+
+  if (transferDepartments.value.length === 0) {
+    transferDepartmentsLoading.value = true;
+    try {
+      transferDepartments.value = await ticketsApi.departments.list();
+    } catch (error) {
+      MessagePlugin.error(errorMessage(error, '加载工单部门失败'));
+    } finally {
+      transferDepartmentsLoading.value = false;
+    }
+  }
+}
+
+async function handleTransfer() {
+  if (!detail.value?.id) return;
+  const result = await transferFormRef.value?.validate?.();
+  if (result !== true) return;
+  if (!transferForm.to_department_id) {
+    MessagePlugin.warning('请选择转派目标部门');
+    return;
+  }
+
+  transferLoading.value = true;
+  try {
+    await ticketsApi.transfer(detail.value.id, {
+      to_department_id: Number(transferForm.to_department_id),
+      to_assignee_id: transferForm.to_assignee_id ?? null,
+      reason: transferForm.reason.trim() || null,
+    });
+    MessagePlugin.success('工单转派成功');
+    transferDialogVisible.value = false;
+    await reloadCurrentDetail();
+  } catch (error) {
+    MessagePlugin.error(errorMessage(error, '工单转派失败'));
+  } finally {
+    transferLoading.value = false;
+  }
+}
+
 onMounted(() => {
-  void Promise.allSettled([loadAdmins(), loadDetail()]);
+  void Promise.allSettled([loadAdmins(), loadDetail(), loadPresetReplies()]);
 });
 </script>

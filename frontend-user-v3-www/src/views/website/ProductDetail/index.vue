@@ -102,26 +102,42 @@
       <div class="pd-body">
         <div class="pd-config">
           <!-- 区域 -->
-          <div class="cfg-group" v-if="regionOptions.length">
+          <div
+            class="cfg-group"
+            v-if="regionOptions.length && !isConfigFieldHidden(regionKey)"
+          >
             <div class="cfg-group-head">区域</div>
             <div class="cfg-group-body">
               <div class="opt-wrap">
-                <button
+                <el-tooltip
                   v-for="opt in regionOptions"
                   :key="opt.id"
-                  type="button"
-                  class="opt-btn"
-                  :class="{ active: configForm[regionKey] === opt.id }"
-                  @click="configForm[regionKey] = opt.id"
+                  content="当前选择不可用"
+                  :disabled="!isConfigFieldDisabled(regionKey)"
+                  placement="top"
                 >
-                  {{ opt.label }}
-                </button>
+                  <button
+                    type="button"
+                    class="opt-btn"
+                    :class="{
+                      active: configForm[regionKey] === opt.id,
+                      'is-disabled': isConfigFieldDisabled(regionKey),
+                    }"
+                    :aria-disabled="isConfigFieldDisabled(regionKey)"
+                    @click="selectConfigOption(regionKey, opt.id)"
+                  >
+                    {{ opt.label }}
+                  </button>
+                </el-tooltip>
               </div>
             </div>
           </div>
 
           <!-- 操作系统 -->
-          <div class="cfg-group" v-if="osConfig">
+          <div
+            class="cfg-group"
+            v-if="osConfig && !isConfigFieldHidden(osFieldKey)"
+          >
             <div class="cfg-group-head">操作系统</div>
             <div class="cfg-group-body">
               <div v-if="isMobile" class="pd-mobile-picker-row">
@@ -183,6 +199,7 @@
                   <el-select
                     v-model="configForm.os_group"
                     placeholder="请选择系统"
+                    :disabled="isConfigFieldDisabled(osFieldKey)"
                     @change="handleOsGroupChange"
                   >
                     <el-option
@@ -198,7 +215,10 @@
                   <el-select
                     v-model="configForm.os"
                     placeholder="请选择版本"
-                    :disabled="!currentOsGroup?.versions?.length"
+                    :disabled="
+                      !currentOsGroup?.versions?.length ||
+                      isConfigFieldDisabled(osFieldKey)
+                    "
                   >
                     <el-option
                       v-for="ver in currentOsGroup?.versions"
@@ -224,20 +244,31 @@
                       v-model="configForm[cfg.key + '_num']"
                       :min="cfg.min ?? 1"
                       :max="cfg.max ?? undefined"
+                      :disabled="isConfigFieldDisabled(cfg.key)"
                       controls-position="right"
                     />
                   </template>
                   <div class="opt-wrap" v-else-if="cfg.options.length > 1">
-                    <button
+                    <el-tooltip
                       v-for="opt in cfg.options"
                       :key="opt.id"
-                      type="button"
-                      class="opt-btn"
-                      :class="{ active: configForm[cfg.key] === opt.id }"
-                      @click="configForm[cfg.key] = opt.id"
+                      content="当前选择不可用"
+                      :disabled="!isConfigFieldDisabled(cfg.key)"
+                      placement="top"
                     >
-                      {{ opt.label }}
-                    </button>
+                      <button
+                        type="button"
+                        class="opt-btn"
+                        :class="{
+                          active: configForm[cfg.key] === opt.id,
+                          'is-disabled': isConfigFieldDisabled(cfg.key),
+                        }"
+                        :aria-disabled="isConfigFieldDisabled(cfg.key)"
+                        @click="selectConfigOption(cfg.key, opt.id)"
+                      >
+                        {{ opt.label }}
+                      </button>
+                    </el-tooltip>
                   </div>
                   <button
                     v-else-if="cfg.options.length === 1"
@@ -263,20 +294,31 @@
                       v-model="configForm[cfg.key + '_num']"
                       :min="cfg.min ?? 1"
                       :max="cfg.max ?? undefined"
+                      :disabled="isConfigFieldDisabled(cfg.key)"
                       controls-position="right"
                     />
                   </template>
                   <div class="opt-wrap" v-else-if="cfg.options.length > 1">
-                    <button
+                    <el-tooltip
                       v-for="opt in cfg.options"
                       :key="opt.id"
-                      type="button"
-                      class="opt-btn"
-                      :class="{ active: configForm[cfg.key] === opt.id }"
-                      @click="configForm[cfg.key] = opt.id"
+                      content="当前选择不可用"
+                      :disabled="!isConfigFieldDisabled(cfg.key)"
+                      placement="top"
                     >
-                      {{ opt.label }}
-                    </button>
+                      <button
+                        type="button"
+                        class="opt-btn"
+                        :class="{
+                          active: configForm[cfg.key] === opt.id,
+                          'is-disabled': isConfigFieldDisabled(cfg.key),
+                        }"
+                        :aria-disabled="isConfigFieldDisabled(cfg.key)"
+                        @click="selectConfigOption(cfg.key, opt.id)"
+                      >
+                        {{ opt.label }}
+                      </button>
+                    </el-tooltip>
                   </div>
                   <button
                     v-else-if="cfg.options.length === 1"
@@ -414,6 +456,41 @@
                   <span>+ {{ item.label }}</span>
                   <span>¥{{ item.amount }}</span>
                 </div>
+                <!-- M7 配置联动加价：price_delta 已含在 total_amount 中，仅作展示 -->
+                <template v-if="linkageDetailVisible">
+                  <button
+                    v-if="linkageAdjustmentRows.length"
+                    type="button"
+                    class="cost-item cost-item--extra linkage-detail-toggle"
+                    @click="linkageDetailExpanded = !linkageDetailExpanded"
+                  >
+                    <span
+                      >联动调整（{{ linkageDetailExpanded ? "收起" : "展开" }}）</span
+                    >
+                    <span>{{ linkageDeltaText || "¥0.00" }}</span>
+                  </button>
+                  <div
+                    v-else
+                    class="cost-item cost-item--extra"
+                  >
+                    <span>联动调整</span>
+                    <span>{{ linkageDeltaText }}</span>
+                  </div>
+                  <template v-if="linkageDetailExpanded">
+                    <div
+                      class="cost-item cost-item--extra linkage-detail-row"
+                      v-for="row in linkageAdjustmentRows"
+                      :key="row.key"
+                    >
+                      <span
+                        >{{ row.sign }}
+                        {{ row.fieldLabel
+                        }}{{ row.subLabel ? ` · ${row.subLabel}` : "" }}</span
+                      >
+                      <span>¥{{ row.absText }}</span>
+                    </div>
+                  </template>
+                </template>
                 <div
                   class="cost-item cost-item--discount"
                   v-if="memberDiscountAmount > 0"
@@ -578,13 +655,24 @@
             </div>
             <div class="allocation-footer-meta">
               <span v-if="selectedCycleLabel">{{ selectedCycleLabel }}</span>
-              <span v-if="regionOptions.length && configForm[regionKey]">
+              <span
+                v-if="
+                  regionOptions.length &&
+                  configForm[regionKey] &&
+                  !isConfigFieldHidden(regionKey)
+                "
+              >
                 {{
                   regionOptions.find((o) => o.id === configForm[regionKey])
                     ?.label || configForm[regionKey]
                 }}
               </span>
-              <span v-if="currentOsVerLabel">{{ currentOsVerLabel }}</span>
+              <span
+                v-if="
+                  currentOsVerLabel && !isConfigFieldHidden(osFieldKey)
+                "
+                >{{ currentOsVerLabel }}</span
+              >
             </div>
           </div>
           <button
@@ -615,7 +703,7 @@
     </div>
 
     <MobileOsPicker
-      v-if="osConfig"
+      v-if="osConfig && !isConfigFieldHidden(osFieldKey)"
       :visible="mobileOsDrawer"
       :os-groups="osGroups"
       :active-os-group-id="configForm.os_group || ''"
@@ -685,6 +773,11 @@ import {
 } from "@/domains/products/machineSpecResolver";
 import { useWebsiteProductConfigurator } from "@/domains/products/useWebsiteProductConfigurator";
 import { useWebsiteProductCheckout } from "@/domains/products/useWebsiteProductCheckout";
+import {
+  resolveDisabledConfigFieldSet,
+  resolveHiddenConfigFieldSet,
+  resolveLinkageAdjustmentRows,
+} from "@/domains/products/configLinkage";
 import MobileOsPicker from "@/components/MobileOsPicker.vue";
 import MobileSheet from "@/components/MobileSheet.vue";
 
@@ -770,6 +863,7 @@ const {
   baseAmount,
   setupFee,
   quoteItems,
+  quoteLinkage,
   appliedCoupon,
   memberDiscount,
   memberDiscountAmount,
@@ -820,6 +914,7 @@ function isNetConfig(key, label) {
 const regionKey = computed(() => configurator.regionFieldKey.value || "region");
 const regionOptions = computed(() => configurator.regionOptions.value || []);
 const osConfig = computed(() => configurator.osConfig.value || null);
+const osFieldKey = computed(() => configurator.osFieldKey.value || "os");
 const osGroups = computed(() => configurator.osGroups.value || []);
 const currentOsGroup = computed(
   () => configurator.currentOsGroup.value || null,
@@ -862,10 +957,10 @@ function handleOsGroupChange(value) {
   selectOsGroup(nextGroup);
 }
 
-// 机型配置（排除 区域/OS/网络）
+// 机型配置（排除 区域/OS/网络）；联动隐藏字段由 hiddenConfigFields 过滤
 const specConfigs = computed(() =>
   configurator.machineConfigs.value.filter(
-    (cfg) => !isNetConfig(cfg.key, cfg.label),
+    (cfg) => !isNetConfig(cfg.key, cfg.label) && !hiddenConfigFields.value.has(cfg.key),
   ),
 );
 
@@ -874,8 +969,56 @@ const netConfigs = computed(() =>
   [
     ...configurator.networkConfigs.value,
     ...configurator.otherConfigs.value,
-  ].filter((cfg) => isNetConfig(cfg.key, cfg.label)),
+  ].filter(
+    (cfg) =>
+      isNetConfig(cfg.key, cfg.label) && !hiddenConfigFields.value.has(cfg.key),
+  ),
 );
+
+// ===== M7 配置联动（报价响应 linkage 投影）=====
+// 无联动规则的商品 linkage 为 null，以下集合/明细均为空态，页面渲染与改动前一致
+const hiddenConfigFields = computed(() =>
+  resolveHiddenConfigFieldSet(quoteLinkage.value),
+);
+const disabledConfigFields = computed(() =>
+  resolveDisabledConfigFieldSet(quoteLinkage.value),
+);
+const linkageAdjustmentRows = computed(() =>
+  resolveLinkageAdjustmentRows(
+    quoteLinkage.value,
+    product.value?.config_options || [],
+  ),
+);
+const linkageDeltaText = computed(() => {
+  const delta = Number(quoteLinkage.value?.price_delta || 0);
+  if (!Number.isFinite(delta) || delta === 0) {
+    return "";
+  }
+  return `${delta < 0 ? "-" : "+"}¥${Math.abs(delta).toFixed(2)}`;
+});
+const linkageDetailExpanded = ref(false);
+// 报价失效（配置变化防抖窗口 quoteResult 置空）时 linkage 为 null，明细同步隐藏，避免旧规则残留
+const linkageDetailVisible = computed(
+  () =>
+    Boolean(quoteLinkage.value) &&
+    (Boolean(linkageDeltaText.value) || linkageAdjustmentRows.value.length > 0),
+);
+
+function isConfigFieldHidden(key) {
+  return hiddenConfigFields.value.has(key);
+}
+
+function isConfigFieldDisabled(key) {
+  return disabledConfigFields.value.has(key);
+}
+
+// 联动禁用字段拦截选项点击（按钮保留 hover 以展示 tooltip 提示）
+function selectConfigOption(key, optionId) {
+  if (disabledConfigFields.value.has(key)) {
+    return;
+  }
+  configForm[key] = optionId;
+}
 
 function isSpecSummaryConfig(cfg) {
   return (
@@ -946,7 +1089,11 @@ const showCatalogHero = computed(() =>
 const summaryItems = computed(() => {
   const items = [];
 
-  if (regionOptions.value.length && configForm[regionKey.value]) {
+  if (
+    regionOptions.value.length &&
+    configForm[regionKey.value] &&
+    !isConfigFieldHidden(regionKey.value)
+  ) {
     items.push({
       key: "region",
       label: "区域",
@@ -957,7 +1104,7 @@ const summaryItems = computed(() => {
     });
   }
 
-  if (currentOsVerLabel.value) {
+  if (currentOsVerLabel.value && !isConfigFieldHidden(osFieldKey.value)) {
     items.push({
       key: "os",
       label: "系统",
@@ -1401,6 +1548,15 @@ onBeforeUnmount(() => {
     color: $color-primary;
     font-weight: 600;
   }
+
+  // M7 联动禁用：置灰且拦截交互（不用原生 disabled，保留 hover 供 tooltip 触发）
+  &.is-disabled,
+  &.is-disabled:hover {
+    border-color: $border-color;
+    background: $bg-color-soft;
+    color: $text-color-placeholder;
+    cursor: not-allowed;
+  }
 }
 
 /* ===== 规格行 ===== */
@@ -1767,6 +1923,26 @@ onBeforeUnmount(() => {
     color: $color-success-text;
     font-size: 13px;
     font-weight: 700;
+  }
+}
+
+/* ===== M7 配置联动明细 ===== */
+.linkage-detail-toggle {
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+
+  &:hover > span:first-child {
+    color: $color-primary;
+  }
+}
+
+.linkage-detail-row {
+  > span:first-child {
+    padding-left: 12px;
   }
 }
 

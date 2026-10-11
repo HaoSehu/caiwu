@@ -18,6 +18,11 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
 use Laravel\Sanctum\HasApiTokens;
 
+/**
+ * @property int|null $sales_owner_admin_id 归属销售管理员ID（null=未归属）
+ * @property Carbon|null $sales_owner_assigned_at 归属时间
+ * @property AdminUser|null $salesOwner 归属销售管理员
+ */
 class User extends Authenticatable
 {
     use HasApiTokens, HasFactory, Notifiable, SoftDeletes;
@@ -28,6 +33,7 @@ class User extends Authenticatable
         'nickname', 'company', 'qq', 'admin_note',
         'referral_code', 'referrer_user_id', 'referred_at', 'member_level_id', 'total_sales_amount',
         'promotion_ambassador_id',
+        'birth_date', 'sales_owner_admin_id',
         'is_verified', 'real_name', 'id_card', 'verification_status', 'verification_message', 'verification_certify_id', 'verified_at',
         'alipay_real_name', 'alipay_account',
         'login_email_alert', 'login_notify', 'login_location_alert', 'password_change_alert', 'phone_change_alert', 'email_change_alert', 'marketing_alert', 'last_login_ip', 'last_login_at',
@@ -52,6 +58,9 @@ class User extends Authenticatable
             'last_login_at' => 'datetime',
             'referred_at' => 'datetime',
             'verified_at' => 'datetime',
+            'birth_date' => 'date:Y-m-d',
+            'sales_owner_admin_id' => 'integer',
+            'sales_owner_assigned_at' => 'datetime',
             'total_sales_amount' => 'decimal:2',
             'is_verified' => 'integer',
             'verification_status' => 'integer',
@@ -293,6 +302,14 @@ class User extends Authenticatable
     public function promotionAmbassador(): BelongsTo
     {
         return $this->belongsTo(PromotionAmbassador::class, 'promotion_ambassador_id');
+    }
+
+    /**
+     * M5 内部销售归属：NULL=未归属，只影响归属后新支付的账单（不追溯历史）。
+     */
+    public function salesOwner(): BelongsTo
+    {
+        return $this->belongsTo(AdminUser::class, 'sales_owner_admin_id');
     }
 
     public function account(): HasOne

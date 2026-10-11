@@ -11,8 +11,11 @@ use App\Jobs\SendTicketNotificationEmailJob;
 use App\Models\AdminUser;
 use App\Models\Product;
 use App\Models\Service;
+use App\Models\Setting;
 use App\Models\Ticket;
+use App\Models\TicketDepartment;
 use App\Models\TicketReply;
+use App\Models\TicketTransferLog;
 use App\Services\ClientServiceConsole\ServiceTransformService;
 use App\Services\Integrations\Plugins\PluginBindingResolver;
 use App\Services\Notification\UserNotificationService;
@@ -87,6 +90,9 @@ class TicketService
 
     /**
      * 客户创建工单
+     *
+     * M3：支持可选 department_id（校验启用中）；未传时回退 settings ticket.default_department_id，
+     * 仍无则不落部门。落部门后按部门 auto_assign_mode 触发自动分派。
      */
     public function create(int $userId, array $data): Ticket
     {
@@ -96,7 +102,9 @@ class TicketService
         $this->ensureReplyPayload($content, $attachments);
         throw_if($subject === '', new BusinessException('工单标题不能为空'));
 
-        $ticket = DB::transaction(function () use ($userId, $data, $subject, $content, $attachments) {
+        $department = $this->resolveDepartmentForCreate($data);
+
+        $ticket = DB::transaction(function () use ($userId, $data, $subject, $content, $attachments, $department) {
             if (! empty($data['service_id'])) {
                 $svc = Service::where('id', $data['service_id'])->where('user_id', $userId)->first();
                 throw_if(! $svc, new BusinessException('服务不存在'));
@@ -104,7 +112,8 @@ class TicketService
 
             $ticket = Ticket::create([
                 'user_id' => $userId,
-                'department' => $data['department'],
+                'department' => $department->name ?? $data['department'],
+                'department_id' => $department?->id,
                 'subject' => $subject,
                 'priority' => $data['priority'] ?? 2,
                 'status' => self::STATUS_OPEN,
@@ -123,9 +132,37 @@ class TicketService
             return $ticket->fresh();
         });
 
+        // 建单即按部门模式自动分派（手动模式原样返回），分派结果参与收件人解析。
+        if ($department !== null) {
+            $ticket = app(TicketAutomationService::class)->dispatch($ticket, $department);
+        }
+
         $this->notifyAdminsOfNewTicket($ticket, $content, $attachments !== []);
 
         return $ticket;
+    }
+
+    /**
+     * 建单部门解析：显式 department_id 校验启用中；未传回退 settings ticket.default_department_id；
+     * 都没有则 null（不落部门，保持向后兼容）。
+     */
+    private function resolveDepartmentForCreate(array $data): ?TicketDepartment
+    {
+        $departmentId = (int) ($data['department_id'] ?? 0);
+
+        if ($departmentId <= 0) {
+            $departmentId = (int) Setting::getValue('ticket', 'default_department_id', 0);
+        }
+
+        if ($departmentId <= 0) {
+            return null;
+        }
+
+        $department = TicketDepartment::query()->find($departmentId);
+        throw_if(! $department, new BusinessException('所选部门不存在'));
+        throw_if((int) $department->is_enabled !== 1, new BusinessException('所选部门已停用'));
+
+        return $department;
     }
 
     /**
@@ -356,6 +393,61 @@ class TicketService
     }
 
     /**
+     * M3 工单转派：更换部门并写转派流水，冗余列 department 同步为部门名。
+     * 未指定 to_assignee_id 时按目标部门 auto_assign_mode 自动分派（无成员则置 NULL）。
+     */
+    public function transfer(Ticket $ticket, int $toDepartmentId, ?int $toAssigneeId, string $reason, AdminUser $operator): Ticket
+    {
+        // 转派越权防护：操作者必须有权访问源工单（部门归属口径与列表一致）。
+        TicketDepartmentService::assertTicketAccessible($operator, $ticket);
+
+        $department = TicketDepartment::query()->find($toDepartmentId);
+        throw_if(! $department, new BusinessException('目标部门不存在'));
+        throw_if((int) $department->is_enabled !== 1, new BusinessException('目标部门已停用'));
+
+        if ($toAssigneeId !== null) {
+            $assignee = AdminUser::query()->find($toAssigneeId);
+            throw_if(! $assignee, new BusinessException('目标处理人不存在'));
+            throw_if((int) $assignee->status !== 1, new BusinessException('目标处理人已禁用'));
+            throw_if(! $assignee->hasPermission(AdminPermissions::TICKET_REPLY), new BusinessException('目标处理人无工单处理权限'));
+        }
+
+        [$transferred, $log] = DB::transaction(function () use ($ticket, $department, $toAssigneeId, $reason, $operator) {
+            $lockedTicket = Ticket::query()->lockForUpdate()->findOrFail($ticket->id);
+
+            $fromDepartmentId = $lockedTicket->department_id !== null ? (int) $lockedTicket->department_id : null;
+            $fromAssigneeId = $lockedTicket->assignee_id !== null ? (int) $lockedTicket->assignee_id : null;
+
+            $lockedTicket->update([
+                'department_id' => (int) $department->id,
+                'department' => (string) $department->name,
+                'assignee_id' => $toAssigneeId,
+            ]);
+
+            $log = TicketTransferLog::create([
+                'ticket_id' => (int) $lockedTicket->id,
+                'from_department_id' => $fromDepartmentId,
+                'to_department_id' => (int) $department->id,
+                'from_assignee_id' => $fromAssigneeId,
+                'to_assignee_id' => $toAssigneeId,
+                'reason' => $reason !== '' ? $reason : null,
+                'operator_id' => (int) $operator->id,
+                'created_at' => now(),
+            ]);
+
+            return [$lockedTicket->refresh(), $log];
+        });
+
+        // 未指定处理人 → 立即按目标部门模式自动分派，并回写流水的新处理人。
+        if ($toAssigneeId === null) {
+            $transferred = app(TicketAutomationService::class)->dispatch($transferred, $department);
+            $log->update(['to_assignee_id' => $transferred->assignee_id !== null ? (int) $transferred->assignee_id : null]);
+        }
+
+        return $transferred->refresh();
+    }
+
+    /**
      * 客户端工单归属查询：仅允许读取本人工单（V5-02：查询逻辑自控制器下沉）。
      */
     public function findForUser(int $userId, int $ticketId): Ticket
@@ -389,10 +481,18 @@ class TicketService
 
     /**
      * 管理端列表
+     *
+     * M3 部门级数据范围：操作者为 AdminUser 且非 super_admin、在 ticket_department_staff
+     * 有归属部门时，限定 department_id IN(归属部门)；无归属（向后兼容全量）与 super_admin 恒全量。
      */
     public function adminList(array $filters, int $perPage): LengthAwarePaginator
     {
         $query = Ticket::with(['user:id,email,nickname', 'assignee:id,username,nickname']);
+
+        $operator = request()->user();
+        if ($operator instanceof AdminUser) {
+            $query = TicketDepartmentService::applyDataScope($query, $operator);
+        }
 
         if (isset($filters['status']) && $filters['status'] !== '') {
             if ((string) $filters['status'] === 'ongoing') {
@@ -506,6 +606,7 @@ class TicketService
             'user_id' => (int) $ticket->user_id,
             'department' => (string) $ticket->department,
             'department_label' => self::DEPT_LABELS[$ticket->department] ?? (string) $ticket->department,
+            'department_id' => $ticket->department_id !== null ? (int) $ticket->department_id : null,
             'subject' => (string) $ticket->subject,
             'priority' => (int) $ticket->priority,
             'priority_label' => self::PRIORITIES[(int) $ticket->priority] ?? (string) $ticket->priority,

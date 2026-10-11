@@ -32,6 +32,8 @@ class StoreProductRequest extends AdminFormRequest
             'pricing.annually' => ['nullable', 'numeric', 'min:0'],
             'setup_fee' => ['nullable', 'numeric', 'min:0'],
             'config_options' => ['nullable', 'array'],
+            // M7 配置联动规则：结构/目标/冲突校验在 ProductAdminService 保存前执行（ConfigLinkageRuleValidator）
+            'config_linkage_rules' => ['nullable', 'array'],
             'purchase_requires' => ['nullable', 'array'],
             'purchase_requires.require_verification' => ['nullable', 'boolean'],
             'purchase_requires.require_phone' => ['nullable', 'boolean'],

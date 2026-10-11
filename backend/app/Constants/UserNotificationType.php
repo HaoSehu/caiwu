@@ -39,6 +39,9 @@ class UserNotificationType
     /** 工单已重新开启 */
     public const TICKET_REOPENED = 'ticket_reopened';
 
+    /** 登录成功提醒（M10，通道=站内信） */
+    public const LOGIN_ALERT = 'login_alert';
+
     /**
      * 类型对应的中文标签，用于前端展示分组/图标。
      */
@@ -53,6 +56,7 @@ class UserNotificationType
         self::TICKET_PENDING_REMINDER => '工单提醒',
         self::TICKET_AUTO_CLOSED => '工单自动关闭',
         self::TICKET_REOPENED => '工单重新开启',
+        self::LOGIN_ALERT => '登录提醒',
     ];
 
     public static function label(string $type): string

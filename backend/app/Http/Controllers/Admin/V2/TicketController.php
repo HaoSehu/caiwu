@@ -23,10 +23,13 @@ use App\Http\Resources\Ticket\V2\TicketListItemResource;
 use App\Http\Resources\Ticket\V2\TicketReplyResource;
 use App\Http\Resources\Ticket\V2\TicketSummaryResource;
 use App\Http\Resources\Ticket\V2\TicketUploadAttachmentResource;
+use App\Models\AdminUser;
 use App\Models\Ticket;
 use App\Services\Admin\V2\AdminTicketActionV2Service;
+use App\Services\Ticket\TicketDepartmentService;
 use App\Services\Ticket\TicketService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class TicketController extends Controller
 {
@@ -59,6 +62,8 @@ class TicketController extends Controller
 
     public function show(ShowTicketRequest $request, Ticket $ticket): JsonResponse
     {
+        $this->assertTicketAccessible($request, $ticket);
+
         return $this->success([
             'ticket' => (new TicketDetailResource($this->tickets->v2Detail($ticket)))->resolve(),
         ]);
@@ -66,6 +71,8 @@ class TicketController extends Controller
 
     public function replies(ListTicketRepliesRequest $request, Ticket $ticket): JsonResponse
     {
+        $this->assertTicketAccessible($request, $ticket);
+
         return $this->paginate(
             $this->tickets->v2Replies($ticket, (int) ($request->validated('page_size') ?? 20)),
             TicketReplyResource::class
@@ -74,6 +81,8 @@ class TicketController extends Controller
 
     public function reply(ReplyTicketRequest $request, Ticket $ticket): JsonResponse
     {
+        $this->assertTicketAccessible($request, $ticket);
+
         $reply = $this->tickets->staffReply(
             $ticket,
             (int) $request->user()->id,
@@ -102,6 +111,8 @@ class TicketController extends Controller
 
     public function close(CloseTicketRequest $request, Ticket $ticket): JsonResponse
     {
+        $this->assertTicketAccessible($request, $ticket);
+
         $result = $this->actions->close($ticket);
 
         return $this->success(AdminActionResultResource::make($result)->resolve(), (string) $result['message']);
@@ -109,6 +120,8 @@ class TicketController extends Controller
 
     public function reopen(ReopenTicketRequest $request, Ticket $ticket): JsonResponse
     {
+        $this->assertTicketAccessible($request, $ticket);
+
         $result = $this->actions->reopen($ticket, 'admin');
 
         return $this->success(AdminActionResultResource::make($result)->resolve(), (string) $result['message']);
@@ -116,6 +129,8 @@ class TicketController extends Controller
 
     public function assign(AssignTicketRequest $request, Ticket $ticket): JsonResponse
     {
+        $this->assertTicketAccessible($request, $ticket);
+
         $result = $this->actions->assign($ticket, $request->assigneeId());
 
         return $this->success(AdminActionResultResource::make($result)->resolve(), (string) $result['message']);
@@ -126,5 +141,17 @@ class TicketController extends Controller
         $result = $this->actions->recallReply($ticket, $replyId, (int) $request->user()->id);
 
         return $this->success(AdminActionResultResource::make($result)->resolve(), (string) $result['message']);
+    }
+
+    /**
+     * 单工单越权防护：路由模型绑定解析出的 Ticket 在读取/操作前校验操作者数据范围
+     * （与列表 applyDataScope 同口径，防 show/replies 等入口越权读 PII）。
+     */
+    private function assertTicketAccessible(Request $request, Ticket $ticket): void
+    {
+        $operator = $request->user();
+        assert($operator instanceof AdminUser);
+
+        TicketDepartmentService::assertTicketAccessible($operator, $ticket);
     }
 }

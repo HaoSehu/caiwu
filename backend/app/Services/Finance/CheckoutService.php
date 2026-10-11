@@ -17,11 +17,14 @@ use App\Models\Payment;
 use App\Models\Product;
 use App\Models\User;
 use App\Services\Order\Concerns\HandlesOrderCalculation;
+use App\Services\Pricing\ConfigLinkage\ConfigLinkageEvaluator;
 use App\Services\Pricing\MemberGroupDiscountService;
 use App\Services\ProductCatalog\ProductCatalogService;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Services\ProductCatalog\ProductFullPathResolver;
 use App\Services\System\OperationLogService;
+use App\Services\Verification\VerificationGateService;
+use App\Support\Money;
 use App\Support\OrderInvoiceNoGenerator;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
@@ -48,6 +51,7 @@ class CheckoutService
         private AdminOrderNotificationService $adminOrderNotificationService,
         private PaymentCallbackProjector $callbackProjector,
         private TradeLifecycleService $tradeLifecycleService,
+        private VerificationGateService $verificationGate,
         private ?ProductDisplayNameResolver $productDisplayNameResolver = null,
         private ?MemberGroupDiscountService $memberGroupDiscountService = null,
     ) {}
@@ -72,10 +76,118 @@ class CheckoutService
     }
 
     /**
+     * M7 配置联动：目录报价 + 联动规则叠加的统一入口（前台预览与下单真源共用）。
+     * hide 目标从计价配置中剔除；price_adjust 以单位口径叠加后再随数量放大。
+     * 无规则（null/空数组）时与既有 quote() 行为完全一致（回归红线）。
+     *
+     * @param  array<string, mixed>  $normalizedConfig  已归一化的用户选择
+     * @return array{quote: array<string, mixed>, linkage: array<string, mixed>|null, rules_hash: string|null, config: array<string, mixed>}
+     */
+    public function quoteWithLinkage(Product $product, string $billingCycle, array $normalizedConfig, int $quantity = 1): array
+    {
+        // config_linkage_rules 经模型 'array' cast 后运行时必为数组（DB 列为 nullable json），
+        // 这里仅做兜底归一，避免异常数据进入联动求值。
+        $rules = (array) ($product->config_linkage_rules ?? []);
+        if ($rules === []) {
+            return [
+                'quote' => $this->quote($product, $billingCycle, $normalizedConfig, $quantity),
+                'linkage' => null,
+                'rules_hash' => null,
+                'config' => $normalizedConfig,
+            ];
+        }
+
+        $evaluator = new ConfigLinkageEvaluator;
+        // 第一遍：确定显隐，把 hide 目标从计价配置中剔除（visibility 默认未列出的字段保持可见）
+        $linkage = $evaluator->evaluate($rules, $normalizedConfig);
+        $visibleConfig = $normalizedConfig;
+        foreach ($linkage['visibility'] as $field => $visible) {
+            if ($visible === false) {
+                unset($visibleConfig[$field]);
+            }
+        }
+
+        // 单位基础金额（quantity=1）用于 percent/set 的换算基数
+        $unitQuote = $this->quote($product, $billingCycle, $visibleConfig, 1);
+        $baseAmounts = [];
+        foreach ((array) ($unitQuote['items'] ?? []) as $item) {
+            $field = (string) ($item['field'] ?? '');
+            if ($field !== '') {
+                $baseAmounts[$field] = (float) ($item['amount'] ?? 0);
+            }
+        }
+        // 第二遍：条件字段取「原始未剔除选择」（hide 命中字段可能同时是其他 show 规则的
+        // 条件字段，用剔除后配置评估会误判二阶显隐导致前端隐藏却收费）；
+        // visibility 与第一遍同源一致，price_adjust 只作用于可见项。
+        $linkage = $evaluator->evaluate($rules, $normalizedConfig, $baseAmounts);
+
+        $quote = $this->quote($product, $billingCycle, $visibleConfig, $quantity);
+        $unitDelta = (float) $linkage['price_delta'];
+        if (Money::compare($unitDelta, 0.0) !== 0) {
+            $quote = $this->applyLinkageUnitDelta($quote, $unitDelta, $quantity);
+        }
+
+        return [
+            'quote' => $quote,
+            'linkage' => $linkage,
+            'rules_hash' => md5(json_encode($rules)),
+            'config' => $visibleConfig,
+        ];
+    }
+
+    /**
+     * M7：把联动调整（单价口径）按既有「单价 × 数量」口径并入金额载荷，
+     * quote 与 config_pricing_snapshot 共用，保证账单金额与快照金额一致。
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    private function applyLinkageUnitDelta(array $payload, float $unitDelta, int $quantity): array
+    {
+        $payload['unit_config_amount'] = Money::format(Money::add($payload['unit_config_amount'] ?? 0, $unitDelta));
+        $payload['config_amount'] = Money::format(Money::multiply($payload['unit_config_amount'], $quantity));
+        $payload['unit_total_amount'] = Money::format(Money::add($payload['unit_total_amount'] ?? 0, $unitDelta));
+        $payload['total_amount'] = Money::format(Money::multiply($payload['unit_total_amount'], $quantity));
+
+        return $payload;
+    }
+
+    /**
+     * M7：把联动投影与规则指纹并入 config_pricing_snapshot（下单写入账单/影子订单前调用）。
+     * 快照金额同步叠加联动调整，保持与账单金额一致；无规则时快照原样返回，
+     * 不新增任何键（回归红线）。
+     *
+     * @param  array<string, mixed>  $configPricingSnapshot
+     */
+    public function withLinkageSnapshot(array $configPricingSnapshot, ?array $linkage, ?string $rulesHash): array
+    {
+        if ($linkage === null) {
+            return $configPricingSnapshot;
+        }
+
+        $unitDelta = (float) ($linkage['price_delta'] ?? 0);
+        if (Money::compare($unitDelta, 0.0) !== 0) {
+            $quantity = max((int) ($configPricingSnapshot['quantity'] ?? 1), 1);
+            $configPricingSnapshot = $this->applyLinkageUnitDelta($configPricingSnapshot, $unitDelta, $quantity);
+        }
+
+        $configPricingSnapshot['linkage'] = $linkage;
+        $configPricingSnapshot['rules_hash'] = (string) $rulesHash;
+
+        return $configPricingSnapshot;
+    }
+
+    /**
      * 创建新购账单
      */
     public function create(int $userId, array $data, array $context = []): Invoice
     {
+        // M11 服务层兜底：客户端新购（purchase scope）创建前实名 Gate；
+        // 管理员补录/代下单不经过本方法（走 InvoiceService manual entry），结构性豁免。
+        $checkoutUser = User::query()->find($userId);
+        if ($checkoutUser !== null) {
+            $this->verificationGate->ensureCan($checkoutUser, VerificationGateService::SCOPE_PURCHASE);
+        }
+
         $productId = (int) ($data['product_id'] ?? 0);
         $billingCycle = trim((string) ($data['billing_cycle'] ?? ''));
         $quantity = max((int) ($data['quantity'] ?? 1), 1);
@@ -157,12 +269,17 @@ class CheckoutService
                         }
                     }
 
-                    $quote = $this->quote($product, $billingCycle, $normalizedConfig, $quantity);
+                    // M7 配置联动：预览与下单共用 quoteWithLinkage（服务端按规则重算为最终价）；
+                    // 指纹与报价令牌校验仍用未剔除的 normalizedConfig，保证与预览签发口径一致。
+                    $linkageQuote = $this->quoteWithLinkage($product, $billingCycle, $normalizedConfig, $quantity);
+                    $quote = $linkageQuote['quote'];
+                    $visibleConfig = $linkageQuote['config'];
                     $amount = (float) ($quote['total_amount'] ?? 0);
-                    $configPricingSnapshot = $this->buildConfigPricingSnapshot($product, $billingCycle, $normalizedConfig, $quantity);
-                    $displayNamePayload = $this->resolveProductDisplayNameResolver()->resolveForProduct($product, $normalizedConfig);
+                    $configPricingSnapshot = $this->buildConfigPricingSnapshot($product, $billingCycle, $visibleConfig, $quantity);
+                    $configPricingSnapshot = $this->withLinkageSnapshot($configPricingSnapshot, $linkageQuote['linkage'], $linkageQuote['rules_hash']);
+                    $displayNamePayload = $this->resolveProductDisplayNameResolver()->resolveForProduct($product, $visibleConfig);
                     $productDisplayName = $this->resolveCheckoutProductDisplayName($displayNamePayload);
-                    $invoiceConfigSnapshot = $this->withProductDisplaySnapshot($product, $normalizedConfig, $productDisplayName);
+                    $invoiceConfigSnapshot = $this->withProductDisplaySnapshot($product, $visibleConfig, $productDisplayName);
                     throw_if($amount <= 0, new BusinessException('无效的计费周期'));
 
                     // 会员折扣层：目录价按「等级 × 营销组」先折算，优惠券以折后价为基数
@@ -288,6 +405,13 @@ class CheckoutService
             throw_if(
                 ! in_array((int) $lockedInvoice->status, [InvoiceStatus::UNPAID], true),
                 new BusinessException('当前账单状态不支持取消')
+            );
+
+            // 合并子账单/总账单不允许独立取消，防止总账单支付后子账单被抹平造成多付。
+            throw_if(
+                ($lockedInvoice->merged_into_id !== null && (int) $lockedInvoice->merged_into_id > 0)
+                    || (int) $lockedInvoice->merge_role === 1,
+                new BusinessException('该账单已参与合并，请对合并总账单整体操作')
             );
 
             $pendingPayments = Payment::query()

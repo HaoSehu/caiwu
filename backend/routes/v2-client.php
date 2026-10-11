@@ -4,6 +4,7 @@ use App\Constants\PaymentGatewayCode;
 use App\Http\Controllers\Client\V2\ActionController;
 use App\Http\Controllers\Client\V2\AuthController;
 use App\Http\Controllers\Client\V2\ContentController;
+use App\Http\Controllers\Client\V2\ContentTagController;
 use App\Http\Controllers\Client\V2\CouponController;
 use App\Http\Controllers\Client\V2\FinanceController;
 use App\Http\Controllers\Client\V2\FinanceLedgerController;
@@ -20,7 +21,9 @@ use App\Http\Controllers\Client\V2\ServiceBillingController;
 use App\Http\Controllers\Client\V2\ServiceConsoleController;
 use App\Http\Controllers\Client\V2\ServiceController;
 use App\Http\Controllers\Client\V2\ServiceNetworkController;
+use App\Http\Controllers\Client\V2\ServiceTransferController;
 use App\Http\Controllers\Client\V2\TicketController;
+use App\Http\Controllers\Client\V2\TicketDepartmentController;
 use App\Http\Controllers\Client\V2\TicketWorkflowController;
 use App\Http\Controllers\Client\V2\VerificationController;
 use Illuminate\Support\Facades\Route;
@@ -74,7 +77,7 @@ Route::middleware(['auth:sanctum', 'ensure.client'])->group(function (): void {
     Route::get('/balance-logs/summary', [FinanceController::class, 'balanceLogsSummary']);
     Route::get('/invoices', [InvoiceController::class, 'index']);
     Route::get('/invoices/summary', [InvoiceWorkflowController::class, 'summary']);
-    Route::post('/invoices', [InvoiceWorkflowController::class, 'store'])->middleware('throttle:8,1,client-invoices-store');
+    Route::post('/invoices', [InvoiceWorkflowController::class, 'store'])->middleware(['throttle:8,1,client-invoices-store', 'verified.purchase']);
     Route::get('/invoices/{invoice}', [InvoiceController::class, 'show']);
     Route::post('/invoices/{invoice}/cancellations', [ActionController::class, 'cancelInvoice'])
         ->middleware('throttle:10,1,client-invoices-cancel');
@@ -95,7 +98,7 @@ Route::middleware(['auth:sanctum', 'ensure.client'])->group(function (): void {
     Route::post('/coupons/{couponId}/claim', [CouponController::class, 'claim'])->middleware('throttle:6,1,client-coupons-claim');
 
     Route::get('/recharge/gateways', [RechargeController::class, 'gateways']);
-    Route::post('/recharge', [RechargeController::class, 'store'])->middleware('throttle:6,1,client-recharge-store');
+    Route::post('/recharge', [RechargeController::class, 'store'])->middleware(['throttle:6,1,client-recharge-store', 'verified.purchase:recharge']);
     Route::get('/recharge/{paymentNo}/status', [RechargeController::class, 'status'])->middleware('throttle:30,1,client-recharge-status');
 
     Route::get('/payments', [PaymentController::class, 'index']);
@@ -109,6 +112,8 @@ Route::middleware(['auth:sanctum', 'ensure.client'])->group(function (): void {
         ->middleware('throttle:10,1,client-orders-cancel');
 
     Route::get('/content/overview', [ContentController::class, 'overview']);
+    // M8 知识库标签云（按未删文章实时使用数倒序）
+    Route::get('/content/tags', [ContentTagController::class, 'tags']);
     Route::get('/notices', [ContentController::class, 'notices']);
     Route::get('/notices/unread-count', [ContentController::class, 'noticeUnreadCount']);
     Route::post('/notices/mark-all-read', [ContentController::class, 'markAllNoticesRead']);
@@ -127,7 +132,7 @@ Route::middleware(['auth:sanctum', 'ensure.client'])->group(function (): void {
     Route::get('/referral/account-logs', [ReferralController::class, 'accountLogs']);
     Route::get('/referral/withdrawals', [ReferralController::class, 'withdrawals']);
     Route::get('/referral/direct-referrals', [ReferralController::class, 'directReferrals']);
-    Route::post('/referral/withdrawals', [ReferralController::class, 'applyWithdrawal'])->middleware('throttle:3,1,client-referral-withdraw');
+    Route::post('/referral/withdrawals', [ReferralController::class, 'applyWithdrawal'])->middleware(['throttle:3,1,client-referral-withdraw', 'verified.purchase:withdrawal']);
 
     Route::get('/services', [ServiceConsoleController::class, 'index']);
     Route::get('/services/grouped-overview', [ServiceConsoleController::class, 'groupedOverview']);
@@ -169,8 +174,21 @@ Route::middleware(['auth:sanctum', 'ensure.client'])->group(function (): void {
     Route::post('/services/{service}/reinstallations', [ActionController::class, 'reinstall'])
         ->middleware('throttle:6,1,client-service-reinstall');
 
+    // M6 服务转移（用户间过户）：发起/列表/确认/拒绝/撤销
+    Route::post('/services/{service}/transfer-requests', [ServiceTransferController::class, 'initiate'])
+        ->middleware('throttle:6,1,client-service-transfer-initiate');
+    Route::get('/service-transfer-requests', [ServiceTransferController::class, 'index']);
+    Route::post('/service-transfer-requests/{transfer}/confirm', [ServiceTransferController::class, 'confirm'])
+        ->middleware('throttle:10,1,client-service-transfer-confirm');
+    Route::post('/service-transfer-requests/{transfer}/reject', [ServiceTransferController::class, 'reject'])
+        ->middleware('throttle:10,1,client-service-transfer-reject');
+    Route::post('/service-transfer-requests/{transfer}/cancel', [ServiceTransferController::class, 'cancel'])
+        ->middleware('throttle:10,1,client-service-transfer-cancel');
+
     Route::get('/tickets', [TicketWorkflowController::class, 'index']);
     Route::get('/tickets/service-options', [TicketWorkflowController::class, 'serviceOptions']);
+    // M3 工单部门：提单可选部门（启用中）
+    Route::get('/ticket-departments', [TicketDepartmentController::class, 'index']);
     Route::post('/tickets', [TicketWorkflowController::class, 'store'])->middleware('throttle:10,1,client-ticket-store');
     Route::post('/tickets/upload-images', [TicketWorkflowController::class, 'uploadImage'])->middleware('throttle:12,1,client-ticket-upload-image');
     Route::get('/tickets/{ticket}/replies', [TicketController::class, 'replies']);

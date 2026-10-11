@@ -31,6 +31,19 @@
             <t-form-item label="别名" name="slug">
               <t-input v-model="form.slug" placeholder="留空自动生成" />
             </t-form-item>
+            <t-form-item class="edit-span-full" label="标签" name="tag_ids">
+              <t-select
+                v-model="tagIds"
+                multiple
+                clearable
+                filterable
+                placeholder="选择标签（未修改则保存时不改动已有标签）"
+                :loading="tagLoading"
+                @change="tagsTouched = true"
+              >
+                <t-option v-for="item in tagOptions" :key="item.id" :label="item.name" :value="item.id" />
+              </t-select>
+            </t-form-item>
           </div>
         </section>
 
@@ -221,7 +234,8 @@ import { MessagePlugin } from 'tdesign-vue-next';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
-import type { ContentArticlePayload, ContentArticleRecord, ContentCategoryRecord, MediaFileRecord } from '@/api/admin';
+import type { ContentArticleRecord, ContentCategoryRecord, MediaFileRecord } from '@/api/admin';
+import type { ContentArticleSavePayload, ContentTagRecord } from '@/api/admin/content';
 import { adminApi } from '@/api/admin';
 
 interface CoverMediaItem {
@@ -282,6 +296,11 @@ const coverMediaTypeOptions = [
   { label: '视频', value: 'video' },
 ];
 const categories = ref<ContentCategoryRecord[]>([]);
+const tagOptions = ref<ContentTagRecord[]>([]);
+const tagLoading = ref(false);
+const tagIds = ref<number[]>([]);
+// 标签控件「touched」标记：未触碰时不传 tag_ids（后端不改动既有绑定）；触碰后（含清空）按当前选择提交
+const tagsTouched = ref(false);
 
 const contentType = computed<string>(() => String(route.meta.contentType || route.query.type || 'notice'));
 const articleLabel = computed(() => (contentType.value === 'help' ? '帮助文章' : '公告'));
@@ -359,9 +378,14 @@ function fillForm(row: ContentArticleRecord) {
     remark: String(row.remark || ''),
     require_reread: false,
   });
+  // 后端 AdminContentArticleDetailResource 返回 tags: [{id, name}]，编辑时回填已选标签；
+  // 回填不视为用户触碰，tagsTouched=false 则提交不带 tag_ids，后端保持既有绑定不变
+  const tags = Array.isArray(row.tags) ? row.tags : [];
+  tagIds.value = tags.map((item) => Number((item as { id?: unknown })?.id)).filter((id) => Number.isFinite(id) && id > 0);
+  tagsTouched.value = false;
 }
 
-function buildPayload(): ContentArticlePayload | null {
+function buildPayload(): ContentArticleSavePayload | null {
   if (!form.category_id) {
     MessagePlugin.warning('请选择分类');
     return null;
@@ -383,6 +407,8 @@ function buildPayload(): ContentArticlePayload | null {
     operator: form.operator.trim() || null,
     remark: form.remark.trim() || null,
     require_reread: form.require_reread || false,
+    // touched 才携带 tag_ids：清空控件 = 显式 []（后端清空绑定）；未触碰 = 缺省（后端不改动）
+    ...(tagsTouched.value ? { tag_ids: tagIds.value.map(Number) } : {}),
   };
 }
 
@@ -487,11 +513,26 @@ async function handleCoverImageUpload(event: Event) {
   }
 }
 
+async function loadTagOptions() {
+  tagLoading.value = true;
+  try {
+    const res = await adminApi.content.tags.list({ page_size: 100 });
+    tagOptions.value = res.list || [];
+  } catch {
+    tagOptions.value = [];
+  } finally {
+    tagLoading.value = false;
+  }
+}
+
 onMounted(async () => {
   pageLoading.value = true;
   try {
     const id = articleId.value;
-    const [catRes] = await Promise.allSettled([adminApi.content.categories.list({ content_type: contentType.value })]);
+    const [catRes] = await Promise.allSettled([
+      adminApi.content.categories.list({ content_type: contentType.value }),
+      loadTagOptions(),
+    ]);
     if (catRes.status === 'fulfilled') categories.value = catRes.value;
 
     if (id) {

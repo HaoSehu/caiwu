@@ -45,6 +45,8 @@ class ContentArticleController extends Controller
     {
         $article->load([
             'contentCategory',
+            // M8：编辑页回填已选标签（fe-content 依赖 detail.tags）
+            'tags:id,name',
         ]);
 
         return $this->success(AdminContentArticleDetailResource::make($article)->resolve());
@@ -57,6 +59,7 @@ class ContentArticleController extends Controller
             adminId: (int) $request->user()->id,
             traceId: $request->header('X-Request-Id'),
         );
+        $article->loadMissing('tags:id,name');
 
         return $this->success(AdminContentArticleDetailResource::make($article)->resolve(), '内容创建成功');
     }
@@ -69,6 +72,7 @@ class ContentArticleController extends Controller
             adminId: (int) $request->user()->id,
             traceId: $request->header('X-Request-Id'),
         );
+        $article->loadMissing('tags:id,name');
 
         return $this->success(AdminContentArticleDetailResource::make($article)->resolve(), '内容更新成功');
     }

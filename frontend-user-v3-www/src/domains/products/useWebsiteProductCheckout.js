@@ -88,6 +88,8 @@ export function useWebsiteProductCheckout({
       normalizeMoneyText(productDetail.value?.setup_fee || 0),
   );
   const quoteItems = computed(() => quoteResult.value?.items || []);
+  // M7 配置联动投影：仅配置了联动规则的商品报价响应才有 linkage 键，无规则商品为 null（UI 零变化）
+  const quoteLinkage = computed(() => quoteResult.value?.linkage || null);
   const appliedCoupon = computed(() => quoteResult.value?.coupon || null);
   const memberDiscount = computed(
     () => quoteResult.value?.member_discount || null,
@@ -785,6 +787,7 @@ export function useWebsiteProductCheckout({
     baseAmount,
     setupFee,
     quoteItems,
+    quoteLinkage,
     appliedCoupon,
     memberDiscount,
     memberDiscountAmount,

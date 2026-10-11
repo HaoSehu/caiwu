@@ -34,6 +34,16 @@ class BusinessException extends Exception
     }
 
     /**
+     * 随异常下发的业务载荷（如 error_code、redirect、captcha_required）。
+     *
+     * @return array<string, mixed>|null
+     */
+    public function getData(): ?array
+    {
+        return $this->data;
+    }
+
+    /**
      * 业务异常属于预期内的受控错误，由各调用层按需主动记录日志。
      * 禁止由顶层异常处理器再次上报，避免产生冗余的 ERROR 日志。
      */

@@ -198,6 +198,67 @@ export const orderApi = {
     }),
 };
 
+// ─── 账单合并（M1）─────────────────────────────────────────────────────────
+
+export interface InvoiceMergeItemRecord {
+  id: number;
+  child_invoice_id: number;
+  child_invoice_no: string;
+  amount_snapshot: string;
+  child_status: number | null;
+  child_status_label: string;
+  child_paid_amount: string | null;
+  child_paid_at: string | null;
+  merged_at: string | null;
+  created_at: string | null;
+}
+
+export interface InvoiceMergeDetail {
+  master: {
+    id: number;
+    invoice_no: string;
+    user_id: number;
+    type: string;
+    currency: string;
+    amount: string;
+    discount: string;
+    member_discount_amount: string;
+    paid_amount: string;
+    status: number;
+    status_label: string;
+    due_date: string | null;
+    paid_at: string | null;
+    merge_role: number;
+    remark: string;
+    created_at: string | null;
+  };
+  summary: {
+    child_count: number;
+    settled_count: number;
+    snapshot_amount_total: string;
+  };
+  merge_items: InvoiceMergeItemRecord[];
+}
+
+export interface AdminActionResult<T = unknown> {
+  id?: number;
+  status?: string;
+  message?: string;
+  detail?: T;
+}
+
+export const invoiceMergeApi = {
+  // 合并同用户多张待支付账单：body { user_id, invoice_ids(≥2) }
+  merge: (data: { user_id: number; invoice_ids: number[] }) =>
+    request.post<AdminActionResult<InvoiceMergeDetail>>({ url: '/v2/admin/invoices/merge', data }),
+  // 拆分合并总账单：子账单恢复独立待支付，总账单作废
+  unmerge: (id: number | string) =>
+    request.post<AdminActionResult>({ url: `/v2/admin/invoices/${id}/unmerge` }),
+  // 总账单子账单清单（含各自支付状态）
+  mergeItems: (id: number | string) =>
+    request.get<{ merge: InvoiceMergeDetail }>({ url: `/v2/admin/invoices/${id}/merge-items` }),
+};
+
 export const financeMenuApi = {
   recharges: (params: RechargeListParams) =>
     request.get<{ list?: RechargeRecord[]; total?: number; page?: number; page_size?: number }>({

@@ -1,16 +1,26 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Services\Ticket;
 
 use App\Constants\UserNotificationType;
 use App\Models\AutomationLog;
+use App\Models\Setting;
 use App\Models\Ticket;
+use App\Models\TicketDepartment;
+use App\Models\TicketDepartmentStaff;
 use App\Services\Notification\UserNotificationService;
 use App\Services\System\SettingService;
 use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class TicketAutomationService
 {
+    private const DISPATCH_CURSOR_GROUP = 'ticket';
+
+    private const DISPATCH_CURSOR_KEY = 'ticket.dispatch.cursor';
+
     public function __construct(
         private SettingService $settingService,
         private TicketService $ticketService,
@@ -117,5 +127,144 @@ class TicketAutomationService
         }
 
         return $count;
+    }
+
+    /**
+     * M3 工单部门自动分派：按部门 auto_assign_mode 选人。
+     * - 0 手动：不动 assignee_id；
+     * - 1 轮询：部门启用成员按 admin_user_id 升序循环，取游标的下一个；
+     * - 2 最少负载：COUNT 未结工单（status != 已关闭）最少者，并列取 id 小者；
+     * 无启用成员时 assignee_id 置 NULL（仅落部门）。
+     */
+    public function dispatch(Ticket $ticket, TicketDepartment $department): Ticket
+    {
+        $mode = (int) $department->auto_assign_mode;
+        if ($mode === TicketDepartment::AUTO_ASSIGN_MANUAL) {
+            return $ticket;
+        }
+
+        $candidateIds = TicketDepartmentStaff::query()
+            ->enabledStaff((int) $department->id)
+            ->pluck('admin_user_id')
+            ->map(fn ($id) => (int) $id)
+            ->values()
+            ->all();
+
+        if ($candidateIds === []) {
+            $ticket->update(['assignee_id' => null]);
+
+            return $ticket->refresh();
+        }
+
+        $assigneeId = $mode === TicketDepartment::AUTO_ASSIGN_ROUND_ROBIN
+            ? $this->nextRoundRobin((int) $department->id, $candidateIds)
+            : $this->leastLoaded($candidateIds);
+
+        $ticket->update(['assignee_id' => $assigneeId]);
+
+        return $ticket->refresh();
+    }
+
+    /**
+     * 轮询取人：游标（settings {dept_id: last_admin_id}）之后的第一个成员；游标指向末尾或缺失时回到队首。
+     *
+     * @param  list<int>  $candidateIds  按 admin_user_id 升序
+     */
+    private function nextRoundRobin(int $departmentId, array $candidateIds): int
+    {
+        $lastId = $this->loadDispatchCursor()[$departmentId] ?? null;
+        $nextId = null;
+
+        foreach ($candidateIds as $candidateId) {
+            if ($lastId === null || $candidateId > (int) $lastId) {
+                $nextId = $candidateId;
+                break;
+            }
+        }
+
+        $nextId = $nextId ?? $candidateIds[0];
+        $this->saveDispatchCursor($departmentId, $nextId);
+
+        return $nextId;
+    }
+
+    /**
+     * 最少负载取人。
+     *
+     * @param  list<int>  $candidateIds  按 admin_user_id 升序，并列时先到者（id 小者）胜出
+     */
+    private function leastLoaded(array $candidateIds): int
+    {
+        $counts = Ticket::query()
+            ->whereIn('assignee_id', $candidateIds)
+            ->where('status', '!=', TicketService::STATUS_CLOSED)
+            ->groupBy('assignee_id')
+            ->selectRaw('assignee_id, count(*) as aggregate')
+            ->pluck('aggregate', 'assignee_id');
+
+        $bestId = (int) $candidateIds[0];
+        $bestCount = null;
+
+        foreach ($candidateIds as $candidateId) {
+            $count = (int) ($counts[$candidateId] ?? 0);
+            if ($bestCount === null || $count < $bestCount) {
+                $bestId = $candidateId;
+                $bestCount = $count;
+            }
+        }
+
+        return $bestId;
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    private function loadDispatchCursor(): array
+    {
+        $raw = Setting::getValue(self::DISPATCH_CURSOR_GROUP, self::DISPATCH_CURSOR_KEY, '{}');
+        if (! is_string($raw) || trim($raw) === '') {
+            return [];
+        }
+
+        try {
+            $decoded = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
+        } catch (Throwable) {
+            return [];
+        }
+
+        if (! is_array($decoded)) {
+            return [];
+        }
+
+        $cursor = [];
+        foreach ($decoded as $key => $value) {
+            if (is_numeric($key) && is_numeric($value)) {
+                $cursor[(int) $key] = (int) $value;
+            }
+        }
+
+        return $cursor;
+    }
+
+    private function saveDispatchCursor(int $departmentId, int $adminId): void
+    {
+        $cursor = $this->loadDispatchCursor();
+        $cursor[$departmentId] = $adminId;
+
+        Setting::setValue(
+            self::DISPATCH_CURSOR_GROUP,
+            self::DISPATCH_CURSOR_KEY,
+            (string) json_encode($cursor, JSON_UNESCAPED_UNICODE)
+        );
+    }
+
+    /**
+     * 供测试断言轮询游标推进。
+     *
+     * @return array<int, int>
+     */
+    public function dispatchCursorSnapshot(): array
+    {
+        return $this->loadDispatchCursor();
     }
 }

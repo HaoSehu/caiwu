@@ -79,7 +79,7 @@
                 <t-dropdown
                   trigger="click"
                   :options="actionOptions(item)"
-                  @click="({ value }: { value: string | number }) => handleServiceAction(String(value), item)"
+                  @click="({ value }: { value: string | number }) => handleServiceActionWithTransfer(String(value), item)"
                 >
                   <button
                     type="button"
@@ -247,7 +247,7 @@
                   <t-dropdown
                     trigger="click"
                     :options="actionOptions(row)"
-                    @click="({ value }: { value: string | number }) => handleServiceAction(String(value), row)"
+                    @click="({ value }: { value: string | number }) => handleServiceActionWithTransfer(String(value), row)"
                   >
                     <t-button size="small" variant="outline">更多</t-button>
                   </t-dropdown>
@@ -345,14 +345,59 @@
         <t-button theme="primary" :loading="remarkSubmitting" @click="submitRemark">保存备注</t-button>
       </template>
     </t-dialog>
+
+    <t-dialog
+      v-model:visible="transferVisible"
+      header="服务过户"
+      width="min(32rem, calc(100vw - 2rem))"
+      destroy-on-close
+    >
+      <div class="transfer-summary-card">
+        <div class="transfer-summary-row">
+          <span>服务实例</span>
+          <strong>{{ resolveServiceName(transferTarget) }}</strong>
+        </div>
+        <div class="transfer-summary-row">
+          <span>服务 ID</span>
+          <strong>#{{ transferTarget?.id || '--' }}</strong>
+        </div>
+      </div>
+
+      <ul class="transfer-notice-list">
+        <li>转移请求发出后，接收方需在 72 小时内完成确认，逾期自动过期；</li>
+        <li>双方确认后转移立即生效，服务归属将变更为接收方；</li>
+        <li>转出方名下存在该服务未结账单时，转移会被拦截，请先结清账单。</li>
+      </ul>
+
+      <t-form label-align="top" class="transfer-form">
+        <t-form-item label="接收方账号" required-mark>
+          <t-input
+            v-model="transferForm.receiver"
+            clearable
+            maxlength="191"
+            placeholder="请输入接收方邮箱或用户 ID"
+          />
+        </t-form-item>
+      </t-form>
+      <p class="transfer-hint">发起后可在「产品与服务 → 服务过户」中查看进度或撤销请求。</p>
+
+      <template #footer>
+        <t-button variant="outline" @click="transferVisible = false">取消</t-button>
+        <t-button theme="primary" :loading="transferSubmitting" @click="submitTransfer">发起过户</t-button>
+      </template>
+    </t-dialog>
   </section>
 </template>
 <script setup lang="ts">
 import DataState from '@shared/user-v3/components/DataState.vue';
 import LoadingState from '@shared/user-v3/components/LoadingState.vue';
 import { CatalogIcon, DashboardIcon, EditIcon, SearchIcon } from 'tdesign-icons-vue-next';
-import type { PrimaryTableCol } from 'tdesign-vue-next';
-import { computed } from 'vue';
+import { MessagePlugin, type PrimaryTableCol } from 'tdesign-vue-next';
+import { computed, reactive, ref, shallowRef } from 'vue';
+
+import clientTransferApi from '@/api/serviceTransfer';
+import type { ServiceInstance } from '@/types/client';
+import { getErrorMessage } from '@/utils/error';
 
 import {
   findListSpecValue,
@@ -427,12 +472,72 @@ const columns: PrimaryTableCol[] = [
   { colKey: 'operation', title: '操作', width: '13rem', fixed: 'right', align: 'right' },
 ];
 
+// ---- 服务过户（M6）：入口 + 发起对话框，状态自含在本页，不过公共服务 composable ----
+const transferVisible = ref(false);
+const transferSubmitting = ref(false);
+const transferTarget = shallowRef<ServiceInstance | null>(null);
+const transferForm = reactive({
+  receiver: '',
+});
+
+function isRunnableService(item: ServiceInstance | Record<string, unknown> | null | undefined) {
+  return Number(item?.status) === 1;
+}
+
 function actionOptions(item: Record<string, any>) {
   const options = [{ content: '立即续费', value: 'renew' }];
+  if (isRunnableService(item)) {
+    options.push({ content: '服务过户', value: 'transfer' });
+  }
   if (item.invoice?.id) {
     options.push({ content: '账单详情', value: 'invoice' });
   }
   return options;
+}
+
+function openTransferDialog(item: ServiceInstance) {
+  transferTarget.value = item;
+  transferForm.receiver = '';
+  transferVisible.value = true;
+}
+
+async function submitTransfer() {
+  const targetId = Number(transferTarget.value?.id || 0);
+  if (!targetId) return;
+
+  const receiver = transferForm.receiver.trim();
+  if (!receiver) {
+    MessagePlugin.warning('请输入接收方邮箱或用户 ID');
+    return;
+  }
+
+  const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(receiver);
+  const toUserId = Number(receiver);
+  if (!isEmail && (!Number.isInteger(toUserId) || toUserId <= 0)) {
+    MessagePlugin.warning('请输入有效的接收方邮箱或用户 ID');
+    return;
+  }
+
+  transferSubmitting.value = true;
+  try {
+    await clientTransferApi.initiate(targetId, isEmail ? { to_user_email: receiver } : { to_user_id: toUserId });
+    transferVisible.value = false;
+    MessagePlugin.success('转移请求已发起，等待对方确认（72 小时内有效）');
+  } catch (error: unknown) {
+    if (!(error as { __handled?: boolean })?.__handled) {
+      MessagePlugin.error(getErrorMessage(error, '转移发起失败'));
+    }
+  } finally {
+    transferSubmitting.value = false;
+  }
+}
+
+function handleServiceActionWithTransfer(command: string, item: ServiceInstance) {
+  if (command === 'transfer') {
+    openTransferDialog(item);
+    return;
+  }
+  handleServiceAction(command, item);
 }
 </script>
 <style src="./index.less" lang="less" scoped></style>

@@ -10,11 +10,13 @@ use App\Http\Resources\V2\Content\PublishedContentDetailResource;
 use App\Http\Resources\V2\Content\PublishedContentSummaryResource;
 use App\Services\Notification\InboxService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
 
 class ContentV2QueryService
 {
     public function __construct(
         private readonly ContentArticleService $contentArticleService,
+        private readonly ContentTagService $contentTagService,
         private readonly InboxService $inboxService,
     ) {}
 
@@ -73,6 +75,16 @@ class ContentV2QueryService
             'page' => $page,
             'page_size' => $pageSize,
         ];
+    }
+
+    /**
+     * M8 前台标签云：按 usage_count（未删文章实时统计）倒序。
+     *
+     * @return Collection<int, array<string, mixed>>
+     */
+    public function clientTags(int $limit = 50): Collection
+    {
+        return $this->contentTagService->clientTagCloud($limit);
     }
 
     /**

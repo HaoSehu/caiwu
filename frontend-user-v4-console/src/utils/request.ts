@@ -114,4 +114,51 @@ const httpClient = createHttpClient({
   },
 });
 
+// ── M11：未实名拦截（verification_required）统一映射 ──
+// 后端 VerificationGateService 拦截时抛 BusinessException：data.error_code='verification_required'
+// + redirect='/client/verification'。信封形如 { code: 40300, message, data: {...} }，
+// 无论是 HTTP 403 还是 HTTP 200 + 业务码路径，shared 拦截器 reject 的 err.response.data 均为该信封。
+interface VerificationBlockedEnvelope {
+  data?: { error_code?: unknown; redirect?: unknown };
+}
+
+interface VerificationBlockedError {
+  response?: { data?: VerificationBlockedEnvelope };
+  __handled?: boolean;
+  config?: { silentError?: boolean };
+}
+
+let redirectingToVerification = false;
+
+function handleVerificationBlocked(error: unknown): unknown {
+  const err = error as VerificationBlockedError | undefined;
+  const payload = err?.response?.data?.data;
+  if (payload?.error_code !== 'verification_required') {
+    return error;
+  }
+  // silentError 请求由调用方全权接管（shared 契约 __handled=false 表示"调用方处理"）：
+  // 不补全局 toast、不抢跳实名页，仅透传错误。
+  if (err.config?.silentError) {
+    return error;
+  }
+  // 拦截器未接管提示时（shared 层未提示）补一条 toast；否则避免重复。
+  if (!err.__handled) {
+    MessagePlugin.warning('请先完成实名认证后再进行此操作');
+  }
+  if (!redirectingToVerification) {
+    redirectingToVerification = true;
+    const redirect =
+      typeof payload.redirect === 'string' && payload.redirect ? payload.redirect : '/client/verification';
+    router.push(redirect).finally(() => {
+      redirectingToVerification = false;
+    });
+  }
+  return error;
+}
+
+httpClient.interceptors.response.use(
+  (response) => response,
+  (error) => Promise.reject(handleVerificationBlocked(error)),
+);
+
 export default httpClient;

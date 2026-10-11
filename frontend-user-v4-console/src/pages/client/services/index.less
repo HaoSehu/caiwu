@@ -619,3 +619,52 @@
     flex-direction: column;
   }
 }
+
+// 服务过户发起对话框（M6）
+.transfer-summary-card {
+  display: grid;
+  gap: var(--td-comp-margin-s);
+  padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-m);
+  background: var(--td-bg-color-component);
+  border: thin solid var(--td-component-stroke);
+  border-radius: var(--td-radius-medium);
+}
+
+.transfer-summary-row {
+  display: flex;
+  gap: var(--td-comp-margin-s);
+  align-items: center;
+  justify-content: space-between;
+
+  > span {
+    color: var(--td-text-color-secondary);
+    font: var(--td-font-body-small);
+  }
+
+  > strong {
+    color: var(--td-text-color-primary);
+    font: var(--td-font-body-medium);
+    text-align: right;
+    overflow-wrap: anywhere;
+  }
+}
+
+.transfer-notice-list {
+  display: grid;
+  gap: 0.25rem;
+  margin: var(--td-comp-margin-m) 0;
+  padding-left: 1.25rem;
+  color: var(--td-text-color-secondary);
+  font: var(--td-font-body-small);
+}
+
+.transfer-form {
+  display: grid;
+  gap: var(--td-comp-margin-s);
+}
+
+.transfer-hint {
+  margin: 0;
+  color: var(--td-text-color-placeholder);
+  font: var(--td-font-body-small);
+}

@@ -31,6 +31,7 @@ class Invoice extends Model
         'coupon_id', 'user_coupon_id', 'coupon_code',
         'amount', 'discount', 'member_discount_amount', 'paid_amount',
         'billing_cycle', 'quantity',
+        'merged_into_id', 'merge_role', 'merged_at',
         'product_snapshot_json', 'config_snapshot', 'config_pricing_snapshot', 'coupon_snapshot', 'member_discount_snapshot',
         'status', 'due_date', 'paid_at',
         'refunded_at', 'refund_amount', 'refund_method', 'refund_trace_id',
@@ -44,6 +45,9 @@ class Invoice extends Model
             'discount' => 'decimal:2',
             'member_discount_amount' => 'decimal:2',
             'paid_amount' => 'decimal:2',
+            'merged_into_id' => 'integer',
+            'merge_role' => 'integer',
+            'merged_at' => 'datetime',
             'due_date' => 'date',
             'paid_at' => 'datetime',
             'refunded_at' => 'datetime',
@@ -128,6 +132,34 @@ class Invoice extends Model
     public function items(): HasMany
     {
         return $this->hasMany(InvoiceItem::class, 'invoice_id');
+    }
+
+    /**
+     * 账单合并（M1）：本账单作为总账单时挂载的子账单关联快照。
+     *
+     * @return HasMany<InvoiceMergeItem, $this>
+     */
+    public function mergeItems(): HasMany
+    {
+        return $this->hasMany(InvoiceMergeItem::class, 'master_invoice_id');
+    }
+
+    /**
+     * 账单合并（M1）：本账单作为子账单时所属的总账单（NULL 即未被合并）。
+     */
+    public function mergeMaster(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'merged_into_id');
+    }
+
+    /**
+     * 账单合并（M1）：本账单作为总账单时挂载的子账单（invoices 自关联）。
+     *
+     * @return HasMany<Invoice, $this>
+     */
+    public function mergedChildren(): HasMany
+    {
+        return $this->hasMany(self::class, 'merged_into_id');
     }
 
     public function getDisplayProductNameAttribute(): string

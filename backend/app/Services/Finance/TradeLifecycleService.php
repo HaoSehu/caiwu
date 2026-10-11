@@ -9,8 +9,10 @@ use App\Constants\OrderStatus;
 use App\Exceptions\BusinessException;
 use App\Models\Invoice;
 use App\Models\Order;
+use App\Services\SalesCommission\SalesCommissionService;
 use App\Support\SchemaMetadataCache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 /**
  * 交易生命周期状态机（方案 2 职责重划的核心：单一写者）。
@@ -28,6 +30,7 @@ class TradeLifecycleService
 {
     public function __construct(
         private CouponService $couponService,
+        private InvoiceMergeService $invoiceMergeService,
     ) {}
 
     /**
@@ -80,6 +83,12 @@ class TradeLifecycleService
                 'paid_at' => $paidAt,
             ])->save();
 
+            // M1 账单合并：合并总账单支付成功 → 同事务联动结清全部子账单
+            // （settleMergedChildren 内部幂等，非总账单零开销直返）。
+            if ((int) $lockedInvoice->merge_role === 1) {
+                $this->invoiceMergeService->settleMergedChildren($lockedInvoice);
+            }
+
             return $lockedInvoice;
         });
     }
@@ -104,6 +113,14 @@ class TradeLifecycleService
                 throw_if(
                     ! in_array((int) $lockedInvoice->status, [InvoiceStatus::UNPAID], true),
                     new BusinessException('当前账单状态不支持取消')
+                );
+
+                // 合并子账单不允许独立取消：总账单支付时按子账单快照结清，
+                // 独立取消会导致「总账单已收款 + 子账单被抹平」的资金多付。
+                throw_if(
+                    ($lockedInvoice->merged_into_id !== null && (int) $lockedInvoice->merged_into_id > 0)
+                        || (int) $lockedInvoice->merge_role === 1,
+                    new BusinessException('该账单已参与合并，请对合并总账单整体操作')
                 );
 
                 $lockedInvoice->forceFill(['status' => InvoiceStatus::CANCELLED])->save();
@@ -174,6 +191,19 @@ class TradeLifecycleService
         }
 
         $this->couponService->syncInvoiceCouponUsage($invoice);
+
+        // M5 提成冲正：真退款后对应计提置已取消；已发放的仅记日志提示线下追偿。
+        // 失败仅告警不阻断退款主流程（markReversed 自身幂等）。
+        try {
+            app(SalesCommissionService::class)
+                ->markReversed($invoice, '账单退款');
+        } catch (\Throwable $exception) {
+            Log::warning('[财务链路] 退款后销售提成冲正失败', [
+                'invoice_id' => (int) $invoice->id,
+                'message' => $exception->getMessage(),
+                'exception' => $exception::class,
+            ]);
+        }
 
         return $invoice;
     }
@@ -261,6 +291,18 @@ class TradeLifecycleService
 
             if ($isFullyRefunded) {
                 $this->couponService->syncInvoiceCouponUsage($lockedInvoice);
+            }
+
+            // M5 提成冲正：退款标记（部分/全额）后对应计提置已取消；已发放的仅记日志提示线下追偿。
+            try {
+                app(SalesCommissionService::class)
+                    ->markReversed($lockedInvoice, '账单退款标记');
+            } catch (\Throwable $exception) {
+                Log::warning('[财务链路] 退款标记后销售提成冲正失败', [
+                    'invoice_id' => (int) $lockedInvoice->id,
+                    'message' => $exception->getMessage(),
+                    'exception' => $exception::class,
+                ]);
             }
 
             return $lockedInvoice;

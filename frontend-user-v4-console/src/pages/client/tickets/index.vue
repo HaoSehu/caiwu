@@ -109,6 +109,22 @@
             />
           </t-select>
         </t-form-item>
+        <t-form-item label="所属部门">
+          <t-select
+            v-model="createForm.department_id"
+            clearable
+            filterable
+            :loading="departmentLoading"
+            placeholder="可选，不选则由系统智能分配"
+          >
+            <t-option
+              v-for="item in departmentOptions"
+              :key="item.id"
+              :label="item.name"
+              :value="item.id"
+            />
+          </t-select>
+        </t-form-item>
         <t-form-item label="工单标题" required-mark>
           <t-input v-model="createForm.subject" maxlength="200" placeholder="请简要描述您的问题" />
         </t-form-item>
@@ -212,6 +228,8 @@ const {
   loadErrorText,
   createForm,
   serviceSelectOptions,
+  departmentOptions,
+  departmentLoading,
   uploadFiles,
   previewVisible,
   previewUrl,

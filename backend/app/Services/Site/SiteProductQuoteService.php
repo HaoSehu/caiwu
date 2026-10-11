@@ -36,7 +36,9 @@ class SiteProductQuoteService
         $quantity = max((int) ($validated['quantity'] ?? 1), 1);
         $userId = (int) ($requestContext['user_id'] ?? 0);
         $normalizedConfig = $this->checkoutService->normalizeConfig($product, (array) ($validated['config'] ?? []));
-        $quote = $this->checkoutService->quote($product, $billingCycle, $normalizedConfig, $quantity);
+        // M7 配置联动：预览与下单共用 quoteWithLinkage，服务端按规则重算为最终价（前端仅 UX 预览）
+        $linkageQuote = $this->checkoutService->quoteWithLinkage($product, $billingCycle, $normalizedConfig, $quantity);
+        $quote = $linkageQuote['quote'];
         // 会员折扣层：目录价先按「等级 × 营销组」折算，优惠券以折后价为基数
         $catalogAmount = round((float) ($quote['total_amount'] ?? 0), 2);
         $memberDiscount = $userId > 0
@@ -74,6 +76,13 @@ class SiteProductQuoteService
         $quote['coupon'] = $coupon;
         $quote['user_coupon_id'] = (int) ($coupon['user_coupon_id'] ?? 0);
         $quote['available_coupons'] = $availableCoupons;
+
+        // M7 联动投影：visibility/disabled/adjustments/price_delta/applied_rule_ids + rules_hash，
+        // 仅在商品配置了联动规则时追加，无规则商品响应结构不变（回归红线）
+        if ($linkageQuote['linkage'] !== null) {
+            $quote['linkage'] = $linkageQuote['linkage'];
+            $quote['rules_hash'] = $linkageQuote['rules_hash'];
+        }
 
         $securityPayload = $this->checkoutSecurityService->issueQuoteToken(
             (int) $product->id,
@@ -116,6 +125,8 @@ class SiteProductQuoteService
                 'setup_fee',
                 'config_options',
                 'purchase_requires',
+                // M7：联动规则列（optionalSelectColumns 在迁移未跑的库上自动剔除，避免 SQL 报错）
+                ...Product::optionalSelectColumns(['config_linkage_rules']),
             ])
             ->whereKey($productId)
             ->first();

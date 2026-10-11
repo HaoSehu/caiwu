@@ -201,6 +201,8 @@ class NotificationTemplateService
     private function formatModel(NotificationTemplate $template): array
     {
         return [
+            // M9/M12：模板关联需要数据库 id（mass_sends.template_id / care_plans.template_id）
+            'id' => (int) $template->id,
             'channel' => (string) $template->channel,
             'code' => (string) $template->code,
             'name' => (string) $template->name,

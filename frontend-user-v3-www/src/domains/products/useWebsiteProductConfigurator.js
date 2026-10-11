@@ -230,7 +230,8 @@ export function useWebsiteProductConfigurator(productDetail) {
         (item) => item.id === regionValue,
       );
       if (region) {
-        items.push({ key: "region", label: "区域", value: region.label });
+        // key 用实际字段键（area/region 等），purchase 层 visibleSummaryItems 按 hidden 字段键过滤
+        items.push({ key: regionFieldKey.value, label: "区域", value: region.label });
       }
     }
 
@@ -239,7 +240,7 @@ export function useWebsiteProductConfigurator(productDetail) {
         (item) => item.id === configForm.os,
       );
       if (version) {
-        items.push({ key: "os", label: "系统安装", value: version.label });
+        items.push({ key: osFieldKey.value, label: "系统安装", value: version.label });
       }
     }
 
@@ -427,6 +428,7 @@ export function useWebsiteProductConfigurator(productDetail) {
   return {
     configForm,
     osConfig,
+    osFieldKey,
     regionFieldKey,
     regionOptions,
     osGroups,

@@ -84,6 +84,18 @@ export const contentRoutes: RouteRecordRaw[] = [
     },
   },
   {
+    path: 'content-tags',
+    name: 'AdminContentTags',
+    component: () => import('@/pages/content/tags/index.vue'),
+    meta: {
+      title: {
+        zh_CN: '知识库标签',
+        en_US: 'Knowledge Tags',
+      },
+      permission: 'content.list',
+    },
+  },
+  {
     path: 'content/media-library',
     name: 'AdminMediaLibrary',
     component: () => import('@/pages/content/media-library.vue'),

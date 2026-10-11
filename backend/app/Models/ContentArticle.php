@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class ContentArticle extends Model
@@ -128,6 +129,17 @@ class ContentArticle extends Model
     public function updater(): BelongsTo
     {
         return $this->belongsTo(AdminUser::class, 'updated_by');
+    }
+
+    /**
+     * M8 知识库标签：经 content_article_tags 中间表的多对多关联。
+     * pivot 维护统一走 ContentTagService::syncArticleTags（写入路径原子增减 usage_count）。
+     *
+     * @return BelongsToMany<ContentTag, $this>
+     */
+    public function tags(): BelongsToMany
+    {
+        return $this->belongsToMany(ContentTag::class, 'content_article_tags', 'article_id', 'tag_id');
     }
 
     public function scopeOfType(Builder $query, string $type): Builder

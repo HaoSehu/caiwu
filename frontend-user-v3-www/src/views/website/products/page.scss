@@ -736,6 +736,15 @@
     color: $color-primary;
     font-weight: 600;
   }
+
+  // M7 联动禁用：置灰且拦截交互（不用原生 disabled，保留 hover 供 tooltip 触发）
+  &.is-disabled,
+  &.is-disabled:hover {
+    border-color: $border-color;
+    background: $bg-color-soft;
+    color: $text-color-placeholder;
+    cursor: not-allowed;
+  }
 }
 
 // 移动端配置项是购买主链路的核心触点，热区提升到 ≥40px
@@ -1005,6 +1014,17 @@
 
   &:last-child {
     border-bottom: none;
+  }
+
+  // M7 联动禁用：置灰并拦截抽屉打开（click guard 在 openMobileSingleConfigDrawer）
+  &.is-disabled {
+    color: $text-color-placeholder;
+    cursor: not-allowed;
+
+    .mobile-config-select-label,
+    .mobile-config-select-value {
+      color: $text-color-placeholder;
+    }
   }
 }
 
@@ -1367,6 +1387,26 @@
     color: $color-success-text;
     font-size: 13px;
     font-weight: 700;
+  }
+}
+
+/* ===== M7 配置联动明细 ===== */
+.linkage-detail-toggle {
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+
+  &:hover > span:first-child {
+    color: $color-primary;
+  }
+}
+
+.linkage-detail-row {
+  > span:first-child {
+    padding-left: 12px;
   }
 }
 

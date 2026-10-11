@@ -49,6 +49,36 @@
               {{ item.name }}
             </t-button>
           </t-space>
+          <!-- M8：标签筛选（标签云 + any/all 模式切换） -->
+          <div v-if="contentTags.length" class="tag-filter-row">
+            <t-select
+              v-model="selectedTagIds"
+              class="tag-filter-row__select"
+              multiple
+              clearable
+              :min-collapsed-num="2"
+              :loading="tagsLoading"
+              placeholder="按标签筛选"
+              @change="handleTagChange"
+            >
+              <t-option
+                v-for="tag in contentTags"
+                :key="tag.id"
+                :value="tag.id"
+                :label="`${tag.name} (${tag.usage_count})`"
+              />
+            </t-select>
+            <t-radio-group
+              v-if="selectedTagIds.length > 1"
+              :value="tagMode"
+              variant="default-filled"
+              size="small"
+              @change="handleTagModeChange"
+            >
+              <t-radio-button value="any">任一标签</t-radio-button>
+              <t-radio-button value="all">同时满足</t-radio-button>
+            </t-radio-group>
+          </div>
         </t-card>
 
         <t-card class="content-card list-card" :bordered="false">
@@ -142,11 +172,17 @@ const {
   loadError,
   heroKeywords,
   currentCategoryLabel,
+  contentTags,
+  tagsLoading,
+  selectedTagIds,
+  tagMode,
   syncPage,
   selectCategory,
   updatePage,
   submitSearch,
   applyKeyword,
+  handleTagChange,
+  handleTagModeChange,
   buildDetailRoute,
 } = useContentList(props.contentType);
 
@@ -328,6 +364,19 @@ async function handleMarkAllRead() {
 .content-pagination {
   display: flex;
   justify-content: flex-end;
+}
+
+// M8：标签筛选行
+.tag-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--td-comp-margin-s);
+  align-items: center;
+  margin-top: var(--td-comp-margin-m);
+
+  &__select {
+    width: min(20rem, 100%);
+  }
 }
 
 @media (max-width: @screen-lg-rem) {

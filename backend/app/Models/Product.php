@@ -15,6 +15,11 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * 商品目录真源模型。
+ *
+ * @property array|null $config_linkage_rules M7 配置选项联动规则（[{id,when,effects}]，保存前经 ConfigLinkageRuleValidator 校验）
+ */
 class Product extends Model
 {
     use SoftDeletes;
@@ -45,6 +50,7 @@ class Product extends Model
         'custom_display_name', 'remark',
         'pricing',
         'setup_fee', 'config_options', 'purchase_requires', 'stock', 'status',
+        'config_linkage_rules',
         'sort_order', 'auto_setup',
     ];
 
@@ -54,6 +60,7 @@ class Product extends Model
             'pricing' => 'array',
             'config_options' => 'array',
             'purchase_requires' => 'array',
+            'config_linkage_rules' => 'array',
             'setup_fee' => 'decimal:2',
             'stock' => 'integer',
             'status' => 'integer',
