@@ -623,6 +623,10 @@ function formatSnapshotValue(value: unknown, key = ''): string {
 }
 
 async function loadDetail() {
+  // 本页被 keep-alive 缓存（路由未声明 keepAlive: false），切离详情路由时组件不卸载，
+  // route.params.id 会变成 undefined。此时必须静默返回：否则下面的 ID 校验会误判为非法，
+  // 在列表页弹出「无效的订单 ID」并把用户 router.replace 回列表。
+  if (route.name !== 'AdminFinanceOrderDetail') return;
   const rawId = route.params.id as string;
   if (!/^\d+$/.test(rawId) || Number(rawId) < 1) {
     detailRequestSeq.value += 1;
