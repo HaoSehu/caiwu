@@ -317,9 +317,13 @@ class ClientInvoicePaymentWorkflowService
     }
 
     /**
+     * 账单支付方式唯一组装点：零元账单返回 free，其余为「余额 + 第三方网关选项」。
+     * 第三方部分与充值模块同源（PaymentGatewayManager::availableThirdPartyGatewayOptions()），
+     * 详情接口（InvoiceController）与 create/pay 响应均复用本方法，新增/下架网关自动跟随。
+     *
      * @return list<array<string, mixed>>
      */
-    private function availablePaymentMethods(float $payableAmount): array
+    public function availablePaymentMethods(float $payableAmount): array
     {
         if ($payableAmount <= 0) {
             return [['key' => 'free', 'name' => '确认支付', 'label' => '零元账单', 'option_key' => 'free']];

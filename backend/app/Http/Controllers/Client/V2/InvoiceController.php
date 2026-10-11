@@ -13,8 +13,8 @@ use App\Http\Resources\Client\V2\ClientInvoiceSummaryResource;
 use App\Models\Invoice;
 use App\Services\Finance\CheckoutSecurityService;
 use App\Services\Finance\CheckoutService;
+use App\Services\Finance\ClientInvoicePaymentWorkflowService;
 use App\Services\Finance\InvoiceV2QueryService;
-use App\Services\Integrations\Payments\PaymentGatewayManager;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -24,7 +24,7 @@ class InvoiceController extends Controller
         private readonly InvoiceV2QueryService $invoices,
         private readonly CheckoutService $checkoutService,
         private readonly CheckoutSecurityService $checkoutSecurityService,
-        private readonly PaymentGatewayManager $paymentGatewayManager,
+        private readonly ClientInvoicePaymentWorkflowService $invoicePayments,
     ) {}
 
     public function index(ListInvoicesRequest $request): JsonResponse
@@ -69,7 +69,8 @@ class InvoiceController extends Controller
         $canCancel = in_array((int) $invoice->status, [InvoiceStatus::UNPAID], true);
 
         return array_merge($payload, [
-            'pay_methods' => $this->availableInvoicePayMethods($payableAmount),
+            // 与充值模块同源：统一走 ClientInvoicePaymentWorkflowService::availablePaymentMethods()
+            'pay_methods' => $this->invoicePayments->availablePaymentMethods($payableAmount),
             'payment_security' => [
                 'can_pay' => $canCancel && (bool) ($security['session_token'] ?? false),
                 'session_token' => (string) ($security['session_token'] ?? ''),
@@ -77,21 +78,6 @@ class InvoiceController extends Controller
             ],
             'can_cancel' => $canCancel,
         ]);
-    }
-
-    /**
-     * @return list<array<string, mixed>>
-     */
-    private function availableInvoicePayMethods(float $payableAmount): array
-    {
-        if ($payableAmount <= 0) {
-            return [['key' => 'free', 'name' => '确认支付', 'label' => '零元账单', 'option_key' => 'free']];
-        }
-
-        return [
-            ['key' => 'balance', 'name' => '余额支付', 'label' => '账户余额', 'option_key' => 'balance'],
-            ...$this->paymentGatewayManager->availableThirdPartyGatewayOptions(),
-        ];
     }
 
     /**
