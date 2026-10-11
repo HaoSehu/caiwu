@@ -91,7 +91,7 @@
           </template>
           <template #invoice="{ row }">
             <div v-if="row.invoice?.invoice_no" class="stack-cell">
-              <t-link theme="primary" hover="color" @click="openInvoiceDrawer(row)">
+              <t-link theme="primary" hover="color" @click="goInvoiceDetail(row)">
                 {{ row.invoice.invoice_no }}
               </t-link>
               <span v-if="row.invoice?.paid_at">支付：{{ formatDateTime(row.invoice.paid_at) }}</span>
@@ -141,14 +141,6 @@
     </t-card>
 
     <!-- 关联账单快速抽屉 -->
-    <invoice-detail-drawer
-      v-model:visible="invoiceDrawerState.visible"
-      :invoice="currentInvoice"
-      :payments="invoicePayments"
-      :items="invoiceItems"
-      :logs="invoiceLogs"
-      @refresh="reloadInvoiceDetail"
-    />
   </div>
 </template>
 <script setup lang="ts">
@@ -161,14 +153,11 @@ import { MessagePlugin } from 'tdesign-vue-next';
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
-import type { InvoiceRecord, OrderRecord } from '@/api/admin';
+import type { OrderRecord } from '@/api/admin';
 import { adminApi } from '@/api/admin';
-import InvoiceDetailDrawer from '@/components/finance-record-detail/InvoiceDetailDrawer.vue';
 import MobileRecordCard from '@/components/mobile-record-card/index.vue';
 import QuickFilterTags from '@/components/quick-filter-tags/index.vue';
 import StatusTag from '@/components/status-tag/index.vue';
-import type { InvoiceDetailPayload } from '@/hooks/useFinanceDetailDrawer';
-import { useFinanceDetailDrawer } from '@/hooks/useFinanceDetailDrawer';
 import { useListPage } from '@/hooks/useListPage';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { fieldValue, formatDateTime, formatMoney } from '@/utils/format';
@@ -305,54 +294,14 @@ function mobileActionOptions(row: OrderRecord) {
 
 function handleMobileAction(value: unknown, row: OrderRecord) {
   if (value === 'detail') goDetail(row);
-  if (value === 'invoice') openInvoiceDrawer(row);
+  if (value === 'invoice') goInvoiceDetail(row);
 }
 
-// 账单详情抽屉联动
-function normalizeInvoiceDetailPayload(
-  payload: Record<string, unknown> = {},
-  fallback: InvoiceRecord = {},
-): InvoiceDetailPayload {
-  const invoice =
-    payload.invoice && typeof payload.invoice === 'object'
-      ? (payload.invoice as InvoiceRecord)
-      : (payload as InvoiceRecord);
-  return {
-    invoice: {
-      ...fallback,
-      ...invoice,
-    },
-    payments: Array.isArray(payload.payments)
-      ? (payload.payments as Record<string, unknown>[])
-      : invoiceDrawerState.detail.payments,
-    items: Array.isArray(payload.items) ? (payload.items as Record<string, unknown>[]) : [],
-    logs: Array.isArray(payload.logs) ? (payload.logs as Record<string, unknown>[]) : [],
-  };
-}
-
-const { detailState: invoiceDrawerState, reloadDetail: reloadInvoiceDetail } = useFinanceDetailDrawer({
-  fetchDetail: (id) => adminApi.invoices.detail(id),
-  errorFallback: '加载账单详情失败',
-  normalize: normalizeInvoiceDetailPayload,
-});
-
-const currentInvoice = computed(() => invoiceDrawerState.detail.invoice || ({} as InvoiceRecord));
-const invoicePayments = computed(() => invoiceDrawerState.detail.payments || []);
-const invoiceItems = computed(() => invoiceDrawerState.detail.items || []);
-const invoiceLogs = computed(() => invoiceDrawerState.detail.logs || []);
-
-async function openInvoiceDrawer(row: OrderRecord) {
-  const invoiceId = row.invoice?.id;
+/** 查看关联账单：跳转财务账单详情页（与账单列表「详情」入口一致）。 */
+function goInvoiceDetail(row: OrderRecord) {
+  const invoiceId = Number(row.invoice?.id ?? 0);
   if (!invoiceId) return;
-  invoiceDrawerState.visible = true;
-  invoiceDrawerState.currentId = Number(invoiceId);
-  invoiceDrawerState.detail = {
-    invoice: (row.invoice || {}) as InvoiceRecord,
-    payments: [],
-    items: [],
-    logs: [],
-  };
-  await reloadInvoiceDetail();
+  router.push(`/admin/finance/invoices/${invoiceId}`);
 }
 
 function orderMobileRows(row: OrderRecord) {

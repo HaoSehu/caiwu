@@ -81,6 +81,22 @@ export interface InvoiceRecord {
   coupon_name?: string;
   paid_amount?: number | string;
   status?: number | string;
+  // 退款投影（纯标记与真退款同表累计；refund_status 为派生态 0/1/2）
+  refund_amount?: number | string;
+  refundable_amount?: number | string;
+  refund_method?: string;
+  refunded_at?: string | null;
+  refund_status?: number;
+  refund_status_label?: string;
+  is_partially_refunded?: boolean;
+  can_mark_refund?: boolean;
+  /** 退款到余额（真退款）能力：需账单有支付单、状态 PAID、未走过纯标记通道 */
+  can_refund_to_balance?: boolean;
+  /** 真退款可退额（单次口径的轻量近似，服务端守卫为准） */
+  refundable_amount_for_balance?: number | string;
+  /** 已有纯标记退款记录（与真退款通道互斥） */
+  has_manual_mark_refund?: boolean;
+  refunds?: Record<string, unknown>[];
   created_at?: string;
   paid_at?: string | null;
   due_date?: string | null;
@@ -138,6 +154,10 @@ export interface OrderRecord {
   coupon_code?: string;
   quantity?: number | string;
   status?: number | string;
+  // 退款投影（订单侧与账单同值，由 TradeLifecycleService 同步写）
+  refund_amount?: number | string;
+  refunded_at?: string | null;
+  refund_status?: number;
   invoice?: Record<string, unknown> | null;
   created_at?: string;
   [key: string]: unknown;

@@ -44,6 +44,28 @@ class InvoiceRefundService
     ) {}
 
     /**
+     * 退款标记通道的可退上限（累计口径，供 InvoiceRefundMarkService 守卫）。
+     *
+     * 与真退款的单次口径（remainingRefundableAmount）差异是刻意为之：后者只取
+     * 「主支付单金额」——真退款一次把一笔钱退回余额，多笔支付需人工分次发起；
+     * 退款标记是**累计登记线下已退事实**，上限必须是整笔实收，否则「订单拆分
+     * 支付 50+50」场景第一次标记 50 后可退归零，剩余 50 永远标不了、
+     * 账单无法收口 REFUNDED。
+     *
+     * 公式：实收基数 max(paid_amount, amount) − 已转余额的异常支付金额
+     * − 已完成退款累计（refunds 表口径，纯标记与真退款同表）。
+     */
+    public function markRefundableAmountOf(Invoice $invoice): float
+    {
+        $gross = round(max((float) ($invoice->paid_amount ?? 0), (float) ($invoice->amount ?? 0)), 2);
+
+        return round(
+            max($gross - $this->invoiceCreditedToBalanceAmount($invoice) - $this->completedRefundAmount($invoice), 0),
+            2
+        );
+    }
+
+    /**
      * 后台发起账单退款到用户余额
      *
      * @return array<string, mixed>
@@ -74,6 +96,18 @@ class InvoiceRefundService
                     throw_if(
                         in_array((string) $lockedInvoice->type, [InvoiceType::RECHARGE, InvoiceType::MANUAL], true),
                         new BusinessException('充值/补录账单不支持退回余额')
+                    );
+
+                    // 与纯标记通道互斥（2026-10-11 裁决：一单只选一种）：
+                    // 同一张账单要么整笔走「线下补标记」，要么整笔走「退款到余额」，
+                    // 混用会让两种资金语义在同一账单上叠加、对账无法解释。
+                    throw_if(
+                        Refund::query()
+                            ->where('invoice_id', (int) $lockedInvoice->id)
+                            ->where('refund_method', Refund::METHOD_MANUAL_MARK)
+                            ->where('status', Refund::STATUS_COMPLETED)
+                            ->exists(),
+                        new BusinessException('该账单已有线下退款标记，请在「标记已退款」入口完成剩余退款')
                     );
 
                     $order = $lockedInvoice->order;

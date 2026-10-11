@@ -81,7 +81,7 @@
           <template #paidAt="{ row }">{{ formatDateTime(row.paid_at) }}</template>
           <template #operation="{ row }">
             <t-space v-if="!isMobile" size="small">
-              <t-button size="small" variant="text" theme="primary" @click="openDetail(row)">详情</t-button>
+              <t-button size="small" variant="text" theme="primary" @click="goDetail(row)">详情</t-button>
               <t-button
                 v-if="canCancel(row)"
                 size="small"
@@ -134,44 +134,24 @@
         />
       </div>
     </t-card>
-
-    <invoice-detail-drawer
-      v-model:visible="detailState.visible"
-      :loading="detailState.loading"
-      :invoice="currentInvoice"
-      :payments="invoicePayments"
-      :items="invoiceItems"
-      :logs="invoiceLogs"
-      :status-label="invoiceStatusLabel(currentInvoice.status)"
-      :status-theme="invoiceStatusTheme(currentInvoice.status)"
-      :cancelable="canCancel(currentInvoice)"
-      :cancel-loading="detailState.cancelLoading"
-      @close="closeDetail"
-      @refresh="reloadDetail"
-      @cancel="confirmCancel(currentInvoice, true)"
-      @view-order="(id) => id && router.push(`/admin/finance/orders/${id}`)"
-      @view-user="(id) => id && router.push(`/admin/users/${id}`)"
-    />
   </div>
 </template>
 <script setup lang="ts">
 import './index.less';
 
-import { INVOICE_STATUS_MAP, INVOICE_TYPE_MAP, toLabelMap, toTagTypeMap } from '@shared/statusConfig';
+import { INVOICE_STATUS_MAP, INVOICE_TYPE_MAP, toLabelMap } from '@shared/statusConfig';
 import { SearchIcon } from 'tdesign-icons-vue-next';
 import type { DropdownOption, PrimaryTableCol } from 'tdesign-vue-next';
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
-import { computed, ref } from 'vue';
+import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 import type { InvoiceRecord } from '@/api/admin';
 import { adminApi } from '@/api/admin';
-import InvoiceDetailDrawer from '@/components/finance-record-detail/InvoiceDetailDrawer.vue';
 import MobileRecordCard from '@/components/mobile-record-card/index.vue';
 import QuickFilterTags from '@/components/quick-filter-tags/index.vue';
 import StatusTag from '@/components/status-tag/index.vue';
 import { AdminPermissions, hasPermissionInList } from '@/constants/permissions';
-import { useFinanceDetailDrawer } from '@/hooks/useFinanceDetailDrawer';
 import { useListPage } from '@/hooks/useListPage';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useUserStore } from '@/store';
@@ -225,13 +205,7 @@ const {
   fetch: (params) => adminApi.invoices.list(params),
 });
 
-const { detailState, openDetail, reloadDetail, closeDetail } = useFinanceDetailDrawer({
-  fetchDetail: (id) => adminApi.invoices.detail(id),
-  errorFallback: '加载账单详情失败',
-});
-
 const statusLabelMap = toLabelMap(INVOICE_STATUS_MAP);
-const statusTypeMap = toTagTypeMap(INVOICE_STATUS_MAP);
 
 const invoiceTypeOptions = Object.entries(INVOICE_TYPE_MAP)
   .filter(([value]) => value !== 'normal') // 历史兼容别名，不单独列出
@@ -253,15 +227,6 @@ const columns: PrimaryTableCol<InvoiceRecord>[] = [
   { colKey: 'operation', title: '操作', width: 130, fixed: 'right' },
 ];
 
-const currentInvoice = computed(() => detailState.detail.invoice || ({} as InvoiceRecord));
-const invoicePayments = computed(() => detailState.detail.payments || []);
-const invoiceItems = computed(() => {
-  const sceneItems = currentInvoice.value.scene?.items;
-  if (Array.isArray(sceneItems)) return sceneItems as Record<string, unknown>[];
-  return detailState.detail.items || [];
-});
-const invoiceLogs = computed(() => detailState.detail.logs || []);
-
 function userPermissions() {
   const info = userStore.userInfo as { permissions?: string[] };
   return Array.isArray(info.permissions) ? info.permissions : [];
@@ -277,7 +242,14 @@ function canCancel(row: InvoiceRecord) {
   return hasPermission(AdminPermissions.INVOICE_MANAGE) && [0].includes(status);
 }
 
-function confirmCancel(row: InvoiceRecord, fromDrawer = false) {
+// ─── 详情：跳转财务账单详情页（与订单列表一致，不在列表页内嵌抽屉） ───
+function goDetail(row: InvoiceRecord) {
+  const id = Number(row.id ?? 0);
+  if (!id) return;
+  router.push(`/admin/finance/invoices/${id}`);
+}
+
+function confirmCancel(row: InvoiceRecord) {
   const dialog = DialogPlugin.confirm({
     header: '取消账单',
     body: `确认取消账单「${row.invoice_no || row.id}」吗？`,
@@ -285,26 +257,23 @@ function confirmCancel(row: InvoiceRecord, fromDrawer = false) {
     confirmBtn: { content: '确定', theme: 'warning' },
     cancelBtn: '取消',
     async onConfirm() {
-      await cancelInvoice(row, fromDrawer);
+      await cancelInvoice(row);
       dialog.hide();
     },
   });
 }
 
-async function cancelInvoice(row: InvoiceRecord, fromDrawer = false) {
+async function cancelInvoice(row: InvoiceRecord) {
   if (!row.id) return;
-  if (fromDrawer) detailState.cancelLoading = true;
   cancelLoadingId.value = row.id;
   try {
     await adminApi.invoices.cancel(row.id);
     MessagePlugin.success('账单已取消');
     await loadList();
-    if (detailState.currentId === Number(row.id)) await reloadDetail();
   } catch (error) {
     MessagePlugin.error(errorMessage(error, '取消账单失败'));
   } finally {
     cancelLoadingId.value = null;
-    detailState.cancelLoading = false;
   }
 }
 
@@ -330,7 +299,7 @@ function handleMobileActionHandler(row: InvoiceRecord) {
 }
 
 function handleMobileAction(action: unknown, row: InvoiceRecord) {
-  if (action === 'detail') openDetail(row);
+  if (action === 'detail') goDetail(row);
   if (action === 'order' && row.order?.id) goToOrder(row.order.id);
   if (action === 'cancel' && canCancel(row)) confirmCancel(row);
 }
@@ -386,15 +355,6 @@ function couponDiscountOf(row: Record<string, unknown>): number {
 
 function memberDiscountOf(row: Record<string, unknown>): number {
   return Number(row.member_discount_amount || 0);
-}
-
-function invoiceStatusLabel(status: unknown) {
-  return statusLabelMap[String(status ?? '')] || fieldValue(status);
-}
-
-function invoiceStatusTheme(status: unknown) {
-  const value = statusTypeMap[String(status ?? '')] || 'default';
-  return value === 'info' ? 'default' : value;
 }
 
 function userName(user: unknown) {

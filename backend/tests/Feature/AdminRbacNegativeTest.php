@@ -6,6 +6,7 @@ namespace Tests\Feature;
 
 use App\Models\AdminUser;
 use App\Models\Role;
+use App\Services\Admin\Rbac\PermissionCatalogService;
 use App\Support\AdminPermissions;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Laravel\Sanctum\Sanctum;
@@ -56,6 +57,40 @@ class AdminRbacNegativeTest extends TestCase
             ->assertStatus(403)
             ->assertJsonPath('code', 40300)
             ->assertJsonPath('message', '管理员账号已被禁用');
+    }
+
+    /**
+     * 退款标记权限（finance.refund）：资金域敏感操作，必须在权限目录中登记
+     * （资金操作组 / high 风险级），且默认不下发任何内置角色。
+     */
+    public function test_refund_mark_permission_is_catalogued_but_not_defaulted(): void
+    {
+        $catalog = app(PermissionCatalogService::class);
+        $item = null;
+        foreach ($catalog->list() as $entry) {
+            if (($entry['key'] ?? '') === AdminPermissions::FINANCE_REFUND) {
+                $item = $entry;
+                break;
+            }
+        }
+
+        $this->assertNotNull($item, 'finance.refund 必须出现在权限目录');
+        $this->assertSame('finance_funds', $item['group']);
+        $this->assertSame('high', $item['risk_level']);
+        $this->assertSame('标记账单退款', $item['name']);
+        $this->assertSame('退款标记', $item['action_label']);
+        $this->assertTrue((bool) $item['is_dangerous']);
+
+        $this->assertNotContains(AdminPermissions::FINANCE_REFUND, AdminPermissions::visitorPermissions());
+        $this->assertNotContains(AdminPermissions::FINANCE_REFUND, AdminPermissions::adminDefaultPermissions());
+        $this->assertNotContains(
+            AdminPermissions::FINANCE_REFUND,
+            AdminPermissions::impliedPermissions(AdminPermissions::INVOICE_MANAGE)
+        );
+        $this->assertNotContains(
+            AdminPermissions::FINANCE_REFUND,
+            AdminPermissions::impliedPermissions(AdminPermissions::ORDER_MANAGE)
+        );
     }
 
     /**

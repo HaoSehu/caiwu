@@ -9,12 +9,14 @@ use App\Constants\InvoiceType;
 use App\Constants\ServiceStatus;
 use App\Models\Invoice;
 use App\Models\ReferralWithdrawal;
+use App\Models\Refund;
 use App\Models\Service;
 use App\Models\Ticket;
 use App\Models\User;
 use App\Support\AdminPrivacy;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 class DashboardService
 {
@@ -31,6 +33,13 @@ class DashboardService
     private const OVERVIEW_STATS_CACHE_KEY = 'dashboard:overview:stats';
 
     private const OVERVIEW_STATS_CACHE_TTL_SECONDS = 60;
+
+    /**
+     * 收入净额 SQL（退款标记批 2026-10-11）：实收 − 已完成退款累计（refunds 表口径，
+     * 纯标记与真退款统一），GREATEST 防负。依赖 salesIncomeInvoices() 的
+     * invoice_refund_totals 左连接与 invoices.* 全表前缀。
+     */
+    private const NET_INCOME_SQL = 'GREATEST(COALESCE(NULLIF(invoices.paid_amount, 0), invoices.amount, 0) - COALESCE(invoice_refund_totals.refunded_total, 0), 0)';
 
     public function overview(): array
     {
@@ -89,8 +98,8 @@ class DashboardService
             ->first();
 
         $invoiceIncomeStats = $this->salesIncomeInvoices()
-            ->selectRaw('COALESCE(SUM(CASE WHEN status = ? AND paid_at >= ? THEN paid_amount ELSE 0 END), 0) as today_income', [InvoiceStatus::PAID, $today])
-            ->selectRaw('COALESCE(SUM(CASE WHEN status = ? AND paid_at >= ? THEN paid_amount ELSE 0 END), 0) as month_income', [InvoiceStatus::PAID, $month])
+            ->selectRaw('COALESCE(SUM(CASE WHEN invoices.status = ? AND invoices.paid_at >= ? THEN '.self::NET_INCOME_SQL.' ELSE 0 END), 0) as today_income', [InvoiceStatus::PAID, $today])
+            ->selectRaw('COALESCE(SUM(CASE WHEN invoices.status = ? AND invoices.paid_at >= ? THEN '.self::NET_INCOME_SQL.' ELSE 0 END), 0) as month_income', [InvoiceStatus::PAID, $month])
             ->first();
 
         // 昨日同口径数据用于环比；独立 count/sum 查询，避免与上方聚合复用造成口径漂移
@@ -105,10 +114,10 @@ class DashboardService
             ->count();
 
         $yesterdayIncome = (float) $this->salesIncomeInvoices()
-            ->where('status', InvoiceStatus::PAID)
-            ->where('paid_at', '>=', $yesterday)
-            ->where('paid_at', '<', $today)
-            ->sum('paid_amount');
+            ->where('invoices.status', InvoiceStatus::PAID)
+            ->where('invoices.paid_at', '>=', $yesterday)
+            ->where('invoices.paid_at', '<', $today)
+            ->sum(DB::raw(self::NET_INCOME_SQL));
 
         $expiringDeadline = now()->addDays(self::EXPIRING_SOON_DAYS);
 
@@ -213,15 +222,15 @@ class DashboardService
 
         // 本月已付账单按产品归一度量（同每日趋势的 paid_at 口径），金额按整数分累加避免浮点误差
         $allProducts = $this->salesIncomeInvoices()
-            ->where('status', InvoiceStatus::PAID)
-            ->where('paid_at', '>=', $month)
-            ->where('paid_at', '<', $month->copy()->addMonth())
+            ->where('invoices.status', InvoiceStatus::PAID)
+            ->where('invoices.paid_at', '>=', $month)
+            ->where('invoices.paid_at', '<', $month->copy()->addMonth())
             ->selectRaw('
-                COALESCE(NULLIF(product_spec_snapshot, ""), "未知产品") as product_name,
-                ROUND(COALESCE(SUM(paid_amount), 0) * 100) as total_amount_cents,
+                COALESCE(NULLIF(invoices.product_spec_snapshot, ""), "未知产品") as product_name,
+                ROUND(COALESCE(SUM('.self::NET_INCOME_SQL.'), 0) * 100) as total_amount_cents,
                 COUNT(*) as count
             ')
-            ->groupByRaw('COALESCE(NULLIF(product_spec_snapshot, ""), "未知产品")')
+            ->groupByRaw('COALESCE(NULLIF(invoices.product_spec_snapshot, ""), "未知产品")')
             ->orderByDesc('total_amount_cents')
             ->get();
 
@@ -250,11 +259,11 @@ class DashboardService
 
         // 本月每日已付金额趋势
         $dailyPaid = $this->salesIncomeInvoices()
-            ->where('status', InvoiceStatus::PAID)
-            ->where('paid_at', '>=', $month)
-            ->where('paid_at', '<', $month->copy()->addMonth())
-            ->selectRaw('DATE(paid_at) as date, ROUND(COALESCE(SUM(paid_amount), 0) * 100) as daily_amount_cents, COUNT(*) as daily_count')
-            ->groupByRaw('DATE(paid_at)')
+            ->where('invoices.status', InvoiceStatus::PAID)
+            ->where('invoices.paid_at', '>=', $month)
+            ->where('invoices.paid_at', '<', $month->copy()->addMonth())
+            ->selectRaw('DATE(invoices.paid_at) as date, ROUND(COALESCE(SUM('.self::NET_INCOME_SQL.'), 0) * 100) as daily_amount_cents, COUNT(*) as daily_count')
+            ->groupByRaw('DATE(invoices.paid_at)')
             ->get()
             ->keyBy('date');
 
@@ -292,18 +301,32 @@ class DashboardService
     }
 
     /**
-     * 商品销售收入不包含充值、后台扣款和推荐奖励等资金流水；退款红字账单保留，用于冲抵销售收入。
+     * 商品销售收入不包含充值、后台扣款和推荐奖励等资金流水。
+     *
+     * 退款口径（退款标记批 2026-10-11）：左连接已完成退款累计（refunds 表口径，
+     * 纯标记与真退款统一），配合 NET_INCOME_SQL 净额扣减；红字账单（type=refund）
+     * 本身就是退款的表达，与净额扣减互斥，排除出收入集合避免双计——
+     * 部分真退款不再出现 X-2Y 重复扣减，全额真退款贡献 0 而非 -X。
+     * 注意：加 join 后所有 invoices 列必须带表前缀（裸列会歧义或错账）。
      *
      * @return Builder<Invoice>
      */
     private function salesIncomeInvoices(): Builder
     {
-        return Invoice::query()->where(function (Builder $query): void {
-            $query->whereNull('type')->orWhereNotIn('type', [
-                InvoiceType::RECHARGE,
-                InvoiceType::DEDUCTION,
-                InvoiceType::REFERRAL_CREDIT,
-            ]);
-        });
+        $refundTotals = Refund::query()
+            ->select('invoice_id', DB::raw('SUM(amount) as refunded_total'))
+            ->where('status', Refund::STATUS_COMPLETED)
+            ->groupBy('invoice_id');
+
+        return Invoice::query()
+            ->leftJoinSub($refundTotals, 'invoice_refund_totals', 'invoice_refund_totals.invoice_id', '=', 'invoices.id')
+            ->where(function (Builder $query): void {
+                $query->whereNull('invoices.type')->orWhereNotIn('invoices.type', [
+                    InvoiceType::RECHARGE,
+                    InvoiceType::DEDUCTION,
+                    InvoiceType::REFERRAL_CREDIT,
+                    InvoiceType::REFUND,
+                ]);
+            });
     }
 }

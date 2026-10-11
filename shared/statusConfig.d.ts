@@ -26,6 +26,7 @@ export const SERVICE_STATUS: Record<string, number>
 export const TICKET_STATUS: Record<string, number>
 export const NOTIFY_STATUS: Record<string, string>
 export const REWARD_STATUS: Record<string, number>
+export const REFUND_STATUS: Record<string, number>
 
 export const ORDER_TYPE_MAP: Record<string, string>
 export const INVOICE_TYPE_MAP: Record<string, string>
@@ -34,6 +35,7 @@ export const TRANSACTION_TYPE_MAP: Record<string, string>
 export const ORDER_STATUS_MAP: StatusMap
 export const ORDER_STATUS_FILTER_OPTIONS: Array<{ label: string, value: string | number }>
 export const INVOICE_STATUS_MAP: StatusMap
+export const REFUND_STATUS_MAP: StatusMap
 export const PAYMENT_STATUS_MAP: StatusMap
 export const MANUAL_PAYMENT_METHOD_MAP: StatusMap
 export const SERVICE_STATUS_MAP: StatusMap

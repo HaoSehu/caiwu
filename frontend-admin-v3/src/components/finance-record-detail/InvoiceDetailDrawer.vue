@@ -1,16 +1,10 @@
 <template>
-  <t-drawer
-    :visible="visible"
-    :size="drawerSize"
-    header="账单详情"
-    :footer="false"
-    @update:visible="(value: boolean) => emit('update:visible', value)"
-    @close="emit('close')"
-  >
+  <!-- embedded 模式：渲染为独立详情页内容（财务账单详情页复用），不套抽屉外壳 -->
+  <component :is="shellComponent" v-bind="shellProps">
     <record-detail-page
       :loading="loading"
       :ready="Boolean(invoice.id || invoice.invoice_no)"
-      :show-back="false"
+      :show-back="embedded"
       eyebrow="账单详情"
       :title="fieldValue(invoice.invoice_no || invoice.id)"
       :description="invoiceTitle(invoice)"
@@ -21,9 +15,11 @@
       :active-tab="activeTab"
       empty-text="账单不存在"
       @refresh="emit('refresh')"
+      @back="handleBack"
       @update:active-tab="(value) => (activeTab = value)"
     >
       <template #toolbar-actions>
+        <t-button v-if="canRefund" theme="warning" variant="outline" @click="emit('mark-refund')"> 退款 </t-button>
         <t-button v-if="cancelable" theme="danger" variant="outline" :loading="cancelLoading" @click="emit('cancel')">
           取消账单
         </t-button>
@@ -127,6 +123,53 @@
           </div>
         </section>
 
+        <section v-if="hasRefundInfo" class="finance-detail-section">
+          <h4>退款信息</h4>
+          <div class="detail-kv-grid">
+            <div class="detail-kv-item">
+              <span class="detail-kv-item__label">退款状态</span>
+              <div class="detail-kv-item__value">
+                <t-tag :theme="refundTagTheme" variant="light">{{ refundStatusLabel }}</t-tag>
+              </div>
+            </div>
+            <div class="detail-kv-item">
+              <span class="detail-kv-item__label">累计已退款</span>
+              <strong class="detail-kv-item__value">{{ formatMoney(invoice.refund_amount) }}</strong>
+            </div>
+            <div v-if="canMarkRefund" class="detail-kv-item">
+              <span class="detail-kv-item__label">可标记余额</span>
+              <strong class="detail-kv-item__value">{{ formatMoney(invoice.refundable_amount) }}</strong>
+            </div>
+            <div v-if="invoice.refund_method" class="detail-kv-item">
+              <span class="detail-kv-item__label">退款方式</span>
+              <strong class="detail-kv-item__value">{{
+                invoice.refund_method === 'manual_mark' ? '线下补标记' : '退回余额'
+              }}</strong>
+            </div>
+            <div v-if="invoice.refunded_at" class="detail-kv-item">
+              <span class="detail-kv-item__label">最近退款时间</span>
+              <strong class="detail-kv-item__value">{{ formatDateTime(invoice.refunded_at) }}</strong>
+            </div>
+          </div>
+        </section>
+
+        <section v-if="refundRecords.length" class="finance-detail-section">
+          <h4>退款记录</h4>
+          <div class="finance-line-list">
+            <div v-for="record in refundRecords" :key="String(record.refund_no || record.id)" class="finance-line-item">
+              <div class="finance-line-item__main">
+                <span>{{ fieldValue(record.refund_no) }}</span>
+                <span class="finance-line-item__meta">
+                  {{ fieldValue(record.refund_method_label) }} · {{ fieldValue(record.operator_name) || '--' }} ·
+                  {{ formatDateTime(record.refunded_at) }}
+                </span>
+              </div>
+              <strong>{{ formatMoney(record.amount) }}</strong>
+            </div>
+          </div>
+          <p v-if="refundReasonOfLatest" class="finance-detail-section__note">最近原因：{{ refundReasonOfLatest }}</p>
+        </section>
+
         <section v-if="items.length" class="finance-detail-section">
           <h4>账单项目</h4>
           <div class="finance-line-list">
@@ -180,10 +223,16 @@
         </section>
       </template>
     </record-detail-page>
-  </t-drawer>
+  </component>
 </template>
 <script setup lang="ts">
-import { getStatusLabel, getStatusTagType, INVOICE_TYPE_MAP, PAYMENT_STATUS_MAP } from '@shared/statusConfig';
+import {
+  getStatusLabel,
+  getStatusTagType,
+  INVOICE_TYPE_MAP,
+  PAYMENT_STATUS_MAP,
+  REFUND_STATUS,
+} from '@shared/statusConfig';
 import { FileCopyIcon } from 'tdesign-icons-vue-next';
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
@@ -192,7 +241,7 @@ import type { InvoiceRecord } from '@/api/admin';
 import type { RecordDetailMetric, RecordDetailTab } from '@/components/record-detail-page/index.vue';
 import RecordDetailPage from '@/components/record-detail-page/index.vue';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { copyToClipboard } from '@/utils/format';
+import { copyToClipboard, formatDateTime, formatMoney } from '@/utils/format';
 
 const props = withDefaults(
   defineProps<{
@@ -206,6 +255,8 @@ const props = withDefaults(
     statusTheme?: string;
     cancelable?: boolean;
     cancelLoading?: boolean;
+    /** 独立详情页模式：渲染为页面内容而非抽屉外壳 */
+    embedded?: boolean;
   }>(),
   {
     loading: false,
@@ -217,21 +268,49 @@ const props = withDefaults(
     statusTheme: 'default',
     cancelable: false,
     cancelLoading: false,
+    /** 独立详情页模式：渲染为页面内容而非抽屉外壳 */
+    embedded: false,
   },
 );
 
 const emit = defineEmits<{
   (event: 'update:visible', value: boolean): void;
   (event: 'close'): void;
+  (event: 'back'): void;
   (event: 'refresh'): void;
   (event: 'cancel'): void;
+  (event: 'mark-refund'): void;
   (event: 'view-order', id: unknown): void;
   (event: 'view-user', id: unknown): void;
 }>();
 
 const isMobile = useMediaQuery('(max-width: 768px)');
 const drawerSize = computed(() => (isMobile.value ? '100%' : '780px'));
+
+// 外壳切换：抽屉模式套 t-drawer；embedded 模式渲染为页面内容（复用同一套详情 UI）
+const shellComponent = computed(() => (props.embedded ? 'div' : 't-drawer'));
+const shellProps = computed(() =>
+  props.embedded
+    ? { class: 'invoice-detail-embedded' }
+    : {
+        visible: props.visible,
+        size: drawerSize.value,
+        header: '账单详情',
+        footer: false,
+        'onUpdate:visible': (value: boolean) => emit('update:visible', value),
+        onClose: () => emit('close'),
+      },
+);
 const activeTab = ref('basic');
+
+/** embedded（独立详情页）模式下返回走路由回退；抽屉模式由父组件处理。 */
+function handleBack(): void {
+  if (props.embedded) {
+    router.back();
+    return;
+  }
+  emit('back');
+}
 const invoice = computed(() => props.invoice || {});
 const payments = computed(() => props.payments || []);
 const logs = computed(() => props.logs || []);
@@ -240,6 +319,27 @@ const items = computed(() => {
   if (Array.isArray(sceneItems)) return sceneItems as Record<string, unknown>[];
   return props.items || [];
 });
+
+// ─── 退款处理（2026-10-11）：标记 / 退到余额两种互斥方式 ───
+const canMarkRefund = computed(() => Boolean(invoice.value.can_mark_refund));
+const canRefundToBalance = computed(() => Boolean(invoice.value.can_refund_to_balance));
+const canRefund = computed(() => canMarkRefund.value || canRefundToBalance.value);
+const refundStatusValue = computed(() => Number(invoice.value.refund_status ?? REFUND_STATUS.NONE));
+const refundStatusLabel = computed(() => {
+  if (refundStatusValue.value === REFUND_STATUS.FULL) return '已全额退款';
+  if (refundStatusValue.value === REFUND_STATUS.PARTIAL) return '部分退款';
+  return '未退款';
+});
+const refundTagTheme = computed(() => (refundStatusValue.value === REFUND_STATUS.NONE ? 'default' : 'danger'));
+const refundRecords = computed(() => {
+  const records = invoice.value.refunds;
+  return Array.isArray(records) ? records : [];
+});
+const refundReasonOfLatest = computed(() => {
+  const first = refundRecords.value[0];
+  return first ? String(first.reason || '').trim() : '';
+});
+const hasRefundInfo = computed(() => refundStatusValue.value !== REFUND_STATUS.NONE || refundRecords.value.length > 0);
 
 // 折扣分列：券减免与会员折扣来源不同，分别展示（formatMoney 自带 ￥，勿再补币符）
 const couponDiscountAmount = computed(() => Number(invoice.value.discount || 0));
@@ -337,23 +437,17 @@ function fieldValue(value: unknown) {
   return String(value);
 }
 
-function formatMoney(value: unknown) {
-  return `¥${Number(value || 0).toFixed(2)}`;
-}
-
-function formatDateTime(value: unknown) {
-  if (!value) return '-';
-  const date = new Date(String(value).replace(/-/g, '/'));
-  if (Number.isNaN(date.getTime())) return String(value);
-  const pad = (num: number) => String(num).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
+// formatMoney/formatDateTime 统一从 @/utils/format 导入（本文件此前本地重写违规，已修正）。
 
 function toRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 }
 </script>
 <style lang="less" scoped>
+// embedded 模式（独立账单详情页）：撑满内容区，不出现抽屉遮罩
+.invoice-detail-embedded {
+  min-height: 100%;
+}
 .finance-detail-section {
   display: flex;
   flex-direction: column;

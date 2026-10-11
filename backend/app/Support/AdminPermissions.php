@@ -113,6 +113,9 @@ class AdminPermissions
     // 专用权限码：补录红字冲抵属资金纠错写入，默认不下发任何内置角色，仅 super_admin 可授权
     public const FINANCE_MANUAL_REVERSAL = 'finance.manual_reversal';
 
+    // 专用权限码：退款标记仅登记线下已退款事实（不动资金），默认不下发任何内置角色，仅 super_admin 可授权
+    public const FINANCE_REFUND = 'finance.refund';
+
     public const FINANCE_WITHDRAW = 'finance.withdraw';
 
     public const MEMBER_LEVEL_MANAGE = 'member_level.manage';

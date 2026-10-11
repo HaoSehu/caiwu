@@ -19,6 +19,7 @@ use App\Models\PromotionAmbassador;
 use App\Models\RechargeRecord;
 use App\Models\ReferralReward;
 use App\Models\ReferralWithdrawal;
+use App\Models\Refund;
 use App\Models\Service;
 use App\Models\Ticket;
 use App\Models\User;
@@ -454,7 +455,11 @@ class UserService
             'service:id,name,status,expires_at',
             'payments',
             'items',
-        ]);
+        ])->withSum(
+            // 退款投影（列表轻量口径）与财务/客户端账单列表同源，预加载避免逐行 N+1。
+            ['refunds' => fn ($refundQuery) => $refundQuery->where('status', Refund::STATUS_COMPLETED)],
+            'amount'
+        );
 
         if (($filters['status'] ?? '') === '5') {
             $query->where(function ($builder) {

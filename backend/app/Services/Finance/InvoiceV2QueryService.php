@@ -9,6 +9,7 @@ use App\Constants\InvoiceType;
 use App\Constants\PaymentStatus;
 use App\Models\Invoice;
 use App\Models\Product;
+use App\Models\Refund;
 use App\Support\Concerns\FiltersDateRange;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
@@ -44,6 +45,11 @@ class InvoiceV2QueryService
     {
         $query = Invoice::query()
             ->with($this->invoiceListRelations())
+            ->withSum(
+                // 退款投影（列表轻量口径）与 adminList 同源，预加载避免逐行 N+1。
+                ['refunds' => fn ($refundQuery) => $refundQuery->where('status', Refund::STATUS_COMPLETED)],
+                'amount'
+            )
             ->where('user_id', $userId)
             ->orderByDesc('id');
 
@@ -83,9 +89,12 @@ class InvoiceV2QueryService
         // 的支付退款分支永远走不到（D1A-02）。
         $statusFilter = $filters['status'] ?? null;
         if ($statusFilter !== null && $statusFilter !== '' && (int) $statusFilter === InvoiceStatus::REFUNDED) {
+            // 「有过退款」语义（退款标记批 2026-10-11）：已收口 REFUNDED、第三方原路
+            // 退款、或名下存在已完成退款记录（含纯标记部分退款，账单仍 PAID）均命中。
             $query->where(function (Builder $builder): void {
                 $builder->whereHas('payments', fn (Builder $paymentQuery): Builder => $paymentQuery->where('status', PaymentStatus::REFUNDED))
-                    ->orWhere('status', InvoiceStatus::REFUNDED);
+                    ->orWhere('status', InvoiceStatus::REFUNDED)
+                    ->orWhereHas('refunds', fn (Builder $refundQuery): Builder => $refundQuery->where('status', Refund::STATUS_COMPLETED));
             });
         } elseif ($statusFilter !== null && $statusFilter !== '' && (int) $statusFilter === InvoiceStatus::PARTIAL_PAID) {
             // 派生展示态「部分已付」：库内仍为待支付，按已付金额介于 (0, 应付) 命中。

@@ -52,6 +52,10 @@ export const AdminPermissions = {
   REFERRAL_LIST: 'referral.list',
   FINANCE_REPORT: 'finance.report',
   FINANCE_WITHDRAW: 'finance.withdraw',
+  // 专用权限码：补录红字冲抵属资金纠错写入，默认不下发任何内置角色（与后端 AdminPermissions 保持一致）
+  FINANCE_MANUAL_REVERSAL: 'finance.manual_reversal',
+  // 专用权限码：退款标记仅登记线下已退款事实（不动资金），默认不下发任何内置角色（与后端 AdminPermissions 保持一致）
+  FINANCE_REFUND: 'finance.refund',
   REFERRAL_WITHDRAWAL_LIST: 'referral_withdrawal.list',
   MEMBER_LEVEL_LIST: 'member_level.list',
   MEMBER_LEVEL_MANAGE: 'member_level.manage',

@@ -48,6 +48,18 @@ class AdminInvoiceDetailResource extends AdminInvoiceSummaryResource
                 'paid_amount' => (string) ($invoice['paid_amount'] ?? '0.00'),
                 'payable_amount' => (string) ($invoice['payable_amount'] ?? '0.00'),
                 'paid_at' => $invoice['paid_at'] ?? null,
+                // 退款投影（纯标记与真退款同表累计，详见执行计划 2026-10-11）
+                'refund_amount' => (string) ($invoice['refund_amount'] ?? '0.00'),
+                'refundable_amount' => (string) ($invoice['refundable_amount'] ?? '0.00'),
+                'refund_method' => (string) ($invoice['refund_method'] ?? ''),
+                'refunded_at' => $invoice['refunded_at'] ?? null,
+                'refund_status' => (int) ($invoice['refund_status'] ?? 0),
+                'refund_status_label' => (string) ($invoice['refund_status_label'] ?? ''),
+                'is_partially_refunded' => (bool) ($invoice['is_partially_refunded'] ?? false),
+                // 退款到余额（真退款）口径：可退额为单次口径的轻量近似，
+                // has_manual_mark_refund 供前端置灰互斥方式（一单只选一种）
+                'refundable_amount_for_balance' => (string) ($invoice['refundable_amount_for_balance'] ?? '0.00'),
+                'has_manual_mark_refund' => (bool) ($invoice['has_manual_mark_refund'] ?? false),
             ],
             'user' => $this->user($invoice['user'] ?? null),
             'order' => $this->order($invoice['order'] ?? null),
@@ -65,6 +77,7 @@ class AdminInvoiceDetailResource extends AdminInvoiceSummaryResource
                     : null,
                 'payments' => $this->cleanList($invoice['payments'] ?? []),
             ],
+            'refund_records' => $this->cleanList($invoice['refunds'] ?? []),
             'items' => $this->cleanList($invoice['items'] ?? []),
             'logs' => $this->cleanList($invoice['logs'] ?? []),
             'audit' => [
@@ -73,6 +86,8 @@ class AdminInvoiceDetailResource extends AdminInvoiceSummaryResource
             ],
             'actions' => [
                 'can_cancel' => (bool) ($invoice['can_cancel'] ?? false),
+                'can_mark_refund' => (bool) ($invoice['can_mark_refund'] ?? false),
+                'can_refund_to_balance' => (bool) ($invoice['can_refund_to_balance'] ?? false),
             ],
             'timestamps' => [
                 'created_at' => $invoice['created_at'] ?? null,

@@ -5,15 +5,18 @@ namespace App\Services\Finance;
 use App\Constants\InvoiceStatus;
 use App\Constants\InvoiceType;
 use App\Constants\ManualPaymentGateway;
+use App\Constants\OrderStatus;
 use App\Constants\OrderType;
 use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
+use App\Constants\RefundStatus;
 use App\Exceptions\BusinessException;
 use App\Models\ActivityLog;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\Product;
+use App\Models\Refund;
 use App\Models\User;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Services\ProductCatalog\ProductFullPathResolver;
@@ -210,7 +213,11 @@ class InvoiceService
             'service:id,name,status,expires_at',
             'payments.callbacks:payment_id,callback_type,payload_json',
             // 列表路径不加载仅详情使用的 items（buildInvoiceItems 只在详情路径调用）
-        ]);
+        ])->withSum(
+            // 退款状态派生（列表轻量口径）：已完成退款累计，单查询预加载无 N+1。
+            ['refunds' => fn ($query) => $query->where('status', Refund::STATUS_COMPLETED)],
+            'amount'
+        );
 
         if (! empty($filters['invoice_no'])) {
             $query->where('invoice_no', $filters['invoice_no']);
@@ -239,6 +246,14 @@ class InvoiceService
                 $query->where('status', InvoiceStatus::UNPAID)
                     ->where('paid_amount', '>', 0)
                     ->whereColumn('paid_amount', '<', 'amount');
+            } elseif ((int) $filters['status'] === InvoiceStatus::REFUNDED) {
+                // 「有过退款」语义（退款标记批 2026-10-11）：已收口 REFUNDED 或名下
+                // 存在已完成退款记录（含纯标记部分退款，账单仍 PAID）均命中，
+                // 与客户端 InvoiceV2QueryService 同口径。
+                $query->where(function ($query) {
+                    $query->where('status', InvoiceStatus::REFUNDED)
+                        ->orWhereHas('refunds', fn ($refundQuery) => $refundQuery->where('status', Refund::STATUS_COMPLETED));
+                });
             } else {
                 $query->where('status', $filters['status']);
             }
@@ -277,6 +292,7 @@ class InvoiceService
             'service:id,name,status,expires_at',
             'payments.callbacks:payment_id,callback_type,payload_json',
             'items',
+            'refunds:id,invoice_id,refund_no,amount,status,refund_method,reason,operator_name,refunded_at',
         ])->findOrFail($id);
 
         $scene = $this->resolveInvoiceScene($invoice);
@@ -339,6 +355,36 @@ class InvoiceService
             'is_partial_paid' => $displayStatus['is_partial_paid'],
             'raw_status' => (int) $invoice->status,
             'raw_status_label' => InvoiceStatus::$labels[$invoice->status] ?? (string) $invoice->status,
+            // 退款投影（详情完整口径）：可退额为轻量展示口径（不含已转余额扣减），
+            // 写入守卫以 InvoiceRefundService::markRefundableAmountOf 为准（防循环依赖）。
+            'refund_amount' => number_format($this->refundCompletedTotal($invoice), 2, '.', ''),
+            'refunded_at' => $this->formatRefundTime($invoice->refunded_at),
+            'refund_method' => (string) ($invoice->refund_method ?? ''),
+            'refund_status' => $this->resolveRefundStatus($invoice),
+            'refund_status_label' => RefundStatus::label($this->resolveRefundStatus($invoice)),
+            'is_partially_refunded' => $this->resolveRefundStatus($invoice) === RefundStatus::PARTIAL,
+            'refundable_amount' => number_format($this->displayRefundableAmount($invoice), 2, '.', ''),
+            'can_mark_refund' => $this->canMarkRefund($invoice, $this->displayRefundableAmount($invoice)),
+            // 退款到余额（真退款，动资金）能力与可退额：单次口径的轻量近似
+            // （真服务按「主支付单金额」扣已完成退款；拆分支付时略大，
+            //  提交由服务端守卫兜底拒绝并给出准确上限）。
+            'can_refund_to_balance' => $this->canRefundToBalance($invoice),
+            'refundable_amount_for_balance' => number_format($this->displayBalanceRefundableAmount($invoice), 2, '.', ''),
+            'has_manual_mark_refund' => $this->hasManualMarkRefund($invoice),
+            'refunds' => $invoice->refunds
+                ->sortByDesc('id')
+                ->values()
+                ->map(fn (Refund $refund): array => [
+                    'id' => (int) $refund->id,
+                    'refund_no' => (string) $refund->refund_no,
+                    'amount' => number_format((float) $refund->amount, 2, '.', ''),
+                    'refund_method' => (string) $refund->refund_method,
+                    'refund_method_label' => (string) $refund->refund_method === Refund::METHOD_MANUAL_MARK ? '线下补标记' : '退回余额',
+                    'status' => (int) $refund->status,
+                    'reason' => (string) ($refund->reason ?? ''),
+                    'operator_name' => (string) ($refund->operator_name ?? ''),
+                    'refunded_at' => $this->formatRefundTime($refund->refunded_at),
+                ])->all(),
             'billing_cycle' => (string) ($invoice->billing_cycle ?? ''),
             'quantity' => (int) ($invoice->quantity ?? 1),
             'summary' => $this->buildInvoiceSummary($invoice, $scene),
@@ -553,6 +599,13 @@ class InvoiceService
             'is_partial_paid' => $displayStatus['is_partial_paid'],
             'raw_status' => (int) $invoice->status,
             'raw_status_label' => InvoiceStatus::$labels[$invoice->status] ?? (string) $invoice->status,
+            // 退款投影（列表轻量口径）：累计/状态由已完成退款聚合派生，不下发可退额
+            // 与 can_mark_refund（标记入口只在详情，列表逐行聚合会 N+1）。
+            'refund_amount' => number_format(max($this->refundCompletedTotal($invoice), (float) ($invoice->refund_amount ?? 0)), 2, '.', ''),
+            'refunded_at' => $this->formatRefundTime($invoice->refunded_at),
+            'refund_status' => $this->resolveRefundStatus($invoice),
+            'refund_status_label' => RefundStatus::label($this->resolveRefundStatus($invoice)),
+            'is_partially_refunded' => $this->resolveRefundStatus($invoice) === RefundStatus::PARTIAL,
             'billing_cycle' => (string) ($invoice->billing_cycle ?? ''),
             'quantity' => (int) ($invoice->quantity ?? 1),
             'summary' => $this->buildInvoiceSummary($invoice, $scene),
@@ -561,6 +614,146 @@ class InvoiceService
             'created_at' => $invoice->created_at?->format('Y-m-d H:i:s'),
             'payment_summary' => $paymentSummary,
         ];
+    }
+
+    /**
+     * 退款时间统一输出（兼容 Carbon/字符串，空值 null；不引入新的 ?->format 调用
+     * 以免扰动 phpstan-baseline 对既有 format-on-string 的计数）。
+     */
+    private function formatRefundTime(mixed $value): ?string
+    {
+        if ($value instanceof \DateTimeInterface) {
+            return $value->format('Y-m-d H:i:s');
+        }
+
+        return is_string($value) && $value !== '' ? $value : null;
+    }
+
+    /**
+     * 已完成退款累计（refunds 表口径，纯标记与真退款同表）。
+     * 取值优先级：withSum 预加载属性 → 已加载关系 → 单查（退化路径）。
+     */
+    private function refundCompletedTotal(Invoice $invoice): float
+    {
+        $withSumValue = $invoice->getAttribute('refund_completed_total');
+        if ($withSumValue !== null) {
+            return round((float) $withSumValue, 2);
+        }
+
+        if ($invoice->relationLoaded('refunds')) {
+            return round((float) $invoice->refunds
+                ->where('status', Refund::STATUS_COMPLETED)
+                ->sum('amount'), 2);
+        }
+
+        return round((float) Refund::query()
+            ->where('invoice_id', (int) $invoice->id)
+            ->where('status', Refund::STATUS_COMPLETED)
+            ->sum('amount'), 2);
+    }
+
+    /**
+     * 派生退款状态：NONE/PARTIAL/FULL（RefundStatus，不落库）。
+     * 实收基数取 paid_amount（部分支付账单退化 amount，与收入口径一致）。
+     */
+    private function resolveRefundStatus(Invoice $invoice): int
+    {
+        $paidBase = (float) ($invoice->paid_amount ?? 0) > 0
+            ? (float) $invoice->paid_amount
+            : (float) $invoice->amount;
+        if ((int) $invoice->status === InvoiceStatus::REFUNDED) {
+            return RefundStatus::FULL;
+        }
+
+        return RefundStatus::derive($this->refundCompletedTotal($invoice), $paidBase);
+    }
+
+    /**
+     * 可退额展示口径（轻量，只读）：实收基数 − 已完成退款累计。
+     * 写入守卫以 InvoiceRefundService::markRefundableAmountOf 为准（本服务不可
+     * 注入它——经 MixPaymentService 回环）；展示值在「异常支付已转余额」场景可能
+     * 略大（未扣 credited 段），提交时由服务端守卫拒绝并给出准确剩余金额。
+     */
+    private function displayRefundableAmount(Invoice $invoice): float
+    {
+        $paidBase = max((float) ($invoice->paid_amount ?? 0), (float) $invoice->amount);
+
+        return round(max($paidBase - $this->refundCompletedTotal($invoice), 0), 2);
+    }
+
+    /**
+     * 服务端标记能力判定（与 InvoiceRefundMarkService 守卫链同规则）：
+     * 类型白名单 + 账单 PAID + 订单 PAID（无订单跳过）+ 可退额 > 0。
+     */
+    private function canMarkRefund(Invoice $invoice, float $refundableAmount): bool
+    {
+        $type = InvoiceType::normalize((string) ($invoice->type ?: InvoiceType::NEW_PURCHASE));
+        if (! in_array($type, [InvoiceType::NEW_PURCHASE, 'normal', InvoiceType::RENEW, InvoiceType::UPGRADE], true)) {
+            return false;
+        }
+
+        if ((int) $invoice->status !== InvoiceStatus::PAID) {
+            return false;
+        }
+
+        if ($invoice->order instanceof Order && (int) $invoice->order->status !== OrderStatus::PAID) {
+            return false;
+        }
+
+        return $refundableAmount > 0.00001;
+    }
+
+    /**
+     * 「退款到余额」能力判定（轻量镜像，真服务守卫为准）：
+     * 类型白名单（排除充值/补录——其资金从未离开系统）+ 账单/订单 PAID
+     * + 存在真实支付单 + 可退额 > 0 + 与纯标记通道互斥。
+     */
+    private function canRefundToBalance(Invoice $invoice): bool
+    {
+        if ($this->hasManualMarkRefund($invoice)) {
+            return false;
+        }
+
+        $type = InvoiceType::normalize((string) ($invoice->type ?: InvoiceType::NEW_PURCHASE));
+        if (! in_array($type, [InvoiceType::NEW_PURCHASE, 'normal', InvoiceType::RENEW, InvoiceType::UPGRADE], true)) {
+            return false;
+        }
+
+        if ((int) $invoice->status !== InvoiceStatus::PAID) {
+            return false;
+        }
+
+        if ($invoice->order instanceof Order && (int) $invoice->order->status !== OrderStatus::PAID) {
+            return false;
+        }
+
+        // 退款到余额必须有真实收款支付单（否则无「退的是哪笔钱」）
+        if (! $invoice->relationLoaded('payments') || $invoice->payments->isEmpty()) {
+            return false;
+        }
+
+        return $this->displayBalanceRefundableAmount($invoice) > 0.00001;
+    }
+
+    /** 账单名下是否已有纯标记退款行（通道互斥判定）。 */
+    private function hasManualMarkRefund(Invoice $invoice): bool
+    {
+        if (! $invoice->relationLoaded('refunds')) {
+            return false;
+        }
+
+        return $invoice->refunds->contains(
+            static fn (Refund $refund): bool => (string) $refund->refund_method === Refund::METHOD_MANUAL_MARK
+                && (int) $refund->status === Refund::STATUS_COMPLETED
+        );
+    }
+
+    /** 真退款（退到余额）可退额展示口径：实收基数 − 已完成退款累计。 */
+    private function displayBalanceRefundableAmount(Invoice $invoice): float
+    {
+        $paidBase = max((float) ($invoice->paid_amount ?? 0), (float) $invoice->amount);
+
+        return round(max($paidBase - $this->refundCompletedTotal($invoice), 0), 2);
     }
 
     private function buildInvoiceItems(Invoice $invoice, array $scene): array

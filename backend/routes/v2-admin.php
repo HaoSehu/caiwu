@@ -95,6 +95,21 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
         Route::post('/users/{user}/invoices/{invoice}/manual-reversal', [UserController::class, 'storeManualReversal']);
     });
 
+    // 退款标记：纯标记不动资金（不改余额、不写台账、不生成红字账单、不改 Payment），
+    // 与 invoice.manage/order.manage 隔离，默认不下发任何内置角色。
+    Route::middleware(['permission:'.AdminPermissions::FINANCE_REFUND])->group(function (): void {
+        Route::post('/invoices/{invoice}/refund-marks', [InvoiceController::class, 'markRefund'])
+            ->middleware('throttle:30,1,admin-invoice-refund-mark');
+        Route::post('/orders/{order}/refund-marks', [OrderController::class, 'markRefund'])
+            ->middleware('throttle:30,1,admin-order-refund-mark');
+
+        // 退款到余额（真退款，动资金：加余额 + 台账 + 红字账单 + 充值记录）。
+        // 2026-10-11 裁决：与纯标记共用 finance.refund 权限、且**一单只选一种**
+        // （服务层互斥守卫），恢复 2026-10-03 下线的管理员退款资金出口。
+        Route::post('/invoices/{invoice}/refunds', [InvoiceController::class, 'refundToBalance'])
+            ->middleware('throttle:20,1,admin-invoice-refund-balance');
+    });
+
     Route::middleware(['permission:'.AdminPermissions::FINANCE_REPORT])->group(function (): void {
         Route::get('/finance/new-customer-daily-summary', [FinanceMenuController::class, 'newCustomerDailySummary']);
         Route::get('/finance/product-income-summary', [FinanceMenuController::class, 'productIncomeSummary']);

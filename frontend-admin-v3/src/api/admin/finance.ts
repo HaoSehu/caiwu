@@ -64,6 +64,19 @@ function normalizeV2AdminInvoiceDetail(payload: V2AdminInvoiceDetailPayload): In
       status_label: basic.status_label,
       raw_status: basic.raw_status,
       raw_status_label: basic.raw_status_label,
+      // 退款投影（纯标记与真退款同表累计，详见执行计划 2026-10-11）
+      refund_amount: financial.refund_amount,
+      refundable_amount: financial.refundable_amount,
+      refund_method: financial.refund_method,
+      refunded_at: financial.refunded_at,
+      refund_status: financial.refund_status,
+      refund_status_label: financial.refund_status_label,
+      is_partially_refunded: financial.is_partially_refunded,
+      refunds: Array.isArray(invoice.refund_records) ? (invoice.refund_records as Record<string, unknown>[]) : [],
+      can_mark_refund: actions.can_mark_refund,
+      can_refund_to_balance: actions.can_refund_to_balance,
+      refundable_amount_for_balance: financial.refundable_amount_for_balance,
+      has_manual_mark_refund: financial.has_manual_mark_refund,
       billing_cycle: basic.billing_cycle,
       quantity: basic.quantity,
       summary: display.summary,
@@ -114,6 +127,10 @@ function normalizeV2AdminOrderDetail(payload: V2AdminOrderDetailPayload): OrderR
       toRecord(financial.member_discount_snapshot) || toRecord(configuration.member_discount_snapshot),
     paid_amount: financial.paid_amount as number | string | undefined,
     paid_at: financial.paid_at as string | undefined,
+    // 退款投影（订单侧与账单同值，由 TradeLifecycleService 同步写）
+    refund_amount: financial.refund_amount as number | string | undefined,
+    refunded_at: financial.refunded_at as string | undefined,
+    refund_status: financial.refund_status as number | undefined,
     user_id: toRecord(order.user).id as number | string | undefined,
     user: order.user as Record<string, unknown> | undefined,
     invoice_id: invoice.id,
@@ -148,6 +165,20 @@ export const invoiceApi = {
   detail: async (id: number | string) =>
     normalizeV2AdminInvoiceDetail(await request.get<V2AdminInvoiceDetailPayload>({ url: `/v2/admin/invoices/${id}` })),
   cancel: (id: number | string) => request.post({ url: `/v2/admin/invoices/${id}/cancellations` }),
+  // 退款标记（纯标记不动资金）：方法内自生成 X-Request-Id 作 trace_id 串联
+  markRefund: (id: number | string, payload: { amount: number | string; remark: string }) =>
+    request.post({
+      url: `/v2/admin/invoices/${id}/refund-marks`,
+      data: payload,
+      headers: { 'X-Request-Id': crypto.randomUUID() },
+    }),
+  // 退款到余额（真退款，动资金：加余额 + 台账 + 红字账单），与 markRefund 互斥（一单只选一种）
+  refundToBalance: (id: number | string, payload: { amount: number | string; remark: string }) =>
+    request.post({
+      url: `/v2/admin/invoices/${id}/refunds`,
+      data: payload,
+      headers: { 'X-Request-Id': crypto.randomUUID() },
+    }),
 };
 
 export const orderApi = {
@@ -158,6 +189,13 @@ export const orderApi = {
     }),
   detail: async (id: number | string) =>
     normalizeV2AdminOrderDetail(await request.get<V2AdminOrderDetailPayload>({ url: `/v2/admin/orders/${id}` })),
+  // 退款标记（订单侧入口，后端解析关联账单后走同一守卫链）
+  markRefund: (id: number | string, payload: { amount: number | string; remark: string }) =>
+    request.post({
+      url: `/v2/admin/orders/${id}/refund-marks`,
+      data: payload,
+      headers: { 'X-Request-Id': crypto.randomUUID() },
+    }),
 };
 
 export const financeMenuApi = {

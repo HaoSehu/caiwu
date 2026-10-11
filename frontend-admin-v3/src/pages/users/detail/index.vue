@@ -259,7 +259,7 @@
             <template #invoicePaid="{ row }">{{ formatDateTime(row.paid_at) }}</template>
             <template #invoiceOperation="{ row }">
               <div class="row-actions">
-                <t-button variant="text" theme="primary" size="small" @click="openInvoiceDrawer(row)">详情</t-button>
+                <t-button variant="text" theme="primary" size="small" @click="goToInvoiceDetail(row)">详情</t-button>
                 <t-button
                   v-if="isCancelableInvoice(row)"
                   variant="text"
@@ -847,25 +847,6 @@
       </t-form>
     </t-dialog>
 
-    <!-- 关联账单详情抽屉（统一复用 InvoiceDetailDrawer） -->
-    <invoice-detail-drawer
-      v-model:visible="invoiceDrawer.visible"
-      :loading="invoiceDrawer.loading"
-      :invoice="currentInvoice"
-      :payments="invoicePayments"
-      :items="invoiceSceneItems"
-      :logs="invoiceLogs"
-      :status-label="invoiceStatusLabel(currentInvoice.status)"
-      :status-theme="invoiceStatusTheme(currentInvoice.status)"
-      :cancelable="isCancelableInvoice(currentInvoice)"
-      :cancel-loading="invoiceDrawer.cancelLoading"
-      @close="closeInvoiceDrawer"
-      @refresh="reloadInvoiceDrawer"
-      @cancel="handleDrawerCancelInvoice"
-      @view-order="(orderId) => orderId && router.push(`/admin/finance/orders/${orderId}`)"
-      @view-user="(targetUserId) => targetUserId && router.push(`/admin/users/${targetUserId}`)"
-    />
-
     <t-dialog
       v-model:visible="manualInvoiceVisible"
       header="补录账单"
@@ -943,7 +924,6 @@ import { productApi } from '@/api/product';
 import { supplierApi } from '@/api/supplier';
 import type { AdminUser, ManualPaymentGateway, PageParams } from '@/api/user';
 import { userApi } from '@/api/user';
-import InvoiceDetailDrawer from '@/components/finance-record-detail/InvoiceDetailDrawer.vue';
 import ProductBindingTreeSelect from '@/components/product-binding-tree-select/index.vue';
 import { AdminPermissions } from '@/constants/permissions';
 import { copyToClipboard, fieldValue, formatDateTime, formatMoney } from '@/utils/format';
@@ -1095,13 +1075,6 @@ const serviceNameForm = reactive({ service_name: '' });
 const resetPasswordForm = reactive({ password: '' });
 const manualProvisionForm = reactive({ upstream_host_id: undefined as number | undefined });
 const serviceDrawer = reactive({ visible: false, loading: false, actionLoading: '', serviceId: 0, detail: {} as Row });
-const invoiceDrawer = reactive({
-  visible: false,
-  loading: false,
-  cancelLoading: false,
-  currentId: 0,
-  detail: { invoice: {}, payments: [], items: [], logs: [] } as Row,
-});
 const canLoginAs = computed(() => hasAdminPermission(AdminPermissions.USER_LOGIN_AS));
 const canManualInvoice = computed(() => hasAdminPermission(AdminPermissions.INVOICE_MANUAL_ENTRY));
 const ordersTabRef = ref<InstanceType<typeof OrdersTab>>();
@@ -1333,19 +1306,6 @@ const servicePricingEntries = computed(() =>
     base_amount: item?.base_amount || null,
   })),
 );
-const currentInvoice = computed(() => {
-  const detail = invoiceDrawer.detail || {};
-  return detail.invoice && typeof detail.invoice === 'object' ? detail.invoice : detail;
-});
-const invoicePayments = computed(() =>
-  Array.isArray(invoiceDrawer.detail.payments) ? invoiceDrawer.detail.payments : [],
-);
-const invoiceLogs = computed(() => (Array.isArray(invoiceDrawer.detail.logs) ? invoiceDrawer.detail.logs : []));
-const invoiceSceneItems = computed(() => {
-  const sceneItems = currentInvoice.value.scene?.items;
-  if (Array.isArray(sceneItems) && sceneItems.length) return sceneItems;
-  return Array.isArray(invoiceDrawer.detail.items) ? invoiceDrawer.detail.items : [];
-});
 const statCards = computed(() => [
   { key: 'ticket_open', label: '在线工单', value: stats.value.ticket_open || 0, tone: 'warning' },
   { key: 'cash_balance', label: '余额', value: formatMoney(user.value.cash_balance), tone: 'success' },
@@ -2199,33 +2159,11 @@ async function submitServiceName() {
   }
 }
 
-async function openInvoiceDrawer(row: Row) {
-  if (!row?.id) return;
-  invoiceDrawer.currentId = Number(row.id);
-  invoiceDrawer.detail = normalizeInvoiceDetail({ invoice: row }, row);
-  invoiceDrawer.visible = true;
-  await reloadInvoiceDrawer();
-}
-
-function closeInvoiceDrawer() {
-  invoiceDrawer.visible = false;
-  invoiceDrawer.loading = false;
-  invoiceDrawer.cancelLoading = false;
-  invoiceDrawer.currentId = 0;
-  invoiceDrawer.detail = { invoice: {}, payments: [], items: [], logs: [] };
-}
-
-async function reloadInvoiceDrawer() {
-  if (!invoiceDrawer.currentId) return;
-  invoiceDrawer.loading = true;
-  try {
-    const detail = await userApi.invoiceDetail(userId.value, invoiceDrawer.currentId);
-    invoiceDrawer.detail = normalizeInvoiceDetail(detail, currentInvoice.value);
-  } catch (error) {
-    MessagePlugin.error(errorMessage(error, '加载账单详情失败'));
-  } finally {
-    invoiceDrawer.loading = false;
-  }
+/** 账单详情跳转财务账单详情页（与订单 tab 的「详情」行为一致）。 */
+function goToInvoiceDetail(row: Row) {
+  const id = Number(row?.id ?? 0);
+  if (!id) return;
+  router.push(`/admin/finance/invoices/${id}`);
 }
 
 function isCancelableInvoice(row: Row) {
@@ -2254,20 +2192,6 @@ function handleCancelInvoice(row: Row) {
       }
     },
   });
-}
-
-async function handleDrawerCancelInvoice() {
-  if (!invoiceDrawer.currentId) return;
-  invoiceDrawer.cancelLoading = true;
-  try {
-    await adminApi.invoices.cancel(invoiceDrawer.currentId);
-    MessagePlugin.success('账单已取消');
-    await Promise.all([loadInvoices(), loadDetail(), reloadInvoiceDrawer()]);
-  } catch (error) {
-    MessagePlugin.error(errorMessage(error, '取消账单失败'));
-  } finally {
-    invoiceDrawer.cancelLoading = false;
-  }
 }
 
 function goBack() {
@@ -2369,22 +2293,6 @@ function patchServiceListItem(detail: Row = {}) {
     },
     custom_service_name: normalized.custom_service_name || '',
   });
-}
-function normalizeInvoiceDetail(payload: Row = {}, fallback: Row = {}) {
-  const invoice = payload.invoice && typeof payload.invoice === 'object' ? payload.invoice : payload;
-  return {
-    invoice: {
-      ...fallback,
-      ...invoice,
-      payment_summary: { ...(fallback.payment_summary || {}), ...(invoice.payment_summary || {}) },
-      order: invoice.order || fallback.order || null,
-      product: invoice.product || fallback.product || null,
-      scene: invoice.scene || fallback.scene || {},
-    },
-    payments: Array.isArray(payload.payments) ? payload.payments : [],
-    items: Array.isArray(payload.items) ? payload.items : [],
-    logs: Array.isArray(payload.logs) ? payload.logs : [],
-  };
 }
 function createLockedPricingForm(detail: Row = {}) {
   const cycles = Array.isArray(detail.renew_pricing_cycles) ? detail.renew_pricing_cycles : [];

@@ -17,6 +17,18 @@ class Refund extends Model
 
     public const STATUS_COMPLETED = 1;
 
+    /**
+     * 纯标记退款方式：登记线下已退款/对账修复事实，不动余额、不写台账、
+     * 不生成红字账单（区别于 balance=退回余额的真退款）。
+     */
+    public const METHOD_MANUAL_MARK = 'manual_mark';
+
+    /**
+     * 真退款方式：余额退回（动资金：加余额 + 台账 + 红字账单）。
+     * 与 manual_mark **互斥**——一单只选一种（2026-10-11 裁决）。
+     */
+    public const METHOD_BALANCE = 'balance';
+
     protected $table = 'refunds';
 
     protected $fillable = [

@@ -34,6 +34,8 @@ class OrderV2QueryService
                 'member_discount_amount',
                 'coupon_code',
                 'paid_amount',
+                'refund_amount',
+                'refunded_at',
                 'billing_cycle',
                 'quantity',
                 'paid_at',
@@ -41,7 +43,7 @@ class OrderV2QueryService
             ])
             ->with([
                 'user:id,email,nickname,phone',
-                'invoice:id,invoice_no,order_id,status,amount,paid_amount,paid_at',
+                'invoice:id,invoice_no,order_id,status,amount,paid_amount,paid_at,refund_amount,refund_method,refunded_at',
                 'product' => fn ($query) => $query->select($this->productProjectionColumns()),
                 'product.productGroup:id,second_product_group_id,name',
                 'product.productGroup.secondProductGroup:id,first_product_group_id,name',
@@ -74,6 +76,8 @@ class OrderV2QueryService
                 'member_discount_amount',
                 'member_discount_snapshot',
                 'paid_amount',
+                'refund_amount',
+                'refunded_at',
                 'billing_cycle',
                 'quantity',
                 'config_snapshot',
@@ -88,7 +92,7 @@ class OrderV2QueryService
             ])
             ->with([
                 'user:id,email,nickname,phone',
-                'invoice:id,invoice_no,order_id,type,status,amount,paid_amount,paid_at,due_date,created_at,trace_id,refund_trace_id',
+                'invoice:id,invoice_no,order_id,type,status,amount,paid_amount,paid_at,due_date,created_at,trace_id,refund_trace_id,refund_amount,refund_method,refunded_at',
                 'invoice.payments' => fn ($query) => $query
                     ->select(Payment::gatewayProjectionColumns([
                         'id',

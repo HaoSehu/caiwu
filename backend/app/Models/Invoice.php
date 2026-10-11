@@ -95,6 +95,11 @@ class Invoice extends Model
         return $this->hasMany(RechargeRecord::class);
     }
 
+    /**
+     * 退款记录（纯标记与真退款同表累计；已完成退款额 = SUM(status=1).amount）。
+     *
+     * @return HasMany<Refund, $this>
+     */
     public function refunds(): HasMany
     {
         return $this->hasMany(Refund::class);

@@ -96,6 +96,19 @@ export const financeRoutes: RouteRecordRaw[] = [
     },
   },
   {
+    path: 'finance/invoices/:id',
+    name: 'AdminFinanceInvoiceDetail',
+    component: () => import('@/pages/finance/invoices/detail/index.vue'),
+    meta: {
+      title: {
+        zh_CN: '账单详情',
+        en_US: 'Invoice Detail',
+      },
+      permission: 'invoice.detail',
+      hidden: true,
+    },
+  },
+  {
     path: 'finance/recharges',
     name: 'AdminFinanceRecharges',
     component: () => import('@/pages/finance/recharges/index.vue'),

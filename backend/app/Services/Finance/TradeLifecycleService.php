@@ -179,6 +179,95 @@ class TradeLifecycleService
     }
 
     /**
+     * 退款标记投影（纯标记通道）：refund_amount 累加 + 订单侧投影同步，不动资金。
+     *
+     * 与 markInvoiceRefunded（覆盖写、无条件收口 REFUNDED）语义不同：
+     * - refund_amount 逐次累加（部分退款标记可多次），基数以锁内真值为准（存量 NULL 视为 0）；
+     * - 仅全额（$isFullyRefunded，由调用方按锁内可退基数判定传入）才置账单
+     *   REFUNDED 并级联订单、触发券回落；部分退款不改状态、不重算券
+     *   （部分退款账单仍 PAID，重算是无谓写放大）。
+     *
+     * 锁顺序：先 Invoice 后 Order（与既有状态机一致）。
+     * 退款列全部走 SchemaMetadataCache 条件写（灰度期未跑迁移的库不报错）；
+     * 订单投影金额与账单投影取同值（账单为真源，订单投影向真源对齐）。
+     *
+     * @param  array<string, mixed>  $context  预留 trace 传播位
+     */
+    public function markInvoiceRefundMarked(
+        Invoice $invoice,
+        float $refundAmount,
+        string $refundMethod,
+        string $traceId = '',
+        bool $isFullyRefunded = false,
+        array $context = [],
+    ): Invoice {
+        return DB::transaction(function () use ($invoice, $refundAmount, $refundMethod, $traceId, $isFullyRefunded) {
+            $lockedInvoice = Invoice::query()->lockForUpdate()->findOrFail((int) $invoice->id);
+
+            if ($isFullyRefunded) {
+                throw_if(
+                    (int) $lockedInvoice->status !== InvoiceStatus::PAID,
+                    new BusinessException('账单状态异常，无法收口退款标记')
+                );
+            }
+
+            $normalizedMethod = trim($refundMethod) !== '' ? trim($refundMethod) : 'balance';
+            $nextRefundAmount = number_format(
+                round((float) ($lockedInvoice->refund_amount ?? 0) + max(round($refundAmount, 2), 0), 2),
+                2,
+                '.',
+                ''
+            );
+
+            $payload = [];
+            if (SchemaMetadataCache::hasColumn('invoices', 'refund_amount')) {
+                $payload['refund_amount'] = $nextRefundAmount;
+            }
+            if (SchemaMetadataCache::hasColumn('invoices', 'refund_method')) {
+                $payload['refund_method'] = $normalizedMethod;
+            }
+            if (SchemaMetadataCache::hasColumn('invoices', 'refunded_at')) {
+                $payload['refunded_at'] = now();
+            }
+            if ($traceId !== '') {
+                if (SchemaMetadataCache::hasColumn('invoices', 'refund_trace_id')) {
+                    $payload['refund_trace_id'] = $traceId;
+                } elseif (SchemaMetadataCache::hasColumn('invoices', 'trace_id')) {
+                    $payload['trace_id'] = $traceId;
+                }
+            }
+            if ($isFullyRefunded) {
+                $payload['status'] = InvoiceStatus::REFUNDED;
+            }
+            $lockedInvoice->forceFill($payload)->save();
+
+            $orderPayload = [];
+            if (SchemaMetadataCache::hasColumn('orders', 'refund_amount')) {
+                $orderPayload['refund_amount'] = $nextRefundAmount;
+            }
+            if (SchemaMetadataCache::hasColumn('orders', 'refunded_at')) {
+                $orderPayload['refunded_at'] = now();
+            }
+            if ($isFullyRefunded) {
+                $orderPayload['status'] = OrderStatus::REFUNDED;
+            }
+
+            $refundedOrder = $lockedInvoice->order_id
+                ? Order::query()->lockForUpdate()->find((int) $lockedInvoice->order_id)
+                : null;
+            if ($refundedOrder instanceof Order && $orderPayload !== []) {
+                $refundedOrder->forceFill($orderPayload)->save();
+            }
+
+            if ($isFullyRefunded) {
+                $this->couponService->syncInvoiceCouponUsage($lockedInvoice);
+            }
+
+            return $lockedInvoice;
+        });
+    }
+
+    /**
      * 部分支付投影递减：组合支付预扣余额回补时，同步递减账单与订单的
      * paid_amount（不为负）。不改变状态——递减到 0 也不回退 PAID，
      * 状态流转一律经 markInvoicePaid / cancelTrade。

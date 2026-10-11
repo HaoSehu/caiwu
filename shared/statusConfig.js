@@ -156,6 +156,37 @@ export const INVOICE_STATUS_MAP = {
   },
 };
 
+// ===================== 退款状态（派生态，不落库） =====================
+// 后端 RefundStatus 派生：NONE/PARTIAL/FULL。部分退款时账单/订单仍 PAID，
+// 前端用独立 danger 标签展示，不占用 status 槽位（值域铁律 0/1/4/5）。
+
+export const REFUND_STATUS = {
+  NONE: 0, // 未退款
+  PARTIAL: 1, // 部分退款
+  FULL: 2, // 已全额退款
+};
+
+export const REFUND_STATUS_MAP = {
+  [REFUND_STATUS.NONE]: {
+    label: "未退款",
+    color: STATUS_COLORS.info,
+    tagType: "info",
+    icon: "CircleCheck",
+  },
+  [REFUND_STATUS.PARTIAL]: {
+    label: "部分退款",
+    color: STATUS_COLORS.danger,
+    tagType: "danger",
+    icon: "RefreshLeft",
+  },
+  [REFUND_STATUS.FULL]: {
+    label: "已全额退款",
+    color: STATUS_COLORS.danger,
+    tagType: "danger",
+    icon: "RefreshLeft",
+  },
+};
+
 // ===================== 第三方支付状态 =====================
 // 4 态：待支付 / 已支付 / 已取消 / 已退款，与订单同构。
 

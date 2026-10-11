@@ -29,6 +29,11 @@
         <template #orderAmount="{ row }">{{ formatMoney(row.amount) }}</template>
         <template #orderPaid="{ row }">{{ formatDateTime(row.paid_at) }}</template>
         <template #orderCreated="{ row }">{{ formatDateTime(row.created_at) }}</template>
+        <template #orderOperation="{ row }">
+          <div class="row-actions">
+            <t-button variant="text" theme="primary" size="small" @click="goToOrderDetail(row)">详情</t-button>
+          </div>
+        </template>
       </t-table>
     </div>
 
@@ -106,6 +111,7 @@ import {
 import type { FormInstanceFunctions, FormRule, PageInfo, PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
 import { computed, onMounted, reactive, ref } from 'vue';
+import { useRouter } from 'vue-router';
 
 import type { ManualPaymentGateway, PageParams } from '@/api/user';
 import { userApi } from '@/api/user';
@@ -155,6 +161,15 @@ const state = reactive<TabPageState>({
   filters: { status: '', type: '' },
 });
 
+const router = useRouter();
+
+/** 跳转财务订单详情页（订单↔账单联动详情，支持退款标记等操作入口）。 */
+function goToOrderDetail(row: TableRowData) {
+  const id = Number(row?.id ?? 0);
+  if (!id) return;
+  router.push(`/admin/finance/orders/${id}`);
+}
+
 const columns: PrimaryTableCol<TableRowData>[] = [
   { title: '订单号', colKey: 'order_no', width: 200 },
   { title: '产品', colKey: 'orderProduct', minWidth: 240 },
@@ -163,6 +178,7 @@ const columns: PrimaryTableCol<TableRowData>[] = [
   { title: '状态', colKey: 'orderStatus', width: 110 },
   { title: '支付时间', colKey: 'orderPaid', width: 180 },
   { title: '创建时间', colKey: 'orderCreated', width: 180 },
+  { title: '操作', colKey: 'orderOperation', width: 100 },
 ];
 
 const pagination = computed(() => ({

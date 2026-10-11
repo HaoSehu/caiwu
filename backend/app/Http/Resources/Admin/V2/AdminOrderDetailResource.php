@@ -43,6 +43,10 @@ class AdminOrderDetailResource extends AdminOrderSummaryResource
                 'member_discount_snapshot' => $this->stripSensitiveKeys((array) ($order->member_discount_snapshot ?? [])),
                 'paid_amount' => $this->money($order->paid_amount),
                 'paid_at' => $order->paid_at?->format('Y-m-d H:i:s'),
+                // 退款投影（订单侧与账单同值，由 TradeLifecycleService 同步写）
+                'refund_amount' => $this->money($order->refund_amount),
+                'refunded_at' => self::formatRefundTime($order->refunded_at),
+                'refund_status' => $this->refundStatus($order),
             ],
             'user' => $this->user($order),
             'invoice' => $this->invoice($order),

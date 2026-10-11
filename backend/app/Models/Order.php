@@ -64,6 +64,7 @@ class Order extends Model
             'discount' => 'decimal:2',
             'member_discount_amount' => 'decimal:2',
             'paid_amount' => 'decimal:2',
+            'refund_amount' => 'decimal:2',
             'quantity' => 'integer',
             'config_snapshot' => 'array',
             'config_pricing_snapshot' => 'array',
@@ -71,6 +72,7 @@ class Order extends Model
             'member_discount_snapshot' => 'array',
             'service_snapshot' => 'array',
             'paid_at' => 'datetime',
+            'refunded_at' => 'datetime',
         ];
     }
 
