@@ -4,6 +4,7 @@ namespace App\Services\Provisioning;
 
 use App\Constants\ServiceStatus;
 use App\Exceptions\BusinessException;
+use App\Exceptions\UpstreamStockShortageException;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Product;
@@ -15,6 +16,7 @@ use App\Services\Integrations\Plugins\ServiceUpstreamBindingWriter;
 use App\Services\Integrations\Plugins\UpstreamBindingWriter;
 use App\Services\Integrations\Support\ProviderErrorMapper;
 use App\Services\ProductCatalog\ProductCatalogService;
+use App\Services\ProductCatalog\ProductSyncService;
 use App\Services\System\SettingService;
 use App\Services\Upstream\Contracts\ProvidesProvisioning;
 use App\Services\Upstream\ProviderResolver;
@@ -58,11 +60,20 @@ class ProvisionService
         private SettingService $settingService,
         private ?ProductCatalogService $productCatalogService = null,
         private ?PluginBindingResolver $bindingResolver = null,
+        private ?ProductSyncService $productSyncService = null,
     ) {}
 
     private function productCatalogService(): ProductCatalogService
     {
         return $this->productCatalogService ??= app(ProductCatalogService::class);
+    }
+
+    /**
+     * 使用 app() 延迟解析：本服务在测试中经 new 直接实例化，避免新增构造依赖。
+     */
+    private function productSyncService(): ProductSyncService
+    {
+        return $this->productSyncService ??= app(ProductSyncService::class);
     }
 
     public function processPaidOrder(Order $order): ?Service
@@ -463,17 +474,27 @@ class ProvisionService
             $this->resolveProvisionHostname($order);
             $cartLockKey = $this->supplierCartLockKey($supplier);
 
-            return Cache::lock($cartLockKey, $this->supplierCartLockTtl())->block(10, function () use ($order, $supplier, $provisioning, $service) {
-                // 锁内基于 DB 最新状态复查幂等：并发"队列履约 + 管理员手动重试"时，
-                // 另一路径可能已 checkout 并提交 checkpoint（upstream_invoice_id/upstream_host_id 已落库）。
-                // 必须用 fresh 数据做幂等回查，避免基于旧内存值重复走购物车流程造成上游二次开通。
-                $freshService = ($service ?? $order->service)?->fresh();
-                if ($freshService instanceof Service) {
-                    $this->assertNoUnresolvedUpstreamProvisionInvoice($freshService);
-                }
+            try {
+                return Cache::lock($cartLockKey, $this->supplierCartLockTtl())->block(10, function () use ($order, $supplier, $provisioning, $service) {
+                    // 锁内基于 DB 最新状态复查幂等：并发"队列履约 + 管理员手动重试"时，
+                    // 另一路径可能已 checkout 并提交 checkpoint（upstream_invoice_id/upstream_host_id 已落库）。
+                    // 必须用 fresh 数据做幂等回查，避免基于旧内存值重复走购物车流程造成上游二次开通。
+                    $freshService = ($service ?? $order->service)?->fresh();
+                    if ($freshService instanceof Service) {
+                        $this->assertNoUnresolvedUpstreamProvisionInvoice($freshService);
+                    }
 
-                return $provisioning->provisionOrder($order, $supplier, $freshService ?? $service ?? $order->service);
-            });
+                    return $provisioning->provisionOrder($order, $supplier, $freshService ?? $service ?? $order->service);
+                });
+            } catch (UpstreamStockShortageException $exception) {
+                // 上游加购/结算是唯一真实库存闸门：被「库存不足」拒绝说明本地快照
+                // （prodetail.qty 展示口径）已经虚高，立即校准归零并写售罄覆盖，
+                // 防止后续用户继续按陈旧快照下单付款后再次卡开通。异常原样上抛，
+                // 重试与 requires_refund 链路保持不变。
+                $this->productSyncService()->markUpstreamStockShortage((int) $order->product_id);
+
+                throw $exception;
+            }
         }
 
         // 幂等键回查：如果 service 已有 upstream_host_id，先查上游确认 host 存在且 Active，

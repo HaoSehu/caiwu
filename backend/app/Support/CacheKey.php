@@ -238,6 +238,16 @@ final class CacheKey
     }
 
     /**
+     * 上游售罄覆盖标记：上游开通（加购/结算）以「库存不足」拒绝时写入，
+     * TTL 内该上游商品的库存读取一律按 0 处理，阻断 prodetail.qty 展示口径
+     * 与加购真实校验脱节导致的「有货可买、付款开不出来」。
+     */
+    public static function upstreamStockShortage(int $supplierId, int $supplierProductId): string
+    {
+        return 'upstream_stock_shortage:'.$supplierId.':'.$supplierProductId;
+    }
+
+    /**
      * 活动日志写入失败计数。
      */
     public static function activityLogWriteFailures(): string

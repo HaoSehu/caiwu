@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Caiwu\Plugins\Servers\ZjmfFinance\Lib;
 
 use App\Exceptions\BusinessException;
+use App\Exceptions\UpstreamStockShortageException;
 use App\Models\Supplier;
 use App\Services\Integrations\Support\ProviderErrorMapper;
 use App\Services\Upstream\ProviderKey;
@@ -270,7 +271,16 @@ final class ZjmfNetworkService
             'message' => $message,
         ]);
 
-        throw new BusinessException(app(ProviderErrorMapper::class)->toUserMessage(ProviderKey::ZJMF_FINANCE_API, $action, $message), 42200);
+        $userMessage = app(ProviderErrorMapper::class)->toUserMessage(ProviderKey::ZJMF_FINANCE_API, $action, $message);
+
+        // 控制台/升级链路的上游失败出口与开通同款分类：以「库存不足」类文案拒绝
+        // （如升级换品命中 PRODUCT_OUT_OF_STOCK）时抛分类异常，供升级编排层
+        // 校准目标商品本地库存（快照归零 + 售罄覆盖），阻断假快照继续招单。
+        if (UpstreamStockShortageException::matches($message)) {
+            throw new UpstreamStockShortageException($userMessage, 42200);
+        }
+
+        throw new BusinessException($userMessage, 42200);
     }
 
     private function resolveJwt(Supplier $supplier, ?string $jwt): string

@@ -420,6 +420,122 @@ class ZjmfCatalogServiceTest extends TestCase
         $this->assertSame(-1, $untouched['stock']);
     }
 
+    public function test_fetch_batch_stocks_marks_hidden_or_retired_as_sold_out(): void
+    {
+        // 上游契约：prodetail 返回 products 整行，hidden/retired 随商品编辑刷新
+        // （上游详情缓存只在编辑时失效，扣减/归还均不刷新），是比 qty 可信的下架信号；
+        // 上游加购对 hidden=1 直接报「商品不存在」，本地按售罄（0）口径返回。
+        $platform = $this->createMock(HostingPanelApiTransport::class);
+        $platform->method('request')->willReturnCallback(function (Supplier $supplier, string $method, string $uri, array $payload = []): array {
+            if ($uri === '/zjmf_api_login') {
+                return ['status' => 200, 'jwt' => 'jwt-1'];
+            }
+
+            if ($uri === '/api/product/prodetail') {
+                return [
+                    'status' => 1001,
+                    'data' => [
+                        'detail' => [
+                            '1' => ['stock_control' => 1, 'qty' => 5, 'hidden' => 1, 'allow_qty' => 1],
+                            '2' => ['stock_control' => 1, 'qty' => 3, 'retired' => 1, 'allow_qty' => 1],
+                            '3' => ['stock_control' => 1, 'qty' => 5, 'hidden' => 0, 'retired' => 0, 'allow_qty' => 1],
+                            // 上游关闭库存控制但已下架：hidden 优先于 stock_control=0（不限量），仍按售罄返回
+                            '4' => ['stock_control' => 0, 'qty' => null, 'hidden' => 1, 'allow_qty' => 0],
+                        ],
+                    ],
+                ];
+            }
+
+            return ['status' => 1001, 'data' => []];
+        });
+        $platform->expects($this->never())->method('parallelGet');
+
+        $service = new ZjmfCatalogService(
+            new ZjmfFinanceTransport($platform, new ZjmfAuthManager($platform)),
+            new ZjmfCloudConfigTemplate,
+        );
+        $results = $service->fetchBatchProductStocks($this->supplier(), [1, 2, 3, 4]);
+
+        $this->assertSame(['stock_control' => 1, 'qty' => 0, 'stock' => 0, 'allow_qty' => 1], $results[1]);
+        $this->assertSame(['stock_control' => 1, 'qty' => 0, 'stock' => 0, 'allow_qty' => 1], $results[2]);
+        $this->assertSame(['stock_control' => 1, 'qty' => 5, 'stock' => 5, 'allow_qty' => 1], $results[3]);
+        $this->assertSame(['stock_control' => 1, 'qty' => 0, 'stock' => 0, 'allow_qty' => 0], $results[4]);
+    }
+
+    public function test_fetch_batch_stocks_marks_hidden_as_sold_out_on_config_fallback(): void
+    {
+        // get_product_config 单商品回退路径同口径：products 整行 hidden=1 按售罄返回。
+        $platform = $this->createMock(HostingPanelApiTransport::class);
+        $platform->method('request')->willReturnCallback(function (Supplier $supplier, string $method, string $uri, array $payload = []): array {
+            if ($uri === '/zjmf_api_login') {
+                return ['status' => 200, 'jwt' => 'jwt-1'];
+            }
+
+            return ['status' => 1001, 'data' => ['detail' => []]];
+        });
+        $platform->expects($this->exactly(1))->method('parallelGet')->willReturn([
+            '7' => [
+                'status_code' => 200,
+                'response' => ['status' => 200, 'data' => ['products' => ['id' => 7, 'stock_control' => 1, 'qty' => 8, 'hidden' => 1, 'allow_qty' => 1]]],
+                'error' => '',
+                'content_type' => 'application/json',
+            ],
+        ]);
+
+        $service = new ZjmfCatalogService(
+            new ZjmfFinanceTransport($platform, new ZjmfAuthManager($platform)),
+            new ZjmfCloudConfigTemplate,
+        );
+        $results = $service->fetchBatchProductStocks($this->supplier(), [7]);
+
+        $this->assertSame(['stock_control' => 1, 'qty' => 0, 'stock' => 0, 'allow_qty' => 1], $results[7]);
+    }
+
+    public function test_get_product_catalog_marks_hidden_detail_as_sold_out(): void
+    {
+        // 目录合并路径同口径：详情 hidden=1 时即使 /cart/all 树里仍出现该商品，库存也按 0 归一。
+        $platform = $this->createMock(HostingPanelApiTransport::class);
+        $platform->method('request')->willReturnCallback(function (Supplier $supplier, string $method, string $uri): array {
+            if ($uri === '/zjmf_api_login') {
+                return ['status' => 200, 'jwt' => 'jwt-1'];
+            }
+
+            if ($uri === '/cart/all') {
+                return [
+                    'status' => 200,
+                    'data' => [
+                        'products' => [
+                            ['id' => 31, 'name' => '已下架商品', 'type' => 'cloud'],
+                        ],
+                    ],
+                ];
+            }
+
+            if ($uri === '/api/product/prodetail') {
+                return [
+                    'status' => 200,
+                    'data' => [
+                        'detail' => [
+                            '31' => ['stock_control' => 1, 'qty' => 6, 'hidden' => 1, 'allow_qty' => 1],
+                        ],
+                    ],
+                ];
+            }
+
+            return ['status' => 1001, 'data' => []];
+        });
+
+        $service = new ZjmfCatalogService(
+            new ZjmfFinanceTransport($platform, new ZjmfAuthManager($platform)),
+            new ZjmfCloudConfigTemplate,
+        );
+        $catalog = $service->getProductCatalog($this->supplier());
+
+        $merged = $catalog['products'][0];
+        $this->assertSame(1, $merged['stock_control']);
+        $this->assertSame(0, $merged['stock']);
+    }
+
     private function supplier(): Supplier
     {
         $supplier = new Supplier;

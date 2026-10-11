@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Caiwu\Plugins\Servers\ZjmfFinance\Lib;
 
 use App\Exceptions\BusinessException;
+use App\Exceptions\UpstreamStockShortageException;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\Service;
@@ -133,9 +134,28 @@ final class ZjmfProvisionService
             $jwt = $this->transport->login($supplier);
             $latency['login_ms'] = $this->elapsedMilliseconds($stepStartedAt);
 
+            // 对齐魔方财务同系统协议：购物车链路携带 downstream_* 注册推送目标并激活
+            // 上游两级幂等门（/cart/clear 收编、/cart/settle 同 token 防重）。
+            // token 必须跨重试稳定（上游按 token 匹配既有主机），因此先于任何上游调用落库。
+            $downstream = $this->resolveDownstreamContext($existingService);
+
             $stepStartedAt = microtime(true);
-            $this->clearCart($supplier, $jwt, $cartCookieJar);
+            $gate = $this->clearCart($supplier, $jwt, $cartCookieJar, $downstream);
             $latency['clear_cart_before_ms'] = $this->elapsedMilliseconds($stepStartedAt);
+
+            if ($gate['gate'] === 'paid') {
+                $gateOutcome = $this->adoptExistingUpstreamHost($existingService, $supplier, $product, (int) $gate['host_id'], $jwt);
+                $result = 'success';
+
+                return $gateOutcome;
+            }
+
+            if ($gate['gate'] === 'unpaid') {
+                $gateOutcome = $this->payExistingUpstreamInvoice($existingService, $supplier, $product, $jwt, $cartCookieJar, $downstream, $gate);
+                $result = 'success';
+
+                return $gateOutcome;
+            }
 
             $upstreamProductId = $this->resolveProductUpstreamProductId($product);
 
@@ -174,6 +194,9 @@ final class ZjmfProvisionService
                 [
                     'pos' => [$cartPosition],
                     'checkout' => 1,
+                    // downstream_* 让上游 is_downstream 生效：结算响应直接携带 data.hostid，
+                    // 且同 token 重入时上游防重门返回既有实例(1001)并回滚重复插入。
+                    ...$downstream,
                 ],
                 $jwt,
                 $cartCookieJar,
@@ -190,11 +213,13 @@ final class ZjmfProvisionService
             $hostIds = $this->extractHostIds($checkoutResponse, $checkoutPayload);
             $this->checkpointUpstreamProvision($existingService, $supplier, $product, $invoiceId, $hostIds, $requestedHost);
 
-            if ($invoiceId <= 0) {
+            if ($invoiceId <= 0 && $hostIds === []) {
                 throw new BusinessException('上游已接受结算，但未返回账单 ID');
             }
+            // invoiceId=0 且已拿到实例 ID：上游同 token 防重门(1001)或 0 元单——
+            // 实例已存在、无账单可付，跳过付款段直接进入详情确认。
 
-            if ($this->extractResponseStatus($checkoutResponse) !== 1001) {
+            if ($invoiceId > 0 && $this->extractResponseStatus($checkoutResponse) !== 1001) {
                 $stepStartedAt = microtime(true);
                 $creditResponse = $this->requestCartWithSession(
                     $supplier,
@@ -204,6 +229,8 @@ final class ZjmfProvisionService
                         'invoiceid' => $invoiceId,
                         'use_credit' => 1,
                         'enough' => 1,
+                        // 支付完成(1001)时上游回写 host.stream_info，开通后可反向推送
+                        ...$downstream,
                     ],
                     $jwt,
                     $cartCookieJar,
@@ -523,13 +550,24 @@ final class ZjmfProvisionService
         );
     }
 
-    private function clearCart(Supplier $supplier, string $jwt, array &$cookieJar): void
+    /**
+     * 清空上游购物车并识别下游幂等门结果。
+     *
+     * 携带 downstream_* 时，上游 /cart/clear 对 is_api 客户不是单纯清车：
+     * - 命中既有主机且其账单已支付 → 400「该订单已开通,请勿重新开通」+ hostid：收编既有实例；
+     * - 命中既有主机且其账单未支付 → 200 + invoiceid + hostid：跳过加购/结算，直接补付该账单；
+     * - 未命中 → 普通 200 清车，继续正常开通链。
+     * 不带 downstream_* 时保持历史行为：只清车，不识别门。
+     *
+     * @return array{gate: 'none'}|array{gate: 'paid', host_id: int}|array{gate: 'unpaid', invoice_id: int, host_id: int}
+     */
+    private function clearCart(Supplier $supplier, string $jwt, array &$cookieJar, array $downstream = []): array
     {
         $response = $this->requestCartWithSession(
             $supplier,
             'POST',
             '/cart/clear',
-            [],
+            $downstream,
             $jwt,
             $cookieJar,
             [
@@ -538,21 +576,179 @@ final class ZjmfProvisionService
             ]
         );
 
-        if ($this->hasSuccessfulUpstreamHttpStatus($response)
-            && $this->extractResponseStatus($response) === 400
-            && $this->isKnownEmptyCartResponse($response)) {
-            return;
+        $status = $this->extractResponseStatus($response);
+
+        if ($status === 400) {
+            $message = trim((string) ($response['msg'] ?? ''));
+            if (str_contains($message, '该订单已开通') && str_contains($message, '请勿重新开通')) {
+                $hostIds = $this->extractHostIds($response, $this->extractPayload($response));
+
+                return ['gate' => 'paid', 'host_id' => (int) ($hostIds[0] ?? 0)];
+            }
+
+            $this->throwUpstreamFailure($response, '清空上游购物车');
         }
 
-        $this->assertUpstreamSuccess($response, [200], '清空上游购物车');
+        if ($status === 200) {
+            $payload = $this->extractPayload($response);
+            $invoiceId = $this->extractInvoiceId($response, $payload);
+            $hostIds = $this->extractHostIds($response, $payload);
+            if ($invoiceId > 0 && $hostIds !== []) {
+                return ['gate' => 'unpaid', 'invoice_id' => $invoiceId, 'host_id' => (int) $hostIds[0]];
+            }
+        }
+
+        return ['gate' => 'none'];
     }
 
-    private function isKnownEmptyCartResponse(array $response): bool
+    /**
+     * 解析/初始化下游注册参数（downstream_url/token/id）。
+     *
+     * 魔方财务同系统协议要求下游在购物车链路携带这三个参数：上游据此把 stream_info
+     * 写到对应主机上，激活 /cart/clear 与 /cart/settle 的按 token 幂等门，并在支付
+     * 完成后具备反向推送 /api/host/sync 的能力。token 必须跨重试稳定，首次生成后
+     * 持久化进 provision_data；app.url 缺失或非 http(s) 时退化为不注册（各门不激活，
+     * 行为与历史版本一致）。
+     */
+    private function resolveDownstreamContext(?Service $service): array
     {
-        $message = trim((string) ($response['msg'] ?? $response['message'] ?? ''));
+        if (! $service instanceof Service || ! $service->exists) {
+            return [];
+        }
 
-        return str_contains($message, '该订单已开通')
-            && str_contains($message, '请勿重新开通');
+        $downstreamUrl = rtrim(trim((string) config('app.url')), '/');
+        if (! preg_match('#^https?://#i', $downstreamUrl)) {
+            return [];
+        }
+
+        $provisionData = (array) ($service->provision_data ?? []);
+        $token = trim((string) ($provisionData['downstream_token'] ?? ''));
+        if (strlen($token) !== 32) {
+            $token = bin2hex(random_bytes(16));
+            $service->forceFill([
+                'provision_data' => [...$provisionData, 'downstream_token' => $token],
+            ])->save();
+            $service->setAttribute('provision_data', (array) ($service->fresh()?->provision_data ?? []));
+        }
+
+        return [
+            'downstream_url' => $downstreamUrl,
+            'downstream_token' => $token,
+            'downstream_id' => (int) $service->id,
+        ];
+    }
+
+    /**
+     * 幂等门「已开通已支付」收编：上游已存在同 token 主机且账单已支付，
+     * 检查点落库并回读详情确认后按成功返回，绝不重复走加购/结算。
+     */
+    private function adoptExistingUpstreamHost(
+        ?Service $service,
+        Supplier $supplier,
+        Product $product,
+        int $hostId,
+        string $jwt,
+    ): array {
+        if ($hostId <= 0) {
+            throw new BusinessException('上游提示订单已开通但未返回实例ID，请人工核实上游实例');
+        }
+
+        $provisionData = (array) ($service?->provision_data ?? []);
+        $this->checkpointUpstreamProvision(
+            $service,
+            $supplier,
+            $product,
+            (int) ($provisionData['upstream_invoice_id'] ?? 0),
+            [$hostId],
+            (string) ($provisionData['requested_host'] ?? ''),
+        );
+
+        $detailResponse = $this->responseWithHttpCode($this->transport->getHostDetailWithMeta($supplier, $hostId, $jwt));
+        $this->assertUpstreamSuccess($detailResponse, [200], '读取上游产品详情');
+        $detailPayload = $this->extractPayload($detailResponse);
+        $hostDetail = is_array($detailPayload['host'] ?? null) ? $detailPayload['host'] : [];
+        $this->assertHostDetailPresent($hostDetail, $hostId);
+
+        Log::info('[ZJMF 财务开通] 清车幂等门收编既有实例', [
+            'supplier_id' => (int) $supplier->id,
+            'upstream_host_id' => $hostId,
+        ]);
+
+        return [
+            'requested_host' => (string) ($provisionData['requested_host'] ?? ''),
+            'upstream_invoice_id' => (int) ($provisionData['upstream_invoice_id'] ?? 0),
+            'upstream_host_ids' => [$hostId],
+            'upstream_host_id' => $hostId,
+            'host_detail' => $hostDetail,
+        ];
+    }
+
+    /**
+     * 幂等门「已开通未支付」补付：上游存在同 token 主机且其账单未支付
+     * （上次开通在结算后、支付前中断），跳过加购/结算直接补付既有账单，
+     * 避免重开一单造成上游二次开通与重复扣款。
+     */
+    private function payExistingUpstreamInvoice(
+        ?Service $service,
+        Supplier $supplier,
+        Product $product,
+        string $jwt,
+        array &$cookieJar,
+        array $downstream,
+        array $gate,
+    ): array {
+        $invoiceId = (int) $gate['invoice_id'];
+        $gateHostId = (int) $gate['host_id'];
+        $provisionData = (array) ($service?->provision_data ?? []);
+        $requestedHost = (string) ($provisionData['requested_host'] ?? '');
+
+        $creditResponse = $this->requestCartWithSession(
+            $supplier,
+            'POST',
+            '/apply_credit',
+            [
+                'invoiceid' => $invoiceId,
+                'use_credit' => 1,
+                'enough' => 1,
+                ...$downstream,
+            ],
+            $jwt,
+            $cookieJar,
+            [
+                'Content-Type: application/x-www-form-urlencoded',
+                'Accept: application/json',
+            ]
+        );
+        // enough=1 与主链付款语义一致：余额必须全额覆盖，不足直接失败浮出
+        $this->assertUpstreamSuccess($creditResponse, [1001], '使用供应商余额支付既有开通账单');
+
+        $creditPayload = $this->extractPayload($creditResponse);
+        $hostIds = array_values(array_unique([
+            $gateHostId,
+            ...$this->extractHostIds($creditResponse, $creditPayload),
+        ]));
+        $this->checkpointUpstreamProvision($service, $supplier, $product, $invoiceId, $hostIds, $requestedHost);
+
+        $hostId = (int) ($hostIds[0] ?? $gateHostId);
+        $detailResponse = $this->responseWithHttpCode($this->transport->getHostDetailWithMeta($supplier, $hostId, $jwt));
+        $this->assertUpstreamSuccess($detailResponse, [200], '读取上游产品详情');
+        $detailPayload = $this->extractPayload($detailResponse);
+        $hostDetail = is_array($detailPayload['host'] ?? null) ? $detailPayload['host'] : [];
+        $this->assertHostDetailPresent($hostDetail, $hostId);
+
+        Log::info('[ZJMF 财务开通] 清车幂等门补付既有账单', [
+            'supplier_id' => (int) $supplier->id,
+            'upstream_invoice_id' => $invoiceId,
+            'upstream_host_id' => $hostId,
+        ]);
+
+        return [
+            'requested_host' => $requestedHost,
+            'upstream_invoice_id' => $invoiceId,
+            'upstream_host_ids' => $hostIds,
+            'upstream_host_id' => $hostId,
+            'host_detail' => $hostDetail,
+        ];
     }
 
     private function requestCartWithSession(
@@ -734,7 +930,22 @@ final class ZjmfProvisionService
             'message' => $message,
         ]);
 
-        throw new BusinessException(app(ProviderErrorMapper::class)->toUserMessage(ProviderKey::ZJMF_FINANCE_API, $action, $message));
+        $userMessage = app(ProviderErrorMapper::class)->toUserMessage(ProviderKey::ZJMF_FINANCE_API, $action, $message);
+
+        // 上游加购/结算的库存校验是唯一真实库存口径；以「库存不足」拒绝时抛分类异常，
+        // 供开通编排层把本地陈旧快照（prodetail.qty 展示口径）校准归零并写售罄覆盖。
+        if ($this->isStockShortageMessage($message)) {
+            throw new UpstreamStockShortageException($userMessage);
+        }
+
+        throw new BusinessException($userMessage);
+    }
+
+    private function isStockShortageMessage(string $message): bool
+    {
+        // 词表与各文案来源收敛在 UpstreamStockShortageException::matches，控制台/升级
+        // 链路（ZjmfNetworkService）的上游失败出口同款判定，勿在此处另立文案清单。
+        return UpstreamStockShortageException::matches($message);
     }
 
     private function extractResponseStatus(array $response): int

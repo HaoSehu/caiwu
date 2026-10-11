@@ -25,6 +25,7 @@ use App\Support\SchemaMetadataCache;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Query\Expression;
 use Illuminate\Support\Facades\DB;
 
 class ProductAdminService
@@ -79,11 +80,35 @@ class ProductAdminService
             $filters
         );
 
+        $sortColumn = $this->resolveAdminProductSortColumn($filters);
+        if ($sortColumn !== null) {
+            $direction = strtolower((string) ($filters['sort_order'] ?? 'asc')) === 'desc' ? 'desc' : 'asc';
+
+            return $query->orderBy($sortColumn, $direction)->orderByDesc('id')->paginate($perPage);
+        }
+
         return $query
             ->orderBy('sort_order')
             ->orderByDesc('status')
             ->orderByDesc('id')
             ->paginate($perPage);
+    }
+
+    /**
+     * 管理端列表排序字段映射：月价格取 pricing.monthly，与摘要资源展示口径一致；
+     * JSON 值经 json_unquote 后是字符串，必须 CAST 成 DECIMAL 才能按数值比较。
+     * 合法取值由 ListProductsRequest 白名单约束，此处仅做兜底，表达式内无任何外部输入。
+     *
+     * @param  array<string, mixed>  $filters
+     */
+    private function resolveAdminProductSortColumn(array $filters): Expression|string|null
+    {
+        return match ($filters['sort_by'] ?? null) {
+            'price' => new Expression("CAST(JSON_UNQUOTE(JSON_EXTRACT(pricing, '$.monthly')) AS DECIMAL(12, 2))"),
+            'stock' => 'stock',
+            'services_count' => 'services_count',
+            default => null,
+        };
     }
 
     public function reorderAdminProducts(array $filters, int $page, int $pageSize, array $productIds): array

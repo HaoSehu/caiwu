@@ -8,6 +8,7 @@ use App\Constants\OrderStatus;
 use App\Constants\OrderType;
 use App\Constants\ProductType;
 use App\Exceptions\BusinessException;
+use App\Exceptions\UpstreamStockShortageException;
 use App\Models\FirstProductGroup;
 use App\Models\Order;
 use App\Models\Product;
@@ -23,9 +24,14 @@ use App\Services\Upstream\Contracts\ProvidesConsoleCatalog;
 use App\Services\Upstream\Contracts\UpstreamDriver;
 use App\Services\Upstream\ProviderRegistry;
 use App\Services\Upstream\ProviderResolver;
+use App\Support\CacheKey;
+use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfProvisionService;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use ReflectionClass;
+use ReflectionMethod;
 use Tests\TestCase;
 
 /**
@@ -50,6 +56,10 @@ class StockGateTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        // redis_volatile 切 array store：覆盖标记与前台库存缓存不落真实 redis，
+        // array store 随用例的应用实例重建，天然隔离无残留
+        config(['cache.stores.redis_volatile' => ['driver' => 'array']]);
 
         // 注册 fake 插件行：provider_key → plugin_id 解析依赖 integration_plugins；
         // 插入发生在测试事务内，由 DatabaseTransactions 统一回滚，不做手动清理
@@ -244,6 +254,101 @@ class StockGateTest extends TestCase
         // 上游不可达时浏览不炸：展示降级为本地快照，快照不被误写
         $this->assertSame($stockBefore, (int) $product->fresh()->stock);
         $this->assertSame($stockBefore, (int) $overlaid->first()->getAttribute('live_stock'));
+    }
+
+    public function test_provision_shortage_marks_override_zeroes_snapshot_and_clears_site_cache(): void
+    {
+        // 售罄校准回归（订单 3202 事故）：上游加购以「库存不足」拒绝后，本地快照
+        // 必须立即归零（快照闸门拦新单）、写覆盖标记（阻断浏览回写把 qty 假值写回）、
+        // 清前台新鲜/陈旧双键（售罄立即可见）。
+        [$product, $syncService] = $this->makeBoundProduct(remoteStock: 20, localStock: 20);
+        $supplierId = $this->boundSupplierId($product);
+
+        $store = Cache::store('redis_volatile');
+        $siteKey = CacheKey::siteProductStock((int) $product->id);
+        $store->put($siteKey, ['product_id' => (int) $product->id, 'stock' => 20], 60);
+        $store->put($siteKey.':stale', ['product_id' => (int) $product->id, 'stock' => 20], 60);
+
+        $syncService->markUpstreamStockShortage((int) $product->id);
+
+        $this->assertSame(0, (int) $product->fresh()->stock);
+        $this->assertTrue($store->has(CacheKey::upstreamStockShortage($supplierId, 11)));
+        $this->assertFalse($store->has($siteKey));
+        $this->assertFalse($store->has($siteKey.':stale'));
+    }
+
+    public function test_shortage_override_forces_remote_stock_reads_to_zero(): void
+    {
+        // 覆盖期读取回归：上游 qty 仍返回 20（展示口径假值）时，覆盖标记内
+        // 库存读取一律按 0 —— 展示归零，浏览回写不再把假值写回快照。
+        [$product, $syncService] = $this->makeBoundProduct(remoteStock: 20, localStock: 20);
+        $supplierId = $this->boundSupplierId($product);
+
+        Cache::store('redis_volatile')->put(
+            CacheKey::upstreamStockShortage($supplierId, 11),
+            true,
+            now()->addSeconds(60)
+        );
+
+        $overlaid = $syncService->applyLiveStockToProducts(new Collection([$product]), true);
+
+        $this->assertSame(0, (int) $overlaid->first()->getAttribute('live_stock'));
+        $this->assertSame(0, (int) $product->fresh()->stock);
+    }
+
+    public function test_shortage_override_is_scoped_to_bound_supplier_product(): void
+    {
+        // 覆盖隔离回归：售罄覆盖只作用于绑定的供应商+上游商品，其他商品不受牵连。
+        [$marked, $markedSync] = $this->makeBoundProduct(remoteStock: 20, localStock: 20);
+        [$other, $otherSync] = $this->makeBoundProduct(remoteStock: 5, localStock: 5);
+
+        $markedSync->markUpstreamStockShortage((int) $marked->id);
+
+        $this->assertSame(0, (int) $marked->fresh()->stock);
+
+        $overlaidOther = $otherSync->applyLiveStockToProducts(new Collection([$other]), true);
+        $this->assertSame(5, (int) $overlaidOther->first()->getAttribute('live_stock'));
+        $this->assertSame(5, (int) $other->fresh()->stock);
+    }
+
+    public function test_zjmf_upstream_stock_shortage_message_is_classified(): void
+    {
+        // 上游「库存不足」文案分类回归：命中售罄词抛 UpstreamStockShortageException
+        // （供开通编排层校准库存），其他失败仍为普通 BusinessException。
+        // 插件类由运行时的 PluginFileLoader 装载，测试中手动引入（与 ZjmfProvisionServiceTest 同款）。
+        require_once __DIR__.'/../../plugins/servers/zjmf_finance/lib/ZjmfFinanceTransport.php';
+        require_once __DIR__.'/../../plugins/servers/zjmf_finance/lib/ZjmfProvisionService.php';
+
+        $provisionClass = ZjmfProvisionService::class;
+        $service = (new ReflectionClass($provisionClass))->newInstanceWithoutConstructor();
+        $method = new ReflectionMethod($provisionClass, 'throwUpstreamFailure');
+        $method->setAccessible(true);
+
+        try {
+            $method->invoke($service, ['status' => 400, 'msg' => '产品美国轻量云 2H2G库存不足'], '加入上游购物车');
+            $this->fail('库存不足文案应抛售罄分类异常');
+        } catch (UpstreamStockShortageException $exception) {
+            $this->assertSame('加入上游购物车失败，请稍后重试', $exception->getMessage());
+        }
+
+        try {
+            $method->invoke($service, ['status' => 400, 'msg' => '登录信息错误'], '加入上游购物车');
+            $this->fail('非库存文案应抛普通业务异常');
+        } catch (BusinessException $exception) {
+            $this->assertNotInstanceOf(UpstreamStockShortageException::class, $exception);
+        }
+    }
+
+    private function boundSupplierId(Product $product): int
+    {
+        $binding = DB::table('product_upstream_bindings')
+            ->where('product_id', $product->id)
+            ->firstOrFail(['supplier_plugin_binding_id']);
+        $supplierBinding = DB::table('supplier_plugin_bindings')
+            ->where('id', $binding->supplier_plugin_binding_id)
+            ->firstOrFail(['supplier_id']);
+
+        return (int) $supplierBinding->supplier_id;
     }
 
     private function checkoutPayload(Product $product, string $quoteToken): array

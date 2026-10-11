@@ -29,31 +29,54 @@
       </div>
     </div>
 
-    <div class="supplier-grid">
-      <article v-for="row in suppliers" :key="row.id" class="supplier-card">
-        <div class="supplier-card__head">
-          <div>
-            <strong>{{ supplierCardTitle(row) }}</strong>
-            <span v-if="supplierCardSubtitle(row)">{{ supplierCardSubtitle(row) }}</span>
-          </div>
-          <t-tag
-            v-if="supplierCardStatus(row).label"
-            :theme="supplierCardStatus(row).theme"
-            :variant="supplierCardStatus(row).variant"
-          >
-            {{ supplierCardStatus(row).label }}
-          </t-tag>
+    <t-table
+      row-key="id"
+      class="supplier-table"
+      :data="suppliers"
+      :columns="supplierColumns"
+      :loading="supplierLoading"
+      hover
+      table-layout="fixed"
+      aria-label="提供商列表"
+    >
+      <template #empty>
+        <t-empty
+          :description="
+            supplierLoading
+              ? '加载中...'
+              : supplierFilters.keyword || supplierFilters.status !== ''
+                ? '未找到匹配结果'
+                : '暂无提供商'
+          "
+        />
+      </template>
+      <template #name="{ row }">
+        <div class="supplier-name">
+          <strong>{{ supplierCardTitle(row) }}</strong>
+          <span v-if="supplierCardSubtitle(row)">{{ supplierCardSubtitle(row) }}</span>
         </div>
-        <div v-if="supplierCardEmptyText(row)" class="supplier-card__empty">
-          {{ supplierCardEmptyText(row) }}
-        </div>
-        <dl v-else>
+      </template>
+      <template #status="{ row }">
+        <t-tag
+          v-if="supplierCardStatus(row).label"
+          :theme="supplierCardStatus(row).theme"
+          :variant="supplierCardStatus(row).variant"
+        >
+          {{ supplierCardStatus(row).label }}
+        </t-tag>
+        <span v-else>--</span>
+      </template>
+      <template #info="{ row }">
+        <div v-if="supplierCardEmptyText(row)" class="supplier-info-empty">{{ supplierCardEmptyText(row) }}</div>
+        <dl v-else class="supplier-info">
           <div v-for="field in supplierCardFields(row)" :key="supplierCardFieldKey(field)">
             <dt>{{ field.label }}</dt>
             <dd :class="supplierCardFieldClass(field)">{{ supplierCardFieldValue(field) }}</dd>
           </div>
         </dl>
-        <div class="supplier-card__actions">
+      </template>
+      <template #operation="{ row }">
+        <div class="supplier-actions">
           <t-button size="small" variant="text" theme="primary" @click="openSupplierDialog(row)">{{
             canManageSuppliers ? '编辑' : '查看'
           }}</t-button>
@@ -87,9 +110,8 @@
             >删除</t-button
           >
         </div>
-      </article>
-      <t-empty v-if="!supplierLoading && suppliers.length === 0" description="暂无提供商" />
-    </div>
+      </template>
+    </t-table>
 
     <div v-if="supplierTotal > 0" class="pagination-row">
       <t-pagination
@@ -424,7 +446,7 @@
 </template>
 <script setup lang="ts">
 import { AddIcon, ChevronRightIcon, SearchIcon } from 'tdesign-icons-vue-next';
-import type { PageInfo } from 'tdesign-vue-next';
+import type { PageInfo, PrimaryTableCol } from 'tdesign-vue-next';
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import { computed, onMounted, reactive, ref } from 'vue';
 
@@ -510,6 +532,13 @@ const supplierTotal = ref(0);
 const supplierPage = ref(1);
 const supplierPageSize = ref(20);
 const providerTypes = ref<ProviderTypeRecord[]>([]);
+
+const supplierColumns: PrimaryTableCol<SupplierRecord>[] = [
+  { title: '提供商', colKey: 'name', minWidth: 200 },
+  { title: '状态', colKey: 'status', width: 100 },
+  { title: '关键信息', colKey: 'info', minWidth: 240 },
+  { title: '操作', colKey: 'operation', width: 230 },
+];
 
 const supplierFilters = reactive({
   keyword: '',
@@ -707,7 +736,7 @@ function supplierCardFieldValue(field: SupplierCardField) {
 
 function supplierCardFieldClass(field: SupplierCardField) {
   const theme = String(field.theme || '').trim();
-  return theme ? `supplier-card__field-value--${theme}` : '';
+  return theme ? `supplier-info-value--${theme}` : '';
 }
 
 function supplierCardActionDisabled(action: SupplierCardAction) {

@@ -354,12 +354,7 @@ final class ZjmfCatalogService
                     continue;
                 }
 
-                $results[$productId] = [
-                    'stock_control' => (int) ($detail['stock_control'] ?? 0),
-                    'qty' => is_numeric($detail['qty'] ?? null) ? max((int) $detail['qty'], 0) : null,
-                    'stock' => $this->normalizeCatalogStock($detail),
-                    'allow_qty' => (int) ($detail['allow_qty'] ?? 0),
-                ];
+                $results[$productId] = $this->resolveDetailStock($detail);
             }
         });
 
@@ -425,6 +420,10 @@ final class ZjmfCatalogService
             }
 
             $groupLabel = $parentLabel !== '' ? $parentLabel : '未分组';
+            if ($this->isUpstreamDelisted($entry)) {
+                $entry['stock_control'] = 1;
+                $entry['qty'] = 0;
+            }
             $item = $this->productTypeMapper->normalizeProduct([
                 'id' => $productId,
                 'name' => $name !== '' ? $name : '未命名商品',
@@ -521,6 +520,11 @@ final class ZjmfCatalogService
 
         if (array_key_exists('qty', $detail)) {
             $item['qty'] = is_numeric($detail['qty'] ?? null) ? max((int) $detail['qty'], 0) : null;
+        }
+
+        if ($this->isUpstreamDelisted($detail)) {
+            $item['stock_control'] = 1;
+            $item['qty'] = 0;
         }
 
         $item['stock'] = $this->normalizeCatalogStock($item);
@@ -634,11 +638,46 @@ final class ZjmfCatalogService
             return null;
         }
 
+        return $this->resolveDetailStock($product);
+    }
+
+    /**
+     * 上游商品是否已下架/退役。prodetail 与 get_product_config 返回的 products 整行中，
+     * hidden/retired 随商品编辑同步刷新（上游详情缓存只在编辑时失效，扣减/归还均不刷新），
+     * 是比 qty 可信的下架信号；上游加购对 hidden=1 直接以「商品不存在」拒绝，
+     * 本地继续按 qty 展示有货必然开通失败，故下架态一律按售罄（0）口径返回。
+     *
+     * @param  array<string, mixed>  $product
+     */
+    private function isUpstreamDelisted(array $product): bool
+    {
+        return (int) ($product['hidden'] ?? 0) === 1 || (int) ($product['retired'] ?? 0) === 1;
+    }
+
+    /**
+     * 库存提取统一出口：prodetail 批量明细与 get_product_config 单商品回退同口径。
+     * qty 是上游商品编辑时的快照（上游扣减/归还均不刷新该缓存），只作展示口径下限，
+     * 真实库存唯一闸门是上游加购结算校验（由开通层 markUpstreamStockShortage 事后校准承接）。
+     *
+     * @param  array<string, mixed>  $detail
+     * @return array{stock_control: int, qty: int|null, stock: int, allow_qty: int}
+     */
+    private function resolveDetailStock(array $detail): array
+    {
+        if ($this->isUpstreamDelisted($detail)) {
+            return [
+                'stock_control' => 1,
+                'qty' => 0,
+                'stock' => 0,
+                'allow_qty' => (int) ($detail['allow_qty'] ?? 0),
+            ];
+        }
+
         return [
-            'stock_control' => (int) ($product['stock_control'] ?? 0),
-            'qty' => is_numeric($product['qty'] ?? null) ? max((int) $product['qty'], 0) : null,
-            'stock' => $this->normalizeCatalogStock($product),
-            'allow_qty' => (int) ($product['allow_qty'] ?? 0),
+            'stock_control' => (int) ($detail['stock_control'] ?? 0),
+            'qty' => is_numeric($detail['qty'] ?? null) ? max((int) $detail['qty'], 0) : null,
+            'stock' => $this->normalizeCatalogStock($detail),
+            'allow_qty' => (int) ($detail['allow_qty'] ?? 0),
         ];
     }
 

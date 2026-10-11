@@ -51,49 +51,61 @@
       </div>
     </t-card>
 
-    <t-loading :loading="loading" size="small">
-      <div v-if="list.length" class="ticket-grid">
-        <article v-for="item in list" :key="item.id" class="ticket-card" @click="openDetail(item.id)">
-          <div class="ticket-card__head">
-            <span>#{{ item.id }}</span>
-            <t-tag :theme="statusTheme(item.status)" variant="light">{{ statusLabel(item.status) }}</t-tag>
-          </div>
-          <h2>{{ item.subject || '-' }}</h2>
-          <div class="ticket-card__meta">
-            <span>
-              <user-icon />
-              <button type="button" @click.stop="goUserDetail(item.user?.id || item.user_id)">
-                {{ userName(item) }}
-              </button>
-            </span>
-            <span>处理人：{{ assigneeName(item) }}</span>
-          </div>
-          <div class="ticket-card__foot">
-            <t-tag :theme="priorityTheme(item.priority)" variant="light">{{ priorityLabel(item.priority) }}</t-tag>
-            <t-tag theme="default" variant="light">{{ departmentLabel(item.department) }}</t-tag>
-            <time>{{ formatDateTime(item.updated_at || item.created_at) }}</time>
-          </div>
-        </article>
-      </div>
-      <t-empty v-else-if="!loading" description="暂无工单记录" />
-    </t-loading>
+    <t-card :bordered="false">
+      <t-table
+        row-key="id"
+        :data="list"
+        :columns="columns"
+        :loading="loading"
+        hover
+        table-layout="fixed"
+        aria-label="工单列表"
+      >
+        <template #empty>
+          <t-empty :description="loading ? '加载中...' : hasActiveFilters ? '未找到匹配结果' : '暂无工单记录'" />
+        </template>
+        <template #subject="{ row }">
+          <button class="ticket-subject" type="button" @click="openDetail(row.id)">
+            {{ row.subject || '-' }}
+          </button>
+        </template>
+        <template #user="{ row }">
+          <button class="ticket-user" type="button" @click="goUserDetail(row.user?.id || row.user_id)">
+            {{ userName(row) }}
+          </button>
+        </template>
+        <template #assignee="{ row }">{{ assigneeName(row) }}</template>
+        <template #status="{ row }">
+          <t-tag :theme="statusTheme(row.status)" variant="light">{{ statusLabel(row.status) }}</t-tag>
+        </template>
+        <template #priority="{ row }">
+          <t-tag :theme="priorityTheme(row.priority)" variant="light">{{ priorityLabel(row.priority) }}</t-tag>
+        </template>
+        <template #department="{ row }">{{ departmentLabel(row.department) }}</template>
+        <template #updatedAt="{ row }">{{ formatDateTime(row.updated_at || row.created_at) }}</template>
+        <template #operation="{ row }">
+          <t-button size="small" variant="text" theme="primary" @click="openDetail(row.id)">查看</t-button>
+        </template>
+      </t-table>
 
-    <div v-if="total > 0" class="ticket-pagination">
-      <t-pagination
-        :current="pagination.page"
-        :page-size="pagination.page_size"
-        :total="total"
-        :page-size-options="[20, 50, 100]"
-        show-jumper
-        @change="handlePaginationChange"
-      />
-    </div>
+      <div v-if="total > 0" class="ticket-pagination">
+        <t-pagination
+          :current="pagination.page"
+          :page-size="pagination.page_size"
+          :total="total"
+          :page-size-options="[20, 50, 100]"
+          show-jumper
+          @change="handlePaginationChange"
+        />
+      </div>
+    </t-card>
   </div>
 </template>
 <script setup lang="ts">
 import './index.less';
 
-import { SearchIcon, UserIcon } from 'tdesign-icons-vue-next';
+import { SearchIcon } from 'tdesign-icons-vue-next';
+import type { PrimaryTableCol } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
 import { useRouter } from 'vue-router';
 
@@ -114,10 +126,17 @@ interface TicketFilter {
   department: string;
 }
 
-const { filters, list, total, loading, pagination, handleSearch, resetFilters, handlePaginationChange } = useListPage<
-  TicketFilter,
-  TicketRecord
->({
+const {
+  filters,
+  list,
+  total,
+  loading,
+  hasActiveFilters,
+  pagination,
+  handleSearch,
+  resetFilters,
+  handlePaginationChange,
+} = useListPage<TicketFilter, TicketRecord>({
   defaultFilters: {
     keyword: '',
     status: DEFAULT_STATUS_FILTER,
@@ -128,6 +147,18 @@ const { filters, list, total, loading, pagination, handleSearch, resetFilters, h
   onError: (error) => MessagePlugin.error(errorMessage(error, '加载工单列表失败')),
   fetch: (params) => adminApi.tickets.list(params),
 });
+
+const columns: PrimaryTableCol<TicketRecord>[] = [
+  { title: 'ID', colKey: 'id', width: 70 },
+  { title: '标题', colKey: 'subject', minWidth: 200 },
+  { title: '用户', colKey: 'user', width: 170 },
+  { title: '处理人', colKey: 'assignee', width: 130 },
+  { title: '状态', colKey: 'status', width: 100 },
+  { title: '优先级', colKey: 'priority', width: 90 },
+  { title: '分类', colKey: 'department', width: 96 },
+  { title: '最后更新', colKey: 'updatedAt', width: 170 },
+  { title: '操作', colKey: 'operation', width: 80 },
+];
 
 const statusOptions = [
   { label: '进行中', value: DEFAULT_STATUS_FILTER },

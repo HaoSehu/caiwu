@@ -27,6 +27,8 @@ class ListProductsRequest extends AdminFormRequest
             'first_product_group_id',
             'second_product_group_id',
             'third_product_group_id',
+            'sort_by',
+            'sort_order',
         ];
 
         $normalized = [];
@@ -64,6 +66,8 @@ class ListProductsRequest extends AdminFormRequest
             'third_product_group_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
             'page' => ['sometimes', 'integer', 'min:1'],
             'page_size' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'sort_by' => ['sometimes', 'nullable', 'string', Rule::in(['price', 'stock', 'services_count'])],
+            'sort_order' => ['sometimes', 'nullable', 'string', Rule::in(['asc', 'desc'])],
             'pageSize' => ['prohibited'],
             'per_page' => ['prohibited'],
         ];

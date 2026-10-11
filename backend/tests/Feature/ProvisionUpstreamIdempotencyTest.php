@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Exceptions\BusinessException;
+use App\Exceptions\UpstreamStockShortageException;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\Service;
@@ -17,7 +18,9 @@ use App\Services\Upstream\Contracts\ProvidesProvisioning;
 use App\Services\Upstream\Contracts\UpstreamDriver;
 use App\Services\Upstream\ProviderRegistry;
 use App\Services\Upstream\ProviderResolver;
+use App\Support\CacheKey;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use ReflectionMethod;
 use Tests\TestCase;
@@ -230,6 +233,131 @@ class ProvisionUpstreamIdempotencyTest extends TestCase
         $this->assertSame(['login', 'get'], $driver->calls);
     }
 
+    public function test_stock_shortage_exception_marks_inventory_and_reraises(): void
+    {
+        // 开通编排层售罄校准回归（订单 3202 事故）：上游开通以「库存不足」拒绝时，
+        // 异常上抛保持重试/requires_refund 链路不变，同时本地快照立即归零并写
+        // 售罄覆盖标记，阻断后续用户按陈旧快照下单付款后再次卡开通。
+        $driver = new class implements ProvidesProvisioning, UpstreamDriver
+        {
+            /** @var array<int, string> */
+            public array $calls = [];
+
+            public function key(): string
+            {
+                return 'fake_provisioner';
+            }
+
+            public function label(): string
+            {
+                return '测试开通驱动';
+            }
+
+            public function capabilities(): array
+            {
+                return [ProvidesProvisioning::class];
+            }
+
+            public function supports(string $capability): bool
+            {
+                return $capability === ProvidesProvisioning::class;
+            }
+
+            public function resolve(string $capability): ?object
+            {
+                return $this->supports($capability) ? $this : null;
+            }
+
+            public function login(Supplier $supplier): string
+            {
+                $this->calls[] = 'login';
+
+                return 'fake-jwt-token';
+            }
+
+            public function get(Supplier $supplier, string $path, string $jwt): array
+            {
+                $this->calls[] = 'get';
+
+                return ['status' => 200, 'data' => []];
+            }
+
+            public function provisionOrder(Order $order, Supplier $supplier, ?Service $service): array
+            {
+                $this->calls[] = 'provisionOrder';
+
+                throw new UpstreamStockShortageException('加入上游购物车失败，请稍后重试');
+            }
+        };
+
+        $product = Product::query()->create([
+            'product_type' => 'cloud_host',
+            'status' => 1,
+            'stock' => 20,
+            'pricing' => ['monthly' => '35.00'],
+        ]);
+        $user = User::factory()->create();
+        $service = Service::query()->create([
+            'user_id' => $user->id,
+            'product_id' => $product->id,
+            'billing_cycle' => 'monthly',
+            'amount' => 35.00,
+            'provision_data' => ['created_from_order' => 'ORD-SHORTAGE'],
+        ]);
+        $order = Order::query()->create([
+            'order_no' => Order::generateOrderNo(),
+            'user_id' => $user->id,
+            'product_id' => $product->id,
+            'type' => 'new',
+            'amount' => 35.00,
+            'quantity' => 1,
+            'billing_cycle' => 'monthly',
+            'status' => 1,
+        ]);
+
+        // 商品→供应商绑定链（数字上游商品 ID，与覆盖键口径一致）
+        $supplier = Supplier::query()->create([
+            'name' => '测试售罄供应商-'.uniqid(),
+            'code' => 'SUP-SS-'.uniqid(),
+        ]);
+        $supplierBindingId = (int) DB::table('supplier_plugin_bindings')->insertGetId([
+            'supplier_id' => $supplier->id,
+            'plugin_id' => $this->pluginId,
+            'provider_key' => self::FAKE_PROVIDER_KEY,
+            'status' => 1,
+        ]);
+        DB::table('product_upstream_bindings')->insert([
+            'product_id' => $product->id,
+            'supplier_plugin_binding_id' => $supplierBindingId,
+            'plugin_id' => $this->pluginId,
+            'provider_key' => self::FAKE_PROVIDER_KEY,
+            'upstream_product_id' => '11',
+            'status' => 1,
+        ]);
+
+        $provisionService = new ProvisionService(
+            new ProviderResolver(new ProviderRegistry([$driver])),
+            app(SettingService::class),
+        );
+
+        $method = new ReflectionMethod(ProvisionService::class, 'provisionViaUpstream');
+
+        try {
+            $method->invoke($provisionService, $order, $service);
+            $this->fail('售罄异常应原样上抛');
+        } catch (UpstreamStockShortageException $exception) {
+            $this->assertSame('加入上游购物车失败，请稍后重试', $exception->getMessage());
+        }
+
+        $this->assertContains('provisionOrder', $driver->calls);
+
+        // 校准生效：本地快照归零 + 售罄覆盖标记写入
+        $this->assertSame(0, (int) $product->fresh()->stock);
+        $this->assertTrue(
+            Cache::store('redis_volatile')->has(CacheKey::upstreamStockShortage((int) $supplier->id, 11))
+        );
+    }
+
     /**
      * 内置路径假驱动（回查非 200 变体）：login 成功返回令牌，get 返回指定状态码。
      */
@@ -333,6 +461,10 @@ class ProvisionUpstreamIdempotencyTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        // redis_volatile 切 array store：售罄覆盖标记不落真实 redis，
+        // array store 随用例的应用实例重建，天然隔离无残留
+        config(['cache.stores.redis_volatile' => ['driver' => 'array']]);
 
         // 注册 fake 插件行：provider_key → plugin_id 解析依赖 integration_plugins；
         // 插入发生在测试事务内，由 DatabaseTransactions 统一回滚，不做手动清理

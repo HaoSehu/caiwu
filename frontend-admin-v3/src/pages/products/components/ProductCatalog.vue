@@ -1,76 +1,7 @@
 <template>
   <div class="catalog-page">
-    <t-card :bordered="false" class="catalog-filter-card">
-      <div class="catalog-type-bar">
-        <span class="catalog-bar-label">商品类型</span>
-        <div class="type-strip">
-          <t-button
-            v-for="item in productTypeOptions"
-            :key="item.value"
-            :theme="catalogFilters.product_type === item.value ? 'primary' : 'default'"
-            :variant="catalogFilters.product_type === item.value ? 'base' : 'outline'"
-            :aria-label="`${item.label}，共${item.usage_count || 0}个商品`"
-            :aria-pressed="catalogFilters.product_type === item.value ? 'true' : 'false'"
-            @click="handleProductTypeChange(item.value)"
-          >
-            {{ item.label }}
-            <span class="type-count">{{ item.usage_count || 0 }}</span>
-          </t-button>
-          <t-tooltip content="管理一级分类">
-            <t-button
-              class="type-manage-button"
-              shape="square"
-              variant="outline"
-              aria-label="管理一级分类"
-              @click="openTypeManagerDialog()"
-            >
-              <template #icon><setting-icon /></template>
-            </t-button>
-          </t-tooltip>
-        </div>
-      </div>
-
-      <div class="catalog-filter-row">
-        <t-input
-          v-model="catalogFilters.keyword"
-          class="catalog-filter-keyword"
-          clearable
-          placeholder="搜索商品名称"
-          aria-label="搜索商品名称"
-          @enter="handleCatalogSearch"
-          @clear="handleCatalogSearch"
-        >
-          <template #suffix-icon><search-icon /></template>
-        </t-input>
-        <t-select
-          v-model="catalogFilters.status"
-          class="catalog-filter-status"
-          clearable
-          placeholder="显示状态"
-          aria-label="筛选显示状态"
-          @change="handleCatalogSearch"
-        >
-          <t-option :value="1" label="显示中" />
-          <t-option :value="0" label="已隐藏" />
-        </t-select>
-        <t-select
-          v-model="catalogFilters.lifecycle_status"
-          class="catalog-filter-status"
-          placeholder="商品范围"
-          aria-label="筛选商品范围"
-          @change="handleCatalogSearch"
-        >
-          <t-option v-for="item in lifecycleStatusOptions" :key="item.value" :value="item.value" :label="item.label" />
-        </t-select>
-        <div class="catalog-filter-actions">
-          <t-button theme="default" variant="base" @click="handleCatalogReset">重置</t-button>
-          <t-button theme="primary" @click="handleCatalogSearch">查询</t-button>
-        </div>
-      </div>
-    </t-card>
-
-    <div class="catalog-layout">
-      <t-card :bordered="false" class="category-panel">
+    <t-card :bordered="false" class="catalog-shell">
+      <aside class="catalog-side">
         <div class="category-panel-head">
           <div class="category-panel-title">
             <strong>商品分类</strong>
@@ -85,6 +16,11 @@
             >
               <template #icon><refresh-icon /></template>
             </t-button>
+            <t-tooltip content="管理一级分类">
+              <t-button shape="square" variant="text" aria-label="管理一级分类" @click="openTypeManagerDialog()">
+                <template #icon><setting-icon /></template>
+              </t-button>
+            </t-tooltip>
             <t-button theme="primary" size="small" aria-label="新建二级分类" @click="openSecondCategoryDialog()">
               <template #icon><add-icon /></template>
               新建二级
@@ -92,7 +28,7 @@
           </t-space>
         </div>
         <div class="category-toolbar">
-          <t-input v-model="categoryKeyword" clearable placeholder="搜索分类或子菜单">
+          <t-input v-model="categoryKeyword" clearable placeholder="搜索分类">
             <template #prefix-icon><search-icon /></template>
           </t-input>
         </div>
@@ -126,13 +62,13 @@
             <button type="button" class="category-drag" aria-label="排序占位" disabled>::</button>
             <button type="button" class="category-tree-main" @click="handleCategorySelect(item)">
               <span class="category-title-line">
-                <span class="category-level-tag" :class="categoryLevelClass(item)">{{ categoryLevelLabel(item) }}</span>
                 <span class="category-name" :class="{ 'is-hidden': !isCategoryVisible(item) }">
                   {{ categoryDisplayName(item) }}
                 </span>
               </span>
             </button>
             <t-dropdown
+              v-if="productGroupLevel(item) > 1"
               class="category-menu"
               trigger="click"
               placement="bottom-right"
@@ -152,9 +88,65 @@
         </div>
         <t-empty v-else-if="categoryOptions.length" description="未找到匹配结果" />
         <t-empty v-else description="暂无分类" />
-      </t-card>
+      </aside>
 
-      <t-card :bordered="false" class="product-table-card">
+      <section class="catalog-main product-table-card">
+        <div class="catalog-filter-form">
+          <div class="catalog-filter-item">
+            <label class="catalog-filter-label">商品名称</label>
+            <t-input
+              v-model="catalogFilters.keyword"
+              class="catalog-filter-control"
+              clearable
+              placeholder="请输入商品名称"
+              aria-label="商品名称"
+              @enter="handleCatalogSearch"
+              @clear="handleCatalogSearch"
+            >
+              <template #suffix-icon><search-icon /></template>
+            </t-input>
+          </div>
+          <div class="catalog-filter-item">
+            <label class="catalog-filter-label">显示状态</label>
+            <t-select
+              v-model="catalogFilters.status"
+              class="catalog-filter-control"
+              clearable
+              placeholder="请选择显示状态"
+              aria-label="显示状态"
+              @change="handleCatalogSearch"
+            >
+              <t-option :value="1" label="显示中" />
+              <t-option :value="0" label="已隐藏" />
+            </t-select>
+          </div>
+          <div class="catalog-filter-item">
+            <label class="catalog-filter-label">商品范围</label>
+            <t-select
+              v-model="catalogFilters.lifecycle_status"
+              class="catalog-filter-control"
+              placeholder="请选择商品范围"
+              aria-label="商品范围"
+              @change="handleCatalogSearch"
+            >
+              <t-option
+                v-for="item in lifecycleStatusOptions"
+                :key="item.value"
+                :value="item.value"
+                :label="item.label"
+              />
+            </t-select>
+          </div>
+          <div class="catalog-filter-actions">
+            <t-button theme="primary" @click="handleCatalogSearch">查询</t-button>
+            <t-button theme="default" variant="base" @click="handleCatalogReset">重置</t-button>
+            <t-button theme="primary" @click="router.push({ name: 'AdminProductCreate' })">
+              <template #icon><add-icon /></template>
+              新建商品
+            </t-button>
+          </div>
+        </div>
+
         <button type="button" class="mobile-catalog-sidebar-entry" @click="mobileCatalogDrawerVisible = true">
           <span>筛选分类</span>
           <strong>{{ selectedProductTypeLabel }} / {{ selectedCategoryLabel }}</strong>
@@ -181,21 +173,6 @@
               <t-button size="small" variant="outline" @click="openProvisionHostnameDialog">批量主机名</t-button>
               <t-button size="small" variant="text" @click="clearProductSelection">清空选择</t-button>
             </template>
-            <t-tooltip content="刷新列表">
-              <t-button
-                shape="square"
-                variant="text"
-                :loading="productLoading"
-                aria-label="刷新商品列表"
-                @click="handleCatalogSearch"
-              >
-                <template #icon><refresh-icon /></template>
-              </t-button>
-            </t-tooltip>
-            <t-button size="small" theme="primary" @click="router.push({ name: 'AdminProductCreate' })">
-              <template #icon><add-icon /></template>
-              新建商品
-            </t-button>
           </div>
         </div>
 
@@ -210,6 +187,7 @@
             table-layout="fixed"
             aria-label="商品列表"
             @select-change="handleProductSelectChange"
+            @sort-change="handleProductSortChange"
           >
             <template #empty>
               <t-empty
@@ -225,12 +203,11 @@
               />
             </template>
             <template #name="{ row }">
-              <div class="product-name">
-                <strong :class="{ 'is-hidden': !isProductVisible(row) }">
+              <t-tooltip :content="productSpecDisplayName(row)">
+                <span class="product-name" :class="{ 'is-hidden': !isProductVisible(row) }">
                   {{ productSpecDisplayName(row) }}
-                </strong>
-                <span>{{ productSubtitle(row) }}</span>
-              </div>
+                </span>
+              </t-tooltip>
             </template>
             <template #status="{ row }">
               <t-tag :theme="productVisibilityTheme(row)" variant="light" size="small">
@@ -247,20 +224,43 @@
               {{ formatCount(row.active_services_count ?? row.services_count) }}
             </template>
             <template #operation="{ row }">
-              <t-dropdown
-                trigger="click"
-                placement="bottom-right"
-                :options="productRowMenuOptions(row)"
-                @click="handleProductRowMenuClick(row, $event)"
-              >
-                <t-button
-                  size="small"
-                  shape="square"
-                  variant="text"
-                  :aria-label="`更多操作：${row.display_name || row.name || row.id}`"
-                  >...</t-button
-                >
-              </t-dropdown>
+              <div class="product-row-actions">
+                <template v-if="row.is_deleted">
+                  <t-button
+                    size="small"
+                    variant="text"
+                    theme="primary"
+                    :loading="productActionLoading === `restore:${row.id}`"
+                    @click="handleRestoreProduct(row)"
+                    >恢复</t-button
+                  >
+                  <t-button
+                    size="small"
+                    variant="text"
+                    theme="danger"
+                    :loading="productActionLoading === `force:${row.id}`"
+                    @click="handleForceDeleteProduct(row)"
+                    >彻底删除</t-button
+                  >
+                </template>
+                <template v-else>
+                  <t-button
+                    size="small"
+                    variant="text"
+                    theme="primary"
+                    @click="router.push({ name: 'AdminProductEdit', params: { id: row.id } })"
+                    >编辑</t-button
+                  >
+                  <t-button
+                    size="small"
+                    variant="text"
+                    :loading="productActionLoading === row.id"
+                    @click="handleToggleProduct(row)"
+                    >{{ Number(row.status) === 1 ? '隐藏' : '显示' }}</t-button
+                  >
+                  <t-button size="small" variant="text" theme="danger" @click="handleDeleteProduct(row)">删除</t-button>
+                </template>
+              </div>
             </template>
           </t-table>
         </div>
@@ -275,8 +275,8 @@
             @change="handleProductPageChange"
           />
         </div>
-      </t-card>
-    </div>
+      </section>
+    </t-card>
 
     <t-drawer
       v-model:visible="mobileCatalogDrawerVisible"
@@ -341,13 +341,13 @@
           </div>
 
           <div
-            v-if="categoryTreeRows.length"
+            v-if="mobileCategoryTreeRows.length"
             class="category-tree mobile-category-tree"
             role="tree"
             aria-label="商品分类树"
           >
             <div
-              v-for="{ node: item, level, childCount } in categoryTreeRows"
+              v-for="{ node: item, level, childCount } in mobileCategoryTreeRows"
               :key="categoryIdKey(item)"
               class="category-tree-row"
               :class="{
@@ -374,9 +374,6 @@
               <button type="button" class="category-drag" aria-label="排序占位" disabled>::</button>
               <button type="button" class="category-tree-main" @click="handleMobileCategorySelect(item)">
                 <span class="category-title-line">
-                  <span class="category-level-tag" :class="categoryLevelClass(item)">{{
-                    categoryLevelLabel(item)
-                  }}</span>
                   <span class="category-name" :class="{ 'is-hidden': !isCategoryVisible(item) }">
                     {{ categoryDisplayName(item) }}
                   </span>
@@ -400,7 +397,7 @@
               </t-dropdown>
             </div>
           </div>
-          <t-empty v-else-if="categoryOptions.length" description="未找到匹配结果" />
+          <t-empty v-else-if="categoryKeyword.trim()" description="未找到匹配结果" />
           <t-empty v-else description="暂无分类" />
         </section>
       </div>
@@ -1160,6 +1157,8 @@ const products = ref<ProductRecord[]>([]);
 const productTotal = ref(0);
 const productPage = ref(1);
 const productPageSize = ref(20);
+// 服务端排序状态：sortBy 与后端 sort_by 白名单一致（price/stock/services_count）
+const productSort = ref<{ sortBy: string; descending: boolean }>({ sortBy: '', descending: false });
 const categoryKeyword = ref('');
 const activeProductDrawerSection = ref('basic');
 const categoryExpandedKeys = ref<Set<string>>(new Set());
@@ -1299,12 +1298,12 @@ const productColumns: PrimaryTableCol<ProductRecord>[] = [
   { colKey: 'row-select', type: 'multiple', width: 54, fixed: 'left' },
   { colKey: 'id', title: 'ID', width: 64 },
   { colKey: 'name', title: '商品', minWidth: 200 },
-  { colKey: 'effective_product_group_full_name', title: '分类', width: 160, ellipsis: true },
-  { colKey: 'price', title: '月价格', width: 100, align: 'right' },
-  { colKey: 'stock', title: '库存', width: 84, align: 'right' },
-  { colKey: 'services_count', title: '现存', width: 84, align: 'right' },
+  { colKey: 'effective_product_group_full_name', title: '分类', minWidth: 180 },
+  { colKey: 'price', title: '月价格', width: 110, align: 'right', sorter: true },
+  { colKey: 'stock', title: '库存', width: 90, align: 'right', sorter: true },
+  { colKey: 'services_count', title: '现存', width: 90, align: 'right', sorter: true },
   { colKey: 'status', title: '显示状态', width: 100, align: 'center' },
-  { colKey: 'operation', title: '操作', width: 64, fixed: 'right', align: 'center' },
+  { colKey: 'operation', title: '操作', width: 190, fixed: 'right', align: 'center' },
 ];
 
 const productRules = {
@@ -1363,15 +1362,31 @@ const categoryProductTypeOptions = computed(() => {
     : [];
 });
 const categoryTree = computed(() => buildCategoryTree(categoryOptions.value));
-// 顶部 type-strip 已展示一级分类（L1，例如"云服务器"），分类树里跳过该层，
-// 将 L2（例如"襄阳"）作为树根展示，L3（例如"高宽"）作为其子节点，形成一级 + 二级菜单。
-const displayCategoryTree = computed(() => toDisplayCategoryTree(categoryTree.value));
+// 左树完整展示 一级 → 二级 → 三级 层级，一级节点即商品类型根节点
+const displayCategoryTree = computed(() => categoryTree.value);
 const filteredCategoryTree = computed(() =>
   filterCategoryTree(displayCategoryTree.value, categoryKeyword.value.trim().toLowerCase()),
 );
 const categoryTreeRows = computed(() => flattenCategoryTreeRows(filteredCategoryTree.value));
+// 移动端抽屉保留 类型侧栏 + 该类型下二级树 的两段式形态
+const scopedDisplayCategoryTree = computed(() => {
+  const typeCode = String(catalogFilters.product_type || '').trim();
+  if (!typeCode) return displayCategoryTree.value;
+  const typeRoot = categoryTree.value.find((node) => String(node.item.first_product_group_code || '') === typeCode);
+  return typeRoot ? toDisplayCategoryTree([typeRoot]) : [];
+});
+const mobileCategoryTreeRows = computed(() =>
+  flattenCategoryTreeRows(
+    filterCategoryTree(scopedDisplayCategoryTree.value, categoryKeyword.value.trim().toLowerCase()),
+  ),
+);
+const scopedCategoryOptions = computed(() => {
+  const typeCode = String(catalogFilters.product_type || '').trim();
+  if (!typeCode) return categoryOptions.value;
+  return categoryOptions.value.filter((item) => String(item.first_product_group_code || '') === typeCode);
+});
 const selectableProductGroupOptions = computed(() =>
-  categoryOptions.value.filter((item) => isSelectableProductGroup(item)),
+  scopedCategoryOptions.value.filter((item) => isSelectableProductGroup(item)),
 );
 const editingCategoryHasChildren = computed(() => {
   const current = editingCategory.value;
@@ -1484,24 +1499,6 @@ function categoryDisplayName(row: ProductCategoryRecord) {
   return String(row.name || row.label || `分类 #${row.id}`).trim();
 }
 
-// 分类树按真实层级标注：一级=产品目录、二级=地区、三级=可用区（树中一级已被顶部菜单吸收）。
-function categoryLevelClass(row: ProductCategoryRecord) {
-  return `category-level-${productGroupLevel(row)}`;
-}
-
-function categoryLevelLabel(row: ProductCategoryRecord) {
-  switch (productGroupLevel(row)) {
-    case 1:
-      return '一级';
-    case 2:
-      return '二级';
-    case 3:
-      return '三级';
-    default:
-      return '分类';
-  }
-}
-
 function isCategoryVisible(row: ProductCategoryRecord) {
   const value = row.is_visible;
   return !(value === false || value === 0 || value === '0');
@@ -1534,59 +1531,6 @@ function productVisibilityTheme(row: ProductRecord): 'success' | 'default' | 'da
 function isProductVisible(row: ProductRecord) {
   return Number(row.status) === 1;
 }
-
-function productRowMenuOptions(
-  row: ProductRecord,
-): Array<{ content: string; value: string; theme?: string; loading?: boolean }> {
-  if (row.is_deleted) {
-    return [
-      {
-        content: '恢复',
-        value: 'restore',
-        theme: 'primary',
-        loading: productActionLoading.value === `restore:${row.id}`,
-      },
-      {
-        content: '彻底删除',
-        value: 'force-delete',
-        theme: 'error',
-        loading: productActionLoading.value === `force:${row.id}`,
-      },
-    ];
-  }
-  return [
-    { content: '编辑', value: 'edit', theme: 'default' },
-    {
-      content: Number(row.status) === 1 ? '隐藏' : '显示',
-      value: 'toggle',
-      theme: 'default',
-      loading: productActionLoading.value === row.id,
-    },
-    { content: '删除', value: 'delete', theme: 'error' },
-  ];
-}
-
-function handleProductRowMenuClick(row: ProductRecord, dropdownItem: { value?: string }) {
-  const value = String(dropdownItem.value || '');
-  switch (value) {
-    case 'edit':
-      router.push({ name: 'AdminProductEdit', params: { id: row.id } });
-      break;
-    case 'toggle':
-      handleToggleProduct(row);
-      break;
-    case 'delete':
-      handleDeleteProduct(row);
-      break;
-    case 'restore':
-      handleRestoreProduct(row);
-      break;
-    case 'force-delete':
-      handleForceDeleteProduct(row);
-      break;
-  }
-}
-
 function buildCategoryTree(list: ProductCategoryRecord[]): CategoryTreeNode[] {
   const nodeMap = new Map<string, CategoryTreeNode>();
   const roots: CategoryTreeNode[] = [];
@@ -1697,30 +1641,26 @@ function flattenCategoryTreeRows(
 function syncCategoryExpandedKeys(nodes: CategoryTreeNode[]) {
   const validKeys = new Set<string>();
   const defaultKeys = new Set<string>();
-  const selectedAncestorKeys = new Set<string>();
   const selectedKey = String(catalogFilters.product_group_key || '');
+  const typeCode = String(catalogFilters.product_type || '').trim();
 
-  function visit(node: CategoryTreeNode, level: number) {
+  function visit(node: CategoryTreeNode): boolean {
     const key = categoryIdKey(node.item);
     validKeys.add(key);
-    if (level === 0 && node.children.length) defaultKeys.add(key);
-    node.children.forEach((child) => visit(child, level + 1));
+    const hasSelectedDescendant = node.children.some(visit);
+    if (hasSelectedDescendant && node.children.length) defaultKeys.add(key);
+    return hasSelectedDescendant || (selectedKey !== '' && key === selectedKey);
   }
 
-  function collectSelectedAncestors(node: CategoryTreeNode): boolean {
-    const key = categoryIdKey(node.item);
-    if (key === selectedKey) return true;
-
-    const hasSelectedChild = node.children.some(collectSelectedAncestors);
-    if (hasSelectedChild && node.children.length) selectedAncestorKeys.add(key);
-    return hasSelectedChild;
+  nodes.forEach((node) => visit(node));
+  // 全量树下仅默认展开当前一级类型根节点，其余一级节点保持折叠
+  if (typeCode) {
+    const typeRoot = nodes.find((node) => String(node.item.first_product_group_code || '') === typeCode);
+    if (typeRoot && typeRoot.children.length) defaultKeys.add(categoryIdKey(typeRoot.item));
   }
-
-  nodes.forEach((node) => visit(node, 0));
-  if (selectedKey) nodes.forEach(collectSelectedAncestors);
 
   const preserved = Array.from(categoryExpandedKeys.value).filter((key) => validKeys.has(key));
-  categoryExpandedKeys.value = new Set([...defaultKeys, ...preserved, ...selectedAncestorKeys]);
+  categoryExpandedKeys.value = new Set([...defaultKeys, ...preserved]);
 }
 
 function findCategoryTreeNode(nodes: CategoryTreeNode[], key: number | string): CategoryTreeNode | null {
@@ -1742,22 +1682,22 @@ function firstDisplayCategoryNode(node: CategoryTreeNode): ProductCategoryRecord
   return node.item;
 }
 
-function syncDefaultCatalogCategory(nodes = displayCategoryTree.value) {
-  if (!nodes.length) {
+// 全量树下的默认选中：定位当前一级类型根节点，选中其首个可挂筛选的子分类；已选分类仍在该类型下时保留
+function ensureCatalogSelection() {
+  const typeCode = String(catalogFilters.product_type || '').trim();
+  const typeRoot = typeCode
+    ? categoryTree.value.find((node) => String(node.item.first_product_group_code || '') === typeCode)
+    : null;
+  if (!typeRoot) {
     catalogFilters.product_group_key = '';
     return;
   }
 
   const selectedKey = String(catalogFilters.product_group_key || '');
-  if (selectedKey) {
-    const selectedNode = findCategoryTreeNode(nodes, selectedKey);
-    if (selectedNode) {
-      catalogFilters.product_group_key = categoryIdKey(firstDisplayCategoryNode(selectedNode));
-      return;
-    }
-  }
-
-  catalogFilters.product_group_key = categoryIdKey(firstDisplayCategoryNode(nodes[0]));
+  const selectedNode = selectedKey ? findCategoryTreeNode([typeRoot], selectedKey) : null;
+  catalogFilters.product_group_key = selectedNode
+    ? categoryIdKey(firstDisplayCategoryNode(selectedNode))
+    : categoryIdKey(firstDisplayCategoryNode(typeRoot));
 }
 
 function isCategoryExpanded(row: ProductCategoryRecord) {
@@ -1766,6 +1706,10 @@ function isCategoryExpanded(row: ProductCategoryRecord) {
 
 function isCategoryRowActive(row: ProductCategoryRecord) {
   const selectedKey = String(catalogFilters.product_group_key || '');
+  if (productGroupLevel(row) === 1) {
+    // 一级节点即商品类型：未选中具体分类时按当前类型高亮
+    return !selectedKey && String(row.first_product_group_code || '') === String(catalogFilters.product_type || '');
+  }
   if (!selectedKey) return false;
   // 仅高亮精确选中的行，父节点不再显示选中背景，避免父子背景连成一片
   return categoryIdKey(row) === selectedKey;
@@ -1773,10 +1717,9 @@ function isCategoryRowActive(row: ProductCategoryRecord) {
 
 function isCategoryRowParentOfSelected(row: ProductCategoryRecord) {
   const selectedKey = String(catalogFilters.product_group_key || '');
-  if (!selectedKey) return false;
-  if (categoryIdKey(row) === selectedKey) return false;
+  if (!selectedKey || categoryIdKey(row) === selectedKey) return false;
   const node = findCategoryTreeNode(categoryTree.value, categoryIdKey(row));
-  return Boolean(node?.children.length && categoryIdKey(firstDisplayCategoryNode(node)) === selectedKey);
+  return Boolean(node?.children.length && findCategoryTreeNode(node.children, selectedKey));
 }
 
 function toggleCategoryExpanded(row: ProductCategoryRecord) {
@@ -1807,15 +1750,6 @@ function productSpecDisplayName(row: ProductRecord) {
     ]
       .map(textValue)
       .find(Boolean) || '-'
-  );
-}
-
-function productSubtitle(row: ProductRecord) {
-  const specName = productSpecDisplayName(row);
-  return (
-    [row.name, row.product_type_label, row.product_type, row.effective_product_group_full_name]
-      .map(textValue)
-      .find((item) => item && item !== specName) || '-'
   );
 }
 
@@ -1929,7 +1863,7 @@ async function loadProductTypes() {
 
 async function refreshTypeCatalog() {
   await loadProductTypes();
-  await reloadCategoryScopedProducts();
+  await reloadCatalogData();
 }
 
 function resolveProductTypeIconName(value: unknown) {
@@ -2078,22 +2012,17 @@ function deleteType(type: ProductTypeRecord) {
 
 async function loadCategories() {
   const requestVersion = ++categoryRequestVersion;
-  const productType = String(catalogFilters.product_type || '').trim();
   categoryLoading.value = true;
   try {
-    const response = await productApi.categories({ first_product_group_code: productType });
-    if (requestVersion !== categoryRequestVersion || productType !== catalogFilters.product_type) return;
+    // 一次性加载全量分类树，一级节点在左树中作为商品类型根节点展示
+    const response = await productApi.categories();
+    if (requestVersion !== categoryRequestVersion) return;
 
-    const scopedTree = response.tree.filter(
-      (root) => String(root.first_product_group_code || '').trim() === productType,
-    );
-    categoryOptions.value = flattenCategories(scopedTree);
-    const tree = buildCategoryTree(categoryOptions.value);
-    const displayTree = toDisplayCategoryTree(tree);
-    syncDefaultCatalogCategory(displayTree);
-    syncCategoryExpandedKeys(displayTree);
+    categoryOptions.value = flattenCategories(response.tree);
+    ensureCatalogSelection();
+    syncCategoryExpandedKeys(displayCategoryTree.value);
   } catch (error) {
-    if (requestVersion !== categoryRequestVersion || productType !== catalogFilters.product_type) return;
+    if (requestVersion !== categoryRequestVersion) return;
     categoryOptions.value = [];
     categoryExpandedKeys.value = new Set();
     MessagePlugin.error(errorMessage(error, '加载商品分类失败'));
@@ -2131,7 +2060,7 @@ async function handleMoveCategory(row: ProductCategoryRecord, direction: 'up' | 
   try {
     await productApi.reorderCategory(payload);
     MessagePlugin.success('分类排序已更新');
-    await reloadCategoryScopedProducts();
+    await reloadCatalogData();
   } catch (error) {
     MessagePlugin.error(errorMessage(error, '更新分类排序失败'));
   } finally {
@@ -2160,6 +2089,9 @@ async function loadProducts() {
       status: catalogFilters.status,
       lifecycle_status: catalogFilters.lifecycle_status,
       ...productGroupPayload(selectedGroup),
+      ...(productSort.value.sortBy
+        ? { sort_by: productSort.value.sortBy, sort_order: productSort.value.descending ? 'desc' : 'asc' }
+        : {}),
       page: productPage.value,
       page_size: productPageSize.value,
     });
@@ -2180,7 +2112,7 @@ async function loadProducts() {
   }
 }
 
-async function reloadCategoryScopedProducts() {
+async function reloadCatalogData() {
   await loadCategories();
   await loadProducts();
 }
@@ -2203,13 +2135,10 @@ async function ensureProviderTypes() {
 function handleProductTypeChange(value: string) {
   catalogFilters.product_type = value;
   catalogFilters.product_group_key = '';
-  categoryExpandedKeys.value = new Set();
-  categoryOptions.value = [];
-  products.value = [];
   selectedProductKeys.value = [];
-  productTotal.value = 0;
   productPage.value = 1;
-  void reloadCategoryScopedProducts();
+  syncCategoryExpandedKeys(displayCategoryTree.value);
+  void loadProducts();
 }
 
 function handleMobileProductTypeChange(value: string) {
@@ -2217,9 +2146,16 @@ function handleMobileProductTypeChange(value: string) {
 }
 
 function handleCategorySelect(row: ProductCategoryRecord) {
+  // 一级节点等价于原商品类型切换：展示该类型下全部商品
+  if (productGroupLevel(row) === 1) {
+    handleProductTypeChange(String(row.first_product_group_code || '').trim());
+    return;
+  }
   const node = findCategoryTreeNode(categoryTree.value, categoryIdKey(row));
   const target = node ? firstDisplayCategoryNode(node) : row;
-  catalogFilters.product_group_key = categoryIdKey(target);
+  const targetKey = categoryIdKey(target);
+  if (String(catalogFilters.product_group_key || '') === targetKey) return;
+  catalogFilters.product_group_key = targetKey;
   productPage.value = 1;
   void loadProducts();
 }
@@ -2374,7 +2310,7 @@ async function submitBatchCategory() {
 
     batchCategoryDialogVisible.value = false;
     batchCategoryTargetKeys.value = [];
-    await reloadCategoryScopedProducts();
+    await reloadCatalogData();
   } catch (error) {
     MessagePlugin.error(errorMessage(error, '批量归类失败'));
   } finally {
@@ -2407,7 +2343,7 @@ async function submitSplitProducts() {
     splitProductDialogVisible.value = false;
     splitProductTargetKeys.value = [];
     selectedProductKeys.value = [];
-    await reloadCategoryScopedProducts();
+    await reloadCatalogData();
   } catch (error) {
     MessagePlugin.error(errorMessage(error, '拆分商品失败'));
   } finally {
@@ -2451,6 +2387,16 @@ async function submitProvisionHostname() {
 function handleProductPageChange(pageInfo: PageInfo) {
   productPage.value = pageInfo.current;
   productPageSize.value = pageInfo.pageSize;
+  void loadProducts();
+}
+
+function handleProductSortChange(value: unknown) {
+  const sort = (Array.isArray(value) ? value[0] : value) as { sortBy?: unknown; descending?: unknown } | undefined;
+  productSort.value = {
+    sortBy: String(sort?.sortBy ?? '').trim(),
+    descending: sort?.descending === true,
+  };
+  productPage.value = 1;
   void loadProducts();
 }
 
@@ -3005,7 +2951,7 @@ async function submitCategory() {
       MessagePlugin.success('分类已创建');
     }
     categoryDialogVisible.value = false;
-    await reloadCategoryScopedProducts();
+    await reloadCatalogData();
   } catch (error) {
     MessagePlugin.error(errorMessage(error, '保存分类失败'));
   } finally {
@@ -3031,7 +2977,7 @@ function handleDeleteCategory(row: ProductCategoryRecord) {
         if (catalogFilters.product_group_key === categoryIdKey(row)) {
           catalogFilters.product_group_key = '';
         }
-        await reloadCategoryScopedProducts();
+        await reloadCatalogData();
       } catch (error) {
         MessagePlugin.error(errorMessage(error, '删除分类失败'));
       } finally {
@@ -3214,7 +3160,7 @@ function formatSplitAction(action: string) {
 // --- Init ---
 async function loadCatalog() {
   await loadProductTypes();
-  await reloadCategoryScopedProducts();
+  await reloadCatalogData();
 }
 
 onMounted(() => {
