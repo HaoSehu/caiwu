@@ -98,6 +98,9 @@ class AdminPermissions
 
     public const SCHEDULE_RETRY = 'schedule.retry';
 
+    // 专用权限码：队列任务删除/清空属破坏性运维操作，默认不下发任何内置角色，仅 super_admin 可授权
+    public const SCHEDULE_QUEUE_MANAGE = 'schedule.queue_manage';
+
     public const SITE_VIEW = 'site.view';
 
     public const SITE_MANAGE = 'site.manage';
@@ -288,6 +291,7 @@ class AdminPermissions
             self::INTEGRATION_PLUGIN_TEST => [self::INTEGRATION_PLUGIN_VIEW],
             self::SCHEDULE_TRIGGER => [self::SCHEDULE_VIEW],
             self::SCHEDULE_RETRY => [self::SCHEDULE_VIEW],
+            self::SCHEDULE_QUEUE_MANAGE => [self::SCHEDULE_VIEW],
             self::SITE_MANAGE => [self::SITE_VIEW],
             self::LOG_MANAGE => [self::LOG_LIST],
             self::MEMBER_LEVEL_MANAGE => [self::MEMBER_LEVEL_LIST],

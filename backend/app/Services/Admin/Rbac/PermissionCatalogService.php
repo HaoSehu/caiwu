@@ -105,7 +105,7 @@ class PermissionCatalogService
             AdminPermissions::SETTINGS_VIEW, AdminPermissions::SETTINGS_MANAGE, AdminPermissions::SETTINGS_SECRET_REVEAL => 'system_config',
             AdminPermissions::DATABASE_VIEW, AdminPermissions::DATABASE_MANAGE => 'system_database',
             AdminPermissions::INTEGRATION_PLUGIN_VIEW, AdminPermissions::INTEGRATION_PLUGIN_MANAGE, AdminPermissions::INTEGRATION_PLUGIN_TEST, AdminPermissions::INTEGRATION_PLUGIN_SECRET_REVEAL => 'system_integration',
-            AdminPermissions::SCHEDULE_VIEW, AdminPermissions::SCHEDULE_TRIGGER, AdminPermissions::SCHEDULE_RETRY => 'system_schedule',
+            AdminPermissions::SCHEDULE_VIEW, AdminPermissions::SCHEDULE_TRIGGER, AdminPermissions::SCHEDULE_RETRY, AdminPermissions::SCHEDULE_QUEUE_MANAGE => 'system_schedule',
             AdminPermissions::SITE_VIEW, AdminPermissions::SITE_MANAGE => 'site_ops',
             AdminPermissions::LOG_LIST, AdminPermissions::LOG_MANAGE => 'system_audit',
             default => $this->detectModule($permission),
@@ -199,6 +199,7 @@ class PermissionCatalogService
             'refund' => '退款标记',
             'trigger' => '触发',
             'retry' => '人工重跑',
+            'queue_manage' => '队列管理',
             'test' => '测试',
             'secret_reveal' => '查看密钥',
             'view_raw' => '查看原始隐私',
@@ -233,6 +234,7 @@ class PermissionCatalogService
             AdminPermissions::COUPON_HIGH_VALUE_GRANT,
             AdminPermissions::USER_LOGIN_AS => 'high',
             AdminPermissions::SCHEDULE_RETRY => 'high',
+            AdminPermissions::SCHEDULE_QUEUE_MANAGE => 'high',
             default => (
                 str_ends_with($permission, '.manage')
                 || str_ends_with($permission, '.reply')
@@ -283,6 +285,7 @@ class PermissionCatalogService
             'sync' => 82,
             'trigger' => 84,
             'retry' => 85,
+            'queue_manage' => 87,
             'test' => 86,
             'secret_reveal' => 88,
             'view_raw' => 89,
@@ -339,6 +342,7 @@ class PermissionCatalogService
             AdminPermissions::SCHEDULE_VIEW => '查看自动化任务',
             AdminPermissions::SCHEDULE_TRIGGER => '触发自动化任务',
             AdminPermissions::SCHEDULE_RETRY => '人工重跑失败任务',
+            AdminPermissions::SCHEDULE_QUEUE_MANAGE => '管理队列任务',
             AdminPermissions::SITE_VIEW => '查看站点展示',
             AdminPermissions::SITE_MANAGE => '管理站点展示',
             AdminPermissions::LOG_LIST => '查看日志',

@@ -66,6 +66,55 @@
   background: var(--td-error-color-1);
 }
 
+.schedule-env-item__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+
+.queue-jobs-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.queue-jobs-toolbar__summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--td-text-color-secondary);
+  font-size: var(--td-font-size-size-1, 12px);
+}
+
+.queue-jobs-pagination {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.queue-exception {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--td-text-color-secondary);
+  font-size: var(--td-font-size-size-1, 12px);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+.clear-queue-hint {
+  margin: 0 0 12px;
+  color: var(--td-text-color-secondary);
+  font-size: var(--td-font-size-size-1, 12px);
+  line-height: 1.6;
+  word-break: break-all;
+}
+
 .schedule-task-toolbar {
   display: flex;
   align-items: center;

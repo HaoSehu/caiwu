@@ -45,6 +45,8 @@ export const AdminPermissions = {
   INTEGRATION_PLUGIN_SECRET_REVEAL: 'integration_plugin.secret_reveal',
   SCHEDULE_VIEW: 'schedule.view',
   SCHEDULE_TRIGGER: 'schedule.trigger',
+  // 专用权限码：队列任务删除/清空属破坏性运维操作，默认不下发任何内置角色（与后端 AdminPermissions 保持一致）
+  SCHEDULE_QUEUE_MANAGE: 'schedule.queue_manage',
   SITE_VIEW: 'site.view',
   SITE_MANAGE: 'site.manage',
   LOG_LIST: 'log.list',
@@ -161,6 +163,8 @@ export function impliedPermissions(permission: string): string[] {
     case AdminPermissions.INTEGRATION_PLUGIN_TEST:
       return [AdminPermissions.INTEGRATION_PLUGIN_VIEW];
     case AdminPermissions.SCHEDULE_TRIGGER:
+      return [AdminPermissions.SCHEDULE_VIEW];
+    case AdminPermissions.SCHEDULE_QUEUE_MANAGE:
       return [AdminPermissions.SCHEDULE_VIEW];
     case AdminPermissions.SITE_MANAGE:
       return [AdminPermissions.SITE_VIEW];
