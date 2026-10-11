@@ -220,11 +220,13 @@ signature == strtoupper(md5(json)) 即校验通过
 
 - caiwu 插件通道（`/zjmf_api_login` JWT + `/cart/all`、`/cart/get_product_config`、`/host/header`、`/host/renew`、`/cart/credit`、`/check_order`、`/pay?action=billing`）在 3.5.8 路由中全部存在且行为一致；`GET /v1/user` **不在**本版本路由（`/v1/*` 属 idcsmart_api 插件或更新版本），对应用户资料应使用 `/user_info` 或 OAuth `getUserInfo`。
 - 库存实时校验链：3.5.8 在 `cart/add_to_shop` 内实时调上游 `/cart/stock_control` + `/cart/ontrialmax`——caiwu 排障时"商品缺货/假库存"优先查上游 `products.qty` 与该链路。
-- caiwu 尚未实现的能力：`/api/host/sync`、`/api/ticket_reply/sync` 接收端（当前靠轮询，见本地对接说明第四节）；下游关联/推送目标注册（`host/setdownstream`、`apply_credit` 携带 `downstream_*`）可让上游开通结果主动推送，替代部分轮询。
+- 2026-10-11 已对齐：caiwu 购物车链路（clear/settle/apply_credit）携带 `downstream_*` 注册推送目标，clear 幂等门收编（已付→收编 hostid、未付→补付既有账单）与 settle 1001 防重门已接入 `ZjmfProvisionService`，token 按服务持久化于 `provision_data.downstream_token`。
+- caiwu 尚未实现的能力：`/api/host/sync`、`/api/ticket_reply/sync` 接收端（注册后上游推送落 404，不影响开通；接入时按第五节协议实现，需系统级路由）。
 - 优惠与豁免：上游客户配额由 `api_user_product{ontrial, qty}` 控制，特价/加价由 `upstream_price_type=percent` 在两侧对称折算。
 
 ## 九、解密版勘误与已知缺口
 
+- **上游 `/cart/clear` 幂等门未判空（缺陷）**：`whereLike("stream_info", "%".token."%")` 在不带 `downstream_token` 时退化为 `'%%'` 全表匹配（且无 uid 过滤），任何 is_api 客户的裸清车都可能误报「已开通」/未支付门并携带**他人主机**的 id。调用方约定：**只在携带注册参数时采信门结果**；未注册时对「已开通」400 仅容忍继续，绝不收编。
 - `data/route/api.php:42` 的 `api/product/upgrade_product` 与 `:36` 的 `api/botMessage` 在解密控制器中无对应实现（`getUpgradeProduct`、`Bot` 控制器缺失）。
 - 错别字：`Exctption`（应为 Exception）、`getZjmfUostreamHostInfo`（应为 Downstream）。
 - `app/3.5.8admin` 为空目录；`/resource_login`（资源池平台端点）不在本库，仅 `/resource_login_supplier` 存在。

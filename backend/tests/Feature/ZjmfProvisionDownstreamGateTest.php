@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use App\Constants\OrderStatus;
 use App\Constants\OrderType;
 use App\Constants\ServiceStatus;
+use App\Exceptions\BusinessException;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\Service;
@@ -238,6 +239,152 @@ class ZjmfProvisionDownstreamGateTest extends TestCase
         $this->assertArrayNotHasKey('downstream_token', $localService->fresh()->provision_data ?? []);
     }
 
+    public function test_clear_cart_unexpected_status_is_rejected(): void
+    {
+        // 非 200/400 的清车响应（如 405 登录失效）必须上抛，不得静默按「无门」
+        // 继续加购结算——否则会在鉴权失效的上游购物车里留下残留商品。
+        $service = $this->makeProvisionService([
+            '/cart/clear' => ['status' => 405, 'msg' => '请登陆后再试'],
+        ]);
+        [$order, $supplier, $localService] = $this->makeBoundContext();
+
+        $this->expectException(BusinessException::class);
+
+        $service->provisionOrder($order, $supplier, $localService);
+    }
+
+    public function test_unpaid_gate_credit_failure_surfaces_without_reprovision(): void
+    {
+        // 补付既有账单余额不足：enough=1 严格语义下异常浮出转人工/重试，
+        // 绝不降级为重开一单（finally 兜底清车静默执行，不影响断言）。
+        $service = $this->makeProvisionService([
+            '/cart/clear' => ['status' => 200, 'msg' => 'SUCCESS MESSAGE', 'invoiceid' => 77, 'hostid' => 501],
+            '/host/header' => $this->hostDetailResponse(501),
+            '/apply_credit' => ['status' => 400, 'msg' => '余额不足：账单需35.00，现余额0.00'],
+        ]);
+        [$order, $supplier, $localService] = $this->makeBoundContext();
+
+        try {
+            $service->provisionOrder($order, $supplier, $localService);
+            $this->fail('补付余额不足必须浮出异常');
+        } catch (BusinessException) {
+            $uris = array_column($this->cartCalls, 'uri');
+            $this->assertNotContains('/cart/add_to_shop', $uris, '补付失败时不得重走加购');
+            $this->assertNotContains('/cart/settle', $uris, '补付失败时不得重走结算');
+        }
+    }
+
+    public function test_paid_gate_rejects_product_mismatched_host(): void
+    {
+        // 换绑场景：token 不随上游换绑失效，门命中的可能是换绑前旧商品的历史开通。
+        // 实例商品(999)与当前绑定(11)不一致时必须转人工，绝不收编错配实例。
+        $service = $this->makeProvisionService([
+            '/cart/clear' => ['status' => 400, 'msg' => '该订单已开通,请勿重新开通', 'hostid' => 501, 'domainstatus' => 'Active'],
+            '/host/header' => $this->hostDetailResponse(501, 999),
+        ]);
+        [$order, $supplier, $localService] = $this->makeBoundContext();
+
+        try {
+            $service->provisionOrder($order, $supplier, $localService);
+            $this->fail('实例与商品绑定不一致必须浮出异常');
+        } catch (BusinessException $exception) {
+            $this->assertStringContainsString('与当前商品绑定不一致', $exception->getMessage());
+        }
+
+        $uris = array_column($this->cartCalls, 'uri');
+        $this->assertNotContains('/cart/add_to_shop', $uris);
+        $this->assertNotContains('/cart/settle', $uris);
+        $this->assertNotContains('/apply_credit', $uris);
+        $this->assertArrayNotHasKey('upstream_host_id', $localService->fresh()->provision_data ?? [], '错配实例不得写入检查点');
+    }
+
+    public function test_unpaid_gate_verifies_product_before_paying(): void
+    {
+        // 补付动用供应商余额前必须先核验实例商品一致：错配实例的账单一分钱都不能付。
+        $service = $this->makeProvisionService([
+            '/cart/clear' => ['status' => 200, 'msg' => 'SUCCESS MESSAGE', 'invoiceid' => 77, 'hostid' => 501],
+            '/host/header' => $this->hostDetailResponse(501, 999),
+        ]);
+        [$order, $supplier, $localService] = $this->makeBoundContext();
+
+        try {
+            $service->provisionOrder($order, $supplier, $localService);
+            $this->fail('实例与商品绑定不一致必须浮出异常');
+        } catch (BusinessException) {
+            $uris = array_column($this->cartCalls, 'uri');
+            $this->assertNotContains('/apply_credit', $uris, '商品一致性核验必须先于余额支付');
+        }
+    }
+
+    public function test_paid_gate_adoption_carries_upstream_status_for_state_mapping(): void
+    {
+        // 状态映射契约：门收编返回的 host_detail 携带上游 domainstatus，
+        // 调用方 resolveServiceStatusFromUpstream 据此忠实映射（Suspended→服务暂停），
+        // 收编不得擅自改写实例状态为 Active。
+        $service = $this->makeProvisionService([
+            '/cart/clear' => ['status' => 400, 'msg' => '该订单已开通,请勿重新开通', 'hostid' => 501, 'domainstatus' => 'Suspended'],
+            '/host/header' => $this->hostDetailResponse(501, 11, 'Suspended'),
+        ]);
+        [$order, $supplier, $localService] = $this->makeBoundContext();
+
+        $result = $service->provisionOrder($order, $supplier, $localService);
+
+        $this->assertSame(501, $result['upstream_host_id']);
+        $this->assertSame('Suspended', $result['host_detail']['domainstatus'] ?? null);
+    }
+
+    public function test_settle_duplicate_gate_rejects_product_mismatched_host(): void
+    {
+        // settle 同 token 防重门(1001)是第三个收编入口：换绑 + 旧实例无账单
+        // （0 元单/试用，clear 门落普通 200）时唯一防线。错配实例必须拦截，
+        // 且检查点在详情校验之后落库，不得先写脏 upstream_host_id。
+        $service = $this->makeProvisionService([
+            '/cart/clear' => ['status' => 200, 'msg' => 'SUCCESS MESSAGE'],
+            '/cart/get_product_config' => ['status' => 200, 'msg' => 'ok', 'data' => []],
+            '/cart/add_to_shop' => ['status' => 200, 'msg' => 'ADD SUCCESS'],
+            '/cart/settle' => ['status' => 1001, 'msg' => 'BUY_SUCCESS', 'data' => ['hostid' => [601]]],
+            '/host/header' => $this->hostDetailResponse(601, 999),
+        ]);
+        [$order, $supplier, $localService] = $this->makeBoundContext();
+
+        try {
+            $service->provisionOrder($order, $supplier, $localService);
+            $this->fail('防重门命中错配实例必须浮出异常');
+        } catch (BusinessException $exception) {
+            $this->assertStringContainsString('与当前商品绑定不一致', $exception->getMessage());
+        }
+
+        $uris = array_column($this->cartCalls, 'uri');
+        $this->assertNotContains('/apply_credit', $uris, '错配实例无账单可付，不得调余额支付');
+        $this->assertArrayNotHasKey('upstream_host_id', $localService->fresh()->provision_data ?? [], '错配实例不得写入检查点');
+    }
+
+    public function test_paid_gate_rejects_host_without_product_id(): void
+    {
+        // fail-closed：上游详情缺失商品归属字段时无法核验一致性，
+        // 必须转人工而非默认放行——收编错误实例的代价远高于一次人工核实。
+        $service = $this->makeProvisionService([
+            '/cart/clear' => ['status' => 400, 'msg' => '该订单已开通,请勿重新开通', 'hostid' => 501, 'domainstatus' => 'Active'],
+            '/host/header' => [
+                'status' => 200,
+                'msg' => 'ok',
+                'data' => [
+                    'host_data' => [
+                        'id' => 501,
+                        'domain' => 'gate-host.example.test',
+                        'domainstatus' => 'Active',
+                    ],
+                ],
+            ],
+        ]);
+        [$order, $supplier, $localService] = $this->makeBoundContext();
+
+        $this->expectException(BusinessException::class);
+        $this->expectExceptionMessage('与当前商品绑定不一致');
+
+        $service->provisionOrder($order, $supplier, $localService);
+    }
+
     /**
      * 构造脚本化的开通服务：底层传输按 URI 返回预置响应并记录购物车链调用。
      *
@@ -369,7 +516,7 @@ class ZjmfProvisionDownstreamGateTest extends TestCase
         return [$order, $supplier, $localService];
     }
 
-    private function hostDetailResponse(int $hostId): array
+    private function hostDetailResponse(int $hostId, int $productId = 11, string $domainstatus = 'Active'): array
     {
         return [
             'status' => 200,
@@ -378,8 +525,8 @@ class ZjmfProvisionDownstreamGateTest extends TestCase
                 'host_data' => [
                     'id' => $hostId,
                     'domain' => 'gate-host.example.test',
-                    'productid' => 11,
-                    'domainstatus' => 'Active',
+                    'productid' => $productId,
+                    'domainstatus' => $domainstatus,
                 ],
             ],
         ];

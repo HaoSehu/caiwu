@@ -175,9 +175,24 @@ class ZjmfProvisionServiceTest extends TestCase
         $gate = $this->clearCartWithResponse(['status' => 200, 'msg' => 'SUCCESS MESSAGE'], $downstream);
         $this->assertSame(['gate' => 'none'], $gate);
 
-        // 未携带 downstream_*（如 finally 兜底清车）→ 不触发门
+        // 未携带 downstream_*（如 finally 兜底清车）→ 不触发门；
+        // 上游缺参时 token LIKE 退化为 '%%' 全表匹配，任何「门样」响应都是误报
         $gate = $this->clearCartWithResponse(['status' => 200, 'msg' => 'SUCCESS MESSAGE'], []);
         $this->assertSame(['gate' => 'none'], $gate);
+        $gate = $this->clearCartWithResponse([
+            'status' => 200,
+            'msg' => 'SUCCESS MESSAGE',
+            'invoiceid' => 77,
+            'hostid' => 501,
+        ], []);
+        $this->assertSame(['gate' => 'none'], $gate, '未注册时的未支付样式响应是误报，不得收编');
+        $gate = $this->clearCartWithResponse([
+            'status' => 400,
+            'msg' => '该订单已开通,请勿重新开通',
+            'hostid' => 501,
+            'domainstatus' => 'Active',
+        ], []);
+        $this->assertSame(['gate' => 'none'], $gate, '未注册时的已开通 400 是误报，按历史口径容忍');
 
         // 200 + invoiceid + hostid → 未支付门：跳过加购/结算直接补付
         $gate = $this->clearCartWithResponse([
@@ -211,8 +226,8 @@ class ZjmfProvisionServiceTest extends TestCase
     }
 
     /**
-     * @param array<string, mixed> $response 上游 /cart/clear 响应体
-     * @param array<string, int|string> $downstream downstream_* 注册参数
+     * @param  array<string, mixed>  $response  上游 /cart/clear 响应体
+     * @param  array<string, int|string>  $downstream  downstream_* 注册参数
      */
     private function clearCartWithResponse(array $response, array $downstream): array
     {
@@ -240,7 +255,7 @@ class ZjmfProvisionServiceTest extends TestCase
     }
 
     /**
-     * @param array<string, mixed> $response
+     * @param  array<string, mixed>  $response
      */
     private function hostingTransportMock(array $response): MockInterface
     {
