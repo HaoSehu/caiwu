@@ -8,6 +8,7 @@ use App\Exceptions\BusinessException;
 use App\Jobs\SendAccountSecurityAlertJob;
 use App\Jobs\SendClientLoginEmailAlertJob;
 use App\Jobs\SendClientLoginFailureEmailAlertJob;
+use App\Jobs\SendTemplateEmailJob;
 use App\Models\AdminUser;
 use App\Models\User;
 use App\Services\Referral\ReferralService;
@@ -254,6 +255,7 @@ class AuthService
             );
         }
 
+        $this->notifyClientRegistrationSuccess($user);
         $token = $user->createToken('client-token')->plainTextToken;
 
         return [
@@ -274,6 +276,32 @@ class AuthService
                 'last_login_ip' => $ip,
             ],
         ];
+    }
+
+    /**
+     * 注册成功欢迎邮件（模板 100002）：队列异步发送。
+     * 仅邮箱注册场景存在收件地址；手机号注册无邮箱时静默跳过。
+     * 发送失败仅告警，不影响注册结果。
+     */
+    private function notifyClientRegistrationSuccess(User $user): void
+    {
+        $email = trim((string) ($user->email ?? ''));
+        if ($email === '') {
+            return;
+        }
+
+        try {
+            SendTemplateEmailJob::dispatch($email, NotificationService::TEMPLATE_REGISTRATION_SUCCESS, [
+                'display_name' => trim((string) ($user->display_name ?? '')) !== '' ? (string) $user->display_name : $email,
+                'email' => $email,
+                'registered_at' => now()->format('Y-m-d H:i:s'),
+            ]);
+        } catch (\Throwable $exception) {
+            Log::warning('[注册通知] 欢迎邮件派发失败', [
+                'user_id' => (int) $user->id,
+                'message' => $exception->getMessage(),
+            ]);
+        }
     }
 
     public function notifyClientLoginFailureOnce(string $account, string $ip, ?string $userAgent = null): void
@@ -590,8 +618,10 @@ class AuthService
 
     /**
      * 管理员登录
+     *
+     * @param  string|null  $userAgent  客户端 UA，用于登录提示邮件的设备摘要；代登录（loginAs）不走本方法、不触发提醒
      */
-    public function adminLogin(string $username, string $password, string $ip): array
+    public function adminLogin(string $username, string $password, string $ip, ?string $userAgent = null): array
     {
         if (! AdminUser::query()->exists()) {
             throw new BusinessException('后台管理员未初始化，请先执行数据初始化', 42200, 422);
@@ -643,6 +673,8 @@ class AuthService
             ipAddress: $ip,
         );
 
+        $this->notifyAdminLoginSuccess($admin, $ip, $userAgent);
+
         $token = $admin->createToken('admin-token')->plainTextToken;
 
         return [
@@ -656,6 +688,27 @@ class AuthService
                 'permissions' => $admin->resolvedPermissions(),
             ],
         ];
+    }
+
+    /**
+     * 管理员登录提示（模板 100028）：队列异步发送，管理员未配置邮箱时静默跳过。
+     */
+    private function notifyAdminLoginSuccess(AdminUser $admin, string $ip, ?string $userAgent): void
+    {
+        try {
+            $this->notificationService->sendAdminLoginEmailAlertToAddress(
+                (string) ($admin->email ?? ''),
+                (string) ($admin->nickname ?? ''),
+                (string) $admin->username,
+                $ip,
+                $userAgent,
+            );
+        } catch (\Throwable $exception) {
+            Log::warning('[管理员登录提醒] 派发失败', [
+                'admin_id' => (int) $admin->id,
+                'message' => $exception->getMessage(),
+            ]);
+        }
     }
 
     public function issueAdminLoginAsCode(User $user, array $context = []): array

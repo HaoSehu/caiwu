@@ -298,30 +298,6 @@ parameters:
 			message: '#^Access to an undefined property App\\Models\\AdminUser\|App\\Models\\User\:\:\$name\.$#'
 			identifier: property.notFound
 			count: 1
-			path: app/Http/Controllers/Admin/V2/SettingController.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Http/Controllers/Admin/V2/SettingController.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Http/Controllers/Admin/V2/SettingController.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>username" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Http/Controllers/Admin/V2/SettingController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\AdminUser\|App\\Models\\User\:\:\$name\.$#'
-			identifier: property.notFound
-			count: 1
 			path: app/Http/Controllers/Admin/V2/SupplierController.php
 
 		-
@@ -559,6 +535,18 @@ parameters:
 			path: app/Http/Resources/Admin/V2/AdminOrderDetailResource.php
 
 		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$discount_type\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Resources/Admin/V2/AdminOrderDetailResource.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$discount_value\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Resources/Admin/V2/AdminOrderDetailResource.php
+
+		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
 			identifier: property.notFound
 			count: 1
@@ -577,18 +565,6 @@ parameters:
 			path: app/Http/Resources/Admin/V2/AdminOrderDetailResource.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$discount_type\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/Admin/V2/AdminOrderDetailResource.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$discount_value\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/Admin/V2/AdminOrderDetailResource.php
-
-		-
 			message: '#^Cannot call method format\(\) on string\.$#'
 			identifier: method.nonObject
 			count: 1
@@ -601,18 +577,6 @@ parameters:
 			path: app/Http/Resources/Admin/V2/AdminOrderDetailResource.php
 
 		-
-			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Http/Resources/Admin/V2/AdminOrderDetailResource.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>product_type" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Http/Resources/Admin/V2/AdminOrderDetailResource.php
-
-		-
 			message: '#^Using nullsafe property access "\?\-\>discount_type" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
@@ -620,6 +584,18 @@ parameters:
 
 		-
 			message: '#^Using nullsafe property access "\?\-\>discount_value" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Resources/Admin/V2/AdminOrderDetailResource.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Resources/Admin/V2/AdminOrderDetailResource.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>product_type" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Http/Resources/Admin/V2/AdminOrderDetailResource.php
@@ -1627,6 +1603,12 @@ parameters:
 			path: app/Services/Automation/AutoRenewService.php
 
 		-
+			message: '#^Parameter \#1 \$user of method App\\Services\\Provisioning\\ServiceRenewService\:\:createRenewInvoiceForUser\(\) expects App\\Models\\User, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Services/Automation/AutoRenewService.php
+
+		-
 			message: '#^Parameter \#1 \$user of method App\\Services\\Provisioning\\ServiceRenewService\:\:findPaidUnfulfilledRenewOrder\(\) expects App\\Models\\User, Illuminate\\Database\\Eloquent\\Model given\.$#'
 			identifier: argument.type
 			count: 1
@@ -1639,20 +1621,14 @@ parameters:
 			path: app/Services/Automation/AutoRenewService.php
 
 		-
-			message: '#^Using nullsafe property access "\?\-\>amount" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Services/Automation/AutoRenewService.php
-
-		-
-			message: '#^Parameter \#1 \$user of method App\\Services\\Provisioning\\ServiceRenewService\:\:createRenewInvoiceForUser\(\) expects App\\Models\\User, Illuminate\\Database\\Eloquent\\Model given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Services/Automation/AutoRenewService.php
-
-		-
 			message: '#^Parameter \#2 \$user of method App\\Services\\Finance\\BalanceInvoicePaymentService\:\:payByBalance\(\) expects App\\Models\\User, Illuminate\\Database\\Eloquent\\Model given\.$#'
 			identifier: argument.type
+			count: 1
+			path: app/Services/Automation/AutoRenewService.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>amount" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Services/Automation/AutoRenewService.php
 
@@ -1683,19 +1659,13 @@ parameters:
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$order_no\.$#'
 			identifier: property.notFound
-			count: 1
+			count: 2
 			path: app/Services/Automation/BillingAutomationService.php
 
 		-
 			message: '#^Instanceof between string\|null and Carbon\\Carbon will always evaluate to false\.$#'
 			identifier: instanceof.alwaysFalse
 			count: 3
-			path: app/Services/Automation/BillingAutomationService.php
-
-		-
-			message: '#^Parameter \#1 \$user of method App\\Services\\Provisioning\\ServiceRenewService\:\:createRenewInvoiceForUser\(\) expects App\\Models\\User, Illuminate\\Database\\Eloquent\\Model given\.$#'
-			identifier: argument.type
-			count: 1
 			path: app/Services/Automation/BillingAutomationService.php
 
 		-
@@ -1725,11 +1695,11 @@ parameters:
 		-
 			message: '#^Using nullsafe property access "\?\-\>order_no" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
-			count: 1
+			count: 2
 			path: app/Services/Automation/BillingAutomationService.php
 
 		-
-			message: '#^Instanceof between App\\Services\\Automation\\Heartbeat\\Providers\\CoreScheduledTaskProvider\|App\\Services\\Automation\\Heartbeat\\Providers\\LegacyScheduleHookTaskProvider\|App\\Services\\Automation\\Heartbeat\\Providers\\PluginScheduledTaskProvider and App\\Services\\Automation\\Heartbeat\\Contracts\\ScheduledTaskProvider will always evaluate to true\.$#'
+			message: '#^Instanceof between App\\Services\\Automation\\Heartbeat\\Providers\\CoreScheduledTaskProvider\|App\\Services\\Automation\\Heartbeat\\Providers\\LegacyScheduleHookTaskProvider\|App\\Services\\Automation\\Heartbeat\\Providers\\PluginScheduledTaskProvider\|App\\Services\\Upstream\\Integration\\UpstreamScheduledTaskProvider and App\\Services\\Automation\\Heartbeat\\Contracts\\ScheduledTaskProvider will always evaluate to true\.$#'
 			identifier: instanceof.alwaysTrue
 			count: 1
 			path: app/Services/Automation/Heartbeat/HeartbeatTaskRegistry.php
@@ -1767,13 +1737,13 @@ parameters:
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$display_name\.$#'
 			identifier: property.notFound
-			count: 1
+			count: 2
 			path: app/Services/Automation/ServiceLifecycleAutomationService.php
 
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$email\.$#'
 			identifier: property.notFound
-			count: 1
+			count: 2
 			path: app/Services/Automation/ServiceLifecycleAutomationService.php
 
 		-
@@ -1815,14 +1785,32 @@ parameters:
 		-
 			message: '#^Using nullsafe property access "\?\-\>display_name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
-			count: 1
+			count: 2
 			path: app/Services/Automation/ServiceLifecycleAutomationService.php
 
 		-
 			message: '#^Using nullsafe property access "\?\-\>email" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
-			count: 1
+			count: 2
 			path: app/Services/Automation/ServiceLifecycleAutomationService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$display_name\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Services/Automation/ServiceStatusSyncService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$email\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Services/Automation/ServiceStatusSyncService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Services/Automation/ServiceStatusSyncService.php
 
 		-
 			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<\(int\|string\),Illuminate\\Database\\Eloquent\\Model\>\:\:filter\(\) expects \(callable\(Illuminate\\Database\\Eloquent\\Model, int\|string\)\: bool\)\|null, Closure\(App\\Models\\Service\)\: bool given\.$#'
@@ -1852,6 +1840,24 @@ parameters:
 			message: '#^Parameter \#2 \$product of method App\\Services\\Integrations\\Plugins\\ServiceUpstreamBindingWriter\:\:syncServiceState\(\) expects App\\Models\\Product\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
 			identifier: argument.type
 			count: 2
+			path: app/Services/Automation/ServiceStatusSyncService.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>display_name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Services/Automation/ServiceStatusSyncService.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>email" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Services/Automation/ServiceStatusSyncService.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
 			path: app/Services/Automation/ServiceStatusSyncService.php
 
 		-
@@ -2787,11 +2793,29 @@ parameters:
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$display_name\.$#'
 			identifier: property.notFound
-			count: 1
+			count: 2
 			path: app/Services/Finance/AdminOrderNotificationService.php
 
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$email\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Services/Finance/AdminOrderNotificationService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$order_no\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Services/Finance/AdminOrderNotificationService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$status\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Services/Finance/AdminOrderNotificationService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$type\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Services/Finance/AdminOrderNotificationService.php
@@ -2805,11 +2829,23 @@ parameters:
 		-
 			message: '#^Parameter \#2 \$order of method App\\Services\\Finance\\AdminOrderNotificationService\:\:resolveInvoiceProductDisplayText\(\) expects App\\Models\\Order\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
 			identifier: argument.type
-			count: 1
+			count: 2
 			path: app/Services/Finance/AdminOrderNotificationService.php
 
 		-
 			message: '#^Using nullsafe property access "\?\-\>email" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 2
+			path: app/Services/Finance/AdminOrderNotificationService.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>order_no" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 2
+			path: app/Services/Finance/AdminOrderNotificationService.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>status" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Services/Finance/AdminOrderNotificationService.php
@@ -2827,21 +2863,45 @@ parameters:
 			path: app/Services/Finance/CheckoutSecurityService.php
 
 		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Services/Finance/CheckoutService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$order_no\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Services/Finance/CheckoutService.php
+
+		-
 			message: '#^Offset ''actor_user_id'' on non\-empty\-array on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
 			count: 1
 			path: app/Services/Finance/CheckoutService.php
 
 		-
-			message: '#^Offset 0 on non\-empty\-list\<string\> in isset\(\) always exists and is not nullable\.$#'
-			identifier: isset.offset
+			message: '#^Using nullsafe property access "\?\-\>display_name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Services/Finance/CheckoutService.php
 
 		-
-			message: '#^Offset 0 on non\-empty\-list\<string\> on left side of \?\? always exists and is not nullable\.$#'
-			identifier: nullCoalesce.offset
-			count: 2
+			message: '#^Using nullsafe property access "\?\-\>email" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Services/Finance/CheckoutService.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Services/Finance/CheckoutService.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>order_no" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
 			path: app/Services/Finance/CheckoutService.php
 
 		-
@@ -3397,7 +3457,19 @@ parameters:
 			path: app/Services/Finance/GatewayInvoicePaymentService.php
 
 		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$display_name\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Services/Finance/InvoicePaidOrchestrator.php
+
+		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$display_product_name\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Services/Finance/InvoicePaidOrchestrator.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$email\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Services/Finance/InvoicePaidOrchestrator.php
@@ -3406,6 +3478,12 @@ parameters:
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
 			identifier: property.notFound
 			count: 3
+			path: app/Services/Finance/InvoicePaidOrchestrator.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$order_no\.$#'
+			identifier: property.notFound
+			count: 1
 			path: app/Services/Finance/InvoicePaidOrchestrator.php
 
 		-
@@ -3427,7 +3505,25 @@ parameters:
 			path: app/Services/Finance/InvoicePaidOrchestrator.php
 
 		-
+			message: '#^Instanceof between string\|null and Carbon\\Carbon will always evaluate to false\.$#'
+			identifier: instanceof.alwaysFalse
+			count: 2
+			path: app/Services/Finance/InvoicePaidOrchestrator.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>display_name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Services/Finance/InvoicePaidOrchestrator.php
+
+		-
 			message: '#^Using nullsafe property access "\?\-\>display_product_name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Services/Finance/InvoicePaidOrchestrator.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>email" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Services/Finance/InvoicePaidOrchestrator.php
@@ -3439,7 +3535,19 @@ parameters:
 			path: app/Services/Finance/InvoicePaidOrchestrator.php
 
 		-
+			message: '#^Using nullsafe property access "\?\-\>order_no" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Services/Finance/InvoicePaidOrchestrator.php
+
+		-
 			message: '#^Using nullsafe property access "\?\-\>service_id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Services/Finance/InvoicePaidOrchestrator.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>trade_no" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Services/Finance/InvoicePaidOrchestrator.php
@@ -3455,6 +3563,54 @@ parameters:
 			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Services/Finance/InvoicePaidOrchestrator.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$display_product_name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Services/Finance/InvoiceRefundMarkService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$order_no\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Services/Finance/InvoiceRefundMarkService.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>display_name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Services/Finance/InvoiceRefundMarkService.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>display_product_name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Services/Finance/InvoiceRefundMarkService.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>email" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Services/Finance/InvoiceRefundMarkService.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>order_no" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Services/Finance/InvoiceRefundMarkService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$display_product_name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Services/Finance/InvoiceRefundService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$order_no\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Services/Finance/InvoiceRefundService.php
 
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$status\.$#'
@@ -3475,7 +3631,19 @@ parameters:
 			path: app/Services/Finance/InvoiceRefundService.php
 
 		-
+			message: '#^Using nullsafe property access "\?\-\>display_product_name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Services/Finance/InvoiceRefundService.php
+
+		-
 			message: '#^Using nullsafe property access "\?\-\>id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Services/Finance/InvoiceRefundService.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>order_no" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Services/Finance/InvoiceRefundService.php
@@ -3970,18 +4138,6 @@ parameters:
 			message: '#^Offset ''actor_user_id'' on non\-empty\-array on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
 			count: 1
-			path: app/Services/Order/OrderService.php
-
-		-
-			message: '#^Offset 0 on non\-empty\-list\<string\> in isset\(\) always exists and is not nullable\.$#'
-			identifier: isset.offset
-			count: 1
-			path: app/Services/Order/OrderService.php
-
-		-
-			message: '#^Offset 0 on non\-empty\-list\<string\> on left side of \?\? always exists and is not nullable\.$#'
-			identifier: nullCoalesce.offset
-			count: 2
 			path: app/Services/Order/OrderService.php
 
 		-
@@ -4861,6 +5017,12 @@ parameters:
 			path: app/Services/Provisioning/ProvisionService.php
 
 		-
+			message: '#^Instanceof between string\|null and Carbon\\Carbon will always evaluate to false\.$#'
+			identifier: instanceof.alwaysFalse
+			count: 1
+			path: app/Services/Provisioning/ProvisionService.php
+
+		-
 			message: '#^Method App\\Services\\Provisioning\\ProvisionService\:\:ensureLocalService\(\) should return App\\Models\\Service but returns Illuminate\\Database\\Eloquent\\Model\.$#'
 			identifier: return.type
 			count: 1
@@ -4936,6 +5098,18 @@ parameters:
 			message: '#^Parameter \#2 \$product of method App\\Services\\Integrations\\Plugins\\ServiceUpstreamBindingWriter\:\:recordProvisionAttempt\(\) expects App\\Models\\Product\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
 			identifier: argument.type
 			count: 2
+			path: app/Services/Provisioning/ProvisionService.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>display_name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Services/Provisioning/ProvisionService.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>email" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
 			path: app/Services/Provisioning/ProvisionService.php
 
 		-
@@ -6321,7 +6495,7 @@ parameters:
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$email\.$#'
 			identifier: property.notFound
-			count: 6
+			count: 7
 			path: app/Services/Ticket/TicketService.php
 
 		-
@@ -6429,7 +6603,7 @@ parameters:
 		-
 			message: '#^Using nullsafe property access "\?\-\>email" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
-			count: 2
+			count: 3
 			path: app/Services/Ticket/TicketService.php
 
 		-
@@ -6485,6 +6659,12 @@ parameters:
 			identifier: arguments.count
 			count: 1
 			path: app/Services/Upstream/Drivers/HostingPanelApi/HostingPanelApiTransport.php
+
+		-
+			message: '#^Instanceof between App\\Services\\Upstream\\Integration\\ProductUpstreamConfigSyncTask\|App\\Services\\Upstream\\Integration\\ProvisionRetryFailedTask\|App\\Services\\Upstream\\Integration\\ServiceStatusSyncTask and App\\Services\\Automation\\Heartbeat\\Contracts\\ScheduledTask will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 1
+			path: app/Services/Upstream/Integration/UpstreamScheduledTaskProvider.php
 
 		-
 			message: '#^Offset ''onetime'' on array\{hour\?\: numeric\-string, day\?\: numeric\-string, ontrial\?\: numeric\-string, monthly\?\: numeric\-string, quarterly\?\: numeric\-string, semiannually\?\: numeric\-string, annually\?\: numeric\-string, biennially\?\: numeric\-string, \.\.\.\} in isset\(\) does not exist\.$#'

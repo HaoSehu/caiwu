@@ -28,6 +28,7 @@ class AuthController extends Controller
             (string) $request->input('username'),
             (string) $request->input('password'),
             (string) $request->ip(),
+            $request->userAgent(),
         );
 
         return $this->success(AdminAuthSessionResource::make($result)->resolve(), '登录成功');

@@ -6,11 +6,15 @@ namespace App\Services\Finance;
 
 use App\Constants\InvoiceStatus;
 use App\Constants\OrderStatus;
+use App\Constants\PaymentGatewayCode;
 use App\Constants\ServiceStatus;
 use App\Constants\UserNotificationType;
 use App\Exceptions\BusinessException;
+use App\Jobs\SendTemplateEmailJob;
+use App\Models\AutomationLog;
 use App\Models\Invoice;
 use App\Models\Order;
+use App\Models\Payment;
 use App\Models\Product;
 use App\Services\ClientServiceConsole\ServiceTrafficPackageService;
 use App\Services\ClientServiceConsole\ServiceUpgradeService;
@@ -19,7 +23,9 @@ use App\Services\Order\PaidOrderBusinessFlowDispatcher;
 use App\Services\Provisioning\ProvisionService;
 use App\Services\Provisioning\ServiceRenewService;
 use App\Services\Referral\ReferralService;
+use App\Services\System\NotificationService;
 use App\Support\SchemaMetadataCache;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
@@ -111,6 +117,20 @@ class InvoicePaidOrchestrator
         }
         $latency['admin_notify_schedule_ms'] = $this->elapsedMilliseconds($stepStartedAt);
 
+        // 客户付款成功通知（模板 100016）：invoice-only 与 Order 路径统一在此收口
+        $stepStartedAt = microtime(true);
+        try {
+            $this->notifyClientInvoicePaid($invoice);
+        } catch (\Throwable $exception) {
+            Log::warning('[购买链路] 支付成功后客户通知调度失败', [
+                'invoice_id' => (int) $invoice->id,
+                'invoice_no' => (string) ($invoice->invoice_no ?? ''),
+                'trace_id' => (string) ($traceId ?? ''),
+                'message' => $exception->getMessage(),
+                'exception' => $exception::class,
+            ]);
+        }
+
         Log::info('[购买链路] 支付成功后处理耗时', array_merge($latency, [
             'invoice_id' => (int) $invoice->id,
             'invoice_no' => (string) ($invoice->invoice_no ?? ''),
@@ -119,6 +139,72 @@ class InvoicePaidOrchestrator
             'trace_id' => (string) ($traceId ?? ''),
             'duration_ms' => $this->elapsedMilliseconds($startedAt),
         ]));
+    }
+
+    /**
+     * 客户付款成功通知（模板 100016）。
+     * handlePaidInvoice 存在重入/对账重放，以 AutomationLog 按账单+用户幂等，
+     * 同一账单只发一次；派发失败仅告警，不影响履约主流程。
+     */
+    private function notifyClientInvoicePaid(Invoice $invoice): void
+    {
+        $userId = (int) ($invoice->user_id ?? 0);
+        if ($userId <= 0) {
+            return;
+        }
+
+        if (! AutomationLog::recordOnce(
+            'client-payment-notify', 'invoice_paid', 'invoice', (int) $invoice->id, 'user:'.$userId
+        )) {
+            return;
+        }
+
+        $user = $invoice->user;
+        $email = trim((string) ($user?->email ?? ''));
+        if ($email === '') {
+            return;
+        }
+
+        $payment = Payment::query()
+            ->where('invoice_id', (int) $invoice->id)
+            ->whereGatewayKeyIn(PaymentGatewayCode::thirdPartyGateways())
+            ->where('status', 1)
+            ->orderByDesc('paid_at')
+            ->orderByDesc('id')
+            ->first(Payment::gatewayProjectionColumns([
+                'id',
+                'invoice_id',
+                'plugin_id',
+                'trade_no',
+                'paid_at',
+            ]));
+
+        try {
+            SendTemplateEmailJob::dispatch($email, NotificationService::TEMPLATE_PAYMENT_SUCCESS, [
+                'display_name' => trim((string) ($user?->display_name ?? '')) !== '' ? (string) $user->display_name : $email,
+                'invoice_no' => (string) ($invoice->invoice_no ?? ''),
+                'order_no' => (string) ($invoice->order?->order_no ?? ''),
+                'product_name' => (string) ($invoice->order?->display_product_name ?: $invoice->display_product_name),
+                'paid_amount' => number_format((float) ($invoice->paid_amount ?? $invoice->amount ?? 0), 2, '.', ''),
+                'payment_method' => PaymentGatewayCode::displayLabel($payment?->gatewayKey() ?? ''),
+                'trade_no' => (string) ($payment?->trade_no ?? ''),
+                'paid_at' => $invoice->paid_at instanceof Carbon
+                    ? $invoice->paid_at->format('Y-m-d H:i:s')
+                    : ($payment?->paid_at instanceof Carbon
+                        ? $payment->paid_at->format('Y-m-d H:i:s')
+                        : now()->format('Y-m-d H:i:s')),
+                'notice_message' => '请留意后续开通与交付进度，如有疑问请联系客服或查看账单详情。',
+            ]);
+        } catch (\Throwable $exception) {
+            AutomationLog::forgetRecord(
+                'client-payment-notify', 'invoice_paid', 'invoice', (int) $invoice->id, 'user:'.$userId
+            );
+            Log::warning('[购买链路] 客户付款成功通知派发失败', [
+                'invoice_id' => (int) $invoice->id,
+                'user_id' => $userId,
+                'message' => $exception->getMessage(),
+            ]);
+        }
     }
 
     /**
@@ -375,11 +461,67 @@ class InvoicePaidOrchestrator
         }
 
         $configSnapshot['fulfillment_pending'] = true;
+        // 首次标记时间：超时未履约巡检（provision:retry-failed）以此判定等待时长；
+        // 存量标记（无该键）由巡检回退到 invoice.updated_at 兜底。
+        $configSnapshot['fulfillment_pending_at'] = now()->toDateTimeString();
         $configSnapshot['fulfillment_type'] = $invoiceType;
 
         $invoice->forceFill(['config_snapshot' => $configSnapshot])->saveQuietly();
 
         return $invoice->fresh(['order.product']) ?? $invoice;
+    }
+
+    /**
+     * 履约彻底放弃后给已付未履约的新购账单打 requires_refund 标记：只标记，不自动退款
+     * ——开通失败可能需要人工先与上游核实。标记口径与续费链路
+     * （ServiceRenewService::flagFailedPaidRenewForRefund 写 config_snapshot['requires_refund']）一致，
+     * 管理端账单详情经 AdminInvoiceDetailResource 的 config_snapshot 直接可见。
+     *
+     * 两个调用方：ProcessPaidOrderFulfillmentJob::failed()（队列重试耗尽，回退异步时的钩子）
+     * 与 provision:retry-failed 超时巡检（同步/afterResponse 模式下队列生命周期不存在，
+     * 以 fulfillment_pending 停留时长判定"履约已放弃"）。幂等：已标记的账单不重复写。
+     *
+     * @return bool 是否实际写入标记（幂等跳过/不满足条件返回 false）
+     */
+    public function markOrderFulfillmentRequiresRefund(int $orderId, string $source): bool
+    {
+        $order = Order::query()->find($orderId);
+
+        // 本判定只针对新购账单：续费与升级有各自的恢复与退款链路。
+        if (! $order instanceof Order || (string) $order->type !== 'new') {
+            return false;
+        }
+
+        if (in_array((int) $order->status, [OrderStatus::CANCELLED, OrderStatus::REFUNDED], true)) {
+            return false;
+        }
+
+        $invoice = $order->invoice;
+
+        if (! $invoice instanceof Invoice || (int) $invoice->status !== InvoiceStatus::PAID) {
+            return false;
+        }
+
+        $configSnapshot = is_array($invoice->config_snapshot ?? null) ? $invoice->config_snapshot : [];
+
+        // 幂等：已标记的账单不重复写
+        if (! empty($configSnapshot['requires_refund'])) {
+            return false;
+        }
+
+        $invoice->forceFill([
+            'config_snapshot' => array_merge($configSnapshot, ['requires_refund' => true]),
+        ])->save();
+
+        Log::error('[支付后自动开通] 履约重试耗尽，已付账单标记 requires_refund 待人工处理', [
+            'order_id' => $orderId,
+            'invoice_id' => (int) $invoice->id,
+            'invoice_no' => (string) ($invoice->invoice_no ?? ''),
+            'paid_amount' => (string) ($invoice->paid_amount ?? ''),
+            'source' => $source,
+        ]);
+
+        return true;
     }
 
     private function clearFulfillmentPending(Invoice $invoice): void

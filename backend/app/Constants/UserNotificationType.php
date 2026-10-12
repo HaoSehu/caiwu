@@ -27,6 +27,9 @@ class UserNotificationType
     /** 账单逾期提醒 */
     public const INVOICE_OVERDUE_REMINDER = 'invoice_overdue_reminder';
 
+    /** 工单提交成功（客户创建工单） */
+    public const TICKET_OPENED = 'ticket_opened';
+
     /** 工单收到客服回复 */
     public const TICKET_STAFF_REPLY = 'ticket_staff_reply';
 
@@ -49,6 +52,7 @@ class UserNotificationType
         self::SERVICE_EXPIRE_REMINDER => '到期提醒',
         self::INVOICE_PAYMENT_REMINDER => '账单提醒',
         self::INVOICE_OVERDUE_REMINDER => '逾期提醒',
+        self::TICKET_OPENED => '工单提交',
         self::TICKET_STAFF_REPLY => '工单回复',
         self::TICKET_PENDING_REMINDER => '工单提醒',
         self::TICKET_AUTO_CLOSED => '工单自动关闭',

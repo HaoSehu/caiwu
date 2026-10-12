@@ -124,6 +124,7 @@ class TicketService
         });
 
         $this->notifyAdminsOfNewTicket($ticket, $content, $attachments !== []);
+        $this->notifyClientOfTicketCreated($ticket, $content, $attachments !== []);
 
         return $ticket;
     }
@@ -724,7 +725,6 @@ class TicketService
                 (string) $admin->email,
                 $templateCode,
                 [
-                    'site_name' => $this->siteName(),
                     'recipient_name' => (string) $admin->display_name,
                     'ticket_id' => (int) $ticket->id,
                     'ticket_subject' => (string) $ticket->subject,
@@ -742,6 +742,32 @@ class TicketService
                 ]
             );
         }
+    }
+
+    /**
+     * 客户建单成功通知（模板 100023 + 站内信）：告知客户工单已提交成功。
+     */
+    private function notifyClientOfTicketCreated(Ticket $ticket, string $content, bool $hasAttachments): void
+    {
+        $ticket->loadMissing('user:id,email,nickname');
+
+        $this->sendClientTicketNotification(
+            ticket: $ticket,
+            email: trim((string) ($ticket->user?->email ?? '')),
+            notifyUserId: (int) ($ticket->user_id ?? 0),
+            status: self::STATUS_LABELS[self::STATUS_OPEN],
+            templateCode: NotificationService::TEMPLATE_TICKET_OPENED,
+            extraParams: [
+                'department' => self::DEPT_LABELS[$ticket->department] ?? (string) $ticket->department,
+                'priority' => self::PRIORITIES[(int) $ticket->priority] ?? (string) $ticket->priority,
+                'ticket_created_at' => $ticket->created_at?->format('Y-m-d H:i:s') ?? now()->format('Y-m-d H:i:s'),
+                'message_preview' => $this->buildReplyPreview($content, $hasAttachments),
+            ],
+            scene: 'ticket_opened',
+            notificationType: UserNotificationType::TICKET_OPENED,
+            notificationTitle: '工单已提交',
+            notificationBody: "工单「{$ticket->subject}」已提交成功，我们会尽快处理您的请求。",
+        );
     }
 
     private function notifyClientOfStaffReply(Ticket $ticket, string $staffName, string $content, bool $hasAttachments): void
@@ -794,7 +820,10 @@ class TicketService
             notifyUserId: $userId,
             status: self::STATUS_LABELS[self::STATUS_CLOSED] ?? '已关闭',
             templateCode: NotificationService::TEMPLATE_TICKET_AUTO_CLOSED,
-            extraParams: [],
+            extraParams: [
+                'ticket_closed_at' => now()->format('Y-m-d H:i:s'),
+                'close_reason' => self::CLOSE_REASON_LABELS[self::CLOSE_REASON_AUTO],
+            ],
             scene: 'ticket_auto_closed',
             notificationType: UserNotificationType::TICKET_AUTO_CLOSED,
             notificationTitle: '工单已自动关闭',
@@ -828,7 +857,6 @@ class TicketService
 
         if ($email !== null && $email !== '') {
             $params = [
-                'site_name' => $this->siteName(),
                 'display_name' => $clientName,
                 'ticket_id' => (int) $ticket->id,
                 'ticket_subject' => (string) $ticket->subject,
@@ -963,11 +991,6 @@ class TicketService
         }
 
         return $this->databaseQueueReady;
-    }
-
-    private function siteName(): string
-    {
-        return (string) config('idc.site_name', config('app.name', '创欧云'));
     }
 
     private function clientTicketsUrl(): string

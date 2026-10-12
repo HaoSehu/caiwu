@@ -9,11 +9,14 @@ use App\Constants\InvoiceType;
 use App\Constants\OrderStatus;
 use App\Constants\RefundStatus;
 use App\Exceptions\BusinessException;
+use App\Jobs\SendTemplateEmailJob;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\ReferralReward;
 use App\Models\Refund;
+use App\Models\User;
 use App\Services\System\ActivityLogService;
+use App\Services\System\NotificationService;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -51,7 +54,7 @@ class InvoiceRefundMarkService
         $lockKey = "lock:admin:refund-mark:invoice:{$invoice->id}";
 
         try {
-            return Cache::lock($lockKey, 15)->block(3, function () use ($invoice, $payload, $context) {
+            $result = Cache::lock($lockKey, 15)->block(3, function () use ($invoice, $payload, $context) {
                 return DB::transaction(function () use ($invoice, $payload, $context) {
                     $lockedInvoice = Invoice::query()
                         ->lockForUpdate()
@@ -61,8 +64,55 @@ class InvoiceRefundMarkService
                     return $this->markLockedInvoice($lockedInvoice, $payload, $context);
                 });
             });
+
+            $this->notifyClientInvoiceRefundMarked($invoice, $result);
+
+            return $result;
         } catch (LockTimeoutException) {
             throw new BusinessException('退款标记正在处理中，请稍候重试');
+        }
+    }
+
+    /**
+     * 客户账单退款（线下标记）通知（模板 100017）：事务提交后队列异步发送。
+     * already_marked（幂等短路）不发；部分退款每次标记独立成事件，各发一封。
+     * 发送失败仅告警，不影响标记结果。
+     */
+    private function notifyClientInvoiceRefundMarked(Invoice $invoice, array $result): void
+    {
+        $detail = (array) ($result['detail'] ?? []);
+        if ($detail === [] || (bool) ($detail['already_marked'] ?? false)) {
+            return;
+        }
+
+        $refund = (array) ($detail['refund'] ?? []);
+        if ($refund === []) {
+            return;
+        }
+
+        $user = User::query()->find((int) $invoice->user_id);
+        $email = trim((string) ($user?->email ?? ''));
+        if ($email === '') {
+            return;
+        }
+
+        try {
+            SendTemplateEmailJob::dispatch($email, NotificationService::TEMPLATE_INVOICE_REFUND, [
+                'display_name' => trim((string) ($user?->display_name ?? '')) !== '' ? (string) $user->display_name : $email,
+                'invoice_no' => (string) ($detail['invoice']['invoice_no'] ?? $invoice->invoice_no),
+                'order_no' => (string) (($detail['order']['order_no'] ?? '') ?: $invoice->order?->order_no ?? ''),
+                'product_name' => (string) ($invoice->display_product_name ?: $invoice->order?->display_product_name ?? ''),
+                'refund_amount' => (string) ($refund['amount'] ?? ''),
+                'refund_method_label' => '线下退款标记',
+                'refunded_at' => (string) ($refund['refunded_at'] ?? ''),
+                'refund_reason' => (string) ($refund['reason'] ?? ''),
+            ]);
+        } catch (\Throwable $exception) {
+            Log::warning('[退款标记] 客户通知派发失败', [
+                'invoice_id' => (int) $invoice->id,
+                'user_id' => (int) $invoice->user_id,
+                'message' => $exception->getMessage(),
+            ]);
         }
     }
 

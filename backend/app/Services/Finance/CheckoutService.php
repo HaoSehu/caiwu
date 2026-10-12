@@ -11,6 +11,7 @@ use App\Constants\OrderType;
 use App\Constants\PaymentStatus;
 use App\Constants\ProductType;
 use App\Exceptions\BusinessException;
+use App\Jobs\SendTemplateEmailJob;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Payment;
@@ -21,8 +22,11 @@ use App\Services\Pricing\MemberGroupDiscountService;
 use App\Services\ProductCatalog\ProductCatalogService;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Services\ProductCatalog\ProductFullPathResolver;
+use App\Services\System\NotificationService;
 use App\Services\System\OperationLogService;
+use App\Support\BillingCycleLabels;
 use App\Support\OrderInvoiceNoGenerator;
+use Carbon\Carbon;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -259,8 +263,10 @@ class CheckoutService
             });
 
             if ($invoice instanceof Invoice && $invoice->wasRecentlyCreated) {
-                // 使用 invoice-only 通知通道
-                $this->adminOrderNotificationService->notifyInvoicePaidAfterResponse($invoice);
+                // 客户新订单待支付通知（模板 100010）
+                $this->notifyClientNewInvoicePending($invoice, $userId);
+                // 管理员新订单通知（模板 100021；原 paid 通知对未支付账单为空转调用，已替换）
+                $this->adminOrderNotificationService->notifyInvoiceCreatedAfterResponse($invoice);
             }
 
             $this->safeLog('info', '[购买链路] 下单耗时', [
@@ -275,6 +281,37 @@ class CheckoutService
             return $invoice;
         } catch (LockTimeoutException) {
             throw new BusinessException('订单正在处理中，请勿重复提交');
+        }
+    }
+
+    /**
+     * 新订单待支付客户通知（模板 100010）：队列异步发送，失败不阻断下单。
+     * 无邮箱（纯手机号账号）静默跳过。
+     */
+    private function notifyClientNewInvoicePending(Invoice $invoice, int $userId): void
+    {
+        try {
+            $user = User::query()->find($userId);
+            $email = trim((string) ($user?->email ?? ''));
+            if ($email === '') {
+                return;
+            }
+
+            SendTemplateEmailJob::dispatch($email, NotificationService::TEMPLATE_CLIENT_ORDER_PENDING, [
+                'display_name' => trim((string) ($user?->display_name ?? '')) !== '' ? (string) $user->display_name : $email,
+                'order_no' => (string) ($invoice->order?->order_no ?? ''),
+                'invoice_no' => (string) ($invoice->invoice_no ?? ''),
+                'product_name' => (string) ($invoice->display_product_name ?: $invoice->product?->name ?? ''),
+                'billing_cycle_label' => BillingCycleLabels::label((string) ($invoice->billing_cycle ?? '')),
+                'amount' => number_format((float) ($invoice->amount ?? 0), 2, '.', ''),
+                'due_date' => Carbon::parse($invoice->due_date)->format('Y-m-d'),
+            ]);
+        } catch (\Throwable $exception) {
+            Log::warning('[购买链路] 新订单待支付通知派发失败', [
+                'invoice_id' => (int) $invoice->id,
+                'user_id' => $userId,
+                'message' => $exception->getMessage(),
+            ]);
         }
     }
 

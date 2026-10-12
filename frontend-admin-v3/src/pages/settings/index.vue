@@ -649,6 +649,14 @@ const configs: Record<Exclude<SettingsTab, 'site_hero'>, SettingsConfig> = {
             max: 30,
           },
           {
+            key: 'invoice_unpaid_second_reminder_days',
+            label: '第2次提醒天数（0=当天，需小于首次提醒天数）',
+            type: 'number',
+            default: 0,
+            min: 0,
+            max: 30,
+          },
+          {
             key: 'invoice_overdue_reminder_days',
             label: '逾期提醒天数',
             type: 'input',
