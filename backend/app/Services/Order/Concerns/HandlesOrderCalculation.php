@@ -373,7 +373,8 @@ trait HandlesOrderCalculation
         $source = (string) ($item['option_name'] ?? $item['spec_key'] ?? '');
         $parts = explode('|', $source);
 
-        return trim((string) ($parts[0] ?? ''));
+        // explode 恒返回至少一个元素，$parts[0] 恒存在
+        return trim((string) $parts[0]);
     }
 
     private function normalizeConfigValue(array $item, mixed $value): string|int|null
@@ -466,7 +467,8 @@ trait HandlesOrderCalculation
         $source = trim((string) ($item['option_name'] ?? $item['spec_key'] ?? ''));
         if ($source !== '') {
             $parts = explode('|', $source, 2);
-            $resolved = trim((string) ($parts[1] ?? $parts[0] ?? ''));
+            // explode 恒返回至少一个元素，$parts[0] 恒存在；$parts[1] 仅在含分隔符时存在
+            $resolved = trim((string) ($parts[1] ?? $parts[0]));
             if ($resolved !== '') {
                 return $resolved;
             }
@@ -618,8 +620,9 @@ trait HandlesOrderCalculation
                 return 'Linux '.$this->normalizeNumericString($matches[1]).'G / Windows '.$this->normalizeNumericString($matches[2]).'G';
             }
 
+            // explode 恒返回至少一个元素，$parts[0] 恒存在
             $parts = array_map('trim', explode(',', $value));
-            if (isset($parts[0]) && is_numeric($parts[0])) {
+            if (is_numeric($parts[0])) {
                 return $this->normalizeNumericString($parts[0]).'G';
             }
         }
