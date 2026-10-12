@@ -128,7 +128,8 @@ class TradeLifecycleService
      * 调用方：余额退款（InvoiceRefundService）、对账修复的订单侧退款回填。
      * 订单级联：账单退款全额落地后订单同步投影 REFUNDED（调用方守卫保证订单
      * 为 PAID 或不存在；对账修复场景订单已是 REFUNDED，重复写同值幂等）。
-     * 与取消路径同一券口径：无有效已付账单时用户券回落可复用，方法幂等。
+     * 券口径：全额退款后券视为已消耗（USED）不返还，防「购-付-退」循环薅券；
+     * 取消（cancelTrade）路径仍回落 OWNED 可复用。方法幂等。
      *
      * @param  array<string, mixed>  $refundRecord
      * @param  array<string, mixed>  $context
@@ -184,8 +185,8 @@ class TradeLifecycleService
      * 与 markInvoiceRefunded（覆盖写、无条件收口 REFUNDED）语义不同：
      * - refund_amount 逐次累加（部分退款标记可多次），基数以锁内真值为准（存量 NULL 视为 0）；
      * - 仅全额（$isFullyRefunded，由调用方按锁内可退基数判定传入）才置账单
-     *   REFUNDED 并级联订单、触发券回落；部分退款不改状态、不重算券
-     *   （部分退款账单仍 PAID，重算是无谓写放大）。
+     *   REFUNDED 并级联订单、触发券消耗（全额退款后券不返还）；部分退款不改状态、
+     *   不重算券（部分退款账单仍 PAID，重算是无谓写放大）。
      *
      * 锁顺序：先 Invoice 后 Order（与既有状态机一致）。
      * 退款列全部走 SchemaMetadataCache 条件写（灰度期未跑迁移的库不报错）；
