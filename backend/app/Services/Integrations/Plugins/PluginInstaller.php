@@ -15,6 +15,7 @@ use App\Services\Integrations\Payments\PaymentGatewayManager;
 use App\Services\Integrations\Payments\PaymentGatewayRegistry;
 use App\Services\Mail\MailDriverManager;
 use App\Services\Sms\SmsDriverManager;
+use App\Services\Upstream\Integration\UpstreamScheduledTaskProvider;
 use App\Services\Upstream\ProviderRegistry;
 use App\Services\Upstream\ProviderResolver;
 use App\Services\Verification\VerificationDriverManager;
@@ -522,7 +523,11 @@ class PluginInstaller
     {
         $keys = [];
 
-        foreach ([CoreScheduledTaskProvider::class, LegacyScheduleHookTaskProvider::class] as $providerClass) {
+        foreach ([
+            CoreScheduledTaskProvider::class,
+            UpstreamScheduledTaskProvider::class,
+            LegacyScheduleHookTaskProvider::class,
+        ] as $providerClass) {
             try {
                 $provider = $this->container->make($providerClass);
                 foreach ($provider->tasks() as $task) {

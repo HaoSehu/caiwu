@@ -9,6 +9,7 @@ use App\Services\Automation\Heartbeat\Contracts\ScheduledTaskProvider;
 use App\Services\Automation\Heartbeat\Providers\CoreScheduledTaskProvider;
 use App\Services\Automation\Heartbeat\Providers\LegacyScheduleHookTaskProvider;
 use App\Services\Automation\Heartbeat\Providers\PluginScheduledTaskProvider;
+use App\Services\Upstream\Integration\UpstreamScheduledTaskProvider;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
@@ -21,6 +22,7 @@ class HeartbeatTaskRegistry
     /** @var list<class-string<ScheduledTaskProvider>> */
     private const PROVIDERS = [
         CoreScheduledTaskProvider::class,
+        UpstreamScheduledTaskProvider::class,
         LegacyScheduleHookTaskProvider::class,
         PluginScheduledTaskProvider::class,
     ];

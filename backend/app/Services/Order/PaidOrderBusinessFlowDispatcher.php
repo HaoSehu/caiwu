@@ -14,11 +14,20 @@ class PaidOrderBusinessFlowDispatcher
     private ?bool $databaseQueueReady = null;
 
     /**
-     * 支付入账后的履约统一走队列派发：此前 new/renew 在支付回调 HTTP 请求内
-     * dispatchSync 同步执行完整上游开通链（多次串行上游调用），回调响应时长被
-     * 上游绑架，网关判定超时后阶梯重发形成回调风暴。异步化后由队列消费履约，
-     * 前端通过服务状态轮询呈现开通进度；队列不可用时回退 afterResponse 兜底，
-     * 审计与资金入账仍在本调用内同步完成，不受影响。
+     * 支付入账后的业务流派发（2026-10-11 用户裁决：支付完成之后进行开通，不走队列）。
+     *
+     * 订单履约（上游开通链）不投递 provision 队列：
+     * - HTTP（网关回调/余额支付/管理端手动标记）：dispatchAfterResponse 在支付响应
+     *   返回给调用方之后立即执行——支付先完成、开通紧随其后，既不阻塞回调响应
+     *   （规避网关超时阶梯重发的回调风暴），也没有队列排队与 worker 依赖。
+     * - 控制台（自动续费、补偿命令等）：无响应可返回，dispatchSync 进程内同步执行。
+     *
+     * 防重不依赖队列中间件——履约入口有订单级分布式锁
+     * （InvoicePaidOrchestrator::processPaidOrderFulfillmentById 的
+     * lock:paid-order-fulfillment:{orderId}），并发重复请求直接跳过。
+     *
+     * 返佣仍按队列策略派发：队列可用时异步投递 referral 队列，队列不可用时
+     * 按运行环境回退 dispatchSync（控制台）/ dispatchAfterResponse（HTTP）。
      */
     public function dispatchPaidInvoice(Invoice $invoice, ?string $traceId = null): void
     {
@@ -31,43 +40,39 @@ class PaidOrderBusinessFlowDispatcher
         $shouldDispatchReferralReward = $this->shouldDispatchReferralReward($invoice);
 
         if (app()->runningInConsole()) {
-            if ($this->shouldUseQueue()) {
-                if ($shouldDispatchReferralReward) {
-                    ProcessPaidOrderReferralRewardJob::dispatch($orderId, $traceId);
-                }
+            ProcessPaidOrderFulfillmentJob::dispatchSync($orderId);
 
-                ProcessPaidOrderFulfillmentJob::dispatch($orderId);
+            if (! $shouldDispatchReferralReward) {
+                return;
+            }
+
+            if ($this->shouldUseQueue()) {
+                ProcessPaidOrderReferralRewardJob::dispatch($orderId, $traceId);
 
                 return;
             }
 
             $this->logFallbackDispatch($orderId);
-            if ($shouldDispatchReferralReward) {
-                ProcessPaidOrderReferralRewardJob::dispatchSync($orderId, $traceId);
-            }
-
-            ProcessPaidOrderFulfillmentJob::dispatchSync($orderId);
+            ProcessPaidOrderReferralRewardJob::dispatchSync($orderId, $traceId);
 
             return;
         }
 
-        if ($this->shouldUseQueue()) {
-            if ($shouldDispatchReferralReward) {
-                ProcessPaidOrderReferralRewardJob::dispatch($orderId, $traceId);
-            }
+        // HTTP：支付响应先返回，开通在响应后立即执行（afterResponse，不走队列）。
+        ProcessPaidOrderFulfillmentJob::dispatchAfterResponse($orderId);
 
-            ProcessPaidOrderFulfillmentJob::dispatch($orderId);
+        if (! $shouldDispatchReferralReward) {
+            return;
+        }
+
+        if ($this->shouldUseQueue()) {
+            ProcessPaidOrderReferralRewardJob::dispatch($orderId, $traceId);
 
             return;
         }
 
         $this->logFallbackDispatch($orderId);
-
-        if ($shouldDispatchReferralReward) {
-            ProcessPaidOrderReferralRewardJob::dispatchAfterResponse($orderId, $traceId);
-        }
-
-        ProcessPaidOrderFulfillmentJob::dispatchAfterResponse($orderId);
+        ProcessPaidOrderReferralRewardJob::dispatchAfterResponse($orderId, $traceId);
     }
 
     private function shouldDispatchReferralReward(Invoice $invoice): bool

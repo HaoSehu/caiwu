@@ -4,10 +4,9 @@ declare(strict_types=1);
 
 namespace Tests\Unit;
 
-use App\Services\Automation\Heartbeat\Providers\CoreScheduledTaskProvider;
-use App\Services\System\SettingService;
 use App\Services\Upstream\Contracts\ProvidesSelfStatusSync;
 use App\Services\Upstream\Contracts\UpstreamDriver;
+use App\Services\Upstream\Integration\ServiceStatusSyncTask;
 use App\Services\Upstream\ProviderRegistry;
 use ReflectionMethod;
 use Tests\TestCase;
@@ -57,11 +56,11 @@ class SelfSyncedProviderKeysTest extends TestCase
 
     private function invokeSelfSyncedProviderKeys(): array
     {
-        $provider = new CoreScheduledTaskProvider(new SettingService);
-        $method = new ReflectionMethod($provider, 'selfSyncedProviderKeys');
+        $task = $this->app->make(ServiceStatusSyncTask::class);
+        $method = new ReflectionMethod($task, 'selfSyncedProviderKeys');
         $method->setAccessible(true);
 
-        return $method->invoke($provider);
+        return $method->invoke($task);
     }
 
     private function makeDriver(string $key, bool $selfSynced): UpstreamDriver

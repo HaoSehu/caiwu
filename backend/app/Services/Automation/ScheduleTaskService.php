@@ -13,6 +13,7 @@ use App\Services\Automation\Heartbeat\Rules\CronRule;
 use App\Services\Automation\Heartbeat\Rules\EveryTicks;
 use App\Services\Automation\Heartbeat\ScheduleTaskRunRepository;
 use App\Services\System\SettingService;
+use App\Services\Upstream\Integration\UpstreamScheduledTaskProvider;
 use App\Support\AutomationScheduleExpression;
 use App\Support\SchemaMetadataCache;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -30,6 +31,7 @@ class ScheduleTaskService
         private ScheduleTaskRunRepository $taskRuns,
         private LegacyScheduleHookTaskProvider $legacyScheduleHookTaskProvider,
         private PluginScheduledTaskProvider $pluginScheduledTaskProvider,
+        private UpstreamScheduledTaskProvider $upstreamScheduledTaskProvider,
     ) {}
 
     public function overview(): array
@@ -168,7 +170,11 @@ class ScheduleTaskService
     {
         $keys = [];
 
-        foreach ([$this->legacyScheduleHookTaskProvider, $this->pluginScheduledTaskProvider] as $provider) {
+        foreach ([
+            $this->legacyScheduleHookTaskProvider,
+            $this->pluginScheduledTaskProvider,
+            $this->upstreamScheduledTaskProvider,
+        ] as $provider) {
             try {
                 foreach ($provider->tasks() as $task) {
                     if ($task instanceof ScheduledTask) {
@@ -272,7 +278,7 @@ class ScheduleTaskService
             [
                 'key' => 'queue_work_provision',
                 'title' => '开通队列 Worker',
-                'description' => '独立消费 provision 队列，避免上游开通类长任务队头阻塞通知、返佣等业务队列。',
+                'description' => '独立消费 provision 队列（站点商品库存刷新等任务）。上游开通履约已改为支付完成后同步/响应后执行，不再占用该队列。',
                 'command' => "{$quotedPhp} {$quotedArtisan} queue:work --queue={$provisionQueues} --sleep=1 --tries={$queueWorkerTries} --timeout={$queueWorkerTimeout}",
             ],
             [

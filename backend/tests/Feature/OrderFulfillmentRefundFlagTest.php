@@ -65,6 +65,55 @@ class OrderFulfillmentRefundFlagTest extends TestCase
         $this->assertSame('basic', (string) ($snapshot['plan'] ?? ''));
     }
 
+    public function test_stale_pending_invoice_is_marked_by_provision_retry_failed(): void
+    {
+        // 开通改同步/响应后执行后，队列 failed() 钩子不再触发；
+        // provision:retry-failed 以 fulfillment_pending 停留时长兜底判定"履约已放弃"。
+        [$order, $invoice] = $this->makePaidUnfulfilledStack();
+        $invoice->forceFill([
+            'config_snapshot' => [
+                'plan' => 'basic',
+                'fulfillment_pending' => true,
+                'fulfillment_pending_at' => now()->subHours(2)->toDateTimeString(),
+            ],
+        ])->save();
+
+        $this->artisan('provision:retry-failed')->assertExitCode(0);
+
+        $snapshot = (array) ($invoice->fresh()->config_snapshot ?? []);
+        $this->assertTrue((bool) ($snapshot['requires_refund'] ?? false));
+    }
+
+    public function test_recent_pending_invoice_is_not_marked(): void
+    {
+        [$order, $invoice] = $this->makePaidUnfulfilledStack();
+        $invoice->forceFill([
+            'config_snapshot' => [
+                'plan' => 'basic',
+                'fulfillment_pending' => true,
+                'fulfillment_pending_at' => now()->subMinutes(5)->toDateTimeString(),
+            ],
+        ])->save();
+
+        $this->artisan('provision:retry-failed')->assertExitCode(0);
+
+        $snapshot = (array) ($invoice->fresh()->config_snapshot ?? []);
+        $this->assertFalse((bool) ($snapshot['requires_refund'] ?? false));
+    }
+
+    public function test_legacy_pending_without_timestamp_falls_back_to_updated_at(): void
+    {
+        // 存量标记无 fulfillment_pending_at 键，回退 updated_at 判定超时。
+        [$order, $invoice] = $this->makePaidUnfulfilledStack();
+        $invoice->forceFill(['config_snapshot' => ['plan' => 'basic', 'fulfillment_pending' => true]])->save();
+        Invoice::query()->whereKey((int) $invoice->id)->update(['updated_at' => now()->subHours(3)]);
+
+        $this->artisan('provision:retry-failed')->assertExitCode(0);
+
+        $snapshot = (array) ($invoice->fresh()->config_snapshot ?? []);
+        $this->assertTrue((bool) ($snapshot['requires_refund'] ?? false));
+    }
+
     /**
      * 直接触发失败钩子：failed() 在重试耗尽后由队列框架调用，这里等价模拟。
      */

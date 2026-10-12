@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Services\Automation\Heartbeat\Providers;
 
-use App\Models\Supplier;
 use App\Services\Automation\AutoRenewService;
 use App\Services\Automation\BillingAutomationService;
 use App\Services\Automation\Heartbeat\CallbackScheduledTask;
@@ -15,17 +14,9 @@ use App\Services\Automation\Heartbeat\Data\TaskContext;
 use App\Services\Automation\Heartbeat\ScheduleRule;
 use App\Services\Automation\InvoiceCleanupAutomationService;
 use App\Services\Automation\ServiceLifecycleAutomationService;
-use App\Services\Automation\ServiceStatusSyncService;
-use App\Services\Finance\CouponCampaignService;
-use App\Services\ProductCatalog\ProductCatalogService;
 use App\Services\Referral\ReferralService;
 use App\Services\System\SettingService;
 use App\Services\Ticket\TicketAutomationService;
-use App\Services\Upstream\Contracts\ProvidesScheduledAuthRefresh;
-use App\Services\Upstream\Contracts\ProvidesSelfStatusSync;
-use App\Services\Upstream\ProviderKey;
-use App\Services\Upstream\ProviderRegistry;
-use App\Services\Upstream\ProviderResolver;
 use App\Support\AutomationScheduleExpression;
 use Closure;
 use Illuminate\Support\Facades\Artisan;
@@ -44,16 +35,6 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
         $automation = $this->automationConfig();
 
         return [
-            $this->task(
-                key: 'refresh-hosting-panel-auth',
-                title: '接口认证刷新',
-                category: '供应商接口',
-                description: '定时刷新系统内置主机面板接口认证会话；插件供应商由各自插件任务负责。',
-                triggers: [ScheduleRule::everyTicks(1)],
-                handler: fn (): array => $this->refreshHostingPanelAuth(),
-                timeout: 600,
-                lockTtlSeconds: 660,
-            ),
             $this->task(
                 key: 'service-auto-renew',
                 title: '服务自动续费',
@@ -113,24 +94,6 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
                 lockTtlSeconds: 960,
             ),
             $this->task(
-                key: 'service-status-sync',
-                title: '用户产品状态同步',
-                category: '服务状态',
-                description: '定时拉取上游实例详情与运行状态，并同步回本地用户服务状态。',
-                triggers: [ScheduleRule::everyTicks(1)],
-                handler: function (): array {
-                    // 启用中且声明 ProvidesSelfStatusSync 能力的上游插件已自带定向状态同步，
-                    // 全量任务据此排除对应 provider_key，避免同一服务被上游重复拉取；
-                    // 插件停用后自动回退全量兜底。
-                    $summary = app(ServiceStatusSyncService::class)->handle(100, 10, $this->selfSyncedProviderKeys());
-                    Log::debug('[定时任务] 用户产品状态同步执行完成', $summary);
-
-                    return $summary;
-                },
-                timeout: 1200,
-                lockTtlSeconds: 1800,
-            ),
-            $this->task(
                 key: 'billing-maintenance',
                 title: '账单自动化维护',
                 category: '账单提醒',
@@ -149,21 +112,6 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
                 },
                 timeout: 1200,
                 lockTtlSeconds: 1800,
-            ),
-            $this->task(
-                key: 'product-upstream-config-sync',
-                title: '上游产品配置同步',
-                category: '商品同步',
-                description: '每 24 小时拉取已绑定上游商品的配置项，并自动保存到本地商品配置，不同步商品定价。',
-                triggers: [ScheduleRule::cron('0 0 * * *')],
-                handler: function (): array {
-                    $summary = app(ProductCatalogService::class)->syncUpstreamProductConfigOptions();
-                    Log::debug('[定时任务] 上游产品配置同步执行完成', $summary);
-
-                    return $summary;
-                },
-                timeout: 3600,
-                lockTtlSeconds: 3660,
             ),
             $this->task(
                 key: 'log-archive',
@@ -193,9 +141,9 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
             ),
             $this->task(
                 key: 'log-archive-health',
-                title: '日志归档健康检查',
+                title: '日志归档健康与容量检查',
                 category: '系统维护',
-                description: '每小时只读检查日志归档候选积压、最近成功/失败批次与归档文件规模。',
+                description: '每小时只读检查日志归档候选积压、最近成功/失败批次与归档文件规模，并采集数据库日志表容量与磁盘空间快照供趋势观测。',
                 triggers: [ScheduleRule::everyTicks(4)],
                 handler: fn (): array => $this->runHealthCheck(),
                 timeout: 300,
@@ -215,34 +163,6 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
                 timeout: 600,
                 lockTtlSeconds: 900,
                 manualTriggerable: true,
-            ),
-            $this->task(
-                key: 'log-capacity-snapshot',
-                title: '日志容量快照',
-                category: '系统维护',
-                description: '每天只读采集数据库日志表容量与日志目录体积，写入运行台账供趋势观测。',
-                triggers: [ScheduleRule::cron('0 3 * * *')],
-                handler: fn (): array => $this->runCapacitySnapshot(),
-                timeout: 300,
-                lockTtlSeconds: 360,
-                manualTriggerable: true,
-            ),
-            $this->task(
-                key: 'coupon-campaign-dispatch',
-                title: '优惠券活动发放',
-                category: '营销活动',
-                description: '按活动配置的星期与时间自动生成一批公开优惠券，例如每周五 18:00 发放周五特惠。',
-                triggers: [ScheduleRule::everyTicks(1)],
-                handler: function (): array {
-                    $summary = app(CouponCampaignService::class)->dispatchDueCampaigns();
-                    if (($summary['triggered'] ?? 0) > 0 || ($summary['failed'] ?? 0) > 0) {
-                        Log::debug('[定时任务] 优惠券活动自动发放执行完成', $summary);
-                    }
-
-                    return $summary;
-                },
-                timeout: 900,
-                lockTtlSeconds: 960,
             ),
             $this->task(
                 key: 'ticket-auto-close',
@@ -283,53 +203,6 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
 
                     return $summary;
                 },
-                timeout: 900,
-                lockTtlSeconds: 960,
-            ),
-            $this->task(
-                key: 'reconcile-account-balance',
-                title: '账户余额在线对账',
-                category: '财务对账',
-                description: '定时执行账户余额在线对账，及时发现余额投影异常。',
-                triggers: [ScheduleRule::everyTicks(4)],
-                handler: function (): array {
-                    $summary = $this->runArtisan('reconcile:account-balance', [], false);
-                    if (($summary['exit_code'] ?? 0) !== 0) {
-                        Log::warning('[定时任务] 账户余额对账发现差异，已记录告警且不进行队列重试', $summary);
-                        $summary['status'] = 'warning';
-                    }
-
-                    return $summary;
-                },
-                timeout: 1200,
-                lockTtlSeconds: 1800,
-            ),
-            $this->task(
-                key: 'audit-ledger-consistency',
-                title: '资金流水一致性审计',
-                category: '财务对账',
-                description: '每日审计账户流水来源完整性、余额与流水一致性、充值桥接覆盖，账实不符即告警。',
-                triggers: [ScheduleRule::cron('0 3 * * *')],
-                handler: function (): array {
-                    $summary = $this->runArtisan('finance:audit-ledger-consistency', ['--strict' => true], false);
-                    if (($summary['exit_code'] ?? 0) !== 0) {
-                        Log::warning('[定时任务] 资金流水一致性审计发现差异，已记录告警且不进行队列重试', $summary);
-                        $summary['status'] = 'warning';
-                    }
-
-                    return $summary;
-                },
-                timeout: 1200,
-                lockTtlSeconds: 1800,
-                manualTriggerable: false,
-            ),
-            $this->task(
-                key: 'provision-retry-failed',
-                title: '上游开通孤儿单补偿告警',
-                category: '上游开通',
-                description: '默认 dry-run 扫描上游开通失败孤儿单并写日志告警。',
-                triggers: [ScheduleRule::everyTicks(1)],
-                handler: fn (): array => $this->runArtisan('provision:retry-failed'),
                 timeout: 900,
                 lockTtlSeconds: 960,
             ),
@@ -418,77 +291,6 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
     }
 
     /**
-     * 已启用的上游插件中以 ProvidesSelfStatusSync 能力声明"自带定向状态同步"的 provider_key 集合。
-     *
-     * 能力判定走 ProviderRegistry 的实时插件清单，不读 capabilities_json 落库快照：
-     * manifest 增补能力后部署即生效；插件清单损坏或文件缺失时驱动不注册进排除集，
-     * 对应 provider 自动回退全量同步兜底，不会出现"定向任务与全量任务同时失效"。
-     *
-     * @return list<string>
-     */
-    private function selfSyncedProviderKeys(): array
-    {
-        $keys = [];
-        foreach (app(ProviderRegistry::class)->all() as $key => $driver) {
-            $normalizedKey = trim($key);
-            if ($normalizedKey !== '' && $driver->supports(ProvidesSelfStatusSync::class)) {
-                $keys[] = $normalizedKey;
-            }
-        }
-
-        return $keys;
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function refreshHostingPanelAuth(): array
-    {
-        $providerResolver = app(ProviderResolver::class);
-        $summary = [
-            'matched' => 0,
-            'refreshed' => 0,
-            'failed' => 0,
-        ];
-
-        Supplier::query()
-            ->enabled()
-            ->orderBy('id')
-            ->get()
-            ->each(function (Supplier $supplier) use ($providerResolver, &$summary): void {
-                $provider = $providerResolver->resolveForSupplier($supplier);
-                $providerKey = trim((string) ($provider->key() ?? $provider->rawKey() ?? ''));
-                if ($providerKey !== ProviderKey::HOSTING_PANEL_API) {
-                    return;
-                }
-
-                if (! $provider->supports(ProvidesScheduledAuthRefresh::class)) {
-                    return;
-                }
-
-                $summary['matched']++;
-
-                try {
-                    $provider->require(ProvidesScheduledAuthRefresh::class, '当前供应商不支持认证刷新')
-                        ->refreshJwt($supplier);
-                    $summary['refreshed']++;
-                } catch (Throwable $exception) {
-                    $summary['failed']++;
-
-                    Log::error('[定时任务] JWT刷新失败', [
-                        'supplier_id' => $supplier->id,
-                        'error' => $exception->getMessage(),
-                        'exception' => $exception::class,
-                    ]);
-                }
-            });
-
-        Log::debug('[定时任务] 接口认证刷新执行完成', $summary);
-
-        return $summary;
-    }
-
-    /**
      * 容量命令的 JSON 包含完整表明细，不能复用 runArtisan 的通用输出截断；
      * 这里只保留趋势所需的紧凑字段，避免运行台账被大表明细撑大。
      *
@@ -543,6 +345,9 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
      * 健康命令的 warning/unknown 状态即使 CLI 保持兼容退出码 0，也必须让心跳任务失败，
      * 否则任务台账会把异常健康状态记为成功，外部监控无法感知。
      *
+     * 容量快照（原独立任务 log-capacity-snapshot）合并为本任务的附加观测维度：
+     * 只读采集失败不改变健康判定，仅以 capacity_error 字段记录原因。
+     *
      * @return array<string, mixed>
      */
     private function runHealthCheck(): array
@@ -579,7 +384,7 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
             throw new RuntimeException("日志归档健康状态为 {$status}，已记录为任务失败。");
         }
 
-        return [
+        $summary = [
             'command' => $command,
             'exit_code' => $exitCode,
             'parameters' => $parameters,
@@ -591,6 +396,14 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
             'audit' => $payload['audit'] ?? null,
             'v2' => $payload['v2'] ?? null,
         ];
+
+        try {
+            $summary['capacity'] = $this->runCapacitySnapshot();
+        } catch (Throwable $exception) {
+            $summary['capacity_error'] = $exception->getMessage();
+        }
+
+        return $summary;
     }
 
     /**
