@@ -2,6 +2,18 @@
   "version": 1,
   "records": [
     {
+      "path": "执行计划/进行中/服务状态五态与实例电源状态-2026-10-11.md",
+      "status": "active",
+      "summary": "服务状态五态化（开通中/运行中/已暂停/已删除/异常）：EXPIRED/CANCELLED 值位重排与存量 4→3 订正（双库已跑）、上游映射收敛 fromUpstreamDomainStatus、zjmf 插件电源状态查询与 GET /services/{id}/power-status、shared 五态重写与三端适配、三组新测试。",
+      "review_by": "2026-11-11"
+    },
+    {
+      "path": "执行计划/进行中/短信模板管理-2026-10-11.md",
+      "status": "active",
+      "summary": "短信模板运营商审核闭环：插件 pull/push 模板（协议翻译不落库）、sms_provider_templates 映射层（审核状态含删除探测）、SmsTemplateResolver 解析链（调用方签名不变）、管理端挂接与同步状态区块。",
+      "review_by": "2026-11-11"
+    },
+    {
       "path": "执行计划/进行中/优惠券持续优惠服务绑定-2026-10-11.md",
       "status": "active",
       "summary": "P1-1 持续优惠对齐 ZJMF recurring 口径：services 快照绑定列迁移、新购开通落绑定、续费 resolveRenewCoupon 快照折算（与手选券互斥）、computeDiscountFromSnapshot 单一折算真源、v4-console 续费弹窗持续优惠提示、回归 5 例。",
@@ -355,6 +367,18 @@
       "path": "执行计划/进行中/优惠券功能智囊团审查-2026-10-05.md",
       "status": "active",
       "summary": "智囊团只读审查：券/活动券/持券全链路 P0×3（折后续费网关回调死循环、预留+UNPAID+释放三重叠加双花、换券并存账单双扣）、P1×8、P2×14 分级发现，待生产核实清单与修复批次 A/B/C 建议；架构/前端域因配额受限部分覆盖。"
+    },
+    {
+      "path": "执行计划/进行中/调度体系重构与开通链路同步化-2026-10-11.md",
+      "status": "active",
+      "summary": "定时任务清单重构（4 上游任务迁 Upstream/Integration 模块、删 2 财务对账、coupon 每分钟+命令内锁、系统维护 4 合 3）+ 开通链路去队列化（HTTP afterResponse / 控制台 dispatchSync）+ 超时未履约巡检打标兜底 requires_refund。",
+      "review_by": "2026-11-11"
+    },
+    {
+      "path": "执行计划/进行中/上游驱动插件化立项-2026-10-12.md",
+      "status": "active",
+      "summary": "hosting_panel_api 驱动插件化已实施：plugins/servers/hosting_panel 同构注册壳（驱动注册走 capabilityCarrier 委托系统侧 Transport——Transport/SessionManager/CookieParser 因被 zjmf 插件与系统服务共享保留 app/ 侧）；认证刷新任务迁插件 scheduled_tasks；安装迁移走 PluginInstaller；端到端验收驱动 9 能力/任务 17/PHPStan 0 错。",
+      "review_by": "2026-11-12"
     }
   ]
 }
