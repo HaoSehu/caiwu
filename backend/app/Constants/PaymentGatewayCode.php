@@ -47,6 +47,23 @@ final class PaymentGatewayCode
         return self::LABELS[$gateway] ?? $gateway;
     }
 
+    /**
+     * 面向用户的网关展示名：在集中 LABELS 之上叠加业务侧历史词条
+     * （支付宝 / 手动入账 / 银行转账为历史展示口径），供邮件等通知文案统一使用。
+     */
+    public static function displayLabel(string $gateway): string
+    {
+        return match ($gateway) {
+            'alipay' => '支付宝',
+            self::YIPAY,
+            self::BALANCE,
+            self::WECHAT => self::label($gateway),
+            'manual' => '手动入账',
+            'bank_transfer' => '银行转账',
+            default => $gateway !== '' ? $gateway : '未知方式',
+        };
+    }
+
     public static function normalize(string $gateway): string
     {
         $gateway = trim($gateway);

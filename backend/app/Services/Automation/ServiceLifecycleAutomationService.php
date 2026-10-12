@@ -4,6 +4,7 @@ namespace App\Services\Automation;
 
 use App\Constants\ServiceStatus;
 use App\Constants\UserNotificationType;
+use App\Jobs\SendTemplateEmailJob;
 use App\Models\AutomationLog;
 use App\Models\Service;
 use App\Services\ClientServiceConsole\ServiceOverviewService;
@@ -107,8 +108,6 @@ class ServiceLifecycleAutomationService
             return 0;
         }
 
-        $siteName = (string) config('idc.site_name', config('app.name', '服务商'));
-
         $services = Service::query()
             ->with('user:id,email,nickname')
             ->where('status', ServiceStatus::SUSPENDED)
@@ -131,13 +130,17 @@ class ServiceLifecycleAutomationService
 
             $displayName = $service->user?->display_name ?? '客户';
             $expiryStr = $service->expires_at?->format('Y-m-d H:i') ?? '-';
+            $provisionData = is_array($service->provision_data ?? null) ? $service->provision_data : [];
+            $suspendedAt = trim((string) ($provisionData[self::EXPIRED_SUSPENDED_AT_KEY] ?? ''));
+            $suspendedReason = (string) $service->suspended_reason;
 
             try {
                 $this->notificationService->sendTemplateEmail($email, NotificationService::TEMPLATE_SERVICE_SUSPENDED, [
-                    'site_name' => $siteName,
                     'display_name' => $displayName,
                     'service_name' => (string) $service->name,
+                    'reason' => $suspendedReason === 'expired' ? '服务到期未续费' : $suspendedReason,
                     'expires_at' => $expiryStr,
+                    'suspended_at' => $suspendedAt !== '' ? $suspendedAt : '-',
                 ]);
                 $this->userNotificationService->create(
                     (int) $service->user_id,
@@ -229,7 +232,7 @@ class ServiceLifecycleAutomationService
                 unset($provisionData[self::EXPIRED_SUSPENDED_AT_KEY]);
 
                 $locked->forceFill([
-                    'status' => ServiceStatus::CANCELLED,
+                    'status' => ServiceStatus::TERMINATED,
                     'suspended_reason' => null,
                     'provision_data' => $provisionData,
                 ])->save();
@@ -244,7 +247,9 @@ class ServiceLifecycleAutomationService
             // 到期取消事务已提交，服务状态变化影响概览状态计数，事务外失效该用户概览缓存。
             app(ServiceOverviewService::class)->forgetGroupedOverviewCache((int) $service->user_id);
 
-            Log::info('[定时任务] 服务超保留期自动取消', [
+            $this->notifyClientServiceTerminated($service, $suspendedAt);
+
+            Log::info('[定时任务] 服务超保留期自动删除', [
                 'service_id' => $service->id,
                 'service_name' => $service->name,
                 'expires_at' => $service->expires_at?->toDateTimeString(),
@@ -258,6 +263,47 @@ class ServiceLifecycleAutomationService
         }
 
         return $count;
+    }
+
+    /**
+     * 到期超保留期自动删除的客户通知（模板 100008）。
+     * cron 每日扫描，以暂停日为幂等键防重复；发送失败仅告警不影响删除流程。
+     */
+    private function notifyClientServiceTerminated(Service $service, Carbon $suspendedAt): void
+    {
+        $email = trim((string) ($service->user?->email ?? ''));
+        if ($email === '') {
+            return;
+        }
+
+        if (! AutomationLog::recordOnce(
+            'service-lifecycle-maintenance', 'service_terminated_notify', 'service', (int) $service->id,
+            'terminated:'.$suspendedAt->format('Y-m-d')
+        )) {
+            return;
+        }
+
+        try {
+            SendTemplateEmailJob::dispatch($email, NotificationService::TEMPLATE_SERVICE_TERMINATED, [
+                'display_name' => (string) ($service->user?->display_name ?? '客户'),
+                'service_name' => (string) $service->name,
+                'terminated_at' => now()->format('Y-m-d H:i:s'),
+                'notice_message' => '您的服务已到期并超过保留期，系统已自动删除；如需继续使用请重新购买。',
+            ]);
+        } catch (\Throwable $exception) {
+            AutomationLog::forgetRecord(
+                'service-lifecycle-maintenance',
+                'service_terminated_notify',
+                'service',
+                (int) $service->id,
+                'terminated:'.$suspendedAt->format('Y-m-d')
+            );
+            Log::warning('[定时任务] 产品删除通知发送失败', [
+                'service_id' => $service->id,
+                'email' => $email,
+                'message' => $exception->getMessage(),
+            ]);
+        }
     }
 
     private function resolveExpiredSuspendedAt(Service $service, int $expireSuspendAfterDays): ?Carbon

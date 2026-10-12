@@ -6,6 +6,8 @@ namespace App\Services\Automation;
 
 use App\Constants\ServiceStatus;
 use App\Exceptions\BusinessException;
+use App\Jobs\SendTemplateEmailJob;
+use App\Models\AutomationLog;
 use App\Models\Product;
 use App\Models\Service;
 use App\Models\Supplier;
@@ -13,6 +15,7 @@ use App\Services\ClientServiceConsole\ServiceOverviewService;
 use App\Services\Integrations\Plugins\PluginBindingResolver;
 use App\Services\Integrations\Plugins\ServiceUpstreamBindingWriter;
 use App\Services\Integrations\Support\ProviderErrorMapper;
+use App\Services\System\NotificationService;
 use App\Services\Upstream\Contracts\ProvidesStatusSync;
 use App\Services\Upstream\ProviderResolver;
 use App\Support\Concerns\ResolvesBinding;
@@ -71,7 +74,6 @@ class ServiceStatusSyncService
                 ServiceStatus::PENDING,
                 ServiceStatus::ACTIVE,
                 ServiceStatus::SUSPENDED,
-                ServiceStatus::EXPIRED,
             ])
             ->tap(fn ($query) => $this->applySyncableUpstreamBindingScope($query, null, $excludedProviderKeys))
             ->chunkById(max(1, $serviceChunkSize), function (EloquentCollection $services) use (&$summary, $supplierRequestChunkSize) {
@@ -106,7 +108,6 @@ class ServiceStatusSyncService
                 ServiceStatus::PENDING,
                 ServiceStatus::ACTIVE,
                 ServiceStatus::SUSPENDED,
-                ServiceStatus::EXPIRED,
             ])
             ->tap(fn ($query) => $this->applySyncableUpstreamBindingScope($query, $normalizedProviderKey))
             ->chunkById(max(1, $serviceChunkSize), function (EloquentCollection $services) use (&$summary, $supplierRequestChunkSize) {
@@ -207,7 +208,6 @@ class ServiceStatusSyncService
                 ServiceStatus::PENDING,
                 ServiceStatus::ACTIVE,
                 ServiceStatus::SUSPENDED,
-                ServiceStatus::EXPIRED,
             ], true);
     }
 
@@ -648,6 +648,8 @@ class ServiceStatusSyncService
                 'service_id' => (int) $service->id,
                 'expires_at' => (string) $service->expires_at,
             ]);
+
+            $this->notifyClientUnsuspendFailed($service);
         }
 
         $shouldResetRuntimeSnapshot = $normalizedHostStatus !== '' && $normalizedHostStatus !== 'active';
@@ -698,6 +700,46 @@ class ServiceStatusSyncService
         $userId = (int) ($service->user_id ?? 0);
         if ($userId > 0) {
             app(ServiceOverviewService::class)->forgetGroupedOverviewCache($userId);
+        }
+    }
+
+    /**
+     * 解除停用失败客户通知（模板 100029）。
+     *
+     * 仅在「续费保护生效」分支被调用（上游仍暂停但本地已开通未到期）；
+     * 状态同步 cron 高频运行，以「日期」为幂等键保证每服务每日最多一封；
+     * 用户关系仅在本方法命中后按需加载，避免同步批量路径的 N+1；
+     * 发送失败仅告警，不影响同步主流程。
+     */
+    private function notifyClientUnsuspendFailed(Service $service): void
+    {
+        try {
+            $service->loadMissing(['user:id,email,nickname', 'product:id,name']);
+
+            $email = trim((string) ($service->user?->email ?? ''));
+            if ($email === '') {
+                return;
+            }
+
+            $ruleKey = 'date:'.now()->format('Y-m-d');
+            if (! AutomationLog::recordOnce(
+                'service-lifecycle-maintenance', 'unsuspend_failed', 'service', (int) $service->id, $ruleKey
+            )) {
+                return;
+            }
+
+            SendTemplateEmailJob::dispatch($email, NotificationService::TEMPLATE_SERVICE_UNSUSPEND_FAILED, [
+                'display_name' => trim((string) ($service->user?->display_name ?? '')) !== '' ? (string) $service->user->display_name : $email,
+                'product_name' => (string) ($service->product?->name ?? $service->name),
+                'service_name' => (string) $service->name,
+                'failure_reason' => '续费成功但上游主机仍处于暂停状态，自动解除停用未生效，请稍候重试或联系客服处理。',
+                'failed_at' => now()->format('Y-m-d H:i:s'),
+            ]);
+        } catch (\Throwable $exception) {
+            Log::warning('[状态同步] 解除停用失败通知派发异常', [
+                'service_id' => (int) $service->id,
+                'message' => $exception->getMessage(),
+            ]);
         }
     }
 
@@ -837,12 +879,7 @@ class ServiceStatusSyncService
 
     private function resolveServiceStatusFromUpstream(string $status): int
     {
-        return match (strtolower(trim($status))) {
-            'active' => ServiceStatus::ACTIVE,
-            'suspended' => ServiceStatus::SUSPENDED,
-            'cancelled', 'deleted' => ServiceStatus::CANCELLED,
-            default => ServiceStatus::PENDING,
-        };
+        return ServiceStatus::fromUpstreamDomainStatus($status);
     }
 
     private function resolveSyncedServiceStatus(Service $service, int $upstreamStatus): int

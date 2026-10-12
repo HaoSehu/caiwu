@@ -9,6 +9,7 @@ use App\Constants\InvoiceType;
 use App\Constants\OrderStatus;
 use App\Constants\ServiceStatus;
 use App\Exceptions\BusinessException;
+use App\Jobs\SendTemplateEmailJob;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Product;
@@ -22,6 +23,7 @@ use App\Services\Finance\FinanceLedgerWriter;
 use App\Services\Integrations\Plugins\PluginBindingResolver;
 use App\Services\Integrations\Plugins\ServiceUpstreamBindingWriter;
 use App\Services\Integrations\Plugins\UpstreamBindingWriter;
+use App\Services\System\NotificationService;
 use App\Services\Upstream\Contracts\ProvidesConsoleRuntime;
 use App\Services\Upstream\ProviderResolver;
 use App\Support\BillingCycle;
@@ -962,6 +964,8 @@ trait HandlesAdminUserServices
         // 服务记录已删除（概览移除该项），事务提交后失效该用户概览缓存。
         app(ServiceOverviewService::class)->forgetGroupedOverviewCache((int) $user->id);
 
+        $this->notifyClientServiceTerminated($user, $serviceName);
+
         try {
             $this->operationLogService->write(
                 userId: $user->id,
@@ -1139,7 +1143,7 @@ trait HandlesAdminUserServices
             return Carbon::parse((string) $expiresAt);
         }
 
-        if ($status === ServiceStatus::CANCELLED) {
+        if ($status === ServiceStatus::TERMINATED) {
             return null;
         }
 
@@ -1177,5 +1181,31 @@ trait HandlesAdminUserServices
         }
 
         return Crypt::encryptString((string) json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+    }
+
+    /**
+     * 管理员删除服务记录后的客户通知（模板 100008）：队列异步发送，
+     * 失败仅告警不阻断删除流程；无邮箱（纯手机号账号）静默跳过。
+     */
+    private function notifyClientServiceTerminated(User $user, string $serviceName): void
+    {
+        $email = trim((string) $user->email);
+        if ($email === '') {
+            return;
+        }
+
+        try {
+            SendTemplateEmailJob::dispatch($email, NotificationService::TEMPLATE_SERVICE_TERMINATED, [
+                'display_name' => trim((string) ($user->display_name ?? '')) !== '' ? (string) $user->display_name : $email,
+                'service_name' => $serviceName !== '' ? $serviceName : '您的产品',
+                'terminated_at' => now()->format('Y-m-d H:i:s'),
+                'notice_message' => '删除操作完成后资源可能无法恢复，如有疑问请联系客服。',
+            ]);
+        } catch (\Throwable $exception) {
+            Log::warning('[管理员删除服务记录] 客户通知派发失败', [
+                'user_id' => (int) $user->id,
+                'message' => $exception->getMessage(),
+            ]);
+        }
     }
 }

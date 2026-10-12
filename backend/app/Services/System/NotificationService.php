@@ -2,6 +2,7 @@
 
 namespace App\Services\System;
 
+use App\Jobs\SendTemplateEmailJob;
 use App\Models\MessageLog;
 use App\Models\Setting;
 use App\Services\Integrations\Plugins\IntegrationDriverBindingResolver;
@@ -68,6 +69,9 @@ class NotificationService
     public const TEMPLATE_SERVICE_SECOND_RENEW_REMINDER = '100019';
 
     public const TEMPLATE_CREDIT_INVOICE_CREATED = '100020';
+
+    /** 管理员新订单通知（账单创建后提醒跟进开通/支付） */
+    public const TEMPLATE_ADMIN_ORDER_CREATED = '100021';
 
     public const TEMPLATE_ADMIN_ORDER_PAID = '100022';
 
@@ -280,6 +284,34 @@ class NotificationService
         ]);
     }
 
+    /**
+     * 管理员登录提示（模板 100028）：经通知队列异步发送。
+     * 与 client 侧提醒方法不同：管理员可能未配置邮箱（email 列可空），
+     * 未配置时静默跳过，不抛异常——登录提醒不应使登录流程失败。
+     */
+    public function sendAdminLoginEmailAlertToAddress(
+        string $email,
+        string $displayName,
+        string $account,
+        string $ip,
+        ?string $userAgent = null
+    ): void {
+        $email = trim($email);
+        if ($email === '') {
+            return;
+        }
+
+        $account = trim($account);
+
+        SendTemplateEmailJob::dispatch($email, self::TEMPLATE_ADMIN_LOGIN_ALERT, [
+            'recipient_name' => trim($displayName) !== '' ? trim($displayName) : $account,
+            'account' => $account,
+            'login_at' => now()->format('Y-m-d H:i:s'),
+            'ip' => $ip,
+            'device' => $this->resolveUserAgentSummary($userAgent),
+        ]);
+    }
+
     public function sendPasswordChangedEmailAlertToAddress(
         string $email,
         string $displayName,
@@ -301,7 +333,6 @@ class NotificationService
             'display_name' => $displayName,
             'bind_type' => '登录密码',
             'bind_account' => '已变更',
-            'bound_at' => $changedAt,
             'changed_at' => $changedAt,
             'ip' => $ip,
             'device' => $this->resolveUserAgentSummary($userAgent),
@@ -331,7 +362,6 @@ class NotificationService
             'display_name' => $displayName,
             'bind_type' => '安全手机号',
             'bind_account' => trim($newPhone) !== '' ? $this->maskPhone($newPhone) : '未设置',
-            'bound_at' => $changedAt,
             'old_phone' => trim($oldPhone) !== '' ? $this->maskPhone($oldPhone) : '未设置',
             'new_phone' => trim($newPhone) !== '' ? $this->maskPhone($newPhone) : '未设置',
             'changed_at' => $changedAt,
@@ -364,7 +394,6 @@ class NotificationService
                 'display_name' => $resolvedDisplayName,
                 'bind_type' => '安全邮箱',
                 'bind_account' => trim($newEmail) !== '' ? $this->maskEmail($newEmail) : '未设置',
-                'bound_at' => $changedAt,
                 'old_email' => trim($oldEmail) !== '' ? $this->maskEmail($oldEmail) : '未设置',
                 'new_email' => trim($newEmail) !== '' ? $this->maskEmail($newEmail) : '未设置',
                 'changed_at' => $changedAt,

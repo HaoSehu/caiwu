@@ -24,8 +24,10 @@ class SendPaidInvoiceAdminNotificationJob implements ShouldQueue
 
     public array $backoff = [60, 300, 600];
 
-    public function __construct(public int $invoiceId)
-    {
+    public function __construct(
+        public int $invoiceId,
+        public string $action = 'invoice_paid',
+    ) {
         $this->onQueue('notification');
         $this->afterCommit();
     }
@@ -41,6 +43,12 @@ class SendPaidInvoiceAdminNotificationJob implements ShouldQueue
 
     public function handle(AdminOrderNotificationService $service): void
     {
+        if ($this->action === 'invoice_created') {
+            $service->notifyInvoiceCreatedNow($this->invoiceId);
+
+            return;
+        }
+
         $service->notifyInvoicePaidNow($this->invoiceId);
     }
 

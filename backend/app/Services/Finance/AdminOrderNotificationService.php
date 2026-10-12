@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Services\Finance;
 
 use App\Constants\InvoiceStatus;
+use App\Constants\InvoiceType;
+use App\Constants\OrderStatus;
 use App\Constants\PaymentGatewayCode;
 use App\Jobs\SendPaidInvoiceAdminNotificationJob;
 use App\Models\AdminUser;
@@ -15,6 +17,7 @@ use App\Models\Payment;
 use App\Services\ProductCatalog\ProductFullPathResolver;
 use App\Services\System\NotificationService;
 use App\Support\AdminPermissions;
+use App\Support\BillingCycleLabels;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 
@@ -48,6 +51,27 @@ class AdminOrderNotificationService
     public function notifyInvoicePaidNow(int $invoiceId): void
     {
         $this->dispatchInvoiceNotificationNow($invoiceId);
+    }
+
+    /**
+     * 入口：把管理员新订单通知派发到队列（模板 100021，账单创建后）。
+     */
+    public function notifyInvoiceCreatedAfterResponse(Invoice $invoice): void
+    {
+        $invoiceId = (int) $invoice->id;
+        if ($invoiceId <= 0) {
+            return;
+        }
+
+        SendPaidInvoiceAdminNotificationJob::dispatch($invoiceId, 'invoice_created');
+    }
+
+    /**
+     * 队列任务的实际执行体：加载账单并逐个管理员发送新订单通知。
+     */
+    public function notifyInvoiceCreatedNow(int $invoiceId): void
+    {
+        $this->dispatchInvoiceCreatedNotificationNow($invoiceId);
     }
 
     private function dispatchInvoiceNotificationNow(int $invoiceId): void
@@ -100,16 +124,15 @@ class AdminOrderNotificationService
                     (string) $admin->email,
                     NotificationService::TEMPLATE_ADMIN_ORDER_PAID,
                     [
-                        'site_name' => $this->siteName(),
                         'recipient_name' => $admin->display_name,
                         'user_name' => $invoice->user?->display_name ?: '客户',
                         'user_email' => (string) ($invoice->user?->email ?? '未绑定'),
-                        'order_no' => (string) ($invoice->invoice_no ?? ''),
+                        'order_no' => (string) ($invoice->order?->order_no ?? ''),
                         'invoice_no' => (string) ($invoice->invoice_no ?? ''),
                         'product_name' => $this->resolveInvoiceProductDisplayText($invoice, $invoice->order),
-                        'billing_cycle_label' => $this->resolveBillingCycleLabel((string) ($invoice->billing_cycle ?? '')),
+                        'billing_cycle_label' => BillingCycleLabels::label((string) ($invoice->billing_cycle ?? '')),
                         'paid_amount' => number_format((float) ($invoice->paid_amount ?? $invoice->amount ?? 0), 2, '.', ''),
-                        'payment_method' => $this->resolvePaymentGatewayLabel($payment?->gatewayKey() ?? ''),
+                        'payment_method' => PaymentGatewayCode::displayLabel($payment?->gatewayKey() ?? ''),
                         'trade_no' => (string) ($payment?->trade_no ?? ''),
                         'paid_at' => $invoice->paid_at?->format('Y-m-d H:i:s')
                             ?? $payment?->paid_at?->format('Y-m-d H:i:s')
@@ -132,6 +155,78 @@ class AdminOrderNotificationService
             } catch (\Throwable $exception) {
                 Log::warning('[管理员账单通知] 邮件发送失败', [
                     'action' => 'invoice_paid',
+                    'invoice_id' => $invoice->id,
+                    'invoice_no' => $invoice->invoice_no,
+                    'admin_id' => $admin->id,
+                    'email' => (string) $admin->email,
+                    'message' => $exception->getMessage(),
+                ]);
+            }
+        }
+    }
+
+    /**
+     * 新订单通知（模板 100021）的实际执行体：加载账单并逐个管理员发送。
+     * 与支付通知（100022）的差异面仅模板码、AutomationLog action 与 payload 组装；
+     * 收件人解析、per-admin 幂等与失败日志结构完全一致。
+     */
+    private function dispatchInvoiceCreatedNotificationNow(int $invoiceId): void
+    {
+        $invoice = Invoice::query()->with([
+            'user:id,email,nickname',
+            'order:id,order_no,status,type,service_id,paid_at,product_id,billing_cycle,product_spec_snapshot,product_type_snapshot,config_snapshot',
+        ])->find($invoiceId);
+
+        if (! $invoice instanceof Invoice) {
+            return;
+        }
+
+        $recipients = $this->resolveRecipients();
+        if ($recipients->isEmpty()) {
+            return;
+        }
+
+        foreach ($recipients as $admin) {
+            $ruleKey = 'admin:'.(int) $admin->id;
+
+            if (AutomationLog::hasRecord(self::TASK_KEY, 'invoice_created', 'invoice', (int) $invoice->id, $ruleKey)) {
+                continue;
+            }
+
+            try {
+                $this->notificationService->sendTemplateEmail(
+                    (string) $admin->email,
+                    NotificationService::TEMPLATE_ADMIN_ORDER_CREATED,
+                    [
+                        'recipient_name' => $admin->display_name,
+                        'user_name' => $invoice->user?->display_name ?: '客户',
+                        'user_email' => (string) ($invoice->user?->email ?? '未绑定'),
+                        'order_no' => (string) ($invoice->order?->order_no ?? ''),
+                        'invoice_no' => (string) ($invoice->invoice_no ?? ''),
+                        'order_type_label' => InvoiceType::label((string) ($invoice->order?->type ?: $invoice->type ?: '')),
+                        'product_name' => $this->resolveInvoiceProductDisplayText($invoice, $invoice->order),
+                        'billing_cycle_label' => BillingCycleLabels::label((string) ($invoice->billing_cycle ?? '')),
+                        'order_amount' => number_format((float) ($invoice->amount ?? 0), 2, '.', ''),
+                        'order_status_label' => (string) (OrderStatus::$labels[(int) ($invoice->order?->status ?? 0)] ?? '-'),
+                        'created_at' => $invoice->created_at?->format('Y-m-d H:i:s') ?? now()->format('Y-m-d H:i:s'),
+                    ]
+                );
+
+                AutomationLog::markExecuted(
+                    self::TASK_KEY,
+                    'invoice_created',
+                    'invoice',
+                    (int) $invoice->id,
+                    $ruleKey,
+                    [
+                        'admin_id' => (int) $admin->id,
+                        'email' => (string) $admin->email,
+                        'template_code' => NotificationService::TEMPLATE_ADMIN_ORDER_CREATED,
+                    ]
+                );
+            } catch (\Throwable $exception) {
+                Log::warning('[管理员账单通知] 新订单邮件发送失败', [
+                    'action' => 'invoice_created',
                     'invoice_id' => $invoice->id,
                     'invoice_no' => $invoice->invoice_no,
                     'admin_id' => $admin->id,
@@ -165,41 +260,6 @@ class AdminOrderNotificationService
             })
             ->unique(fn (AdminUser $admin) => mb_strtolower(trim((string) $admin->email)))
             ->values();
-    }
-
-    private function resolveBillingCycleLabel(string $cycle): string
-    {
-        return [
-            'monthly' => '月付',
-            'quarterly' => '季付',
-            'semiannually' => '半年付',
-            'annually' => '年付',
-            'biennially' => '两年付',
-            'triennially' => '三年付',
-            'one_time' => '一次性',
-            'onetime' => '一次性',
-        ][$cycle] ?? ($cycle !== '' ? $cycle : '-');
-    }
-
-    private function resolvePaymentGatewayLabel(string $gateway): string
-    {
-        return match ($gateway) {
-            // 「支付宝」「手动入账」是本通知场景的历史展示口径，与集中 LABELS 不同，保留本地文案。
-            'alipay' => '支付宝',
-            // 与 LABELS 一致的词条走集中定义，避免多处文案漂移。
-            PaymentGatewayCode::YIPAY,
-            PaymentGatewayCode::BALANCE,
-            PaymentGatewayCode::WECHAT => PaymentGatewayCode::label($gateway),
-            // 业务侧扩展口径与本地历史文案不属于集中 LABELS，保留原样。
-            'manual' => '手动入账',
-            'bank_transfer' => '银行转账',
-            default => $gateway !== '' ? $gateway : '未知方式',
-        };
-    }
-
-    private function siteName(): string
-    {
-        return (string) config('idc.site_name', config('app.name', '创欧云'));
     }
 
     private function resolveOrderProductDisplayText(Order $order): string

@@ -6,13 +6,16 @@ use App\Constants\InvoiceStatus;
 use App\Constants\OrderType;
 use App\Constants\ServiceStatus;
 use App\Constants\UserNotificationType;
+use App\Jobs\SendTemplateEmailJob;
 use App\Models\AutomationLog;
 use App\Models\Invoice;
 use App\Models\Service;
+use App\Models\User;
 use App\Services\Notification\UserNotificationService;
 use App\Services\Provisioning\ServiceRenewService;
 use App\Services\System\NotificationService;
 use App\Services\System\SettingService;
+use App\Support\BillingCycleLabels;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 
@@ -60,7 +63,6 @@ class BillingAutomationService
         }
 
         $resolvedNow = now();
-        $siteName = (string) config('idc.site_name', config('app.name', '服务商'));
         $maxRenewNoticeDays = max($renewNoticeDays);
 
         // 仅通知正常与已暂停的服务（已取消、已终止不再提醒）
@@ -108,13 +110,17 @@ class BillingAutomationService
                     : "您的服务 {$service->name} 将在 {$days} 天后到期。");
 
             try {
-                $this->notificationService->sendTemplateEmail($email, NotificationService::TEMPLATE_SERVICE_RENEW_REMINDER, [
-                    'site_name' => $siteName,
+                // 里程碑分档：最早档（如提前 7 天）发第 1 次提醒（100018），其余档发第 2 次加急提醒（100019）。
+                $renewTemplateCode = $milestoneDays === $maxRenewNoticeDays
+                    ? NotificationService::TEMPLATE_SERVICE_RENEW_REMINDER
+                    : NotificationService::TEMPLATE_SERVICE_SECOND_RENEW_REMINDER;
+
+                $this->notificationService->sendTemplateEmail($email, $renewTemplateCode, [
                     'display_name' => $displayName,
                     'service_name' => (string) $service->name,
                     'days_left' => $days,
                     'expires_at' => $expiryStr,
-                    'billing_cycle_label' => $this->resolveCycleLabel((string) $service->billing_cycle),
+                    'billing_cycle_label' => BillingCycleLabels::label((string) $service->billing_cycle),
                     'urgency_message' => $urgencyLine,
                 ]);
                 $this->userNotificationService->create(
@@ -169,7 +175,6 @@ class BillingAutomationService
         $noticeDay = $autoRenewDays + 1; // 自动续费前 1 天通知
 
         $resolvedNow = now();
-        $siteName = (string) config('idc.site_name', config('app.name', '服务商'));
         $targetDate = $resolvedNow->copy()->addDays($noticeDay)->toDateString();
 
         $services = Service::query()
@@ -205,7 +210,7 @@ class BillingAutomationService
             $displayName = $service->user?->display_name ?? '客户';
             $expiryStr = $expiresAt->format('Y-m-d H:i');
             $autoRenewDate = $expiresAt->copy()->subDays($autoRenewDays)->format('Y-m-d');
-            $cycleLabel = $this->resolveCycleLabel((string) $service->billing_cycle);
+            $cycleLabel = BillingCycleLabels::label((string) $service->billing_cycle);
 
             $urgencyLine = "您的服务 {$service->name} 将于 {$autoRenewDate} 由系统自动续费（{$cycleLabel}），请确保账户余额充足。如不希望自动续费，请在 {$autoRenewDate} 前登录控制台关闭自动续费。";
 
@@ -214,7 +219,6 @@ class BillingAutomationService
                     $email,
                     NotificationService::TEMPLATE_AUTO_RENEW_UPCOMING,
                     [
-                        'site_name' => $siteName,
                         'display_name' => $displayName,
                         'service_name' => (string) $service->name,
                         'expires_at' => $expiryStr,
@@ -259,6 +263,37 @@ class BillingAutomationService
 
     // ─── 自动生成续费账单 ──────────────────────────────────────────────────────
 
+    /**
+     * 自动续费账单生成后通知客户（模板 100015）。
+     * createRenewOrders 的建单已由 AutomationLog recordOnce 包裹，本通知随建单天然单次；
+     * 发送失败仅告警，不回滚建单、不影响调度批处理。
+     */
+    private function sendAutoRenewNoticeEmail(User $user, Service $service, Invoice $invoice): void
+    {
+        $email = trim((string) ($user->email ?? ''));
+        if ($email === '') {
+            return;
+        }
+
+        try {
+            SendTemplateEmailJob::dispatch($email, NotificationService::TEMPLATE_AUTO_RENEW_NOTICE, [
+                'display_name' => (string) ($user->display_name ?? '客户'),
+                'service_name' => (string) $service->name,
+                'order_no' => (string) ($invoice->order?->order_no ?? ''),
+                'invoice_no' => (string) $invoice->invoice_no,
+                'amount' => number_format((float) $invoice->amount, 2, '.', ''),
+                'renewed_at' => now()->format('Y-m-d H:i:s'),
+                'notice_message' => '系统已生成自动续费账单，请确保账户余额充足，以便按时完成自动扣款。',
+            ]);
+        } catch (\Throwable $exception) {
+            Log::warning('[定时任务] 自动续费通知发送失败', [
+                'service_id' => $service->id,
+                'email' => $email,
+                'message' => $exception->getMessage(),
+            ]);
+        }
+    }
+
     private function createRenewOrders(array $config): int
     {
         $renewNoticeDays = collect((array) ($config['renew_notice_days_before'] ?? []))
@@ -291,7 +326,8 @@ class BillingAutomationService
         $count = 0;
 
         foreach ($services as $service) {
-            if (! $service->user) {
+            $renewUser = $service->user;
+            if (! $renewUser instanceof User) {
                 continue;
             }
 
@@ -312,9 +348,10 @@ class BillingAutomationService
             }
 
             try {
-                $this->serviceRenewService->createRenewInvoiceForUser(
-                    $service->user, (int) $service->id, (string) $service->billing_cycle
+                $invoice = $this->serviceRenewService->createRenewInvoiceForUser(
+                    $renewUser, (int) $service->id, (string) $service->billing_cycle
                 );
+                $this->sendAutoRenewNoticeEmail($renewUser, $service, $invoice);
                 Log::info('[定时任务] 自动生成续费订单', [
                     'service_id' => $service->id,
                     'days_left' => $days,
@@ -351,8 +388,18 @@ class BillingAutomationService
             return 0;
         }
 
-        $siteName = (string) config('idc.site_name', config('app.name', '服务商'));
-        $targetDays = $config['invoice_unpaid_before_due_days'];
+        // 里程碑分档：第一档（invoice_unpaid_before_due_days）发首次提醒（100011），
+        // 第二档（invoice_unpaid_second_reminder_days，0=当天，需更临近第一档）发第二次提醒（100012）；
+        // 第二档与第一档重合或更早时忽略，避免同档重复发信。
+        $firstDays = (int) $config['invoice_unpaid_before_due_days'];
+        $secondDays = (int) ($config['invoice_unpaid_second_reminder_days'] ?? 0);
+
+        $milestoneTemplates = [
+            $firstDays => NotificationService::TEMPLATE_INVOICE_PAYMENT_REMINDER,
+        ];
+        if ($secondDays < $firstDays) {
+            $milestoneTemplates[$secondDays] = NotificationService::TEMPLATE_INVOICE_SECOND_PAYMENT_REMINDER;
+        }
 
         $invoices = Invoice::query()
             ->with(['user:id,email,nickname', 'order.product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires'])
@@ -366,7 +413,7 @@ class BillingAutomationService
             $dueDate = Carbon::parse($invoice->due_date);
             $days = (int) now()->startOfDay()->diffInDays($dueDate->copy()->startOfDay(), false);
 
-            if ($days !== $targetDays) {
+            if (! array_key_exists($days, $milestoneTemplates)) {
                 continue;
             }
 
@@ -385,8 +432,7 @@ class BillingAutomationService
 
             if ($this->sendInvoiceReminderEmail(
                 $invoice,
-                $siteName,
-                NotificationService::TEMPLATE_INVOICE_PAYMENT_REMINDER,
+                $milestoneTemplates[$days],
                 $tailText
             )) {
                 AutomationLog::markExecuted(
@@ -419,8 +465,6 @@ class BillingAutomationService
             return 0;
         }
 
-        $siteName = (string) config('idc.site_name', config('app.name', '服务商'));
-
         $invoices = Invoice::query()
             ->with(['user:id,email,nickname', 'order.product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires'])
             ->where('status', InvoiceStatus::UNPAID)
@@ -448,7 +492,6 @@ class BillingAutomationService
 
             if ($this->sendInvoiceReminderEmail(
                 $invoice,
-                $siteName,
                 NotificationService::TEMPLATE_INVOICE_OVERDUE_REMINDER,
                 $tailText
             )) {
@@ -476,7 +519,7 @@ class BillingAutomationService
 
     // ─── 公共邮件发送 ──────────────────────────────────────────────────────────
 
-    private function sendInvoiceReminderEmail(Invoice $invoice, string $siteName, string $templateCode, string $tailText): bool
+    private function sendInvoiceReminderEmail(Invoice $invoice, string $templateCode, string $tailText): bool
     {
         $email = trim((string) ($invoice->user?->email ?? ''));
         if ($email === '') {
@@ -485,14 +528,17 @@ class BillingAutomationService
 
         $displayName = $invoice->user?->display_name ?? '客户';
         $dueDate = Carbon::parse($invoice->due_date)->format('Y-m-d');
+        $productName = trim((string) ($invoice->order?->display_product_name ?? ''));
+        if ($productName === '') {
+            $productName = (string) $invoice->display_product_name;
+        }
 
         try {
             $this->notificationService->sendTemplateEmail($email, $templateCode, [
-                'site_name' => $siteName,
                 'display_name' => $displayName,
                 'invoice_no' => (string) $invoice->invoice_no,
                 'order_no' => (string) ($invoice->order?->order_no ?? ''),
-                'product_name' => (string) ($invoice->order?->display_product_name ?? ''),
+                'product_name' => $productName,
                 'amount' => number_format((float) $invoice->amount, 2, '.', ''),
                 'due_date' => $dueDate,
                 'notice_message' => $tailText,
@@ -521,20 +567,6 @@ class BillingAutomationService
 
             return false;
         }
-    }
-
-    private function resolveCycleLabel(string $cycle): string
-    {
-        return [
-            'monthly' => '月付',
-            'quarterly' => '季付',
-            'semiannually' => '半年付',
-            'annually' => '年付',
-            'biennially' => '两年付',
-            'triennially' => '三年付',
-            'one_time' => '一次性',
-            'onetime' => '一次性',
-        ][$cycle] ?? $cycle;
     }
 
     private function resolveDaysLeft(Carbon $expiresAt, ?Carbon $resolvedNow = null): int

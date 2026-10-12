@@ -29,7 +29,6 @@ use App\Services\System\OperationLogService;
 use App\Services\System\SettingService;
 use App\Services\Upstream\Contracts\ProvidesRenewal;
 use App\Services\Upstream\ProviderResolver;
-use App\Services\Verification\VerificationGateService;
 use App\Support\BillingCycle;
 use App\Support\Money;
 use App\Support\OrderInvoiceNoGenerator;
@@ -77,7 +76,6 @@ class ServiceRenewService
         private InvoiceRefundService $invoiceRefundService,
         private ?PluginBindingResolver $bindingResolver = null,
         private ?MemberGroupDiscountService $memberGroupDiscountService = null,
-        private ?VerificationGateService $verificationGate = null,
     ) {}
 
     /**
@@ -296,21 +294,11 @@ class ServiceRenewService
      */
     public function createRenewInvoiceForUser(User $user, int $serviceId, string $billingCycle, int $userCouponId = 0, array $context = [], bool $rejectBlockingPaidInvoice = false): Invoice
     {
-        // M11 未实名限制：用户主动续费受 renewal scope 约束（自动续费为系统履约行为不受限，
-        // 以 $rejectBlockingPaidInvoice 区分手动/自动路径）。Gate 未注入或未启用时零影响。
-        if ($rejectBlockingPaidInvoice && $this->verificationGate instanceof VerificationGateService) {
-            $this->verificationGate->ensureCan($user, VerificationGateService::SCOPE_RENEWAL);
-        }
-
         $service = $this->findUserService($user, $serviceId);
         $service = $this->healServiceProductMapping($service);
 
         // 已删除的服务不可续费：避免创建并支付续费账单后状态仍保持删除（收了钱不交付）。
-        // 注：原实现引用了不存在的 ServiceStatus::TERMINATED（运行时致命错误）；
-        // 服务删除为软删语义（SoftDeletes 全局作用域下 findUserService 已天然 404），
-        // 这里改为 withTrashed 显式复查，保留防御意图且不改变正常路径行为。
-        $deletedService = Service::withTrashed()->find((int) $service->id);
-        throw_if($deletedService?->trashed() === true, new BusinessException('服务已删除，无法续费'));
+        throw_if((int) $service->status === ServiceStatus::TERMINATED, new BusinessException('服务已删除，无法续费'));
 
         $renewConfig = $this->buildRenewConfig($service);
         $cycle = trim($billingCycle);

@@ -180,7 +180,6 @@ class NotificationTemplateTestSendService
             'terminated_at' => '2026-05-10 03:00:00',
             'resumed_at' => '2026-04-02 12:00:00',
             'approved_at' => '2026-04-03 16:00:00',
-            'bound_at' => '2026-04-01 09:30:00',
             'product_end_time' => '2026-04-10 23:59:59',
             'product_first_time' => '2026-04-01 14:30:00',
             'product_binlly_cycle' => '月付',
