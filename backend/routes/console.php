@@ -48,6 +48,13 @@ Schedule::command('scheduler:liveness')
     ->everyMinute()
     ->name('scheduler-liveness');
 
+// 优惠券活动发放与心跳解耦：活动时间按分钟级精度匹配（如每周五 18:05），
+// 每 1 分钟后台执行一次；服务层 AutomationLog 幂等去重，重复执行安全。
+Schedule::command('coupon:dispatch-due-campaigns')
+    ->everyMinute()
+    ->name('coupon-campaign-dispatch')
+    ->runInBackground();
+
 if ($shouldUseScheduleMutex) {
     $heartbeat->withoutOverlapping(2);
 }
