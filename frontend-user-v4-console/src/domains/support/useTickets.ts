@@ -3,7 +3,7 @@ import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import { computed, onMounted, reactive, ref, shallowRef, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
-import clientApi, { type TicketDepartmentOption } from '@/api/client';
+import clientApi from '@/api/client';
 import type {
   TicketAttachment,
   TicketImageUploadPayload,
@@ -145,8 +145,6 @@ export function useTicketList() {
   const loadError = ref(false);
   const loadErrorText = ref('');
   const serviceOptions = ref<ServiceOption[]>([]);
-  const departmentOptions = ref<TicketDepartmentOption[]>([]);
-  const departmentLoading = ref(false);
   const uploadFiles = ref<TicketImageUploadPayload[]>([]);
   const previewVisible = ref(false);
   const previewUrl = ref('');
@@ -158,7 +156,6 @@ export function useTicketList() {
   });
   const createForm = reactive({
     department: 'support',
-    department_id: undefined as number | undefined,
     subject: '',
     service_id: undefined as number | undefined,
     priority: 2,
@@ -174,7 +171,6 @@ export function useTicketList() {
 
   function resetCreateForm() {
     createForm.department = 'support';
-    createForm.department_id = undefined;
     createForm.subject = '';
     createForm.service_id = undefined;
     createForm.priority = 2;
@@ -218,21 +214,6 @@ export function useTicketList() {
     }
   }
 
-  // M3 工单部门：提单时可选所属部门（仅启用中部门），不选则由系统智能分配/走默认部门
-  async function loadDepartmentOptions() {
-    if (departmentOptions.value.length) return;
-    departmentLoading.value = true;
-    try {
-      const res = await clientApi.ticketDepartments();
-      departmentOptions.value = Array.isArray(res.data?.list) ? res.data.list : [];
-    } catch {
-      // 部门列表加载失败不阻断提单，保持“智能分配”默认行为
-      departmentOptions.value = [];
-    } finally {
-      departmentLoading.value = false;
-    }
-  }
-
   function handleSearch() {
     filters.page = 1;
     void loadTickets();
@@ -248,7 +229,6 @@ export function useTicketList() {
     resetCreateForm();
     createVisible.value = true;
     if (!serviceOptions.value.length) await loadServiceOptions();
-    void loadDepartmentOptions();
   }
 
   function closeCreateDialog() {
@@ -298,7 +278,6 @@ export function useTicketList() {
     try {
       await clientApi.createTicket({
         department: createForm.department,
-        department_id: createForm.department_id || undefined,
         subject: createForm.subject,
         content: createForm.content,
         priority: createForm.priority,
@@ -337,8 +316,6 @@ export function useTicketList() {
     createForm,
     serviceOptions,
     serviceSelectOptions,
-    departmentOptions,
-    departmentLoading,
     uploadFiles,
     previewVisible,
     previewUrl,

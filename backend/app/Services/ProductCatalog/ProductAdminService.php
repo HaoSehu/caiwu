@@ -16,7 +16,6 @@ use App\Models\ThirdProductGroup;
 use App\Models\User;
 use App\Services\Integrations\Plugins\PluginBindingResolver;
 use App\Services\Integrations\Plugins\UpstreamBindingWriter;
-use App\Services\Pricing\ConfigLinkage\ConfigLinkageRuleValidator;
 use App\Services\ProductCatalog\Concerns\HandlesProductCatalogHelpers;
 use App\Services\System\OperationLogService;
 use App\Services\System\SettingService;
@@ -288,12 +287,6 @@ class ProductAdminService
         $product = DB::transaction(function () use ($data) {
             $prepared = $this->prepareProductPayload($data);
 
-            // M7 配置联动规则：提交了才保存，保存前按提交的配置项做结构/目标/冲突校验
-            $linkageRules = $this->resolveSubmittedLinkageRules($data, $prepared['base']['config_options']);
-            if ($linkageRules !== null) {
-                $prepared['base']['config_linkage_rules'] = $linkageRules;
-            }
-
             /** @var Product $product */
             $product = Product::withoutEvents(
                 fn () => Product::query()->create($prepared['base'])
@@ -331,17 +324,6 @@ class ProductAdminService
                 $prepared['base']['purchase_requires'],
                 array_key_exists('purchase_requires', $data)
             );
-
-            // M7 配置联动规则：请求提交了才覆盖（先按有效配置项校验），未提交则不写入该键，
-            // Eloquent update 不会触碰原列，避免任意一次 PUT 静默清空既有规则。
-            // 校验基准：本次提交了 config_options 用提交值，否则用库中原值（避免误报目标不存在）。
-            $effectiveConfigOptions = array_key_exists('config_options', $data)
-                ? $prepared['base']['config_options']
-                : $product->config_options;
-            $linkageRules = $this->resolveSubmittedLinkageRules($data, (array) $effectiveConfigOptions);
-            if ($linkageRules !== null || array_key_exists('config_linkage_rules', $data)) {
-                $prepared['base']['config_linkage_rules'] = $linkageRules;
-            }
 
             Product::withoutEvents(fn () => $product->update($prepared['base']));
             $product->refresh()->loadMissing('supplier');
@@ -1664,33 +1646,6 @@ class ProductAdminService
         return $this->normalizeNullableString($value) === Product::CONSOLE_TEMPLATE_PORT_MAPPING
             ? Product::CONSOLE_TEMPLATE_PORT_MAPPING
             : Product::CONSOLE_TEMPLATE_COMPUTE;
-    }
-
-    /**
-     * M7 配置联动规则：请求提交了 config_linkage_rules 才返回归一化结果（null=显式清空规则），
-     * 未提交返回 null 且由调用方凭 array_key_exists 区分「未提交」与「显式置空」。
-     * 提交为数组时先跑 ConfigLinkageRuleValidator（结构/目标/冲突/自引用/范围型限制），非法直接拦截。
-     *
-     * @param  array<int, mixed>  $configOptions  参与校验的配置项（有效口径由调用方决定）
-     */
-    private function resolveSubmittedLinkageRules(array $data, array $configOptions): ?array
-    {
-        if (! array_key_exists('config_linkage_rules', $data)) {
-            return null;
-        }
-
-        $rules = $data['config_linkage_rules'];
-        if ($rules === null) {
-            return null;
-        }
-
-        if (! is_array($rules)) {
-            throw new BusinessException('配置联动规则格式错误，必须是规则数组');
-        }
-
-        ConfigLinkageRuleValidator::validate($rules, $configOptions);
-
-        return $rules;
     }
 
     private function deriveInternalProductName(array $data): string

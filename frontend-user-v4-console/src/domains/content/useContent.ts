@@ -28,16 +28,7 @@ type ListQueryParams = Record<string, unknown> & {
   page_size: number;
   category_id?: number;
   keyword?: string;
-  tag_ids?: string;
-  tag_mode?: 'any' | 'all';
 };
-
-// M8：内容标签（类型自含，对应 GET /v2/client/content/tags）
-export interface ContentTagItem {
-  id: number;
-  name: string;
-  usage_count: number;
-}
 
 interface ContentListConfig {
   pageTitle: string;
@@ -105,16 +96,6 @@ function parseQueryString(value: unknown) {
   return String(normalized || '').trim();
 }
 
-// M8：tag_ids 查询参数解析（逗号分隔正整数）
-function parseTagIds(value: unknown): number[] {
-  const raw = parseQueryString(value);
-  if (!raw) return [];
-  return raw
-    .split(',')
-    .map((item) => Number.parseInt(item.trim(), 10))
-    .filter((item) => Number.isInteger(item) && item > 0);
-}
-
 function compactQuery(query: Record<string, unknown>): LocationQueryRaw {
   const result: LocationQueryRaw = {};
   for (const [key, value] of Object.entries(query)) {
@@ -166,10 +147,6 @@ export function useContentList(contentType: ContentType) {
   const total = ref(0);
   const activeCategoryId = ref(0);
   const loadError = ref('');
-  const contentTags = ref<ContentTagItem[]>([]);
-  const tagsLoading = ref(false);
-  const selectedTagIds = ref<number[]>([]);
-  const tagMode = ref<'any' | 'all'>('any');
 
   const heroKeywords = computed(() => {
     const names = categories.value
@@ -189,21 +166,6 @@ export function useContentList(contentType: ContentType) {
     categories.value = resolveCategories(response.data, config.overviewCategoryKey);
   }
 
-  async function loadTags() {
-    if (contentTags.value.length) return;
-    tagsLoading.value = true;
-    try {
-      const response = await clientApi.contentTags({ limit: 50 });
-      const list = response.data?.list;
-      contentTags.value = Array.isArray(list) ? list : [];
-    } catch {
-      // 标签云加载失败静默降级为空列表，不让筛选器拖垮列表页主数据
-      contentTags.value = [];
-    } finally {
-      tagsLoading.value = false;
-    }
-  }
-
   async function loadList() {
     const params: ListQueryParams = {
       page: page.value,
@@ -211,10 +173,6 @@ export function useContentList(contentType: ContentType) {
     };
     if (activeCategoryId.value > 0) params.category_id = activeCategoryId.value;
     if (keyword.value) params.keyword = keyword.value;
-    if (selectedTagIds.value.length) {
-      params.tag_ids = selectedTagIds.value.join(',');
-      params.tag_mode = tagMode.value;
-    }
 
     const response = await config.fetchList(params);
     const payload = response.data;
@@ -239,9 +197,7 @@ export function useContentList(contentType: ContentType) {
       keyword.value = parseQueryString(route.query.keyword);
       page.value = parseQueryNumber(route.query.page, 1);
       activeCategoryId.value = parseQueryNumber(route.query.category, 0);
-      selectedTagIds.value = parseTagIds(route.query.tag_ids);
-      tagMode.value = parseQueryString(route.query.tag_mode) === 'all' ? 'all' : 'any';
-      await Promise.all([loadOverview(), loadTags(), loadList(), loadSidebarContent()]);
+      await Promise.all([loadOverview(), loadList(), loadSidebarContent()]);
     } catch (error: unknown) {
       loadError.value = getErrorMessage(error, `${config.pageTitle}加载失败`);
       articleList.value = [];
@@ -281,30 +237,6 @@ export function useContentList(contentType: ContentType) {
     submitSearch();
   }
 
-  // M8：标签筛选变更（清空数组即恢复全量，tag_ids/tag_mode 不入 query）
-  function handleTagChange(value: unknown) {
-    const ids = Array.isArray(value) ? value.map((item) => Number(item)).filter((item) => Number.isInteger(item) && item > 0) : [];
-    selectedTagIds.value = ids;
-    page.value = 1;
-    replaceListQuery({
-      ...route.query,
-      tag_ids: ids.length ? ids.join(',') : undefined,
-      tag_mode: ids.length > 1 ? tagMode.value : undefined,
-      page: undefined,
-    });
-  }
-
-  function handleTagModeChange(value: unknown) {
-    tagMode.value = value === 'all' ? 'all' : 'any';
-    if (selectedTagIds.value.length <= 1) return;
-    page.value = 1;
-    replaceListQuery({
-      ...route.query,
-      tag_mode: tagMode.value,
-      page: undefined,
-    });
-  }
-
   function buildDetailRoute(item: ContentArticleRecord): RouteLocationRaw {
     return {
       name: config.detailRouteName,
@@ -318,7 +250,7 @@ export function useContentList(contentType: ContentType) {
   }
 
   watch(
-    () => [route.query.category, route.query.keyword, route.query.page, route.query.tag_ids, route.query.tag_mode],
+    () => [route.query.category, route.query.keyword, route.query.page],
     () => {
       void syncPage();
     },
@@ -340,17 +272,11 @@ export function useContentList(contentType: ContentType) {
     loadError,
     heroKeywords,
     currentCategoryLabel,
-    contentTags,
-    tagsLoading,
-    selectedTagIds,
-    tagMode,
     syncPage,
     selectCategory,
     updatePage,
     submitSearch,
     applyKeyword,
-    handleTagChange,
-    handleTagModeChange,
     buildDetailRoute,
   };
 }

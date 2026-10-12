@@ -91,13 +91,6 @@ class InvoiceRefundService
                         new BusinessException('当前账单状态不支持退款')
                     );
 
-                    // M1 合并账单守卫（2026-10-11 裁决）：合并总账单不做退款入口，
-                    // 退款按子账单为对象，避免聚合金额退款破坏子账单冲正口径。
-                    throw_if(
-                        (int) $lockedInvoice->merge_role === 1,
-                        new BusinessException('合并总账单不支持退回余额，请按子账单操作')
-                    );
-
                     // 充值账单到账时余额已同步增加、补录账单为系统外收款凭证：
                     // 两者退回余额都没有对应的资金流出，等于凭空增加余额，不得退回余额（需红字冲抵等其它方式）。
                     throw_if(

@@ -65,14 +65,6 @@ import request from '@/utils/request';
 type QueryParams = Record<string, unknown> | undefined;
 type RequestConfig = (AxiosRequestConfig & { silentError?: boolean }) | undefined;
 
-/** 工单部门（GET /v2/client/ticket-departments，仅启用中） */
-export interface TicketDepartmentOption {
-  id: number;
-  name: string;
-  description?: string;
-  sort_order?: number;
-}
-
 const LONG_RUNNING_REQUEST_TIMEOUT = 45000;
 const LONG_RUNNING_REQUEST_CONFIG: RequestConfig = { timeout: LONG_RUNNING_REQUEST_TIMEOUT };
 const SILENT_LONG_RUNNING_REQUEST_CONFIG: RequestConfig = { ...LONG_RUNNING_REQUEST_CONFIG, silentError: true };
@@ -285,6 +277,10 @@ const clientApi = {
     postEnvelope<ServicePowerActionPayload>(`/v2/client/services/${id}/power-actions`, data),
   serviceModuleStatus: (id: number | string, params?: QueryParams) =>
     request.get(`/v2/client/services/${id}/module-status`, { params }),
+  servicePowerStatus: (id: number | string) =>
+    getEnvelope<{ service_id?: number; power_status?: string; power_label?: string }>(
+      `/v2/client/services/${id}/power-status`,
+    ),
   serviceReinstallOptions: (id: number | string, params?: QueryParams) =>
     getEnvelope<ServiceReinstallOptionsPayload>(`/v2/client/services/${id}/reinstallations/options`, { params }),
   serviceResetPassword: (id: number | string, data: Record<string, unknown>) =>
@@ -388,8 +384,6 @@ const clientApi = {
   tickets: (params?: QueryParams) => getEnvelope<PagedList<TicketRecord>>('/v2/client/tickets', { params }),
   ticketServiceOptions: (params?: QueryParams) =>
     getEnvelope<TicketServiceOption[]>('/v2/client/tickets/service-options', { params }),
-  ticketDepartments: () =>
-    getEnvelope<{ list?: TicketDepartmentOption[] | null }>('/v2/client/ticket-departments'),
   ticketDetail: (id: number | string) => v2TicketDetail(id),
   createTicket: (data: Record<string, unknown>) => request.post('/v2/client/tickets', data),
   replyTicket: (id: number | string, data: Record<string, unknown>) =>
@@ -406,9 +400,6 @@ const clientApi = {
     getEnvelope<Record<string, unknown>>('/v2/client/content/overview').then((response) =>
       withNormalizedData<ContentOverviewPayload>(response, normalizeContentOverviewPayload),
     ),
-  // M8：前台内容标签云（类型自含，不进共享 types）
-  contentTags: (params?: QueryParams) =>
-    getEnvelope<{ list?: { id: number; name: string; usage_count: number }[] }>('/v2/client/content/tags', { params }),
   notices: (params?: QueryParams) =>
     getEnvelope<Record<string, unknown>>('/v2/client/notices', { params }).then((response) =>
       withNormalizedData<ContentListPayload>(response, normalizeContentListPayload),

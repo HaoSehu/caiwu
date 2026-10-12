@@ -65,8 +65,6 @@ class AdminProductDetailResource extends JsonResource
             'configuration' => [
                 'console_template' => $product->console_template,
                 'config_options' => $this->trimConfigOptions($product->config_options),
-                // M7：已保存的配置联动规则（编辑器回显；null=未配置）
-                'config_linkage_rules' => $product->config_linkage_rules,
             ],
             'purchase_requirements' => [
                 'require_verification' => (bool) ($purchaseRequires['require_verification'] ?? false),

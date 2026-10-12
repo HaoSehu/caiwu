@@ -20,17 +20,6 @@ export const AdminPermissions = {
   TICKET_LIST: 'ticket.list',
   TICKET_REPLY: 'ticket.reply',
   TICKET_MANAGE: 'ticket.manage',
-  // —— 功能模块扩展（2026-10-11，与后端 AdminPermissions 保持一致）——
-  SALES_COMMISSION_LIST: 'sales_commission.list',
-  SALES_COMMISSION_MANAGE: 'sales_commission.manage',
-  // 专用权限码：提成结算发放属资金登记写入，默认不下发任何内置角色
-  SALES_COMMISSION_SETTLE: 'sales_commission.settle',
-  SERVICE_TRANSFER_LIST: 'service_transfer.list',
-  SERVICE_TRANSFER_MANAGE: 'service_transfer.manage',
-  MASS_SEND_LIST: 'mass_send.list',
-  MASS_SEND_MANAGE: 'mass_send.manage',
-  CARE_PLAN_LIST: 'care_plan.list',
-  CARE_PLAN_MANAGE: 'care_plan.manage',
   PRODUCT_LIST: 'product.list',
   PRODUCT_MANAGE: 'product.manage',
   PRODUCT_SYNC: 'product.sync',
@@ -138,10 +127,6 @@ export const ADMIN_DEFAULT_PERMISSION_CODES = [
   AdminPermissions.REFERRAL_LIST,
   AdminPermissions.MEMBER_LEVEL_MANAGE,
   AdminPermissions.CONTENT_MANAGE,
-  AdminPermissions.SALES_COMMISSION_MANAGE,
-  AdminPermissions.SERVICE_TRANSFER_MANAGE,
-  AdminPermissions.MASS_SEND_MANAGE,
-  AdminPermissions.CARE_PLAN_MANAGE,
 ] as const;
 
 export function isBuiltinRoleCode(value?: string | null): value is BuiltinRoleCode {
@@ -193,15 +178,6 @@ export function impliedPermissions(permission: string): string[] {
       return [AdminPermissions.STAFF_LIST];
     case AdminPermissions.ROLE_MANAGE:
       return [AdminPermissions.ROLE_LIST, AdminPermissions.PERMISSION_LIST];
-    case AdminPermissions.SALES_COMMISSION_MANAGE:
-    case AdminPermissions.SALES_COMMISSION_SETTLE:
-      return [AdminPermissions.SALES_COMMISSION_LIST];
-    case AdminPermissions.SERVICE_TRANSFER_MANAGE:
-      return [AdminPermissions.SERVICE_TRANSFER_LIST];
-    case AdminPermissions.MASS_SEND_MANAGE:
-      return [AdminPermissions.MASS_SEND_LIST];
-    case AdminPermissions.CARE_PLAN_MANAGE:
-      return [AdminPermissions.CARE_PLAN_LIST];
     default:
       return [];
   }

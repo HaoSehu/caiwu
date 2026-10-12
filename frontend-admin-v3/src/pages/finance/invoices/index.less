@@ -58,33 +58,3 @@
     }
   }
 }
-// 账单合并（M1）对话框
-.merge-summary {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: 12px 0;
-
-  &__row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-
-    > span:first-child {
-      color: var(--td-text-color-placeholder, rgba(0, 0, 0, 0.4));
-    }
-  }
-
-  &__list {
-    max-height: 220px;
-    overflow-y: auto;
-    border-top: 1px dashed var(--td-component-border, #e7e7e7);
-    padding-top: 8px;
-  }
-}
-
-.merge-detail-footer {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 12px;
-}

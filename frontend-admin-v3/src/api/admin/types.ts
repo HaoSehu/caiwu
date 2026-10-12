@@ -626,7 +626,10 @@ export interface CouponRecord {
   billing_cycle_text?: string;
   product_ids?: number[];
   product_scope_text?: string;
+  requires_product_ids?: number[];
   first_order_only?: boolean | number;
+  only_old_client?: boolean | number;
+  is_discount?: boolean | number;
   user_ids?: number[];
   used_count?: number | string;
   total_usage_limit?: number | string | null;
@@ -660,13 +663,10 @@ export interface CouponPayload {
   max_discount_amount: number | null;
   billing_cycles: string[];
   product_ids: number[];
+  requires_product_ids: number[];
   first_order_only: boolean;
-  /** 优惠券定向增强：仅持有这些商品的用户可用 */
-  requires_product_ids?: number[];
-  /** 老客户专享（绑定既有客户判定口径） */
-  only_old_client?: boolean;
-  /** 折扣标记（覆盖价场景） */
-  is_discount?: boolean;
+  only_old_client: boolean;
+  is_discount: boolean;
   user_ids: number[];
   total_usage_limit: number | null;
   per_user_limit: number | null;
@@ -710,7 +710,10 @@ export interface CouponCampaignRecord {
   billing_cycle_text?: string;
   product_ids?: number[];
   product_scope_text?: string;
+  requires_product_ids?: number[];
   first_order_only?: boolean | number;
+  only_old_client?: boolean | number;
+  is_discount?: boolean | number;
   per_user_limit?: number | string | null;
   status?: number | string;
   display_status?: string;
@@ -741,13 +744,10 @@ export interface CouponCampaignPayload {
   max_discount_amount: number | null;
   billing_cycles: string[];
   product_ids: number[];
+  requires_product_ids: number[];
   first_order_only: boolean;
-  /** 优惠券定向增强：仅持有这些商品的用户可领 */
-  requires_product_ids?: number[];
-  /** 老客户专享（绑定既有客户判定口径） */
-  only_old_client?: boolean;
-  /** 折扣标记（覆盖价场景） */
-  is_discount?: boolean;
+  only_old_client: boolean;
+  is_discount: boolean;
   per_user_limit: number | null;
   status: number;
   sort_order: number;

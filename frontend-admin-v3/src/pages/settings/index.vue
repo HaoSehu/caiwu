@@ -1,14 +1,6 @@
 <template>
   <div class="settings-page">
-    <template v-if="activeTab === 'verification_restriction'">
-      <verification-restriction-panel />
-    </template>
-
-    <template v-else-if="activeTab === 'login_alert'">
-      <login-alert-panel />
-    </template>
-
-    <template v-else-if="activeTab !== 'site_hero'">
+    <template v-if="activeTab !== 'site_hero'">
       <t-card v-if="sections.length > 1" :bordered="false">
         <div class="section-nav">
           <span>分组</span>
@@ -480,20 +472,11 @@ import type { HomeHeroFeature, HomeHeroPayload, HomeHeroSlide, MediaFileRecord, 
 import { adminApi } from '@/api/admin';
 import SecretInput from '@/components/secret-input/index.vue';
 import { AdminPermissions } from '@/constants/permissions';
-import LoginAlertPanel from '@/pages/settings/LoginAlertPanel.vue';
-import VerificationRestrictionPanel from '@/pages/settings/VerificationRestrictionPanel.vue';
 import { resolveApiAssetUrl } from '@/utils/apiAssetUrl';
 import { hasAdminPermission } from '@/utils/permission';
 import { errorMessage } from '@/utils/userMessage';
 
-type SettingsTab =
-  | 'referral'
-  | 'automation'
-  | 'log_archive'
-  | 'site_basic'
-  | 'site_hero'
-  | 'verification_restriction'
-  | 'login_alert';
+type SettingsTab = 'referral' | 'automation' | 'log_archive' | 'site_basic' | 'site_hero';
 type FieldType = 'input' | 'password' | 'textarea' | 'switch' | 'select' | 'number' | 'image' | 'time';
 type FieldValue = string | number | boolean | null;
 
@@ -598,21 +581,10 @@ const tabGroups: Array<{ group: string; label: string; tabs: Array<{ label: stri
       { label: '首页 Banner', value: 'site_hero' },
     ],
   },
-  {
-    group: 'user',
-    label: '用户与风控',
-    tabs: [
-      { label: '未实名限制', value: 'verification_restriction' },
-      { label: '登录提醒', value: 'login_alert' },
-    ],
-  },
 ];
 const tabOptions = tabGroups.flatMap((g) => g.tabs);
 
-// 以独立面板承载、不走通用 settings 字段表的 tab
-const customPanelTabs: ReadonlySet<SettingsTab> = new Set(['site_hero', 'verification_restriction', 'login_alert']);
-
-const configs: Record<Exclude<SettingsTab, 'site_hero' | 'verification_restriction' | 'login_alert'>, SettingsConfig> = {
+const configs: Record<Exclude<SettingsTab, 'site_hero'>, SettingsConfig> = {
   referral: {
     group: 'referral',
     title: '推荐奖励配置',
@@ -867,15 +839,8 @@ const configs: Record<Exclude<SettingsTab, 'site_hero' | 'verification_restricti
   },
 };
 
-// 自定义面板 tab（site_hero / 实名限制 / 登录提醒）不走通用字段表逻辑
-type GenericSettingsTab = Exclude<SettingsTab, 'site_hero' | 'verification_restriction' | 'login_alert'>;
-
-function isGenericSettingsTab(tab: SettingsTab): tab is GenericSettingsTab {
-  return !customPanelTabs.has(tab);
-}
-
 const pageConfig = computed<SettingsConfig | null>(() =>
-  isGenericSettingsTab(activeTab.value) ? configs[activeTab.value] : null,
+  activeTab.value === 'site_hero' ? null : configs[activeTab.value],
 );
 const sections = computed(() =>
   (pageConfig.value?.sections || []).map((section, index) => ({ ...section, anchor: `${activeTab.value}-${index}` })),
@@ -920,8 +885,6 @@ const canManageCurrentTab = computed(() =>
 
 function refreshCurrentTab() {
   if (activeTab.value === 'site_hero') return loadHero();
-  // 独立面板 tab 自行在挂载时加载数据
-  if (customPanelTabs.has(activeTab.value)) return;
   return loadSettings();
 }
 
@@ -943,8 +906,6 @@ function saveCurrentTab() {
   }
 
   if (activeTab.value === 'site_hero') return saveHero();
-  // 独立面板 tab 的保存逻辑在各自组件内
-  if (customPanelTabs.has(activeTab.value)) return undefined;
   return saveSettings();
 }
 

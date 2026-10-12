@@ -19,7 +19,6 @@ use App\Services\Order\PaidOrderBusinessFlowDispatcher;
 use App\Services\Provisioning\ProvisionService;
 use App\Services\Provisioning\ServiceRenewService;
 use App\Services\Referral\ReferralService;
-use App\Services\SalesCommission\SalesCommissionService;
 use App\Support\SchemaMetadataCache;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -53,12 +52,6 @@ class InvoicePaidOrchestrator
             return;
         }
 
-        // 合并总账单是财务聚合投影：履约/返利/券同步等业务编排以子账单口径为准，
-        // 总账单支付的资金联动由 TradeLifecycleService::markInvoicePaid 同事务结清子账单。
-        if ((int) $invoice->merge_role === 1) {
-            return;
-        }
-
         $orderId = (int) ($invoice->order?->id ?? 0);
         $invoiceType = (string) ($invoice->type ?? $invoice->order?->type ?? '');
 
@@ -87,24 +80,6 @@ class InvoicePaidOrchestrator
             }
         }
         $latency['business_flow_dispatch_ms'] = $this->elapsedMilliseconds($stepStartedAt);
-
-        // M5 内部销售提成计提：与推广大使返利并存双算（互不抵扣）；幂等（invoice_id 唯一），
-        // 失败仅告警不阻断支付主流程。合并总账单（merge_role=1）跳过——按裁决以子账单为
-        // 计提粒度，子账单结清时由 InvoiceMergeService::settleMergedChildren 逐张计提。
-        if ((int) $invoice->merge_role !== 1) {
-            try {
-                app(SalesCommissionService::class)
-                    ->accrueForInvoice($invoice, 'payment');
-            } catch (\Throwable $exception) {
-                Log::warning('[购买链路] 支付成功后销售提成计提失败', [
-                    'invoice_id' => (int) $invoice->id,
-                    'invoice_no' => (string) ($invoice->invoice_no ?? ''),
-                    'trace_id' => (string) ($traceId ?? ''),
-                    'message' => $exception->getMessage(),
-                    'exception' => $exception::class,
-                ]);
-            }
-        }
 
         // 优惠券同步统一走 invoice 状态机，具体执行交给 coupon 队列。
         $stepStartedAt = microtime(true);

@@ -24,7 +24,6 @@ use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Services\ProductCatalog\ProductFullPathResolver;
 use App\Services\System\OperationLogService;
 use App\Services\User\AccountService;
-use App\Services\Verification\VerificationGateService;
 use App\Support\AdminPrivacy;
 use App\Support\PublicUrl;
 use App\Support\SchemaMetadataCache;
@@ -84,7 +83,6 @@ class ReferralService
         private PromotionAmbassadorService $promotionAmbassadorService,
         private OperationLogService $operationLogService,
         private InvoiceService $invoiceService,
-        private VerificationGateService $verificationGate,
         private readonly ?ProductDisplayNameResolver $productDisplayNameResolver = null,
         private ?AccountService $accountService = null,
     ) {}
@@ -597,10 +595,6 @@ class ReferralService
     {
         $this->releaseMaturedRewards($user);
         $user = User::query()->findOrFail($user->id);
-
-        // M11 服务层兜底：提现（withdrawal scope）实名 Gate（结构化 error_code=verification_required）。
-        // 下方既有 is_verified 硬校验保留为合规底线：M11 总开关关闭时提现仍要求实名，不放宽。
-        $this->verificationGate->ensureCan($user, VerificationGateService::SCOPE_WITHDRAWAL);
 
         $amount = round((float) ($data['amount'] ?? 0), 2);
         $minAmount = $this->withdrawMinAmount();

@@ -5,7 +5,6 @@ use App\Http\Middleware\CheckPermission;
 use App\Http\Middleware\EnsureAdminAuthenticated;
 use App\Http\Middleware\EnsureClientAuthenticated;
 use App\Http\Middleware\EnsureEmailIsVerified;
-use App\Http\Middleware\EnsureVerifiedForPurchase;
 use App\Http\Middleware\LogOperation;
 use App\Http\Middleware\SetJsonEncodingOptions;
 use App\Http\Middleware\VerifyAlipayCallbackSignature;
@@ -71,8 +70,6 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'verified' => EnsureEmailIsVerified::class,
-            // M11 未实名自动限制：购买/充值/提现路由层的实名 Gate（服务层兜底的双保险）
-            'verified.purchase' => EnsureVerifiedForPurchase::class,
             'permission' => CheckPermission::class,
             'ensure.admin' => EnsureAdminAuthenticated::class,
             'ensure.client' => EnsureClientAuthenticated::class,

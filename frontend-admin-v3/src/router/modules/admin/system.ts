@@ -341,30 +341,4 @@ export const systemRoutes: RouteRecordRaw[] = [
       settingsTab: 'referral',
     },
   },
-  {
-    path: 'verification-restrictions',
-    name: 'AdminVerificationRestrictionSettings',
-    component: () => import('@/pages/settings/index.vue'),
-    meta: {
-      title: {
-        zh_CN: '未实名限制',
-        en_US: 'Verification Restrictions',
-      },
-      permission: 'settings.view',
-      settingsTab: 'verification_restriction',
-    },
-  },
-  {
-    path: 'login-alert',
-    name: 'AdminLoginAlertSettings',
-    component: () => import('@/pages/settings/index.vue'),
-    meta: {
-      title: {
-        zh_CN: '登录提醒',
-        en_US: 'Login Alert',
-      },
-      permission: 'settings.view',
-      settingsTab: 'login_alert',
-    },
-  },
 ];

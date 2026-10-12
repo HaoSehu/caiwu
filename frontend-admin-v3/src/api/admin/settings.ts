@@ -35,43 +35,6 @@ function normalizeV2Setting(item: V2SettingItem): SettingItem {
   };
 }
 
-// M11 未实名自动限制（专用接口 GET/PUT /v2/admin/settings/verification-restrictions）
-export type VerificationRestrictionScope = 'purchase' | 'recharge' | 'renewal' | 'withdrawal' | 'service_transfer_receive';
-
-export interface VerificationRestrictionConfig {
-  enabled: boolean;
-  grace_days: number;
-  exempt_member_level_ids: number[];
-  scope: Record<VerificationRestrictionScope, boolean>;
-}
-
-// M10 登录成功提醒（group=users，login_alert.default / login_alert.channels 两键）
-export type LoginAlertChannel = 'mail' | 'inbox';
-
-export interface LoginAlertConfig {
-  defaultEnabled: boolean;
-  channels: LoginAlertChannel[];
-}
-
-const LOGIN_ALERT_GROUP = 'users';
-const LOGIN_ALERT_KEY_DEFAULT = 'login_alert.default';
-const LOGIN_ALERT_KEY_CHANNELS = 'login_alert.channels';
-const LOGIN_ALERT_ALL_CHANNELS: LoginAlertChannel[] = ['mail', 'inbox'];
-
-function parseLoginAlertChannels(raw: unknown): LoginAlertChannel[] {
-  const parsed = String(raw ?? '')
-    .split(',')
-    .map((item) => item.trim().toLowerCase())
-    .filter((item): item is LoginAlertChannel => item === 'mail' || item === 'inbox');
-  // 后端约定：空值/全部非法时回退为邮件 + 站内信
-  return parsed.length > 0 ? parsed : [...LOGIN_ALERT_ALL_CHANNELS];
-}
-
-function parseLoginAlertDefault(raw: unknown): boolean {
-  if (raw === undefined || raw === null || raw === '') return true;
-  return raw === true || raw === 1 || raw === '1' || raw === 'true' || raw === 'on';
-}
-
 export const settingsApi = {
   list: (params?: Record<string, unknown>) =>
     request.get<V2SettingListResponse>({ url: '/v2/admin/settings', params }).then((response) => ({
@@ -91,35 +54,6 @@ export const settingsApi = {
   revealSecret: (group: string, key: string) =>
     request.get<{ group: string; key: string; value: unknown }>({
       url: `/v2/admin/settings/${encodeURIComponent(group)}/secrets/${encodeURIComponent(key)}`,
-    }),
-};
-
-export const verificationRestrictionApi = {
-  get: () =>
-    request.get<VerificationRestrictionConfig>({ url: '/v2/admin/settings/verification-restrictions' }),
-  update: (data: VerificationRestrictionConfig) =>
-    request.put<Record<string, unknown>>({ url: '/v2/admin/settings/verification-restrictions', data }),
-};
-
-export const loginAlertApi = {
-  get: async (): Promise<LoginAlertConfig> => {
-    const response = await settingsApi.list({ group: LOGIN_ALERT_GROUP });
-    const map = Object.fromEntries(response.list.map((item) => [item.key, item.value]));
-    return {
-      defaultEnabled: parseLoginAlertDefault(map[LOGIN_ALERT_KEY_DEFAULT]),
-      channels: parseLoginAlertChannels(map[LOGIN_ALERT_KEY_CHANNELS]),
-    };
-  },
-  save: (data: LoginAlertConfig) =>
-    request.post<Record<string, unknown>>({
-      url: '/v2/admin/settings',
-      data: {
-        group: LOGIN_ALERT_GROUP,
-        settings: {
-          [LOGIN_ALERT_KEY_DEFAULT]: data.defaultEnabled ? 1 : 0,
-          [LOGIN_ALERT_KEY_CHANNELS]: data.channels.join(','),
-        },
-      },
     }),
 };
 

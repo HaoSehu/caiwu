@@ -8,7 +8,6 @@ use App\Exceptions\BusinessException;
 use App\Jobs\SendAccountSecurityAlertJob;
 use App\Jobs\SendClientLoginEmailAlertJob;
 use App\Jobs\SendClientLoginFailureEmailAlertJob;
-use App\Jobs\SendLoginAlertJob;
 use App\Models\AdminUser;
 use App\Models\User;
 use App\Services\Referral\ReferralService;
@@ -58,7 +57,6 @@ class AuthService
         private AdminRoleBridgeService $adminRoleBridgeService,
         private LoginRiskControlService $loginRiskControlService,
         private LegacyPasswordVerifier $legacyPasswordVerifier,
-        private LoginAlertSettingService $loginAlertSettings,
     ) {}
 
     /**
@@ -228,8 +226,7 @@ class AuthService
                 'password' => $data['password'],
                 'phone' => $storablePhone,
                 'nickname' => $normalizedNickname,
-                // M10：新用户登录提醒开关默认值来自 settings users.login_alert.default
-                'login_email_alert' => ($email !== null && $this->loginAlertSettings->defaultUserSwitchEnabled()) ? 1 : 0,
+                'login_email_alert' => $email !== null ? 1 : 0,
                 'last_login_at' => now(),
                 'last_login_ip' => $ip,
             ]);
@@ -883,17 +880,8 @@ class AuthService
         ): void {
             $this->persistClientLoginState($userId, $loginAt, $ip, $passwordToRehash);
 
-            if ($loginNotifyEnabled) {
-                // M10：登录提醒按全局通道配置分发（settings users.login_alert.channels）。
-                // 邮件通道沿用既有实现（含 sync 降级与队列投递），前提为用户有邮箱；
-                // 站内信通道不依赖邮箱，纯手机号用户也能收到。
-                if ($email !== '' && $this->loginAlertSettings->hasChannel(LoginAlertSettingService::CHANNEL_MAIL)) {
-                    $this->dispatchClientLoginEmailAlert($userId, $email, $displayName, $loginAt, $ip, $userAgent, $previousIp);
-                }
-
-                if ($this->loginAlertSettings->hasChannel(LoginAlertSettingService::CHANNEL_INBOX)) {
-                    $this->dispatchClientLoginInboxAlert($userId, $displayName, $loginAt, $ip, $userAgent);
-                }
+            if ($email !== '' && $loginNotifyEnabled) {
+                $this->dispatchClientLoginEmailAlert($userId, $email, $displayName, $loginAt, $ip, $userAgent, $previousIp);
             }
 
             if (
@@ -976,34 +964,6 @@ class AuthService
             Log::warning('投递用户登录邮件提醒任务失败', [
                 'user_id' => $userId,
                 'email' => $email,
-                'ip' => $ip,
-                'message' => $exception->getMessage(),
-            ]);
-        }
-    }
-
-    /**
-     * M10：登录成功站内信提醒，队列异步投递；代登录（login_as）路径不会进入本方法，
-     * 与既有邮件提醒的不触发语义保持一致。
-     */
-    private function dispatchClientLoginInboxAlert(
-        int $userId,
-        string $displayName,
-        string $loginAt,
-        string $ip,
-        ?string $userAgent
-    ): void {
-        try {
-            SendLoginAlertJob::dispatch(
-                userId: $userId,
-                displayName: $displayName,
-                loginAt: $loginAt,
-                ip: $ip,
-                userAgent: $userAgent,
-            );
-        } catch (\Throwable $exception) {
-            Log::warning('投递用户登录站内信提醒任务失败', [
-                'user_id' => $userId,
                 'ip' => $ip,
                 'message' => $exception->getMessage(),
             ]);

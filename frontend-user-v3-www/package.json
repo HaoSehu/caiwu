@@ -26,7 +26,6 @@
     "vue-router": "^4.6.0"
   },
   "devDependencies": {
-    "@antfu/utils": "^0.7.10",
     "@vitejs/plugin-vue": "^5.1.0",
     "autoprefixer": "^10",
     "sass": "^1.80.0",

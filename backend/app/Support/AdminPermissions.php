@@ -147,26 +147,6 @@ class AdminPermissions
 
     public const PRIVACY_VIEW_RAW = 'privacy.view_raw';
 
-    // —— 功能模块扩展（2026-10-11 设计方案裁决）——
-    public const SALES_COMMISSION_LIST = 'sales_commission.list';
-
-    public const SALES_COMMISSION_MANAGE = 'sales_commission.manage';
-
-    // 专用权限码：提成结算发放属资金登记写入，默认不下发任何内置角色，仅 super_admin 可授权
-    public const SALES_COMMISSION_SETTLE = 'sales_commission.settle';
-
-    public const SERVICE_TRANSFER_LIST = 'service_transfer.list';
-
-    public const SERVICE_TRANSFER_MANAGE = 'service_transfer.manage';
-
-    public const MASS_SEND_LIST = 'mass_send.list';
-
-    public const MASS_SEND_MANAGE = 'mass_send.manage';
-
-    public const CARE_PLAN_LIST = 'care_plan.list';
-
-    public const CARE_PLAN_MANAGE = 'care_plan.manage';
-
     /**
      * @return array<string, string[]>
      */
@@ -258,10 +238,6 @@ class AdminPermissions
             self::REFERRAL_LIST,
             self::MEMBER_LEVEL_MANAGE,
             self::CONTENT_MANAGE,
-            self::SALES_COMMISSION_MANAGE,
-            self::SERVICE_TRANSFER_MANAGE,
-            self::MASS_SEND_MANAGE,
-            self::CARE_PLAN_MANAGE,
         ])));
     }
 
@@ -322,11 +298,6 @@ class AdminPermissions
             self::CONTENT_MANAGE => [self::CONTENT_LIST],
             self::STAFF_MANAGE => [self::STAFF_LIST],
             self::ROLE_MANAGE => [self::ROLE_LIST, self::PERMISSION_LIST],
-            self::SALES_COMMISSION_MANAGE => [self::SALES_COMMISSION_LIST],
-            self::SALES_COMMISSION_SETTLE => [self::SALES_COMMISSION_LIST],
-            self::SERVICE_TRANSFER_MANAGE => [self::SERVICE_TRANSFER_LIST],
-            self::MASS_SEND_MANAGE => [self::MASS_SEND_LIST],
-            self::CARE_PLAN_MANAGE => [self::CARE_PLAN_LIST],
             default => [],
         };
     }

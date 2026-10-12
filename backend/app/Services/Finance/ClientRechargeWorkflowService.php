@@ -9,7 +9,6 @@ use App\Exceptions\BusinessException;
 use App\Models\Payment;
 use App\Models\User;
 use App\Services\Integrations\Payments\PaymentGatewayManager;
-use App\Services\Verification\VerificationGateService;
 
 class ClientRechargeWorkflowService
 {
@@ -17,7 +16,6 @@ class ClientRechargeWorkflowService
         private readonly RechargePaymentService $payments,
         private readonly CheckoutSecurityService $checkoutSecurity,
         private readonly PaymentGatewayManager $paymentGateways,
-        private readonly VerificationGateService $verificationGate,
     ) {}
 
     /**
@@ -34,10 +32,6 @@ class ClientRechargeWorkflowService
      */
     public function create(User $user, array $payload, string $ipAddress): array
     {
-        // M11 服务层兜底：客户端充值（recharge scope）创建前实名 Gate；
-        // 管理员代充值走 RechargePaymentService::adjustBalance，不经过本方法，结构性豁免。
-        $this->verificationGate->ensureCan($user, VerificationGateService::SCOPE_RECHARGE);
-
         $options = $this->gatewayOptions();
         $gateway = trim((string) ($payload['gateway'] ?? ''));
         $paymentType = trim((string) ($payload['payment_type'] ?? ''));

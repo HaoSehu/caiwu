@@ -18,9 +18,6 @@
             代登录
           </t-button>
           <t-button theme="default" :disabled="!user.id" @click="openEditDialog">编辑资料</t-button>
-          <t-button v-if="canManageSalesOwner" theme="default" :disabled="!user.id" @click="openSalesOwnerDialog">
-            销售归属
-          </t-button>
           <t-button variant="outline" :loading="detailLoading" @click="loadDetail">刷新</t-button>
         </div>
       </div>
@@ -900,42 +897,6 @@
         </t-form-item>
       </t-form>
     </t-dialog>
-
-    <t-dialog
-      v-model:visible="salesOwnerVisible"
-      header="设置销售归属"
-      width="480px"
-      :confirm-btn="{ content: '确定', loading: salesOwnerSaving }"
-      @cancel="salesOwnerVisible = false"
-      @confirm="handleSalesOwnerSubmit"
-    >
-      <t-form :data="salesOwnerForm" label-align="top">
-        <t-form-item label="归属销售" name="admin_id">
-          <t-select
-            v-model="salesOwnerForm.admin_id"
-            clearable
-            filterable
-            :loading="salesOwnerStaffLoading"
-            placeholder="选择销售；清空即解除归属"
-          >
-            <t-option
-              v-for="item in salesOwnerStaffOptions"
-              :key="item.value"
-              :label="item.label"
-              :value="item.value"
-            />
-          </t-select>
-        </t-form-item>
-        <t-form-item label="操作原因" name="reason">
-          <t-input v-model="salesOwnerForm.reason" :maxlength="255" placeholder="必填，记录归属调整原因" />
-        </t-form-item>
-      </t-form>
-      <p class="sales-owner-current">
-        当前归属：{{ currentSalesOwnerLabel }}<template v-if="currentSalesOwnerAssignedAt">
-          （{{ currentSalesOwnerAssignedAt }}）</template
-        >
-      </p>
-    </t-dialog>
   </div>
 </template>
 <script setup lang="ts">
@@ -958,9 +919,6 @@ import { useRoute, useRouter } from 'vue-router';
 
 import type { ProductBindingRecord } from '@/api/admin';
 import { adminApi } from '@/api/admin';
-import { adminStaffApi } from '@/api/admin-staff';
-import type { SalesOwnerResult } from '@/api/admin/salesCommission';
-import { salesCommissionApi } from '@/api/admin/salesCommission';
 import type { ProductRecord } from '@/api/product';
 import { productApi } from '@/api/product';
 import { supplierApi } from '@/api/supplier';
@@ -1119,7 +1077,6 @@ const manualProvisionForm = reactive({ upstream_host_id: undefined as number | u
 const serviceDrawer = reactive({ visible: false, loading: false, actionLoading: '', serviceId: 0, detail: {} as Row });
 const canLoginAs = computed(() => hasAdminPermission(AdminPermissions.USER_LOGIN_AS));
 const canManualInvoice = computed(() => hasAdminPermission(AdminPermissions.INVOICE_MANUAL_ENTRY));
-const canManageSalesOwner = computed(() => hasAdminPermission(AdminPermissions.SALES_COMMISSION_MANAGE));
 const ordersTabRef = ref<InstanceType<typeof OrdersTab>>();
 const rechargesTabRef = ref<InstanceType<typeof RechargesTab>>();
 const LOGIN_AS_READY_EVENT = 'caiwu:login-as-ready';
@@ -1688,74 +1645,6 @@ async function handleOrdersChanged() {
   // 补录订单会派生已支付账单：联动刷新账单 tab 与顶部统计（总消费）
   await loadDetail();
   if (loadedTabs.invoices) await loadInvoices();
-}
-
-// ─── 销售归属（M5，sales_commission.manage） ────────────────────────────────
-
-const salesOwnerVisible = ref(false);
-const salesOwnerSaving = ref(false);
-const salesOwnerStaffLoading = ref(false);
-const salesOwnerStaffOptions = ref<Array<{ label: string; value: number }>>([]);
-const salesOwnerForm = reactive({ admin_id: null as number | null, reason: '' });
-// 用户详情资源暂不投影归属销售，这里以本地状态记录最近一次设置结果
-const lastSalesOwner = ref<SalesOwnerResult | null>(null);
-
-const currentSalesOwnerLabel = computed(() => {
-  const owner = lastSalesOwner.value?.sales_owner;
-  if (owner) return `${owner.display_name}（ID ${owner.id}）`;
-  const ownerId = (user.value as Record<string, unknown>).sales_owner_admin_id;
-  return ownerId ? `ID ${ownerId}` : '未设置';
-});
-
-const currentSalesOwnerAssignedAt = computed(() => {
-  const assignedAt = lastSalesOwner.value?.sales_owner_assigned_at;
-  return assignedAt ? formatDateTime(assignedAt) : '';
-});
-
-async function loadSalesOwnerStaffOptions() {
-  if (salesOwnerStaffOptions.value.length) return;
-  salesOwnerStaffLoading.value = true;
-  try {
-    const response = await adminStaffApi.list({ page: 1, page_size: 100 });
-    salesOwnerStaffOptions.value = (response.list || []).map((item) => ({
-      label: String(item.nickname || item.username || item.email || `员工 #${item.id}`),
-      value: Number(item.id),
-    }));
-  } catch (error) {
-    MessagePlugin.error(errorMessage(error, '加载销售选项失败'));
-  } finally {
-    salesOwnerStaffLoading.value = false;
-  }
-}
-
-function openSalesOwnerDialog() {
-  // 预填当前归属（用户详情原始字段；未设置则为 null=提交即解除归属，弹窗文案已说明）
-  const ownerId = Number((user.value as Record<string, unknown>).sales_owner_admin_id ?? 0);
-  salesOwnerForm.admin_id = ownerId > 0 ? ownerId : null;
-  salesOwnerForm.reason = '';
-  void loadSalesOwnerStaffOptions();
-  salesOwnerVisible.value = true;
-}
-
-async function handleSalesOwnerSubmit() {
-  if (!salesOwnerForm.reason.trim()) {
-    MessagePlugin.warning('请填写操作原因');
-    return;
-  }
-  salesOwnerSaving.value = true;
-  try {
-    lastSalesOwner.value = await salesCommissionApi.salesOwner.set(userId.value, {
-      admin_id: salesOwnerForm.admin_id,
-      reason: salesOwnerForm.reason.trim(),
-    });
-    MessagePlugin.success(lastSalesOwner.value.changed ? '归属已更新' : '归属未变化（幂等跳过）');
-    salesOwnerVisible.value = false;
-    await loadDetail();
-  } catch (error) {
-    MessagePlugin.error(errorMessage(error, '设置销售归属失败'));
-  } finally {
-    salesOwnerSaving.value = false;
-  }
 }
 
 async function openAddServiceDialog() {

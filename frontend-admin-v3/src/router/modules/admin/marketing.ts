@@ -90,30 +90,6 @@ export const marketingRoutes: RouteRecordRaw[] = [
     },
   },
   {
-    path: 'mass-sends',
-    name: 'AdminMassSends',
-    component: () => import('@/pages/mass-sends/index.vue'),
-    meta: {
-      title: {
-        zh_CN: '批量群发',
-        en_US: 'Mass Sends',
-      },
-      permission: 'mass_send.list',
-    },
-  },
-  {
-    path: 'care-plans',
-    name: 'AdminCarePlans',
-    component: () => import('@/pages/care-plans/index.vue'),
-    meta: {
-      title: {
-        zh_CN: '客户关怀',
-        en_US: 'Care Plans',
-      },
-      permission: 'care_plan.list',
-    },
-  },
-  {
     path: 'referral/withdrawals',
     name: 'AdminReferralWithdrawals',
     component: () => import('@/pages/referral/index.vue'),

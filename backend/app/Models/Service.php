@@ -454,11 +454,6 @@ class Service extends Model
         return $this->hasMany(ServiceProvisionAttempt::class, 'service_id');
     }
 
-    public function transfers(): HasMany
-    {
-        return $this->hasMany(ServiceTransfer::class, 'service_id');
-    }
-
     public function scopeActive($query)
     {
         return $query->where('status', 1);

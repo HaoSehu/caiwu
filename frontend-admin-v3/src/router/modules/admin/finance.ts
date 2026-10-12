@@ -173,54 +173,6 @@ export const financeRoutes: RouteRecordRaw[] = [
     },
   },
   {
-    path: 'sales-commissions',
-    name: 'AdminSalesCommissionRecords',
-    component: () => import('@/pages/sales-commissions/records/index.vue'),
-    meta: {
-      title: {
-        zh_CN: '销售提成记录',
-        en_US: 'Sales Commissions',
-      },
-      permission: 'sales_commission.list',
-    },
-  },
-  {
-    path: 'sales-commission-plans',
-    name: 'AdminSalesCommissionPlans',
-    component: () => import('@/pages/sales-commissions/plans/index.vue'),
-    meta: {
-      title: {
-        zh_CN: '提成方案管理',
-        en_US: 'Commission Plans',
-      },
-      permission: 'sales_commission.list',
-    },
-  },
-  {
-    path: 'sales-commission-settlements',
-    name: 'AdminSalesCommissionSettlements',
-    component: () => import('@/pages/sales-commissions/settlements/index.vue'),
-    meta: {
-      title: {
-        zh_CN: '提成结算批次',
-        en_US: 'Commission Settlements',
-      },
-      permission: 'sales_commission.list',
-    },
-  },
-  {
-    path: 'service-transfers',
-    name: 'AdminServiceTransfers',
-    component: () => import('@/pages/service-transfers/index.vue'),
-    meta: {
-      title: {
-        zh_CN: '服务过户复核',
-        en_US: 'Service Transfers',
-      },
-      permission: 'service_transfer.list',
-    },
-  },
-  {
     path: 'services',
     name: 'AdminServices',
     component: () => import('@/pages/services/index.vue'),

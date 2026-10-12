@@ -30,28 +30,11 @@
         <div class="filter-actions">
           <t-button theme="primary" @click="handleSearch">查询</t-button>
           <t-button theme="default" variant="base" @click="resetFilters">重置</t-button>
-          <t-button
-            v-if="hasPermission(AdminPermissions.INVOICE_MANAGE)"
-            theme="warning"
-            :disabled="!canMergeSelection"
-            @click="openMergeDialog"
-          >
-            合并账单{{ mergeableSelection.length >= 2 ? `（${mergeableSelection.length}）` : '' }}
-          </t-button>
         </div>
       </div>
 
       <div v-if="!isMobile" class="table-scroll">
-        <t-table
-          row-key="id"
-          :data="invoices"
-          :columns="columns"
-          :loading="loading"
-          :selected-row-keys="selectedRowKeys"
-          hover
-          table-layout="fixed"
-          @select-change="handleSelectChange"
-        >
+        <t-table row-key="id" :data="invoices" :columns="columns" :loading="loading" hover table-layout="fixed">
           <template #user="{ row }">
             <div class="stack-cell">
               <strong>{{ userName(row.user) }}</strong>
@@ -99,15 +82,6 @@
           <template #operation="{ row }">
             <t-space v-if="!isMobile" size="small">
               <t-button size="small" variant="text" theme="primary" @click="goDetail(row)">详情</t-button>
-              <t-button
-                v-if="hasPermission(AdminPermissions.INVOICE_DETAIL)"
-                size="small"
-                variant="text"
-                theme="default"
-                @click="openMergeDetailDialog(row)"
-              >
-                合并明细
-              </t-button>
               <t-button
                 v-if="canCancel(row)"
                 size="small"
@@ -160,84 +134,6 @@
         />
       </div>
     </t-card>
-
-    <!-- 合并账单确认 -->
-    <t-dialog
-      v-model:visible="mergeDialogVisible"
-      header="合并账单"
-      width="520px"
-      :confirm-btn="{ content: '确认合并', theme: 'warning' }"
-      :confirm-loading="merging"
-      @confirm="submitMerge"
-    >
-      <t-alert theme="warning" message="将把所选待支付账单合并为一张总账单统一支付，支付成功后子账单原子结清；支付前可在总账单上拆分。" />
-      <div class="merge-summary">
-        <div class="merge-summary__row">
-          <span>用户</span>
-          <strong>{{ mergeTargetSummary.userName }}</strong>
-        </div>
-        <div class="merge-summary__row">
-          <span>账单数量</span>
-          <strong>{{ mergeTargetSummary.count }} 张</strong>
-        </div>
-        <div class="merge-summary__row">
-          <span>合计金额</span>
-          <strong>{{ formatMoney(mergeTargetSummary.totalAmount) }}</strong>
-        </div>
-      </div>
-      <div class="merge-summary__list">
-        <div v-for="item in mergeableSelection" :key="item.id" class="merge-summary__row">
-          <span>{{ item.invoice_no }}</span>
-          <span>{{ formatMoney(item.amount) }}</span>
-        </div>
-      </div>
-    </t-dialog>
-
-    <!-- 合并明细 -->
-    <t-dialog
-      v-model:visible="mergeDetailVisible"
-      :header="`合并明细 · ${mergeDetail?.master?.invoice_no || ''}`"
-      width="680px"
-      :footer="false"
-      @close="mergeDetailVisible = false"
-    >
-      <t-loading :loading="mergeDetailLoading" size="small">
-        <template v-if="mergeDetail && Number(mergeDetail.master?.merge_role) === 1">
-          <div class="merge-summary">
-            <div class="merge-summary__row">
-              <span>总账单</span>
-              <strong>{{ mergeDetail.master.invoice_no }}（{{ mergeDetail.master.status_label }}）</strong>
-            </div>
-            <div class="merge-summary__row">
-              <span>总账单金额</span>
-              <strong>{{ formatMoney(mergeDetail.master.amount) }}</strong>
-            </div>
-            <div class="merge-summary__row">
-              <span>子账单快照合计</span>
-              <strong>{{ formatMoney(mergeDetail.summary?.snapshot_amount_total) }}</strong>
-            </div>
-            <div class="merge-summary__row">
-              <span>子账单</span>
-              <strong
-                >{{ mergeDetail.summary?.child_count || 0 }} 张 · 已结清 {{ mergeDetail.summary?.settled_count || 0 }} 张</strong
-              >
-            </div>
-          </div>
-          <t-table row-key="id" :data="mergeDetail.merge_items || []" :columns="mergeItemColumns" table-layout="fixed">
-            <template #itemAmount="{ row }">{{ formatMoney(row.amount_snapshot) }}</template>
-            <template #itemStatus="{ row }">
-              <t-tag :theme="Number(row.child_status) === 0 ? 'warning' : 'success'" variant="light">
-                {{ row.child_status_label || '--' }}
-              </t-tag>
-            </template>
-          </t-table>
-          <div v-if="canUnmergeMaster" class="merge-detail-footer">
-            <t-button theme="danger" @click="handleUnmergeMaster">拆分合并</t-button>
-          </div>
-        </template>
-        <t-empty v-else-if="!mergeDetailLoading" description="该账单不是合并总账单，无合并明细" />
-      </t-loading>
-    </t-dialog>
   </div>
 </template>
 <script setup lang="ts">
@@ -247,13 +143,11 @@ import { INVOICE_STATUS_MAP, INVOICE_TYPE_MAP, toLabelMap } from '@shared/status
 import { SearchIcon } from 'tdesign-icons-vue-next';
 import type { DropdownOption, PrimaryTableCol } from 'tdesign-vue-next';
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
-import { computed, ref } from 'vue';
+import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 import type { InvoiceRecord } from '@/api/admin';
 import { adminApi } from '@/api/admin';
-import type { InvoiceMergeDetail } from '@/api/admin/finance';
-import { invoiceMergeApi } from '@/api/admin/finance';
 import MobileRecordCard from '@/components/mobile-record-card/index.vue';
 import QuickFilterTags from '@/components/quick-filter-tags/index.vue';
 import StatusTag from '@/components/status-tag/index.vue';
@@ -319,7 +213,6 @@ const invoiceTypeOptions = Object.entries(INVOICE_TYPE_MAP)
 const invoiceStatusOptions = Object.entries(statusLabelMap).map(([value, label]) => ({ value, label }));
 
 const columns: PrimaryTableCol<InvoiceRecord>[] = [
-  { colKey: 'row-select', type: 'multiple', width: 46 },
   { colKey: 'invoice_no', title: '账单号', minWidth: 170, ellipsis: true },
   { colKey: 'user', title: '用户', minWidth: 180 },
   { colKey: 'item', title: '账单项目', minWidth: 240 },
@@ -390,129 +283,8 @@ function goToOrder(orderId: unknown) {
   }
 }
 
-// ─── 账单合并（M1，invoice.manage） ─────────────────────────────────────────
-
-const selectedRowKeys = ref<Array<string | number>>([]);
-const mergeDialogVisible = ref(false);
-const merging = ref(false);
-const mergeDetailVisible = ref(false);
-const mergeDetailLoading = ref(false);
-const mergeDetail = ref<InvoiceMergeDetail | null>(null);
-
-const mergeItemColumns: PrimaryTableCol<Record<string, unknown>>[] = [
-  { colKey: 'child_invoice_no', title: '子账单号', minWidth: 170, ellipsis: true },
-  { colKey: 'itemAmount', title: '金额快照', width: 130, align: 'right' },
-  { colKey: 'itemStatus', title: '状态', width: 100 },
-  { colKey: 'merged_at', title: '合并时间', width: 170 },
-];
-
-// 待支付（status=0）且同用户的选择项才可合并
-const mergeableSelection = computed(() => {
-  const selected = invoices.value.filter((row) => selectedRowKeys.value.includes(row.id as string | number));
-  return selected.filter((row) => Number(row.status ?? -1) === 0);
-});
-
-const canMergeSelection = computed(() => {
-  if (mergeableSelection.value.length < 2) return false;
-  const userIds = new Set(mergeableSelection.value.map((row) => Number(row.user?.id ?? 0)));
-  return userIds.size === 1;
-});
-
-const mergeTargetSummary = computed(() => {
-  const rows = mergeableSelection.value;
-  const firstUser = toRecord(rows[0]?.user);
-  return {
-    userName: String(firstUser.nickname || firstUser.email || firstUser.display_name || `用户 #${firstUser.id ?? '-'}`),
-    count: rows.length,
-    totalAmount: rows.reduce((sum, row) => sum + Number(row.amount || 0), 0),
-  };
-});
-
-function handleSelectChange(value: Array<string | number>) {
-  selectedRowKeys.value = value;
-}
-
-function openMergeDialog() {
-  if (!canMergeSelection.value) {
-    MessagePlugin.warning('请勾选同一用户名下至少 2 张待支付账单');
-    return;
-  }
-  mergeDialogVisible.value = true;
-}
-
-async function submitMerge() {
-  const rows = mergeableSelection.value;
-  const userId = Number(rows[0]?.user?.id ?? 0);
-  if (!userId || rows.length < 2) {
-    MessagePlugin.warning('请勾选同一用户名下至少 2 张待支付账单');
-    return;
-  }
-  merging.value = true;
-  try {
-    const result = await invoiceMergeApi.merge({
-      user_id: userId,
-      invoice_ids: rows.map((row) => Number(row.id)),
-    });
-    MessagePlugin.success(result.message || '账单已合并');
-    mergeDialogVisible.value = false;
-    selectedRowKeys.value = [];
-    await loadList();
-  } catch (error) {
-    MessagePlugin.error(errorMessage(error, '合并账单失败'));
-  } finally {
-    merging.value = false;
-  }
-}
-
-async function openMergeDetailDialog(row: InvoiceRecord) {
-  if (!row.id) return;
-  mergeDetailVisible.value = true;
-  mergeDetailLoading.value = true;
-  mergeDetail.value = null;
-  try {
-    const response = await invoiceMergeApi.mergeItems(row.id);
-    mergeDetail.value = response.merge || null;
-  } catch (error) {
-    MessagePlugin.error(errorMessage(error, '加载合并明细失败'));
-    mergeDetailVisible.value = false;
-  } finally {
-    mergeDetailLoading.value = false;
-  }
-}
-
-const canUnmergeMaster = computed(
-  () =>
-    Boolean(mergeDetail.value?.master) &&
-    Number(mergeDetail.value?.master?.status) === 0 &&
-    hasPermission(AdminPermissions.INVOICE_MANAGE),
-);
-
-function handleUnmergeMaster() {
-  const master = mergeDetail.value?.master;
-  if (!master) return;
-  const dialog = DialogPlugin.confirm({
-    header: '拆分合并账单',
-    body: `确认拆分总账单「${master.invoice_no}」吗？子账单将恢复独立待支付，总账单作废。`,
-    confirmBtn: { content: '确认拆分', theme: 'danger' },
-    async onConfirm() {
-      try {
-        const result = await invoiceMergeApi.unmerge(master.id);
-        MessagePlugin.success(result.message || '总账单已拆分');
-        dialog.hide();
-        mergeDetailVisible.value = false;
-        await loadList();
-      } catch (error) {
-        MessagePlugin.error(errorMessage(error, '拆分合并账单失败'));
-      }
-    },
-  });
-}
-
 function mobileActionOptions(row: InvoiceRecord) {
   const options = [{ content: '详情', value: 'detail' }];
-  if (hasPermission(AdminPermissions.INVOICE_DETAIL)) {
-    options.push({ content: '合并明细', value: 'merge-items' });
-  }
   if (row.order?.id) {
     options.push({ content: '查看订单', value: 'order' });
   }
@@ -528,7 +300,6 @@ function handleMobileActionHandler(row: InvoiceRecord) {
 
 function handleMobileAction(action: unknown, row: InvoiceRecord) {
   if (action === 'detail') goDetail(row);
-  if (action === 'merge-items') openMergeDetailDialog(row);
   if (action === 'order' && row.order?.id) goToOrder(row.order.id);
   if (action === 'cancel' && canCancel(row)) confirmCancel(row);
 }

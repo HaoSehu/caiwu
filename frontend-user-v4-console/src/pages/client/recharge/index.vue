@@ -2,17 +2,6 @@
   <section class="client-recharge">
     <t-card class="recharge-stage" :bordered="false">
       <div class="recharge-panel">
-        <!-- M11：未实名限制提示（数据来自 /auth/info restrictions 投影；宽限期内仅提示不阻断） -->
-        <t-alert v-if="restrictionNotice" class="recharge-restriction-alert" theme="warning">
-          <template #message>
-            <span>{{ restrictionNotice }}</span>
-          </template>
-          <template #operation>
-            <t-button theme="primary" variant="text" size="small" @click="router.push('/client/verification')">
-              去实名认证
-            </t-button>
-          </template>
-        </t-alert>
         <template v-if="isMobileScreen">
           <div class="recharge-mobile">
             <header class="recharge-mobile__hero">
@@ -284,22 +273,6 @@ const QrcodeVue = defineAsyncComponent(() => import('qrcode.vue'));
 
 import { useMediaQuery } from '@/composables/useMediaQuery';
 
-// M11：restrictions 投影类型（自含，禁改共享 types）
-interface ClientRestrictionProjection {
-  enabled?: boolean;
-  restricted_scopes?: string[];
-  grace_days_remaining?: number | string;
-  exempted?: boolean;
-}
-
-const RESTRICTION_SCOPE_LABELS: Record<string, string> = {
-  recharge: '在线充值',
-  purchase: '新购服务',
-  renewal: '服务续费',
-  withdrawal: '余额提现',
-  service_transfer_receive: '接收服务转移',
-};
-
 const isMobileScreen = useMediaQuery('(max-width: 47.98rem)');
 const mobileCustomMode = ref(false);
 const mobileAgreementChecked = ref(true);
@@ -355,22 +328,6 @@ const balanceText = computed(() => {
   }
 
   return formatMoneyText(rechargeSummary.cashBalance || 0);
-});
-
-// M11：未实名限制提示文案（enabled 且实际受限时展示；宽限剩余天数仅提示不阻断）
-const restrictionNotice = computed(() => {
-  const raw = userStore.info?.restrictions as ClientRestrictionProjection | undefined;
-  if (!raw || !raw.enabled || raw.exempted) return '';
-  const scopes = Array.isArray(raw.restricted_scopes) ? raw.restricted_scopes : [];
-  if (!scopes.length) return '';
-  const labels = scopes.map((scope) => RESTRICTION_SCOPE_LABELS[scope] || scope).filter(Boolean);
-  if (!labels.length) return '';
-  let notice = `未实名账号部分功能受限：${labels.join('、')}暂不可用`;
-  const graceDays = Number(raw.grace_days_remaining || 0);
-  if (graceDays > 0) {
-    notice += `（注册宽限剩余 ${graceDays} 天）`;
-  }
-  return `${notice}，请完成实名认证`;
 });
 
 function handleMobilePresetSelect(value: number) {

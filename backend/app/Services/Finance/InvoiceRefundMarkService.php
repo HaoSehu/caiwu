@@ -97,12 +97,6 @@ class InvoiceRefundMarkService
     {
         $this->assertMarkableType($lockedInvoice);
 
-        // M1 合并账单守卫（2026-10-11 裁决：退款按子账单为对象）：合并总账单本身
-        // 不做退款入口——其金额是子账单聚合投影，直接标记会破坏子账单退款/提成冲正口径。
-        if ((int) $lockedInvoice->merge_role === 1) {
-            throw new BusinessException('合并总账单不支持退款标记，请按子账单操作');
-        }
-
         // 与真退款通道互斥（2026-10-11 裁决：一单只选一种）：已有「退款到余额」
         // 记录的账单不再受理纯标记——两种资金语义叠加后对账无法解释。
         // 置于幂等短路之前：全额真退款的账单再点标记应明确报「已用余额退款」，
