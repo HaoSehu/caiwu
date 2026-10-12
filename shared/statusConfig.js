@@ -12,8 +12,8 @@
  *  │ warning  │ #E6A23C    │ 待支付/待付款 — 需要行动        │
  *  │ blue     │ #409EFF    │ 已支付/已付款 — 流程中          │
  *  │ primary  │ #409EFF    │ 开通中 — 处理中(带呼吸动画)     │
- *  │ success  │ #67C23A    │ 已开通/已完成 — 正向完结        │
- *  │ info     │ #909399    │ 已关闭/已取消/已到期 — 终态      │
+ *  │ success  │ #67C23A    │ 运行中/已完成 — 正向完结        │
+ *  │ info     │ #909399    │ 已关闭/已删除 — 终态            │
  *  │ danger   │ #F56C6C    │ 已退款 — 资金逆向              │
  *  │ purple   │ #8B5CF6    │ 已冻结/已暂停 — 异常锁定        │
  *  └──────────┴────────────┴───────────────────────────────┘
@@ -29,8 +29,8 @@
 export const STATUS_COLORS = {
   warning: "#E6A23C", // 待支付
   blue: "#409EFF", // 已支付 / 开通中
-  success: "#67C23A", // 已开通 / 已完成
-  info: "#909399", // 已关闭 / 已取消 / 已到期
+  success: "#67C23A", // 运行中 / 已完成
+  info: "#909399", // 已关闭 / 已删除
   danger: "#F56C6C", // 已退款
   purple: "#8B5CF6", // 已冻结 / 已暂停
 };
@@ -237,13 +237,16 @@ export const MANUAL_PAYMENT_METHOD_MAP = {
 };
 
 // ===================== 服务/产品实例状态 =====================
+// 五态：开通中 / 运行中 / 已暂停 / 已删除 / 异常。
+// 生命周期：到期不再单独成态——到期暂停归"已暂停"(suspended_reason=expired)，
+// 宽限期后归"已删除"；上游 fraud/未知非空状态归"异常"。
 
 export const SERVICE_STATUS = {
   PENDING: 0, // 开通中
-  ACTIVE: 1, // 已开通
-  SUSPENDED: 2, // 已暂停（冻结）
-  EXPIRED: 3, // 已到期
-  CANCELLED: 4, // 已取消
+  ACTIVE: 1, // 运行中
+  SUSPENDED: 2, // 已暂停
+  TERMINATED: 3, // 已删除
+  ABNORMAL: 4, // 异常
 };
 
 export const SERVICE_STATUS_MAP = {
@@ -254,7 +257,7 @@ export const SERVICE_STATUS_MAP = {
     icon: "Clock",
   },
   [SERVICE_STATUS.ACTIVE]: {
-    label: "已开通",
+    label: "运行中",
     color: STATUS_COLORS.success,
     tagType: "success",
     icon: "CircleCheck",
@@ -265,17 +268,17 @@ export const SERVICE_STATUS_MAP = {
     tagType: "purple",
     icon: "Lock",
   },
-  [SERVICE_STATUS.EXPIRED]: {
-    label: "已到期",
+  [SERVICE_STATUS.TERMINATED]: {
+    label: "已删除",
     color: STATUS_COLORS.info,
     tagType: "info",
-    icon: "Timer",
+    icon: "Delete",
   },
-  [SERVICE_STATUS.CANCELLED]: {
-    label: "已取消",
-    color: STATUS_COLORS.info,
-    tagType: "info",
-    icon: "CircleClose",
+  [SERVICE_STATUS.ABNORMAL]: {
+    label: "异常",
+    color: STATUS_COLORS.danger,
+    tagType: "danger",
+    icon: "WarningFilled",
   },
 };
 

@@ -38,7 +38,12 @@ class AutoRenewService
         Service::query()
             ->with(['user', 'product.supplier', 'order'])
             ->where('auto_renew', 1)
-            ->whereIn('status', [ServiceStatus::ACTIVE, ServiceStatus::EXPIRED])
+            ->where(function ($query) {
+                // 到期未处理的服务现为"已暂停(reason=expired)"，与运行中一样保留自动续费窗口
+                $query->where('status', ServiceStatus::ACTIVE)
+                    ->orWhere(fn ($q) => $q->where('status', ServiceStatus::SUSPENDED)
+                        ->where('suspended_reason', 'expired'));
+            })
             ->whereNotNull('expires_at')
             ->whereBetween('expires_at', [
                 $targetDate.' 00:00:00',

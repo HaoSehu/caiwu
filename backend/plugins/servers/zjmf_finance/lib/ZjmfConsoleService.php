@@ -11,6 +11,17 @@ final class ZjmfConsoleService
 {
     private const FORM_HEADERS = ['content-type: application/x-www-form-urlencoded'];
 
+    /** 上游 DCIM 电源态 → 中文口径（对齐上游 des 文案；process 由上游附 task 名时优先透传 des） */
+    private const POWER_STATE_LABELS = [
+        'on' => '开机',
+        'off' => '关机',
+        'suspend' => '暂停',
+        'waiting' => '等待重启',
+        'paused' => '挂起',
+        'process' => '任务执行中',
+        'unknown' => '未知',
+    ];
+
     public function __construct(
         private readonly ZjmfFinanceTransport $transport,
     ) {}
@@ -36,6 +47,31 @@ final class ZjmfConsoleService
     public function powerAction(Supplier $supplier, int $hostId, string $action, ?string $jwt = null): array
     {
         return $this->postDefaultModuleAction($supplier, $hostId, $action, [], $jwt);
+    }
+
+    /**
+     * 上游电源状态刷新：POST /dcim/refresh_power_status（仅上游 dcim 型产品支持）。
+     * 上游会实时向其 DCIM 面板查询，返回 {status, des}，此处标准化为 power_status + power_label。
+     */
+    public function getPowerStatus(Supplier $supplier, int $hostId, ?string $jwt = null): array
+    {
+        throw_if($hostId <= 0, new BusinessException('上游实例参数无效', 42200));
+
+        $response = $this->transport->post(
+            $supplier,
+            '/dcim/refresh_power_status',
+            ['id' => $hostId, 'is_api' => 1],
+            $this->resolveJwt($supplier, $jwt),
+            self::FORM_HEADERS
+        );
+
+        $payload = is_array($response['data'] ?? null) ? $response['data'] : [];
+        $state = strtolower(trim((string) ($payload['status'] ?? '')));
+
+        return [
+            'power_status' => $state !== '' ? $state : 'unknown',
+            'power_label' => self::POWER_STATE_LABELS[$state] ?? trim((string) ($payload['des'] ?? '')) ?: '未知',
+        ];
     }
 
     public function getModuleStatus(Supplier $supplier, int $hostId, string $type = 'host', ?string $jwt = null): array

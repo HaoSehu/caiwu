@@ -445,7 +445,7 @@ class ServiceMigrationService
     {
         return match ($orderStatus) {
             1, 3 => ServiceStatus::ACTIVE,
-            4, 5 => ServiceStatus::CANCELLED,
+            4, 5 => ServiceStatus::TERMINATED,
             default => ServiceStatus::PENDING,
         };
     }
@@ -827,7 +827,7 @@ class ServiceMigrationService
             $payload['expires_at'] = $expiresAt;
         }
 
-        if (($payload['terminated_at'] ?? null) === null && (($payload['status'] ?? null) === ServiceStatus::CANCELLED)) {
+        if (($payload['terminated_at'] ?? null) === null && (($payload['status'] ?? null) === ServiceStatus::TERMINATED)) {
             $payload['terminated_at'] = $this->normalizeDateTimeString(
                 $legacyService['updated_at'] ?? $legacyService['expires_at'] ?? null
             );
@@ -845,9 +845,8 @@ class ServiceMigrationService
     {
         return match ($legacyStatus) {
             1 => ServiceStatus::ACTIVE,
-            2 => ServiceStatus::SUSPENDED,
-            3 => ServiceStatus::EXPIRED,
-            4 => ServiceStatus::CANCELLED,
+            2, 3 => ServiceStatus::SUSPENDED,
+            4 => ServiceStatus::TERMINATED,
             default => ServiceStatus::PENDING,
         };
     }
@@ -1025,9 +1024,8 @@ class ServiceMigrationService
         return match ($normalized) {
             'pending' => ServiceStatus::PENDING,
             'active' => ServiceStatus::ACTIVE,
-            'suspended' => ServiceStatus::SUSPENDED,
-            'expired' => ServiceStatus::EXPIRED,
-            'cancelled', 'terminated' => ServiceStatus::CANCELLED,
+            'suspended', 'expired' => ServiceStatus::SUSPENDED,
+            'cancelled', 'terminated', 'deleted' => ServiceStatus::TERMINATED,
             default => null,
         };
     }

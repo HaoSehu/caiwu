@@ -109,6 +109,10 @@ export function useConsoleDetail(_options?: UseConsoleDetailOptions) {
     if (detail.value.actions?.module_status) {
       await clientApi.serviceModuleStatus(serviceId.value, { type: 'host' });
     }
+    // 电源状态实时刷新（上游 DCIM 面板），失败静默：module-status 快照仍可回退展示
+    if (detail.value.actions?.power_status) {
+      await clientApi.servicePowerStatus(serviceId.value).catch(() => undefined);
+    }
     await loadRemoteStatus(true);
   }
 

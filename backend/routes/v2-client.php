@@ -144,6 +144,7 @@ Route::middleware(['auth:sanctum', 'ensure.client'])->group(function (): void {
     Route::post('/services/{id}/renewals', [ServiceBillingController::class, 'createRenewOrder'])->middleware('throttle:6,1,client-service-renew');
     Route::put('/services/{id}/renewals/auto', [ServiceBillingController::class, 'updateAutoRenew'])->middleware('throttle:6,1,client-service-renew-auto');
     Route::get('/services/{id}/module-status', [ServiceConsoleController::class, 'moduleStatus']);
+    Route::get('/services/{id}/power-status', [ServiceConsoleController::class, 'powerStatus'])->middleware('throttle:12,1,client-service-power-status');
     Route::get('/services/{id}/reinstallations/options', [ServiceConsoleController::class, 'reinstallOptions']);
     Route::get('/services/{id}/operation-logs', [ServiceConsoleController::class, 'operationLogs']);
     Route::get('/services/{id}/monitor', [ServiceConsoleController::class, 'monitor']);

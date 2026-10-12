@@ -1499,7 +1499,7 @@ CREATE TABLE `services` (
   `billing_cycle` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '计费周期',
   `amount` decimal(12,2) NOT NULL COMMENT '服务续费/购买金额',
   `locked_pricing` json DEFAULT NULL COMMENT '锁定续费定价 JSON，null 表示跟随商品定价',
-  `status` tinyint NOT NULL DEFAULT '0' COMMENT '服务状态：0待开通 1运行中 2已暂停 3已到期 4已取消',
+  `status` tinyint NOT NULL DEFAULT '0' COMMENT '服务状态：0开通中 1运行中 2已暂停 3已删除 4异常',
   `provision_data` json DEFAULT NULL COMMENT '开通和上游实例数据 JSON',
   `expires_at` timestamp NULL DEFAULT NULL COMMENT '服务到期时间',
   `auto_renew` tinyint NOT NULL DEFAULT '0' COMMENT '是否自动续费：0关闭 1开启',

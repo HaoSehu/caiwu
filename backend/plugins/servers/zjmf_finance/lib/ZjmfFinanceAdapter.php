@@ -191,6 +191,11 @@ final class ZjmfFinanceAdapter implements ProvidesConsoleAccess, ProvidesConsole
         return $this->consoleService->powerAction($supplier, $hostId, $action, $jwt);
     }
 
+    public function getPowerStatus(Supplier $supplier, int $hostId, ?string $jwt = null): array
+    {
+        return $this->consoleService->getPowerStatus($supplier, $hostId, $jwt);
+    }
+
     public function getModuleStatus(Supplier $supplier, int $hostId, string $type = 'host', ?string $jwt = null): array
     {
         return $this->consoleService->getModuleStatus($supplier, $hostId, $type, $jwt);

@@ -89,6 +89,13 @@ class ServiceConsoleController extends Controller
         );
     }
 
+    public function powerStatus(Request $request, int $id)
+    {
+        return $this->success(
+            $this->clientServiceConsoleService->getPowerStatusForUser($request->user(), $id)
+        );
+    }
+
     public function reinstallOptions(Request $request, int $id)
     {
         return $this->success(

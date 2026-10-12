@@ -83,6 +83,26 @@ class ServicePowerService
         ];
     }
 
+    public function getPowerStatusForUser(User $user, int $serviceId): array
+    {
+        $service = $this->detailService->findUserService($user, $serviceId, [
+            'product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
+            'product.productGroup.secondProductGroup.firstProductGroup',
+            'product.supplier',
+        ]);
+
+        [$runtime, $supplier, $hostId, $jwt] = $this->detailService->resolveUpstreamContext($service);
+        throw_if(! is_callable([$runtime, 'getPowerStatus']), new BusinessException('当前上游类型不支持电源状态查询', 42200));
+
+        $payload = $runtime->getPowerStatus($supplier, $hostId, $jwt);
+
+        return [
+            'service_id' => (int) $service->id,
+            'power_status' => (string) ($payload['power_status'] ?? 'unknown'),
+            'power_label' => (string) ($payload['power_label'] ?? '未知'),
+        ];
+    }
+
     private function applyPendingPowerSnapshot(Service $service, string $action): void
     {
         $snapshot = $this->resolvePendingPowerSnapshot($action);

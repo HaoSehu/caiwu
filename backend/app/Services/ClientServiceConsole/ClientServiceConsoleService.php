@@ -163,6 +163,11 @@ class ClientServiceConsoleService
         return $this->powerService->powerActionForUser($user, $serviceId, $action, $context);
     }
 
+    public function getPowerStatusForUser(User $user, int $serviceId): array
+    {
+        return $this->powerService->getPowerStatusForUser($user, $serviceId);
+    }
+
     public function getModuleStatusForUser(User $user, int $serviceId, string $type = 'host'): array
     {
         return $this->powerService->getModuleStatusForUser($user, $serviceId, $type);

@@ -307,6 +307,7 @@ class ServiceTransformService
                 'refresh' => true,
                 'power' => $canExecuteConsoleActions,
                 'module_status' => $this->canManageService($service),
+                'power_status' => $this->canManageService($service),
                 'manual_provision' => $this->canManualProvisionService($service),
                 'password_reset' => $this->canResetPassword($service, $serviceStatus),
                 'reinstall' => $canExecuteConsoleActions,
@@ -421,8 +422,8 @@ class ServiceTransformService
         if (in_array((int) $service->status, [
             ServiceStatus::PENDING,
             ServiceStatus::SUSPENDED,
-            ServiceStatus::EXPIRED,
-            ServiceStatus::CANCELLED,
+            ServiceStatus::TERMINATED,
+            ServiceStatus::ABNORMAL,
         ], true)) {
             return false;
         }
@@ -466,8 +467,8 @@ class ServiceTransformService
         if (in_array((int) $service->status, [
             ServiceStatus::PENDING,
             ServiceStatus::SUSPENDED,
-            ServiceStatus::EXPIRED,
-            ServiceStatus::CANCELLED,
+            ServiceStatus::TERMINATED,
+            ServiceStatus::ABNORMAL,
         ], true)) {
             return false;
         }
@@ -821,9 +822,8 @@ class ServiceTransformService
     {
         return match ($status) {
             ServiceStatus::ACTIVE => 'success',
-            ServiceStatus::SUSPENDED => 'danger',
-            ServiceStatus::EXPIRED => 'warning',
-            ServiceStatus::CANCELLED => 'muted',
+            ServiceStatus::SUSPENDED, ServiceStatus::ABNORMAL => 'danger',
+            ServiceStatus::TERMINATED => 'muted',
             default => 'info',
         };
     }
@@ -870,12 +870,7 @@ class ServiceTransformService
 
     public function resolveServiceStatusFromUpstream(string $status): int
     {
-        return match (strtolower(trim($status))) {
-            'active' => ServiceStatus::ACTIVE,
-            'suspended' => ServiceStatus::SUSPENDED,
-            'cancelled', 'deleted' => ServiceStatus::CANCELLED,
-            default => ServiceStatus::PENDING,
-        };
+        return ServiceStatus::fromUpstreamDomainStatus($status);
     }
 
     public function resolveExpiry(array $host, Service $service): ?Carbon
