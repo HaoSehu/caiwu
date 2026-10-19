@@ -680,7 +680,7 @@
                 :disabled="!serviceActions.manual_provision"
                 :loading="serviceDrawer.actionLoading === 'manual-provision'"
                 @click="openManualProvisionDialog"
-                >手动开通</t-button
+                >绑定服务</t-button
               >
               <t-tag v-if="isServiceRefunded" theme="danger" variant="light">已退款</t-tag>
             </div>
@@ -762,17 +762,13 @@
 
     <t-dialog
       v-model:visible="manualProvisionVisible"
-      header="手动开通 / 关联上游"
+      header="绑定服务"
       width="420px"
       :confirm-btn="{ content: '确定', loading: serviceDrawer.actionLoading === 'manual-provision' }"
       @cancel="manualProvisionVisible = false"
       @confirm="handleManualProvision"
     >
-      <t-form ref="manualProvisionFormRef" :data="manualProvisionForm" :rules="manualProvisionRules" label-align="top">
-        <t-form-item label="上游实例 ID" name="upstream_host_id">
-          <t-input-number v-model="manualProvisionForm.upstream_host_id" :min="1" style="width: 100%" />
-        </t-form-item>
-      </t-form>
+      <t-alert theme="info" message="将按当前上游绑定重新提交上游开通，指令下发后可稍后点击「刷新远程」查看结果。" />
     </t-dialog>
 
     <t-dialog
@@ -1001,7 +997,6 @@ const addServiceFormRef = ref<FormInstanceFunctions>();
 const serviceUpstreamFormRef = ref<FormInstanceFunctions>();
 const servicePricingFormRef = ref<FormInstanceFunctions>();
 const resetPasswordFormRef = ref<FormInstanceFunctions>();
-const manualProvisionFormRef = ref<FormInstanceFunctions>();
 const editForm = reactive({
   nickname: '',
   phone: '',
@@ -1073,7 +1068,6 @@ const servicePricingForm = reactive({
 });
 const serviceNameForm = reactive({ service_name: '' });
 const resetPasswordForm = reactive({ password: '' });
-const manualProvisionForm = reactive({ upstream_host_id: undefined as number | undefined });
 const serviceDrawer = reactive({ visible: false, loading: false, actionLoading: '', serviceId: 0, detail: {} as Row });
 const canLoginAs = computed(() => hasAdminPermission(AdminPermissions.USER_LOGIN_AS));
 const canManualInvoice = computed(() => hasAdminPermission(AdminPermissions.INVOICE_MANUAL_ENTRY));
@@ -1154,9 +1148,6 @@ const servicePricingRules: Record<string, FormRule[]> = {
 };
 const resetPasswordRules: Record<string, FormRule[]> = {
   password: [{ validator: (val) => String(val || '').length >= 8, message: '密码长度至少 8 位', type: 'error' }],
-};
-const manualProvisionRules: Record<string, FormRule[]> = {
-  upstream_host_id: [required('请输入上游实例 ID')],
 };
 
 const serviceStatusLabelMap = toLabelMap(SERVICE_STATUS_MAP);
@@ -2015,24 +2006,19 @@ async function handleResetServicePassword() {
 }
 
 function openManualProvisionDialog() {
-  manualProvisionForm.upstream_host_id = undefined;
   manualProvisionVisible.value = true;
-  manualProvisionFormRef.value?.clearValidate?.();
 }
 
 async function handleManualProvision() {
-  const result = await manualProvisionFormRef.value?.validate?.();
-  if (!isValidationPass(result) || !serviceDrawer.serviceId) return;
+  if (!serviceDrawer.serviceId) return;
   serviceDrawer.actionLoading = 'manual-provision';
   try {
-    await userApi.manualProvisionService(userId.value, serviceDrawer.serviceId, {
-      upstream_host_id: Number(manualProvisionForm.upstream_host_id || 0),
-    });
-    MessagePlugin.success('手动开通指令已下发');
+    await userApi.manualProvisionService(userId.value, serviceDrawer.serviceId);
+    MessagePlugin.success('绑定服务指令已下发');
     manualProvisionVisible.value = false;
     await Promise.all([reloadServiceDrawer(), loadServices()]);
   } catch (error) {
-    MessagePlugin.error(errorMessage(error, '手动开通失败'));
+    MessagePlugin.error(errorMessage(error, '绑定服务失败'));
   } finally {
     serviceDrawer.actionLoading = '';
   }
