@@ -12,6 +12,10 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 
+/**
+ * @property User|null $user 关联用户（belongsTo user）
+ * @property Product|null $product 关联商品（belongsTo product）
+ */
 class Service extends Model
 {
     use EnsuresTraceId, NormalizesTraceId, SoftDeletes;

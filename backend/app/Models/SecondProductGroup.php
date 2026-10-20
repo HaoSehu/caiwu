@@ -6,6 +6,12 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * @property int $id
+ * @property FirstProductGroup|null $firstProductGroup 上级一级分组
+ * @property string $name 分组名
+ * @property string|null $description 分组描述
+ */
 class SecondProductGroup extends Model
 {
     protected $table = 'second_product_groups';

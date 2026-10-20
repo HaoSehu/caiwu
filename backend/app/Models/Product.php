@@ -15,6 +15,9 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * @property ThirdProductGroup|null $productGroup 所属三级分组（belongsTo product_group）
+ */
 class Product extends Model
 {
     use SoftDeletes;

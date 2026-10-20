@@ -103,12 +103,6 @@ parameters:
 			path: app/Console/Commands/ServeBackendStackCommand.php
 
 		-
-			message: '#^Parameter \#1 \$product of method App\\Services\\Integrations\\Plugins\\PluginBindingResolver\:\:supplierForProduct\(\) expects App\\Models\\Product, Illuminate\\Database\\Eloquent\\Model given\.$#'
-			identifier: argument.type
-			count: 2
-			path: app/Console/Commands/SyncUpstreamServicesCommand.php
-
-		-
 			message: '#^Offset ''timed_out'' on array\{timed_out\: bool, blocked\: bool, eof\: bool, unread_bytes\: int, stream_type\: string, wrapper_type\: string, wrapper_data\: mixed, mode\: string, \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
 			count: 1
@@ -607,19 +601,7 @@ parameters:
 			path: app/Http/Resources/Admin/V2/AdminOrderSummaryResource.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$expires_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/Admin/V2/AdminOrderSummaryResource.php
-
-		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Resources/Admin/V2/AdminOrderSummaryResource.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Http/Resources/Admin/V2/AdminOrderSummaryResource.php
@@ -637,21 +619,9 @@ parameters:
 			path: app/Http/Resources/Admin/V2/AdminOrderSummaryResource.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$status\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/Admin/V2/AdminOrderSummaryResource.php
-
-		-
 			message: '#^Cannot call method format\(\) on string\.$#'
 			identifier: method.nonObject
-			count: 3
-			path: app/Http/Resources/Admin/V2/AdminOrderSummaryResource.php
-
-		-
-			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<\(int\|string\),mixed\>\:\:map\(\) contains unresolvable type\.$#'
-			identifier: argument.unresolvableType
-			count: 1
+			count: 2
 			path: app/Http/Resources/Admin/V2/AdminOrderSummaryResource.php
 
 		-
@@ -671,18 +641,6 @@ parameters:
 			identifier: method.nonObject
 			count: 1
 			path: app/Http/Resources/Admin/V2/AdminProductDetailResource.php
-
-		-
-			message: '#^Method App\\Http\\Resources\\Admin\\V2\\AdminProductGroupListResource\:\:firstGroup\(\) should return App\\Models\\FirstProductGroup\|null but returns Illuminate\\Database\\Eloquent\\Model\|null\.$#'
-			identifier: return.type
-			count: 2
-			path: app/Http/Resources/Admin/V2/AdminProductGroupListResource.php
-
-		-
-			message: '#^Method App\\Http\\Resources\\Admin\\V2\\AdminProductGroupListResource\:\:secondGroup\(\) should return App\\Models\\SecondProductGroup\|null but returns Illuminate\\Database\\Eloquent\\Model\|null\.$#'
-			identifier: return.type
-			count: 1
-			path: app/Http/Resources/Admin/V2/AdminProductGroupListResource.php
 
 		-
 			message: '#^Using nullsafe property access "\?\-\>code" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
@@ -779,36 +737,6 @@ parameters:
 			identifier: function.impossibleType
 			count: 1
 			path: app/Http/Resources/Admin/V2/AdminUserOperationLogResource.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$code\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/Admin/V2/CouponProductGroupResource.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$firstProductGroup\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/Admin/V2/CouponProductGroupResource.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$first_product_group_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/Admin/V2/CouponProductGroupResource.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Resources/Admin/V2/CouponProductGroupResource.php
-
-		-
-			message: '#^Parameter \#1 \$group of static method App\\Constants\\ProductType\:\:businessValueForFirstGroup\(\) expects App\\Models\\FirstProductGroup\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Http/Resources/Admin/V2/CouponProductGroupResource.php
 
 		-
 			message: '#^Using nullsafe property access "\?\-\>code" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
@@ -925,18 +853,6 @@ parameters:
 			path: app/Http/Resources/Site/V2/SiteProductDetailResource.php
 
 		-
-			message: '#^Method App\\Http\\Resources\\Site\\V2\\SiteProductGroupResource\:\:firstGroup\(\) should return App\\Models\\FirstProductGroup\|null but returns Illuminate\\Database\\Eloquent\\Model\|null\.$#'
-			identifier: return.type
-			count: 2
-			path: app/Http/Resources/Site/V2/SiteProductGroupResource.php
-
-		-
-			message: '#^Method App\\Http\\Resources\\Site\\V2\\SiteProductGroupResource\:\:secondGroup\(\) should return App\\Models\\SecondProductGroup\|null but returns Illuminate\\Database\\Eloquent\\Model\|null\.$#'
-			identifier: return.type
-			count: 1
-			path: app/Http/Resources/Site/V2/SiteProductGroupResource.php
-
-		-
 			message: '#^Using nullsafe property access "\?\-\>code" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
@@ -1007,30 +923,6 @@ parameters:
 			identifier: identical.alwaysFalse
 			count: 1
 			path: app/Models/ContentArticle.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$discount\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Models/Invoice.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$display_product_name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Models/Invoice.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$order_no\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Models/Invoice.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$quantity\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Models/Invoice.php
 
 		-
 			message: '#^Comparison operation "\>" between int\<1, max\> and 0 is always true\.$#'
@@ -1115,18 +1007,6 @@ parameters:
 			identifier: nullsafe.neverNull
 			count: 2
 			path: app/Models/Payment.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$secondProductGroup\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Models/Product.php
-
-		-
-			message: '#^Method App\\Models\\Product\:\:resolvedProductGroupHierarchy\(\) should return array\{App\\Models\\FirstProductGroup\|null, App\\Models\\SecondProductGroup\|null, App\\Models\\ThirdProductGroup\|null\} but returns array\{mixed, mixed, Illuminate\\Database\\Eloquent\\Model\|null\}\.$#'
-			identifier: return.type
-			count: 1
-			path: app/Models/Product.php
 
 		-
 			message: '#^Offset ''product_display_name'' on array\{product_display_name\: string, product_spec_display\: string, custom_display_name\: string, cpu_memory_display\: string, cpu_memory_slug_display\: string, combined_display_name\: string, instance_spec_text\: string, cpu_display\: string, \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'
@@ -1325,18 +1205,6 @@ parameters:
 			identifier: argument.type
 			count: 1
 			path: app/Services/Admin/V2/AdminCatalogActionV2Service.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Admin/V2/AdminConfigurationV2QueryService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$secondProductGroup\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Admin/V2/AdminConfigurationV2QueryService.php
 
 		-
 			message: '#^Offset ''product_display_name'' on array\{product_display_name\: string, product_spec_display\: string, custom_display_name\: string, cpu_memory_display\: string, cpu_memory_slug_display\: string, combined_display_name\: string, instance_spec_text\: string, cpu_display\: string, \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'
@@ -1591,38 +1459,8 @@ parameters:
 			path: app/Services/Auth/VerificationService.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$balance\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Automation/AutoRenewService.php
-
-		-
 			message: '#^Instanceof between string\|null and Carbon\\Carbon will always evaluate to false\.$#'
 			identifier: instanceof.alwaysFalse
-			count: 1
-			path: app/Services/Automation/AutoRenewService.php
-
-		-
-			message: '#^Parameter \#1 \$user of method App\\Services\\Provisioning\\ServiceRenewService\:\:createRenewInvoiceForUser\(\) expects App\\Models\\User, Illuminate\\Database\\Eloquent\\Model given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Services/Automation/AutoRenewService.php
-
-		-
-			message: '#^Parameter \#1 \$user of method App\\Services\\Provisioning\\ServiceRenewService\:\:findPaidUnfulfilledRenewOrder\(\) expects App\\Models\\User, Illuminate\\Database\\Eloquent\\Model given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Services/Automation/AutoRenewService.php
-
-		-
-			message: '#^Parameter \#1 \$user of method App\\Services\\Provisioning\\ServiceRenewService\:\:previewForUser\(\) expects App\\Models\\User, Illuminate\\Database\\Eloquent\\Model given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Services/Automation/AutoRenewService.php
-
-		-
-			message: '#^Parameter \#2 \$user of method App\\Services\\Finance\\BalanceInvoicePaymentService\:\:payByBalance\(\) expects App\\Models\\User, Illuminate\\Database\\Eloquent\\Model given\.$#'
-			identifier: argument.type
 			count: 1
 			path: app/Services/Automation/AutoRenewService.php
 
@@ -1631,36 +1469,6 @@ parameters:
 			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Services/Automation/AutoRenewService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$display_name\.$#'
-			identifier: property.notFound
-			count: 3
-			path: app/Services/Automation/BillingAutomationService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$display_product_name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Automation/BillingAutomationService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$email\.$#'
-			identifier: property.notFound
-			count: 3
-			path: app/Services/Automation/BillingAutomationService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Automation/BillingAutomationService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$order_no\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Services/Automation/BillingAutomationService.php
 
 		-
 			message: '#^Instanceof between string\|null and Carbon\\Carbon will always evaluate to false\.$#'
@@ -1735,18 +1543,6 @@ parameters:
 			path: app/Services/Automation/ScheduleTaskService.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$display_name\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Services/Automation/ServiceLifecycleAutomationService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$email\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Services/Automation/ServiceLifecycleAutomationService.php
-
-		-
 			message: '#^Cannot call method format\(\) on string\.$#'
 			identifier: method.nonObject
 			count: 2
@@ -1795,24 +1591,6 @@ parameters:
 			path: app/Services/Automation/ServiceLifecycleAutomationService.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$display_name\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Services/Automation/ServiceStatusSyncService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$email\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Automation/ServiceStatusSyncService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Automation/ServiceStatusSyncService.php
-
-		-
 			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<\(int\|string\),Illuminate\\Database\\Eloquent\\Model\>\:\:filter\(\) expects \(callable\(Illuminate\\Database\\Eloquent\\Model, int\|string\)\: bool\)\|null, Closure\(App\\Models\\Service\)\: bool given\.$#'
 			identifier: argument.type
 			count: 1
@@ -1828,18 +1606,6 @@ parameters:
 			message: '#^Parameter \#1 \$groupBy of method Illuminate\\Support\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:groupBy\(\) expects \(callable\(Illuminate\\Database\\Eloquent\\Model, int\)\: int\)\|list\<Closure\|string\>\|string, Closure\(App\\Models\\Service\)\: int given\.$#'
 			identifier: argument.type
 			count: 1
-			path: app/Services/Automation/ServiceStatusSyncService.php
-
-		-
-			message: '#^Parameter \#2 \$product of method App\\Services\\Automation\\ServiceStatusSyncService\:\:resolveSupplierId\(\) expects App\\Models\\Product\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
-			identifier: argument.type
-			count: 2
-			path: app/Services/Automation/ServiceStatusSyncService.php
-
-		-
-			message: '#^Parameter \#2 \$product of method App\\Services\\Integrations\\Plugins\\ServiceUpstreamBindingWriter\:\:syncServiceState\(\) expects App\\Models\\Product\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
-			identifier: argument.type
-			count: 2
 			path: app/Services/Automation/ServiceStatusSyncService.php
 
 		-
@@ -1907,18 +1673,6 @@ parameters:
 			identifier: booleanAnd.rightAlwaysTrue
 			count: 2
 			path: app/Services/ClientServiceConsole/ClientServiceConsoleService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$console_template\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/ClientServiceConsole/ServiceDetailService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$updated_at\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Services/ClientServiceConsole/ServiceDetailService.php
 
 		-
 			message: '#^Call to an undefined method App\\Services\\Upstream\\Contracts\\ProvidesConsoleRuntime\:\:getText\(\)\.$#'
@@ -2011,18 +1765,6 @@ parameters:
 			path: app/Services/ClientServiceConsole/ServiceDetailService.php
 
 		-
-			message: '#^Parameter \#1 \$product of method App\\Services\\Integrations\\Plugins\\PluginBindingResolver\:\:supplierForProduct\(\) expects App\\Models\\Product, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Services/ClientServiceConsole/ServiceDetailService.php
-
-		-
-			message: '#^Parameter \#1 \$product of method App\\Services\\Integrations\\Plugins\\PluginBindingResolver\:\:supplierIdForProduct\(\) expects App\\Models\\Product, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Services/ClientServiceConsole/ServiceDetailService.php
-
-		-
 			message: '#^Offset 1 on array\{non\-falsy\-string, non\-falsy\-string\} on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
 			count: 1
@@ -2045,18 +1787,6 @@ parameters:
 			identifier: nullsafe.neverNull
 			count: 2
 			path: app/Services/ClientServiceConsole/ServiceNatService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
-			identifier: property.notFound
-			count: 3
-			path: app/Services/ClientServiceConsole/ServiceOverviewService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$productGroup\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/ClientServiceConsole/ServiceOverviewService.php
 
 		-
 			message: '#^Cannot call method format\(\) on string\.$#'
@@ -2101,48 +1831,6 @@ parameters:
 			path: app/Services/ClientServiceConsole/ServicePowerService.php
 
 		-
-			message: '#^Parameter \#2 \$product of method App\\Services\\Integrations\\Plugins\\ServiceUpstreamBindingWriter\:\:syncServiceState\(\) expects App\\Models\\Product\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Services/ClientServiceConsole/ServicePowerService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$console_template\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/ClientServiceConsole/ServiceResolverService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$productGroup\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Services/ClientServiceConsole/ServiceResolverService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$product_type\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/ClientServiceConsole/ServiceResolverService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$service_type_code\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/ClientServiceConsole/ServiceResolverService.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>product_type" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Services/ClientServiceConsole/ServiceResolverService.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>service_type_code" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Services/ClientServiceConsole/ServiceResolverService.php
-
-		-
 			message: '#^Offset 1 on array\{non\-falsy\-string, non\-empty\-string\} on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
 			count: 1
@@ -2167,24 +1855,6 @@ parameters:
 			path: app/Services/ClientServiceConsole/ServiceSecurityGroupService.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/ClientServiceConsole/ServiceTrafficPackageService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$product_group_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/ClientServiceConsole/ServiceTrafficPackageService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$product_type\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Services/ClientServiceConsole/ServiceTrafficPackageService.php
-
-		-
 			message: '#^Method App\\Services\\ClientServiceConsole\\ServiceTrafficPackageService\:\:buildTrafficOptionPayload\(\) is unused\.$#'
 			identifier: method.unused
 			count: 1
@@ -2206,42 +1876,6 @@ parameters:
 			message: '#^Offset ''product_spec_display'' on array\{product_display_name\: string, product_spec_display\: string, custom_display_name\: string, cpu_memory_display\: string, cpu_memory_slug_display\: string, combined_display_name\: string, instance_spec_text\: string, cpu_display\: string, \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
 			count: 2
-			path: app/Services/ClientServiceConsole/ServiceTrafficPackageService.php
-
-		-
-			message: '#^Parameter \#1 \$order of method App\\Services\\ClientServiceConsole\\ServiceTrafficPackageService\:\:processPaidTrafficPackageOrder\(\) expects App\\Models\\Order, Illuminate\\Database\\Eloquent\\Model given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Services/ClientServiceConsole/ServiceTrafficPackageService.php
-
-		-
-			message: '#^Parameter \#1 \$product of method App\\Services\\ProductCatalog\\ProductDisplayNameResolver\:\:resolveForProduct\(\) expects App\\Models\\Product, Illuminate\\Database\\Eloquent\\Model given\.$#'
-			identifier: argument.type
-			count: 2
-			path: app/Services/ClientServiceConsole/ServiceTrafficPackageService.php
-
-		-
-			message: '#^Parameter \#2 \$product of method App\\Services\\Integrations\\Plugins\\ServiceUpstreamBindingWriter\:\:recordProvisionAttempt\(\) expects App\\Models\\Product\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
-			identifier: argument.type
-			count: 2
-			path: app/Services/ClientServiceConsole/ServiceTrafficPackageService.php
-
-		-
-			message: '#^Parameter \#2 \$product of method App\\Services\\Integrations\\Plugins\\ServiceUpstreamBindingWriter\:\:syncServiceState\(\) expects App\\Models\\Product\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
-			identifier: argument.type
-			count: 2
-			path: app/Services/ClientServiceConsole/ServiceTrafficPackageService.php
-
-		-
-			message: '#^Parameter \#3 \$product of method App\\Services\\ClientServiceConsole\\ServiceTrafficPackageService\:\:createTrafficPackageOrderForInvoice\(\) expects App\\Models\\Product, Illuminate\\Database\\Eloquent\\Model given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Services/ClientServiceConsole/ServiceTrafficPackageService.php
-
-		-
-			message: '#^Parameter \#3 \$product of method App\\Services\\ClientServiceConsole\\ServiceTrafficPackageService\:\:ensureTrafficPackageOrderForInvoice\(\) expects App\\Models\\Product, Illuminate\\Database\\Eloquent\\Model given\.$#'
-			identifier: argument.type
-			count: 1
 			path: app/Services/ClientServiceConsole/ServiceTrafficPackageService.php
 
 		-
@@ -2269,21 +1903,9 @@ parameters:
 			path: app/Services/ClientServiceConsole/ServiceTrafficPackageService.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$config_options\.$#'
-			identifier: property.notFound
-			count: 4
-			path: app/Services/ClientServiceConsole/ServiceTransformService.php
-
-		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$config_snapshot\.$#'
 			identifier: property.notFound
 			count: 1
-			path: app/Services/ClientServiceConsole/ServiceTransformService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$console_template\.$#'
-			identifier: property.notFound
-			count: 4
 			path: app/Services/ClientServiceConsole/ServiceTransformService.php
 
 		-
@@ -2296,12 +1918,6 @@ parameters:
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$invoice_no\.$#'
 			identifier: property.notFound
 			count: 2
-			path: app/Services/ClientServiceConsole/ServiceTransformService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
-			identifier: property.notFound
-			count: 4
 			path: app/Services/ClientServiceConsole/ServiceTransformService.php
 
 		-
@@ -2323,43 +1939,7 @@ parameters:
 			path: app/Services/ClientServiceConsole/ServiceTransformService.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$pricing\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Services/ClientServiceConsole/ServiceTransformService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$productGroup\.$#'
-			identifier: property.notFound
-			count: 6
-			path: app/Services/ClientServiceConsole/ServiceTransformService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$product_type\.$#'
-			identifier: property.notFound
-			count: 3
-			path: app/Services/ClientServiceConsole/ServiceTransformService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$second_product_group_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/ClientServiceConsole/ServiceTransformService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$service_type_code\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/ClientServiceConsole/ServiceTransformService.php
-
-		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$status\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/ClientServiceConsole/ServiceTransformService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$third_product_group_id\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Services/ClientServiceConsole/ServiceTransformService.php
@@ -2503,12 +2083,6 @@ parameters:
 			path: app/Services/ClientServiceConsole/ServiceTransformService.php
 
 		-
-			message: '#^Method App\\Services\\ClientServiceConsole\\ServiceUpgradeService\:\:processPaidUpgradeOrder\(\) should return App\\Models\\Service\|null but returns Illuminate\\Database\\Eloquent\\Model\|null\.$#'
-			identifier: return.type
-			count: 1
-			path: app/Services/ClientServiceConsole/ServiceUpgradeService.php
-
-		-
 			message: '#^Offset ''last_upgraded_at'' on non\-empty\-array\<string, mixed\> on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
 			count: 1
@@ -2524,18 +2098,6 @@ parameters:
 			message: '#^Offset ''upgrade_error'' on non\-empty\-array\<string, mixed\> on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
 			count: 1
-			path: app/Services/ClientServiceConsole/ServiceUpgradeService.php
-
-		-
-			message: '#^Parameter \#2 \$product of method App\\Services\\Integrations\\Plugins\\ServiceUpstreamBindingWriter\:\:recordProvisionAttempt\(\) expects App\\Models\\Product\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
-			identifier: argument.type
-			count: 2
-			path: app/Services/ClientServiceConsole/ServiceUpgradeService.php
-
-		-
-			message: '#^Parameter \#2 \$product of method App\\Services\\Integrations\\Plugins\\ServiceUpstreamBindingWriter\:\:syncServiceState\(\) expects App\\Models\\Product\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
-			identifier: argument.type
-			count: 2
 			path: app/Services/ClientServiceConsole/ServiceUpgradeService.php
 
 		-
@@ -2671,27 +2233,15 @@ parameters:
 			path: app/Services/Finance/AdminFinanceQueryService.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$expires_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Finance/AdminFinanceQueryService.php
-
-		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
 			identifier: property.notFound
-			count: 5
+			count: 4
 			path: app/Services/Finance/AdminFinanceQueryService.php
 
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$invoice_no\.$#'
 			identifier: property.notFound
 			count: 2
-			path: app/Services/Finance/AdminFinanceQueryService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
-			identifier: property.notFound
-			count: 1
 			path: app/Services/Finance/AdminFinanceQueryService.php
 
 		-
@@ -2727,7 +2277,7 @@ parameters:
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$status\.$#'
 			identifier: property.notFound
-			count: 3
+			count: 2
 			path: app/Services/Finance/AdminFinanceQueryService.php
 
 		-
@@ -2745,7 +2295,7 @@ parameters:
 		-
 			message: '#^Cannot call method format\(\) on string\.$#'
 			identifier: method.nonObject
-			count: 4
+			count: 2
 			path: app/Services/Finance/AdminFinanceQueryService.php
 
 		-
@@ -2791,48 +2341,6 @@ parameters:
 			path: app/Services/Finance/AdminFinanceQueryService.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$display_name\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Services/Finance/AdminOrderNotificationService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$email\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Services/Finance/AdminOrderNotificationService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$order_no\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Services/Finance/AdminOrderNotificationService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$status\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Finance/AdminOrderNotificationService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$type\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Finance/AdminOrderNotificationService.php
-
-		-
-			message: '#^Cannot call method format\(\) on string\.$#'
-			identifier: method.nonObject
-			count: 2
-			path: app/Services/Finance/AdminOrderNotificationService.php
-
-		-
-			message: '#^Parameter \#2 \$order of method App\\Services\\Finance\\AdminOrderNotificationService\:\:resolveInvoiceProductDisplayText\(\) expects App\\Models\\Order\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
-			identifier: argument.type
-			count: 2
-			path: app/Services/Finance/AdminOrderNotificationService.php
-
-		-
 			message: '#^Using nullsafe property access "\?\-\>email" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 2
@@ -2861,18 +2369,6 @@ parameters:
 			identifier: ternary.alwaysFalse
 			count: 2
 			path: app/Services/Finance/CheckoutSecurityService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Finance/CheckoutService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$order_no\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Finance/CheckoutService.php
 
 		-
 			message: '#^Offset ''actor_user_id'' on non\-empty\-array on left side of \?\? always exists and is not nullable\.$#'
@@ -2931,18 +2427,6 @@ parameters:
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$config_options\.$#'
 			identifier: property.notFound
-			count: 1
-			path: app/Services/Finance/ClientInvoicePaymentWorkflowService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$product\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Finance/ClientInvoicePaymentWorkflowService.php
-
-		-
-			message: '#^Cannot call method format\(\) on string\.$#'
-			identifier: method.nonObject
 			count: 1
 			path: app/Services/Finance/ClientInvoicePaymentWorkflowService.php
 
@@ -3040,12 +2524,6 @@ parameters:
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$type\.$#'
 			identifier: property.notFound
 			count: 1
-			path: app/Services/Finance/ClientPaymentQueryService.php
-
-		-
-			message: '#^Cannot call method format\(\) on string\.$#'
-			identifier: method.nonObject
-			count: 2
 			path: app/Services/Finance/ClientPaymentQueryService.php
 
 		-
@@ -3445,69 +2923,15 @@ parameters:
 			path: app/Services/Finance/FinanceLedgerQueryService.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Finance/GatewayInvoicePaymentService.php
-
-		-
 			message: '#^Using nullsafe property access "\?\-\>id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Services/Finance/GatewayInvoicePaymentService.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$display_name\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Services/Finance/InvoicePaidOrchestrator.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$display_product_name\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Services/Finance/InvoicePaidOrchestrator.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$email\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Finance/InvoicePaidOrchestrator.php
-
-		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
 			identifier: property.notFound
-			count: 3
-			path: app/Services/Finance/InvoicePaidOrchestrator.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$order_no\.$#'
-			identifier: property.notFound
 			count: 1
-			path: app/Services/Finance/InvoicePaidOrchestrator.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$service_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Finance/InvoicePaidOrchestrator.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$type\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Finance/InvoicePaidOrchestrator.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$user_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Finance/InvoicePaidOrchestrator.php
-
-		-
-			message: '#^Instanceof between string\|null and Carbon\\Carbon will always evaluate to false\.$#'
-			identifier: instanceof.alwaysFalse
-			count: 2
 			path: app/Services/Finance/InvoicePaidOrchestrator.php
 
 		-
@@ -3565,18 +2989,6 @@ parameters:
 			path: app/Services/Finance/InvoicePaidOrchestrator.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$display_product_name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Finance/InvoiceRefundMarkService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$order_no\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Finance/InvoiceRefundMarkService.php
-
-		-
 			message: '#^Using nullsafe property access "\?\-\>display_name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
@@ -3599,24 +3011,6 @@ parameters:
 			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Services/Finance/InvoiceRefundMarkService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$display_product_name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Finance/InvoiceRefundService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$order_no\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Finance/InvoiceRefundService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$status\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Services/Finance/InvoiceRefundService.php
 
 		-
 			message: '#^Method App\\Services\\Finance\\InvoiceRefundService\:\:resolvePrimaryRefundablePayment\(\) should return App\\Models\\Payment\|null but returns Illuminate\\Database\\Eloquent\\Model\|null\.$#'
@@ -3655,30 +3049,6 @@ parameters:
 			path: app/Services/Finance/InvoiceRefundService.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$billing_cycle\.$#'
-			identifier: property.notFound
-			count: 3
-			path: app/Services/Finance/InvoiceService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$config_pricing_snapshot\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Finance/InvoiceService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$config_snapshot\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Finance/InvoiceService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$display_product_name\.$#'
-			identifier: property.notFound
-			count: 4
-			path: app/Services/Finance/InvoiceService.php
-
-		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$expires_at\.$#'
 			identifier: property.notFound
 			count: 2
@@ -3687,7 +3057,7 @@ parameters:
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
 			identifier: property.notFound
-			count: 8
+			count: 5
 			path: app/Services/Finance/InvoiceService.php
 
 		-
@@ -3699,43 +3069,19 @@ parameters:
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
 			identifier: property.notFound
-			count: 5
-			path: app/Services/Finance/InvoiceService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$order_no\.$#'
-			identifier: property.notFound
-			count: 6
-			path: app/Services/Finance/InvoiceService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$paid_at\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Services/Finance/InvoiceService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$product\.$#'
-			identifier: property.notFound
-			count: 3
+			count: 4
 			path: app/Services/Finance/InvoiceService.php
 
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$status\.$#'
 			identifier: property.notFound
-			count: 4
-			path: app/Services/Finance/InvoiceService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$type\.$#'
-			identifier: property.notFound
-			count: 1
+			count: 2
 			path: app/Services/Finance/InvoiceService.php
 
 		-
 			message: '#^Cannot call method format\(\) on string\.$#'
 			identifier: method.nonObject
-			count: 11
+			count: 5
 			path: app/Services/Finance/InvoiceService.php
 
 		-
@@ -3772,18 +3118,6 @@ parameters:
 			message: '#^Parameter \#1 \$collection of method Illuminate\\Pagination\\AbstractPaginator\<int,App\\Models\\Invoice\>\:\:setCollection\(\) expects Illuminate\\Support\\Collection\<int, App\\Models\\Invoice\>, Illuminate\\Support\\Collection\<int, array\> given\.$#'
 			identifier: argument.type
 			count: 1
-			path: app/Services/Finance/InvoiceService.php
-
-		-
-			message: '#^Parameter \#1 \$order of method App\\Services\\Finance\\InvoiceService\:\:resolveOrderProductPath\(\) expects App\\Models\\Order, Illuminate\\Database\\Eloquent\\Model given\.$#'
-			identifier: argument.type
-			count: 3
-			path: app/Services/Finance/InvoiceService.php
-
-		-
-			message: '#^Parameter \#1 \$user of method App\\Services\\Finance\\InvoiceService\:\:adminUserPayload\(\) expects App\\Models\\User\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
-			identifier: argument.type
-			count: 2
 			path: app/Services/Finance/InvoiceService.php
 
 		-
@@ -3841,12 +3175,6 @@ parameters:
 			path: app/Services/Finance/InvoiceService.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 3
-			path: app/Services/Finance/InvoiceSettlementService.php
-
-		-
 			message: '#^Using nullsafe property access "\?\-\>payment_no" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
@@ -3857,12 +3185,6 @@ parameters:
 			identifier: argument.type
 			count: 1
 			path: app/Services/Finance/InvoiceV2QueryService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Finance/MixPaymentService.php
 
 		-
 			message: '#^Using nullsafe property access "\?\-\>id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
@@ -4035,12 +3357,6 @@ parameters:
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
 			identifier: property.notFound
-			count: 2
-			path: app/Services/Order/ClientOrderQueryService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
-			identifier: property.notFound
 			count: 1
 			path: app/Services/Order/ClientOrderQueryService.php
 
@@ -4053,7 +3369,7 @@ parameters:
 		-
 			message: '#^Cannot call method format\(\) on string\.$#'
 			identifier: method.nonObject
-			count: 3
+			count: 2
 			path: app/Services/Order/ClientOrderQueryService.php
 
 		-
@@ -4123,12 +3439,6 @@ parameters:
 			path: app/Services/Order/OrderService.php
 
 		-
-			message: '#^Cannot call method format\(\) on string\.$#'
-			identifier: method.nonObject
-			count: 1
-			path: app/Services/Order/OrderService.php
-
-		-
 			message: '#^Method App\\Services\\Order\\OrderService\:\:assertPurchaseRequires\(\) is unused\.$#'
 			identifier: method.unused
 			count: 1
@@ -4151,18 +3461,6 @@ parameters:
 			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Services/Order/OrderService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Order/PaidOrderBusinessFlowDispatcher.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$type\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Order/PaidOrderBusinessFlowDispatcher.php
 
 		-
 			message: '#^Using nullsafe property access "\?\-\>id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
@@ -4423,30 +3721,6 @@ parameters:
 			path: app/Services/ProductCatalog/ProductAdminService.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$code\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Services/ProductCatalog/ProductCategoryService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$firstProductGroup\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/ProductCatalog/ProductCategoryService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$first_product_group_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/ProductCatalog/ProductCategoryService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
-			identifier: property.notFound
-			count: 4
-			path: app/Services/ProductCatalog/ProductCategoryService.php
-
-		-
 			message: '#^Constant App\\Services\\ProductCatalog\\ProductCategoryService\:\:SITE_CHILD_GROUPS_CACHE_KEY is unused\.$#'
 			identifier: classConstant.unused
 			count: 1
@@ -4503,12 +3777,6 @@ parameters:
 		-
 			message: '#^Constant App\\Services\\ProductCatalog\\ProductCategoryService\:\:SITE_ROOT_GROUPS_CACHE_KEY is unused\.$#'
 			identifier: classConstant.unused
-			count: 1
-			path: app/Services/ProductCatalog/ProductCategoryService.php
-
-		-
-			message: '#^Parameter \#1 \$group of static method App\\Constants\\ProductType\:\:businessValueForFirstGroup\(\) expects App\\Models\\FirstProductGroup\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
-			identifier: argument.type
 			count: 1
 			path: app/Services/ProductCatalog/ProductCategoryService.php
 
@@ -4591,24 +3859,6 @@ parameters:
 			path: app/Services/ProductCatalog/ProductGroupV2QueryService.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$code\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/ProductCatalog/ProductSiteService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$firstProductGroup\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/ProductCatalog/ProductSiteService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Services/ProductCatalog/ProductSiteService.php
-
-		-
 			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\:\:onSale\(\)\.$#'
 			identifier: method.notFound
 			count: 1
@@ -4670,12 +3920,6 @@ parameters:
 
 		-
 			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:map\(\) expects callable\(Illuminate\\Database\\Eloquent\\Model, int\)\: array, Closure\(App\\Models\\SecondProductGroup\)\: array given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Services/ProductCatalog/ProductSiteService.php
-
-		-
-			message: '#^Parameter \#1 \$group of static method App\\Constants\\ProductType\:\:businessValueForFirstGroup\(\) expects App\\Models\\FirstProductGroup\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
 			identifier: argument.type
 			count: 1
 			path: app/Services/ProductCatalog/ProductSiteService.php
@@ -4855,25 +4099,7 @@ parameters:
 			path: app/Services/ProductCatalog/ProductSyncService.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$email\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Provisioning/AdminServiceListService.php
-
-		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 3
-			path: app/Services/Provisioning/AdminServiceListService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Provisioning/AdminServiceListService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$nickname\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Services/Provisioning/AdminServiceListService.php
@@ -4885,27 +4111,9 @@ parameters:
 			path: app/Services/Provisioning/AdminServiceListService.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$phone\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Provisioning/AdminServiceListService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$product_type\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Provisioning/AdminServiceListService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$status\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Provisioning/AdminServiceListService.php
-
-		-
 			message: '#^Cannot call method format\(\) on string\.$#'
 			identifier: method.nonObject
-			count: 2
+			count: 1
 			path: app/Services/Provisioning/AdminServiceListService.php
 
 		-
@@ -4989,7 +4197,7 @@ parameters:
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
 			identifier: property.notFound
-			count: 2
+			count: 1
 			path: app/Services/Provisioning/ProvisionService.php
 
 		-
@@ -5023,12 +4231,6 @@ parameters:
 			path: app/Services/Provisioning/ProvisionService.php
 
 		-
-			message: '#^Method App\\Services\\Provisioning\\ProvisionService\:\:ensureLocalService\(\) should return App\\Models\\Service but returns Illuminate\\Database\\Eloquent\\Model\.$#'
-			identifier: return.type
-			count: 1
-			path: app/Services/Provisioning/ProvisionService.php
-
-		-
 			message: '#^Offset 0 on array\{non\-empty\-string\} on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
 			count: 1
@@ -5037,12 +4239,6 @@ parameters:
 		-
 			message: '#^Offset 0 on non\-empty\-list\<string\> on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
-			count: 1
-			path: app/Services/Provisioning/ProvisionService.php
-
-		-
-			message: '#^Parameter \#1 \$order of method App\\Services\\Provisioning\\ProvisionService\:\:processPaidOrder\(\) expects App\\Models\\Order, Illuminate\\Database\\Eloquent\\Model given\.$#'
-			identifier: argument.type
 			count: 1
 			path: app/Services/Provisioning/ProvisionService.php
 
@@ -5137,30 +4333,6 @@ parameters:
 			path: app/Services/Provisioning/ProvisionService.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$display_name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Provisioning/ServiceRenewService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$email\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Provisioning/ServiceRenewService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$pricing\.$#'
-			identifier: property.notFound
-			count: 4
-			path: app/Services/Provisioning/ServiceRenewService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$service\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Provisioning/ServiceRenewService.php
-
-		-
 			message: '#^Cannot call method format\(\) on string\.$#'
 			identifier: method.nonObject
 			count: 2
@@ -5203,12 +4375,6 @@ parameters:
 			path: app/Services/Provisioning/ServiceRenewService.php
 
 		-
-			message: '#^Method App\\Services\\Provisioning\\ServiceRenewService\:\:resolveEffectiveProduct\(\) should return App\\Models\\Product\|null but returns Illuminate\\Database\\Eloquent\\Model\|null\.$#'
-			identifier: return.type
-			count: 2
-			path: app/Services/Provisioning/ServiceRenewService.php
-
-		-
 			message: '#^Method App\\Services\\Provisioning\\ServiceRenewService\:\:resolveRenewedExpiry\(\) never returns null so it can be removed from the return type\.$#'
 			identifier: return.unusedType
 			count: 1
@@ -5224,36 +4390,6 @@ parameters:
 			message: '#^Offset ''product_spec_display'' on array\{product_display_name\: string, product_spec_display\: string, custom_display_name\: string, cpu_memory_display\: string, cpu_memory_slug_display\: string, combined_display_name\: string, instance_spec_text\: string, cpu_display\: string, \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
 			count: 1
-			path: app/Services/Provisioning/ServiceRenewService.php
-
-		-
-			message: '#^Parameter \#2 \$product of method App\\Services\\Integrations\\Plugins\\ServiceUpstreamBindingWriter\:\:syncServiceState\(\) expects App\\Models\\Product\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
-			identifier: argument.type
-			count: 2
-			path: app/Services/Provisioning/ServiceRenewService.php
-
-		-
-			message: '#^Parameter \#2 \$product of method App\\Services\\Provisioning\\ServiceRenewService\:\:recordRenewInvoiceAttempt\(\) expects App\\Models\\Product\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
-			identifier: argument.type
-			count: 2
-			path: app/Services/Provisioning/ServiceRenewService.php
-
-		-
-			message: '#^Parameter \#2 \$product of method App\\Services\\Provisioning\\ServiceRenewService\:\:resolveProviderKeyForService\(\) expects App\\Models\\Product\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
-			identifier: argument.type
-			count: 4
-			path: app/Services/Provisioning/ServiceRenewService.php
-
-		-
-			message: '#^Parameter \#2 \$product of method App\\Services\\Provisioning\\ServiceRenewService\:\:resolveRenewalCapability\(\) expects App\\Models\\Product\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
-			identifier: argument.type
-			count: 2
-			path: app/Services/Provisioning/ServiceRenewService.php
-
-		-
-			message: '#^Parameter \#2 \$product of method App\\Services\\Provisioning\\ServiceRenewService\:\:supportsUpstreamRenew\(\) expects App\\Models\\Product\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
-			identifier: argument.type
-			count: 2
 			path: app/Services/Provisioning/ServiceRenewService.php
 
 		-
@@ -5607,7 +4743,7 @@ parameters:
 		-
 			message: '#^Parameter \#1 \$buyer of method App\\Services\\Referral\\ReferralService\:\:resolveBuyerReferrerUserId\(\) expects App\\Models\\User, Illuminate\\Database\\Eloquent\\Model given\.$#'
 			identifier: argument.type
-			count: 2
+			count: 1
 			path: app/Services/Referral/ReferralService.php
 
 		-
@@ -6067,18 +5203,6 @@ parameters:
 			path: app/Services/System/DashboardService.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$email\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/System/DashboardService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$nickname\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/System/DashboardService.php
-
-		-
 			message: '#^Using nullsafe property access "\?\-\>active_services" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
@@ -6379,12 +5503,6 @@ parameters:
 			path: app/Services/System/NotificationTemplateTestSendService.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/System/OperationLogService.php
-
-		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$order_no\.$#'
 			identifier: property.notFound
 			count: 1
@@ -6507,7 +5625,7 @@ parameters:
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
 			identifier: property.notFound
-			count: 3
+			count: 1
 			path: app/Services/Ticket/TicketService.php
 
 		-
@@ -6795,17 +5913,11 @@ parameters:
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
 			identifier: property.notFound
-			count: 4
-			path: app/Services/User/UserService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$order_no\.$#'
-			identifier: property.notFound
 			count: 2
 			path: app/Services/User/UserService.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$pricing\.$#'
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$order_no\.$#'
 			identifier: property.notFound
 			count: 2
 			path: app/Services/User/UserService.php
@@ -6831,7 +5943,7 @@ parameters:
 		-
 			message: '#^Cannot call method format\(\) on string\.$#'
 			identifier: method.nonObject
-			count: 3
+			count: 1
 			path: app/Services/User/UserService.php
 
 		-
@@ -6868,24 +5980,6 @@ parameters:
 			message: '#^Parameter \#1 \$collection of method Illuminate\\Pagination\\AbstractPaginator\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:setCollection\(\) expects Illuminate\\Support\\Collection\<int, Illuminate\\Database\\Eloquent\\Model\>, Illuminate\\Support\\Collection\<int, non\-empty\-array\<mixed\>\> given\.$#'
 			identifier: argument.type
 			count: 1
-			path: app/Services/User/UserService.php
-
-		-
-			message: '#^Parameter \#1 \$product of method App\\Services\\User\\UserService\:\:resolveProductUpstreamProductId\(\) expects App\\Models\\Product\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Services/User/UserService.php
-
-		-
-			message: '#^Parameter \#1 \$product of method App\\Services\\User\\UserService\:\:supportsManagedUpstream\(\) expects App\\Models\\Product\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Services/User/UserService.php
-
-		-
-			message: '#^Parameter \#2 \$product of method App\\Services\\Integrations\\Plugins\\ServiceUpstreamBindingWriter\:\:syncServiceState\(\) expects App\\Models\\Product\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
-			identifier: argument.type
-			count: 2
 			path: app/Services/User/UserService.php
 
 		-
@@ -7142,12 +6236,6 @@ parameters:
 
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$display_product_name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Support/ServiceListPresentation.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$productGroup\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Support/ServiceListPresentation.php

@@ -31,12 +31,14 @@ class ServiceResolverService
     {
         $service->loadMissing('product.productGroup.secondProductGroup.firstProductGroup');
 
-        $productType = trim((string) ($service->product?->product_type ?? ''));
+        // ?? 对属性链本身是 null 安全的（isset 语义），无需 ?->；
+        // 保留 ?? 兜底商品行缺失（软删除/孤儿 FK）时的空串。
+        $productType = trim((string) ($service->product->product_type ?? ''));
         if ($productType !== '') {
             return ProductType::normalizeBusinessValue($productType);
         }
 
-        $serviceTypeCode = trim((string) ($service->product?->service_type_code ?? ''));
+        $serviceTypeCode = trim((string) ($service->product->service_type_code ?? ''));
         if ($serviceTypeCode !== '') {
             return ProductType::normalizeBusinessValue($serviceTypeCode);
         }

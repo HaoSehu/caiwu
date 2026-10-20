@@ -17,6 +17,11 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
 
 /**
+ * @property User|null $user 关联下单用户（belongsTo user）
+ * @property Order|null $order 关联订单（belongsTo order）
+ * @property Product|null $product 关联商品（belongsTo product）
+ * @property string $display_product_name 展示用商品名（访问器，恒非空字符串）
+ * @property CarbonInterface|null $paid_at 支付时间（datetime cast）
  * @property float $member_discount_amount 会员等级×营销组折扣减免金额
  * @property array|null $member_discount_snapshot 会员折扣命中快照
  */

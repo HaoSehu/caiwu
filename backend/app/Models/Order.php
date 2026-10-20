@@ -15,6 +15,8 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
+ * @property Service|null $service 关联服务（hasOne service）
+ * @property string $display_product_name 展示用商品名（访问器，恒非空字符串）
  * @property float $member_discount_amount 会员等级×营销组折扣减免金额
  * @property array|null $member_discount_snapshot 会员折扣命中快照
  */

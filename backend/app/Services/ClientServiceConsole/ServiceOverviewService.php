@@ -385,22 +385,22 @@ class ServiceOverviewService
         $firstService = $services->first();
         $leafGroup = $firstService ? $this->resolveServiceLeafGroup($firstService) : null;
         $secondGroup = null;
-        if ($leafGroup instanceof ThirdProductGroup) {
+        if ($leafGroup !== null) {
             $relatedSecond = $leafGroup->relationLoaded('secondProductGroup') ? $leafGroup->secondProductGroup : null;
             $secondGroup = $relatedSecond instanceof SecondProductGroup ? $relatedSecond : null;
         }
-        $groupLevel = $leafGroup instanceof ThirdProductGroup ? 3 : ($leafGroup instanceof SecondProductGroup ? 2 : null);
+        // resolveServiceLeafGroup 只会返回三级分组；命中时不可能是二级。
+        $groupLevel = $leafGroup !== null ? 3 : null;
         $groupName = trim((string) ($leafGroup?->name ?? '')) ?: (trim((string) ($rootGroup?->name ?? '')) ?: '未分类');
         $groupTitle = $groupName;
         $groupDescription = trim((string) ($leafGroup?->description ?? $rootGroup?->description ?? ''));
         // 子卡 key 使用「层级:ID」，避免二级 #57 与三级 #57 因 slug 相同互相覆盖。
         $groupKey = ProductGroupHierarchyFields::groupNodeKey($groupLevel, $leafGroup?->id ? (int) $leafGroup->id : null, $fallbackKey);
         $secondGroupName = $secondGroup instanceof SecondProductGroup ? (string) $secondGroup->name : null;
-        $leafSecondName = $leafGroup instanceof SecondProductGroup ? (string) $leafGroup->name : null;
         $hierarchy = ProductGroupHierarchyFields::forGroupNode(
             $rootGroup?->name,
-            $secondGroupName ?? $leafSecondName,
-            $leafGroup instanceof ThirdProductGroup ? (string) $leafGroup->name : null,
+            $secondGroupName,
+            $leafGroup !== null ? (string) $leafGroup->name : null,
             (int) ($groupLevel ?? 0),
         );
         $activeCount = $services->where('status', ServiceStatus::ACTIVE)->count();
@@ -442,7 +442,7 @@ class ServiceOverviewService
         ];
     }
 
-    private function resolveServiceLeafGroup(Service $service): SecondProductGroup|ThirdProductGroup|null
+    private function resolveServiceLeafGroup(Service $service): ?ThirdProductGroup
     {
         $service->loadMissing([
             'product.productGroup.secondProductGroup.firstProductGroup',
@@ -451,7 +451,7 @@ class ServiceOverviewService
         return $service->product?->productGroup;
     }
 
-    private function resolveGroupedOverviewGroupKey(SecondProductGroup|ThirdProductGroup|null $group, string $fallback = 'ungrouped'): string
+    private function resolveGroupedOverviewGroupKey(?ThirdProductGroup $group, string $fallback = 'ungrouped'): string
     {
         return $group?->id ? ('effective_product_group_'.$group->id) : $fallback;
     }

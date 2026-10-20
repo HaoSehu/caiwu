@@ -5,6 +5,11 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * @property int $id
+ * @property string $name 分组名
+ * @property string|null $description 分组描述
+ */
 class FirstProductGroup extends Model
 {
     protected $table = 'first_product_groups';

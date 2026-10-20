@@ -8,6 +8,7 @@ use App\Models\Concerns\NormalizesTraceId;
 use App\Support\OrderInvoiceNoGenerator;
 use App\Support\SchemaMetadataCache;
 use App\Support\VersionedJson;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Collection;
@@ -18,6 +19,10 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
+/**
+ * @property string|null $trade_no 第三方交易号（支付成功后回填）
+ * @property CarbonInterface|null $paid_at 支付时间（datetime cast）
+ */
 class Payment extends Model
 {
     use EnsuresTraceId, NormalizesTraceId, SoftDeletes;
