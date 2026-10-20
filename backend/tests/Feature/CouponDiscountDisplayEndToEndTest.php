@@ -23,12 +23,12 @@ use App\Models\Role;
 use App\Models\SecondProductGroup;
 use App\Models\ThirdProductGroup;
 use App\Models\User;
-use App\Models\UserAccount;
 use App\Models\UserCoupon;
 use App\Services\Finance\CouponService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Queue;
 use Laravel\Sanctum\Sanctum;
+use Tests\Support\SeedsFinanceBalance;
 use Tests\TestCase;
 
 /**
@@ -48,6 +48,7 @@ use Tests\TestCase;
 class CouponDiscountDisplayEndToEndTest extends TestCase
 {
     use DatabaseTransactions;
+    use SeedsFinanceBalance;
 
     private const CATALOG_AMOUNT = '100.00';
 
@@ -328,11 +329,8 @@ class CouponDiscountDisplayEndToEndTest extends TestCase
             'is_verified' => 1,
             'member_level_id' => (int) $level->id,
         ]);
-        // 余额账户：供余额支付
-        UserAccount::query()->create([
-            'user_id' => (int) $user->id,
-            'cash_balance' => '200.00',
-        ]);
+        // 余额账户：供余额支付（真源 finance_accounts，经内核入账以保证批次守恒）
+        $this->seedFinanceBalance($user, 200.00);
 
         $created = app(CouponService::class)->createCoupon([
             'name' => 'E2E八折券'.uniqid(),

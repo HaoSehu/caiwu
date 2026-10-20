@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace App\Http\Resources\Client\V2;
 
 use App\Http\Resources\Finance\FinanceLedgerResource;
-use App\Models\AccountTransaction;
+use App\Models\FinanceLedgerEntry;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
-/** @mixin AccountTransaction */
+/** @mixin FinanceLedgerEntry */
 class ClientLedgerSummaryResource extends JsonResource
 {
     /**

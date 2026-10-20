@@ -11,17 +11,18 @@ use App\Constants\OrderStatus;
 use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
 use App\Exceptions\BusinessException;
-use App\Models\AccountTransaction;
+use App\Models\FinanceLedgerEntry;
+use App\Models\FinanceRefund;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\ReferralReward;
-use App\Models\Refund;
 use App\Models\User;
 use App\Services\Finance\BalanceInvoicePaymentService;
 use App\Services\Finance\InvoiceRefundService;
 use App\Services\User\AccountService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Tests\Support\SeedsFinanceBalance;
 use Tests\TestCase;
 
 /**
@@ -35,17 +36,18 @@ use Tests\TestCase;
 class RefundInvoiceToBalanceTest extends TestCase
 {
     use DatabaseTransactions;
+    use SeedsFinanceBalance;
 
     public function test_full_refund_balance_paid_invoice_writes_red_documents(): void
     {
         $user = $this->makeUser();
         $accounts = app(AccountService::class);
-        $accounts->setCashBalance($user, 100.00);
+        $this->seedFinanceBalance($user, 100.00);
 
         $invoice = $this->makeInvoice($user, 40.00);
         app(BalanceInvoicePaymentService::class)->payByBalance($invoice, $user);
         $this->assertSame(InvoiceStatus::PAID, (int) $invoice->refresh()->status);
-        $this->assertEqualsWithDelta(60.00, $accounts->cashBalance($user), 0.001);
+        $this->assertEqualsWithDelta(60.00, $this->financeBalance($user), 0.001);
         $this->assertSame(1, $this->countLedger($user, FinanceLedgerEventType::INVOICE_PAYMENT));
 
         $result = app(InvoiceRefundService::class)->refundInvoiceToBalance($user, $invoice);
@@ -55,8 +57,8 @@ class RefundInvoiceToBalanceTest extends TestCase
         $this->assertGreaterThan(0, (int) ($result['refund_id'] ?? 0));
 
         // 余额回到支付前水平，台账一行精确挂账单。
-        $this->assertEqualsWithDelta(100.00, $accounts->cashBalance($user), 0.001);
-        $refundLog = AccountTransaction::query()
+        $this->assertEqualsWithDelta(100.00, $this->financeBalance($user), 0.001);
+        $refundLog = FinanceLedgerEntry::query()
             ->where('user_id', (int) $user->id)
             ->where('event_type', FinanceLedgerEventType::INVOICE_REFUND)
             ->firstOrFail();
@@ -66,10 +68,11 @@ class RefundInvoiceToBalanceTest extends TestCase
         $this->assertEqualsWithDelta(100.00, (float) $refundLog->balance_after, 0.001);
 
         // Refund 记录 + 红字账单（负数金额、指向原单）。
-        $refund = Refund::query()->where('invoice_id', (int) $invoice->id)->firstOrFail();
-        $this->assertSame(Refund::STATUS_COMPLETED, (int) $refund->status);
+        $refund = FinanceRefund::query()->where('invoice_id', (int) $invoice->id)->firstOrFail();
+        $this->assertSame(FinanceRefund::STATUS_COMPLETED, (int) $refund->status);
         $this->assertSame('40.00', (string) $refund->amount);
-        $this->assertSame('balance', (string) $refund->refund_method);
+        $this->assertTrue((bool) $refund->funds_moved);
+        $this->assertSame(FinanceRefund::ORIGIN_NATIVE, (string) $refund->data_origin);
         $redInvoice = Invoice::query()->where('origin_invoice_id', (int) $invoice->id)->firstOrFail();
         $this->assertSame(InvoiceType::REFUND, (string) $redInvoice->type);
         $this->assertEqualsWithDelta(-40.00, (float) $redInvoice->amount, 0.001);
@@ -84,7 +87,7 @@ class RefundInvoiceToBalanceTest extends TestCase
         $referrer = $this->makeUser('referrer');
         $payer = $this->makeUser('payer');
         $accounts = app(AccountService::class);
-        $accounts->setCashBalance($payer, 0.00);
+        $this->seedFinanceBalance($payer, 0.00);
         $referrerAccount = $accounts->ensureAccount($referrer);
         $accounts->updateAccount($referrerAccount, ['referral_frozen_balance' => 10.00]);
 
@@ -123,8 +126,8 @@ class RefundInvoiceToBalanceTest extends TestCase
         $this->assertSame(OrderStatus::REFUNDED, (int) $order->refresh()->status);
 
         // 资金与红字单据。
-        $this->assertEqualsWithDelta(100.00, $accounts->cashBalance($payer), 0.001);
-        $this->assertSame(1, Refund::query()->where('invoice_id', (int) $invoice->id)->count());
+        $this->assertEqualsWithDelta(100.00, $this->financeBalance($payer), 0.001);
+        $this->assertSame(1, FinanceRefund::query()->where('invoice_id', (int) $invoice->id)->count());
         $redInvoice = Invoice::query()->where('origin_invoice_id', (int) $invoice->id)->firstOrFail();
         $this->assertEqualsWithDelta(-100.00, (float) $redInvoice->amount, 0.001);
 
@@ -144,7 +147,7 @@ class RefundInvoiceToBalanceTest extends TestCase
     {
         $user = $this->makeUser();
         $accounts = app(AccountService::class);
-        $accounts->setCashBalance($user, 0.00);
+        $this->seedFinanceBalance($user, 0.00);
 
         $invoice = $this->makeInvoice($user, 100.00);
         $payment = $this->makeSuccessPayment($user, $invoice, 100.00);
@@ -152,17 +155,17 @@ class RefundInvoiceToBalanceTest extends TestCase
 
         // 部分退款 30：账单与支付单保持已支付，只落红字单据。
         app(InvoiceRefundService::class)->refundInvoiceToBalance($user, $invoice, ['amount' => 30.00]);
-        $this->assertEqualsWithDelta(30.00, $accounts->cashBalance($user), 0.001);
+        $this->assertEqualsWithDelta(30.00, $this->financeBalance($user), 0.001);
         $this->assertSame(InvoiceStatus::PAID, (int) $invoice->refresh()->status);
         $this->assertSame(PaymentStatus::SUCCESS, (int) $payment->refresh()->status);
-        $this->assertSame(1, Refund::query()->where('invoice_id', (int) $invoice->id)->count());
+        $this->assertSame(1, FinanceRefund::query()->where('invoice_id', (int) $invoice->id)->count());
 
         // 剩余 70 全款退：账单/支付单收口 REFUNDED。
         app(InvoiceRefundService::class)->refundInvoiceToBalance($user, $invoice, ['amount' => 70.00]);
-        $this->assertEqualsWithDelta(100.00, $accounts->cashBalance($user), 0.001);
+        $this->assertEqualsWithDelta(100.00, $this->financeBalance($user), 0.001);
         $this->assertSame(InvoiceStatus::REFUNDED, (int) $invoice->refresh()->status);
         $this->assertSame(PaymentStatus::REFUNDED, (int) $payment->refresh()->status);
-        $this->assertSame(2, Refund::query()->where('invoice_id', (int) $invoice->id)->count());
+        $this->assertSame(2, FinanceRefund::query()->where('invoice_id', (int) $invoice->id)->count());
         $this->assertSame(2, Invoice::query()->where('origin_invoice_id', (int) $invoice->id)->count());
     }
 
@@ -217,7 +220,7 @@ class RefundInvoiceToBalanceTest extends TestCase
 
     private function countLedger(User $user, string $eventType): int
     {
-        return AccountTransaction::query()
+        return FinanceLedgerEntry::query()
             ->where('user_id', (int) $user->id)
             ->where('event_type', $eventType)
             ->count();

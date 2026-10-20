@@ -6,9 +6,9 @@ namespace App\Console\Commands;
 
 use App\Constants\InvoiceStatus;
 use App\Constants\OrderStatus;
+use App\Models\FinanceRefund;
 use App\Models\Invoice;
 use App\Models\Order;
-use App\Models\Refund;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -49,7 +49,7 @@ class BackfillOrderRefundAmountCommand extends Command
 
         // 候选：账单名下有已完成退款记录的订单（含已收口 REFUNDED 与部分退款仍 PAID）。
         $orderIds = Invoice::query()
-            ->whereHas('refunds', fn ($query) => $query->where('status', Refund::STATUS_COMPLETED))
+            ->whereHas('refunds', fn ($query) => $query->where('status', FinanceRefund::STATUS_COMPLETED))
             ->whereNotNull('order_id')
             ->distinct()
             ->limit($limit)
@@ -132,7 +132,7 @@ class BackfillOrderRefundAmountCommand extends Command
         $aggregate = DB::table('refunds')
             ->join('invoices', 'invoices.id', '=', 'refunds.invoice_id')
             ->where('invoices.order_id', $orderId)
-            ->where('refunds.status', Refund::STATUS_COMPLETED)
+            ->where('refunds.status', FinanceRefund::STATUS_COMPLETED)
             ->selectRaw('COALESCE(SUM(refunds.amount), 0) as refunded_total')
             ->selectRaw('MAX(refunds.refunded_at) as last_refunded_at')
             ->first();

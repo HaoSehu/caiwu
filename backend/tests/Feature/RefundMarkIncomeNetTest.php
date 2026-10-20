@@ -9,13 +9,13 @@ use App\Constants\InvoiceType;
 use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
 use App\Constants\ProductType;
+use App\Models\FinanceRefund;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\Product;
-use App\Models\Refund;
 use App\Models\User;
 use App\Services\Finance\AdminFinanceQueryService;
-use App\Services\Finance\InvoiceRefundMarkService;
+use App\Services\Finance\InvoiceRefundService;
 use App\Services\System\DashboardService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\TestCase;
@@ -46,7 +46,8 @@ class RefundMarkIncomeNetTest extends TestCase
         $this->makePaidSalesInvoice($user, 100.00, ['product_id' => $product->id]);
         $invoice = Invoice::query()->where('user_id', (int) $user->id)->firstOrFail();
 
-        app(InvoiceRefundMarkService::class)->markInvoiceRefunded(
+        app(InvoiceRefundService::class)->refundInvoiceToBalance(
+            User::query()->findOrFail((int) $invoice->user_id),
             $invoice,
             ['amount' => 30.00, 'remark' => '部分退款净额验证'],
             ['operator_id' => 1, 'operator_name' => '测试'],
@@ -63,7 +64,8 @@ class RefundMarkIncomeNetTest extends TestCase
         $this->makePaidSalesInvoice($user, 100.00, ['product_id' => $product->id]);
         $invoice = Invoice::query()->where('user_id', (int) $user->id)->firstOrFail();
 
-        app(InvoiceRefundMarkService::class)->markInvoiceRefunded(
+        app(InvoiceRefundService::class)->refundInvoiceToBalance(
+            User::query()->findOrFail((int) $invoice->user_id),
             $invoice,
             ['amount' => 100.00, 'remark' => '全额退款净额验证'],
             ['operator_id' => 1, 'operator_name' => '测试'],
@@ -80,7 +82,8 @@ class RefundMarkIncomeNetTest extends TestCase
         $this->makePaidSalesInvoice($user, 100.00);
         $invoice = Invoice::query()->where('user_id', (int) $user->id)->firstOrFail();
 
-        app(InvoiceRefundMarkService::class)->markInvoiceRefunded(
+        app(InvoiceRefundService::class)->refundInvoiceToBalance(
+            User::query()->findOrFail((int) $invoice->user_id),
             $invoice,
             ['amount' => 30.00, 'remark' => '月度收入净额验证'],
             ['operator_id' => 1, 'operator_name' => '测试'],
@@ -101,13 +104,14 @@ class RefundMarkIncomeNetTest extends TestCase
 
         // 手工模拟「部分真退款」终态：refunds 行 + 红字账单（createBalanceRefundDocuments
         // 的落库形态；真退款服务由 RefundInvoiceToBalanceTest 固化，此处只造数据）。
-        $refund = Refund::query()->create([
+        $refund = FinanceRefund::query()->create([
             'refund_no' => 'RFD'.date('YmdHis').mt_rand(100000, 999999),
             'user_id' => (int) $user->id,
             'invoice_id' => (int) $invoice->id,
             'amount' => '30.00',
-            'status' => Refund::STATUS_COMPLETED,
-            'refund_method' => 'balance',
+            'status' => FinanceRefund::STATUS_COMPLETED,
+            'funds_moved' => 1,
+            'data_origin' => FinanceRefund::ORIGIN_NATIVE,
             'currency' => 'CNY',
             'reason' => '部分真退款',
             'refunded_at' => now(),
@@ -144,13 +148,14 @@ class RefundMarkIncomeNetTest extends TestCase
 
         // 全额真退款终态：原单 REFUNDED + 红字账单 PAID(-100) + refunds 行。
         $invoice->forceFill(['status' => InvoiceStatus::REFUNDED, 'refund_amount' => '100.00', 'refunded_at' => now()])->save();
-        Refund::query()->create([
+        FinanceRefund::query()->create([
             'refund_no' => 'RFD'.date('YmdHis').mt_rand(100000, 999999),
             'user_id' => (int) $user->id,
             'invoice_id' => (int) $invoice->id,
             'amount' => '100.00',
-            'status' => Refund::STATUS_COMPLETED,
-            'refund_method' => 'balance',
+            'status' => FinanceRefund::STATUS_COMPLETED,
+            'funds_moved' => 1,
+            'data_origin' => FinanceRefund::ORIGIN_NATIVE,
             'currency' => 'CNY',
             'reason' => '全额真退款',
             'refunded_at' => now(),

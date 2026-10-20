@@ -15,8 +15,8 @@ use App\Models\Service;
 use App\Models\User;
 use App\Services\Automation\AutoRenewService;
 use App\Services\Order\PaidOrderBusinessFlowDispatcher;
-use App\Services\User\AccountService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Tests\Support\SeedsFinanceBalance;
 use Tests\TestCase;
 
 /**
@@ -29,6 +29,7 @@ use Tests\TestCase;
 class AutoRenewInvoicePathTest extends TestCase
 {
     use DatabaseTransactions;
+    use SeedsFinanceBalance;
 
     protected function setUp(): void
     {
@@ -133,7 +134,7 @@ class AutoRenewInvoicePathTest extends TestCase
     private function fixture(float $balance): array
     {
         $user = User::factory()->create(['is_verified' => 1]);
-        app(AccountService::class)->setCashBalance($user, $balance);
+        $this->seedFinanceBalance($user, $balance);
 
         $product = Product::query()->create([
             'name' => '自动续费契约商品'.uniqid(),

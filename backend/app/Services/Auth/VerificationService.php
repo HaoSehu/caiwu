@@ -7,11 +7,10 @@ use App\Exceptions\BusinessException;
 use App\Models\IntegrationPlugin;
 use App\Models\User;
 use App\Models\VerificationHistory;
-use App\Services\Finance\FinanceLedgerWriter;
+use App\Services\Finance\Core\FinanceAccountService;
 use App\Services\Integrations\Plugins\IntegrationDriverBindingResolver;
 use App\Services\Integrations\Plugins\PluginConfigRepository;
 use App\Services\Integrations\Plugins\PluginDomain;
-use App\Services\User\AccountService;
 use App\Services\Verification\Contracts\ProvidesVerificationFeeConfig;
 use App\Services\Verification\Contracts\VerificationDriver;
 use App\Services\Verification\Data\VerificationInitializeRequest;
@@ -19,11 +18,13 @@ use App\Services\Verification\Data\VerificationInitializeResult;
 use App\Services\Verification\Data\VerificationScanUrlResult;
 use App\Services\Verification\Data\VerificationStatusResult;
 use App\Services\Verification\VerificationDriverManager;
+use App\Support\Money;
 use App\Support\PublicUrl;
 use App\Support\SchemaMetadataCache;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class VerificationService
 {
@@ -55,13 +56,12 @@ class VerificationService
 
     private ?array $verificationPluginConfigCache = null;
 
-    private ?FinanceLedgerWriter $financeLedgerWriter = null;
+    private ?FinanceAccountService $financeAccounts = null;
 
     public function __construct(
         VerificationDriverManager $driverManager,
         private ?PluginConfigRepository $pluginConfigRepository = null,
         private ?IntegrationDriverBindingResolver $driverBindingResolver = null,
-        private ?AccountService $accountService = null,
     ) {
         $this->driverManager = $driverManager;
     }
@@ -628,33 +628,43 @@ class VerificationService
             return;
         }
 
-        $accounts = $this->accounts();
-        $currentBalance = $accounts->cashBalance($user, true);
+        $accounts = $this->financeAccounts();
+        $feeCents = Money::toCents($feeAmount);
         throw_if(
-            $currentBalance < $feeAmount,
+            $accounts->balanceCents((int) $user->id, true) < $feeCents,
             new BusinessException('实名认证需要支付认证费用，当前余额不足', 42200)
         );
 
-        $balanceAfter = $accounts->setCashBalance($user, $currentBalance - $feeAmount, true);
-
-        // 台账统一写入口：source_type 经 FinanceLedgerWriter 映射为 verification，保证现金域口径一致
-        $this->financeLedgerWriter()->createBalanceLog(
+        // 系统按配置自动扣费；trace 取当前请求的 X-Request-Id（缺失时按平台约定生成 auto:uuid），
+        // 保证认证费流水可与发起请求的日志串联。
+        $accounts->debit(
             (int) $user->id,
+            $feeCents,
             FinanceLedgerEventType::VERIFICATION_FEE,
-            -$feeAmount,
-            $balanceAfter,
-            null,
-            '实名认证费用',
             [
-                // 系统按配置自动扣费；认证发起链路暂不携带业务 trace，由 EnsuresTraceId 兜底 auto:uuid
-                'operator' => 'system',
-            ]
+                'source_type' => 'verification',
+                'remark' => '实名认证费用',
+                'operator_type' => 'system',
+                'operator_name' => 'system',
+                'trace_id' => $this->currentTraceId(),
+            ],
         );
     }
 
-    private function financeLedgerWriter(): FinanceLedgerWriter
+    /** 当前请求链路号：优先取中间件生成的 X-Request-Id，非 HTTP 上下文生成 auto:uuid。 */
+    private function currentTraceId(): string
     {
-        return $this->financeLedgerWriter ??= app(FinanceLedgerWriter::class);
+        $header = trim((string) request()->header('X-Request-Id', ''));
+        if ($header !== '') {
+            return $header;
+        }
+
+        return 'auto:'.Str::uuid()->toString();
+    }
+
+    private function financeAccounts(): FinanceAccountService
+    {
+        return $this->financeAccounts ??= app(FinanceAccountService::class);
     }
 
     /**
@@ -670,11 +680,6 @@ class VerificationService
         return (int) VerificationHistory::query()
             ->where('user_id', (int) $user->id)
             ->count();
-    }
-
-    private function accounts(): AccountService
-    {
-        return $this->accountService ??= app(AccountService::class);
     }
 
     private function pluginConfigRepository(): PluginConfigRepository

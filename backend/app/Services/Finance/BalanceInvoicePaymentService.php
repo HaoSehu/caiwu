@@ -9,7 +9,8 @@ use App\Constants\InvoiceStatus;
 use App\Exceptions\BusinessException;
 use App\Models\Invoice;
 use App\Models\User;
-use App\Services\User\AccountService;
+use App\Services\Finance\Core\FinanceAccountService;
+use App\Support\Money;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -22,8 +23,7 @@ use Illuminate\Support\Facades\DB;
 class BalanceInvoicePaymentService
 {
     public function __construct(
-        private AccountService $accountService,
-        private FinanceLedgerWriter $financeLedgerWriter,
+        private FinanceAccountService $accounts,
         private InvoiceSettlementService $invoiceSettlementService,
         private InvoicePaidOrchestrator $paidInvoiceOrchestrator,
         private TradeLifecycleService $tradeLifecycleService,
@@ -53,23 +53,24 @@ class BalanceInvoicePaymentService
                 );
 
                 $amount = round((float) $lockedInvoice->amount - (float) ($lockedInvoice->paid_amount ?? 0), 2);
-                $currentBalance = $this->getUserBalance($lockedUser);
                 throw_if($amount <= 0, new BusinessException('当前账单无需支付'));
-                throw_if($currentBalance < $amount, new BusinessException('余额不足'));
 
-                $balanceAfter = $this->setUserBalance($lockedUser, $currentBalance - $amount);
-                $this->financeLedgerWriter->createBalanceLog(
+                $currentBalance = $this->accounts->balanceCents((int) $lockedUser->id, true);
+                throw_if($currentBalance < Money::toCents($amount), new BusinessException('余额不足'));
+
+                $this->accounts->debit(
                     (int) $lockedUser->id,
+                    Money::toCents($amount),
                     FinanceLedgerEventType::INVOICE_PAYMENT,
-                    -$amount,
-                    $balanceAfter,
-                    (int) $lockedInvoice->id,
-                    '支付账单 '.(string) $lockedInvoice->invoice_no,
                     [
+                        'source_type' => 'invoice',
+                        'source_id' => (int) $lockedInvoice->id,
+                        'remark' => '支付账单 '.(string) $lockedInvoice->invoice_no,
                         // 控制器上下文统一 actor_name，兼容服务层 operator_name/operator 键
-                        'operator' => trim((string) ($context['actor_name'] ?? $context['operator_name'] ?? $context['operator'] ?? '')),
+                        'operator_type' => 'member',
+                        'operator_name' => trim((string) ($context['actor_name'] ?? $context['operator_name'] ?? $context['operator'] ?? '')),
                         'trace_id' => $traceId,
-                    ]
+                    ],
                 );
 
                 $lockedInvoice = $this->tradeLifecycleService->markInvoicePaid($lockedInvoice, [
@@ -85,16 +86,6 @@ class BalanceInvoicePaymentService
         $this->paidInvoiceOrchestrator->handlePaidInvoice($invoice, $traceId !== '' ? 'balance:'.$traceId : 'balance:'.$invoice->id);
 
         return $paidInvoice->fresh() ?? $paidInvoice;
-    }
-
-    private function getUserBalance(User $user): float
-    {
-        return $this->accountService->cashBalance($user, true);
-    }
-
-    private function setUserBalance(User $user, float $balance): string
-    {
-        return $this->accountService->setCashBalance($user, $balance);
     }
 
     private function withLock(string $lockKey, int $seconds, callable $callback, string $timeoutMessage): mixed

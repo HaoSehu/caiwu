@@ -78,6 +78,6 @@ class RechargeRecord extends Model
 
     public function refund(): BelongsTo
     {
-        return $this->belongsTo(Refund::class);
+        return $this->belongsTo(FinanceRefund::class);
     }
 }

@@ -6,9 +6,9 @@ namespace App\Console\Commands;
 
 use App\Constants\InvoiceStatus;
 use App\Constants\PaymentStatus;
+use App\Models\FinanceRefund;
 use App\Models\Invoice;
 use App\Models\Payment;
-use App\Models\Refund;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
@@ -93,19 +93,20 @@ class BackfillRefundRecordsCommand extends Command
             try {
                 DB::transaction(function () use ($payment, $invoice, $amount): void {
                     // 并发/重复保护：二次检查
-                    $exists = Refund::query()->where('payment_id', (int) $payment->id)->exists();
+                    $exists = FinanceRefund::query()->where('payment_id', (int) $payment->id)->exists();
                     if ($exists) {
                         return;
                     }
 
-                    Refund::query()->create([
-                        'refund_no' => Refund::generateRefundNo(),
+                    FinanceRefund::query()->create([
+                        'refund_no' => 'RF'.date('YmdHis').strtoupper(bin2hex(random_bytes(6))),
                         'payment_id' => (int) $payment->id,
                         'invoice_id' => (int) $invoice->id,
                         'user_id' => (int) $invoice->user_id,
                         'amount' => $amount,
-                        'status' => Refund::STATUS_COMPLETED,
-                        'refund_method' => 'balance',
+                        'status' => FinanceRefund::STATUS_COMPLETED,
+                        'funds_moved' => 1,
+                        'data_origin' => FinanceRefund::ORIGIN_NATIVE,
                         'currency' => 'CNY',
                         'reason' => '历史退款回填（订单/支付已退款，发票未落账）',
                         'refunded_at' => $invoice->refunded_at ?: $payment->paid_at ?: now(),

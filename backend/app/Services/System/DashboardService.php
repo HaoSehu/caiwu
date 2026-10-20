@@ -7,9 +7,9 @@ namespace App\Services\System;
 use App\Constants\InvoiceStatus;
 use App\Constants\InvoiceType;
 use App\Constants\ServiceStatus;
+use App\Models\FinanceRefund;
 use App\Models\Invoice;
 use App\Models\ReferralWithdrawal;
-use App\Models\Refund;
 use App\Models\Service;
 use App\Models\Ticket;
 use App\Models\User;
@@ -313,9 +313,10 @@ class DashboardService
      */
     private function salesIncomeInvoices(): Builder
     {
-        $refundTotals = Refund::query()
+        $refundTotals = FinanceRefund::query()
             ->select('invoice_id', DB::raw('SUM(amount) as refunded_total'))
-            ->where('status', Refund::STATUS_COMPLETED)
+            ->where('funds_moved', 1)
+            ->where('status', FinanceRefund::STATUS_COMPLETED)
             ->groupBy('invoice_id');
 
         return Invoice::query()

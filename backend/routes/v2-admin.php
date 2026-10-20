@@ -78,36 +78,34 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
     });
 
     Route::middleware(['permission:'.AdminPermissions::INVOICE_MANAGE])->group(function (): void {
-        Route::post('/invoices/{invoice}/cancellations', [InvoiceController::class, 'cancel']);
+        Route::post('/invoices/{invoice}/cancellations', [InvoiceController::class, 'cancel'])
+            ->middleware('throttle:20,1,admin-invoice-cancel');
     });
 
     // 补录为资金写入入口，用默认不下发的专用权限码把关，与 invoice.manage/order.manage 隔离。
     Route::middleware(['permission:'.AdminPermissions::INVOICE_MANUAL_ENTRY])->group(function (): void {
-        Route::post('/users/{user}/manual-invoices', [UserController::class, 'storeManualInvoice']);
+        Route::post('/users/{user}/manual-invoices', [UserController::class, 'storeManualInvoice'])
+            ->middleware('throttle:20,1,admin-manual-invoice');
     });
 
     Route::middleware(['permission:'.AdminPermissions::ORDER_MANUAL_ENTRY])->group(function (): void {
-        Route::post('/users/{user}/manual-orders', [UserController::class, 'storeManualOrder']);
+        Route::post('/users/{user}/manual-orders', [UserController::class, 'storeManualOrder'])
+            ->middleware('throttle:20,1,admin-manual-order');
     });
 
     // 补录红字冲抵：已入账补录账单的纠错通道，独立权限码把关，与 invoice.manage/补录权限隔离。
     Route::middleware(['permission:'.AdminPermissions::FINANCE_MANUAL_REVERSAL])->group(function (): void {
-        Route::post('/users/{user}/invoices/{invoice}/manual-reversal', [UserController::class, 'storeManualReversal']);
+        Route::post('/users/{user}/invoices/{invoice}/manual-reversal', [UserController::class, 'storeManualReversal'])
+            ->middleware('throttle:20,1,admin-manual-reversal');
     });
 
-    // 退款标记：纯标记不动资金（不改余额、不写台账、不生成红字账单、不改 Payment），
-    // 与 invoice.manage/order.manage 隔离，默认不下发任何内置角色。
+    // 退款到余额（唯一通道，动资金：加余额 + 台账 + 批次 + 红字账单 + 充值凭证）。
+    // 2026-10-20 裁决：移除 manual_mark 纯标记通道，账单侧与订单侧统一走本组。
     Route::middleware(['permission:'.AdminPermissions::FINANCE_REFUND])->group(function (): void {
-        Route::post('/invoices/{invoice}/refund-marks', [InvoiceController::class, 'markRefund'])
-            ->middleware('throttle:30,1,admin-invoice-refund-mark');
-        Route::post('/orders/{order}/refund-marks', [OrderController::class, 'markRefund'])
-            ->middleware('throttle:30,1,admin-order-refund-mark');
-
-        // 退款到余额（真退款，动资金：加余额 + 台账 + 红字账单 + 充值记录）。
-        // 2026-10-11 裁决：与纯标记共用 finance.refund 权限、且**一单只选一种**
-        // （服务层互斥守卫），恢复 2026-10-03 下线的管理员退款资金出口。
         Route::post('/invoices/{invoice}/refunds', [InvoiceController::class, 'refundToBalance'])
             ->middleware('throttle:20,1,admin-invoice-refund-balance');
+        Route::post('/orders/{order}/refunds', [OrderController::class, 'refundToBalance'])
+            ->middleware('throttle:20,1,admin-order-refund-balance');
     });
 
     Route::middleware(['permission:'.AdminPermissions::FINANCE_REPORT])->group(function (): void {
@@ -158,7 +156,10 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
     });
 
     Route::middleware(['permission:'.AdminPermissions::USER_RECHARGE])->group(function (): void {
-        Route::post('/users/{user}/recharges', [UserController::class, 'recharge']);
+        // 余额调整是最重的资金写口（入账 + 台账 + 批次 + 账单 + 凭证），单独限流，
+        // 与 Client 端「全部财务写均有命名限流器」对齐；保留原全局 api 兜底。
+        Route::post('/users/{user}/recharges', [UserController::class, 'recharge'])
+            ->middleware('throttle:10,1,admin-user-recharge');
     });
 
     Route::middleware(['permission:'.AdminPermissions::VERIFICATION_LIST])->group(function (): void {
@@ -233,7 +234,8 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
         Route::put('/coupon-campaigns/{couponCampaign}', [CouponCampaignController::class, 'update']);
         Route::delete('/coupon-campaigns/{couponCampaign}', [CouponCampaignController::class, 'destroy']);
         Route::patch('/coupon-campaigns/{couponCampaign}/status', [CouponCampaignController::class, 'updateStatus']);
-        Route::post('/coupon-campaigns/{couponCampaign}/tasks', [CouponCampaignController::class, 'runTask']);
+        Route::post('/coupon-campaigns/{couponCampaign}/tasks', [CouponCampaignController::class, 'runTask'])
+            ->middleware('throttle:10,1,admin-coupon-campaign-task');
     });
 
     Route::middleware(['permission:'.AdminPermissions::PRODUCT_MANAGE])->group(function (): void {
@@ -480,8 +482,12 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
     });
 
     Route::middleware(['permission:'.AdminPermissions::FINANCE_WITHDRAW])->group(function (): void {
-        Route::post('/referral-withdrawals/{withdrawal}/approvals', [ReferralWithdrawalController::class, 'approve']);
-        Route::post('/referral-withdrawals/{withdrawal}/rejections', [ReferralWithdrawalController::class, 'reject']);
-        Route::post('/referral-withdrawals/{withdrawal}/payment-confirmations', [ReferralWithdrawalController::class, 'confirmPayment']);
+        Route::post('/referral-withdrawals/{withdrawal}/approvals', [ReferralWithdrawalController::class, 'approve'])
+            ->middleware('throttle:10,1,admin-withdraw-approve');
+        Route::post('/referral-withdrawals/{withdrawal}/rejections', [ReferralWithdrawalController::class, 'reject'])
+            ->middleware('throttle:10,1,admin-withdraw-reject');
+        // 打款确认不可撤销：限流防止误双击与脚本重放造成重复出款确认。
+        Route::post('/referral-withdrawals/{withdrawal}/payment-confirmations', [ReferralWithdrawalController::class, 'confirmPayment'])
+            ->middleware('throttle:10,1,admin-withdraw-confirm');
     });
 });

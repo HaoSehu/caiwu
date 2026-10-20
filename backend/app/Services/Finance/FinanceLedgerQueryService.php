@@ -8,8 +8,8 @@ use App\Constants\InvoiceType;
 use App\Constants\OrderStatus;
 use App\Constants\PaymentStatus;
 use App\Http\Resources\Finance\FinanceLedgerResource;
-use App\Models\AccountTransaction;
 use App\Models\ActivityLog;
+use App\Models\FinanceLedgerEntry;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Payment;
@@ -67,7 +67,7 @@ class FinanceLedgerQueryService
     public function detailForClient(User $user, int $ledgerId): array
     {
         $record = $this->buildQuery(['user_id' => (int) $user->id])
-            ->where('account_transactions.id', $ledgerId)
+            ->where('finance_ledger_entries.id', $ledgerId)
             ->firstOrFail();
 
         return $this->buildClientDetailPayload($record);
@@ -76,7 +76,7 @@ class FinanceLedgerQueryService
     public function detailForAdmin(int $ledgerId): array
     {
         $record = $this->buildQuery([])
-            ->where('account_transactions.id', $ledgerId)
+            ->where('finance_ledger_entries.id', $ledgerId)
             ->firstOrFail();
 
         return $this->buildDetailPayload($record);
@@ -108,12 +108,12 @@ class FinanceLedgerQueryService
             return $cached;
         }
 
-        $baseQuery = AccountTransaction::query()
+        $baseQuery = FinanceLedgerEntry::query()
             ->where('account_type', 'cash');
 
         $this->applyFilters($baseQuery, $filters);
 
-        $normalizedEventSql = $this->normalizedEventTypeSql('account_transactions.event_type');
+        $normalizedEventSql = $this->normalizedEventTypeSql('finance_ledger_entries.event_type');
         $summaryRow = (clone $baseQuery)
             ->selectRaw('COALESCE(SUM(CASE WHEN change_amount > 0 THEN change_amount ELSE 0 END), 0) as total_in')
             ->selectRaw('COALESCE(SUM(CASE WHEN change_amount < 0 THEN ABS(change_amount) ELSE 0 END), 0) as total_out')
@@ -155,7 +155,7 @@ class FinanceLedgerQueryService
         $recharge30Days = (clone $baseQuery)
             ->where('created_at', '>=', now()->subDays(30))
             ->whereRaw(
-                $this->normalizedEventTypeSql('account_transactions.event_type').' = ?',
+                $this->normalizedEventTypeSql('finance_ledger_entries.event_type').' = ?',
                 array_merge($this->normalizedEventTypeBindings(), [FinanceLedgerEventType::RECHARGE])
             )
             ->sum('change_amount');
@@ -163,7 +163,7 @@ class FinanceLedgerQueryService
         $refund30Days = (clone $baseQuery)
             ->where('created_at', '>=', now()->subDays(30))
             ->whereRaw(
-                $this->normalizedEventTypeSql('account_transactions.event_type').' = ?',
+                $this->normalizedEventTypeSql('finance_ledger_entries.event_type').' = ?',
                 array_merge($this->normalizedEventTypeBindings(), [FinanceLedgerEventType::INVOICE_REFUND])
             )
             ->sum('change_amount');
@@ -217,11 +217,11 @@ class FinanceLedgerQueryService
 
     private function buildQuery(array $filters, bool $withRelations = true): Builder
     {
-        $query = AccountTransaction::query()
+        $query = FinanceLedgerEntry::query()
             ->where('account_type', 'cash')
-            ->select('account_transactions.*')
+            ->select('finance_ledger_entries.*')
             ->selectRaw(
-                $this->normalizedEventTypeSql('account_transactions.event_type').' as normalized_event_type',
+                $this->normalizedEventTypeSql('finance_ledger_entries.event_type').' as normalized_event_type',
                 $this->normalizedEventTypeBindings()
             );
 
@@ -248,7 +248,7 @@ class FinanceLedgerQueryService
 
         if (! empty($filters['event_type'])) {
             $query->whereRaw(
-                $this->normalizedEventTypeSql('account_transactions.event_type').' = ?',
+                $this->normalizedEventTypeSql('finance_ledger_entries.event_type').' = ?',
                 array_merge($this->normalizedEventTypeBindings(), [$filters['event_type']])
             );
         }
@@ -270,7 +270,7 @@ class FinanceLedgerQueryService
         if (! empty($filters['tab'])) {
             match ($filters['tab']) {
                 'invoices' => $query->whereRaw(
-                    $this->normalizedEventTypeSql('account_transactions.event_type').' IN (?, ?)',
+                    $this->normalizedEventTypeSql('finance_ledger_entries.event_type').' IN (?, ?)',
                     array_merge(
                         $this->normalizedEventTypeBindings(),
                         [
@@ -280,7 +280,7 @@ class FinanceLedgerQueryService
                     )
                 ),
                 'balance' => $query->whereRaw(
-                    $this->normalizedEventTypeSql('account_transactions.event_type').' IN (?, ?, ?, ?, ?)',
+                    $this->normalizedEventTypeSql('finance_ledger_entries.event_type').' IN (?, ?, ?, ?, ?)',
                     array_merge(
                         $this->normalizedEventTypeBindings(),
                         [
@@ -293,7 +293,7 @@ class FinanceLedgerQueryService
                     )
                 ),
                 'recharge' => $query->whereRaw(
-                    $this->normalizedEventTypeSql('account_transactions.event_type').' IN (?, ?)',
+                    $this->normalizedEventTypeSql('finance_ledger_entries.event_type').' IN (?, ?)',
                     array_merge(
                         $this->normalizedEventTypeBindings(),
                         [
@@ -303,7 +303,7 @@ class FinanceLedgerQueryService
                     )
                 ),
                 'adjustment' => $query->whereRaw(
-                    $this->normalizedEventTypeSql('account_transactions.event_type').' IN (?, ?)',
+                    $this->normalizedEventTypeSql('finance_ledger_entries.event_type').' IN (?, ?)',
                     array_merge(
                         $this->normalizedEventTypeBindings(),
                         [
@@ -321,19 +321,19 @@ class FinanceLedgerQueryService
             // 关联子查询代替 pluck 全表拉取：台账过滤此前把整张 invoices/payments 的
             // 匹配 id 拉入 PHP 再 whereIn，行数增长后内存与查询包体积同步放大，且
             // whereIn 大列表会让 MySQL range 优化失效。子查询命中
-            // account_transactions(source_type, source_id) 关联索引与源表主键。
+            // finance_ledger_entries(source_type, source_id) 关联索引与源表主键。
             $query->where(function (Builder $builder) use ($status) {
                 $builder->where(function (Builder $inner) use ($status) {
                     $inner->where('source_type', 'invoice')
                         ->whereExists(fn ($q) => $q->selectRaw(1)
                             ->from('invoices')
-                            ->whereColumn('invoices.id', 'account_transactions.source_id')
+                            ->whereColumn('invoices.id', 'finance_ledger_entries.source_id')
                             ->where('invoices.status', $status));
                 })->orWhere(function (Builder $inner) use ($status) {
                     $inner->where('source_type', 'payment')
                         ->whereExists(fn ($q) => $q->selectRaw(1)
                             ->from('payments')
-                            ->whereColumn('payments.id', 'account_transactions.source_id')
+                            ->whereColumn('payments.id', 'finance_ledger_entries.source_id')
                             ->where('payments.status', $status));
                 });
             });
@@ -346,14 +346,14 @@ class FinanceLedgerQueryService
                     $inner->where('source_type', 'invoice')
                         ->whereExists(fn ($q) => $q->selectRaw(1)
                             ->from('invoices')
-                            ->whereColumn('invoices.id', 'account_transactions.source_id')
+                            ->whereColumn('invoices.id', 'finance_ledger_entries.source_id')
                             ->where('invoices.invoice_no', 'like', '%'.$keyword.'%'));
                 })->orWhere(function (Builder $inner) use ($keyword) {
                     // 支付单归属匹配账单：payments.invoice_id ∈ invoices(invoice_no like)
                     $inner->where('source_type', 'payment')
                         ->whereExists(fn ($q) => $q->selectRaw(1)
                             ->from('payments')
-                            ->whereColumn('payments.id', 'account_transactions.source_id')
+                            ->whereColumn('payments.id', 'finance_ledger_entries.source_id')
                             ->whereExists(fn ($pi) => $pi->selectRaw(1)
                                 ->from('invoices')
                                 ->whereColumn('invoices.id', 'payments.invoice_id')
@@ -369,14 +369,14 @@ class FinanceLedgerQueryService
                     $inner->where('source_type', 'payment')
                         ->whereExists(fn ($q) => $q->selectRaw(1)
                             ->from('payments')
-                            ->whereColumn('payments.id', 'account_transactions.source_id')
+                            ->whereColumn('payments.id', 'finance_ledger_entries.source_id')
                             ->where('payments.payment_no', 'like', '%'.$keyword.'%'));
                 })->orWhere(function (Builder $inner) use ($keyword) {
                     // 支付单号命中时，其关联账单也纳入结果：invoices.id ∈ payments(payment_no like).invoice_id
                     $inner->where('source_type', 'invoice')
                         ->whereExists(fn ($q) => $q->selectRaw(1)
                             ->from('invoices')
-                            ->whereColumn('invoices.id', 'account_transactions.source_id')
+                            ->whereColumn('invoices.id', 'finance_ledger_entries.source_id')
                             ->whereExists(fn ($pi) => $pi->selectRaw(1)
                                 ->from('payments')
                                 ->whereColumn('payments.invoice_id', 'invoices.id')
@@ -399,7 +399,7 @@ class FinanceLedgerQueryService
                         $inner->where('source_type', 'invoice')
                             ->whereExists(fn ($q) => $q->selectRaw(1)
                                 ->from('invoices')
-                                ->whereColumn('invoices.id', 'account_transactions.source_id')
+                                ->whereColumn('invoices.id', 'finance_ledger_entries.source_id')
                                 ->where(function (Builder $invoiceMatch) use ($keyword) {
                                     $invoiceMatch->where('invoices.invoice_no', 'like', '%'.$keyword.'%')
                                         ->orWhereExists(fn ($pi) => $pi->selectRaw(1)
@@ -411,7 +411,7 @@ class FinanceLedgerQueryService
                         $inner->where('source_type', 'payment')
                             ->whereExists(fn ($q) => $q->selectRaw(1)
                                 ->from('payments')
-                                ->whereColumn('payments.id', 'account_transactions.source_id')
+                                ->whereColumn('payments.id', 'finance_ledger_entries.source_id')
                                 ->where(function (Builder $paymentMatch) use ($keyword) {
                                     $paymentMatch->where('payments.payment_no', 'like', '%'.$keyword.'%')
                                         ->orWhereExists(fn ($iv) => $iv->selectRaw(1)
@@ -438,7 +438,7 @@ class FinanceLedgerQueryService
                 $inner->where('source_type', 'invoice')
                     ->whereExists(fn ($q) => $q->selectRaw(1)
                         ->from('invoices')
-                        ->whereColumn('invoices.id', 'account_transactions.source_id')
+                        ->whereColumn('invoices.id', 'finance_ledger_entries.source_id')
                         ->where(function (Builder $invoiceMatch) use ($serviceId) {
                             $invoiceMatch->where('invoices.service_id', $serviceId)
                                 ->orWhereExists(fn ($oi) => $oi->selectRaw(1)
@@ -450,7 +450,7 @@ class FinanceLedgerQueryService
                 $inner->where('source_type', 'payment')
                     ->whereExists(fn ($q) => $q->selectRaw(1)
                         ->from('payments')
-                        ->whereColumn('payments.id', 'account_transactions.source_id')
+                        ->whereColumn('payments.id', 'finance_ledger_entries.source_id')
                         ->whereExists(fn ($iv) => $iv->selectRaw(1)
                             ->from('invoices')
                             ->whereColumn('invoices.id', 'payments.invoice_id')
@@ -538,7 +538,7 @@ class FinanceLedgerQueryService
         });
     }
 
-    private function buildDetailPayload(AccountTransaction $record): array
+    private function buildDetailPayload(FinanceLedgerEntry $record): array
     {
         $base = FinanceLedgerResource::make($record)->resolve();
         $invoice = $record->getRelationValue('invoice');
@@ -558,7 +558,7 @@ class FinanceLedgerQueryService
         ]);
     }
 
-    private function buildClientDetailPayload(AccountTransaction $record): array
+    private function buildClientDetailPayload(FinanceLedgerEntry $record): array
     {
         $base = $this->sanitizeClientLedgerPayload(FinanceLedgerResource::make($record)->resolve());
         $invoice = $record->getRelationValue('invoice');
@@ -644,7 +644,7 @@ class FinanceLedgerQueryService
         return $projection === [] ? $legacy : array_replace($legacy, $projection);
     }
 
-    private function buildSourceChain(AccountTransaction $record, ?Invoice $invoice, ?Payment $payment, ?Order $order): array
+    private function buildSourceChain(FinanceLedgerEntry $record, ?Invoice $invoice, ?Payment $payment, ?Order $order): array
     {
         $items = [];
 
@@ -707,7 +707,7 @@ class FinanceLedgerQueryService
     }
 
     private function buildStatusTimeline(
-        AccountTransaction $record,
+        FinanceLedgerEntry $record,
         ?Invoice $invoice,
         ?Payment $payment,
         ?Order $order,
@@ -782,7 +782,7 @@ class FinanceLedgerQueryService
             ->all();
     }
 
-    private function buildAuditLogs(AccountTransaction $record, ?Invoice $invoice, ?Payment $payment, ?Order $order): array
+    private function buildAuditLogs(FinanceLedgerEntry $record, ?Invoice $invoice, ?Payment $payment, ?Order $order): array
     {
         $logs = collect();
 
@@ -836,7 +836,7 @@ class FinanceLedgerQueryService
         })->values()->all();
     }
 
-    private function buildTraceLinks(AccountTransaction $record, ?Invoice $invoice, ?Payment $payment, ?Order $order): array
+    private function buildTraceLinks(FinanceLedgerEntry $record, ?Invoice $invoice, ?Payment $payment, ?Order $order): array
     {
         $links = [];
         $traceId = trim((string) ($record->trace_id ?? ''));
@@ -917,7 +917,7 @@ class FinanceLedgerQueryService
             ->all();
     }
 
-    private function buildStandaloneSourceNode(AccountTransaction $record): ?array
+    private function buildStandaloneSourceNode(FinanceLedgerEntry $record): ?array
     {
         $sourceType = trim((string) ($record->source_type ?: $record->origin_type));
         $sourceId = (int) ($record->source_id ?: $record->origin_id ?: 0);
@@ -934,7 +934,7 @@ class FinanceLedgerQueryService
             'id' => $sourceId > 0 ? $sourceId : null,
             'no' => $sourceNo,
             'status' => null,
-            'status_label' => trim((string) ($record->operator ?? '')) ?: '系统触发',
+            'status_label' => trim((string) ($record->operator_name ?? '')) ?: '系统触发',
             'occurred_at' => $record->created_at?->format('Y-m-d H:i:s'),
             'description' => trim((string) ($record->remark ?? '')) ?: $this->sourceTypeDescription($sourceType),
         ];
@@ -990,7 +990,7 @@ class FinanceLedgerQueryService
         };
     }
 
-    private function eventStatusLabel(AccountTransaction $record, ?Invoice $invoice, ?Payment $payment): string
+    private function eventStatusLabel(FinanceLedgerEntry $record, ?Invoice $invoice, ?Payment $payment): string
     {
         if ($payment instanceof Payment) {
             return PaymentStatus::$labels[(int) $payment->status] ?? (string) $payment->status;

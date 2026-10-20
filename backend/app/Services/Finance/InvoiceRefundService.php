@@ -12,15 +12,18 @@ use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
 use App\Exceptions\BusinessException;
 use App\Jobs\SendTemplateEmailJob;
-use App\Models\AccountTransaction;
+use App\Models\FinanceLedgerEntry;
+use App\Models\FinanceRefund;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Payment;
-use App\Models\Refund;
 use App\Models\User;
+use App\Services\Finance\Core\FinanceAccountService;
+use App\Services\Finance\Core\FinanceIdempotencyService;
 use App\Services\Referral\ReferralService;
+use App\Services\System\ActivityLogService;
 use App\Services\System\NotificationService;
-use App\Services\User\AccountService;
+use App\Support\Money;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -36,13 +39,15 @@ use Illuminate\Support\Facades\Log;
 class InvoiceRefundService
 {
     public function __construct(
-        private AccountService $accountService,
+        private FinanceAccountService $accounts,
         private FinanceDocumentService $financeDocumentService,
-        private FinanceLedgerWriter $financeLedgerWriter,
         private PaymentCallbackProjector $callbackProjector,
         private MixPaymentService $mixPaymentService,
         private ReferralService $referralService,
         private TradeLifecycleService $tradeLifecycleService,
+        private FinanceIdempotencyService $idempotency,
+        private RefundDeliveryGuard $deliveryGuard,
+        private ActivityLogService $activityLogs,
     ) {}
 
     /**
@@ -75,201 +80,255 @@ class InvoiceRefundService
     public function refundInvoiceToBalance(User $user, Invoice $invoice, array $payload = [], array $context = []): array
     {
         $lockKey = "lock:refund:invoice:{$invoice->id}";
+        // 幂等键：管理端入口由请求层强制传入（payload 优先，直调方可放 context）；
+        // 直调方（测试/内部）缺省自动生成。幂等记录在业务事务之外落库（约束见 FinanceIdempotencyService）。
+        $idempotencyKey = trim((string) ($payload['idempotency_key'] ?? $context['idempotency_key'] ?? ''));
+        if ($idempotencyKey === '') {
+            $idempotencyKey = 'auto:'.bin2hex(random_bytes(16));
+        }
 
         try {
-            $result = Cache::lock($lockKey, 40)->block(5, function () use ($user, $invoice, $payload, $context) {
-                return DB::transaction(function () use ($user, $invoice, $payload, $context) {
-                    $lockedInvoice = Invoice::query()
-                        ->lockForUpdate()
-                        ->with(['order', 'payments'])
-                        ->findOrFail($invoice->id);
-                    $lockedUser = User::query()
-                        ->lockForUpdate()
-                        ->findOrFail($user->id);
+            $operation = $this->idempotency->execute(
+                'invoice_refund',
+                (string) ($context['operator_type'] ?? 'admin'),
+                (int) ($context['operator_id'] ?? 0),
+                $idempotencyKey,
+                [
+                    'invoice_id' => (int) $invoice->id,
+                    'amount' => round((float) ($payload['amount'] ?? 0), 2),
+                    'remark' => trim((string) ($payload['remark'] ?? '')),
+                ],
+                function () use ($user, $invoice, $payload, $context, $lockKey) {
+                    return Cache::lock($lockKey, 40)->block(5, function () use ($user, $invoice, $payload, $context) {
+                        return DB::transaction(function () use ($user, $invoice, $payload, $context) {
+                            $lockedInvoice = Invoice::query()
+                                ->lockForUpdate()
+                                ->with(['order', 'payments'])
+                                ->findOrFail($invoice->id);
+                            $lockedUser = User::query()
+                                ->lockForUpdate()
+                                ->findOrFail($user->id);
 
-                    throw_if((int) $lockedInvoice->user_id !== (int) $lockedUser->id, new BusinessException('账单与用户不匹配'));
-                    throw_if(
-                        ! in_array((int) $lockedInvoice->status, [InvoiceStatus::PAID], true),
-                        new BusinessException('当前账单状态不支持退款')
-                    );
-
-                    // 充值账单到账时余额已同步增加、补录账单为系统外收款凭证：
-                    // 两者退回余额都没有对应的资金流出，等于凭空增加余额，不得退回余额（需红字冲抵等其它方式）。
-                    throw_if(
-                        in_array((string) $lockedInvoice->type, [InvoiceType::RECHARGE, InvoiceType::MANUAL], true),
-                        new BusinessException('充值/补录账单不支持退回余额')
-                    );
-
-                    // 与纯标记通道互斥（2026-10-11 裁决：一单只选一种）：
-                    // 同一张账单要么整笔走「线下补标记」，要么整笔走「退款到余额」，
-                    // 混用会让两种资金语义在同一账单上叠加、对账无法解释。
-                    throw_if(
-                        Refund::query()
-                            ->where('invoice_id', (int) $lockedInvoice->id)
-                            ->where('refund_method', Refund::METHOD_MANUAL_MARK)
-                            ->where('status', Refund::STATUS_COMPLETED)
-                            ->exists(),
-                        new BusinessException('该账单已有线下退款标记，请在「标记已退款」入口完成剩余退款')
-                    );
-
-                    $order = $lockedInvoice->order;
-
-                    if ($order && (int) $order->status === OrderStatus::REFUNDED) {
-                        return [
-                            'already_refunded' => true,
-                            'invoice_id' => (int) $lockedInvoice->id,
-                            'payment_id' => 0,
-                            'refund' => [],
-                        ];
-                    }
-
-                    throw_if(
-                        $order && (int) $order->status !== OrderStatus::PAID,
-                        new BusinessException('当前订单状态不支持退款')
-                    );
-
-                    // 账单退款与订单退款同规则：奖励已释放且可提余额不足时先阻断，避免退款后无法追回返利
-                    $this->referralService->assertInvoiceRewardRefundable($lockedInvoice);
-
-                    $payment = $this->resolvePrimaryRefundablePayment($lockedInvoice);
-
-                    if ($payment instanceof Payment && (int) $payment->status === PaymentStatus::REFUNDED) {
-                        $refund = (array) data_get((array) ($payment->callback_raw ?? []), 'refund', []);
-                        if ((int) $lockedInvoice->status !== InvoiceStatus::REFUNDED) {
-                            $this->tradeLifecycleService->markInvoiceRefunded(
-                                $lockedInvoice,
-                                $refund,
-                                (string) ($refund['refund_method'] ?? 'balance'),
-                                (float) ($refund['refund_amount'] ?? $refund['refund_fee'] ?? 0),
-                                $context
+                            throw_if((int) $lockedInvoice->user_id !== (int) $lockedUser->id, new BusinessException('账单与用户不匹配'));
+                            throw_if(
+                                ! in_array((int) $lockedInvoice->status, [InvoiceStatus::PAID], true),
+                                new BusinessException('当前账单状态不支持退款')
                             );
-                        }
 
-                        return [
-                            'already_refunded' => true,
-                            'invoice_id' => (int) $lockedInvoice->id,
-                            'payment_id' => (int) $payment->id,
-                            'refund' => $refund,
-                        ];
-                    }
+                            // 充值账单到账时余额已同步增加、补录账单为系统外收款凭证：
+                            // 两者退回余额都没有对应的资金流出，等于凭空增加余额，不得退回余额（需红字冲抵等其它方式）。
+                            throw_if(
+                                in_array((string) $lockedInvoice->type, [InvoiceType::RECHARGE, InvoiceType::MANUAL], true),
+                                new BusinessException('充值/补录账单不支持退回余额')
+                            );
 
-                    $refundableAmount = $this->remainingRefundableAmount($lockedInvoice, $payment);
-                    $refundAmount = round((float) ($payload['amount'] ?? $refundableAmount), 2);
-                    throw_if(
-                        $refundAmount <= 0,
-                        new BusinessException($this->invoiceCreditedToBalanceAmount($lockedInvoice) > 0
-                            ? '该账单款项已通过重复支付转入余额，无需再退款'
-                            : '退款金额不正确')
-                    );
-                    throw_if($refundAmount - $refundableAmount > 0.00001, new BusinessException('退款金额超过原单可退金额'));
+                            // 纯标记通道已于 2026-10-20 裁决移除：历史 manual_mark 行只读保留，
+                            // 新退款一律为「退回余额」，不再需要双通道互斥守卫。
 
-                    $refundReason = trim((string) ($payload['remark'] ?? ''));
-                    if ($refundReason === '') {
-                        $refundReason = '后台退回用户余额';
-                    }
+                            // 交付守卫（finance.refund.delivery_guard）：block 已交付拒绝退款，
+                            // warn 把交付快照随退款单落 delivery_evidence 证据。
+                            $deliveryEvidence = $this->deliveryGuard->inspect($lockedInvoice);
 
-                    // 退款口径（2026-10-10 裁决）：暂时不提供原路退款——支付插件层无退款能力与契约，
-                    // 只保留余额退回，refund_method 恒为 balance，不产生「原路退款」标签。
-                    $refundMethod = 'balance';
-                    $refundMethodLabel = trim((string) ($payload['refund_method_label'] ?? '')) ?: '退回余额';
+                            $order = $lockedInvoice->order;
 
-                    $balanceAfter = $this->setUserBalance($lockedUser, $this->getUserBalance($lockedUser) + $refundAmount);
-                    $transaction = $this->financeLedgerWriter->createBalanceLog(
-                        (int) $lockedUser->id,
-                        FinanceLedgerEventType::INVOICE_REFUND,
-                        $refundAmount,
-                        $balanceAfter,
-                        (int) $lockedInvoice->id,
-                        '账单退款 '.(string) $lockedInvoice->invoice_no,
-                        [
-                            'operator' => (string) ($context['operator_name'] ?? ''),
-                            'trace_id' => (string) ($context['trace_id'] ?? ''),
-                        ],
-                    );
+                            if ($order && (int) $order->status === OrderStatus::REFUNDED) {
+                                return [
+                                    'already_refunded' => true,
+                                    'invoice_id' => (int) $lockedInvoice->id,
+                                    'payment_id' => 0,
+                                    'refund' => [],
+                                ];
+                            }
 
-                    $refundRecord = [
-                        'refund_method' => $refundMethod,
-                        'refund_method_label' => $refundMethodLabel,
-                        'refund_amount' => number_format($refundAmount, 2, '.', ''),
-                        'refund_reason' => $refundReason,
-                        'trade_no' => (string) ($payment?->trade_no ?? ''),
-                        'original_gateway' => $payment?->gatewayKey() ?? 'balance',
-                        'original_gateway_label' => $payment instanceof Payment
-                            ? $this->resolvePaymentGatewayLabel($payment->gatewayKey())
-                            : '余额支付',
-                        'operator_id' => (int) ($context['operator_id'] ?? 0),
-                        'operator_name' => (string) ($context['operator_name'] ?? ''),
-                        'trace_id' => (string) ($context['trace_id'] ?? ''),
-                        'refunded_at' => now()->format('Y-m-d H:i:s'),
-                    ];
+                            throw_if(
+                                $order && (int) $order->status !== OrderStatus::PAID,
+                                new BusinessException('当前订单状态不支持退款')
+                            );
 
-                    $documents = $this->financeDocumentService->createBalanceRefundDocuments(
-                        $lockedInvoice,
-                        $payment,
-                        $transaction,
-                        $refundAmount,
-                        $refundReason,
-                        array_merge($context, ['operator_type' => $context['operator_type'] ?? 'admin']),
-                    );
-                    $isFullyRefunded = abs($refundAmount - $refundableAmount) <= 0.00001;
+                            // 账单退款与订单退款同规则：奖励已释放且可提余额不足时先阻断，避免退款后无法追回返利
+                            $this->referralService->assertInvoiceRewardRefundable($lockedInvoice);
 
-                    if ($payment instanceof Payment) {
-                        $callbackRaw = (array) ($payment->callback_raw ?? []);
-                        $callbackRaw['refund'] = $refundRecord;
-                        $callbackRaw['refunds'] = array_values(array_merge(
-                            (array) ($callbackRaw['refunds'] ?? []),
-                            [$refundRecord]
-                        ));
+                            $payment = $this->resolvePrimaryRefundablePayment($lockedInvoice);
 
-                        $paymentPayload = [
-                            'callback_raw' => $callbackRaw,
-                        ];
-                        if ($isFullyRefunded) {
-                            $paymentPayload['status'] = PaymentStatus::REFUNDED;
-                        }
-                        $payment->forceFill($paymentPayload)->save();
-                        $this->callbackProjector->syncProjection($payment);
-                    }
+                            if ($payment instanceof Payment && (int) $payment->status === PaymentStatus::REFUNDED) {
+                                $refund = (array) data_get((array) ($payment->callback_raw ?? []), 'refund', []);
+                                if ((int) $lockedInvoice->status !== InvoiceStatus::REFUNDED) {
+                                    $this->tradeLifecycleService->markInvoiceRefunded(
+                                        $lockedInvoice,
+                                        $refund,
+                                        (string) ($refund['refund_method'] ?? 'balance'),
+                                        (float) ($refund['refund_amount'] ?? $refund['refund_fee'] ?? 0),
+                                        $context
+                                    );
+                                }
 
-                    if ($isFullyRefunded) {
-                        $this->tradeLifecycleService->markInvoiceRefunded($lockedInvoice, $refundRecord, $refundMethod, $refundAmount, $context);
+                                return [
+                                    'already_refunded' => true,
+                                    'invoice_id' => (int) $lockedInvoice->id,
+                                    'payment_id' => (int) $payment->id,
+                                    'refund' => $refund,
+                                ];
+                            }
 
-                        // 全款退款回退推广奖励（幂等：订单退款流程已回退则直接跳过）
-                        $refundTraceId = trim((string) ($context['trace_id'] ?? ''));
-                        $this->referralService->reverseRewardForRefundedInvoice(
-                            $lockedInvoice,
-                            $refundTraceId !== '' ? "refund:{$refundTraceId}" : "refund:invoice:{$lockedInvoice->id}",
-                        );
-                    }
+                            $refundableAmount = $this->remainingRefundableAmount($lockedInvoice, $payment);
+                            $refundAmount = round((float) ($payload['amount'] ?? $refundableAmount), 2);
+                            throw_if(
+                                $refundAmount <= 0,
+                                new BusinessException($this->invoiceCreditedToBalanceAmount($lockedInvoice) > 0
+                                    ? '该账单款项已通过重复支付转入余额，无需再退款'
+                                    : '退款金额不正确')
+                            );
+                            throw_if($refundAmount - $refundableAmount > 0.00001, new BusinessException('退款金额超过原单可退金额'));
 
-                    // 订单 REFUNDED 投影由状态机 markInvoiceRefunded 统一级联（原 scope 直写段已收敛）。
+                            $refundReason = trim((string) ($payload['remark'] ?? ''));
+                            if ($refundReason === '') {
+                                $refundReason = '后台退回用户余额';
+                            }
 
-                    Log::info('[账单退款] 已退回用户余额', [
-                        'invoice_id' => $lockedInvoice->id,
-                        'invoice_no' => $lockedInvoice->invoice_no,
-                        'payment_id' => $payment?->id,
-                        'refund_amount' => $refundRecord['refund_amount'],
-                        'user_id' => $lockedUser->id,
-                    ]);
+                            // 退款口径（2026-10-10 裁决）：暂时不提供原路退款——支付插件层无退款能力与契约，
+                            // 只保留余额退回，refund_method 恒为 balance，不产生「原路退款」标签。
+                            $refundMethod = 'balance';
+                            $refundMethodLabel = trim((string) ($payload['refund_method_label'] ?? '')) ?: '退回余额';
 
-                    return [
-                        'already_refunded' => false,
-                        'invoice_id' => (int) $lockedInvoice->id,
-                        'payment_id' => (int) ($payment?->id ?? 0),
-                        'refund_id' => (int) $documents['refund']->id,
-                        'refund_invoice_id' => (int) $documents['refund_invoice']->id,
-                        'recharge_record_id' => $documents['recharge_record']?->id,
-                        'refund' => $refundRecord,
-                    ];
-                });
-            });
+                            $mutation = $this->accounts->credit(
+                                (int) $lockedUser->id,
+                                Money::toCents($refundAmount),
+                                FinanceLedgerEventType::INVOICE_REFUND,
+                                [
+                                    'source_type' => 'invoice',
+                                    'source_id' => (int) $lockedInvoice->id,
+                                    'remark' => '账单退款 '.(string) $lockedInvoice->invoice_no,
+                                    'lot_source_type' => 'refund',
+                                    'operator_type' => (string) ($context['operator_type'] ?? 'admin'),
+                                    'operator_id' => $context['operator_id'] ?? null,
+                                    'operator_name' => (string) ($context['operator_name'] ?? ''),
+                                    'trace_id' => (string) ($context['trace_id'] ?? ''),
+                                ],
+                            );
+                            $transaction = FinanceLedgerEntry::query()->findOrFail($mutation->entryId);
 
-            $this->notifyClientInvoiceRefunded($user, $invoice, $result);
+                            // 退款血缘：把这笔退款追认到原账单的消费映射上（只写 evidence，
+                            // 不动批次剩余），否则退款在账上看起来像一笔新钱，查不到对应原消费。
+                            $this->accounts->markRefundedConsumptions(
+                                (int) $lockedUser->id,
+                                'invoice',
+                                (int) $lockedInvoice->id,
+                                Money::toCents($refundAmount),
+                            );
 
-            return $result;
+                            $refundRecord = [
+                                'refund_method' => $refundMethod,
+                                'refund_method_label' => $refundMethodLabel,
+                                'refund_amount' => number_format($refundAmount, 2, '.', ''),
+                                'refund_reason' => $refundReason,
+                                'trade_no' => (string) ($payment?->trade_no ?? ''),
+                                'original_gateway' => $payment?->gatewayKey() ?? 'balance',
+                                'original_gateway_label' => $payment instanceof Payment
+                                    ? $this->resolvePaymentGatewayLabel($payment->gatewayKey())
+                                    : '余额支付',
+                                'operator_id' => (int) ($context['operator_id'] ?? 0),
+                                'operator_name' => (string) ($context['operator_name'] ?? ''),
+                                'trace_id' => (string) ($context['trace_id'] ?? ''),
+                                'refunded_at' => now()->format('Y-m-d H:i:s'),
+                            ];
+
+                            $documents = $this->financeDocumentService->createBalanceRefundDocuments(
+                                $lockedInvoice,
+                                $payment,
+                                $transaction,
+                                $refundAmount,
+                                $refundReason,
+                                array_merge($context, [
+                                    'operator_type' => $context['operator_type'] ?? 'admin',
+                                    'delivery_evidence' => $deliveryEvidence,
+                                ]),
+                            );
+                            $isFullyRefunded = abs($refundAmount - $refundableAmount) <= 0.00001;
+
+                            if ($payment instanceof Payment) {
+                                $callbackRaw = (array) ($payment->callback_raw ?? []);
+                                $callbackRaw['refund'] = $refundRecord;
+                                $callbackRaw['refunds'] = array_values(array_merge(
+                                    (array) ($callbackRaw['refunds'] ?? []),
+                                    [$refundRecord]
+                                ));
+
+                                $paymentPayload = [
+                                    'callback_raw' => $callbackRaw,
+                                ];
+                                if ($isFullyRefunded) {
+                                    $paymentPayload['status'] = PaymentStatus::REFUNDED;
+                                }
+                                $payment->forceFill($paymentPayload)->save();
+                                $this->callbackProjector->syncProjection($payment);
+                            }
+
+                            if ($isFullyRefunded) {
+                                $this->tradeLifecycleService->markInvoiceRefunded($lockedInvoice, $refundRecord, $refundMethod, $refundAmount, $context);
+
+                                // 全款退款回退推广奖励（幂等：订单退款流程已回退则直接跳过）
+                                $refundTraceId = trim((string) ($context['trace_id'] ?? ''));
+                                $this->referralService->reverseRewardForRefundedInvoice(
+                                    $lockedInvoice,
+                                    $refundTraceId !== '' ? "refund:{$refundTraceId}" : "refund:invoice:{$lockedInvoice->id}",
+                                );
+                            }
+
+                            // 订单 REFUNDED 投影由状态机 markInvoiceRefunded 统一级联（原 scope 直写段已收敛）。
+
+                            Log::info('[账单退款] 已退回用户余额', [
+                                'invoice_id' => $lockedInvoice->id,
+                                'invoice_no' => $lockedInvoice->invoice_no,
+                                'payment_id' => $payment?->id,
+                                'refund_amount' => $refundRecord['refund_amount'],
+                                'user_id' => $lockedUser->id,
+                            ]);
+
+                            return [
+                                'already_refunded' => false,
+                                'invoice_id' => (int) $lockedInvoice->id,
+                                'payment_id' => (int) ($payment?->id ?? 0),
+                                'refund_id' => (int) $documents['refund']->id,
+                                'refund_invoice_id' => (int) $documents['refund_invoice']->id,
+                                'recharge_record_id' => $documents['recharge_record']?->id,
+                                'refund' => $refundRecord,
+                            ];
+                        });
+                    });
+                },
+                [
+                    'resource_type' => 'invoice',
+                    'resource_id' => (int) $invoice->id,
+                    'trace_id' => (string) ($context['trace_id'] ?? ''),
+                ],
+            );
         } catch (LockTimeoutException) {
             throw new BusinessException('退款处理中，请勿重复提交');
         }
+
+        $result = $operation->payload;
+
+        if (! $operation->replayed) {
+            // 审计走 logSafely：写失败只告警，不阻断已完成的资金动作
+            $this->activityLogs->logSafely(
+                'finance',
+                'invoice.refund.completed',
+                sprintf('账单退款到余额 ¥%s', (string) ($result['refund']['refund_amount'] ?? '')),
+                'invoice',
+                (int) ($result['invoice_id'] ?? $invoice->id),
+                [
+                    'invoice_id' => (int) ($result['invoice_id'] ?? 0),
+                    'refund_id' => (int) ($result['refund_id'] ?? 0),
+                    'already_refunded' => (bool) ($result['already_refunded'] ?? false),
+                    'operator_name' => (string) ($context['operator_name'] ?? ''),
+                    'trace_id' => (string) ($context['trace_id'] ?? ''),
+                ],
+            );
+
+            $this->notifyClientInvoiceRefunded($user, $invoice, $result);
+        }
+
+        return $result;
     }
 
     /**
@@ -375,7 +434,7 @@ class InvoiceRefundService
     {
         // 台账 INVOICE_PAYMENT 行的 source_id 统一为账单 ID（历史错挂订单 ID 的
         // 存量已由订正迁移 2026_08_31_000001 归位），此处只需精确匹配账单本身。
-        return AccountTransaction::query()
+        return FinanceLedgerEntry::query()
             ->where('user_id', (int) $invoice->user_id)
             ->where('event_type', FinanceLedgerEventType::INVOICE_PAYMENT)
             ->where('source_type', 'invoice')
@@ -392,9 +451,10 @@ class InvoiceRefundService
 
     private function completedRefundAmount(Invoice $invoice): float
     {
-        return round((float) Refund::query()
+        return round((float) FinanceRefund::query()
             ->where('invoice_id', (int) $invoice->id)
-            ->where('status', Refund::STATUS_COMPLETED)
+            ->where('funds_moved', 1)
+            ->where('status', FinanceRefund::STATUS_COMPLETED)
             ->sum('amount'), 2);
     }
 
@@ -411,15 +471,5 @@ class InvoiceRefundService
             'offline' => '线下支付',
             default => '手动入账',
         };
-    }
-
-    private function getUserBalance(User $user): float
-    {
-        return $this->accountService->cashBalance($user, true);
-    }
-
-    private function setUserBalance(User $user, float $balance): string
-    {
-        return $this->accountService->setCashBalance($user, $balance);
     }
 }

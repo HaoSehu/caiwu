@@ -11,8 +11,11 @@ use App\Support\UserBalanceCache;
 
 class AccountService
 {
+    /**
+     * 非现金账户列白名单：现金余额已迁移到 finance_accounts，由 FinanceAccountService 独占。
+     * cash_balance 保留在旧表仅作切换期热备，禁止经本类直接写入。
+     */
     private const MONEY_FIELDS = [
-        'cash_balance',
         'credit_limit',
         'referral_frozen_balance',
         'referral_available_balance',
@@ -47,27 +50,15 @@ class AccountService
         return $account;
     }
 
-    public function cashBalance(User|int $user, bool $lockForUpdate = false): float
-    {
-        $account = $this->ensureAccount($user, $lockForUpdate);
-
-        return round((float) $account->cash_balance, 2);
-    }
-
-    public function setCashBalance(User|int $user, float|string $balance, bool $lockForUpdate = false): string
-    {
-        $account = $this->updateAccount($user, [
-            'cash_balance' => $balance,
-        ], $lockForUpdate);
-
-        return $this->money($account->cash_balance);
-    }
-
     /**
      * @param  array<string, mixed>  $attributes
      */
     public function updateAccount(UserAccount|User|int $accountOrUser, array $attributes, bool $lockForUpdate = false): UserAccount
     {
+        if (array_key_exists('cash_balance', $attributes)) {
+            throw new \InvalidArgumentException('现金余额必须通过 FinanceAccountService 写入');
+        }
+
         $account = $accountOrUser instanceof UserAccount
             ? $accountOrUser
             : $this->ensureAccount($accountOrUser, $lockForUpdate);

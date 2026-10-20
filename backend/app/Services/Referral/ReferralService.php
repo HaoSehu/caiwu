@@ -8,7 +8,7 @@ use App\Constants\FinanceLedgerEventType;
 use App\Constants\InvoiceStatus;
 use App\Constants\OrderStatus;
 use App\Exceptions\BusinessException;
-use App\Models\AccountTransaction;
+use App\Models\FinanceLedgerEntry;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Product;
@@ -19,12 +19,14 @@ use App\Models\Setting;
 use App\Models\User;
 use App\Models\UserAccount;
 use App\Models\UserReferral;
+use App\Services\Finance\Core\FinanceAccountService;
 use App\Services\Finance\InvoiceService;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Services\ProductCatalog\ProductFullPathResolver;
 use App\Services\System\OperationLogService;
 use App\Services\User\AccountService;
 use App\Support\AdminPrivacy;
+use App\Support\Money;
 use App\Support\PublicUrl;
 use App\Support\SchemaMetadataCache;
 use App\Support\TextSanitizer;
@@ -1105,29 +1107,28 @@ class ReferralService
                     'referral_withdrawn_balance' => round((float) $account->referral_withdrawn_balance + $amount, 2),
                 ];
 
-                if ($record->method === ReferralWithdrawal::METHOD_BALANCE) {
-                    $accountPayload['cash_balance'] = round((float) $account->cash_balance + $amount, 2);
-                }
-
                 $account = $this->accounts()->updateAccount($account, $accountPayload);
 
                 $this->resetUserAggregateRelations($user);
 
                 if ($record->method === ReferralWithdrawal::METHOD_BALANCE) {
-                    AccountTransaction::query()->create([
-                        'user_id' => $user->id,
-                        'account_type' => 'cash',
-                        'event_type' => FinanceLedgerEventType::REFERRAL_CREDIT_CASH,
-                        'change_amount' => $amount,
-                        'balance_after' => $account->cash_balance,
-                        'source_type' => 'referral_withdrawal',
-                        'source_id' => $record->id,
-                        'origin_type' => 'referral_withdrawal',
-                        'origin_id' => $record->id,
-                        'remark' => "推荐奖励提现转入余额 #{$record->id}",
-                        'operator' => $operator,
-                        'trace_id' => $traceId,
-                    ]);
+                    // 返利转现金：由财务内核统一写余额 + 台账 + 批次，来源标记为 referral_withdrawal。
+                    app(FinanceAccountService::class)->credit(
+                        (int) $user->id,
+                        Money::toCents($amount),
+                        FinanceLedgerEventType::REFERRAL_CREDIT_CASH,
+                        [
+                            'source_type' => 'referral_withdrawal',
+                            'source_id' => (int) $record->id,
+                            'origin_type' => 'referral_withdrawal',
+                            'origin_id' => (int) $record->id,
+                            'remark' => "推荐奖励提现转入余额 #{$record->id}",
+                            'lot_source_type' => 'referral_withdrawal',
+                            'operator_type' => 'admin',
+                            'operator_name' => $operator,
+                            'trace_id' => $traceId,
+                        ],
+                    );
                 }
 
                 $record->forceFill([
@@ -1546,21 +1547,24 @@ class ReferralService
             ? [$accountTypeOverride, $this->resolveReferralBalanceAfter($accountTypeOverride, $balances)]
             : $this->resolveReferralAccountTypeAndBalance($type, $balances);
 
-        AccountTransaction::query()->create([
+        FinanceLedgerEntry::query()->create([
+            'entry_no' => 'FL'.date('YmdHis').strtoupper(bin2hex(random_bytes(8))),
             'user_id' => $user->id,
+            'account_id' => null,
             'event_type' => $type,
             'account_type' => $accountType,
             'change_amount' => round($amount, 2),
             'balance_after' => $balanceAfter,
+            'currency' => 'CNY',
             'remark' => $remark,
             'source_id' => $relatedId,
             'source_type' => $relatedType,
             'origin_type' => 'referral_event',
             'origin_id' => $relatedId,
-            'operator' => $operator,
+            'operator_type' => 'system',
+            'operator_name' => $operator,
             'trace_id' => $traceId,
             'created_at' => now(),
-            'updated_at' => now(),
         ]);
     }
 
@@ -1602,7 +1606,7 @@ class ReferralService
             'remark' => (string) data_get($transaction, 'remark', ''),
             'operator' => (string) data_get($transaction, 'operator', ''),
             'created_at' => $createdAt?->format('Y-m-d H:i:s'),
-            'user' => $transaction instanceof AccountTransaction && $transaction->relationLoaded('user') && $transaction->user ? [
+            'user' => $transaction instanceof FinanceLedgerEntry && $transaction->relationLoaded('user') && $transaction->user ? [
                 'id' => (int) $transaction->user->id,
                 'email' => $privacy->email($transaction->user->email),
                 'nickname' => (string) $transaction->user->nickname,
@@ -1613,7 +1617,7 @@ class ReferralService
 
     private function buildReferralAccountLogQuery(User $user)
     {
-        return AccountTransaction::query()
+        return FinanceLedgerEntry::query()
             ->where('user_id', $user->id)
             ->whereIn('event_type', self::ACCOUNT_LOG_EVENT_TYPES);
     }

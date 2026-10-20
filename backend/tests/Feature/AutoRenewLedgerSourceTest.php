@@ -7,14 +7,14 @@ namespace Tests\Feature;
 use App\Constants\FinanceLedgerEventType;
 use App\Constants\InvoiceStatus;
 use App\Constants\OrderStatus;
-use App\Models\AccountTransaction;
+use App\Models\FinanceLedgerEntry;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\User;
 use App\Services\Finance\BalanceInvoicePaymentService;
 use App\Services\Order\PaidOrderBusinessFlowDispatcher;
-use App\Services\User\AccountService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Tests\Support\SeedsFinanceBalance;
 use Tests\TestCase;
 
 /**
@@ -27,6 +27,7 @@ use Tests\TestCase;
 class AutoRenewLedgerSourceTest extends TestCase
 {
     use DatabaseTransactions;
+    use SeedsFinanceBalance;
 
     public function test_pay_by_balance_ledger_source_stays_invoice_id(): void
     {
@@ -35,14 +36,14 @@ class AutoRenewLedgerSourceTest extends TestCase
         });
 
         $user = $this->makeUser();
-        app(AccountService::class)->setCashBalance($user, 100.00);
+        $this->seedFinanceBalance($user, 100.00);
 
         $order = $this->makeOrder($user);
         $invoice = $this->makeInvoice($user, $order);
 
         app(BalanceInvoicePaymentService::class)->payByBalance($invoice, $user);
 
-        $txn = AccountTransaction::query()
+        $txn = FinanceLedgerEntry::query()
             ->where('user_id', $user->id)
             ->where('event_type', FinanceLedgerEventType::INVOICE_PAYMENT)
             ->first();

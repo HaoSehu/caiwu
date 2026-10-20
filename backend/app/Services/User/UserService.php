@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\User;
 
+use App\Constants\FinanceLedgerEventType;
 use App\Constants\InvoiceStatus;
 use App\Constants\OrderStatus;
 use App\Constants\PaymentGatewayCode;
@@ -11,6 +12,7 @@ use App\Constants\PaymentStatus;
 use App\Constants\ServiceStatus;
 use App\Exceptions\BusinessException;
 use App\Models\ActivityLog;
+use App\Models\FinanceRefund;
 use App\Models\Invoice;
 use App\Models\MemberLevel;
 use App\Models\MessageLog;
@@ -19,13 +21,13 @@ use App\Models\PromotionAmbassador;
 use App\Models\RechargeRecord;
 use App\Models\ReferralReward;
 use App\Models\ReferralWithdrawal;
-use App\Models\Refund;
 use App\Models\Service;
 use App\Models\Ticket;
 use App\Models\User;
 use App\Models\UserReferral;
 use App\Services\Automation\ServiceStatusSyncService;
 use App\Services\ClientServiceConsole\ClientServiceConsoleService;
+use App\Services\Finance\Core\FinanceAccountService;
 use App\Services\Finance\FinanceLedgerQueryService;
 use App\Services\Finance\InvoiceService;
 use App\Services\Finance\TradeLifecycleService;
@@ -35,6 +37,7 @@ use App\Services\System\OperationLogService;
 use App\Services\System\SettingService;
 use App\Services\User\Concerns\HandlesAdminUserServices;
 use App\Support\AccountIdentifier;
+use App\Support\Money;
 use App\Support\SchemaMetadataCache;
 use App\Support\TextSanitizer;
 use Illuminate\Database\Eloquent\Builder;
@@ -65,6 +68,9 @@ class UserService
     {
         $query = User::query()
             ->withReadAggregates()
+            // 列表行会经 AdminUserListItemResource 读 $user->balance：
+            // 预载账户关系后访问器直接读热备列，避免逐行回查财务内核（N+1）
+            ->with('account:id,user_id,cash_balance')
             ->select([
                 'id',
                 'email',
@@ -129,10 +135,21 @@ class UserService
                 'nickname' => TextSanitizer::clean((string) ($data['nickname'] ?? '')),
             ]);
 
+            // 现金余额已由 finance_accounts 独占：这里只写非现金列，
+            // 初始余额必须走内核入账（产生台账与资金批次），否则「余额 == 批次剩余合计」不变式断裂。
             $this->accounts()->updateAccount($user, [
-                'cash_balance' => $initialBalance,
                 'credit_limit' => number_format((float) ($data['credit_limit'] ?? 0), 2, '.', ''),
             ]);
+
+            $initialCents = Money::toCents($initialBalance);
+            if ($initialCents > 0) {
+                app(FinanceAccountService::class)->credit((int) $user->id, $initialCents, FinanceLedgerEventType::INITIAL_BALANCE, [
+                    'source_type' => 'user_create',
+                    'source_id' => (int) $user->id,
+                    'remark' => '管理员创建用户初始余额',
+                    'operator_type' => 'admin',
+                ]);
+            }
 
             $this->referralService->ensureReferralCode($user);
 
@@ -457,7 +474,7 @@ class UserService
             'items',
         ])->withSum(
             // 退款投影（列表轻量口径）与财务/客户端账单列表同源，预加载避免逐行 N+1。
-            ['refunds' => fn ($refundQuery) => $refundQuery->where('status', Refund::STATUS_COMPLETED)],
+            ['refunds' => fn ($refundQuery) => $refundQuery->where('status', FinanceRefund::STATUS_COMPLETED)],
             'amount'
         );
 

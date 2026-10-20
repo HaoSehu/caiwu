@@ -35,11 +35,11 @@ use App\Services\Integrations\Payments\PaymentGatewayRegistry;
 use App\Services\Integrations\Plugins\PluginDomain;
 use App\Services\Order\OrderService;
 use App\Services\Order\PaidOrderBusinessFlowDispatcher;
-use App\Services\User\AccountService;
 use App\Services\User\UserService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Schema;
+use Tests\Support\SeedsFinanceBalance;
 use Tests\TestCase;
 
 /**
@@ -54,6 +54,7 @@ use Tests\TestCase;
 class TradeLifecycleEquivalenceTest extends TestCase
 {
     use DatabaseTransactions;
+    use SeedsFinanceBalance;
 
     protected function setUp(): void
     {
@@ -97,7 +98,7 @@ class TradeLifecycleEquivalenceTest extends TestCase
     public function test_balance_pay_marks_invoice_and_order_paid(): void
     {
         [$user, $order, $invoice] = $this->pair(40.00);
-        app(AccountService::class)->setCashBalance($user, 50.00);
+        $this->seedFinanceBalance($user, 50.00);
 
         app(BalanceInvoicePaymentService::class)->payByBalance($invoice, $user, ['trace_id' => 'tr-balance-1']);
 
@@ -261,7 +262,7 @@ class TradeLifecycleEquivalenceTest extends TestCase
                 PaymentCallbackRaw::KEY_BALANCE_AMOUNT => 20.00,
             ],
         ]);
-        app(AccountService::class)->setCashBalance($user, 0.00);
+        $this->seedFinanceBalance($user, 0.00);
 
         $restored = app(MixPaymentService::class)->restoreReservedMixBalance($payment, [
             'balance_amount' => 20.00,
@@ -306,7 +307,7 @@ class TradeLifecycleEquivalenceTest extends TestCase
     public function test_admin_manual_service_marks_order_and_invoice_paid(): void
     {
         $user = User::factory()->create(['is_verified' => 1]);
-        app(AccountService::class)->setCashBalance($user, 100.00);
+        $this->seedFinanceBalance($user, 100.00);
         $product = Product::query()->create([
             'name' => '手工实例商品'.uniqid(),
             'product_type' => 'cloud_host',

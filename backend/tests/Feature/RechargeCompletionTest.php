@@ -10,7 +10,7 @@ use App\Constants\InvoiceType;
 use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
 use App\Contracts\Integrations\Payments\PaymentGatewayInterface;
-use App\Models\AccountTransaction;
+use App\Models\FinanceLedgerEntry;
 use App\Models\IntegrationPlugin;
 use App\Models\Invoice;
 use App\Models\Payment;
@@ -27,6 +27,7 @@ use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Schema;
 use ReflectionMethod;
+use Tests\Support\SeedsFinanceBalance;
 use Tests\TestCase;
 
 /**
@@ -38,12 +39,13 @@ use Tests\TestCase;
 class RechargeCompletionTest extends TestCase
 {
     use DatabaseTransactions;
+    use SeedsFinanceBalance;
 
     public function test_recharge_settles_via_query_recharge_status_with_four_table_consistency(): void
     {
         $user = $this->makeUser();
         $accounts = app(AccountService::class);
-        $accounts->setCashBalance($user, 0.00);
+        $this->seedFinanceBalance($user, 0.00);
         $tradeNo = 'STUBTRADE'.mt_rand(100000, 999999);
         $this->registerStubGateway(new PaymentQueryResult(
             tradeStatus: 'TRADE_SUCCESS',
@@ -57,7 +59,7 @@ class RechargeCompletionTest extends TestCase
         $payment = Payment::query()->where('payment_no', $payload['payment_no'])->firstOrFail();
         $this->assertSame(PaymentStatus::PENDING, (int) $payment->status);
         $this->assertNull($payment->invoice_id);
-        $this->assertEqualsWithDelta(0.00, $accounts->cashBalance($user), 0.001);
+        $this->assertEqualsWithDelta(0.00, $this->financeBalance($user), 0.001);
 
         $result = app(RechargePaymentService::class)->queryRechargeStatus($payment);
         $this->assertTrue((bool) ($result['paid'] ?? false));
@@ -68,10 +70,10 @@ class RechargeCompletionTest extends TestCase
         $this->assertSame($tradeNo, (string) $payment->trade_no);
 
         // 余额：精确入账一次。
-        $this->assertEqualsWithDelta(50.00, $accounts->cashBalance($user), 0.001);
+        $this->assertEqualsWithDelta(50.00, $this->financeBalance($user), 0.001);
 
         // 台账：RECHARGE 一行，source 精确挂支付单，余额快照一致。
-        $transaction = AccountTransaction::query()
+        $transaction = FinanceLedgerEntry::query()
             ->where('user_id', (int) $user->id)
             ->where('event_type', FinanceLedgerEventType::RECHARGE)
             ->firstOrFail();
@@ -95,7 +97,7 @@ class RechargeCompletionTest extends TestCase
         // 幂等重放：重复轮询不重复加余额、不重复建账单/台账/凭证。
         $replay = app(RechargePaymentService::class)->queryRechargeStatus($payment);
         $this->assertTrue((bool) ($replay['paid'] ?? false));
-        $this->assertEqualsWithDelta(50.00, $accounts->cashBalance($user), 0.001);
+        $this->assertEqualsWithDelta(50.00, $this->financeBalance($user), 0.001);
         $this->assertSame(1, $this->countLedger($user, FinanceLedgerEventType::RECHARGE));
         $this->assertSame(1, Invoice::query()->where('user_id', (int) $user->id)->where('type', InvoiceType::RECHARGE)->count());
         $this->assertSame(1, RechargeRecord::query()->where('invoice_id', (int) $invoice->id)->count());
@@ -105,7 +107,7 @@ class RechargeCompletionTest extends TestCase
     {
         $user = $this->makeUser();
         $accounts = app(AccountService::class);
-        $accounts->setCashBalance($user, 0.00);
+        $this->seedFinanceBalance($user, 0.00);
         $this->registerStubGateway(new PaymentQueryResult(
             tradeStatus: 'TRADE_SUCCESS',
             tradeNo: 'STUBTRADE'.mt_rand(100000, 999999),
@@ -123,7 +125,7 @@ class RechargeCompletionTest extends TestCase
 
         $payment->refresh();
         $this->assertSame(PaymentStatus::PENDING, (int) $payment->status);
-        $this->assertEqualsWithDelta(0.00, $accounts->cashBalance($user), 0.001);
+        $this->assertEqualsWithDelta(0.00, $this->financeBalance($user), 0.001);
         $this->assertSame(0, $this->countLedger($user, FinanceLedgerEventType::RECHARGE));
         $this->assertSame(0, Invoice::query()->where('user_id', (int) $user->id)->where('type', InvoiceType::RECHARGE)->count());
     }
@@ -132,7 +134,7 @@ class RechargeCompletionTest extends TestCase
     {
         $user = $this->makeUser();
         $accounts = app(AccountService::class);
-        $accounts->setCashBalance($user, 0.00);
+        $this->seedFinanceBalance($user, 0.00);
 
         $payment = Payment::query()->create([
             'payment_no' => 'PY'.date('YmdHis').mt_rand(100000, 999999),
@@ -149,8 +151,8 @@ class RechargeCompletionTest extends TestCase
 
         $payment->refresh();
         $this->assertSame(PaymentStatus::SUCCESS, (int) $payment->status);
-        $this->assertEqualsWithDelta(30.00, $accounts->cashBalance($user), 0.001);
-        $transaction = AccountTransaction::query()
+        $this->assertEqualsWithDelta(30.00, $this->financeBalance($user), 0.001);
+        $transaction = FinanceLedgerEntry::query()
             ->where('user_id', (int) $user->id)
             ->where('event_type', FinanceLedgerEventType::RECHARGE)
             ->firstOrFail();
@@ -162,7 +164,7 @@ class RechargeCompletionTest extends TestCase
 
         // 幂等重放：已 SUCCESS 走补开票短路分支，余额与各单据不再变化。
         $this->invokeCompleteRechargePayment($service, $payment, 'TRADE'.mt_rand(100000, 999999));
-        $this->assertEqualsWithDelta(30.00, $accounts->cashBalance($user), 0.001);
+        $this->assertEqualsWithDelta(30.00, $this->financeBalance($user), 0.001);
         $this->assertSame(1, $this->countLedger($user, FinanceLedgerEventType::RECHARGE));
         $this->assertSame(1, Invoice::query()->where('user_id', (int) $user->id)->where('type', InvoiceType::RECHARGE)->count());
     }
@@ -179,7 +181,7 @@ class RechargeCompletionTest extends TestCase
 
     private function countLedger(User $user, string $eventType): int
     {
-        return AccountTransaction::query()
+        return FinanceLedgerEntry::query()
             ->where('user_id', (int) $user->id)
             ->where('event_type', $eventType)
             ->count();

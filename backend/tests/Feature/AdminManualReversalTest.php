@@ -7,7 +7,7 @@ namespace Tests\Feature;
 use App\Constants\InvoiceStatus;
 use App\Constants\InvoiceType;
 use App\Exceptions\BusinessException;
-use App\Models\AccountTransaction;
+use App\Models\FinanceLedgerEntry;
 use App\Models\Invoice;
 use App\Models\RechargeRecord;
 use App\Models\User;
@@ -59,7 +59,7 @@ class AdminManualReversalTest extends TestCase
         $this->assertSame('88.50', number_format((float) $original->paid_amount, 2, '.', ''));
 
         // 补录账单为系统外收款的纯记账凭证：不产生任何余额流水或充值记录。
-        $this->assertSame(0, AccountTransaction::query()->where('user_id', (int) $user->id)->count());
+        $this->assertSame(0, FinanceLedgerEntry::query()->where('user_id', (int) $user->id)->count());
         $this->assertSame(0, RechargeRecord::query()->where('user_id', (int) $user->id)->count());
 
         // 审计：生成与执行各一条。

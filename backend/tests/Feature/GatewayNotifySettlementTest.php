@@ -9,8 +9,8 @@ use App\Constants\InvoiceStatus;
 use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
 use App\Contracts\Integrations\Payments\PaymentGatewayInterface;
-use App\Models\AccountTransaction;
 use App\Models\ActivityLog;
+use App\Models\FinanceLedgerEntry;
 use App\Models\IntegrationPlugin;
 use App\Models\Invoice;
 use App\Models\Payment;
@@ -27,6 +27,7 @@ use App\Services\User\AccountService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Schema;
+use Tests\Support\SeedsFinanceBalance;
 use Tests\TestCase;
 
 /**
@@ -38,12 +39,13 @@ use Tests\TestCase;
 class GatewayNotifySettlementTest extends TestCase
 {
     use DatabaseTransactions;
+    use SeedsFinanceBalance;
 
     public function test_success_notify_settles_invoice_and_records_documents(): void
     {
         $user = $this->makeUser();
         $accounts = app(AccountService::class);
-        $accounts->setCashBalance($user, 100.00);
+        $this->seedFinanceBalance($user, 100.00);
         $this->registerStubGateway();
 
         $invoice = $this->makeInvoice($user, 100.00);
@@ -68,7 +70,7 @@ class GatewayNotifySettlementTest extends TestCase
         $invoice->refresh();
         $this->assertSame(InvoiceStatus::PAID, (int) $invoice->status);
         $this->assertEqualsWithDelta(100.00, (float) $invoice->paid_amount, 0.001);
-        $this->assertEqualsWithDelta(100.00, $accounts->cashBalance($user), 0.001);
+        $this->assertEqualsWithDelta(100.00, $this->financeBalance($user), 0.001);
         $this->assertSame(0, $this->countLedger($user, FinanceLedgerEventType::INVOICE_PAYMENT));
 
         // S1-3：入账成功路径写入 activity_logs 审计行（幂等重放不重复写入）。
@@ -93,7 +95,7 @@ class GatewayNotifySettlementTest extends TestCase
 
         // 幂等重放：同一回调重复投递不重复入账、不重复记凭证。
         $this->assertTrue(app(GatewayInvoicePaymentService::class)->handleGatewayNotify(PaymentGatewayCode::ALIPAY, $notifyParams));
-        $this->assertEqualsWithDelta(100.00, $accounts->cashBalance($user), 0.001);
+        $this->assertEqualsWithDelta(100.00, $this->financeBalance($user), 0.001);
         $this->assertSame(1, RechargeRecord::query()->where('payment_id', (int) $payment->id)->count());
         $this->assertSame(1, PaymentCallback::query()->where('payment_id', (int) $payment->id)->count());
     }
@@ -196,7 +198,7 @@ class GatewayNotifySettlementTest extends TestCase
     {
         $user = $this->makeUser();
         $accounts = app(AccountService::class);
-        $accounts->setCashBalance($user, 100.00);
+        $this->seedFinanceBalance($user, 100.00);
         $this->registerStubGateway();
 
         $invoice = $this->makeInvoice($user, 100.00);
@@ -235,7 +237,7 @@ class GatewayNotifySettlementTest extends TestCase
         $this->assertSame('invoice_already_paid', (string) ($raw['credit_reason'] ?? ''));
         $invoice->refresh();
         $this->assertSame(InvoiceStatus::PAID, (int) $invoice->status);
-        $this->assertEqualsWithDelta(200.00, $accounts->cashBalance($user), 0.001);
+        $this->assertEqualsWithDelta(200.00, $this->financeBalance($user), 0.001);
         $this->assertSame(1, $this->countLedger($user, FinanceLedgerEventType::RECHARGE, '异常支付转入余额'));
 
         // 幂等闸：同一支付单重复回调不重复转余额。
@@ -246,7 +248,7 @@ class GatewayNotifySettlementTest extends TestCase
             'total_amount' => '100.00',
             'app_id' => 'stub-merchant',
         ]));
-        $this->assertEqualsWithDelta(200.00, $accounts->cashBalance($user), 0.001);
+        $this->assertEqualsWithDelta(200.00, $this->financeBalance($user), 0.001);
         $this->assertSame(1, $this->countLedger($user, FinanceLedgerEventType::RECHARGE, '异常支付转入余额'));
     }
 
@@ -347,7 +349,7 @@ class GatewayNotifySettlementTest extends TestCase
 
     private function countLedger(User $user, string $eventType, ?string $remarkPrefix = null): int
     {
-        $query = AccountTransaction::query()
+        $query = FinanceLedgerEntry::query()
             ->where('user_id', (int) $user->id)
             ->where('event_type', $eventType);
 

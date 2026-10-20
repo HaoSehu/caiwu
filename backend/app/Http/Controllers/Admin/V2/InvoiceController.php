@@ -7,7 +7,6 @@ namespace App\Http\Controllers\Admin\V2;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\V2\Invoice\CancelInvoiceActionRequest;
 use App\Http\Requests\Admin\V2\Invoice\ListInvoicesRequest;
-use App\Http\Requests\Admin\V2\Invoice\MarkInvoiceRefundRequest;
 use App\Http\Requests\Admin\V2\Invoice\RefundInvoiceToBalanceRequest;
 use App\Http\Requests\Admin\V2\Invoice\ShowInvoiceRequest;
 use App\Http\Resources\Admin\V2\AdminActionResultResource;
@@ -17,7 +16,6 @@ use App\Models\AdminUser;
 use App\Models\Invoice;
 use App\Models\User;
 use App\Services\Admin\V2\AdminInvoiceActionV2Service;
-use App\Services\Finance\InvoiceRefundMarkService;
 use App\Services\Finance\InvoiceRefundService;
 use App\Services\Finance\InvoiceV2QueryService;
 use App\Services\System\ActivityLogService;
@@ -29,7 +27,6 @@ class InvoiceController extends Controller
     public function __construct(
         private readonly InvoiceV2QueryService $invoices,
         private readonly AdminInvoiceActionV2Service $actions,
-        private readonly InvoiceRefundMarkService $refundMarks,
         private readonly InvoiceRefundService $refunds,
         private readonly ActivityLogService $activityLogs,
     ) {}
@@ -57,25 +54,8 @@ class InvoiceController extends Controller
     }
 
     /**
-     * 退款标记（纯标记不动资金）：登记线下已退款事实，支持部分金额。
-     * 权限由路由组 finance.refund 把关；守卫/幂等/审计在 InvoiceRefundMarkService。
-     */
-    public function markRefund(MarkInvoiceRefundRequest $request, Invoice $invoice): JsonResponse
-    {
-        $actor = $this->resolveAdminActor($request);
-
-        $result = $this->refundMarks->markInvoiceRefunded($invoice, $request->payload(), [
-            'operator_id' => $actor['id'],
-            'operator_name' => $actor['name'],
-            'trace_id' => (string) $request->header('X-Request-Id', ''),
-        ]);
-
-        return $this->success(AdminActionResultResource::make($result)->resolve(), (string) $result['message']);
-    }
-
-    /**
-     * 退款到余额（真退款，动资金）：2026-10-11 恢复 2026-10-03 下线的退款出口。
-     * 与纯标记共用 finance.refund 权限、**一单只选一种**（服务层互斥守卫）。
+     * 退款到余额（唯一通道，动资金）。
+     * 权限由路由组 finance.refund 把关；守卫/幂等/审计在 InvoiceRefundService。
      */
     public function refundToBalance(RefundInvoiceToBalanceRequest $request, Invoice $invoice): JsonResponse
     {

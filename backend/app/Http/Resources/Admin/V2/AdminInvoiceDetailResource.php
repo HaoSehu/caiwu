@@ -66,6 +66,12 @@ class AdminInvoiceDetailResource extends AdminInvoiceSummaryResource
             'product' => $this->product($invoice['product'] ?? null),
             'service' => $this->service($invoice['service'] ?? null),
             'scene' => $this->stripSensitiveKeys((array) ($invoice['scene'] ?? [])),
+            'fulfillment' => [
+                'pending' => (bool) ($invoice['fulfillment_pending'] ?? false),
+                'pending_at' => $invoice['fulfillment_pending_at'] ?? null,
+                'cleared_at' => $invoice['fulfillment_cleared_at'] ?? null,
+                'requires_refund' => (bool) ($invoice['requires_refund'] ?? false),
+            ],
             'configuration' => [
                 'config_snapshot' => $this->stripSensitiveKeys((array) ($invoice['config_snapshot'] ?? [])),
                 'config_pricing_snapshot' => $this->stripSensitiveKeys((array) ($invoice['config_pricing_snapshot'] ?? [])),

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Casts\LegacyEncrypted;
 use App\Models\Concerns\ReleasesUniqueKeysOnDelete;
+use App\Services\Finance\Core\FinanceAccountService;
 use App\Services\User\AccountService;
 use App\Support\Money;
 use Carbon\CarbonInterface;
@@ -17,6 +18,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
 use Laravel\Sanctum\HasApiTokens;
+use App\Support\LikeEscape;
 
 class User extends Authenticatable
 {
@@ -105,15 +107,19 @@ class User extends Authenticatable
 
     public function getBalanceAttribute(mixed $value): string
     {
-        return $this->normalizeDecimalString($this->resolveAccountValue('cash_balance'));
-    }
-
-    public function setBalanceAttribute(string|float|int $value): void
-    {
-        // 写入真源 user_accounts，不写 users 表（该列已删除）
-        if ($this->exists) {
-            app(AccountService::class)->setCashBalance($this, (float) $value);
+        if (! $this->exists) {
+            return '0.00';
         }
+
+        // 已预载账户关系（列表场景）时直接读热备列：与内核同一事务写入，值一致，
+        // 且避免逐行回查 finance_accounts 造成 N+1；未预载时才回源财务内核。
+        if ($this->relationLoaded('account') && $this->getRelation('account') instanceof UserAccount) {
+            return $this->normalizeDecimalString($this->getRelation('account')->cash_balance);
+        }
+
+        return Money::format(Money::fromCents(
+            app(FinanceAccountService::class)->balanceCents((int) $this->getKey())
+        ));
     }
 
     public function getCreditLimitAttribute(mixed $value): string
@@ -342,7 +348,7 @@ class User extends Authenticatable
 
     public function refunds(): HasMany
     {
-        return $this->hasMany(Refund::class);
+        return $this->hasMany(FinanceRefund::class);
     }
 
     public function tickets(): HasMany
@@ -378,22 +384,22 @@ class User extends Authenticatable
         return $query->where(function ($q) use ($keyword) {
             if (ctype_digit($keyword)) {
                 $q->where('id', (int) $keyword)
-                    ->orWhere('email', 'like', '%'.$keyword.'%')
-                    ->orWhere('phone', 'like', '%'.$keyword.'%')
-                    ->orWhere('nickname', 'like', '%'.$keyword.'%')
-                    ->orWhere('company', 'like', '%'.$keyword.'%')
-                    ->orWhere('qq', 'like', '%'.$keyword.'%')
-                    ->orWhere('real_name', 'like', '%'.$keyword.'%');
+                    ->orWhere('email', 'like', LikeEscape::contains($keyword))
+                    ->orWhere('phone', 'like', LikeEscape::contains($keyword))
+                    ->orWhere('nickname', 'like', LikeEscape::contains($keyword))
+                    ->orWhere('company', 'like', LikeEscape::contains($keyword))
+                    ->orWhere('qq', 'like', LikeEscape::contains($keyword))
+                    ->orWhere('real_name', 'like', LikeEscape::contains($keyword));
 
                 return;
             }
 
-            $q->where('email', 'like', '%'.$keyword.'%')
-                ->orWhere('phone', 'like', '%'.$keyword.'%')
-                ->orWhere('nickname', 'like', '%'.$keyword.'%')
-                ->orWhere('company', 'like', '%'.$keyword.'%')
-                ->orWhere('qq', 'like', '%'.$keyword.'%')
-                ->orWhere('real_name', 'like', '%'.$keyword.'%');
+            $q->where('email', 'like', LikeEscape::contains($keyword))
+                ->orWhere('phone', 'like', LikeEscape::contains($keyword))
+                ->orWhere('nickname', 'like', LikeEscape::contains($keyword))
+                ->orWhere('company', 'like', LikeEscape::contains($keyword))
+                ->orWhere('qq', 'like', LikeEscape::contains($keyword))
+                ->orWhere('real_name', 'like', LikeEscape::contains($keyword));
         });
     }
 

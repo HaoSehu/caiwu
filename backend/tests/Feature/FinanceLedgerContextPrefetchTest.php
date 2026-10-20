@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Constants\PaymentGatewayCode;
-use App\Models\AccountTransaction;
+use App\Models\FinanceLedgerEntry;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\User;
@@ -94,9 +94,10 @@ class FinanceLedgerContextPrefetchTest extends TestCase
         ]);
     }
 
-    private function makeTransaction(User $user, string $eventType, string $changeAmount, string $sourceType, ?int $sourceId): AccountTransaction
+    private function makeTransaction(User $user, string $eventType, string $changeAmount, string $sourceType, ?int $sourceId): FinanceLedgerEntry
     {
-        return AccountTransaction::query()->create([
+        return FinanceLedgerEntry::query()->create([
+            'entry_no' => 'LG'.uniqid(),
             'user_id' => $user->id,
             'account_type' => 'cash',
             'event_type' => $eventType,

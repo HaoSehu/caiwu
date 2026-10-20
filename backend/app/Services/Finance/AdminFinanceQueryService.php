@@ -10,11 +10,11 @@ use App\Constants\OrderType;
 use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
 use App\Exceptions\BusinessException;
+use App\Models\FinanceRefund;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\Product;
-use App\Models\Refund;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Services\ProductCatalog\ProductFullPathResolver;
 use App\Support\AdminPrivacy;
@@ -176,7 +176,7 @@ class AdminFinanceQueryService
                 // （refunds 表同表口径，纯标记与真退款统一），GREATEST 防负。
                 // 子查询必须置于 SUM() 内：ONLY_FULL_GROUP_BY 下 select 列表的
                 // 非聚合子查询列（引用 group by 之外的 invoices.id）会直接报错。
-                DB::raw('SUM(GREATEST((CASE WHEN paid_amount > 0 THEN paid_amount ELSE COALESCE(amount, 0) END) - COALESCE((SELECT SUM(r.amount) FROM refunds r WHERE r.invoice_id = invoices.id AND r.status = '.Refund::STATUS_COMPLETED.'), 0), 0)) as income_amount'),
+                DB::raw('SUM(GREATEST((CASE WHEN paid_amount > 0 THEN paid_amount ELSE COALESCE(amount, 0) END) - COALESCE((SELECT SUM(r.amount) FROM finance_refunds r WHERE r.invoice_id = invoices.id AND r.funds_moved = 1 AND r.status = '.FinanceRefund::STATUS_COMPLETED.'), 0), 0)) as income_amount'),
                 DB::raw('SUM(COALESCE(quantity, 1)) as quantity_total'),
             ])
             ->where('status', InvoiceStatus::PAID)

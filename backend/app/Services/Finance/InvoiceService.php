@@ -303,6 +303,12 @@ class InvoiceService
         $combinedDisplayName = $this->resolveInvoiceCombinedDisplayName($invoice, $productDisplayName);
 
         return [
+            // 履约状态独立列：原在 config_snapshot 内，JSON 共享读改写会丢标记，
+            // 详情页也需要它判断「已付未履约待人工退款」。
+            'fulfillment_pending' => (bool) $invoice->fulfillment_pending,
+            'fulfillment_pending_at' => $invoice->fulfillment_pending_at?->format('Y-m-d H:i:s'),
+            'fulfillment_cleared_at' => $invoice->fulfillment_cleared_at?->format('Y-m-d H:i:s'),
+            'requires_refund' => (bool) $invoice->requires_refund,
             'id' => (int) $invoice->id,
             'invoice_no' => (string) $invoice->invoice_no,
             'user_id' => (int) $invoice->user_id,

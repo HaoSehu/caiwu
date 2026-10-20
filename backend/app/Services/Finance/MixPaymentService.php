@@ -9,13 +9,15 @@ use App\Constants\InvoiceStatus;
 use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
 use App\Exceptions\BusinessException;
+use App\Models\FinanceLedgerEntry;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\User;
+use App\Services\Finance\Core\FinanceAccountService;
 use App\Services\Integrations\Payments\PaymentGatewayManager;
 use App\Services\Integrations\Payments\PaymentGatewayOperationService;
 use App\Services\Integrations\Plugins\PaymentGatewayBindingResolver;
-use App\Services\User\AccountService;
+use App\Support\Money;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -35,8 +37,7 @@ class MixPaymentService
     public function __construct(
         private PaymentGatewayManager $paymentGatewayManager,
         private CheckoutSecurityService $checkoutSecurityService,
-        private AccountService $accountService,
-        private FinanceLedgerWriter $financeLedgerWriter,
+        private FinanceAccountService $accounts,
         private PaymentCallbackProjector $callbackProjector,
         private TradeLifecycleService $tradeLifecycleService,
         private InvoiceService $invoiceService,
@@ -81,21 +82,21 @@ class MixPaymentService
                 throw_if($normalizedBalanceAmount <= 0, new BusinessException('余额支付金额必须大于 0'));
                 throw_if($normalizedBalanceAmount >= $remainingAmount, new BusinessException('余额支付金额需小于待支付金额'));
 
-                $currentBalance = $this->getUserBalance($lockedUser);
-                throw_if($currentBalance < $normalizedBalanceAmount, new BusinessException('余额不足'));
+                $currentBalance = $this->accounts->balanceCents((int) $lockedUser->id, true);
+                throw_if($currentBalance < Money::toCents($normalizedBalanceAmount), new BusinessException('余额不足'));
 
-                $balanceAfter = $this->setUserBalance($lockedUser, $currentBalance - $normalizedBalanceAmount);
-                $this->financeLedgerWriter->createBalanceLog(
+                $this->accounts->debit(
                     (int) $lockedUser->id,
+                    Money::toCents($normalizedBalanceAmount),
                     FinanceLedgerEventType::INVOICE_PAYMENT,
-                    -$normalizedBalanceAmount,
-                    $balanceAfter,
-                    (int) $lockedInvoice->id,
-                    '账单余额支付 '.(string) $lockedInvoice->invoice_no,
                     [
-                        'operator' => $this->resolveOperator($context),
+                        'source_type' => 'invoice',
+                        'source_id' => (int) $lockedInvoice->id,
+                        'remark' => '账单余额支付 '.(string) $lockedInvoice->invoice_no,
+                        'operator_type' => 'member',
+                        'operator_name' => $this->resolveOperator($context),
                         'trace_id' => $traceId,
-                    ]
+                    ],
                 );
 
                 // 预扣投影递增经状态机（与回补递减对称），同步订单侧 paid_amount
@@ -238,19 +239,19 @@ class MixPaymentService
                 : true;
             $preserveInvoicePaidAmount = (bool) ($context['preserve_invoice_paid_amount'] ?? false);
 
-            $balanceAfter = $this->setUserBalance($lockedUser, $this->getUserBalance($lockedUser) + $balanceAmount);
             $suppressLogs = (bool) ($context['suppress_logs'] ?? false);
-            $this->financeLedgerWriter->createBalanceLog(
+            $this->accounts->restore(
                 (int) $lockedUser->id,
+                Money::toCents($balanceAmount),
                 FinanceLedgerEventType::INVOICE_REFUND,
-                $balanceAmount,
-                $balanceAfter,
+                'invoice',
                 (int) $invoice->id,
-                $suppressLogs
-                    ? '组合支付预下单失败恢复余额 '.(string) $invoice->invoice_no
-                    : '组合支付取消退回余额 '.(string) $invoice->invoice_no,
                 [
-                    'operator' => $this->resolveOperator($context),
+                    'remark' => $suppressLogs
+                        ? '组合支付预下单失败恢复余额 '.(string) $invoice->invoice_no
+                        : '组合支付取消退回余额 '.(string) $invoice->invoice_no,
+                    'operator_type' => 'member',
+                    'operator_name' => $this->resolveOperator($context),
                     'trace_id' => (string) ($context['trace_id'] ?? ''),
                 ],
             );
@@ -344,19 +345,19 @@ class MixPaymentService
         $lockedUser = User::query()
             ->lockForUpdate()
             ->findOrFail((int) $payment->user_id);
-        $balanceAfter = $this->setUserBalance($lockedUser, $this->getUserBalance($lockedUser) + $amount);
-
-        $transaction = $this->financeLedgerWriter->createBalanceLog(
+        $mutation = $this->accounts->credit(
             (int) $lockedUser->id,
+            Money::toCents($amount),
             FinanceLedgerEventType::RECHARGE,
-            $amount,
-            $balanceAfter,
-            (int) $payment->id,
-            '异常支付转入余额 '.(string) $payment->payment_no,
             [
+                'source_type' => 'payment',
+                'source_id' => (int) $payment->id,
+                'remark' => '异常支付转入余额 '.(string) $payment->payment_no,
+                'operator_type' => 'system',
                 'trace_id' => $traceId,
-            ]
+            ],
         );
+        $transaction = FinanceLedgerEntry::query()->findOrFail($mutation->entryId);
 
         // 与 completeRechargePayment 同构：真钱入余额补齐充值账单 + 充值凭证，
         // 保证该笔资金在账单域/凭证域可追溯（此前仅有台账行，凭证面缺位）。
@@ -435,15 +436,5 @@ class MixPaymentService
     private function resolveOperator(array $context): string
     {
         return trim((string) ($context['actor_name'] ?? $context['operator_name'] ?? $context['operator'] ?? ''));
-    }
-
-    private function getUserBalance(User $user): float
-    {
-        return $this->accountService->cashBalance($user, true);
-    }
-
-    private function setUserBalance(User $user, float $balance): string
-    {
-        return $this->accountService->setCashBalance($user, $balance);
     }
 }

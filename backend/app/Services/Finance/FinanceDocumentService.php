@@ -9,11 +9,11 @@ use App\Constants\InvoiceStatus;
 use App\Constants\InvoiceType;
 use App\Constants\PaymentStatus;
 use App\Exceptions\BusinessException;
-use App\Models\AccountTransaction;
+use App\Models\FinanceLedgerEntry;
+use App\Models\FinanceRefund;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\RechargeRecord;
-use App\Models\Refund;
 use App\Support\Money;
 
 class FinanceDocumentService
@@ -58,16 +58,16 @@ class FinanceDocumentService
     public function recordRecharge(
         Invoice $invoice,
         ?Payment $payment,
-        AccountTransaction $accountTransaction,
+        FinanceLedgerEntry $ledgerEntry,
         string $scene,
         array $context = [],
     ): RechargeRecord {
-        $this->assertSameUser($invoice->user_id, $accountTransaction->user_id);
+        $this->assertSameUser($invoice->user_id, $ledgerEntry->user_id);
         if ($payment instanceof Payment) {
             $this->assertSameUser($invoice->user_id, $payment->user_id);
         }
 
-        $amount = abs((float) $accountTransaction->change_amount);
+        $amount = abs((float) $ledgerEntry->change_amount);
         $this->assertPositiveAmount($amount, '充值金额不正确');
         throw_if(
             abs($amount - (float) $invoice->amount) > 0.00001,
@@ -75,7 +75,7 @@ class FinanceDocumentService
         );
 
         $existing = RechargeRecord::query()
-            ->where('account_transaction_id', (int) $accountTransaction->id)
+            ->where('account_transaction_id', (int) $ledgerEntry->id)
             ->first();
 
         if ($existing instanceof RechargeRecord) {
@@ -91,7 +91,7 @@ class FinanceDocumentService
             'user_id' => (int) $invoice->user_id,
             'invoice_id' => (int) $invoice->id,
             'payment_id' => $payment?->id,
-            'account_transaction_id' => (int) $accountTransaction->id,
+            'account_transaction_id' => (int) $ledgerEntry->id,
             'scene' => $scene,
             'direction' => 'in',
             'amount' => Money::format($amount),
@@ -106,12 +106,12 @@ class FinanceDocumentService
     }
 
     /**
-     * @return array{refund: Refund, refund_invoice: Invoice, recharge_record: ?RechargeRecord}
+     * @return array{refund: FinanceRefund, refund_invoice: Invoice, recharge_record: ?RechargeRecord}
      */
     public function createBalanceRefundDocuments(
         Invoice $invoice,
         ?Payment $payment,
-        AccountTransaction $accountTransaction,
+        FinanceLedgerEntry $ledgerEntry,
         float $refundAmount,
         string $reason,
         array $context = [],
@@ -119,19 +119,21 @@ class FinanceDocumentService
         if ($payment instanceof Payment) {
             $this->assertSameUser($invoice->user_id, $payment->user_id);
         }
-        $this->assertSameUser($invoice->user_id, $accountTransaction->user_id);
+        $this->assertSameUser($invoice->user_id, $ledgerEntry->user_id);
         $this->assertPositiveAmount($refundAmount, '退款金额不正确');
 
-        $refund = Refund::query()->create([
-            'refund_no' => Refund::generateRefundNo(),
+        $refund = FinanceRefund::query()->create([
+            'refund_no' => 'RF'.date('YmdHis').strtoupper(bin2hex(random_bytes(6))),
             'user_id' => (int) $invoice->user_id,
             'invoice_id' => (int) $invoice->id,
             'payment_id' => $payment?->id,
             'amount' => Money::format($refundAmount),
-            'status' => Refund::STATUS_COMPLETED,
-            'refund_method' => 'balance',
+            'status' => FinanceRefund::STATUS_COMPLETED,
+            'funds_moved' => 1,
+            'data_origin' => FinanceRefund::ORIGIN_NATIVE,
             'currency' => 'CNY',
             'reason' => $reason,
+            'delivery_evidence' => $context['delivery_evidence'] ?? null,
             'operator_type' => $this->nullableString($context['operator_type'] ?? 'admin'),
             'operator_id' => $this->nullableInt($context['operator_id'] ?? null),
             'operator_name' => $this->nullableString($context['operator_name'] ?? null),
@@ -180,7 +182,7 @@ class FinanceDocumentService
                 'user_id' => (int) $invoice->user_id,
                 'order_id' => $invoice->order_id,
                 'invoice_id' => (int) $refundInvoice->id,
-                'account_transaction_id' => (int) $accountTransaction->id,
+                'account_transaction_id' => (int) $ledgerEntry->id,
                 'refund_id' => (int) $refund->id,
                 'origin_recharge_record_id' => (int) $originRechargeRecord->id,
                 'scene' => 'refund',
@@ -214,7 +216,7 @@ class FinanceDocumentService
             ->where('invoice_id', (int) $invoice->id)
             ->whereIn('status', [PaymentStatus::SUCCESS, PaymentStatus::REFUNDED])
             ->sum('amount');
-        $balanceAmount = -1 * (float) AccountTransaction::query()
+        $balanceAmount = -1 * (float) FinanceLedgerEntry::query()
             ->where('user_id', (int) $invoice->user_id)
             ->whereIn('event_type', [
                 FinanceLedgerEventType::INVOICE_PAYMENT,

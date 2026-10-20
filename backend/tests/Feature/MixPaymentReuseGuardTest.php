@@ -25,6 +25,7 @@ use App\Services\User\AccountService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Schema;
+use Tests\Support\SeedsFinanceBalance;
 use Tests\TestCase;
 
 /**
@@ -37,12 +38,13 @@ use Tests\TestCase;
 class MixPaymentReuseGuardTest extends TestCase
 {
     use DatabaseTransactions;
+    use SeedsFinanceBalance;
 
     public function test_restored_mix_payment_is_not_reused_and_second_deposit_is_refundable(): void
     {
         $user = $this->makeUser();
         $accounts = app(AccountService::class);
-        $accounts->setCashBalance($user, 100.00);
+        $this->seedFinanceBalance($user, 100.00);
         $this->registerStubGateway();
         $service = app(MixPaymentService::class);
 
@@ -59,7 +61,7 @@ class MixPaymentReuseGuardTest extends TestCase
             'closed_reason' => 'payment_window_expired_captured',
             'mark_payment_failed' => false,
         ]));
-        $this->assertEqualsWithDelta(100.00, $accounts->cashBalance($user), 0.001);
+        $this->assertEqualsWithDelta(100.00, $this->financeBalance($user), 0.001);
         $first->refresh();
         $this->assertSame(PaymentStatus::PENDING, (int) $first->status);
         $this->assertNotEmpty((array) ($first->callback_raw ?? [])['balance_restored'] ?? null);
@@ -67,7 +69,7 @@ class MixPaymentReuseGuardTest extends TestCase
 
         // 第二次混付：修复后不复用已退回的旧单，而是新建支付单。
         $service->payByBalanceAndGateway($invoice->fresh(), $user, 30.00, PaymentGatewayCode::ALIPAY);
-        $this->assertEqualsWithDelta(70.00, $accounts->cashBalance($user), 0.001);
+        $this->assertEqualsWithDelta(70.00, $this->financeBalance($user), 0.001);
 
         $pendingPayments = Payment::query()
             ->where('invoice_id', (int) $invoice->id)
@@ -80,7 +82,7 @@ class MixPaymentReuseGuardTest extends TestCase
 
         // 用户再次取消：第二张单的预扣 30 必须能正常退回（修复前复用旧单会被幂等闸拦截，余额冻结在 70）。
         app(CheckoutService::class)->cancel($invoice->fresh());
-        $this->assertEqualsWithDelta(100.00, $accounts->cashBalance($user), 0.001);
+        $this->assertEqualsWithDelta(100.00, $this->financeBalance($user), 0.001);
     }
 
     private function registerStubGateway(): void

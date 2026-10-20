@@ -37,6 +37,7 @@ class Invoice extends Model
         'amount', 'discount', 'member_discount_amount', 'paid_amount',
         'billing_cycle', 'quantity',
         'product_snapshot_json', 'config_snapshot', 'config_pricing_snapshot', 'coupon_snapshot', 'member_discount_snapshot',
+        'fulfillment_pending', 'fulfillment_pending_at', 'fulfillment_cleared_at', 'requires_refund',
         'status', 'due_date', 'paid_at',
         'refunded_at', 'refund_amount', 'refund_method', 'refund_trace_id',
         'remark', 'operator', 'trace_id',
@@ -54,6 +55,10 @@ class Invoice extends Model
             'refunded_at' => 'datetime',
             'refund_amount' => 'decimal:2',
             'config_snapshot' => 'array',
+            'fulfillment_pending' => 'boolean',
+            'fulfillment_pending_at' => 'datetime',
+            'fulfillment_cleared_at' => 'datetime',
+            'requires_refund' => 'boolean',
             'config_pricing_snapshot' => 'array',
             'coupon_snapshot' => 'array',
             'member_discount_snapshot' => 'array',
@@ -103,11 +108,11 @@ class Invoice extends Model
     /**
      * 退款记录（纯标记与真退款同表累计；已完成退款额 = SUM(status=1).amount）。
      *
-     * @return HasMany<Refund, $this>
+     * @return HasMany<FinanceRefund, $this>
      */
     public function refunds(): HasMany
     {
-        return $this->hasMany(Refund::class);
+        return $this->hasMany(FinanceRefund::class);
     }
 
     public function product(): BelongsTo

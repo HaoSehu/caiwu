@@ -11,6 +11,7 @@ use App\Models\UserAccount;
 use App\Services\Finance\ClientFinanceQueryService;
 use App\Services\Finance\FinanceLedgerQueryService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Tests\Support\SeedsFinanceBalance;
 use Tests\TestCase;
 
 /**
@@ -24,6 +25,7 @@ use Tests\TestCase;
 class ClientFinanceSummaryBalanceTest extends TestCase
 {
     use DatabaseTransactions;
+    use SeedsFinanceBalance;
 
     public function test_balance_log_summary_reflects_balance_change_immediately(): void
     {
@@ -33,8 +35,8 @@ class ClientFinanceSummaryBalanceTest extends TestCase
 
         $this->assertSame('0.00', $service->balanceLogSummary($user, [])['cash_balance']);
 
-        // 模拟充值到账：余额更新后立即重查，内层缓存命中也必须重读余额
-        UserAccount::query()->where('user_id', (int) $user->id)->update(['cash_balance' => '123.45']);
+        // 模拟充值到账：余额经财务内核入账后立即重查，内层缓存命中也必须重读余额
+        $this->seedFinanceBalance($user, 123.45);
         $user->unsetRelation('account');
 
         $after = $service->balanceLogSummary($user, []);

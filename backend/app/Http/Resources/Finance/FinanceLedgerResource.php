@@ -7,11 +7,11 @@ use App\Constants\InvoiceStatus;
 use App\Constants\InvoiceType;
 use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
-use App\Models\AccountTransaction;
+use App\Models\FinanceLedgerEntry;
 use App\Support\AdminPrivacy;
 use Illuminate\Http\Resources\Json\JsonResource;
 
-/** @mixin AccountTransaction */
+/** @mixin FinanceLedgerEntry */
 class FinanceLedgerResource extends JsonResource
 {
     public function toArray($request): array
@@ -44,7 +44,7 @@ class FinanceLedgerResource extends JsonResource
             'source_id' => $this->source_id !== null ? (int) $this->source_id : null,
             'origin_type' => (string) ($this->origin_type ?? ''),
             'origin_id' => $this->origin_id !== null ? (int) $this->origin_id : null,
-            'operator' => (string) ($this->operator ?? ''),
+            'operator' => (string) ($this->operator_name ?? ''),
             'trace_id' => (string) ($this->trace_id ?? ''),
             'business_scene' => $businessScene['key'],
             'business_scene_label' => $businessScene['label'],
@@ -126,7 +126,7 @@ class FinanceLedgerResource extends JsonResource
 
         $paymentRaw = method_exists($payment, 'callbackPayload') ? $payment->callbackPayload() : [];
         $values = [
-            $this->operator ?? '',
+            $this->operator_name ?? '',
             $this->trace_id ?? '',
             $this->remark ?? '',
             $config['created_by'] ?? '',

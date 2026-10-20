@@ -19,7 +19,7 @@ use App\Models\Ticket;
 use App\Models\User;
 use App\Services\ClientServiceConsole\ServiceDetailService;
 use App\Services\ClientServiceConsole\ServiceOverviewService;
-use App\Services\Finance\FinanceLedgerWriter;
+use App\Services\Finance\Core\FinanceAccountService;
 use App\Services\Integrations\Plugins\PluginBindingResolver;
 use App\Services\Integrations\Plugins\ServiceUpstreamBindingWriter;
 use App\Services\Integrations\Plugins\UpstreamBindingWriter;
@@ -27,6 +27,7 @@ use App\Services\System\NotificationService;
 use App\Services\Upstream\Contracts\ProvidesConsoleRuntime;
 use App\Services\Upstream\ProviderResolver;
 use App\Support\BillingCycle;
+use App\Support\Money;
 use App\Support\ServiceHostname;
 use App\Support\TextSanitizer;
 use Carbon\Carbon;
@@ -722,28 +723,29 @@ trait HandlesAdminUserServices
                 $lockedUser = User::query()
                     ->lockForUpdate()
                     ->findOrFail($user->id);
-                $currentBalance = $this->accounts()->cashBalance($lockedUser, true);
+                $finance = app(FinanceAccountService::class);
+                $amountCents = Money::toCents($amount);
 
                 throw_if(
-                    $currentBalance < $amount,
+                    $finance->balanceCents((int) $lockedUser->id, true) < $amountCents,
                     new BusinessException('余额不足，无法创建实例')
                 );
 
-                if ($amount > 0) {
-                    $balanceAfter = $this->accounts()->setCashBalance($lockedUser, $currentBalance - $amount);
-                    $balanceTransaction = app(FinanceLedgerWriter::class)->createBalanceLog(
+                if ($amountCents > 0) {
+                    $mutation = $finance->debit(
                         (int) $lockedUser->id,
+                        $amountCents,
                         FinanceLedgerEventType::INVOICE_PAYMENT,
-                        -$amount,
-                        $balanceAfter,
-                        (int) $invoice->id,
-                        '支付账单 '.(string) $invoice->invoice_no,
                         [
-                            'operator' => $operatorName !== '' ? $operatorName : null,
+                            'source_type' => 'invoice',
+                            'source_id' => (int) $invoice->id,
+                            'remark' => '支付账单 '.(string) $invoice->invoice_no,
+                            'operator_type' => 'admin',
+                            'operator_name' => $operatorName !== '' ? $operatorName : null,
                             'trace_id' => $traceId !== '' ? $traceId : null,
-                        ]
+                        ],
                     );
-                    $balanceTransactionId = (int) $balanceTransaction->id;
+                    $balanceTransactionId = $mutation->entryId;
                 }
 
                 // 入账联动收敛到生命周期状态机：账单 PAID + 订单投影（同事务单一写者）。

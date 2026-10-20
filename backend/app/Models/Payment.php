@@ -190,7 +190,7 @@ class Payment extends Model
 
     public function refunds(): HasMany
     {
-        return $this->hasMany(Refund::class);
+        return $this->hasMany(FinanceRefund::class);
     }
 
     public function plugin(): BelongsTo

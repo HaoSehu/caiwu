@@ -83,7 +83,7 @@ class MaintenanceCommandSafetyTest extends TestCase
         ]);
 
         $paymentsBefore = DB::table('payments')->count();
-        $accountTransactionsBefore = DB::table('account_transactions')->count();
+        $accountTransactionsBefore = DB::table('finance_ledger_entries')->count();
 
         // 默认 dry-run：只统计，不删除
         $this->artisan('db:prune-stale-records')->assertExitCode(0);
@@ -99,6 +99,6 @@ class MaintenanceCommandSafetyTest extends TestCase
         // 财务审计链路不被触碰
         $this->assertDatabaseHas('payments', ['id' => $payment->id]);
         $this->assertSame($paymentsBefore, DB::table('payments')->count(), '维护命令不得删除 payments');
-        $this->assertSame($accountTransactionsBefore, DB::table('account_transactions')->count(), '维护命令不得删除资金流水');
+        $this->assertSame($accountTransactionsBefore, DB::table('finance_ledger_entries')->count(), '维护命令不得删除资金流水');
     }
 }
