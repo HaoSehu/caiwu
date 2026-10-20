@@ -65,6 +65,27 @@ final class Money
     }
 
     /**
+     * 整数分转两位小数金额字符串，供 DECIMAL(12,2) 列直接落库。
+     *
+     * 不经过 float，避免大额或负数在边界上产生 0.01 漂移。
+     */
+    public static function formatCents(int $cents): string
+    {
+        $sign = $cents < 0 ? '-' : '';
+        $absolute = $cents < 0 ? -$cents : $cents;
+
+        return $sign.intdiv($absolute, 100).'.'.str_pad((string) ($absolute % 100), 2, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * 以分为单位求和。入参已是整数分，不存在舍入。
+     */
+    public static function sumCents(int ...$cents): int
+    {
+        return array_sum($cents);
+    }
+
+    /**
      * 以分为单位比较两个金额：前者小于/等于/大于后者分别返回 -1 / 0 / 1。
      */
     public static function compare(mixed $a, mixed $b): int
