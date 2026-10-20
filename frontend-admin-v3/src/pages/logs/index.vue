@@ -50,6 +50,18 @@
             <t-option label="访客" value="guest" />
           </t-select>
           <t-select
+            v-if="showFilter('actor_type')"
+            v-model="filters.actor_type"
+            clearable
+            placeholder="操作者类型"
+            @change="handleLogSearch"
+          >
+            <t-option label="管理员" value="admin" />
+            <t-option label="客户" value="client" />
+            <t-option label="系统" value="system" />
+            <t-option label="子账号" value="sub_account" />
+          </t-select>
+          <t-select
             v-if="showFilter('status')"
             v-model="filters.status"
             clearable
@@ -493,6 +505,14 @@
                 @click="handleCleanup"
                 >立即清理</t-button
               >
+              <t-button
+                theme="primary"
+                variant="outline"
+                :loading="cleanupPreviewing"
+                :disabled="cleanupPreviewDisabled"
+                @click="handlePreviewCleanup"
+                >预览影响范围</t-button
+              >
               <t-button variant="outline" @click="cleanupForm.confirm_text = ''">清空确认</t-button>
             </div>
           </t-form>
@@ -500,10 +520,14 @@
 
         <section v-if="lastCleanupResult" class="cleanup-section">
           <div class="section-title">
-            <h2>最近一次清理结果</h2>
-            <p>显示本次清理范围、截止时间和影响条数。</p>
+            <h2>最近一次清理 / 预览结果</h2>
+            <p>显示本次操作范围、截止时间和影响条数；预览不会删除任何数据。</p>
           </div>
           <div class="file-meta-grid">
+            <article>
+              <span>操作模式</span>
+              <strong>{{ lastCleanupResult.dry_run ? '预览（未删除）' : '已执行清理' }}</strong>
+            </article>
             <article>
               <span>清理类型</span>
               <strong>{{ fieldValue(lastCleanupResult.type) }}</strong>
@@ -581,7 +605,7 @@ import { errorMessage } from '@/utils/userMessage';
 import LogDetailDrawer from './components/LogDetailDrawer.vue';
 import QueueJobsDrawer from './components/QueueJobsDrawer.vue';
 
-type LogTab = 'runtime' | 'admin-logins' | 'api' | 'sms' | 'email' | 'tasks' | 'gateway';
+type LogTab = 'activity' | 'runtime' | 'admin-logins' | 'api' | 'sms' | 'email' | 'tasks' | 'gateway';
 type LogsTab = LogTab | 'schedules' | 'cleanup';
 type RecordRow = Record<string, unknown>;
 
@@ -590,6 +614,7 @@ const router = useRouter();
 const userStore = useUserStore();
 const isMobile = useMediaQuery('(max-width: 768px)');
 const validTabs: LogsTab[] = [
+  'activity',
   'runtime',
   'admin-logins',
   'api',
@@ -605,6 +630,7 @@ const scheduleLoading = ref(false);
 const scheduleSourceFilter = ref<'all' | 'system' | 'third_party'>('all');
 const cleanupLoading = ref(false);
 const cleanupSubmitting = ref(false);
+const cleanupPreviewing = ref(false);
 const triggeringKey = ref('');
 const detailVisible = ref(false);
 const currentLog = ref<RecordRow | null>(null);
@@ -628,6 +654,7 @@ interface LogFilter {
   method: string;
   module: string;
   user_type: string;
+  actor_type: string;
   status: string | number;
   phone: string;
   email: string;
@@ -649,6 +676,7 @@ const DEFAULT_LOG_FILTERS: LogFilter = {
   method: '',
   module: '',
   user_type: '',
+  actor_type: '',
   status: '',
   phone: '',
   email: '',
@@ -718,6 +746,10 @@ const notifyStatusOptions = [
   { label: '发送成功', value: 'success' },
   { label: '发送失败', value: 'failed' },
 ];
+const adminLoginStatusOptions = [
+  { label: '登录成功', value: 'success' },
+  { label: '登录失败', value: 'failed' },
+];
 const gatewayOptions = [
   { label: '支付宝', value: 'alipay' },
   { label: '微信支付', value: 'wechat' },
@@ -749,6 +781,12 @@ const taskLogOptions = [
   { value: 'order-cleanup', label: '账单与充值清理' },
 ];
 const logMeta: Record<LogTab, { title: string; description: string; filters: string[]; keyword: string }> = {
+  activity: {
+    title: '业务审计日志',
+    description: '记录后台业务操作、系统事件与审计轨迹。',
+    filters: ['keyword', 'module', 'actor_type', 'date'],
+    keyword: '描述、操作者、模块或 IP',
+  },
   runtime: {
     title: '运行日志',
     description: '查看应用运行日志、警告与错误信息。',
@@ -794,6 +832,16 @@ const logMeta: Record<LogTab, { title: string; description: string; filters: str
 };
 
 const baseLogColumns: Record<LogTab, PrimaryTableCol<RecordRow>[]> = {
+  activity: [
+    { colKey: 'time', title: '记录时间', width: 170 },
+    { colKey: 'primary', title: '操作者', minWidth: 180 },
+    { colKey: 'module', title: '模块', width: 120 },
+    { colKey: 'action', title: '动作', minWidth: 160, ellipsis: true },
+    { colKey: 'message', title: '描述', minWidth: 360 },
+    { colKey: 'ip_address', title: 'IP', minWidth: 140 },
+    { colKey: 'trace_id', title: 'Trace ID', minWidth: 170, ellipsis: true },
+    { colKey: 'actions', title: '操作', fixed: 'right', width: 90 },
+  ],
   runtime: [
     { colKey: 'time', title: '记录时间', width: 170 },
     { colKey: 'level', title: '级别', width: 100 },
@@ -803,11 +851,14 @@ const baseLogColumns: Record<LogTab, PrimaryTableCol<RecordRow>[]> = {
     { colKey: 'actions', title: '操作', fixed: 'right', width: 90 },
   ],
   'admin-logins': [
-    { colKey: 'primary', title: '账号信息', minWidth: 230 },
-    { colKey: 'role_name', title: '角色', minWidth: 140 },
+    { colKey: 'primary', title: '账号信息', minWidth: 200 },
+    { colKey: 'role_name', title: '角色', minWidth: 130 },
+    { colKey: 'status', title: '状态', width: 110 },
+    { colKey: 'failure_reason', title: '失败原因', minWidth: 140, ellipsis: true },
+    { colKey: 'browser', title: '浏览器', minWidth: 130, ellipsis: true },
+    { colKey: 'operating_system', title: '操作系统', minWidth: 130, ellipsis: true },
     { colKey: 'ip_address', title: '登录 IP', minWidth: 150 },
     { colKey: 'time', title: '登录时间', width: 170 },
-    { colKey: 'status', title: '来源', width: 120 },
     { colKey: 'actions', title: '操作', fixed: 'right', width: 90 },
   ],
   api: [
@@ -882,6 +933,7 @@ const keywordPlaceholder = computed(() => currentLogMeta.value.keyword);
 const statusPlaceholder = computed(() => {
   if (activeTab.value === 'api') return '全部状态码';
   if (activeTab.value === 'tasks') return '全部任务状态';
+  if (activeTab.value === 'admin-logins') return '全部登录结果';
   return '全部发送状态';
 });
 const taskStatusOptions = [
@@ -892,6 +944,7 @@ const taskStatusOptions = [
 const statusOptions = computed(() => {
   if (activeTab.value === 'api') return httpStatusOptions;
   if (activeTab.value === 'tasks') return taskStatusOptions;
+  if (activeTab.value === 'admin-logins') return adminLoginStatusOptions;
   return notifyStatusOptions;
 });
 const drawerSize = computed(() => (isMobile.value ? '100%' : '700px'));
@@ -1020,11 +1073,21 @@ const clearQueueDialogHint = computed(() =>
 const cleanupSubmitDisabled = computed(
   () =>
     cleanupSubmitting.value ||
+    cleanupPreviewing.value ||
     !canManageLogCleanup.value ||
     !cleanupForm.type ||
     !Number.isFinite(Number(cleanupForm.keep_days)) ||
     Number(cleanupForm.keep_days) < 1 ||
     cleanupForm.confirm_text.trim() !== '立即清理',
+);
+const cleanupPreviewDisabled = computed(
+  () =>
+    cleanupPreviewing.value ||
+    cleanupSubmitting.value ||
+    !canManageLogCleanup.value ||
+    !cleanupForm.type ||
+    !Number.isFinite(Number(cleanupForm.keep_days)) ||
+    Number(cleanupForm.keep_days) < 1,
 );
 const cleanupTypes = computed(() => asArray(cleanupOverview.value.supported_cleanup_types));
 const databaseCards = computed(() => {
@@ -1075,7 +1138,7 @@ function resolveRouteTab(): LogsTab {
 }
 
 function isLogTab(value: LogsTab): value is LogTab {
-  return ['runtime', 'admin-logins', 'api', 'sms', 'email', 'tasks', 'gateway'].includes(value);
+  return ['activity', 'runtime', 'admin-logins', 'api', 'sms', 'email', 'tasks', 'gateway'].includes(value);
 }
 
 function showFilter(name: string) {
@@ -1103,6 +1166,7 @@ function applyRouteFilterQuery() {
 
 function requestLogList(tab: LogTab, params: LogListParams): Promise<PaginatedList> {
   const map = {
+    activity: adminApi.logs.activity,
     runtime: adminApi.logs.runtime,
     'admin-logins': adminApi.logs.adminLogins,
     api: adminApi.logs.api,
@@ -1211,6 +1275,34 @@ async function loadCleanupOverview() {
   }
 }
 
+async function handlePreviewCleanup() {
+  if (!canManageLogCleanup.value) {
+    MessagePlugin.warning('当前账号缺少 log.manage 权限');
+    return;
+  }
+  if (!cleanupForm.type) {
+    MessagePlugin.warning('请选择清理类型');
+    return;
+  }
+  if (!Number.isFinite(Number(cleanupForm.keep_days)) || Number(cleanupForm.keep_days) < 1) {
+    MessagePlugin.warning('保留天数必须大于 0');
+    return;
+  }
+  cleanupPreviewing.value = true;
+  try {
+    lastCleanupResult.value = await adminApi.logs.cleanup({
+      type: cleanupForm.type,
+      keep_days: Number(cleanupForm.keep_days),
+      dry_run: true,
+    });
+    MessagePlugin.success('预览完成，未删除数据');
+  } catch (error) {
+    MessagePlugin.error(errorMessage(error, '日志清理预览失败'));
+  } finally {
+    cleanupPreviewing.value = false;
+  }
+}
+
 async function handleCleanup() {
   if (!canManageLogCleanup.value) {
     MessagePlugin.warning('当前账号缺少 log.manage 权限');
@@ -1275,6 +1367,7 @@ function closeDetailDrawer() {
 function primaryTitle(row: RecordRow) {
   if (activeTab.value === 'admin-logins') return fieldValue(row.admin_username);
   if (activeTab.value === 'api') return fieldValue(row.actor_name || userTypeLabel(row.user_type));
+  if (activeTab.value === 'activity') return fieldValue(row.actor_name || userTypeLabel(row.actor_type));
   if (activeTab.value === 'sms') return fieldValue(row.phone);
   if (activeTab.value === 'email') return fieldValue(row.to_email);
   if (activeTab.value === 'tasks') return fieldValue(row.task_title || row.task_key);
@@ -1284,6 +1377,8 @@ function primaryTitle(row: RecordRow) {
 function primarySubText(row: RecordRow) {
   if (activeTab.value === 'admin-logins') return fieldValue(row.admin_nickname || row.actor_name || '未设置昵称');
   if (activeTab.value === 'api') return userTypeLabel(row.user_type);
+  if (activeTab.value === 'activity')
+    return fieldValue(row.subject_type ? `${row.subject_type} #${row.subject_id ?? ''}` : '');
   if (activeTab.value === 'sms' || activeTab.value === 'email') return `发送时间：${formatDate(row.sent_at)}`;
   if (activeTab.value === 'tasks') return fieldValue(row.task_key);
   return '';
@@ -1407,7 +1502,12 @@ function routeForIdSegment(label: string, id: string) {
 }
 
 function statusLabel(status: unknown) {
-  if (activeTab.value === 'admin-logins') return sourceLabel(status);
+  if (activeTab.value === 'admin-logins') {
+    const key = String(status || '').toLowerCase();
+    if (key === 'success') return '登录成功';
+    if (key === 'failed') return '登录失败';
+    return sourceLabel(status);
+  }
   const statusKey = String(status || '').toLowerCase();
   if (activeTab.value === 'tasks') {
     return String({ success: '成功', failed: '失败', skipped: '跳过' }[statusKey] || fieldValue(status));
@@ -1416,12 +1516,12 @@ function statusLabel(status: unknown) {
 }
 
 function statusValue(row: RecordRow) {
-  return activeTab.value === 'admin-logins' ? row.source : row.status;
+  return activeTab.value === 'admin-logins' ? row.status || row.source : row.status;
 }
 
 /** 为移动端卡片提取状态值（兼容多种日志类型） */
 function logStatusValue(row: RecordRow) {
-  if (activeTab.value === 'admin-logins') return row.source;
+  if (activeTab.value === 'admin-logins') return row.status || row.source;
   if (row.result_status) return row.result_status;
   return row.status;
 }
@@ -1438,6 +1538,9 @@ function logCardMessage(row: RecordRow) {
 
 function statusTheme(status: unknown) {
   if (activeTab.value === 'admin-logins') {
+    const key = String(status || '').toLowerCase();
+    if (key === 'success') return 'success';
+    if (key === 'failed') return 'danger';
     return ['operation_log', 'activity_log'].includes(String(status)) ? 'success' : 'warning';
   }
   return (
@@ -1490,6 +1593,7 @@ function sourceLabel(value: unknown) {
       activity_log: '活动日志',
       operation_log: '操作日志',
       admin_snapshot: '账号快照',
+      admin_login_log: '登录日志',
     }[String(value || '').toLowerCase()] || '未知来源'
   );
 }

@@ -11,6 +11,7 @@ class MessageLog extends Model
         'plugin_id',
         'driver_key',
         'trace_id',
+        'delivery_key',
         'recipient',
         'template_code',
         'subject',

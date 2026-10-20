@@ -6,9 +6,11 @@ namespace App\Services\System;
 
 use App\Http\Resources\Admin\V2\AdminLogSummaryResource;
 use App\Models\ActivityLog;
+use App\Models\AdminLoginLog;
 use App\Models\AdminUser;
 use App\Models\GatewayLog;
 use App\Models\IntegrationPluginRuntimeLog;
+use App\Models\MessageDeliveryAttempt;
 use App\Models\MessageLog;
 use App\Models\ScheduleRunLog;
 use App\Support\ApiAccessLogFile;
@@ -177,6 +179,7 @@ class AdminLogV2QueryService
 
         $row = $this->normalizeRow($model);
         $recipient = (string) ($row['recipient'] ?? '');
+        $attempts = $this->messageAttempts((int) $model->getKey());
         $fields = array_filter([
             'id' => (int) $model->getKey(),
             'phone' => $channel === 'sms' ? ($row['phone'] ?? $recipient) : null,
@@ -189,6 +192,8 @@ class AdminLogV2QueryService
             'plugin_id' => $row['plugin_id'] ?? null,
             'driver_key' => $row['driver_key'] ?? null,
             'trace_id' => $row['trace_id'] ?? null,
+            'delivery_key' => $row['delivery_key'] ?? null,
+            'attempt_count' => count($attempts),
             'sent_at' => $this->dateValue($model, 'sent_at'),
             'created_at' => $this->dateValue($model, 'created_at'),
             'error_msg' => $row['error_msg'] ?? null,
@@ -203,9 +208,37 @@ class AdminLogV2QueryService
             'context' => [
                 'params' => $row['params_json'] ?? $row['params'] ?? [],
                 'error_msg' => $row['error_msg'] ?? '',
+                'attempts' => $attempts,
             ],
             'created_at' => $this->dateValue($model, 'created_at'),
         ];
+    }
+
+    /**
+     * 同一逻辑消息的逐次投递尝试（队列重试血缘）。
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function messageAttempts(int $messageLogId): array
+    {
+        if (! SchemaMetadataCache::hasTable('message_delivery_attempts')) {
+            return [];
+        }
+
+        return MessageDeliveryAttempt::query()
+            ->where('message_log_id', $messageLogId)
+            ->orderBy('attempt_no')
+            ->get()
+            ->map(fn (MessageDeliveryAttempt $attempt): array => [
+                'attempt_no' => (int) $attempt->attempt_no,
+                'status' => (string) $attempt->status,
+                'error_code' => (string) $attempt->error_code,
+                'error_msg' => (string) ($attempt->error_msg ?? ''),
+                'duration_ms' => (int) $attempt->duration_ms,
+                'started_at' => $this->dateValue($attempt, 'created_at'),
+                'finished_at' => $this->dateValue($attempt, 'finished_at'),
+            ])
+            ->all();
     }
 
     /**
@@ -289,6 +322,39 @@ class AdminLogV2QueryService
 
     private function adminLoginDetail(string $log): ?array
     {
+        // 独立登录日志表是新增登录审计的唯一在线真源，优先解析；
+        // 历史 id 仍可从 activity_logs(admin.login) 读取。
+        if (SchemaMetadataCache::hasTable('admin_login_logs')) {
+            $login = AdminLoginLog::query()->find($log);
+            if ($login instanceof AdminLoginLog) {
+                $succeeded = $login->status === AdminLoginLog::STATUS_SUCCESS;
+
+                return [
+                    'id' => (string) $login->id,
+                    'channel' => 'admin-logins',
+                    'source' => 'admin_login_logs',
+                    'fields' => [
+                        'id' => (int) $login->id,
+                        'admin_username' => (string) $login->username,
+                        'admin_nickname' => (string) $login->nickname,
+                        'role_name' => (string) $login->role_name,
+                        'status' => $succeeded ? 'success' : 'failed',
+                        'failure_reason' => (string) $login->failure_reason,
+                        'ip_address' => (string) $login->client_ip,
+                        'browser' => (string) $login->browser,
+                        'operating_system' => (string) $login->operating_system,
+                        'created_at' => $this->dateValue($login, 'logged_at'),
+                    ],
+                    'message' => $succeeded ? '登录成功' : '登录失败'.($login->failure_reason !== '' ? '：'.$login->failure_reason : ''),
+                    'context' => [
+                        'source' => 'admin_login_logs',
+                        'failure_reason' => (string) $login->failure_reason,
+                    ],
+                    'created_at' => $this->dateValue($login, 'logged_at'),
+                ];
+            }
+        }
+
         $activity = SchemaMetadataCache::hasTable('activity_logs')
             ? ActivityLog::query()
                 ->where('module', 'auth')

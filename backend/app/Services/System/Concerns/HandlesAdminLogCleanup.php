@@ -4,10 +4,15 @@ declare(strict_types=1);
 
 namespace App\Services\System\Concerns;
 
+use App\Models\ActivityLog;
+use App\Models\AdminLoginLog;
 use App\Models\GatewayLog;
 use App\Models\MessageLog;
 use App\Models\ScheduleRunLog;
+use App\Support\SchemaMetadataCache;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -31,7 +36,7 @@ trait HandlesAdminLogCleanup
                         'sms' => MessageLog::query()->where('channel', 'sms')->count(),
                         'email' => MessageLog::query()->where('channel', 'email')->count(),
                         'api' => $this->baseApiLogQuery()->count(),
-                        'admin_login' => $this->baseAdminLoginLogQuery()->count(),
+                        'admin_login' => $this->adminLoginLogCount(),
                         'activity' => $this->activityLogCount(),
                         'schedule_run' => ScheduleRunLog::query()->count(),
                         'gateway' => GatewayLog::query()->count(),
@@ -53,71 +58,159 @@ trait HandlesAdminLogCleanup
         );
     }
 
+    /**
+     * 清理或预览日志（对齐 howstack-bos prune 的「默认预览、显式执行」语义）。
+     *
+     * $payload['dry_run'] 为 true 时只统计截止时间前的待删行数，不执行任何删除。
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
     public function cleanup(array $payload): array
     {
         $type = trim((string) ($payload['type'] ?? ''));
         $keepDays = (int) ($payload['keep_days'] ?? 0);
+        $dryRun = (bool) ($payload['dry_run'] ?? false);
         $cutoff = now()->subDays($keepDays)->startOfDay();
+        $targets = $this->cleanupTargets($cutoff);
+        $selected = $type === 'all_db'
+            ? $targets
+            : [$type => $targets[$type] ?? ['children' => [], 'primary' => []]];
         $affected = [];
 
-        if ($type === 'all_db') {
-            DB::transaction(function () use ($cutoff, &$affected) {
-                $affected['sms'] = MessageLog::query()->where('channel', 'sms')->where('created_at', '<', $cutoff)->delete();
-                $affected['email'] = MessageLog::query()->where('channel', 'email')->where('created_at', '<', $cutoff)->delete();
-                $affected['api'] = $this->baseApiLogQuery()
-                    ->where('created_at', '<', $cutoff)
-                    ->delete();
-                $affected['admin_login'] = $this->baseAdminLoginLogQuery()
-                    ->where('created_at', '<', $cutoff)
-                    ->delete();
-                $affected['activity'] = $this->deleteActivityLogsBefore($cutoff);
-                $affected['schedule_run'] = ScheduleRunLog::query()->where('created_at', '<', $cutoff)->delete();
-                // gateway 为支付证据：不随 all_db 清理物理删除，仅保留只读预览
-            });
+        if ($dryRun) {
+            foreach ($selected as $key => $target) {
+                // 预览只统计主表行数，不把子表（投递尝试）计入「影响条数」。
+                $affected[$key] = $this->countQueries($target['primary']);
+            }
         } else {
-            DB::transaction(function () use ($type, $cutoff, &$affected) {
-                if ($type === 'sms') {
-                    $affected['sms'] = MessageLog::query()->where('channel', 'sms')->where('created_at', '<', $cutoff)->delete();
+            DB::transaction(function () use ($selected, &$affected): void {
+                foreach ($selected as $key => $target) {
+                    // 先删子表（投递尝试），再删主表，避免 message_logs 删除后留下孤儿行。
+                    $this->deleteQueries($target['children']);
+                    $affected[$key] = $this->deleteQueries($target['primary']);
                 }
-
-                if ($type === 'email') {
-                    $affected['email'] = MessageLog::query()->where('channel', 'email')->where('created_at', '<', $cutoff)->delete();
-                }
-
-                if ($type === 'api') {
-                    $affected['api'] = $this->baseApiLogQuery()
-                        ->where('created_at', '<', $cutoff)
-                        ->delete();
-                }
-
-                if ($type === 'admin_login') {
-                    $affected['admin_login'] = $this->baseAdminLoginLogQuery()
-                        ->where('created_at', '<', $cutoff)
-                        ->delete();
-                }
-
-                if ($type === 'activity') {
-                    $affected['activity'] = $this->deleteActivityLogsBefore($cutoff);
-                }
-
-                if ($type === 'schedule_run') {
-                    $affected['schedule_run'] = ScheduleRunLog::query()->where('created_at', '<', $cutoff)->delete();
-                }
-
-                // gateway 为支付证据，单独 type 也不得物理删除（校验层已排除）
             });
+
+            $this->bumpCleanupOverviewCacheVersion();
         }
 
         // 文件日志（laravel-*.log）不再提供清理：生产 daily 轮转自带生命周期，
         // 旧实现整文件重写还会绕过审计并破坏并发写入。
-        $this->bumpCleanupOverviewCacheVersion();
 
         return [
             'type' => $type,
             'keep_days' => $keepDays,
+            'dry_run' => $dryRun,
             'cutoff_at' => $cutoff->format('Y-m-d H:i:s'),
             'affected' => $affected,
         ];
+    }
+
+    /**
+     * 各清理类型对应的查询集合；children 先于 primary 删除，避免孤儿行。
+     *
+     * admin_login 只清理独立登录日志表；activity_logs 中的历史 admin.login 行
+     * 归属于 activity（业务审计），避免 all_db 时重复计数与重复删除。
+     *
+     * @return array<string, array{children: list<EloquentBuilder|QueryBuilder>, primary: list<EloquentBuilder|QueryBuilder>}>
+     */
+    private function cleanupTargets(Carbon $cutoff): array
+    {
+        $targets = [
+            'sms' => [
+                'children' => $this->messageAttemptCleanupQueries($cutoff, 'sms'),
+                'primary' => [MessageLog::query()->where('channel', 'sms')->where('created_at', '<', $cutoff)],
+            ],
+            'email' => [
+                'children' => $this->messageAttemptCleanupQueries($cutoff, 'email'),
+                'primary' => [MessageLog::query()->where('channel', 'email')->where('created_at', '<', $cutoff)],
+            ],
+            'api' => [
+                'children' => [],
+                'primary' => [$this->baseApiLogQuery()->where('created_at', '<', $cutoff)],
+            ],
+            'activity' => [
+                'children' => [],
+                'primary' => $this->activityLogCleanupQueries($cutoff),
+            ],
+            'schedule_run' => [
+                'children' => [],
+                'primary' => [ScheduleRunLog::query()->where('created_at', '<', $cutoff)],
+            ],
+        ];
+
+        if (SchemaMetadataCache::hasTable('admin_login_logs')) {
+            $targets['admin_login'] = [
+                'children' => [],
+                'primary' => [AdminLoginLog::query()->where('logged_at', '<', $cutoff)],
+            ];
+        } else {
+            // 迁移执行前的存量环境：登录记录仍在 activity_logs。
+            $targets['admin_login'] = [
+                'children' => [],
+                'primary' => [ActivityLog::query()
+                    ->where('module', 'auth')
+                    ->where('action', 'admin.login')
+                    ->where('created_at', '<', $cutoff)],
+            ];
+        }
+
+        return $targets;
+    }
+
+    /**
+     * 待删 message_logs 对应的投递尝试（子表先删）。
+     *
+     * @return list<QueryBuilder>
+     */
+    private function messageAttemptCleanupQueries(Carbon $cutoff, string $channel): array
+    {
+        if (! SchemaMetadataCache::hasTable('message_delivery_attempts')) {
+            return [];
+        }
+
+        return [DB::table('message_delivery_attempts')
+            ->whereIn('message_log_id', function ($query) use ($cutoff, $channel): void {
+                $query->select('id')
+                    ->from('message_logs')
+                    ->where('channel', $channel)
+                    ->where('created_at', '<', $cutoff);
+            })];
+    }
+
+    /**
+     * @param  list<EloquentBuilder|QueryBuilder>  $queries
+     */
+    private function countQueries(array $queries): int
+    {
+        return array_sum(array_map(
+            static fn (EloquentBuilder|QueryBuilder $query): int => (int) $query->count(),
+            $queries,
+        ));
+    }
+
+    /**
+     * @param  list<EloquentBuilder|QueryBuilder>  $queries
+     */
+    private function deleteQueries(array $queries): int
+    {
+        return array_sum(array_map(
+            static fn (EloquentBuilder|QueryBuilder $query): int => (int) $query->delete(),
+            $queries,
+        ));
+    }
+
+    private function adminLoginLogCount(): int
+    {
+        if (SchemaMetadataCache::hasTable('admin_login_logs')) {
+            return (int) DB::table('admin_login_logs')->count();
+        }
+
+        return (int) ActivityLog::query()
+            ->where('module', 'auth')
+            ->where('action', 'admin.login')
+            ->count();
     }
 
     /**
@@ -154,13 +247,16 @@ trait HandlesAdminLogCleanup
         return Schema::hasTable('activity_logs') ? (int) DB::table('activity_logs')->count() : 0;
     }
 
-    private function deleteActivityLogsBefore(Carbon $cutoff): int
+    /**
+     * @return list<EloquentBuilder|QueryBuilder>
+     */
+    private function activityLogCleanupQueries(Carbon $cutoff): array
     {
         if (! Schema::hasTable('activity_logs')) {
-            return 0;
+            return [];
         }
 
-        return (int) DB::table('activity_logs')->where('created_at', '<', $cutoff)->delete();
+        return [DB::table('activity_logs')->where('created_at', '<', $cutoff)];
     }
 
     private function bumpCleanupOverviewCacheVersion(): void

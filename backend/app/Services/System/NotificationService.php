@@ -3,6 +3,7 @@
 namespace App\Services\System;
 
 use App\Jobs\SendTemplateEmailJob;
+use App\Models\MessageDeliveryAttempt;
 use App\Models\MessageLog;
 use App\Models\Setting;
 use App\Services\Integrations\Plugins\IntegrationDriverBindingResolver;
@@ -105,13 +106,21 @@ class NotificationService
         private ?NotificationTemplateService $notificationTemplateService = null,
     ) {}
 
-    public function sendEmail(string $to, string $subject, string $content, ?string $templateCode = null): void
-    {
+    public function sendEmail(
+        string $to,
+        string $subject,
+        string $content,
+        ?string $templateCode = null,
+        ?string $deliveryKey = null,
+        int $attemptNo = 1,
+    ): void {
         if ($this->shouldSkipDisabledTemplate('email', $templateCode)) {
             return;
         }
 
-        $logContext = $this->createEmailLog($to, $subject, $content, $templateCode);
+        $attemptStartedAt = now();
+        $attemptStart = microtime(true);
+        $logContext = $this->createEmailLog($to, $subject, $content, $templateCode, $deliveryKey);
 
         try {
             if (! $this->channelSwitchEnabled('email_enabled')) {
@@ -127,18 +136,41 @@ class NotificationService
                 'error_msg' => null,
                 'sent_at' => now(),
             ]);
+
+            $this->recordMessageAttempt(
+                $logContext['id'],
+                $attemptNo,
+                MessageDeliveryAttempt::STATUS_SUCCESS,
+                null,
+                $this->elapsedMilliseconds($attemptStart),
+                $attemptStartedAt,
+            );
         } catch (\Throwable $exception) {
             $this->updateMessageLog($logContext, [
                 'status' => 'failed',
                 'error_msg' => $exception->getMessage(),
             ]);
 
+            $this->recordMessageAttempt(
+                $logContext['id'],
+                $attemptNo,
+                MessageDeliveryAttempt::STATUS_FAILED,
+                $exception,
+                $this->elapsedMilliseconds($attemptStart),
+                $attemptStartedAt,
+            );
+
             throw $exception;
         }
     }
 
-    public function sendTemplateEmail(string $to, string $templateCode, array $params = []): void
-    {
+    public function sendTemplateEmail(
+        string $to,
+        string $templateCode,
+        array $params = [],
+        ?string $deliveryKey = null,
+        int $attemptNo = 1,
+    ): void {
         $template = $this->notificationTemplates()->find('email', $templateCode);
         if (! is_array($template)) {
             throw new \RuntimeException('邮件模板不存在');
@@ -164,7 +196,7 @@ class NotificationService
             $this->renderTemplateContent($contentTemplate, $renderParams)
         );
 
-        $this->sendEmail($to, $subject, $content, $templateCode);
+        $this->sendEmail($to, $subject, $content, $templateCode, $deliveryKey, $attemptNo);
     }
 
     private function notificationTemplates(): NotificationTemplateService
@@ -423,9 +455,29 @@ class NotificationService
      * @return array{id: int|null}
      */
     // 邮件日志明文保存完整正文，供管理端真实审计；管理员端不做脱敏（项目红线）
-    private function createEmailLog(string $to, string $subject, string $content, ?string $templateCode): array
-    {
+    private function createEmailLog(
+        string $to,
+        string $subject,
+        string $content,
+        ?string $templateCode,
+        ?string $deliveryKey = null,
+    ): array {
         $traceId = $this->notificationTraceId('email', $templateCode);
+        $deliveryKey = trim((string) $deliveryKey);
+
+        // 队列重试复用同一条逻辑消息：按 delivery_key 找回首次尝试创建的日志行，
+        // 每次尝试单独落 message_delivery_attempts。
+        if ($deliveryKey !== '') {
+            $existing = MessageLog::query()
+                ->where('channel', 'email')
+                ->where('delivery_key', $deliveryKey)
+                ->first();
+            if ($existing instanceof MessageLog) {
+                return [
+                    'id' => (int) $existing->getKey(),
+                ];
+            }
+        }
 
         try {
             $log = MessageLog::create(array_merge([
@@ -437,6 +489,7 @@ class NotificationService
                 'status' => 'pending',
                 'origin_type' => 'email_send',
                 'origin_id' => 0,
+                'delivery_key' => $deliveryKey !== '' ? $deliveryKey : null,
             ], $this->mailAuditPayload($traceId)));
 
             return [

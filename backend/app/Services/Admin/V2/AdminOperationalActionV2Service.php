@@ -31,11 +31,12 @@ class AdminOperationalActionV2Service
     public function cleanupLogs(array $payload): array
     {
         $result = $this->logs->cleanup($payload);
+        $dryRun = (bool) ($result['dry_run'] ?? false);
 
         return [
             'id' => 0,
-            'status' => 'completed',
-            'message' => '清理完成',
+            'status' => $dryRun ? 'preview' : 'completed',
+            'message' => $dryRun ? '预览完成，未删除数据' : '清理完成',
             'detail' => [
                 'type' => 'log_cleanup',
                 'cleanup' => [
@@ -43,6 +44,7 @@ class AdminOperationalActionV2Service
                     'keep_days' => (int) ($result['keep_days'] ?? 0),
                     'cutoff_at' => (string) ($result['cutoff_at'] ?? ''),
                     'affected' => is_array($result['affected'] ?? null) ? $result['affected'] : [],
+                    'dry_run' => $dryRun,
                 ],
             ],
         ];

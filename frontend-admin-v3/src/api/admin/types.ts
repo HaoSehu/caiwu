@@ -327,7 +327,9 @@ export interface PaginatedList<T extends Record<string, unknown> = Record<string
 export interface LogCleanupPayload {
   type: string;
   keep_days: number;
-  confirm_text: string;
+  confirm_text?: string;
+  /** true 只预览截止时间与待删行数，不执行删除 */
+  dry_run?: boolean;
 }
 
 // ─── Content ──────────────────────────────────────────────────

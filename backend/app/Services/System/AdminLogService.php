@@ -6,6 +6,7 @@ namespace App\Services\System;
 
 use App\Constants\PaymentGatewayCode;
 use App\Models\ActivityLog;
+use App\Models\AdminLoginLog;
 use App\Models\AdminUser;
 use App\Models\GatewayLog;
 use App\Models\IntegrationPluginRuntimeLog;
@@ -492,6 +493,14 @@ class AdminLogService
 
     public function getAdminLoginLogs(array $filters, int $page, int $perPage, bool $withSummary = true): array
     {
+        // 新表 admin_login_logs 是登录审计唯一在线真源（成功与失败都落库）。
+        // 升级前只有 activity_logs 的 admin.login 行：仅当新表为空时降级读取历史，
+        // 保证未登录过的存量环境仍能看到既有登录记录。
+        if (SchemaMetadataCache::hasTable('admin_login_logs')
+            && AdminLoginLog::query()->exists()) {
+            return $this->getAdminLoginLogsFromTable($filters, $page, $perPage, $withSummary);
+        }
+
         // 仅当 activity_logs 表中从未有过任何 admin.login 记录（全新部署）时，才降级到
         // admin_users 快照。若表内有历史记录但当前过滤条件下为空，应返回空页而非降级，
         // 否则前端会看到与实际日志不一致的"最后一次登录"快照数据。
@@ -520,6 +529,16 @@ class AdminLogService
 
         $this->applyDateFilter($query, $filters);
 
+        // 历史 activity_logs 只在登录成功时写入，不存在失败记录：
+        // 筛选「失败」直接返回空页，避免把成功记录当成失败展示。
+        $legacyStatusFilter = strtolower(trim((string) ($filters['status'] ?? '')));
+        if (in_array($legacyStatusFilter, ['failed', '0'], true)) {
+            return $this->buildPaginatorPayload(
+                $this->emptyPaginator($perPage),
+                $withSummary ? ['total' => 0, 'success' => 0, 'failed' => 0, 'mode' => 'activity_log'] : []
+            );
+        }
+
         $logs = (clone $query)->orderByDesc('created_at')->paginate($perPage, ['*'], 'page', $page);
 
         $rows = $this->mapActivityLogRows($logs->getCollection())->map(function (array $item) {
@@ -527,6 +546,11 @@ class AdminLogService
             $item['admin_username'] = trim((string) ($detail['admin_username'] ?? $item['actor_name'] ?? ''));
             $item['admin_nickname'] = trim((string) ($detail['admin_nickname'] ?? ''));
             $item['role_name'] = trim((string) ($detail['role_name'] ?? $item['role_name'] ?? ''));
+            // 历史行只有成功登录，统一标记 success，保证状态列与筛选一致。
+            $item['status'] = 'success';
+            $item['failure_reason'] = '';
+            $item['browser'] = '';
+            $item['operating_system'] = '';
             $item['source'] = 'activity_log';
 
             return $item;
@@ -538,10 +562,119 @@ class AdminLogService
             $withSummary
                 ? [
                     'total' => $logs->total(),
+                    'success' => $logs->total(),
+                    'failed' => 0,
                     'mode' => 'activity_log',
                 ]
                 : []
         );
+    }
+
+    /**
+     * 读取独立登录日志表（对齐 howstack-bos 登录审计模型）。
+     *
+     * @param  array<string, mixed>  $filters
+     * @return array<string, mixed>
+     */
+    private function getAdminLoginLogsFromTable(array $filters, int $page, int $perPage, bool $withSummary = true): array
+    {
+        $query = AdminLoginLog::query();
+
+        if (! empty($filters['keyword'])) {
+            $keyword = trim((string) $filters['keyword']);
+            $query->where(function ($builder) use ($keyword): void {
+                $builder->where('username', 'like', "%{$keyword}%")
+                    ->orWhere('nickname', 'like', "%{$keyword}%")
+                    ->orWhere('role_name', 'like', "%{$keyword}%")
+                    ->orWhere('client_ip', 'like', "%{$keyword}%")
+                    ->orWhere('browser', 'like', "%{$keyword}%")
+                    ->orWhere('operating_system', 'like', "%{$keyword}%");
+            });
+        }
+
+        $statusFilter = strtolower(trim((string) ($filters['status'] ?? '')));
+        if ($statusFilter !== '') {
+            $status = match ($statusFilter) {
+                'success', '1' => AdminLoginLog::STATUS_SUCCESS,
+                'failed', '0' => AdminLoginLog::STATUS_FAILED,
+                default => null,
+            };
+            if ($status !== null) {
+                $query->where('status', $status);
+            }
+        }
+
+        if (! empty($filters['start_date'])) {
+            $query->where('logged_at', '>=', Carbon::parse((string) $filters['start_date'])->startOfDay());
+        }
+
+        if (! empty($filters['end_date'])) {
+            $query->where('logged_at', '<=', Carbon::parse((string) $filters['end_date'])->endOfDay());
+        }
+
+        $logs = (clone $query)
+            ->orderByDesc('logged_at')
+            ->orderByDesc('id')
+            ->paginate($perPage, ['*'], 'page', $page);
+
+        $logs->setCollection($this->mapAdminLoginLogRows($logs->getCollection()));
+
+        return $this->buildPaginatorPayload(
+            $logs,
+            $withSummary
+                ? [
+                    'total' => $logs->total(),
+                    'success' => (clone $query)->where('status', AdminLoginLog::STATUS_SUCCESS)->count(),
+                    'failed' => (clone $query)->where('status', AdminLoginLog::STATUS_FAILED)->count(),
+                    'mode' => 'admin_login_log',
+                ]
+                : []
+        );
+    }
+
+    /**
+     * @param  Collection<int, AdminLoginLog>  $logs
+     */
+    private function mapAdminLoginLogRows(Collection $logs): Collection
+    {
+        return $logs->map(function (AdminLoginLog $log) {
+            $username = trim((string) $log->username);
+            $nickname = trim((string) $log->nickname);
+            $succeeded = $log->status === AdminLoginLog::STATUS_SUCCESS;
+            $reason = trim((string) $log->failure_reason);
+
+            return [
+                'id' => (int) $log->id,
+                'user_id' => $log->admin_user_id,
+                'user_type' => 'admin',
+                'actor_name' => $nickname !== '' ? $nickname : $username,
+                'admin_username' => $username,
+                'admin_nickname' => $nickname,
+                'role_name' => trim((string) $log->role_name),
+                'ip_address' => trim((string) $log->client_ip),
+                'status' => $succeeded ? 'success' : 'failed',
+                'failure_reason' => $reason,
+                'browser' => trim((string) $log->browser),
+                'operating_system' => trim((string) $log->operating_system),
+                'detail' => [
+                    'source' => 'admin_login_logs',
+                    'failure_reason' => $reason,
+                    'browser' => (string) $log->browser,
+                    'operating_system' => (string) $log->operating_system,
+                ],
+                'source' => 'admin_login_log',
+                'created_at' => $this->dateText($log->getAttribute('logged_at')),
+            ];
+        });
+    }
+
+    private function dateText(mixed $value): ?string
+    {
+        if ($value instanceof \DateTimeInterface) {
+            return $value->format('Y-m-d H:i:s');
+        }
+
+        return $value !== null && $value !== '' ? (string) $value : null;
     }
 
     private function getAdminLoginLogsFromSnapshot(array $filters, int $page, int $perPage, bool $withSummary = true): array
@@ -577,6 +710,11 @@ class AdminLogService
                 'admin_nickname' => trim((string) ($admin->nickname ?? '')),
                 'role_name' => trim((string) ($admin->role?->label ?: $admin->role?->name ?: '')),
                 'ip_address' => trim((string) ($admin->last_login_ip ?? '')),
+                // 快照代表最近一次成功登录；无失败记录。
+                'status' => 'success',
+                'failure_reason' => '',
+                'browser' => '',
+                'operating_system' => '',
                 'created_at' => $admin->last_login_at?->format('Y-m-d H:i:s'),
                 'detail' => ['source' => 'admin_users.last_login_at'],
                 'source' => 'admin_snapshot',
@@ -597,13 +735,6 @@ class AdminLogService
     private function baseApiLogQuery()
     {
         return ActivityLog::query()->whereRaw('action REGEXP ?', [self::HTTP_ACTION_REGEXP]);
-    }
-
-    private function baseAdminLoginLogQuery()
-    {
-        return ActivityLog::query()
-            ->where('module', 'auth')
-            ->where('action', 'admin.login');
     }
 
     private function buildPaginatorPayload(LengthAwarePaginator $paginator, array $summary = []): array
@@ -1285,12 +1416,12 @@ class AdminLogService
 
     private function buildFileLogSummaryCacheKey(string $type, array $filters): string
     {
-        $logPath = storage_path('logs/laravel.log');
+        $logPath = $this->resolveActiveLaravelLogPath();
         $fileModifiedAt = is_file($logPath) ? (int) filemtime($logPath) : 0;
         $fileSize = is_file($logPath) ? (int) filesize($logPath) : 0;
         ksort($filters);
 
-        return 'admin_logs:file_summary:'.$type.':'.$fileModifiedAt.':'.$fileSize.':'.md5(
+        return 'admin_logs:file_summary:'.$type.':'.md5($logPath).':'.$fileModifiedAt.':'.$fileSize.':'.md5(
             json_encode($filters, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
         );
     }
@@ -1569,7 +1700,7 @@ class AdminLogService
 
     private function readLaravelLogEntries(int $lineLimit = 1600): array
     {
-        $logPath = storage_path('logs/laravel.log');
+        $logPath = $this->resolveActiveLaravelLogPath();
 
         if (! is_file($logPath)) {
             return [];
@@ -1577,7 +1708,7 @@ class AdminLogService
 
         $fileModifiedAt = (int) filemtime($logPath);
         $fileSize = (int) filesize($logPath);
-        $cacheKey = "admin_logs:file_scan:{$lineLimit}:{$fileModifiedAt}:{$fileSize}";
+        $cacheKey = 'admin_logs:file_scan:'.md5($logPath).":{$lineLimit}:{$fileModifiedAt}:{$fileSize}";
 
         return Cache::remember(
             $cacheKey,
@@ -1591,6 +1722,79 @@ class AdminLogService
                     ->all();
             }
         );
+    }
+
+    /**
+     * 解析当前生效的 Laravel 文件日志路径。
+     *
+     * 生产默认 LOG_CHANNEL=daily，Monolog 的 RotatingFileHandler 实际写入
+     * laravel-YYYY-MM-DD.log；旧实现硬编码 laravel.log，导致日志页的文件兜底源
+     * 在生产环境读不到当天日志。这里按 logging 配置展开 daily/stack channel，
+     * 取最近写入的现存文件；均不存在时回退单文件路径。
+     */
+    private function resolveActiveLaravelLogPath(): string
+    {
+        $existing = array_values(array_filter(
+            $this->configuredLaravelLogPaths(),
+            static fn (string $path): bool => is_file($path),
+        ));
+
+        if ($existing !== []) {
+            usort(
+                $existing,
+                static fn (string $a, string $b): int => filemtime($b) <=> filemtime($a),
+            );
+
+            return $existing[0];
+        }
+
+        return storage_path('logs/laravel.log');
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function configuredLaravelLogPaths(): array
+    {
+        $channels = (array) config('logging.channels', []);
+        $paths = [];
+
+        $resolve = function (string $name, int $depth) use (&$resolve, $channels, &$paths): void {
+            if ($depth > 3) {
+                return;
+            }
+
+            $channel = (array) ($channels[$name] ?? []);
+            $driver = (string) ($channel['driver'] ?? '');
+
+            if ($driver === 'stack') {
+                foreach ((array) ($channel['channels'] ?? []) as $nested) {
+                    if (is_string($nested)) {
+                        $resolve($nested, $depth + 1);
+                    }
+                }
+
+                return;
+            }
+
+            $path = $channel['path'] ?? null;
+            if (! is_string($path) || $path === '') {
+                return;
+            }
+
+            if ($driver === 'daily') {
+                $paths[] = (string) preg_replace('/\.log$/', '-'.date('Y-m-d').'.log', $path);
+                foreach (glob((string) preg_replace('/\.log$/', '-*.log', $path)) ?: [] as $file) {
+                    $paths[] = $file;
+                }
+            }
+
+            $paths[] = $path;
+        };
+
+        $resolve((string) config('logging.default', 'single'), 0);
+
+        return array_values(array_unique($paths));
     }
 
     /**

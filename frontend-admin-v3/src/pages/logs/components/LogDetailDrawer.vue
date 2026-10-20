@@ -35,7 +35,7 @@ import { computed } from 'vue';
 
 import { fieldValue, formatDateTime } from '@/utils/format';
 
-type LogTab = 'runtime' | 'admin-logins' | 'api' | 'sms' | 'email' | 'tasks' | 'gateway';
+type LogTab = 'activity' | 'runtime' | 'admin-logins' | 'api' | 'sms' | 'email' | 'tasks' | 'gateway';
 type RecordRow = Record<string, unknown>;
 
 defineOptions({ name: 'LogDetailDrawer' });
@@ -60,6 +60,7 @@ const isGatewayDetailUnavailable = computed(
 
 const headerTitle = computed(() => {
   const row = props.currentLog || {};
+  if (props.activeTab === 'activity') return `业务审计日志 · ${fieldValue(row.id) || '详情'}`;
   if (props.activeTab === 'admin-logins') return `管理员登录 · ${fieldValue(row.admin_username) || '详情'}`;
   if (props.activeTab === 'api') return `API 日志 · ${fieldValue(row.request_id) || '详情'}`;
   if (props.activeTab === 'sms') return `短信日志 · ${fieldValue(row.phone) || '详情'}`;
@@ -91,9 +92,25 @@ const detailFields = computed(() => {
       { label: '登录账号', value: fieldValue(row.admin_username) },
       { label: '昵称', value: fieldValue(row.admin_nickname || row.actor_name) },
       { label: '角色', value: fieldValue(row.role_name) },
+      { label: '登录结果', value: row.status ? statusLabel(row.status) : '历史记录' },
+      { label: '失败原因', value: fieldValue(row.failure_reason || '') },
+      { label: '浏览器', value: fieldValue(row.browser || '') },
+      { label: '操作系统', value: fieldValue(row.operating_system || '') },
       { label: '登录时间', value: formatDate(row.created_at) },
       { label: 'IP 地址', value: fieldValue(row.ip_address) },
       { label: '数据来源', value: sourceLabel(row.source) },
+    ];
+  }
+  if (props.activeTab === 'activity') {
+    return [
+      { label: '操作者', value: fieldValue(row.actor_name) },
+      { label: '操作者类型', value: fieldValue(row.actor_type) },
+      { label: '模块', value: fieldValue(row.module) },
+      { label: '动作', value: fieldValue(row.action) },
+      { label: '关联对象', value: fieldValue(row.subject_type ? `${row.subject_type} #${row.subject_id ?? ''}` : '') },
+      { label: 'Trace ID', value: fieldValue(row.trace_id) },
+      { label: 'IP 地址', value: fieldValue(row.ip_address) },
+      { label: '记录时间', value: formatDate(row.created_at) },
     ];
   }
   if (props.activeTab === 'sms') {
@@ -105,6 +122,7 @@ const detailFields = computed(() => {
       { label: '插件 ID', value: fieldValue(row.plugin_id) },
       { label: '驱动 key', value: fieldValue(row.driver_key) },
       { label: 'Trace ID', value: fieldValue(row.trace_id) },
+      { label: '投递尝试', value: `${fieldValue(row.attempt_count || 0)} 次` },
       { label: '请求号', value: fieldValue(row.request_id) },
       { label: '发送时间', value: formatDate(row.sent_at) },
       { label: '创建时间', value: formatDate(row.created_at) },
@@ -120,6 +138,7 @@ const detailFields = computed(() => {
       { label: '插件 ID', value: fieldValue(row.plugin_id) },
       { label: '驱动 key', value: fieldValue(row.driver_key) },
       { label: 'Trace ID', value: fieldValue(row.trace_id) },
+      { label: '投递尝试', value: `${fieldValue(row.attempt_count || 0)} 次` },
       { label: '发送时间', value: formatDate(row.sent_at) },
       { label: '创建时间', value: formatDate(row.created_at) },
       { label: '错误信息', value: fieldValue(row.error_msg) },
@@ -176,12 +195,14 @@ const detailBlocks = computed(() => {
     return [
       { label: '模板参数', value: formatJson(row.params, '暂无模板参数') },
       { label: '短信内容', value: fieldValue(row.content) },
+      { label: '投递尝试', value: formatJson(attemptList(row), '暂无尝试记录') },
     ];
   }
   if (props.activeTab === 'email') {
     return [
       { label: '邮件正文预览', value: buildContentPreviewDoc(row.content), html: true },
       { label: 'HTML 源码', value: fieldValue(row.content) },
+      { label: '投递尝试', value: formatJson(attemptList(row), '暂无尝试记录') },
     ];
   }
   if (props.activeTab === 'gateway') {
@@ -212,8 +233,19 @@ function formatDate(value: unknown) {
   return formatDateTime(value);
 }
 
+/** 逐次投递尝试（队列重试血缘）位于详情 context.attempts。 */
+function attemptList(row: RecordRow): unknown[] {
+  const context = (row.context ?? {}) as Record<string, unknown>;
+  return Array.isArray(context.attempts) ? context.attempts : [];
+}
+
 function statusLabel(status: unknown) {
-  if (props.activeTab === 'admin-logins') return sourceLabel(status);
+  if (props.activeTab === 'admin-logins') {
+    const key = String(status || '').toLowerCase();
+    if (key === 'success') return '登录成功';
+    if (key === 'failed') return '登录失败';
+    return sourceLabel(status);
+  }
   if (props.activeTab === 'tasks') return taskStatusLabel(status);
   const statusKey = String(status || '').toLowerCase();
   return String({ success: '发送成功', failed: '发送失败', pending: '待发送' }[statusKey] || fieldValue(status));
@@ -254,6 +286,10 @@ function sourceLabel(value: unknown) {
     {
       operation_log: '操作日志',
       admin_snapshot: '账号快照',
+      admin_login_log: '登录日志',
+      admin_login_logs: '登录日志',
+      activity_log: '业务审计',
+      activity_logs: '业务审计',
     }[String(value || '').toLowerCase()] || '未知来源'
   );
 }

@@ -31,7 +31,12 @@ return [
     'tables' => [
         'operation_logs' => 'API/后台操作及管理员登录日志（只读遗留表，存量由归档消化）',
         'activity_logs' => '系统与业务活动日志',
+        // 管理员登录尝试独立审计表（成功/失败、失败原因、归纳后的客户端环境），
+        // 与 activity_logs 同窗口归档；清理页 admin_login 只作用于该表。
+        'admin_login_logs' => '管理员登录尝试审计（成功/失败）',
         'message_logs' => '短信/邮件统一消息日志',
+        // 逐次投递尝试与 message_logs 同窗口归档；清理时先删子表再删主表。
+        'message_delivery_attempts' => '消息逐次投递尝试（重试血缘）',
         'schedule_run_logs' => 'Laravel 调度运行日志',
         // 调度运行台账是全库最大日志表，需与其它日志同样支持归档；
         // 归档按 created_at 保留 90 天、归档文件保留 180 天，人工重跑血缘均在窗口内。

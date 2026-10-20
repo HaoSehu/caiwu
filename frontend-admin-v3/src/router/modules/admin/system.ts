@@ -25,6 +25,20 @@ export const systemRoutes: RouteRecordRaw[] = [
     },
   },
   {
+    path: 'logs/activity',
+    name: 'AdminActivityLogs',
+    component: () => import('@/pages/logs/index.vue'),
+    meta: {
+      title: {
+        zh_CN: '业务审计日志',
+        en_US: 'Activity Logs',
+      },
+      permission: 'log.list',
+      keepAlive: false,
+      logTab: 'activity',
+    },
+  },
+  {
     path: 'logs/runtime',
     name: 'AdminRuntimeLogs',
     component: () => import('@/pages/logs/index.vue'),

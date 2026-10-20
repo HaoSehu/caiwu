@@ -228,7 +228,13 @@ const ADMIN_MENU_GROUPS: MenuGroupConfig[] = [
       {
         path: '/admin/menu/log-center/runtime-access',
         title: { zh_CN: '运行与访问', en_US: 'Runtime & Access' },
-        children: ['/admin/logs/runtime', '/admin/logs/api', '/admin/logs/admin-logins', '/admin/logs/gateway'],
+        children: [
+          '/admin/logs/runtime',
+          '/admin/logs/activity',
+          '/admin/logs/api',
+          '/admin/logs/admin-logins',
+          '/admin/logs/gateway',
+        ],
       },
       {
         path: '/admin/menu/log-center/notification-logs',

@@ -2,6 +2,7 @@
 
 namespace App\Services\System;
 
+use App\Models\MessageDeliveryAttempt;
 use App\Models\MessageLog;
 use App\Models\Setting;
 use App\Models\SmsProviderTemplate;
@@ -100,6 +101,9 @@ class SmsService
             'sms_verify'
         );
 
+        $attemptStartedAt = now();
+        $attemptStart = microtime(true);
+
         try {
             if (! $this->channelSwitchEnabled('sms_enabled')) {
                 throw new \RuntimeException('短信通知未启用');
@@ -119,11 +123,30 @@ class SmsService
                 'template_code' => $providerTemplateCode !== '' ? $providerTemplateCode : 'aliyun_verify_code',
                 'params_json' => $updatedParams,
             ]);
+
+            $this->recordMessageAttempt(
+                $logContext['id'],
+                1,
+                MessageDeliveryAttempt::STATUS_SUCCESS,
+                null,
+                $this->elapsedMilliseconds($attemptStart),
+                $attemptStartedAt,
+            );
         } catch (\Exception $e) {
             $this->updateMessageLog($logContext, [
                 'status' => 'failed',
                 'error_msg' => $e->getMessage(),
             ]);
+
+            $this->recordMessageAttempt(
+                $logContext['id'],
+                1,
+                MessageDeliveryAttempt::STATUS_FAILED,
+                $e,
+                $this->elapsedMilliseconds($attemptStart),
+                $attemptStartedAt,
+            );
+
             throw $e;
         }
     }
@@ -172,6 +195,9 @@ class SmsService
             (string) ($options['origin_type'] ?? 'sms_template')
         );
 
+        $attemptStartedAt = now();
+        $attemptStart = microtime(true);
+
         try {
             if (! $this->channelSwitchEnabled('sms_enabled')) {
                 throw new \RuntimeException('短信通知未启用');
@@ -189,11 +215,30 @@ class SmsService
                 'request_id' => $result->requestId,
                 'sent_at' => now(),
             ]);
+
+            $this->recordMessageAttempt(
+                $logContext['id'],
+                1,
+                MessageDeliveryAttempt::STATUS_SUCCESS,
+                null,
+                $this->elapsedMilliseconds($attemptStart),
+                $attemptStartedAt,
+            );
         } catch (\Exception $e) {
             $this->updateMessageLog($logContext, [
                 'status' => 'failed',
                 'error_msg' => $e->getMessage(),
             ]);
+
+            $this->recordMessageAttempt(
+                $logContext['id'],
+                1,
+                MessageDeliveryAttempt::STATUS_FAILED,
+                $e,
+                $this->elapsedMilliseconds($attemptStart),
+                $attemptStartedAt,
+            );
+
             throw $e;
         }
     }

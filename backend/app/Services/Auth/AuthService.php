@@ -9,9 +9,11 @@ use App\Jobs\SendAccountSecurityAlertJob;
 use App\Jobs\SendClientLoginEmailAlertJob;
 use App\Jobs\SendClientLoginFailureEmailAlertJob;
 use App\Jobs\SendTemplateEmailJob;
+use App\Models\AdminLoginLog;
 use App\Models\AdminUser;
 use App\Models\User;
 use App\Services\Referral\ReferralService;
+use App\Services\System\AdminLoginLogService;
 use App\Services\System\NotificationService;
 use App\Services\System\OperationLogService;
 use App\Services\User\AdminRoleBridgeService;
@@ -58,6 +60,7 @@ class AuthService
         private AdminRoleBridgeService $adminRoleBridgeService,
         private LoginRiskControlService $loginRiskControlService,
         private LegacyPasswordVerifier $legacyPasswordVerifier,
+        private AdminLoginLogService $adminLoginLogService,
     ) {}
 
     /**
@@ -642,11 +645,27 @@ class AuthService
 
         if ($admin === null || ! $passwordValid) {
             $this->recordAdminLoginFailure($normalizedUsername);
+            // 登录审计：失败尝试落独立表（含未知账号），不再只留 Redis 计数。
+            $this->adminLoginLogService->recordFailure(
+                $admin,
+                trim($username),
+                $ip,
+                $userAgent,
+                AdminLoginLog::REASON_INVALID_CREDENTIALS,
+            );
 
             throw new BusinessException('用户名或密码错误', 40100, 401);
         }
 
         if ($admin->status !== 1) {
+            $this->adminLoginLogService->recordFailure(
+                $admin,
+                trim($username),
+                $ip,
+                $userAgent,
+                AdminLoginLog::REASON_ACCOUNT_DISABLED,
+            );
+
             throw new BusinessException('账号已被禁用', 40300, 403);
         }
 
@@ -659,19 +678,9 @@ class AuthService
         $this->adminRoleBridgeService->syncPrimaryRole($admin);
         $admin->unsetRelation('roles');
 
-        $this->operationLogService->write(
-            userId: (int) $admin->id,
-            userType: 'admin',
-            action: 'admin.login',
-            module: 'auth',
-            targetId: (int) $admin->id,
-            detail: [
-                'admin_username' => (string) $admin->username,
-                'admin_nickname' => (string) ($admin->nickname ?? ''),
-                'role_name' => $admin->resolvedRoleLabel(),
-            ],
-            ipAddress: $ip,
-        );
+        // 登录成功写入独立登录日志；activity_logs 不再重复记录 admin.login，
+        // 避免成功登录同时产生登录日志与访问审计两条重复记录。
+        $this->adminLoginLogService->recordSuccess($admin, $ip, $userAgent);
 
         $this->notifyAdminLoginSuccess($admin, $ip, $userAgent);
 

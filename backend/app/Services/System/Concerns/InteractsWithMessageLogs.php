@@ -4,6 +4,7 @@ namespace App\Services\System\Concerns;
 
 use App\Models\MessageLog;
 use App\Models\Setting;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
@@ -98,6 +99,56 @@ trait InteractsWithMessageLogs
         ));
 
         return $siteName !== '' ? $siteName : (string) config('app.name', '创欧云');
+    }
+
+    /**
+     * 发送耗时（毫秒），用于尝试记录。
+     */
+    private function elapsedMilliseconds(float $startedAt): int
+    {
+        return max(0, (int) round((microtime(true) - $startedAt) * 1000));
+    }
+
+    /**
+     * 记录一次发送尝试；同一 (message_log_id, attempt_no) 只保留一行。
+     *
+     * 尝试表不保存收件地址、正文或凭据；正文与收件人仍在 message_logs。
+     * 写入失败仅告警，不阻断发送流程。
+     */
+    private function recordMessageAttempt(
+        ?int $messageLogId,
+        int $attemptNo,
+        string $status,
+        ?\Throwable $exception,
+        int $durationMs,
+        \DateTimeInterface $startedAt,
+    ): void {
+        $id = (int) ($messageLogId ?? 0);
+        if ($id <= 0) {
+            return;
+        }
+
+        try {
+            DB::table('message_delivery_attempts')->insertOrIgnore([
+                'message_log_id' => $id,
+                'attempt_no' => max(1, $attemptNo),
+                'status' => $status,
+                'error_code' => $exception !== null ? mb_substr(class_basename($exception), 0, 64) : '',
+                'error_msg' => $exception !== null
+                    ? mb_substr(trim($exception->getMessage()), 0, 500)
+                    : null,
+                'duration_ms' => max(0, $durationMs),
+                'created_at' => $startedAt->format('Y-m-d H:i:s'),
+                'finished_at' => now()->format('Y-m-d H:i:s'),
+            ]);
+        } catch (\Throwable $logException) {
+            Log::warning($this->messageChannelLabel().'投递尝试写入失败，已忽略以避免阻断发送流程', [
+                'table' => 'message_delivery_attempts',
+                'message_log_id' => $id,
+                'attempt_no' => $attemptNo,
+                'message' => $logException->getMessage(),
+            ]);
+        }
     }
 
     /**

@@ -159,6 +159,12 @@ class LogOperation
             return false;
         }
 
+        if ($request->is('api/v2/admin/login')) {
+            // 管理员登录由独立登录日志（admin_login_logs）记录成功与失败，
+            // 不再重复写访问审计，避免成功登录产生两条重复记录。
+            return false;
+        }
+
         if ($request->is('api/v2/admin/logs')
             || $request->is('api/v2/admin/logs/*')
             || $request->is('api/v2/admin/log-summaries')

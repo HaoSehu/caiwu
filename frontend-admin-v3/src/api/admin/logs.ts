@@ -2,7 +2,7 @@ import { request } from '@/utils/request';
 
 import type { LogCleanupPayload, LogListParams, PaginatedList } from './types';
 
-type LogChannel = 'runtime' | 'admin-logins' | 'api' | 'sms' | 'email' | 'tasks' | 'gateway';
+type LogChannel = 'activity' | 'runtime' | 'admin-logins' | 'api' | 'sms' | 'email' | 'tasks' | 'gateway';
 
 interface V2LogPage {
   list?: Record<string, unknown>[];
@@ -109,6 +109,8 @@ export const logsApi = {
   tasksSummary: (params: LogListParams) => summaryChannel('tasks', params),
   runtime: (params: LogListParams) => listChannel('runtime', params),
   runtimeSummary: (params: LogListParams) => summaryChannel('runtime', params),
+  activity: (params: LogListParams) => listChannel('activity', params),
+  activitySummary: (params: LogListParams) => summaryChannel('activity', params),
   adminLogins: (params: LogListParams) => listChannel('admin-logins', params),
   gateway: (params: LogListParams) => listChannel('gateway', params),
   detail: (channel: LogChannel, id: number | string) => detailChannel(channel, id),
