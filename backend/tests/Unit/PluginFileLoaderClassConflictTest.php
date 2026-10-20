@@ -47,6 +47,33 @@ class PluginFileLoaderClassConflictTest extends TestCase
         $this->loader()->ensureLoaded($this->manifest('Caiwu\\Plugins\\Tests\\Imposter\\ImposterPlugin'));
     }
 
+    public function test_arbitrary_namespace_declaration_is_rejected(): void
+    {
+        // 收紧（2026-10-13 审查 P2-6）：任意第三方命名空间同样越出插件边界
+        $this->tempDir = $this->makePlugin([
+            'lib/Foreign.php' => "<?php\ndeclare(strict_types=1);\nnamespace MyLib\\Foo;\nclass Bar {}\n",
+        ]);
+
+        $this->expectException(BusinessException::class);
+        $this->expectExceptionMessage('自身命名空间');
+
+        $this->loader()->ensureLoaded($this->manifest('Caiwu\\Plugins\\Tests\\Foreign\\ForeignPlugin'));
+    }
+
+    public function test_namespaced_declaration_is_rejected_when_entry_class_is_global(): void
+    {
+        // 入口类无命名空间时无法推导自身前缀：命名空间声明一律拒绝，避免预检被整体绕过
+        $this->tempDir = $this->makePlugin([
+            'GlobalEntryPlugin.php' => "<?php\ndeclare(strict_types=1);\nclass GlobalEntryPlugin {}\n",
+            'lib/Imposter.php' => "<?php\ndeclare(strict_types=1);\nnamespace Caiwu\\Plugins\\Tests\\Other;\nclass Stolen {}\n",
+        ]);
+
+        $this->expectException(BusinessException::class);
+        $this->expectExceptionMessage('禁止声明命名空间类');
+
+        $this->loader()->ensureLoaded($this->manifest('GlobalEntryPlugin'));
+    }
+
     public function test_duplicate_class_declaration_is_rejected(): void
     {
         $this->tempDir = $this->makePlugin([

@@ -12,6 +12,9 @@ use App\Services\Integrations\Plugins\PluginRuntimeRegistry;
 use App\Services\System\ActivityLogService;
 use App\Services\System\NotificationTemplateService;
 use App\Support\SchemaMetadataCache;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
@@ -216,7 +219,23 @@ class SmsProviderTemplateService
         $row->reject_reason = '';
         $row->raw_json = $this->rawSummary($data);
         $row->synced_at = now();
-        $row->save();
+
+        try {
+            $row->save();
+        } catch (Throwable $exception) {
+            // 运营商侧已受理但本地落库失败：留痕供人工核对，避免重试时
+            // 对同一文案向运营商重复建模板（2026-10-13 审查 P2-4）。
+            Log::error('[短信模板] 提审后本地落库失败，运营商侧模板已存在，请人工核对', [
+                'mapping_id' => (int) $row->id,
+                'plugin_key' => $pluginKey,
+                'provider_template_id' => $providerTemplateId,
+                'title' => (string) $row->title,
+                'message' => $exception->getMessage(),
+                'exception' => $exception::class,
+            ]);
+
+            throw $exception;
+        }
 
         $this->activityLogs->logSafely(
             'integrations',
@@ -505,27 +524,44 @@ class SmsProviderTemplateService
             throw new BusinessException('短信业务模板不存在：'.$businessCode);
         }
 
-        $releasedCount = 0;
-        SmsProviderTemplate::query()
-            ->where('business_code', $businessCode)
-            ->whereKeyNot($row->getKey())
-            ->get()
-            ->each(function (SmsProviderTemplate $other) use ($businessCode, &$releasedCount): void {
-                $other->business_code = null;
-                $other->save();
-                $releasedCount++;
+        // 单挂接「先解绑后挂接」两步事务化（2026-10-13 审查 P2-5）：两步之间失败
+        // 会让业务码短暂无挂接（发送解析回落旧列/fallback 链），包事务保证原子切换。
+        // 并发保护（同日审查 P2-1）：business_code 无唯一约束，事务本身只保证失败原子性，
+        // 两个并发挂接仍可能各留一条；以业务码为粒度加互斥锁，串行化同一业务码的挂接。
+        $lock = Cache::lock('lock:sms-provider-template-link:'.$businessCode, 15);
+        if (! $lock->get()) {
+            throw new BusinessException('该业务码正在被其他挂接操作处理，请稍后重试', 40900, 409);
+        }
 
-                $this->activityLogs->logSafely(
-                    'integrations',
-                    'sms_template.unlink',
-                    sprintf('短信模板自动解绑（%s / %s，原业务码 %s，被新挂接替换）', $other->plugin_key, $other->provider_template_id, $businessCode),
-                    'sms_provider_template',
-                    (int) $other->id,
-                );
+        try {
+            $releasedCount = DB::transaction(function () use ($row, $businessCode): int {
+                $released = 0;
+                SmsProviderTemplate::query()
+                    ->where('business_code', $businessCode)
+                    ->whereKeyNot($row->getKey())
+                    ->get()
+                    ->each(function (SmsProviderTemplate $other) use ($businessCode, &$released): void {
+                        $other->business_code = null;
+                        $other->save();
+                        $released++;
+
+                        $this->activityLogs->logSafely(
+                            'integrations',
+                            'sms_template.unlink',
+                            sprintf('短信模板自动解绑（%s / %s，原业务码 %s，被新挂接替换）', $other->plugin_key, $other->provider_template_id, $businessCode),
+                            'sms_provider_template',
+                            (int) $other->id,
+                        );
+                    });
+
+                $row->business_code = $businessCode;
+                $row->save();
+
+                return $released;
             });
-
-        $row->business_code = $businessCode;
-        $row->save();
+        } finally {
+            $lock->release();
+        }
 
         $this->activityLogs->logSafely(
             'integrations',

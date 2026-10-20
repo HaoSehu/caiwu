@@ -11,9 +11,6 @@ class PluginFileLoader
     /** 插件不得声明进核心命名空间：清单可被污染，声明进 App\ 会顶替或污染核心类。 */
     private const FORBIDDEN_CLASS_NAMESPACE_PREFIXES = ['App\\', 'Illuminate\\'];
 
-    /** 插件类的统一命名空间根，用于识别「冒充其他插件命名空间」的声明。 */
-    private const PLUGIN_NAMESPACE_ROOT = 'Caiwu\\Plugins\\';
-
     /**
      * @var array<string, bool>
      */
@@ -71,7 +68,10 @@ class PluginFileLoader
     /**
      * 预检插件目录内声明的类/接口/trait/enum（token 级解析，不执行插件代码）：
      * 1) 拒绝声明进 App\ / Illuminate\ 核心命名空间；
-     * 2) 拒绝声明进其他插件命名空间（冒充），仅允许自身入口类推导出的命名空间前缀；
+     * 2) 拒绝一切不在自身入口类命名空间前缀之下的「非全局」命名空间声明
+     *    （含冒充其他插件命名空间与任意第三方命名空间）；入口类本身未声明
+     *    命名空间时无法推导前缀，此时同样拒绝一切命名空间声明；全局命名空间
+     *    声明放行，由已加载类冲突检查兜底；
      * 3) 拒绝插件内部重复声明同名类；
      * 4) 拒绝与当前进程已加载类同名冲突。
      */
@@ -163,13 +163,26 @@ class PluginFileLoader
             }
         }
 
-        if (str_starts_with($fqcn, self::PLUGIN_NAMESPACE_ROOT)
-            && $ownPrefix !== null
-            && ! str_starts_with($fqcn.'\\', $ownPrefix.'\\')) {
-            throw new BusinessException(
-                "插件声明的类必须位于自身命名空间 [{$ownPrefix}] 之下，发现 [{$fqcn}]（".basename($file).'）',
-                42200,
-            );
+        if (str_contains($fqcn, '\\')) {
+            if ($ownPrefix === null) {
+                // 入口类未声明命名空间时无法推导自身前缀：不再放行任意命名空间，
+                // 否则「冒充其他插件/第三方命名空间」的预检会被整体绕过。
+                throw new BusinessException(
+                    "插件入口类未声明命名空间时，禁止声明命名空间类 [{$fqcn}]（".basename($file).'）',
+                    42200,
+                );
+            }
+
+            if (! str_starts_with($fqcn.'\\', $ownPrefix.'\\')) {
+                // 收紧（2026-10-13 审查 P2-6）：任何「非全局」命名空间声明都必须位于自身
+                // 前缀之下——核心命名空间与其他插件命名空间（冒充）一并拦截；任意第三方
+                // 命名空间（如 MyLib\Foo）同样越出插件边界。全局命名空间声明放行，
+                // 由下方已加载类冲突检查兜底；插件自带 vendor 依赖走独立 autoload，不经本预检。
+                throw new BusinessException(
+                    "插件声明的类必须位于自身命名空间 [{$ownPrefix}] 之下，发现 [{$fqcn}]（".basename($file).'）',
+                    42200,
+                );
+            }
         }
 
         if (isset($declarations[$fqcn])) {
