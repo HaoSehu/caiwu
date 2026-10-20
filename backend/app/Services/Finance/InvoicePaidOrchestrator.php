@@ -153,15 +153,17 @@ class InvoicePaidOrchestrator
             return;
         }
 
-        if (! AutomationLog::recordOnce(
-            'client-payment-notify', 'invoice_paid', 'invoice', (int) $invoice->id, 'user:'.$userId
-        )) {
-            return;
-        }
-
+        // 先判收件地址再落幂等记录：纯手机号账号无邮箱时不动幂等键，
+        // 用户后续补绑邮箱后的重入/对账重放仍可补发本通知。
         $user = $invoice->user;
         $email = trim((string) ($user?->email ?? ''));
         if ($email === '') {
+            return;
+        }
+
+        if (! AutomationLog::recordOnce(
+            'client-payment-notify', 'invoice_paid', 'invoice', (int) $invoice->id, 'user:'.$userId
+        )) {
             return;
         }
 
@@ -506,6 +508,14 @@ class InvoicePaidOrchestrator
 
         // 幂等：已标记的账单不重复写
         if (! empty($configSnapshot['requires_refund'])) {
+            return false;
+        }
+
+        // 复查履约仍处于 pending：扫描列表/重试耗尽与打标之间履约可能恰好完成
+        // （clearFulfillmentPending 已清标志），此时不得给已成功履约的账单打标。
+        // 所有进入开通流程的新购账单在派发前都先经 markFulfillmentPending 落标志，
+        // 缺失该键的存量已付账单不属于本兜底口径，跳过。
+        if (empty($configSnapshot['fulfillment_pending'])) {
             return false;
         }
 

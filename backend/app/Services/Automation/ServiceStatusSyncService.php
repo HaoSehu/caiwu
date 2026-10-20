@@ -713,6 +713,9 @@ class ServiceStatusSyncService
      */
     private function notifyClientUnsuspendFailed(Service $service): void
     {
+        $ruleKey = 'date:'.now()->format('Y-m-d');
+        $recorded = false;
+
         try {
             $service->loadMissing(['user:id,email,nickname', 'product:id,name']);
 
@@ -721,12 +724,12 @@ class ServiceStatusSyncService
                 return;
             }
 
-            $ruleKey = 'date:'.now()->format('Y-m-d');
             if (! AutomationLog::recordOnce(
                 'service-lifecycle-maintenance', 'unsuspend_failed', 'service', (int) $service->id, $ruleKey
             )) {
                 return;
             }
+            $recorded = true;
 
             SendTemplateEmailJob::dispatch($email, NotificationService::TEMPLATE_SERVICE_UNSUSPEND_FAILED, [
                 'display_name' => trim((string) ($service->user?->display_name ?? '')) !== '' ? (string) $service->user->display_name : $email,
@@ -736,6 +739,14 @@ class ServiceStatusSyncService
                 'failed_at' => now()->format('Y-m-d H:i:s'),
             ]);
         } catch (\Throwable $exception) {
+            // 已落幂等记录但派发失败：回滚记录（对齐其余通知助手的 forgetRecord 口径），
+            // 避免以「日期」为键的幂等把当日该服务的通知静默吞掉。
+            if ($recorded) {
+                AutomationLog::forgetRecord(
+                    'service-lifecycle-maintenance', 'unsuspend_failed', 'service', (int) $service->id, $ruleKey
+                );
+            }
+
             Log::warning('[状态同步] 解除停用失败通知派发异常', [
                 'service_id' => (int) $service->id,
                 'message' => $exception->getMessage(),
