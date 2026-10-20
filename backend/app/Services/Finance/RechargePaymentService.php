@@ -8,16 +8,20 @@ use App\Constants\FinanceLedgerEventType;
 use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
 use App\Exceptions\BusinessException;
+use App\Models\FinanceLedgerEntry;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\RechargeRecord;
 use App\Models\User;
+use App\Services\Finance\Core\Data\FinanceOperationResult;
+use App\Services\Finance\Core\FinanceAccountService;
+use App\Services\Finance\Core\FinanceIdempotencyService;
 use App\Services\Integrations\Payments\PaymentGatewayManager;
 use App\Services\Integrations\Payments\PaymentGatewayOperationService;
 use App\Services\Integrations\Plugins\PaymentGatewayBindingResolver;
 use App\Services\System\ActivityLogService;
 use App\Services\System\OperationLogService;
-use App\Services\User\AccountService;
+use App\Support\Money;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -39,9 +43,9 @@ class RechargePaymentService
         private PaymentGatewayManager $paymentGatewayManager,
         private CheckoutSecurityService $checkoutSecurityService,
         private InvoiceService $invoiceService,
-        private AccountService $accountService,
+        private FinanceAccountService $accounts,
         private FinanceDocumentService $financeDocumentService,
-        private FinanceLedgerWriter $financeLedgerWriter,
+        private FinanceIdempotencyService $idempotency,
         private PaymentCallbackProjector $callbackProjector,
         private ActivityLogService $activityLogService,
         private ?PaymentGatewayBindingResolver $paymentGatewayBindingResolver = null,
@@ -59,99 +63,145 @@ class RechargePaymentService
         $idempotencyKey = trim((string) ($context['idempotency_key'] ?? ''));
         throw_if($idempotencyKey === '', new BusinessException('余额调整缺少幂等键（idempotency_key），已拒绝执行'));
 
-        $lockKey = 'lock:admin:balance-adjust:'.$user->id.':'.md5($idempotencyKey);
-        if (! Cache::add($lockKey, 1, 600)) {
-            // 幂等命中留痕：区分“已入账重放”与“误重试”，不动资金
-            app(OperationLogService::class)->write(
-                userId: ((int) ($context['operator_id'] ?? 0)) ?: null,
-                userType: 'admin',
-                action: 'balance.adjust.duplicate_blocked',
-                module: 'finance',
-                targetId: (int) $user->id,
-                detail: [
-                    'user_id' => (int) $user->id,
-                    'idempotency_key' => $idempotencyKey,
-                    'amount' => number_format($amount, 2, '.', ''),
-                    'operator_name' => trim((string) ($context['operator_name'] ?? '')),
-                    'trace_id' => trim((string) ($context['trace_id'] ?? '')),
-                ],
-                ipAddress: (string) ($context['ip_address'] ?? '') ?: null,
-            );
-
-            throw new BusinessException('相同充值请求已提交，请勿重复操作');
-        }
+        $operatorId = (int) ($context['operator_id'] ?? 0);
+        $amountCents = Money::toCents($amount);
+        $requestKey = 'balance-adjust:'.$user->id.':'.$idempotencyKey;
 
         try {
-            $result = DB::transaction(function () use ($user, $amount, $remark, $context): array {
-                $lockedUser = User::query()->lockForUpdate()->findOrFail($user->id);
-                $currentBalance = $this->getUserBalance($lockedUser);
-                $newBalance = $currentBalance + $amount;
-
-                throw_if($newBalance < 0, new BusinessException(
-                    '扣减后余额不足，当前余额 ¥'.number_format($currentBalance, 2).'，扣减 ¥'.number_format(abs($amount), 2)
-                ));
-
-                $balanceAfter = $this->setUserBalance($lockedUser, $newBalance);
-
-                $eventType = $amount > 0
-                    ? FinanceLedgerEventType::MANUAL_RECHARGE
-                    : FinanceLedgerEventType::MANUAL_DEDUCTION;
-                $transaction = $this->financeLedgerWriter->createBalanceLog(
-                    (int) $lockedUser->id,
-                    $eventType,
-                    $amount,
-                    $balanceAfter,
-                    (int) $lockedUser->id,
-                    $remark,
-                    [
-                        'operator' => trim((string) ($context['operator_name'] ?? '')),
-                        'trace_id' => trim((string) ($context['trace_id'] ?? '')),
-                    ]
-                );
-
-                $operatorName = trim((string) ($context['operator_name'] ?? $context['operator'] ?? ''));
-                $invoice = $amount > 0
-                    ? $this->invoiceService->createForRecharge($lockedUser, abs($amount), null, $remark, trim((string) ($context['trace_id'] ?? '')))
-                    : $this->invoiceService->createForDeduction($lockedUser, abs($amount), $remark, trim((string) ($context['trace_id'] ?? '')));
-
-                $invoice->forceFill([
+            $result = $this->idempotency->execute(
+                'balance_adjust',
+                'admin',
+                $operatorId > 0 ? $operatorId : 0,
+                $requestKey,
+                [
+                    'user_id' => (int) $user->id,
+                    'amount' => Money::formatCents($amountCents),
                     'remark' => $remark,
-                    'operator' => $operatorName !== '' ? $operatorName : null,
-                ])->save();
-
-                $rechargeRecord = null;
-                if ($amount > 0) {
-                    $rechargeRecord = $this->financeDocumentService->recordRecharge(
-                        $invoice,
-                        null,
-                        $transaction,
-                        'admin_recharge',
-                        [
-                            'record_remark' => '管理员手工充值',
-                            'operator_type' => (string) ($context['operator_type'] ?? 'admin'),
-                            'operator_id' => $context['operator_id'] ?? null,
-                            'operator_name' => $operatorName,
-                            'trace_id' => (string) ($context['trace_id'] ?? ''),
-                        ],
-                    );
-                }
-
-                return [
-                    'invoice' => $invoice->fresh(),
-                    'transaction' => $transaction,
-                    'recharge_record' => $rechargeRecord,
-                ];
-            });
-        } catch (\Throwable $exception) {
-            // 入账失败释放幂等占位，允许修正后重试；成功则保留占位拦截同键重放。
-            Cache::forget($lockKey);
+                ],
+                fn (): array => $this->applyBalanceAdjustment($user, $amount, $remark, $context),
+                ['resource_type' => 'user', 'resource_id' => (int) $user->id],
+            );
+        } catch (BusinessException $exception) {
+            // 幂等命中留痕：区分「已入账重放」与「误重试」，不动资金
+            if (str_contains($exception->getMessage(), '幂等键') || str_contains($exception->getMessage(), '正在处理中')) {
+                app(OperationLogService::class)->write(
+                    userId: $operatorId ?: null,
+                    userType: 'admin',
+                    action: 'balance.adjust.duplicate_blocked',
+                    module: 'finance',
+                    targetId: (int) $user->id,
+                    detail: [
+                        'user_id' => (int) $user->id,
+                        'idempotency_key' => $idempotencyKey,
+                        'amount' => Money::formatCents($amountCents),
+                        'operator_name' => trim((string) ($context['operator_name'] ?? '')),
+                        'trace_id' => trim((string) ($context['trace_id'] ?? '')),
+                    ],
+                    ipAddress: (string) ($context['ip_address'] ?? '') ?: null,
+                );
+            }
 
             throw $exception;
         }
 
+        return $this->finishBalanceAdjustment($user, $amount, $result, $context, $idempotencyKey);
+    }
+
+    /**
+     * 余额调整的业务事务体：入账 + 账单 + 充值凭证。由幂等外壳在业务事务外调用。
+     *
+     * @param  array<string, mixed>  $context
+     * @return array<string, mixed>
+     */
+    private function applyBalanceAdjustment(User $user, float $amount, string $remark, array $context): array
+    {
+        $amountCents = Money::toCents($amount);
+
+        return DB::transaction(function () use ($user, $amount, $remark, $context, $amountCents): array {
+            $lockedUser = User::query()->lockForUpdate()->findOrFail($user->id);
+            $currentCents = $this->accounts->balanceCents((int) $lockedUser->id, true);
+
+            throw_if($currentCents + $amountCents < 0, new BusinessException(
+                '扣减后余额不足，当前余额 ¥'.number_format(Money::fromCents($currentCents), 2).'，扣减 ¥'.number_format(abs($amount), 2)
+            ));
+
+            $eventType = $amountCents > 0
+                ? FinanceLedgerEventType::MANUAL_RECHARGE
+                : FinanceLedgerEventType::MANUAL_DEDUCTION;
+            $mutation = $amountCents > 0
+                ? $this->accounts->credit((int) $lockedUser->id, $amountCents, $eventType, [
+                    'source_type' => 'manual_adjustment',
+                    'source_id' => (int) $lockedUser->id,
+                    'remark' => $remark,
+                    'operator_type' => (string) ($context['operator_type'] ?? 'admin'),
+                    'operator_id' => $context['operator_id'] ?? null,
+                    'operator_name' => trim((string) ($context['operator_name'] ?? '')),
+                    'trace_id' => trim((string) ($context['trace_id'] ?? '')),
+                ])
+                : $this->accounts->debit((int) $lockedUser->id, -$amountCents, $eventType, [
+                    'source_type' => 'manual_adjustment',
+                    'source_id' => (int) $lockedUser->id,
+                    'remark' => $remark,
+                    'operator_type' => (string) ($context['operator_type'] ?? 'admin'),
+                    'operator_id' => $context['operator_id'] ?? null,
+                    'operator_name' => trim((string) ($context['operator_name'] ?? '')),
+                    'trace_id' => trim((string) ($context['trace_id'] ?? '')),
+                ]);
+            $transaction = FinanceLedgerEntry::query()->findOrFail($mutation->entryId);
+
+            $operatorName = trim((string) ($context['operator_name'] ?? $context['operator'] ?? ''));
+            $invoice = $amount > 0
+                ? $this->invoiceService->createForRecharge($lockedUser, abs($amount), null, $remark, trim((string) ($context['trace_id'] ?? '')))
+                : $this->invoiceService->createForDeduction($lockedUser, abs($amount), $remark, trim((string) ($context['trace_id'] ?? '')));
+
+            $invoice->forceFill([
+                'remark' => $remark,
+                'operator' => $operatorName !== '' ? $operatorName : null,
+            ])->save();
+
+            $rechargeRecord = null;
+            if ($amount > 0) {
+                $rechargeRecord = $this->financeDocumentService->recordRecharge(
+                    $invoice,
+                    null,
+                    $transaction,
+                    'admin_recharge',
+                    [
+                        'record_remark' => '管理员手工充值',
+                        'operator_type' => (string) ($context['operator_type'] ?? 'admin'),
+                        'operator_id' => $context['operator_id'] ?? null,
+                        'operator_name' => $operatorName,
+                        'trace_id' => (string) ($context['trace_id'] ?? ''),
+                    ],
+                );
+            }
+
+            return [
+                'invoice' => $invoice->fresh(),
+                'transaction' => $transaction,
+                'recharge_record' => $rechargeRecord,
+            ];
+        });
+    }
+
+    /**
+     * 余额调整成功后的审计收尾：重放命中时不重复写审计。
+     *
+     * @param  array<string, mixed>  $context
+     * @param  FinanceOperationResult  $result
+     * @return array<string, mixed>
+     */
+    private function finishBalanceAdjustment(User $user, float $amount, FinanceOperationResult $result, array $context, string $idempotencyKey): array
+    {
+        $payload = $result->payload;
+
+        if ($result->replayed) {
+            return $payload;
+        }
+
         // S1-3：余额调整成功路径补 activity_logs 审计行（写入失败不阻断已完成的资金调整）。
-        $invoice = $result['invoice'] ?? null;
-        $rechargeRecord = $result['recharge_record'] ?? null;
+        $invoice = $payload['invoice'] ?? null;
+        $rechargeRecord = $payload['recharge_record'] ?? null;
 
         $this->activityLogService->logSafely(
             'finance',
@@ -169,7 +219,7 @@ class RechargePaymentService
             ], static fn (mixed $value): bool => $value !== null && $value !== ''),
         );
 
-        return $result;
+        return $payload;
     }
 
     /**
@@ -431,20 +481,20 @@ class RechargePaymentService
                 $this->callbackProjector->syncProjection($lockedPayment);
 
                 $user = User::query()->lockForUpdate()->findOrFail($lockedPayment->user_id);
-                $balanceAfter = $this->setUserBalance($user, $this->getUserBalance($user) + (float) $lockedPayment->amount);
-
-                $transaction = $this->financeLedgerWriter->createBalanceLog(
+                $mutation = $this->accounts->credit(
                     (int) $user->id,
+                    Money::toCents((float) $lockedPayment->amount),
                     FinanceLedgerEventType::RECHARGE,
-                    (float) $lockedPayment->amount,
-                    $balanceAfter,
-                    (int) $lockedPayment->id,
-                    // 充值单可属任意第三方网关，备注使用中性文案，不硬编码具体渠道
-                    '账户充值 '.(string) $lockedPayment->payment_no,
                     [
+                        'source_type' => 'payment',
+                        'source_id' => (int) $lockedPayment->id,
+                        // 充值单可属任意第三方网关，备注使用中性文案，不硬编码具体渠道
+                        'remark' => '账户充值 '.(string) $lockedPayment->payment_no,
+                        'operator_type' => 'system',
                         'trace_id' => (string) ($lockedPayment->trace_id ?? ''),
-                    ]
+                    ],
                 );
+                $transaction = FinanceLedgerEntry::query()->findOrFail($mutation->entryId);
 
                 $invoice = $this->invoiceService->createForRecharge(
                     $user,
@@ -559,15 +609,5 @@ class RechargePaymentService
             ! $user->hasCompletedVerification(),
             new BusinessException('请先完成实名认证后再继续操作', 40301)
         );
-    }
-
-    private function getUserBalance(User $user): float
-    {
-        return $this->accountService->cashBalance($user, true);
-    }
-
-    private function setUserBalance(User $user, float $balance): string
-    {
-        return $this->accountService->setCashBalance($user, $balance);
     }
 }
