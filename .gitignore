@@ -152,6 +152,11 @@ frontend-console-v2/
 zjmf/
 ZJMF-CBAP-10.4.6/
 zjmf-manger-decoded-main/
+howstack-bos-main/
+
+# 会话遗留产物（根目录误生成，不得入库）
+/MEMORY.md
+/phpstan-baseline.neon
 
 # Claude
 .claude/
