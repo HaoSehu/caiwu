@@ -14,21 +14,18 @@
       :cancel-loading="cancelLoading"
       @refresh="load"
       @cancel="handleCancel"
-      @mark-refund="openRefundMarkDialog"
+      @mark-refund="openRefundDialog"
       @view-order="(id) => id && router.push(`/admin/finance/orders/${id}`)"
       @view-user="(id) => id && router.push(`/admin/users/${id}`)"
     />
 
-    <refund-mark-dialog
-      v-model:visible="refundMarkVisible"
+    <refund-dialog
+      v-model:visible="refundVisible"
       :target-label="fieldValue(invoice.invoice_no || invoice.id)"
       :paid-amount="Number(invoice.paid_amount || 0)"
       :refunded-amount="Number(invoice.refund_amount || 0)"
-      :mark-refundable-amount="Number(invoice.refundable_amount || 0)"
-      :balance-refundable-amount="Number(invoice.refundable_amount_for_balance || 0)"
-      :can-mark-refund="Boolean(invoice.can_mark_refund)"
-      :can-refund-to-balance="Boolean(invoice.can_refund_to_balance)"
-      :has-manual-mark-refund="Boolean(invoice.has_manual_mark_refund)"
+      :refundable-amount="Number(invoice.refundable_amount_for_balance || 0)"
+      :can-refund="Boolean(invoice.can_refund_to_balance)"
       :submit="submitRefund"
     />
   </div>
@@ -42,7 +39,7 @@ import { useRoute, useRouter } from 'vue-router';
 import type { InvoiceDetailResponse, InvoiceRecord } from '@/api/admin';
 import { adminApi } from '@/api/admin';
 import InvoiceDetailDrawer from '@/components/finance-record-detail/InvoiceDetailDrawer.vue';
-import RefundMarkDialog from '@/components/finance-record-detail/RefundMarkDialog.vue';
+import RefundDialog from '@/components/finance-record-detail/RefundDialog.vue';
 import { AdminPermissions, hasPermissionInList } from '@/constants/permissions';
 import { useUserStore } from '@/store';
 import { fieldValue } from '@/utils/format';
@@ -93,7 +90,7 @@ const cancelable = computed(
   () => hasInvoiceManagePermission.value && Number(invoice.value.status) === INVOICE_STATUS.UNPAID,
 );
 
-const refundMarkVisible = ref(false);
+const refundVisible = ref(false);
 
 async function load(): Promise<void> {
   const id = Number(route.params.id || 0);
@@ -112,23 +109,18 @@ async function load(): Promise<void> {
   }
 }
 
-function openRefundMarkDialog(): void {
-  if (!invoice.value.can_mark_refund && !invoice.value.can_refund_to_balance) {
-    MessagePlugin.warning('该账单当前不支持退款处理');
+function openRefundDialog(): void {
+  if (!invoice.value.can_refund_to_balance) {
+    MessagePlugin.warning('该账单当前不支持退款到余额');
     return;
   }
-  refundMarkVisible.value = true;
+  refundVisible.value = true;
 }
 
-async function submitRefund(payload: { mode: 'mark' | 'balance'; amount: number; remark: string }): Promise<void> {
+async function submitRefund(payload: { amount: number; remark: string }): Promise<void> {
   if (!invoice.value.id) return;
-  if (payload.mode === 'balance') {
-    await adminApi.invoices.refundToBalance(invoice.value.id, { amount: payload.amount, remark: payload.remark });
-    MessagePlugin.success('已退款至用户余额');
-  } else {
-    await adminApi.invoices.markRefund(invoice.value.id, { amount: payload.amount, remark: payload.remark });
-    MessagePlugin.success('退款标记成功');
-  }
+  await adminApi.invoices.refundToBalance(invoice.value.id, { amount: payload.amount, remark: payload.remark });
+  MessagePlugin.success('已退款至用户余额');
   await load();
 }
 

@@ -136,15 +136,13 @@
               <span class="detail-kv-item__label">累计已退款</span>
               <strong class="detail-kv-item__value">{{ formatMoney(invoice.refund_amount) }}</strong>
             </div>
-            <div v-if="canMarkRefund" class="detail-kv-item">
-              <span class="detail-kv-item__label">可标记余额</span>
-              <strong class="detail-kv-item__value">{{ formatMoney(invoice.refundable_amount) }}</strong>
+            <div v-if="canRefund" class="detail-kv-item">
+              <span class="detail-kv-item__label">可退余额</span>
+              <strong class="detail-kv-item__value">{{ formatMoney(invoice.refundable_amount_for_balance) }}</strong>
             </div>
             <div v-if="invoice.refund_method" class="detail-kv-item">
               <span class="detail-kv-item__label">退款方式</span>
-              <strong class="detail-kv-item__value">{{
-                invoice.refund_method === 'manual_mark' ? '线下补标记' : '退回余额'
-              }}</strong>
+              <strong class="detail-kv-item__value">退回余额</strong>
             </div>
             <div v-if="invoice.refunded_at" class="detail-kv-item">
               <span class="detail-kv-item__label">最近退款时间</span>
@@ -321,9 +319,7 @@ const items = computed(() => {
 });
 
 // ─── 退款处理（2026-10-11）：标记 / 退到余额两种互斥方式 ───
-const canMarkRefund = computed(() => Boolean(invoice.value.can_mark_refund));
-const canRefundToBalance = computed(() => Boolean(invoice.value.can_refund_to_balance));
-const canRefund = computed(() => canMarkRefund.value || canRefundToBalance.value);
+const canRefund = computed(() => Boolean(invoice.value.can_refund_to_balance));
 const refundStatusValue = computed(() => Number(invoice.value.refund_status ?? REFUND_STATUS.NONE));
 const refundStatusLabel = computed(() => {
   if (refundStatusValue.value === REFUND_STATUS.FULL) return '已全额退款';

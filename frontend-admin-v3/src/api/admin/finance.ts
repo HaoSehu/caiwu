@@ -165,18 +165,13 @@ export const invoiceApi = {
   detail: async (id: number | string) =>
     normalizeV2AdminInvoiceDetail(await request.get<V2AdminInvoiceDetailPayload>({ url: `/v2/admin/invoices/${id}` })),
   cancel: (id: number | string) => request.post({ url: `/v2/admin/invoices/${id}/cancellations` }),
-  // 退款标记（纯标记不动资金）：方法内自生成 X-Request-Id 作 trace_id 串联
-  markRefund: (id: number | string, payload: { amount: number | string; remark: string }) =>
-    request.post({
-      url: `/v2/admin/invoices/${id}/refund-marks`,
-      data: payload,
-      headers: { 'X-Request-Id': crypto.randomUUID() },
-    }),
-  // 退款到余额（真退款，动资金：加余额 + 台账 + 红字账单），与 markRefund 互斥（一单只选一种）
+  // 退款到余额（唯一退款通道，动资金：加余额 + 台账 + 批次 + 红字账单）。
+  // manual_mark 纯标记通道已于 2026-10-20 裁决移除；每次发起生成幂等键与 X-Request-Id，
+  // 网络重试携带同键时服务端直接返回既有结果，不会二次扣款。
   refundToBalance: (id: number | string, payload: { amount: number | string; remark: string }) =>
     request.post({
       url: `/v2/admin/invoices/${id}/refunds`,
-      data: payload,
+      data: { ...payload, idempotency_key: crypto.randomUUID() },
       headers: { 'X-Request-Id': crypto.randomUUID() },
     }),
 };
@@ -189,11 +184,11 @@ export const orderApi = {
     }),
   detail: async (id: number | string) =>
     normalizeV2AdminOrderDetail(await request.get<V2AdminOrderDetailPayload>({ url: `/v2/admin/orders/${id}` })),
-  // 退款标记（订单侧入口，后端解析关联账单后走同一守卫链）
-  markRefund: (id: number | string, payload: { amount: number | string; remark: string }) =>
+  // 订单侧退款到余额：后端解析关联账单后走同一服务（无关联账单直接拒绝）
+  refundToBalance: (id: number | string, payload: { amount: number | string; remark: string }) =>
     request.post({
-      url: `/v2/admin/orders/${id}/refund-marks`,
-      data: payload,
+      url: `/v2/admin/orders/${id}/refunds`,
+      data: { ...payload, idempotency_key: crypto.randomUUID() },
       headers: { 'X-Request-Id': crypto.randomUUID() },
     }),
 };

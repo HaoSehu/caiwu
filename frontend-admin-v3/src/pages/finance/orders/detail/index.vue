@@ -28,11 +28,11 @@
           查看关联账单
         </t-button>
         <t-button
-          v-if="canMarkRefundFromOrder"
+          v-if="canRefundFromOrder"
           theme="warning"
           variant="outline"
-          :loading="refundMarkPreparing"
-          @click="openRefundMarkFromOrder"
+          :loading="refundPreparing"
+          @click="openRefundFromOrder"
         >
           退款
         </t-button>
@@ -350,21 +350,18 @@
       :status-theme="invoiceStatusTheme(currentInvoice.status)"
       @close="closeInvoiceDetail"
       @refresh="reloadInvoiceDetail"
-      @mark-refund="openRefundMarkDialog"
+      @mark-refund="openRefundDialog"
       @view-order="(id) => id && router.push(`/admin/finance/orders/${id}`)"
       @view-user="(id) => id && router.push(`/admin/users/${id}`)"
     />
 
-    <refund-mark-dialog
-      v-model:visible="refundMarkVisible"
-      :target-label="fieldValue(refundMarkInvoice.invoice_no || order.order_no)"
-      :paid-amount="Number(refundMarkInvoice.paid_amount || 0)"
-      :refunded-amount="Number(refundMarkInvoice.refund_amount || 0)"
-      :mark-refundable-amount="Number(refundMarkInvoice.refundable_amount || 0)"
-      :balance-refundable-amount="Number(refundMarkInvoice.refundable_amount_for_balance || 0)"
-      :can-mark-refund="Boolean(refundMarkInvoice.can_mark_refund)"
-      :can-refund-to-balance="Boolean(refundMarkInvoice.can_refund_to_balance)"
-      :has-manual-mark-refund="Boolean(refundMarkInvoice.has_manual_mark_refund)"
+    <refund-dialog
+      v-model:visible="refundVisible"
+      :target-label="fieldValue(refundInvoice.invoice_no || order.order_no)"
+      :paid-amount="Number(refundInvoice.paid_amount || 0)"
+      :refunded-amount="Number(refundInvoice.refund_amount || 0)"
+      :refundable-amount="Number(refundInvoice.refundable_amount_for_balance || 0)"
+      :can-refund="Boolean(refundInvoice.can_refund_to_balance)"
       :submit="submitRefund"
     />
   </div>
@@ -391,7 +388,7 @@ import { useRoute, useRouter } from 'vue-router';
 import type { InvoiceRecord, OrderRecord } from '@/api/admin';
 import { adminApi } from '@/api/admin';
 import InvoiceDetailDrawer from '@/components/finance-record-detail/InvoiceDetailDrawer.vue';
-import RefundMarkDialog from '@/components/finance-record-detail/RefundMarkDialog.vue';
+import RefundDialog from '@/components/finance-record-detail/RefundDialog.vue';
 import type { RecordDetailMetric, RecordDetailTab } from '@/components/record-detail-page/index.vue';
 import RecordDetailPage from '@/components/record-detail-page/index.vue';
 import { useRefundMark } from '@/hooks/useRefundMark';
@@ -548,57 +545,52 @@ const configValueLabelMap = computed<Record<string, string>>(() => {
 
 const currentInvoice = computed(() => invoiceDrawer.detail.invoice || ({} as InvoiceRecord));
 
-// ─── 退款标记（2026-10-11）：订单侧入口，复用账单详情数据与服务端判定 ───
+// ─── 退款到余额（唯一通道，2026-10-20）：订单侧入口，复用账单详情数据与服务端判定 ───
 const { hasRefundPermission } = useRefundMark();
-const refundMarkVisible = ref(false);
-const refundMarkPreparing = ref(false);
+const refundVisible = ref(false);
+const refundPreparing = ref(false);
 // 弹窗数据源独立于抽屉：订单页点「退款」只拉详情，不顺带弹出账单抽屉
-const refundMarkInvoice = ref<InvoiceRecord>({} as InvoiceRecord);
+const refundInvoice = ref<InvoiceRecord>({} as InvoiceRecord);
 
-const canMarkRefundFromOrder = computed(
+const canRefundFromOrder = computed(
   () => hasRefundPermission.value && Boolean(order.value.invoice_id) && Number(order.value.status) === 1,
 );
 
-async function openRefundMarkFromOrder() {
+async function openRefundFromOrder() {
   const invoiceId = Number(order.value.invoice_id ?? 0);
   if (!invoiceId) return;
-  refundMarkPreparing.value = true;
+  refundPreparing.value = true;
   try {
     // 退款能力/可退额以账单详情的服务端判定为准（订单投影不含这些字段）
     const detail = await adminApi.invoices.detail(invoiceId);
-    refundMarkInvoice.value = detail.invoice || ({} as InvoiceRecord);
-    if (!refundMarkInvoice.value.can_mark_refund && !refundMarkInvoice.value.can_refund_to_balance) {
-      MessagePlugin.warning('该账单当前不支持退款处理');
+    refundInvoice.value = detail.invoice || ({} as InvoiceRecord);
+    if (!refundInvoice.value.can_refund_to_balance) {
+      MessagePlugin.warning('该账单当前不支持退款到余额');
       return;
     }
-    refundMarkVisible.value = true;
+    refundVisible.value = true;
   } catch (error) {
     MessagePlugin.error(errorMessage(error, '加载账单详情失败'));
   } finally {
-    refundMarkPreparing.value = false;
+    refundPreparing.value = false;
   }
 }
 
 /** 账单抽屉内的退款入口：数据已在抽屉中，直接复用。 */
-function openRefundMarkDialog() {
-  if (!currentInvoice.value.can_mark_refund && !currentInvoice.value.can_refund_to_balance) {
-    MessagePlugin.warning('该账单当前不支持退款处理');
+function openRefundDialog() {
+  if (!currentInvoice.value.can_refund_to_balance) {
+    MessagePlugin.warning('该账单当前不支持退款到余额');
     return;
   }
-  refundMarkInvoice.value = currentInvoice.value;
-  refundMarkVisible.value = true;
+  refundInvoice.value = currentInvoice.value;
+  refundVisible.value = true;
 }
 
-async function submitRefund(payload: { mode: 'mark' | 'balance'; amount: number; remark: string }): Promise<void> {
-  const invoiceId = Number(refundMarkInvoice.value.id ?? 0);
+async function submitRefund(payload: { amount: number; remark: string }): Promise<void> {
+  const invoiceId = Number(refundInvoice.value.id ?? 0);
   if (!invoiceId) return;
-  if (payload.mode === 'balance') {
-    await adminApi.invoices.refundToBalance(invoiceId, { amount: payload.amount, remark: payload.remark });
-    MessagePlugin.success('已退款至用户余额');
-  } else {
-    await adminApi.invoices.markRefund(invoiceId, { amount: payload.amount, remark: payload.remark });
-    MessagePlugin.success('退款标记成功');
-  }
+  await adminApi.invoices.refundToBalance(invoiceId, { amount: payload.amount, remark: payload.remark });
+  MessagePlugin.success('已退款至用户余额');
   await loadDetail();
   if (invoiceDrawer.currentId === invoiceId) await reloadInvoiceDetail();
 }
