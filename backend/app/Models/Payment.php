@@ -33,6 +33,12 @@ class Payment extends Model
      */
     public bool $allowNonThirdPartyGateway = false;
 
+    /**
+     * 纵深防御：即使 Resource 裁剪失效，序列化也不得带出原始回调报文
+     * （内含网关签名、买家标识等第三方数据）。
+     */
+    protected $hidden = ['callback_raw'];
+
     protected $fillable = [
         'payment_no', 'user_id',
         /**
@@ -71,13 +77,18 @@ class Payment extends Model
             }
         });
 
+        // 软删支付单不得销毁回调审计（P1-7）：payment_callbacks 是资金链路的取证依据，
+        // 物理删除等于销毁证据。保留行并标记归档来源，按 payment_id 仍可追溯原始回调。
         static::deleting(function (self $payment): void {
             if ($payment->isForceDeleting()) {
                 return;
             }
 
             DB::transaction(function () use ($payment): void {
-                $payment->callbacks()->each(fn ($callback) => $callback->delete());
+                $payment->callbacks()->update([
+                    'remark' => 'payment_soft_deleted',
+                    'updated_at' => now(),
+                ]);
             });
         });
     }

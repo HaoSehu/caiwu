@@ -16,6 +16,13 @@ return [
      */
     'hot_standby' => (bool) env('FINANCE_HOT_STANDBY', true),
 
+    /*
+     * 账户余额 version 条件更新（CAS）冲突时的进程内重试次数与退避基数。
+     * 同一用户的支付回调与主动支付可能同时到达，直接抛 409 会让用户看到无谓失败。
+     */
+    'version_retry_attempts' => (int) env('FINANCE_VERSION_RETRY_ATTEMPTS', 3),
+    'version_retry_delay_ms' => (int) env('FINANCE_VERSION_RETRY_DELAY_MS', 20),
+
     'funding' => [
         /*
          * 资金批次读取模式：
@@ -33,9 +40,11 @@ return [
 
         /*
          * 交付状态守卫：off=不检查，warn=记录证据但放行，block=已交付拒绝退款。
-         * 默认 warn：存量存在 482 张无 service_id 的续费账单，直接 block 会误伤。
+         * 默认 block（2026-10-21 裁决）：已复现「服务仍在跑 + 全额退款」双吃，属资金损失；
+         * 存量无 service_id 的账单本就查不到交付事实，放行等于保留漏洞。
+         * 个别放行走「订单侧退款入口 + 二次确认」，warn/off 仅供演练或回滚窗口临时使用。
          */
-        'delivery_guard' => (string) env('FINANCE_REFUND_DELIVERY_GUARD', 'warn'),
+        'delivery_guard' => (string) env('FINANCE_REFUND_DELIVERY_GUARD', 'block'),
     ],
 
     'idempotency' => [

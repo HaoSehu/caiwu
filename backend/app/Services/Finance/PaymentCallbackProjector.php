@@ -106,15 +106,66 @@ class PaymentCallbackProjector
             $row['remark'] = $this->nullableString($payload['remark'] ?? $payload['refund_reason'] ?? null);
         }
 
-        DB::table('payment_callbacks')->updateOrInsert(
-            [
-                'payment_id' => (int) $payment->id,
-                'callback_type' => $callbackType,
-            ],
-            array_merge($row, [
-                'created_at' => $payment->created_at ?? $now,
-            ])
-        );
+        // 已验签的成功回调是不可变审计证据（B-08 修复）：网关重试/延迟通知再投递
+        // 非成功状态（WAIT_BUYER_PAY 等）时，不得覆盖「为什么这笔单是成功的」。
+        // 拒绝载荷已有同类守卫（recordRejectedCallback），这里补齐成功投影侧。
+        if ($callbackType === 'payment' && $isVerified) {
+            $verifiedRow = DB::table('payment_callbacks')
+                ->where('payment_id', (int) $payment->id)
+                ->where('callback_type', $callbackType)
+                ->where('is_verified', 1)
+                ->first(['payload_json']);
+
+            if ($verifiedRow !== null
+                && $this->isSuccessStatus($verifiedRow->payload_json)
+                && ! $this->isSuccessStatus($row['payload_json'])) {
+                // 成功投影已存在，本次是非成功通知：不改写，保留首条成功投影。
+                return;
+            }
+        }
+
+        // created_at 固定为首次落库时间：updateOrInsert 的 update 分支若带上
+        // payment->created_at 会把「回调首次到达时间」改成支付单创建时间，失去审计意义。
+        $existingId = DB::table('payment_callbacks')
+            ->where('payment_id', (int) $payment->id)
+            ->where('callback_type', $callbackType)
+            ->value('id');
+
+        if ($existingId !== null) {
+            DB::table('payment_callbacks')
+                ->where('id', (int) $existingId)
+                ->update($row);
+
+            return;
+        }
+
+        DB::table('payment_callbacks')->insert(array_merge([
+            'payment_id' => (int) $payment->id,
+            'callback_type' => $callbackType,
+        ], $row, [
+            'created_at' => $now,
+        ]));
+    }
+
+    /**
+     * 判断回调载荷是否为「支付成功」状态（支付宝 TRADE_SUCCESS/TRADE_FINISHED、
+     * 易支付 SUCCESS，以及自定义网关的 success=1/paid=true 兜底）。
+     */
+    private function isSuccessStatus(mixed $rawPayloadJson): bool
+    {
+        $decoded = json_decode((string) $rawPayloadJson, true);
+        if (! is_array($decoded)) {
+            return false;
+        }
+
+        $payload = is_array($decoded['payload'] ?? null) ? $decoded['payload'] : $decoded;
+        $status = strtoupper(trim((string) ($payload['trade_status'] ?? $payload['status'] ?? '')));
+
+        if (in_array($status, ['TRADE_SUCCESS', 'TRADE_FINISHED', 'SUCCESS', 'PAID'], true)) {
+            return true;
+        }
+
+        return (bool) ($payload['paid'] ?? false) === true;
     }
 
     /**

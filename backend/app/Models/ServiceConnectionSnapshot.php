@@ -9,6 +9,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ServiceConnectionSnapshot extends Model
 {
+    /** 纵深防御：连接快照含明文凭据，序列化默认剔除。 */
+    protected $hidden = ['secret_json', 'connection_json'];
+
     protected $fillable = [
         'service_id',
         'service_upstream_binding_id',

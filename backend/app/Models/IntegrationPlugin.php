@@ -14,6 +14,9 @@ class IntegrationPlugin extends Model
 
     public const STATUS_ENABLED = 1;
 
+    /** 纵深防御：插件配置结构与能力清单含网关端点，默认不进序列化。 */
+    protected $hidden = ['config_schema_json', 'capabilities_json'];
+
     protected $fillable = [
         'domain',
         'slug',

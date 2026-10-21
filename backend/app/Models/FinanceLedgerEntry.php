@@ -15,6 +15,9 @@ class FinanceLedgerEntry extends Model
 {
     public $timestamps = false;
 
+    /** 纵深防御：台账 meta 可能含操作人/渠道明细，默认不进序列化。 */
+    protected $hidden = ['meta'];
+
     protected $fillable = [
         'entry_no',
         'account_id',

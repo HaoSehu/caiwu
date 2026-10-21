@@ -18,6 +18,7 @@ use App\Services\Automation\Heartbeat\HeartbeatTaskRegistry;
 use App\Services\System\Concerns\HandlesAdminLogCleanup;
 use App\Support\AdminPrivacy;
 use App\Support\ApiAccessLogFile;
+use App\Support\LikeEscape;
 use App\Support\SchemaMetadataCache;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
@@ -222,7 +223,7 @@ class AdminLogService
                 $builder->where('action', 'like', "%{$keyword}%")
                     ->orWhere('module', 'like', "%{$keyword}%")
                     ->orWhere('ip_address', 'like', "%{$keyword}%")
-                    ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(context, '$.request_id')) like ?", ["%{$keyword}%"]);
+                    ->orWhere('context_request_id', 'like', LikeEscape::contains($keyword));
             });
         }
 
@@ -241,17 +242,14 @@ class AdminLogService
                 // 只在 context.request_id 中保存。两种形态必须一起匹配，
                 // 否则同一个 trace_id 在切换窗口内会被分页结果漏掉。
                 $query->where(function ($builder) use ($traceId): void {
-                    $builder->where('trace_id', 'like', '%'.$traceId.'%')
-                        ->orWhereRaw(
-                            "JSON_UNQUOTE(JSON_EXTRACT(context, '$.request_id')) like ?",
-                            ['%'.$traceId.'%'],
-                        );
+                    $likeTraceId = LikeEscape::contains($traceId);
+                    $builder->where('trace_id', 'like', $likeTraceId)
+                        // 生成列 activity_logs.context_request_id 与 JSON_EXTRACT 同值，
+                        // 但可走索引；历史行同样被覆盖（生成列建列时已回填）。
+                        ->orWhere('context_request_id', 'like', $likeTraceId);
                 });
             } else {
-                $query->whereRaw(
-                    "JSON_UNQUOTE(JSON_EXTRACT(context, '$.request_id')) like ?",
-                    ['%'.$traceId.'%'],
-                );
+                $query->where('context_request_id', 'like', LikeEscape::contains($traceId));
             }
         }
 
@@ -264,7 +262,7 @@ class AdminLogService
         }
 
         if (! empty($filters['status'])) {
-            $query->whereRaw("CAST(JSON_UNQUOTE(JSON_EXTRACT(context, '$.status')) AS UNSIGNED) = ?", [(int) $filters['status']]);
+            $query->where('context_status', (int) $filters['status']);
         }
 
         if (! empty($filters['user_type'])) {

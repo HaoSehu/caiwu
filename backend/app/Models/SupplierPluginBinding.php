@@ -9,6 +9,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class SupplierPluginBinding extends Model
 {
+    /** 纵深防御：绑定密钥列必须永不随模型序列化。 */
+    protected $hidden = ['secret_json'];
+
     protected $fillable = [
         'supplier_id',
         'plugin_id',
