@@ -291,13 +291,17 @@ class DemoSmsService
 
     /**
      * 本地 {{var}}/{{#var}}/{var} 语法 → 运营商 ${var} 语法。
+     *
+     * 单花括号分支必须带 (?<!\$) 负向后行断言：运营可能直接粘贴运营商原文
+     * （如「验证码${code}，5分钟内有效」），若把其中的 {code} 再翻译一次会得到
+     * $${code}，运营商侧变量名变成 $code，模板变量校验不通过、短信发不出去。
      */
     private function translateLocalSyntax(string $content): string
     {
         $withoutSections = preg_replace('/\{\{\s*#\w+\s*\}\}|\{\{\s*\/\w+\s*\}\}/u', '', $content) ?? $content;
 
         return (string) preg_replace_callback(
-            '/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}|\{([a-zA-Z0-9_]+)\}/u',
+            '/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}|(?<!\$)\{([a-zA-Z0-9_]+)\}/u',
             static fn (array $matches): string => '${'.($matches[1] !== '' && $matches[1] !== null ? $matches[1] : (string) $matches[2]).'}',
             $withoutSections
         );
