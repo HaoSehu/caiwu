@@ -196,6 +196,25 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
                 lockTtlSeconds: 900,
                 manualTriggerable: true,
             ),
+            // 在线账户余额对账（只读）：核对每个 (user_id, account_type) 最新一条流水
+            // balance_after 快照与账户余额是否一致，兜住并发与直改库造成的账实不符。
+            // 与 04:20 的合计口径审计错峰到 04:50；调度传 --tolerate-legacy：
+            // 财务内核切换前的存量漂移（如返利释放漏写冻结侧冲减行）无法自动修复，
+            // 一律非零会让心跳天天红灯、真告警被淹没，因此只告警不失败。
+            $this->task(
+                key: 'finance-account-balance-reconcile',
+                title: '账户余额快照对账',
+                category: '财务',
+                description: '每日只读核对财务流水最新 balance_after 快照与账户余额是否一致（现金与返利子账户），存量历史漂移只告警不阻断调度。',
+                triggers: [ScheduleRule::cron('50 4 * * *')],
+                handler: fn (): array => $this->runArtisan('reconcile:account-balance', [
+                    '--json' => true,
+                    '--tolerate-legacy' => true,
+                ]),
+                timeout: 300,
+                lockTtlSeconds: 420,
+                manualTriggerable: true,
+            ),
             // 财务幂等记录清理：按 config finance.idempotency.ttl_days 保留期删除旧行。
             $this->task(
                 key: 'finance-operations-prune',

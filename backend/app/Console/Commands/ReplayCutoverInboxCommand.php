@@ -14,7 +14,8 @@ use Throwable;
  * 逐条送回 handleGatewayNotify 正常入账。
  *
  * 失败语义：单条失败保留 pending 并写 error_msg（可修数后重跑），
- * 不因个别脏报文中断整批；只有全批失败才返回非零退出码提醒人工介入。
+ * 不因个别脏报文中断整批；但只要有失败行就返回非零退出码，
+ * 否则「成功若干 + 失败若干」的批次会被调度心跳当成全绿，脏报文永远没人处理。
  */
 final class ReplayCutoverInboxCommand extends Command
 {
@@ -91,6 +92,12 @@ final class ReplayCutoverInboxCommand extends Command
 
         $this->info("重放完成：成功 {$replayed}，失败 {$failed}（失败行保留 pending，可修复后重跑本命令）");
 
-        return $replayed > 0 || $failed === 0 ? self::SUCCESS : self::FAILURE;
+        if ($failed > 0) {
+            $this->error("重放存在 {$failed} 条失败行，退出码置为失败以便告警；失败行仍保留 pending。");
+
+            return self::FAILURE;
+        }
+
+        return self::SUCCESS;
     }
 }

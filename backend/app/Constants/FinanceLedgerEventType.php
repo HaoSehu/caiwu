@@ -42,6 +42,12 @@ class FinanceLedgerEventType
     /** 实名认证费用扣款 */
     public const VERIFICATION_FEE = 'verification_fee';
 
+    /**
+     * 存量校准：财务内核切换/账本重建时，以账户余额为准补记历史差额（finance:rebuild）。
+     * 补差为正向入账，文案与 shared/statusConfig.js 的 calibration 映射保持一致。
+     */
+    public const CALIBRATION = 'calibration';
+
     public const DIRECTION_IN = 'in';
 
     public const DIRECTION_OUT = 'out';
@@ -72,7 +78,8 @@ class FinanceLedgerEventType
             self::REFERRAL_REWARD_REVERSED,
             self::REFERRAL_WITHDRAW_APPLY,
             self::REFERRAL_WITHDRAW_APPROVED,
-            self::REFERRAL_WITHDRAW_REJECTED => trim($eventType),
+            self::REFERRAL_WITHDRAW_REJECTED,
+            self::CALIBRATION => trim($eventType),
             default => trim($eventType) !== '' ? trim($eventType) : self::SYSTEM_ADJUSTMENT,
         };
     }
@@ -100,6 +107,7 @@ class FinanceLedgerEventType
             self::SYSTEM_ADJUSTMENT => '系统调账',
             self::INITIAL_BALANCE => '开户初始余额',
             self::VERIFICATION_FEE => '实名认证费用',
+            self::CALIBRATION => '存量校准',
         ];
     }
 
@@ -109,7 +117,7 @@ class FinanceLedgerEventType
 
         return match ($normalized) {
             self::INVOICE_PAYMENT, self::MANUAL_DEDUCTION, self::VERIFICATION_FEE => self::DIRECTION_OUT,
-            self::INVOICE_REFUND, self::RECHARGE, self::MANUAL_RECHARGE, self::INITIAL_BALANCE, self::REFERRAL_CREDIT_CASH => self::DIRECTION_IN,
+            self::INVOICE_REFUND, self::RECHARGE, self::MANUAL_RECHARGE, self::INITIAL_BALANCE, self::REFERRAL_CREDIT_CASH, self::CALIBRATION => self::DIRECTION_IN,
             default => $amount < 0 ? self::DIRECTION_OUT : self::DIRECTION_IN,
         };
     }
@@ -118,7 +126,7 @@ class FinanceLedgerEventType
     {
         return match (self::normalize($eventType)) {
             self::INVOICE_PAYMENT, self::INVOICE_REFUND => self::CATEGORY_INVOICE,
-            self::RECHARGE, self::MANUAL_RECHARGE, self::MANUAL_DEDUCTION, self::SYSTEM_ADJUSTMENT, self::INITIAL_BALANCE, self::VERIFICATION_FEE => self::CATEGORY_BALANCE,
+            self::RECHARGE, self::MANUAL_RECHARGE, self::MANUAL_DEDUCTION, self::SYSTEM_ADJUSTMENT, self::INITIAL_BALANCE, self::VERIFICATION_FEE, self::CALIBRATION => self::CATEGORY_BALANCE,
             self::REFERRAL_CREDIT_CASH,
             self::REFERRAL_REWARD_FROZEN,
             self::REFERRAL_REWARD_RELEASED,
@@ -141,6 +149,7 @@ class FinanceLedgerEventType
             self::REFERRAL_CREDIT_CASH,
             self::SYSTEM_ADJUSTMENT,
             self::VERIFICATION_FEE,
+            self::CALIBRATION,
         ];
     }
 }

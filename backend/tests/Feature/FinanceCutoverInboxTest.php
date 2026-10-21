@@ -21,6 +21,7 @@ use App\Services\Integrations\Payments\PaymentGatewayRegistry;
 use App\Services\Integrations\Plugins\PluginDomain;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schema;
 use Tests\Support\SeedsFinanceBalance;
 use Tests\TestCase;
@@ -143,6 +144,65 @@ class FinanceCutoverInboxTest extends TestCase
         $inbox = FinanceCutoverInbox::query()->firstOrFail();
         $this->assertSame(FinanceCutoverInbox::STATUS_PENDING, (string) $inbox->status);
         $this->assertNotNull($inbox->error_msg);
+    }
+
+    public function test_replay_exits_non_zero_when_some_rows_fail(): void
+    {
+        $user = $this->makeUser();
+        $this->registerStubGateway();
+        $invoice = $this->makeInvoice($user, 100.00);
+        $payload = app(GatewayInvoicePaymentService::class)->payByGateway($invoice, $user, PaymentGatewayCode::ALIPAY);
+        $payment = Payment::query()->where('payment_no', $payload['payment_no'])->firstOrFail();
+
+        $tradeNo = 'TRADEOK'.mt_rand(100000, 999999);
+        FinanceCutoverInbox::query()->create([
+            'channel' => PaymentGatewayCode::ALIPAY,
+            'notification_id' => $payment->payment_no.':'.$tradeNo.':mixed-ok',
+            'request_uri' => '/api/v2/client/payment/notify/alipay',
+            'payload' => json_encode([
+                'out_trade_no' => $payment->payment_no,
+                'trade_no' => $tradeNo,
+                'trade_status' => 'TRADE_SUCCESS',
+                'total_amount' => '100.00',
+                'app_id' => 'stub-merchant',
+            ], JSON_UNESCAPED_UNICODE),
+            'status' => FinanceCutoverInbox::STATUS_PENDING,
+            'received_at' => now(),
+        ]);
+
+        // 同批次再塞一条金额对不上的脏报文：成功与失败混合时不能报全绿。
+        FinanceCutoverInbox::query()->create([
+            'channel' => PaymentGatewayCode::ALIPAY,
+            'notification_id' => 'mixed-bad:'.mt_rand(100000, 999999),
+            'request_uri' => '/api/v2/client/payment/notify/alipay',
+            'payload' => json_encode([
+                'out_trade_no' => 'PYMIXEDMISS'.mt_rand(100000, 999999),
+                'trade_no' => 'TRADEMIXBAD'.mt_rand(100000, 999999),
+                'trade_status' => 'TRADE_SUCCESS',
+                'total_amount' => '66.00',
+                'app_id' => 'stub-merchant',
+            ], JSON_UNESCAPED_UNICODE),
+            'status' => FinanceCutoverInbox::STATUS_PENDING,
+            'received_at' => now(),
+        ]);
+
+        // 用 Artisan::call 直接取退出码与输出：expectsOutputToContain 只捕获标准输出，
+        // 而失败计数同时出现在 error() 写出的告警行里，需要一并断言。
+        $exitCode = Artisan::call('finance:replay-cutover-inbox');
+        $output = Artisan::output();
+
+        $this->assertSame(1, $exitCode);
+        $this->assertStringContainsString('成功 1', $output);
+        $this->assertStringContainsString('失败 1', $output);
+        $this->assertStringContainsString('退出码置为失败以便告警', $output);
+
+        $this->assertSame(PaymentStatus::SUCCESS, (int) $payment->refresh()->status);
+        $this->assertSame(FinanceCutoverInbox::STATUS_REPLAYED, (string) FinanceCutoverInbox::query()
+            ->where('notification_id', $payment->payment_no.':'.$tradeNo.':mixed-ok')
+            ->firstOrFail()->status);
+        $this->assertSame(FinanceCutoverInbox::STATUS_PENDING, (string) FinanceCutoverInbox::query()
+            ->where('notification_id', 'like', 'mixed-bad:%')
+            ->firstOrFail()->status);
     }
 
     private function makeUser(): User

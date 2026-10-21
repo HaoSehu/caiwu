@@ -19,6 +19,9 @@ use Illuminate\Support\Facades\Schema;
  *
  * 本命令三方比对：finance_accounts.available_amount == finance_funding_lots 剩余合计
  * == user_accounts.cash_balance，统一转分比较，默认 dry-run 只报告。
+ *
+ * 退出码：有未解决的漂移就返回失败（含 --json 分支），否则调度/巡检拿不到告警信号；
+ * --repair 只修热备列，修完仍存在的批次差异继续计为漂移。
  */
 class FinanceHotStandbyDriftCommand extends Command
 {
@@ -77,9 +80,11 @@ class FinanceHotStandbyDriftCommand extends Command
             ];
         }
 
+        $repairedUserIds = [];
+
         if ((bool) $this->option('repair') && $drifts !== []) {
             $repaired = 0;
-            DB::transaction(function () use ($drifts, &$repaired): void {
+            DB::transaction(function () use ($drifts, &$repaired, &$repairedUserIds): void {
                 foreach ($drifts as $drift) {
                     if (! $drift['standby_drift']) {
                         continue;
@@ -94,17 +99,26 @@ class FinanceHotStandbyDriftCommand extends Command
 
                     if ($updated === 1) {
                         $repaired++;
+                        $repairedUserIds[] = $drift['user_id'];
                     }
                 }
             });
 
             $this->warn(sprintf('已按账户真源回写 %d 个用户的热备列（批次差异需人工核查，不自动修复）。', $repaired));
+
+            // 修复成功的纯热备漂移已消除，退出码只反映修复后仍存在的差异，避免手动修复后仍报失败。
+            $drifts = array_values(array_filter(
+                $drifts,
+                static fn (array $drift): bool => ! ($drift['standby_drift']
+                    && ! $drift['lot_drift']
+                    && in_array($drift['user_id'], $repairedUserIds, true)),
+            ));
         }
 
         if ((bool) $this->option('json')) {
             $this->line(json_encode(['drift_count' => count($drifts), 'rows' => $drifts], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
 
-            return self::SUCCESS;
+            return $drifts === [] ? self::SUCCESS : self::FAILURE;
         }
 
         if ($drifts === []) {
@@ -123,6 +137,6 @@ class FinanceHotStandbyDriftCommand extends Command
 
         $this->warn(sprintf('发现 %d 个用户存在漂移。加 --repair 可按账户真源回写热备列。', count($drifts)));
 
-        return self::SUCCESS;
+        return self::FAILURE;
     }
 }
