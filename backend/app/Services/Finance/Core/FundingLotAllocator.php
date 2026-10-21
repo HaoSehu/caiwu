@@ -216,16 +216,19 @@ final class FundingLotAllocator
      * 可追认额度 = 消费金额 − 已恢复 − 已追认，逐笔分摊，剩余部分不再硬凑
      * （历史缺口消费没有真实批次，追认不到就留空，不做假账）。
      *
-     * @return int 实际追认的分（0 表示找不到可追认的原消费）
+     * marked_total 为实际追认的分（0 表示找不到可追认的原消费）；
+     * marks 为逐笔分摊明细，供退款分摊证据表按条记账。
+     *
+     * @return array{marked_total: int, marks: list<array{consumption_id: int, amount_cents: int}>}
      */
     public function markRefundedBySource(
         FinanceAccount $account,
         string $sourceType,
         int $sourceId,
         int $amountCents,
-    ): int {
+    ): array {
         if ($amountCents <= 0) {
-            return 0;
+            return ['marked_total' => 0, 'marks' => []];
         }
 
         $consumptions = FinanceConsumption::query()
@@ -238,6 +241,8 @@ final class FundingLotAllocator
 
         $remaining = $amountCents;
         $markedTotal = 0;
+        /** @var list<array{consumption_id: int, amount_cents: int}> $marks */
+        $marks = [];
 
         foreach ($consumptions as $consumption) {
             if ($remaining === 0) {
@@ -255,11 +260,17 @@ final class FundingLotAllocator
             $take = min($cap, $remaining);
             $this->markRefunded($consumption, $take);
 
+            // take 就是这条消费本次分摊到的金额，逐笔留档供证据表按条记账。
+            $marks[] = [
+                'consumption_id' => (int) $consumption->id,
+                'amount_cents' => $take,
+            ];
+
             $remaining -= $take;
             $markedTotal += $take;
         }
 
-        return $markedTotal;
+        return ['marked_total' => $markedTotal, 'marks' => $marks];
     }
 
     /**

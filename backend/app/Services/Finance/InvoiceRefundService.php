@@ -12,7 +12,6 @@ use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
 use App\Exceptions\BusinessException;
 use App\Jobs\SendTemplateEmailJob;
-use App\Models\FinanceConsumption;
 use App\Models\FinanceLedgerEntry;
 use App\Models\FinanceRefund;
 use App\Models\FinanceRefundAllocation;
@@ -54,11 +53,12 @@ class InvoiceRefundService
     ) {}
 
     /**
-     * 账单可退上限（累计口径，供详情页能力位与退款标记类历史消费者复用）。
+     * 账单可退上限（累计口径）——全系统可退额的唯一真源。
      *
-     * 2026-10-21 起与真退款完全同口径：实收基数 max(paid_amount, amount)
-     * − 已转余额的异常支付金额 − 已完成退款累计。原先「真退款只取主支付单金额」
-     * 的差异已随拆分支付截断缺陷一并取消，两处不再分叉。
+     * 口径：实收基数 max(paid_amount, amount) − 已转余额的异常支付金额 − 已完成退款累计。
+     * 后台详情页的 refundable_amount / refundable_amount_for_balance / can_refund_to_balance
+     * 一律调本方法（InvoiceService::adminDetail），提交时的 remainingRefundableAmount
+     * 也建立在同一公式上（再扣一次已完成退款），因此展示值与守卫上限不再分叉。
      */
     public function markRefundableAmountOf(Invoice $invoice): float
     {
@@ -219,7 +219,8 @@ class InvoiceRefundService
 
                             // 退款血缘：把这笔退款追认到原账单的消费映射上（只写 evidence，
                             // 不动批次剩余），否则退款在账上看起来像一笔新钱，查不到对应原消费。
-                            $this->accounts->markRefundedConsumptions(
+                            // 返回值里的 marks 是逐条消费的分摊明细，直接作为证据表的按条金额来源。
+                            $lineage = $this->accounts->markRefundedConsumptions(
                                 (int) $lockedUser->id,
                                 'invoice',
                                 (int) $lockedInvoice->id,
@@ -259,14 +260,13 @@ class InvoiceRefundService
                                 ]),
                             );
                             // 退款批次证据（P1-3）：new_lot 指向本次退款入账产生的新批次，
-                            // consumption_mark 指向被追认的原消费（markRefundedConsumptions 已标记）。
+                            // consumption_mark 指向被追认的原消费（markRefundedConsumptions 已标记），
+                            // 金额取 marks 里的逐条分摊额，不再统一写本次退款总额。
                             $this->recordRefundAllocations(
                                 (int) $documents['refund']->id,
                                 $mutation,
-                                (int) $lockedUser->id,
-                                'invoice',
-                                (int) $lockedInvoice->id,
                                 Money::toCents($refundAmount),
+                                $lineage['marks'],
                             );
 
                             $isFullyRefunded = Money::lessThanOrEqual(abs($refundAmount - $refundableAmount), 0.0);
@@ -492,14 +492,13 @@ class InvoiceRefundService
      * 幂等：allocation_key 唯一，重复调用被忽略。
      *
      * @param  CashMutation  $mutation  退款入账结果（含 allocations）
+     * @param  list<array{consumption_id: int, amount_cents: int}>  $marks  本次退款逐条消费的分摊明细
      */
     private function recordRefundAllocations(
         int $refundId,
         CashMutation $mutation,
-        int $userId,
-        string $sourceType,
-        int $sourceId,
         int $amountCents,
+        array $marks = [],
     ): void {
         if ($refundId <= 0 || ! SchemaMetadataCache::hasTable('finance_refund_allocations')) {
             return;
@@ -525,29 +524,25 @@ class InvoiceRefundService
             ];
         }
 
-        // 原消费映射：按账单来源取本次被标记的消费行（refunded_amount > 0），
-        // 作为退款血缘证据。表结构：source_type/source_id 指向账单，refunded_amount 为已追认金额。
-        if ($rows !== [] && SchemaMetadataCache::hasTable('finance_consumptions')) {
-            $markedConsumptions = FinanceConsumption::query()
-                ->where('user_id', $userId)
-                ->where('source_type', $sourceType)
-                ->where('source_id', $sourceId)
-                ->where('refunded_amount', '>', 0)
-                ->orderByDesc('id')
-                ->limit(20)
-                ->get(['id']);
-
-            foreach ($markedConsumptions as $consumption) {
-                $rows[] = [
-                    'allocation_key' => 'refund:'.$refundId.':consumption:'.(int) $consumption->id,
-                    'refund_id' => $refundId,
-                    'allocation_type' => FinanceRefundAllocation::TYPE_CONSUMPTION_MARK,
-                    'lot_id' => null,
-                    'consumption_id' => (int) $consumption->id,
-                    'amount' => Money::formatCents($amountCents),
-                    'created_at' => $now,
-                ];
+        // 原消费映射：amount 必须是「这一条消费本次分摊到的金额」，不是本次退款总额
+        // （表定义：amount = 分配金额）。金额来自 markRefundedConsumptions 的 marks 明细，
+        // 由 allocator 按 min(可追认额度, 剩余) 逐笔算好；一条退款跨多笔消费时各自一行、合计等于退款额。
+        // 保留 20 条上限：单次退款在上百条消费上分摊时不把证据表写爆，超出部分不落证据行。
+        foreach (array_slice($marks, 0, 20) as $mark) {
+            $consumptionId = (int) $mark['consumption_id'];
+            if ($consumptionId <= 0) {
+                continue;
             }
+
+            $rows[] = [
+                'allocation_key' => 'refund:'.$refundId.':consumption:'.$consumptionId,
+                'refund_id' => $refundId,
+                'allocation_type' => FinanceRefundAllocation::TYPE_CONSUMPTION_MARK,
+                'lot_id' => null,
+                'consumption_id' => $consumptionId,
+                'amount' => Money::formatCents((int) $mark['amount_cents']),
+                'created_at' => $now,
+            ];
         }
 
         foreach ($rows as $row) {

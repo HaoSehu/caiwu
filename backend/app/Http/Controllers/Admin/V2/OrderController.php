@@ -64,7 +64,14 @@ class OrderController extends Controller
             'trace_id' => (string) $request->header('X-Request-Id', ''),
         ]);
 
-        return $this->success(AdminActionResultResource::make($result)->resolve(), '退款已退回会员余额');
+        // 文案按幂等结果分支：已退款（订单/支付单已收口 REFUNDED）时不能再说「已退回」，
+        // 否则运营会误以为本次又退了一笔。与 InvoiceController::refundToBalance 保持一致。
+        $refund = (array) ($result['refund'] ?? []);
+        $message = (bool) ($result['already_refunded'] ?? false)
+            ? '该账单已退款到余额，未重复操作'
+            : sprintf('已退款 %s 元至会员余额', number_format((float) ($refund['refund_amount'] ?? 0), 2, '.', ''));
+
+        return $this->success(AdminActionResultResource::make($result)->resolve(), $message);
     }
 
     private function resolveAdminActor(Request $request): array

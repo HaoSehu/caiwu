@@ -18,7 +18,6 @@ use App\Models\User;
 use App\Services\Admin\V2\AdminInvoiceActionV2Service;
 use App\Services\Finance\InvoiceRefundService;
 use App\Services\Finance\InvoiceV2QueryService;
-use App\Services\System\ActivityLogService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -28,7 +27,6 @@ class InvoiceController extends Controller
         private readonly InvoiceV2QueryService $invoices,
         private readonly AdminInvoiceActionV2Service $actions,
         private readonly InvoiceRefundService $refunds,
-        private readonly ActivityLogService $activityLogs,
     ) {}
 
     public function index(ListInvoicesRequest $request): JsonResponse
@@ -74,22 +72,10 @@ class InvoiceController extends Controller
             ? '该账单已退款到余额，未重复操作'
             : sprintf('已退款 %s 元至用户余额', number_format((float) ($refund['refund_amount'] ?? 0), 2, '.', ''));
 
-        // 资金操作审计：与纯标记通道对齐（finance.refund_mark.*），写失败不阻断结果返回。
-        $this->activityLogs->logSafely(
-            'finance',
-            'finance.refund_balance.executed',
-            $message,
-            'invoice',
-            (int) $invoice->id,
-            array_filter([
-                'invoice_no' => (string) $invoice->invoice_no,
-                'refund_amount' => (string) ($refund['refund_amount'] ?? ''),
-                'refund_reason' => (string) ($refund['refund_reason'] ?? ''),
-                'operator_name' => $actor['name'],
-                'trace_id' => (string) $request->header('X-Request-Id', ''),
-                'already_refunded' => $alreadyRefunded ? 1 : 0,
-            ], static fn (mixed $value): bool => $value !== ''),
-        );
+        // 审计不在这里写：资金操作审计由 InvoiceRefundService 在事务提交后统一写
+        // invoice.refund.completed（含 refund_id / already_refunded / operator_name /
+        // trace_id，且幂等重放不重复写）。此处再写 finance.refund_balance.executed
+        // 会让同一笔退款产生两条审计记录，已在 2026-10-21 收敛为单写。
 
         return $this->success(AdminActionResultResource::make([
             'id' => (int) ($result['refund_id'] ?? $result['refund_invoice_id'] ?? $invoice->id),

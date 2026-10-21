@@ -144,14 +144,18 @@ final class FinanceLedgerService
 
     /**
      * 退款入账后的原消费血缘追认（只管证据链，不动余额与批次剩余）。
-     * 返回实际追认的分；0 表示原账单没有可追溯的消费映射（历史缺口）。
+     *
+     * marked_total 为实际追认的分，0 表示原账单没有可追溯的消费映射（历史缺口）；
+     * marks 为逐笔分摊明细（consumption_id + amount_cents），供退款分摊证据表按条记账。
+     *
+     * @return array{marked_total: int, marks: list<array{consumption_id: int, amount_cents: int}>}
      */
     public function markRefundedConsumptions(
         FinanceAccount $account,
         string $sourceType,
         int $sourceId,
         int $amountCents,
-    ): int {
+    ): array {
         return $this->lots->markRefundedBySource($account, $sourceType, $sourceId, $amountCents);
     }
 

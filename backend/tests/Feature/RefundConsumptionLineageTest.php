@@ -49,7 +49,11 @@ class RefundConsumptionLineageTest extends TestCase
 
         $lotRemainingBefore = $this->lotRemainingCents((int) $user->id);
 
-        $accounts->markRefundedConsumptions((int) $user->id, 'invoice', 9001, 3000);
+        $lineage = $accounts->markRefundedConsumptions((int) $user->id, 'invoice', 9001, 3000);
+        $this->assertSame(3000, $lineage['marked_total']);
+        $this->assertCount(1, $lineage['marks']);
+        $this->assertSame((int) $consumption->id, $lineage['marks'][0]['consumption_id']);
+        $this->assertSame(3000, $lineage['marks'][0]['amount_cents']);
 
         $consumption->refresh();
         $this->assertSame('30.00', (string) $consumption->refunded_amount);
@@ -67,10 +71,12 @@ class RefundConsumptionLineageTest extends TestCase
         $accounts->debit((int) $user->id, 3000, FinanceLedgerEventType::INVOICE_PAYMENT, ['source_type' => 'invoice', 'source_id' => 9002]);
 
         // 超额的追认只按可追认额度截断，不抛错、不做假账
-        $marked = $accounts->markRefundedConsumptions((int) $user->id, 'invoice', 9002, 5000);
-        $this->assertSame(3000, $marked);
+        $lineage = $accounts->markRefundedConsumptions((int) $user->id, 'invoice', 9002, 5000);
+        $this->assertSame(3000, $lineage['marked_total']);
+        $this->assertCount(1, $lineage['marks']);
+        $this->assertSame(3000, $lineage['marks'][0]['amount_cents']);
 
-        $this->assertSame(0, $accounts->markRefundedConsumptions((int) $user->id, 'invoice', 9002, 1000));
+        $this->assertSame(['marked_total' => 0, 'marks' => []], $accounts->markRefundedConsumptions((int) $user->id, 'invoice', 9002, 1000));
     }
 
     public function test_unknown_source_returns_zero(): void
@@ -79,7 +85,7 @@ class RefundConsumptionLineageTest extends TestCase
         $accounts = app(FinanceAccountService::class);
         $accounts->accountFor((int) $user->id);
 
-        $this->assertSame(0, $accounts->markRefundedConsumptions((int) $user->id, 'invoice', 123456, 1000));
+        $this->assertSame(['marked_total' => 0, 'marks' => []], $accounts->markRefundedConsumptions((int) $user->id, 'invoice', 123456, 1000));
     }
 
     private function lotRemainingCents(int $userId): int

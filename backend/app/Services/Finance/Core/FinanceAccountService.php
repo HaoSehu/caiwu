@@ -103,11 +103,13 @@ final class FinanceAccountService
      * 退款走 credit 会新建一个 refund 批次，原始「这笔钱花在哪笔批次」的线索
      * 只能从原账单的 finance_consumptions 读；不追认的话，退款在账上看起来像新钱，
      * 无法回答「这笔退款对应哪笔原消费」。
+     *
+     * @return array{marked_total: int, marks: list<array{consumption_id: int, amount_cents: int}>}
      */
-    public function markRefundedConsumptions(int $userId, string $sourceType, int $sourceId, int $amountCents): int
+    public function markRefundedConsumptions(int $userId, string $sourceType, int $sourceId, int $amountCents): array
     {
         if ($amountCents <= 0) {
-            return 0;
+            return ['marked_total' => 0, 'marks' => []];
         }
 
         $account = $this->accountFor($userId);

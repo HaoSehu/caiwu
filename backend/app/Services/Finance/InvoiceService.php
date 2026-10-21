@@ -23,6 +23,7 @@ use App\Services\ProductCatalog\ProductFullPathResolver;
 use App\Services\System\OperationLogService;
 use App\Support\AdminPrivacy;
 use App\Support\Concerns\FiltersDateRange;
+use App\Support\LikeEscape;
 use App\Support\Money;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -231,16 +232,19 @@ class InvoiceService
         }
         if (! empty($filters['keyword'])) {
             $keyword = trim((string) $filters['keyword']);
-            $query->where(function ($query) use ($keyword) {
-                $query->where('invoice_no', 'like', "%{$keyword}%")
+            // 关键字模糊匹配统一走 LikeEscape::contains：转义 % _ \ 通配符，
+            // 否则用户输入 "%" 会把全表命中、输入 "_" 会误匹配任意单字符。
+            $likeKeyword = LikeEscape::contains($keyword);
+            $query->where(function ($query) use ($keyword, $likeKeyword) {
+                $query->where('invoice_no', 'like', $likeKeyword)
                     ->orWhere('id', $keyword)
-                    ->orWhereHas('user', function ($userQuery) use ($keyword) {
-                        $userQuery->where('email', 'like', "%{$keyword}%")
-                            ->orWhere('nickname', 'like', "%{$keyword}%")
-                            ->orWhere('phone', 'like', "%{$keyword}%");
+                    ->orWhereHas('user', function ($userQuery) use ($likeKeyword) {
+                        $userQuery->where('email', 'like', $likeKeyword)
+                            ->orWhere('nickname', 'like', $likeKeyword)
+                            ->orWhere('phone', 'like', $likeKeyword);
                     })
-                    ->orWhereHas('order', function ($orderQuery) use ($keyword) {
-                        $orderQuery->where('order_no', 'like', "%{$keyword}%");
+                    ->orWhereHas('order', function ($orderQuery) use ($likeKeyword) {
+                        $orderQuery->where('order_no', 'like', $likeKeyword);
                     });
             });
         }
@@ -309,6 +313,11 @@ class InvoiceService
         $productSpecDisplay = $this->resolveInvoiceProductSpecDisplay($invoice, $scene, $productDisplayName);
         $combinedDisplayName = $this->resolveInvoiceCombinedDisplayName($invoice, $productDisplayName);
 
+        // 可退额唯一真源：一律取 InvoiceRefundService（与真退款的提交守卫同口径，
+        // 实收基数 − 已转余额 − 已完成退款）。本服务不能构造注入它——会经
+        // FinanceDocumentService→InvoiceService 形成依赖环，故运行时解析一次复用。
+        $refundableAmount = app(InvoiceRefundService::class)->markRefundableAmountOf($invoice);
+
         return [
             // 履约状态独立列：原在 config_snapshot 内，JSON 共享读改写会丢标记，
             // 详情页也需要它判断「已付未履约待人工退款」。
@@ -372,20 +381,20 @@ class InvoiceService
             'is_partial_paid' => $displayStatus['is_partial_paid'],
             'raw_status' => (int) $invoice->status,
             'raw_status_label' => InvoiceStatus::$labels[$invoice->status] ?? (string) $invoice->status,
-            // 退款投影（详情完整口径）：可退额为轻量展示口径（不含已转余额扣减），
-            // 写入守卫以 InvoiceRefundService::markRefundableAmountOf 为准（防循环依赖）。
+            // 退款投影（详情完整口径）：退款累计只算已完成退款，与可退额同源。
             'refund_amount' => number_format($this->refundCompletedTotal($invoice), 2, '.', ''),
             'refunded_at' => $this->formatRefundTime($invoice->refunded_at),
             'refund_method' => (string) ($invoice->refund_method ?? ''),
             'refund_status' => $this->resolveRefundStatus($invoice),
             'refund_status_label' => RefundStatus::label($this->resolveRefundStatus($invoice)),
             'is_partially_refunded' => $this->resolveRefundStatus($invoice) === RefundStatus::PARTIAL,
-            'refundable_amount' => number_format($this->displayRefundableAmount($invoice), 2, '.', ''),
-            // 退款到余额（唯一通道，动资金）能力与可退额：单次口径的轻量近似
-            // （真服务按「主支付单金额」扣已完成退款；拆分支付时略大，
-            //  提交由服务端守卫兜底拒绝并给出准确上限）。
-            'can_refund_to_balance' => $this->canRefundToBalance($invoice),
-            'refundable_amount_for_balance' => number_format($this->displayBalanceRefundableAmount($invoice), 2, '.', ''),
+            'refundable_amount' => number_format($refundableAmount, 2, '.', ''),
+            // 退款到余额（唯一通道，动资金）能力位与可退额：
+            // 金额取 InvoiceRefundService::markRefundableAmountOf 的单一真源口径
+            // （实收基数 max(paid_amount, amount) − 已转余额的异常支付 − 已完成退款累计），
+            // 与提交时的服务端守卫完全一致，拆分支付/重复支付转余额不再虚高。
+            'can_refund_to_balance' => $this->canRefundToBalance($invoice, $refundableAmount),
+            'refundable_amount_for_balance' => number_format($refundableAmount, 2, '.', ''),
             'refunds' => $invoice->refunds
                 ->sortByDesc('id')
                 ->values()
@@ -684,24 +693,14 @@ class InvoiceService
     }
 
     /**
-     * 可退额展示口径（轻量，只读）：实收基数 − 已完成退款累计。
-     * 写入守卫以 InvoiceRefundService::markRefundableAmountOf 为准（本服务不可
-     * 注入它——经 MixPaymentService 回环）；展示值在「异常支付已转余额」场景可能
-     * 略大（未扣 credited 段），提交时由服务端守卫拒绝并给出准确剩余金额。
-     */
-    private function displayRefundableAmount(Invoice $invoice): float
-    {
-        $paidBase = max((float) ($invoice->paid_amount ?? 0), (float) $invoice->amount);
-
-        return round(max($paidBase - $this->refundCompletedTotal($invoice), 0), 2);
-    }
-
-    /**
      * 「退款到余额」能力判定（轻量镜像，真服务守卫为准）：
      * 类型白名单（排除充值/补录——其资金从未离开系统）+ 账单/订单 PAID
      * + 存在真实支付单 + 可退额 > 0 + 与纯标记通道互斥。
+     *
+     * 可退额由调用方按 InvoiceRefundService::markRefundableAmountOf 的单一口径传入，
+     * 本方法不再自带公式，避免两处口径分叉。
      */
-    private function canRefundToBalance(Invoice $invoice): bool
+    private function canRefundToBalance(Invoice $invoice, float $refundableAmount): bool
     {
         $type = InvoiceType::normalize((string) ($invoice->type ?: InvoiceType::NEW_PURCHASE));
         if (! in_array($type, [InvoiceType::NEW_PURCHASE, 'normal', InvoiceType::RENEW, InvoiceType::UPGRADE], true)) {
@@ -731,15 +730,7 @@ class InvoiceService
             return false;
         }
 
-        return Money::greaterThan($this->displayBalanceRefundableAmount($invoice), 0);
-    }
-
-    /** 真退款（退到余额）可退额展示口径：实收基数 − 已完成退款累计。 */
-    private function displayBalanceRefundableAmount(Invoice $invoice): float
-    {
-        $paidBase = max((float) ($invoice->paid_amount ?? 0), (float) $invoice->amount);
-
-        return round(max($paidBase - $this->refundCompletedTotal($invoice), 0), 2);
+        return Money::greaterThan($refundableAmount, 0);
     }
 
     private function buildInvoiceItems(Invoice $invoice, array $scene): array

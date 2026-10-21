@@ -11,6 +11,7 @@ use App\Constants\OrderStatus;
 use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
 use App\Exceptions\BusinessException;
+use App\Models\FinanceConsumption;
 use App\Models\FinanceLedgerEntry;
 use App\Models\FinanceRefund;
 use App\Models\FinanceRefundAllocation;
@@ -20,7 +21,9 @@ use App\Models\Payment;
 use App\Models\ReferralReward;
 use App\Models\User;
 use App\Services\Finance\BalanceInvoicePaymentService;
+use App\Services\Finance\Core\FinanceAccountService;
 use App\Services\Finance\InvoiceRefundService;
+use App\Services\Finance\InvoiceService;
 use App\Services\User\AccountService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\Support\SeedsFinanceBalance;
@@ -225,6 +228,100 @@ class RefundInvoiceToBalanceTest extends TestCase
         $this->expectException(BusinessException::class);
         $this->expectExceptionMessage('该账单款项已通过重复支付转入余额，无需再退款');
         app(InvoiceRefundService::class)->refundInvoiceToBalance($user, $invoice);
+    }
+
+    public function test_refund_allocations_record_per_consumption_amount_across_two_lots(): void
+    {
+        $user = $this->makeUser();
+        $accounts = app(FinanceAccountService::class);
+        $this->seedFinanceBalance($user, 100.00);
+        // 第二个批次：首批次被第一笔消费吃满后，第二笔消费只能落到后一批次，
+        // 这样同一账单名下会留下两条指向不同 lot 的消费映射。
+        $accounts->credit((int) $user->id, 5000, FinanceLedgerEventType::SYSTEM_ADJUSTMENT, [
+            'source_type' => 'test_seed',
+            'remark' => '测试预置余额（第二批）',
+        ]);
+
+        $invoice = $this->makeInvoice($user, 150.00);
+
+        foreach ([10000, 5000] as $cents) {
+            $accounts->debit((int) $user->id, $cents, FinanceLedgerEventType::INVOICE_PAYMENT, [
+                'source_type' => 'invoice',
+                'source_id' => (int) $invoice->id,
+                'remark' => '测试余额支付账单',
+            ]);
+        }
+
+        $invoice->forceFill(['status' => InvoiceStatus::PAID, 'paid_amount' => 150.00, 'paid_at' => now()])->save();
+        $this->assertSame(2, FinanceConsumption::query()
+            ->where('source_type', 'invoice')
+            ->where('source_id', (int) $invoice->id)
+            ->count(), '前置条件：该账单名下必须有两条消费映射');
+        $this->assertEqualsWithDelta(0.00, $this->financeBalance($user), 0.001);
+
+        $result = app(InvoiceRefundService::class)->refundInvoiceToBalance($user, $invoice);
+
+        $this->assertFalse((bool) ($result['already_refunded'] ?? true));
+        $refundId = (int) ($result['refund_id'] ?? 0);
+        $this->assertGreaterThan(0, $refundId);
+
+        $marks = FinanceRefundAllocation::query()
+            ->where('refund_id', $refundId)
+            ->where('allocation_type', FinanceRefundAllocation::TYPE_CONSUMPTION_MARK)
+            ->get();
+
+        $this->assertCount(2, $marks, '跨两批次退款：每条被追认消费都要有自己的证据行');
+        $amounts = $marks->map(fn (FinanceRefundAllocation $row): float => round((float) $row->amount, 2))->all();
+        sort($amounts);
+        // 金额必须是该条消费的分摊额（100 / 50），而不是每条都写本次退款总额 150。
+        $this->assertSame([50.0, 100.0], $amounts);
+        $this->assertEqualsWithDelta(150.00, array_sum($amounts), 0.001);
+        $this->assertEqualsWithDelta(150.00, $this->financeBalance($user), 0.001);
+    }
+
+    public function test_refundable_amount_single_source_deducts_credited_to_balance_and_completed_refunds(): void
+    {
+        $user = $this->makeUser();
+        $this->seedFinanceBalance($user, 0.00);
+
+        $order = $this->makeOrder($user, 100.00);
+        $invoice = $this->makeInvoice($user, 100.00, ['order_id' => $order->id]);
+        // 主支付单 100 为正常收款；另有一笔 30 的重复支付已转入余额，必须从可退额里扣掉，
+        // 否则展示值虚高、运营会以为这 30 还能再退一次。
+        $this->makeSuccessPayment($user, $invoice, 100.00);
+        $this->makeSuccessPayment($user, $invoice, 30.00, [
+            'credited_to_balance' => true,
+            'credited_amount' => '30.00',
+            'credit_reason' => 'invoice_already_paid',
+        ]);
+        // 已完成退款 20（纯标记 funds_moved=0 与真退款同表同口径，一并扣减）。
+        FinanceRefund::query()->create([
+            'refund_no' => 'RFD'.date('YmdHis').mt_rand(100000, 999999),
+            'user_id' => (int) $user->id,
+            'invoice_id' => (int) $invoice->id,
+            'amount' => '20.00',
+            'status' => FinanceRefund::STATUS_COMPLETED,
+            'funds_moved' => 0,
+            'data_origin' => FinanceRefund::ORIGIN_NATIVE,
+            'currency' => 'CNY',
+            'reason' => '已部分退款',
+            'refunded_at' => now(),
+        ]);
+
+        $order->forceFill(['status' => OrderStatus::PAID, 'paid_amount' => 100.00, 'paid_at' => now()])->save();
+        $invoice->forceFill(['status' => InvoiceStatus::PAID, 'paid_amount' => 100.00, 'paid_at' => now()])->save();
+
+        // 唯一真源口径：100 − 30（已转余额）− 20（已完成退款） = 50。
+        $this->assertEqualsWithDelta(
+            50.00,
+            app(InvoiceRefundService::class)->markRefundableAmountOf($invoice->refresh()),
+            0.001,
+        );
+
+        // 详情页三个金额字段必须与真源一致（改造前会显示 80 的虚高值）。
+        $detail = app(InvoiceService::class)->adminDetail((int) $invoice->id);
+        $this->assertSame('50.00', $detail['refundable_amount']);
+        $this->assertSame('50.00', $detail['refundable_amount_for_balance']);
     }
 
     private function countLedger(User $user, string $eventType): int
