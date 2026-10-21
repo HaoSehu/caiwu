@@ -10,6 +10,8 @@ backend/storage/logs/
 backend/storage/framework/cache/
 backend/storage/framework/sessions/
 backend/storage/framework/views/
+# 运行时升级锁：db:upgrade 的 flock 文件，属进程状态，不入库
+backend/storage/framework/upgrade.lock
 backend/phpunit.xml
 
 # Frontend dependencies and generated output
