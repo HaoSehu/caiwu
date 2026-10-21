@@ -26,6 +26,7 @@ use App\Services\ProductCatalog\ProductFullPathResolver;
 use App\Services\System\OperationLogService;
 use App\Services\User\AccountService;
 use App\Support\AdminPrivacy;
+use App\Support\LikeEscape;
 use App\Support\Money;
 use App\Support\PublicUrl;
 use App\Support\SchemaMetadataCache;
@@ -788,8 +789,8 @@ class ReferralService
 
             $query->where(function (Builder $builder) use ($keyword, $matchedUserIds) {
                 $builder
-                    ->where('account_name', 'like', "%{$keyword}%")
-                    ->orWhere('account_no', 'like', "%{$keyword}%")
+                    ->where('account_name', 'like', LikeEscape::contains($keyword))
+                    ->orWhere('account_no', 'like', LikeEscape::contains($keyword))
                     ->when($matchedUserIds !== [], fn (Builder $query) => $query->orWhereIn('user_id', $matchedUserIds));
             });
         }
@@ -1379,6 +1380,23 @@ class ReferralService
                         balances: $this->buildReferralBalanceSnapshot($account),
                     );
 
+                    // 释放是「冻结→可用」的成对变动：只写 available 增加行会让 referral_frozen
+                    // 台账最新快照停在释放前金额，而账户冻结余额已扣减（对账差异）。
+                    // 这里补写同一奖励的冻结侧冲减行（-amount，remark 标明 release），
+                    // 幂等由奖励状态机（STATUS_FROZEN→STATUS_REWARDED）与行锁保证，不会重复冲减。
+                    $this->writeAccountLog(
+                        user: $user,
+                        type: self::ACCOUNT_LOG_TYPE_REWARD_RELEASED,
+                        amount: -$amount,
+                        remark: '冻结期结束，奖励已转为可提现（释放冲减冻结余额，reward release）',
+                        relatedId: $freshReward->id,
+                        relatedType: 'reward',
+                        operator: 'system',
+                        traceId: $freshReward->trace_id,
+                        balances: $this->buildReferralBalanceSnapshot($account),
+                        accountTypeOverride: 'referral_frozen',
+                    );
+
                     $this->operationLogService->write(
                         userId: $user->id,
                         userType: 'system',
@@ -1440,8 +1458,8 @@ class ReferralService
 
         $query->where(function (Builder $builder) use ($keyword) {
             $builder
-                ->where('users.email', 'like', "%{$keyword}%")
-                ->orWhere('users.nickname', 'like', "%{$keyword}%");
+                ->where('users.email', 'like', LikeEscape::contains($keyword))
+                ->orWhere('users.nickname', 'like', LikeEscape::contains($keyword));
         });
 
         return $query
@@ -1463,7 +1481,7 @@ class ReferralService
         }
 
         return Order::query()
-            ->where('order_no', 'like', "%{$keyword}%")
+            ->where('order_no', 'like', LikeEscape::contains($keyword))
             ->limit($limit)
             ->pluck('id')
             ->map(fn ($id) => (int) $id)
@@ -1546,6 +1564,14 @@ class ReferralService
         [$accountType, $balanceAfter] = $accountTypeOverride !== null
             ? [$accountTypeOverride, $this->resolveReferralBalanceAfter($accountTypeOverride, $balances)]
             : $this->resolveReferralAccountTypeAndBalance($type, $balances);
+
+        // 台账 balance_after 必须以账户真实余额为准：所有调用点都在同一事务内先更新 user_accounts
+        // 再写台账，若只取调用方传入的快照，一旦成对变动（如冻结→释放）漏写一侧，历史快照就会
+        // 停留在旧值，与账户余额漂移（对账 reconcile:account-balance 报 referral_frozen 差异）。
+        $accountBalance = $this->currentReferralAccountBalance((int) $user->id, $accountType);
+        if ($accountBalance !== null) {
+            $balanceAfter = $accountBalance;
+        }
 
         FinanceLedgerEntry::query()->create([
             'entry_no' => 'FL'.date('YmdHis').strtoupper(bin2hex(random_bytes(8))),
@@ -1757,6 +1783,30 @@ class ReferralService
     private function accounts(): AccountService
     {
         return $this->accountService ??= app(AccountService::class);
+    }
+
+    /**
+     * 读取账户某返利子账本的权威余额（同事务内先写账户再写台账，读到的即本次变动后的余额）。
+     * 返利子账本没有独立余额列，权威值始终落在 user_accounts 的 referral_* 列上；
+     * 台账 balance_after 若改用调用方快照，成对变动漏写一侧时会与账户漂移。
+     */
+    private function currentReferralAccountBalance(int $userId, string $accountType): ?float
+    {
+        $column = match ($accountType) {
+            'referral_frozen' => 'referral_frozen_balance',
+            'referral_available' => 'referral_available_balance',
+            'referral_pending_withdrawal' => 'referral_pending_withdrawal_balance',
+            'referral_withdrawn' => 'referral_withdrawn_balance',
+            default => null,
+        };
+
+        if ($column === null || $userId <= 0) {
+            return null;
+        }
+
+        $value = UserAccount::query()->where('user_id', $userId)->value($column);
+
+        return $value === null ? null : round((float) $value, 2);
     }
 
     /**

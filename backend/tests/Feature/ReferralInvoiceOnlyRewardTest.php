@@ -6,6 +6,7 @@ namespace Tests\Feature;
 
 use App\Constants\InvoiceStatus;
 use App\Constants\OrderStatus;
+use App\Models\FinanceLedgerEntry;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\ReferralReward;
@@ -96,6 +97,82 @@ class ReferralInvoiceOnlyRewardTest extends TestCase
 
         $this->assertNotNull($reward);
         $this->assertSame('8.00', number_format((float) $reward->refresh()->reward_amount, 2, '.', ''), '奖励基数必须读账单实收而非订单快照');
+    }
+
+    public function test_release_writes_frozen_offset_and_ledger_matches_account_balance(): void
+    {
+        // 冻结→释放是成对变动：两条奖励都释放后，退利子账本（finance_ledger_entries
+        // 每个 account_type 的最新 balance_after）必须等于 user_accounts 实际余额，
+        // 否则 reconcile:account-balance 会报存量漂移（实测 user 314 referral_frozen 2.75 vs 0.00）。
+        Setting::setValue('referral', 'reward_rate', 10);
+        Setting::setValue('referral', 'reward_freeze_days', 0);
+
+        $referrer = $this->makeUser('relref');
+        $this->makeAccount($referrer->id);
+        $buyer = $this->makeUser('relbuy');
+        $buyer->forceFill(['referrer_user_id' => $referrer->id])->save();
+
+        $first = app(ReferralService::class)->rewardForPaidInvoice($this->makeInvoice($buyer));
+        $second = app(ReferralService::class)->rewardForPaidInvoice($this->makeInvoice($buyer));
+        $this->assertNotNull($first);
+        $this->assertNotNull($second);
+
+        // 两条都进入冻结期：冻结余额=两条奖励合计，冻结台账最新快照必须等于该值
+        $frozen = round((float) $referrer->refresh()->referral_frozen_amount, 2);
+        $this->assertGreaterThan(0.00, $frozen);
+        $this->assertSame(
+            number_format($frozen, 2, '.', ''),
+            $this->latestLedgerBalance((int) $referrer->id, 'referral_frozen'),
+            '冻结时台账 balance_after 必须等于账户冻结余额'
+        );
+
+        $lastLedgerIdBeforeRelease = (int) FinanceLedgerEntry::query()->where('user_id', $referrer->id)->max('id');
+
+        $released = app(ReferralService::class)->releaseMaturedRewards($referrer->refresh());
+        $this->assertSame(2, $released, '两条到期奖励都应释放');
+
+        $account = UserAccount::query()->findOrFail($referrer->id);
+        $this->assertSame('0.00', number_format((float) $account->referral_frozen_balance, 2, '.', ''), '释放后冻结余额应归零');
+        $this->assertSame(number_format($frozen, 2, '.', ''), number_format((float) $account->referral_available_balance, 2, '.', ''));
+
+        // 释放必须补写冻结侧冲减行，最新快照归零，否则与账户余额 0.00 漂移
+        $this->assertSame(
+            '0.00',
+            $this->latestLedgerBalance((int) $referrer->id, 'referral_frozen'),
+            '释放后必须写冻结侧冲减台账，最新快照应归零'
+        );
+        $this->assertSame(
+            number_format($frozen, 2, '.', ''),
+            $this->latestLedgerBalance((int) $referrer->id, 'referral_available'),
+            '可用台账最新快照必须等于账户可提余额'
+        );
+
+        // 每条奖励各写一条冻结侧冲减行（金额取负），合计必须等于释放总额，便于对账审计
+        $offsets = FinanceLedgerEntry::query()
+            ->where('user_id', $referrer->id)
+            ->where('account_type', 'referral_frozen')
+            ->where('id', '>', $lastLedgerIdBeforeRelease)
+            ->orderBy('id')
+            ->get();
+        $this->assertCount(2, $offsets, '两条奖励释放应各写一条冻结冲减行');
+        $this->assertSame(
+            '-'.number_format($frozen, 2, '.', ''),
+            number_format((float) $offsets->sum(fn (FinanceLedgerEntry $entry) => (float) $entry->change_amount), 2, '.', '')
+        );
+        foreach ($offsets as $offset) {
+            $this->assertStringContainsString('release', (string) $offset->remark);
+        }
+    }
+
+    private function latestLedgerBalance(int $userId, string $accountType): string
+    {
+        $value = FinanceLedgerEntry::query()
+            ->where('user_id', $userId)
+            ->where('account_type', $accountType)
+            ->orderByDesc('id')
+            ->value('balance_after');
+
+        return number_format((float) $value, 2, '.', '');
     }
 
     private function makeUser(string $prefix): User

@@ -98,6 +98,46 @@ class RefundDeliveryGuardTest extends TestCase
         $this->assertArrayHasKey('confirm_delivered_refund', $rules);
     }
 
+    public function test_block_mode_rejects_renewal_invoice_without_service_order_id(): void
+    {
+        config(['finance.refund.delivery_guard' => 'block']);
+        [$user, $order, $renewalInvoice, $service] = $this->makeRenewalInvoiceWithActiveService();
+        $balanceBefore = $this->financeBalance($user, true);
+
+        // 续费账单的订单与服务的 order_id 不一致（服务仍挂在首开订单上），
+        // 只能用 order.service_id 反查或 services.invoice_id 命中，否则会被漏判成「未交付」。
+        $this->assertNotSame((int) $order->id, (int) $service->order_id);
+
+        try {
+            app(InvoiceRefundService::class)->refundInvoiceToBalance($user, $renewalInvoice);
+            $this->fail('续费账单关联服务仍在运行，退款必须被拒绝');
+        } catch (BusinessException $exception) {
+            $this->assertStringContainsString('已交付', $exception->getMessage());
+        }
+
+        $this->assertEqualsWithDelta($balanceBefore, $this->financeBalance($user, true), 0.001);
+        $this->assertSame(0, FinanceRefund::query()->where('invoice_id', (int) $renewalInvoice->id)->count());
+    }
+
+    public function test_block_mode_rejects_renewal_invoice_without_order(): void
+    {
+        config(['finance.refund.delivery_guard' => 'block']);
+        [$user, $order, $renewalInvoice, $service] = $this->makeRenewalInvoiceWithActiveService();
+
+        // order_id 缺失时仍要走 services.invoice_id 兜底，不能直接 return null 放行。
+        $renewalInvoice->forceFill(['order_id' => null])->save();
+        $renewalInvoice->refresh();
+
+        try {
+            app(InvoiceRefundService::class)->refundInvoiceToBalance($user, $renewalInvoice);
+            $this->fail('无订单的续费账单仍需按 invoice_id 兜底判定交付');
+        } catch (BusinessException $exception) {
+            $this->assertStringContainsString('已交付', $exception->getMessage());
+        }
+
+        $this->assertSame((int) $service->invoice_id, (int) $renewalInvoice->id);
+    }
+
     public function test_guard_passes_when_order_has_no_live_service(): void
     {
         config(['finance.refund.delivery_guard' => 'block']);
@@ -140,6 +180,26 @@ class RefundDeliveryGuardTest extends TestCase
         ]);
 
         return [$user, $order, $invoice];
+    }
+
+    /**
+     * 构造「续费账单」场景：服务挂在首开订单上，续费只回写 service.invoice_id，
+     * 续费账单的 order_id 指向影子订单（与 service.order_id 不同）。
+     *
+     * @return array{0: User, 1: Order, 2: Invoice, 3: Service}
+     */
+    private function makeRenewalInvoiceWithActiveService(): array
+    {
+        [$user, $firstOrder, $firstInvoice] = $this->makePaidOrderWithActiveService();
+        $service = Service::query()->where('order_id', (int) $firstOrder->id)->firstOrFail();
+        $service->forceFill(['invoice_id' => (int) $firstInvoice->id])->save();
+
+        // 续费影子订单：服务未回填到影子订单，模拟历史遗留数据。
+        $renewOrder = $this->makeOrder($user, 100.00);
+        $renewalInvoice = $this->makePaidInvoice($user, $renewOrder, 100.00);
+        $service->forceFill(['invoice_id' => (int) $renewalInvoice->id])->save();
+
+        return [$user, $renewOrder, $renewalInvoice, $service];
     }
 
     private function makeUser(): User

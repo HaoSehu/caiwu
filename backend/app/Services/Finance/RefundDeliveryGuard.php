@@ -7,7 +7,9 @@ namespace App\Services\Finance;
 use App\Constants\ServiceStatus;
 use App\Exceptions\BusinessException;
 use App\Models\Invoice;
+use App\Models\Order;
 use App\Models\Service;
+use Illuminate\Database\Eloquent\Builder;
 
 /**
  * 退款交付守卫（finance.refund.delivery_guard）。
@@ -17,8 +19,9 @@ use App\Models\Service;
  * - warn：落交付快照后放行，但**必须**带 confirm_delivered_refund=true，否则拒绝；
  * - block（默认）：已交付直接拒绝退款。
  *
- * 「已交付」定义：账单关联订单名下存在未终止的服务实例
- * （PENDING 开通中 / ACTIVE 运行中 / SUSPENDED 已暂停 / ABNORMAL 异常均算交付事实）。
+ * 「已交付」定义：账单经三路（services.order_id / order.service_id 反查 / services.invoice_id）
+ * 能命中未终止的服务实例（PENDING 开通中 / ACTIVE 运行中 / SUSPENDED 已暂停 / ABNORMAL 异常均算交付事实）。
+ * 续费账单只回写 service.invoice_id、不改 order_id，必须走 invoice_id 那一路，否则会漏判。
  * 默认 block 的原因：已复现「服务仍在跑 + 全额退款」双吃，属资金损失；
  * 存量无 service_id 的账单查不到交付事实，放行等于保留漏洞。
  */
@@ -38,18 +41,66 @@ class RefundDeliveryGuard
         }
 
         $orderId = (int) ($invoice->order_id ?? 0);
-        if ($orderId <= 0) {
+        $invoiceId = (int) ($invoice->id ?? 0);
+
+        // 续费账单可能没有订单（order_id<=0），此时仍要按 invoice_id 兜底，不能直接放行。
+        if ($orderId <= 0 && $invoiceId <= 0) {
             return null;
         }
 
+        // 订单主线上可能已经回填的服务：续费成功后影子订单会补记 service_id。
+        $relatedServiceIds = [];
+        if ($orderId > 0) {
+            $order = Order::query()->find($orderId, ['id', 'service_id']);
+            if ($order !== null && (int) ($order->service_id ?? 0) > 0) {
+                $relatedServiceIds[] = (int) $order->service_id;
+            }
+        }
+
+        // 三路合并去重判定「已交付」，缺一路都会漏判：
+        // 1) services.order_id = 账单订单：首开账单的主线；
+        // 2) services.id = order.service_id：续费成功后影子订单回填的服务关联；
+        // 3) services.invoice_id = 账单 ID：ServiceRenewService 续费只改 service.invoice_id、
+        //    不改 order_id（服务仍挂在首开订单上），只看 order_id 会把续费账单漏判成「未交付」
+        //    （实测 invoice 3035/order 3095 守卫命中 0 个服务，但按订单反查能命中 ACTIVE 服务）。
         $services = Service::query()
-            ->where('order_id', $orderId)
             ->whereIn('status', [
                 ServiceStatus::PENDING,
                 ServiceStatus::ACTIVE,
                 ServiceStatus::SUSPENDED,
                 ServiceStatus::ABNORMAL,
             ])
+            ->where(function (Builder $query) use ($orderId, $relatedServiceIds, $invoiceId): void {
+                $hasCondition = false;
+
+                if ($orderId > 0) {
+                    $query->where('order_id', $orderId);
+                    $hasCondition = true;
+                }
+
+                if ($relatedServiceIds !== []) {
+                    if ($hasCondition) {
+                        $query->orWhereIn('id', $relatedServiceIds);
+                    } else {
+                        $query->whereIn('id', $relatedServiceIds);
+                    }
+                    $hasCondition = true;
+                }
+
+                if ($invoiceId > 0) {
+                    if ($hasCondition) {
+                        $query->orWhere('invoice_id', $invoiceId);
+                    } else {
+                        $query->where('invoice_id', $invoiceId);
+                    }
+                    $hasCondition = true;
+                }
+
+                // 三路都没有可用条件时不允许退化成全表扫描。
+                if (! $hasCondition) {
+                    $query->whereRaw('1 = 0');
+                }
+            })
             ->orderBy('id')
             ->get(['id', 'name', 'domain', 'status']);
 
