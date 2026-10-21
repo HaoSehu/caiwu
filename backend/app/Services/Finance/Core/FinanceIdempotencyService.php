@@ -61,7 +61,8 @@ final class FinanceIdempotencyService
         }
 
         // 资金已经动了：finish 失败只告警，绝不能让幂等行停留在 processing。
-        // 否则 60 秒后会被判定僵死并允许同键重放，等于二次执行资金回调。
+        // 否则超过 finance.idempotency.stale_processing_seconds 的僵死窗口后
+        // 会被判定僵死并允许同键重放，等于二次执行资金回调。
         $this->safeFinish($operation, FinanceOperation::STATUS_SUCCEEDED, $result, null, $meta);
 
         return new FinanceOperationResult(false, $result, (int) $operation->id, FinanceOperation::STATUS_SUCCEEDED);
@@ -204,12 +205,11 @@ final class FinanceIdempotencyService
     }
 
     /**
-     * @param  array<string, mixed>|null  $result
-     * @param  array{resource_type?: string, resource_id?: int, trace_id?: string}  $meta
-     */
-    /**
      * finish 的失败必须被吞掉并告警：调用点要么是「业务已失败正在抛错」（再抛会掩盖原始异常），
      * 要么是「资金已提交成功」（抛错会让调用方误以为整笔失败而重试）。
+     *
+     * @param  array<string, mixed>|null  $result
+     * @param  array{resource_type?: string, resource_id?: int, trace_id?: string}  $meta
      */
     private function safeFinish(
         FinanceOperation $operation,

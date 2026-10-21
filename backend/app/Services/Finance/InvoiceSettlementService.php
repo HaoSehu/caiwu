@@ -31,7 +31,7 @@ use Illuminate\Support\Facades\Log;
  * 消毒逻辑留在 query 入口，保证 notify 通道锁键与并发行为不变。
  *
  * 本类自身不直写余额与台账：异常款转余额/预扣回补经 MixPaymentService
- * （其内部经 AccountService 与 FinanceLedgerWriter），第三方实付凭证经
+ * （其内部经 FinanceAccountService，台账由 FinanceLedgerService 落库），第三方实付凭证经
  * FinanceDocumentService 落库。
  */
 class InvoiceSettlementService

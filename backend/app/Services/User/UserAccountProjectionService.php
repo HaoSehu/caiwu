@@ -18,7 +18,7 @@ use Illuminate\Support\Facades\File;
  * 写入边界（V5-02 复核，2026-10-10）：本工具为命令侧运维工具而非在线业务路径，
  * 回填采用分块 `insertOrIgnore` 直写 user_accounts 并流式输出 JSON 备份——逐行走
  * AccountService 会失去幂等忽略语义、放大事务与内存开销，属有意例外；在线余额
- * 写入仍必须经 AccountService / FinanceLedgerWriter。
+ * 写入仍必须经 FinanceAccountService（内部经 FinanceLedgerService 落台账）。
  */
 class UserAccountProjectionService
 {

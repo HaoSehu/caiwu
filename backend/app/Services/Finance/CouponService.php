@@ -1722,9 +1722,9 @@ class CouponService
             );
         }
 
-        // 唯一的「一人一份」约束来自表结构 UK(coupon_id,user_id)，
-        // 因此 per_user_limit 在领取口径下恒等于 1（>1 的配置在领取侧不生效，
-        // 管理端保存时已由 CouponService::assertPerUserLimitCompatible 拒绝）。
+        // 领取张数的「一人一份」约束来自表结构 UK(coupon_id,user_id)，与 per_user_limit 无关：
+        // per_user_limit 的真实语义是「同一张券对该用户的核销次数上限」（见 ownedCouponUsageCountSql），
+        // 领取侧不读取该字段，因此无需在保存时做兼容性校验。
         throw_if(
             UserCoupon::query()->where('coupon_id', $coupon->id)->where('user_id', $userId)->exists(),
             new BusinessException('你已经领取过这张优惠券')
