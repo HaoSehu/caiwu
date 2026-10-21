@@ -66,6 +66,23 @@ return Application::configure(basePath: dirname(__DIR__))
             return '/';
         });
 
+        // 可信代理（B-10）：生产在 Nginx 反代之后，未声明可信代理时 $request->ip() 恒为
+        // 反代地址，按 IP 的限流（含支付回调 60/min）退化为全站共用一个桶，轮询凭证的
+        // IP 绑定也形同虚设。只信任 .env 显式列出的反代地址，不信任任意来源的 XFF。
+        $trustedProxies = array_values(array_filter(array_map(
+            static fn (string $ip): string => trim($ip),
+            explode(',', (string) env('TRUSTED_PROXIES', ''))
+        )));
+        if ($trustedProxies !== []) {
+            $middleware->trustProxies(
+                at: $trustedProxies,
+                headers: Request::HEADER_X_FORWARDED_FOR
+                    | Request::HEADER_X_FORWARDED_PROTO
+                    | Request::HEADER_X_FORWARDED_HOST
+                    | Request::HEADER_X_FORWARDED_PORT,
+            );
+        }
+
         // 维护模式豁免支付回调：切换窗口 php artisan down 期间，网关回调必须仍能到达控制器，
         // 由 FinanceCutoverInboxService 落库并 ack 成功（否则网关重试耗尽、回调永久丢失）。
         // 与 Runbook「回调会进收件箱」承诺对齐；业务端点仍按维护模式返回 503。
