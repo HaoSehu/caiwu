@@ -11,6 +11,7 @@ use App\Models\FinanceRefund;
 use App\Models\Invoice;
 use App\Models\Product;
 use App\Support\Concerns\FiltersDateRange;
+use App\Support\LikeEscape;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -118,13 +119,13 @@ class InvoiceV2QueryService
         $keyword = trim((string) ($filters['keyword'] ?? ''));
         if ($keyword !== '') {
             $query->where(function (Builder $builder) use ($keyword): void {
-                $builder->where('invoice_no', 'like', "%{$keyword}%")
+                $builder->where('invoice_no', 'like', LikeEscape::contains($keyword))
                     ->orWhereHas('order', function (Builder $orderQuery) use ($keyword): void {
-                        $orderQuery->where('order_no', 'like', "%{$keyword}%");
+                        $orderQuery->where('order_no', 'like', LikeEscape::contains($keyword));
                     })
                     ->orWhereHas('payments', function (Builder $paymentQuery) use ($keyword): void {
-                        $paymentQuery->where('payment_no', 'like', "%{$keyword}%")
-                            ->orWhere('trade_no', 'like', "%{$keyword}%");
+                        $paymentQuery->where('payment_no', 'like', LikeEscape::contains($keyword))
+                            ->orWhere('trade_no', 'like', LikeEscape::contains($keyword));
                     });
             });
         }

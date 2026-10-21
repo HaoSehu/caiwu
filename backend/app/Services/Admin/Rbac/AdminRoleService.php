@@ -8,6 +8,7 @@ use App\Exceptions\BusinessException;
 use App\Models\AdminUser;
 use App\Models\Role;
 use App\Support\AdminPermissions;
+use App\Support\LikeEscape;
 use App\Support\SchemaMetadataCache;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
@@ -35,8 +36,8 @@ class AdminRoleService
             ->when($keyword !== '', function ($query) use ($keyword): void {
                 $query->where(function ($inner) use ($keyword): void {
                     $inner
-                        ->where('name', 'like', "%{$keyword}%")
-                        ->orWhere('label', 'like', "%{$keyword}%");
+                        ->where('name', 'like', LikeEscape::contains($keyword))
+                        ->orWhere('label', 'like', LikeEscape::contains($keyword));
                 });
             })
             ->orderBy('id')

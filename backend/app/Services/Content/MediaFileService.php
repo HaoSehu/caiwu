@@ -199,9 +199,9 @@ class MediaFileService
         // 检查 settings 表
         $settings = DB::table('settings')
             ->where(function ($query) use ($path, $url) {
-                $query->where('item_value', 'like', "%{$path}%");
+                $query->where('item_value', 'like', LikeEscape::contains($path));
                 if ($url !== '') {
-                    $query->orWhere('item_value', 'like', "%{$url}%");
+                    $query->orWhere('item_value', 'like', LikeEscape::contains($url));
                 }
             })
             ->get(['group_key', 'item_key']);
@@ -213,9 +213,9 @@ class MediaFileService
         // 检查内容文章封面
         $articleCount = DB::table('content_articles')
             ->where(function ($query) use ($path, $url) {
-                $query->where('cover_image', 'like', "%{$path}%");
+                $query->where('cover_image', 'like', LikeEscape::contains($path));
                 if ($url !== '') {
-                    $query->orWhere('cover_image', 'like', "%{$url}%");
+                    $query->orWhere('cover_image', 'like', LikeEscape::contains($url));
                 }
             })
             ->count();

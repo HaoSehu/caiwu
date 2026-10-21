@@ -37,6 +37,7 @@ use App\Services\System\OperationLogService;
 use App\Services\System\SettingService;
 use App\Services\User\Concerns\HandlesAdminUserServices;
 use App\Support\AccountIdentifier;
+use App\Support\LikeEscape;
 use App\Support\Money;
 use App\Support\SchemaMetadataCache;
 use App\Support\TextSanitizer;
@@ -595,7 +596,7 @@ class UserService
         $query = ActivityLog::where('actor_id', $userId)->where('actor_type', 'client');
 
         if (! empty($filters['keyword'])) {
-            $query->where('action', 'like', "%{$filters['keyword']}%");
+            $query->where('action', 'like', LikeEscape::contains(trim((string) $filters['keyword'])));
         }
 
         if (! empty($filters['start_date'])) {
@@ -607,7 +608,7 @@ class UserService
         }
 
         if (! empty($filters['ip_address'])) {
-            $query->where('ip_address', 'like', "%{$filters['ip_address']}%");
+            $query->where('ip_address', 'like', LikeEscape::contains(trim((string) $filters['ip_address'])));
         }
 
         if (! empty($filters['source'])) {

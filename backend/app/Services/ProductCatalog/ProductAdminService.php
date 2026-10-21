@@ -19,6 +19,7 @@ use App\Services\Integrations\Plugins\UpstreamBindingWriter;
 use App\Services\ProductCatalog\Concerns\HandlesProductCatalogHelpers;
 use App\Services\System\OperationLogService;
 use App\Services\System\SettingService;
+use App\Support\LikeEscape;
 use App\Support\Money;
 use App\Support\ProductProvisionHostname;
 use App\Support\SchemaMetadataCache;
@@ -760,8 +761,8 @@ class ProductAdminService
                                 ->whereColumn('pub.product_id', 'products.id')
                                 ->where(function ($bindingQuery) use ($keyword): void {
                                     $bindingQuery
-                                        ->where('pub.provider_key', 'like', "%{$keyword}%")
-                                        ->orWhere('pub.upstream_product_id', 'like', "%{$keyword}%");
+                                        ->where('pub.provider_key', 'like', LikeEscape::contains($keyword))
+                                        ->orWhere('pub.upstream_product_id', 'like', LikeEscape::contains($keyword));
                                 });
                         });
                     }

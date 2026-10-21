@@ -10,6 +10,7 @@ use App\Models\Service;
 use App\Services\Integrations\Plugins\PluginBindingResolver;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Support\Concerns\ResolvesBinding;
+use App\Support\LikeEscape;
 use App\Support\SchemaMetadataCache;
 use App\Support\ServiceHostname;
 use App\Support\ServiceListPresentation;
@@ -213,7 +214,7 @@ class AdminServiceListService
 
     private function applyKeywordSearch(Builder $query, string $keyword): void
     {
-        $likeKeyword = '%'.$keyword.'%';
+        $likeKeyword = LikeEscape::contains($keyword);
         $numericKeyword = $this->extractNumericKeyword($keyword);
 
         $query->where(function (Builder $builder) use ($keyword, $likeKeyword, $numericKeyword) {
@@ -304,7 +305,7 @@ class AdminServiceListService
 
     private function resolveSnapshotMatchedServiceIds(string $keyword): array
     {
-        $likeKeyword = '%'.$keyword.'%';
+        $likeKeyword = LikeEscape::contains($keyword);
         $ids = collect();
 
         $ids = $ids->merge(DB::table('service_upstream_bindings')

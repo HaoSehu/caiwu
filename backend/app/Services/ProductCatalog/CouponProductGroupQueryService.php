@@ -58,7 +58,7 @@ class CouponProductGroupQueryService
                 ])
                 ->selectSub($this->productTreeCountSubquery('second_product_groups.id', 2), 'products_count')
                 ->selectSub($this->directProductCountSubquery('second_product_groups.id', 2), 'direct_products_count')
-                ->when($this->keyword($filters) !== '', fn (Builder $query) => $query->where('name', 'like', '%'.$this->keyword($filters).'%'))
+                ->when($this->keyword($filters) !== '', fn (Builder $query) => $query->where('name', 'like', LikeEscape::contains($this->keyword($filters))))
                 ->when($this->status($filters) !== null, fn (Builder $query) => $query->where('is_visible', $this->status($filters)))
                 ->orderBy('sort_order')
                 ->orderBy('id')
@@ -76,7 +76,7 @@ class CouponProductGroupQueryService
                     'products as products_count',
                     'products as direct_products_count',
                 ])
-                ->when($this->keyword($filters) !== '', fn (Builder $query) => $query->where('name', 'like', '%'.$this->keyword($filters).'%'))
+                ->when($this->keyword($filters) !== '', fn (Builder $query) => $query->where('name', 'like', LikeEscape::contains($this->keyword($filters))))
                 ->when($this->status($filters) !== null, fn (Builder $query) => $query->where('is_visible', $this->status($filters)))
                 ->orderBy('sort_order')
                 ->orderBy('id')

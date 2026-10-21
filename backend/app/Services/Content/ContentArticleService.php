@@ -8,6 +8,7 @@ use App\Models\ContentCategory;
 use App\Support\Concerns\NormalizesNullableString;
 use App\Support\ContentExcerpt;
 use App\Support\ContentPublishedCacheVersion;
+use App\Support\LikeEscape;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Carbon;
@@ -72,10 +73,10 @@ class ContentArticleService
             // `LIKE '%kw%'` 必然全表扫描，拖垮管理端列表页。
             $query->where(function ($builder) use ($keyword) {
                 $builder
-                    ->where('title', 'like', "%{$keyword}%")
-                    ->orWhere('summary', 'like', "%{$keyword}%")
-                    ->orWhere('slug', 'like', "%{$keyword}%")
-                    ->orWhereHas('contentCategory', fn ($query) => $query->where('name', 'like', "%{$keyword}%"));
+                    ->where('title', 'like', LikeEscape::contains($keyword))
+                    ->orWhere('summary', 'like', LikeEscape::contains($keyword))
+                    ->orWhere('slug', 'like', LikeEscape::contains($keyword))
+                    ->orWhereHas('contentCategory', fn ($query) => $query->where('name', 'like', LikeEscape::contains($keyword)));
             });
         }
 
@@ -163,11 +164,11 @@ class ContentArticleService
             $keyword = trim((string) $filters['keyword']);
             $query->where(function ($builder) use ($keyword) {
                 $builder
-                    ->where('title', 'like', "%{$keyword}%")
-                    ->orWhere('summary', 'like', "%{$keyword}%")
-                    ->orWhere('content', 'like', "%{$keyword}%")
-                    ->orWhere('keywords', 'like', "%{$keyword}%")
-                    ->orWhereHas('contentCategory', fn ($query) => $query->where('name', 'like', "%{$keyword}%"));
+                    ->where('title', 'like', LikeEscape::contains($keyword))
+                    ->orWhere('summary', 'like', LikeEscape::contains($keyword))
+                    ->orWhere('content', 'like', LikeEscape::contains($keyword))
+                    ->orWhere('keywords', 'like', LikeEscape::contains($keyword))
+                    ->orWhereHas('contentCategory', fn ($query) => $query->where('name', 'like', LikeEscape::contains($keyword)));
             });
         }
 

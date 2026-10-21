@@ -5,6 +5,7 @@ namespace App\Services\System;
 use App\Models\ScheduleRunLog;
 use App\Services\Automation\ScheduleHookService;
 use App\Support\ActivityLogStream;
+use App\Support\LikeEscape;
 use App\Support\PayloadLimiter;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
@@ -212,8 +213,8 @@ class ScheduleRunLogService
         if (! empty($filters['keyword'])) {
             $keyword = $filters['keyword'];
             $query->where(function ($q) use ($keyword) {
-                $q->where('task_name', 'like', "%{$keyword}%")
-                    ->orWhere('error_msg', 'like', "%{$keyword}%");
+                $q->where('task_name', 'like', LikeEscape::contains($keyword))
+                    ->orWhere('error_msg', 'like', LikeEscape::contains($keyword));
             });
         }
 

@@ -19,6 +19,7 @@ use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Services\ProductCatalog\ProductFullPathResolver;
 use App\Support\AdminPrivacy;
 use App\Support\Concerns\FiltersDateRange;
+use App\Support\LikeEscape;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
@@ -107,19 +108,19 @@ class AdminFinanceQueryService
         $keyword = trim((string) ($filters['keyword'] ?? ''));
         if ($keyword !== '') {
             $query->where(function (Builder $query) use ($keyword): void {
-                $query->where('payment_no', 'like', "%{$keyword}%")
-                    ->orWhere('trade_no', 'like', "%{$keyword}%")
+                $query->where('payment_no', 'like', LikeEscape::contains($keyword))
+                    ->orWhere('trade_no', 'like', LikeEscape::contains($keyword))
                     ->orWhere('id', $keyword)
                     ->orWhereHas('user', function (Builder $userQuery) use ($keyword): void {
-                        $userQuery->where('email', 'like', "%{$keyword}%")
-                            ->orWhere('nickname', 'like', "%{$keyword}%")
-                            ->orWhere('phone', 'like', "%{$keyword}%");
+                        $userQuery->where('email', 'like', LikeEscape::contains($keyword))
+                            ->orWhere('nickname', 'like', LikeEscape::contains($keyword))
+                            ->orWhere('phone', 'like', LikeEscape::contains($keyword));
                     })
                     ->orWhereHas('invoice', function (Builder $invoiceQuery) use ($keyword): void {
-                        $invoiceQuery->where('invoice_no', 'like', "%{$keyword}%");
+                        $invoiceQuery->where('invoice_no', 'like', LikeEscape::contains($keyword));
                     })
                     ->orWhereHas('order', function (Builder $orderQuery) use ($keyword): void {
-                        $orderQuery->where('order_no', 'like', "%{$keyword}%");
+                        $orderQuery->where('order_no', 'like', LikeEscape::contains($keyword));
                     });
             });
         }
@@ -435,20 +436,20 @@ class AdminFinanceQueryService
         }
 
         $query->where(function (Builder $query) use ($keyword): void {
-            $query->where('order_no', 'like', "%{$keyword}%")
+            $query->where('order_no', 'like', LikeEscape::contains($keyword))
                 ->orWhere('id', $keyword)
-                ->orWhere('product_spec_snapshot', 'like', "%{$keyword}%")
+                ->orWhere('product_spec_snapshot', 'like', LikeEscape::contains($keyword))
                 ->orWhereHas('user', function (Builder $userQuery) use ($keyword): void {
-                    $userQuery->where('email', 'like', "%{$keyword}%")
-                        ->orWhere('nickname', 'like', "%{$keyword}%")
-                        ->orWhere('phone', 'like', "%{$keyword}%");
+                    $userQuery->where('email', 'like', LikeEscape::contains($keyword))
+                        ->orWhere('nickname', 'like', LikeEscape::contains($keyword))
+                        ->orWhere('phone', 'like', LikeEscape::contains($keyword));
                 })
                 ->orWhereHas('invoice', function (Builder $invoiceQuery) use ($keyword): void {
-                    $invoiceQuery->where('invoice_no', 'like', "%{$keyword}%");
+                    $invoiceQuery->where('invoice_no', 'like', LikeEscape::contains($keyword));
                 })
                 ->orWhereHas('service', function (Builder $serviceQuery) use ($keyword): void {
-                    $serviceQuery->where('name', 'like', "%{$keyword}%")
-                        ->orWhere('domain', 'like', "%{$keyword}%");
+                    $serviceQuery->where('name', 'like', LikeEscape::contains($keyword))
+                        ->orWhere('domain', 'like', LikeEscape::contains($keyword));
                 });
         });
     }

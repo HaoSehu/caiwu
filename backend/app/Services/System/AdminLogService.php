@@ -220,15 +220,15 @@ class AdminLogService
         if (! empty($filters['keyword'])) {
             $keyword = trim((string) $filters['keyword']);
             $query->where(function ($builder) use ($keyword) {
-                $builder->where('action', 'like', "%{$keyword}%")
-                    ->orWhere('module', 'like', "%{$keyword}%")
-                    ->orWhere('ip_address', 'like', "%{$keyword}%")
+                $builder->where('action', 'like', LikeEscape::contains($keyword))
+                    ->orWhere('module', 'like', LikeEscape::contains($keyword))
+                    ->orWhere('ip_address', 'like', LikeEscape::contains($keyword))
                     ->orWhere('context_request_id', 'like', LikeEscape::contains($keyword));
             });
         }
 
         if (! empty($filters['ip_address'])) {
-            $query->where('ip_address', 'like', '%'.trim((string) $filters['ip_address']).'%');
+            $query->where('ip_address', 'like', LikeEscape::contains(trim((string) $filters['ip_address'])));
         }
 
         // trace_id 是管理端 API 日志筛选契约的一部分。新请求写入
@@ -258,7 +258,7 @@ class AdminLogService
         }
 
         if (! empty($filters['method'])) {
-            $query->where('action', 'like', trim((string) $filters['method']).' %');
+            $query->where('action', 'like', LikeEscape::escape(trim((string) $filters['method'])).' %');
         }
 
         if (! empty($filters['status'])) {
@@ -518,10 +518,10 @@ class AdminLogService
         if (! empty($filters['keyword'])) {
             $keyword = trim((string) $filters['keyword']);
             $query->where(function ($builder) use ($keyword) {
-                $builder->where('ip_address', 'like', "%{$keyword}%")
-                    ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(context, '$.admin_username')) like ?", ["%{$keyword}%"])
-                    ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(context, '$.admin_nickname')) like ?", ["%{$keyword}%"])
-                    ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(context, '$.role_name')) like ?", ["%{$keyword}%"]);
+                $builder->where('ip_address', 'like', LikeEscape::contains($keyword))
+                    ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(context, '$.admin_username')) like ?", [LikeEscape::contains($keyword)])
+                    ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(context, '$.admin_nickname')) like ?", [LikeEscape::contains($keyword)])
+                    ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(context, '$.role_name')) like ?", [LikeEscape::contains($keyword)]);
             });
         }
 
@@ -581,12 +581,12 @@ class AdminLogService
         if (! empty($filters['keyword'])) {
             $keyword = trim((string) $filters['keyword']);
             $query->where(function ($builder) use ($keyword): void {
-                $builder->where('username', 'like', "%{$keyword}%")
-                    ->orWhere('nickname', 'like', "%{$keyword}%")
-                    ->orWhere('role_name', 'like', "%{$keyword}%")
-                    ->orWhere('client_ip', 'like', "%{$keyword}%")
-                    ->orWhere('browser', 'like', "%{$keyword}%")
-                    ->orWhere('operating_system', 'like', "%{$keyword}%");
+                $builder->where('username', 'like', LikeEscape::contains($keyword))
+                    ->orWhere('nickname', 'like', LikeEscape::contains($keyword))
+                    ->orWhere('role_name', 'like', LikeEscape::contains($keyword))
+                    ->orWhere('client_ip', 'like', LikeEscape::contains($keyword))
+                    ->orWhere('browser', 'like', LikeEscape::contains($keyword))
+                    ->orWhere('operating_system', 'like', LikeEscape::contains($keyword));
             });
         }
 
@@ -683,9 +683,9 @@ class AdminLogService
             ->when(! empty($filters['keyword']), function ($builder) use ($filters) {
                 $keyword = trim((string) $filters['keyword']);
                 $builder->where(function ($q) use ($keyword) {
-                    $q->where('username', 'like', "%{$keyword}%")
-                        ->orWhere('nickname', 'like', "%{$keyword}%")
-                        ->orWhere('last_login_ip', 'like', "%{$keyword}%");
+                    $q->where('username', 'like', LikeEscape::contains($keyword))
+                        ->orWhere('nickname', 'like', LikeEscape::contains($keyword))
+                        ->orWhere('last_login_ip', 'like', LikeEscape::contains($keyword));
                 });
             });
 
@@ -759,14 +759,14 @@ class AdminLogService
         $this->applyPluginLogFilters($query, $tableName, $filters, 'driver_key');
 
         if (! empty($filters['phone'])) {
-            $query->where($recipientColumn, 'like', '%'.trim((string) $filters['phone']).'%');
+            $query->where($recipientColumn, 'like', LikeEscape::contains(trim((string) $filters['phone'])));
         }
 
         if (! empty($filters['keyword'])) {
             $keyword = trim((string) $filters['keyword']);
             $query->where(function ($builder) use ($keyword, $tableName) {
-                $builder->where('template_code', 'like', "%{$keyword}%")
-                    ->orWhere('request_id', 'like', "%{$keyword}%");
+                $builder->where('template_code', 'like', LikeEscape::contains($keyword))
+                    ->orWhere('request_id', 'like', LikeEscape::contains($keyword));
 
                 $this->applyOptionalKeywordColumns($builder, $tableName, $keyword, ['driver_key', 'trace_id']);
             });
@@ -795,15 +795,15 @@ class AdminLogService
         $this->applyPluginLogFilters($query, $tableName, $filters, 'driver_key');
 
         if (! empty($filters['email'])) {
-            $query->where($recipientColumn, 'like', '%'.trim((string) $filters['email']).'%');
+            $query->where($recipientColumn, 'like', LikeEscape::contains(trim((string) $filters['email'])));
         }
 
         if (! empty($filters['keyword'])) {
             $keyword = trim((string) ($filters['keyword'] ?? ''));
             $query->where(function ($builder) use ($keyword, $tableName) {
-                $builder->where('template_code', 'like', "%{$keyword}%")
-                    ->orWhere('subject', 'like', "%{$keyword}%")
-                    ->orWhere('content', 'like', "%{$keyword}%");
+                $builder->where('template_code', 'like', LikeEscape::contains($keyword))
+                    ->orWhere('subject', 'like', LikeEscape::contains($keyword))
+                    ->orWhere('content', 'like', LikeEscape::contains($keyword));
 
                 $this->applyOptionalKeywordColumns($builder, $tableName, $keyword, ['driver_key', 'trace_id']);
             });
@@ -830,21 +830,21 @@ class AdminLogService
         $this->applyPluginLogFilters($query, $tableName, $filters, 'driver_key');
 
         if ($channel === 'sms' && ! empty($filters['phone'])) {
-            $query->where($recipientColumn, 'like', '%'.trim((string) $filters['phone']).'%');
+            $query->where($recipientColumn, 'like', LikeEscape::contains(trim((string) $filters['phone'])));
         }
 
         if ($channel === 'email' && ! empty($filters['email'])) {
-            $query->where($recipientColumn, 'like', '%'.trim((string) $filters['email']).'%');
+            $query->where($recipientColumn, 'like', LikeEscape::contains(trim((string) $filters['email'])));
         }
 
         if (! empty($filters['keyword'])) {
             $keyword = trim((string) $filters['keyword']);
             $query->where(function ($builder) use ($channel, $hasRequestId, $keyword, $tableName) {
                 if ($channel === 'sms') {
-                    $builder->where('template_code', 'like', "%{$keyword}%");
+                    $builder->where('template_code', 'like', LikeEscape::contains($keyword));
 
                     if ($hasRequestId) {
-                        $builder->orWhere('request_id', 'like', "%{$keyword}%");
+                        $builder->orWhere('request_id', 'like', LikeEscape::contains($keyword));
                     }
 
                     $this->applyOptionalKeywordColumns($builder, $tableName, $keyword, ['driver_key', 'trace_id']);
@@ -852,12 +852,12 @@ class AdminLogService
                     return;
                 }
 
-                $builder->where('content', 'like', "%{$keyword}%")
-                    ->orWhere('template_code', 'like', "%{$keyword}%")
-                    ->orWhere('subject', 'like', "%{$keyword}%");
+                $builder->where('content', 'like', LikeEscape::contains($keyword))
+                    ->orWhere('template_code', 'like', LikeEscape::contains($keyword))
+                    ->orWhere('subject', 'like', LikeEscape::contains($keyword));
 
                 if ($hasRequestId) {
-                    $builder->orWhere('request_id', 'like', "%{$keyword}%");
+                    $builder->orWhere('request_id', 'like', LikeEscape::contains($keyword));
                 }
 
                 $this->applyOptionalKeywordColumns($builder, $tableName, $keyword, ['driver_key', 'trace_id']);
@@ -906,7 +906,7 @@ class AdminLogService
         }
 
         if (! empty($filters['trace_id']) && $this->tableHasColumn($tableName, 'trace_id')) {
-            $query->where('trace_id', 'like', '%'.trim((string) $filters['trace_id']).'%');
+            $query->where('trace_id', 'like', LikeEscape::contains(trim((string) $filters['trace_id'])));
         }
     }
 
@@ -917,7 +917,7 @@ class AdminLogService
     {
         foreach ($columns as $column) {
             if ($this->tableHasColumn($tableName, $column)) {
-                $query->orWhere($column, 'like', "%{$keyword}%");
+                $query->orWhere($column, 'like', LikeEscape::contains($keyword));
             }
         }
     }
@@ -1111,8 +1111,8 @@ class AdminLogService
         if (! empty($filters['keyword'])) {
             $keyword = trim((string) $filters['keyword']);
             $query->where(function ($builder) use ($keyword) {
-                $builder->where('task_name', 'like', "%{$keyword}%")
-                    ->orWhere('error_msg', 'like', "%{$keyword}%");
+                $builder->where('task_name', 'like', LikeEscape::contains($keyword))
+                    ->orWhere('error_msg', 'like', LikeEscape::contains($keyword));
             });
         }
 
@@ -1181,7 +1181,7 @@ class AdminLogService
         if (! empty($filters['task_key'])) {
             $taskKey = trim((string) $filters['task_key']);
             $query->where(function ($builder) use ($taskKey) {
-                $builder->where('description', 'like', "%{$taskKey}%")
+                $builder->where('description', 'like', LikeEscape::contains($taskKey))
                     ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(context, '$.task_key')) = ?", [$taskKey]);
             });
         }
@@ -1193,9 +1193,9 @@ class AdminLogService
         if (! empty($filters['keyword'])) {
             $keyword = trim((string) $filters['keyword']);
             $query->where(function ($builder) use ($keyword) {
-                $builder->where('description', 'like', "%{$keyword}%")
-                    ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(context, '$.task_key')) like ?", ["%{$keyword}%"])
-                    ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(context, '$.error_message')) like ?", ["%{$keyword}%"]);
+                $builder->where('description', 'like', LikeEscape::contains($keyword))
+                    ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(context, '$.task_key')) like ?", [LikeEscape::contains($keyword)])
+                    ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(context, '$.error_message')) like ?", [LikeEscape::contains($keyword)]);
             });
         }
 
@@ -1289,7 +1289,7 @@ class AdminLogService
         }
 
         if (! empty($filters['trace_id'])) {
-            $query->where('trace_id', 'like', '%'.trim((string) $filters['trace_id']).'%');
+            $query->where('trace_id', 'like', LikeEscape::contains(trim((string) $filters['trace_id'])));
         }
 
         if (! empty($filters['status'])) {
@@ -1310,11 +1310,11 @@ class AdminLogService
         if (! empty($filters['keyword'])) {
             $keyword = trim((string) $filters['keyword']);
             $query->where(function (Builder $builder) use ($keyword): void {
-                $builder->where('plugin_key', 'like', "%{$keyword}%")
-                    ->orWhere('slug', 'like', "%{$keyword}%")
-                    ->orWhere('action', 'like', "%{$keyword}%")
-                    ->orWhere('trace_id', 'like', "%{$keyword}%")
-                    ->orWhere('error_message', 'like', "%{$keyword}%");
+                $builder->where('plugin_key', 'like', LikeEscape::contains($keyword))
+                    ->orWhere('slug', 'like', LikeEscape::contains($keyword))
+                    ->orWhere('action', 'like', LikeEscape::contains($keyword))
+                    ->orWhere('trace_id', 'like', LikeEscape::contains($keyword))
+                    ->orWhere('error_message', 'like', LikeEscape::contains($keyword));
             });
         }
 
@@ -1975,10 +1975,10 @@ class AdminLogService
         if (! empty($filters['keyword'])) {
             $keyword = trim((string) $filters['keyword']);
             $query->where(function ($builder) use ($keyword) {
-                $builder->where('out_trade_no', 'like', "%{$keyword}%")
-                    ->orWhere('trade_no', 'like', "%{$keyword}%")
-                    ->orWhere('gateway', 'like', "%{$keyword}%")
-                    ->orWhere('error_msg', 'like', "%{$keyword}%");
+                $builder->where('out_trade_no', 'like', LikeEscape::contains($keyword))
+                    ->orWhere('trade_no', 'like', LikeEscape::contains($keyword))
+                    ->orWhere('gateway', 'like', LikeEscape::contains($keyword))
+                    ->orWhere('error_msg', 'like', LikeEscape::contains($keyword));
 
                 $this->applyOptionalKeywordColumns($builder, 'gateway_logs', $keyword, ['gateway_key', 'trace_id']);
             });
@@ -2092,10 +2092,10 @@ class AdminLogService
         if (! empty($filters['keyword'])) {
             $keyword = trim((string) $filters['keyword']);
             $query->where(function ($builder) use ($keyword) {
-                $builder->where('description', 'like', "%{$keyword}%")
-                    ->orWhere('actor_name', 'like', "%{$keyword}%")
-                    ->orWhere('module', 'like', "%{$keyword}%")
-                    ->orWhere('ip_address', 'like', "%{$keyword}%");
+                $builder->where('description', 'like', LikeEscape::contains($keyword))
+                    ->orWhere('actor_name', 'like', LikeEscape::contains($keyword))
+                    ->orWhere('module', 'like', LikeEscape::contains($keyword))
+                    ->orWhere('ip_address', 'like', LikeEscape::contains($keyword));
 
                 if (ctype_digit($keyword)) {
                     $builder->orWhere('actor_id', (int) $keyword)
@@ -2107,7 +2107,7 @@ class AdminLogService
         if (! empty($filters['actor_keyword'])) {
             $keyword = trim((string) $filters['actor_keyword']);
             $query->where(function ($builder) use ($keyword) {
-                $builder->where('actor_name', 'like', "%{$keyword}%");
+                $builder->where('actor_name', 'like', LikeEscape::contains($keyword));
 
                 if (ctype_digit($keyword)) {
                     $builder->orWhere('actor_id', (int) $keyword);
@@ -2117,11 +2117,11 @@ class AdminLogService
 
         if (! empty($filters['description_keyword'])) {
             $keyword = trim((string) $filters['description_keyword']);
-            $query->where('description', 'like', "%{$keyword}%");
+            $query->where('description', 'like', LikeEscape::contains($keyword));
         }
 
         if (! empty($filters['ip_address'])) {
-            $query->where('ip_address', 'like', '%'.trim((string) $filters['ip_address']).'%');
+            $query->where('ip_address', 'like', LikeEscape::contains(trim((string) $filters['ip_address'])));
         }
 
         if (! empty($filters['module'])) {

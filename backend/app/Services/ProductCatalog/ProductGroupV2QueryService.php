@@ -10,6 +10,7 @@ use App\Models\FirstProductGroup;
 use App\Models\Product;
 use App\Models\SecondProductGroup;
 use App\Models\ThirdProductGroup;
+use App\Support\LikeEscape;
 use App\Support\SiteProductGroupQuery;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
@@ -40,9 +41,9 @@ class ProductGroupV2QueryService
             ->when($keyword !== '', function (Builder $query) use ($keyword): void {
                 $query->where(function (Builder $keywordQuery) use ($keyword): void {
                     $keywordQuery
-                        ->where('name', 'like', "%{$keyword}%")
-                        ->orWhere('code', 'like', "%{$keyword}%")
-                        ->orWhere('slug', 'like', "%{$keyword}%");
+                        ->where('name', 'like', LikeEscape::contains($keyword))
+                        ->orWhere('code', 'like', LikeEscape::contains($keyword))
+                        ->orWhere('slug', 'like', LikeEscape::contains($keyword));
                 });
             })
             ->when(array_key_exists('status', $filters) && $filters['status'] !== null, fn (Builder $query) => $query->where('is_visible', (int) $filters['status']))
@@ -188,8 +189,8 @@ class ProductGroupV2QueryService
             ->when($keyword !== '', function (Builder $builder) use ($keyword): void {
                 $builder->where(function (Builder $keywordQuery) use ($keyword): void {
                     $keywordQuery
-                        ->where('name', 'like', "%{$keyword}%")
-                        ->orWhere('slug', 'like', "%{$keyword}%");
+                        ->where('name', 'like', LikeEscape::contains($keyword))
+                        ->orWhere('slug', 'like', LikeEscape::contains($keyword));
                 });
             })
             ->when(array_key_exists('status', $filters) && $filters['status'] !== null, fn (Builder $builder) => $builder->where('is_visible', (int) $filters['status']))

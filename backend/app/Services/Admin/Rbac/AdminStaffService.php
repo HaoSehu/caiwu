@@ -11,6 +11,7 @@ use App\Services\System\OperationLogService;
 use App\Services\User\AdminRoleBridgeService;
 use App\Support\AdminPermissions;
 use App\Support\Concerns\NormalizesNullableString;
+use App\Support\LikeEscape;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
@@ -40,9 +41,9 @@ class AdminStaffService
             ->when($keyword !== '', function ($query) use ($keyword): void {
                 $query->where(function ($inner) use ($keyword): void {
                     $inner
-                        ->where('username', 'like', "%{$keyword}%")
-                        ->orWhere('nickname', 'like', "%{$keyword}%")
-                        ->orWhere('email', 'like', "%{$keyword}%");
+                        ->where('username', 'like', LikeEscape::contains($keyword))
+                        ->orWhere('nickname', 'like', LikeEscape::contains($keyword))
+                        ->orWhere('email', 'like', LikeEscape::contains($keyword));
                 });
             })
             ->when(isset($filters['status']) && $filters['status'] !== '', fn ($query) => $query->where('status', (int) $filters['status']))

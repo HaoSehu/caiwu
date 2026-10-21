@@ -19,6 +19,7 @@ use App\Models\User;
 use App\Services\Integrations\Plugins\PluginBindingResolver;
 use App\Support\AdminPrivacy;
 use App\Support\Concerns\FiltersDateRange;
+use App\Support\LikeEscape;
 use App\Support\ServiceHostname;
 use App\Support\VersionedJson;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -347,7 +348,7 @@ class FinanceLedgerQueryService
                         ->whereExists(fn ($q) => $q->selectRaw(1)
                             ->from('invoices')
                             ->whereColumn('invoices.id', 'finance_ledger_entries.source_id')
-                            ->where('invoices.invoice_no', 'like', '%'.$keyword.'%'));
+                            ->where('invoices.invoice_no', 'like', LikeEscape::contains($keyword)));
                 })->orWhere(function (Builder $inner) use ($keyword) {
                     // 支付单归属匹配账单：payments.invoice_id ∈ invoices(invoice_no like)
                     $inner->where('source_type', 'payment')
@@ -357,7 +358,7 @@ class FinanceLedgerQueryService
                             ->whereExists(fn ($pi) => $pi->selectRaw(1)
                                 ->from('invoices')
                                 ->whereColumn('invoices.id', 'payments.invoice_id')
-                                ->where('invoices.invoice_no', 'like', '%'.$keyword.'%')));
+                                ->where('invoices.invoice_no', 'like', LikeEscape::contains($keyword))));
                 });
             });
         }
@@ -370,7 +371,7 @@ class FinanceLedgerQueryService
                         ->whereExists(fn ($q) => $q->selectRaw(1)
                             ->from('payments')
                             ->whereColumn('payments.id', 'finance_ledger_entries.source_id')
-                            ->where('payments.payment_no', 'like', '%'.$keyword.'%'));
+                            ->where('payments.payment_no', 'like', LikeEscape::contains($keyword)));
                 })->orWhere(function (Builder $inner) use ($keyword) {
                     // 支付单号命中时，其关联账单也纳入结果：invoices.id ∈ payments(payment_no like).invoice_id
                     $inner->where('source_type', 'invoice')
@@ -380,7 +381,7 @@ class FinanceLedgerQueryService
                             ->whereExists(fn ($pi) => $pi->selectRaw(1)
                                 ->from('payments')
                                 ->whereColumn('payments.invoice_id', 'invoices.id')
-                                ->where('payments.payment_no', 'like', '%'.$keyword.'%')));
+                                ->where('payments.payment_no', 'like', LikeEscape::contains($keyword))));
                 });
             });
         }
@@ -401,11 +402,11 @@ class FinanceLedgerQueryService
                                 ->from('invoices')
                                 ->whereColumn('invoices.id', 'finance_ledger_entries.source_id')
                                 ->where(function (Builder $invoiceMatch) use ($keyword) {
-                                    $invoiceMatch->where('invoices.invoice_no', 'like', '%'.$keyword.'%')
+                                    $invoiceMatch->where('invoices.invoice_no', 'like', LikeEscape::contains($keyword))
                                         ->orWhereExists(fn ($pi) => $pi->selectRaw(1)
                                             ->from('payments')
                                             ->whereColumn('payments.invoice_id', 'invoices.id')
-                                            ->where('payments.payment_no', 'like', '%'.$keyword.'%'));
+                                            ->where('payments.payment_no', 'like', LikeEscape::contains($keyword)));
                                 }));
                     })->orWhere(function (Builder $inner) use ($keyword) {
                         $inner->where('source_type', 'payment')
@@ -413,11 +414,11 @@ class FinanceLedgerQueryService
                                 ->from('payments')
                                 ->whereColumn('payments.id', 'finance_ledger_entries.source_id')
                                 ->where(function (Builder $paymentMatch) use ($keyword) {
-                                    $paymentMatch->where('payments.payment_no', 'like', '%'.$keyword.'%')
+                                    $paymentMatch->where('payments.payment_no', 'like', LikeEscape::contains($keyword))
                                         ->orWhereExists(fn ($iv) => $iv->selectRaw(1)
                                             ->from('invoices')
                                             ->whereColumn('invoices.id', 'payments.invoice_id')
-                                            ->where('invoices.invoice_no', 'like', '%'.$keyword.'%'));
+                                            ->where('invoices.invoice_no', 'like', LikeEscape::contains($keyword)));
                                 }));
                     });
                 });

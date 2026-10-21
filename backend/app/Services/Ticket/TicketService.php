@@ -383,7 +383,7 @@ class TicketService
         }
 
         if (! empty($filters['keyword'])) {
-            $query->where('subject', 'like', "%{$filters['keyword']}%");
+            $query->where('subject', 'like', LikeEscape::contains(trim((string) $filters['keyword'])));
         }
 
         return $query->orderByDesc('updated_at')->paginate($perPage);
@@ -419,7 +419,7 @@ class TicketService
         if (! empty($filters['keyword'])) {
             $kw = $filters['keyword'];
             $query->where(function ($q) use ($kw) {
-                $q->where('subject', 'like', "%{$kw}%")
+                $q->where('subject', 'like', LikeEscape::contains(trim((string) $kw)))
                     ->orWhere('id', $kw);
             });
         }

@@ -26,6 +26,7 @@ use App\Services\Upstream\Contracts\ProvidesConsoleCatalog;
 use App\Services\Upstream\Contracts\ProvidesRenewal;
 use App\Services\Upstream\ProviderRegistry;
 use App\Services\Upstream\ProviderResolver;
+use App\Support\LikeEscape;
 use App\Support\SchemaMetadataCache;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -221,8 +222,8 @@ class AdminConfigurationV2QueryService
         if ($keyword !== '') {
             $query->where(function ($builder) use ($keyword): void {
                 $builder
-                    ->where('name', 'like', "%{$keyword}%")
-                    ->orWhere('code', 'like', "%{$keyword}%");
+                    ->where('name', 'like', LikeEscape::contains($keyword))
+                    ->orWhere('code', 'like', LikeEscape::contains($keyword));
             });
         }
 

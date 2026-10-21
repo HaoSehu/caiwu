@@ -8,6 +8,7 @@ use App\Models\Order;
 use App\Models\Payment;
 use App\Models\Product;
 use App\Support\Concerns\FiltersDateRange;
+use App\Support\LikeEscape;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -148,20 +149,20 @@ class OrderV2QueryService
         }
 
         $query->where(function (Builder $query) use ($keyword): void {
-            $query->where('order_no', 'like', "%{$keyword}%")
+            $query->where('order_no', 'like', LikeEscape::contains($keyword))
                 ->orWhere('id', $keyword)
-                ->orWhere('product_spec_snapshot', 'like', "%{$keyword}%")
+                ->orWhere('product_spec_snapshot', 'like', LikeEscape::contains($keyword))
                 ->orWhereHas('user', function (Builder $userQuery) use ($keyword): void {
-                    $userQuery->where('email', 'like', "%{$keyword}%")
-                        ->orWhere('nickname', 'like', "%{$keyword}%")
-                        ->orWhere('phone', 'like', "%{$keyword}%");
+                    $userQuery->where('email', 'like', LikeEscape::contains($keyword))
+                        ->orWhere('nickname', 'like', LikeEscape::contains($keyword))
+                        ->orWhere('phone', 'like', LikeEscape::contains($keyword));
                 })
                 ->orWhereHas('invoice', function (Builder $invoiceQuery) use ($keyword): void {
-                    $invoiceQuery->where('invoice_no', 'like', "%{$keyword}%");
+                    $invoiceQuery->where('invoice_no', 'like', LikeEscape::contains($keyword));
                 })
                 ->orWhereHas('service', function (Builder $serviceQuery) use ($keyword): void {
-                    $serviceQuery->where('name', 'like', "%{$keyword}%")
-                        ->orWhere('domain', 'like', "%{$keyword}%");
+                    $serviceQuery->where('name', 'like', LikeEscape::contains($keyword))
+                        ->orWhere('domain', 'like', LikeEscape::contains($keyword));
                 });
         });
     }
