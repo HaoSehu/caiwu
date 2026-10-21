@@ -139,6 +139,21 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
                 lockTtlSeconds: 3660,
                 manualTriggerable: false,
             ),
+            // 高增长日志表容量护栏（P1-14 替代方案）：超阈值时以非零退出码告警，
+            // 届时再评估分区或缩短在线窗口。只读，每 6 小时检查一次。
+            $this->task(
+                key: 'log-capacity-guard',
+                title: '日志表容量护栏',
+                category: '系统维护',
+                description: '只读检查 10 张高增长日志/审计表容量，任一张超过阈值（默认 2GB）时告警，提示评估分区或缩短归档窗口。',
+                triggers: [ScheduleRule::everyTicks(24)],
+                handler: fn (): array => $this->runArtisan('db:log-capacity-guard', [
+                    '--json' => true,
+                ]),
+                timeout: 120,
+                lockTtlSeconds: 180,
+                manualTriggerable: true,
+            ),
             $this->task(
                 key: 'log-archive-health',
                 title: '日志归档健康与容量检查',
@@ -148,6 +163,51 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
                 handler: fn (): array => $this->runHealthCheck(),
                 timeout: 300,
                 lockTtlSeconds: 360,
+                manualTriggerable: true,
+            ),
+            // 混合支付「预下单失败且预扣余额回收失败」的兜底重放（CMP-P1-2）。
+            // 每 5 分钟一次：待回补金额通常很小但停在用户余额上，拖久了会变成投诉。
+            $this->task(
+                key: 'mix-restore-replay',
+                title: '混合支付待回补重放',
+                category: '财务',
+                description: '重放「预下单失败但预扣余额回收失败」的记录（finance_reconciliation_diffs 中 mix_balance_pending_restore 的 open 行），把滞留在账上的预扣余额退回用户。',
+                triggers: [ScheduleRule::everyTicks(1)],
+                handler: fn (): array => $this->runArtisan('finance:replay-mix-restore', [
+                    '--limit' => 100,
+                    '--json' => true,
+                ]),
+                timeout: 300,
+                lockTtlSeconds: 360,
+                manualTriggerable: true,
+            ),
+            // 财务账务一致性审计（只读）：余额 vs 流水合计、来源完整性、充值桥接覆盖。
+            // strict 只对金额级差异退出非零；source_type/trace 存量缺口只作为报告项。
+            $this->task(
+                key: 'finance-ledger-audit',
+                title: '财务流水一致性审计',
+                category: '财务',
+                description: '每日只读审计财务台账：余额与流水合计是否一致、来源字段完整性、充值账单桥接覆盖；只对金额级差异告警。',
+                triggers: [ScheduleRule::cron('20 4 * * *')],
+                handler: fn (): array => $this->runArtisan('finance:audit-ledger-consistency', [
+                    '--json' => true,
+                ]),
+                timeout: 600,
+                lockTtlSeconds: 900,
+                manualTriggerable: true,
+            ),
+            // 财务幂等记录清理：按 config finance.idempotency.ttl_days 保留期删除旧行。
+            $this->task(
+                key: 'finance-operations-prune',
+                title: '财务幂等记录清理',
+                category: '财务',
+                description: '每天清理超过保留期（默认 30 天）的财务幂等记录，防止 finance_operations 无限增长。',
+                triggers: [ScheduleRule::cron('40 4 * * *')],
+                handler: fn (): array => $this->runArtisan('finance:prune-operations', [
+                    '--execute' => true,
+                ]),
+                timeout: 300,
+                lockTtlSeconds: 420,
                 manualTriggerable: true,
             ),
             $this->task(

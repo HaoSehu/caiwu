@@ -541,6 +541,20 @@ class PluginRuntimeRegistry
      */
     public function probeGatewaySupportsAction(PluginManifest $manifest, string $action): bool
     {
+        return $this->probeGatewayActionDeclaration($manifest, $action) === true;
+    }
+
+    /**
+     * 三态探测插件对某动作的能力声明：
+     * - true：入口类已升级且声明支持；
+     * - false：入口类已升级且声明不支持（可选动作可据此安全跳过执行）；
+     * - null：旧插件未升级、无 supportsAction 方法（调用方须按「可能实现」处理）。
+     *
+     * 三态是必要的：只用 bool 无法区分「旧插件没说」与「新插件明确说不」，
+     * 会导致要么旧插件功能丢失、要么新插件每次都被无谓执行。
+     */
+    public function probeGatewayActionDeclaration(PluginManifest $manifest, string $action): ?bool
+    {
         $resolvedAction = trim($action);
 
         if ($resolvedAction === '') {
@@ -550,7 +564,7 @@ class PluginRuntimeRegistry
         $entry = $this->makeExecutableEntry($manifest);
 
         if (! method_exists($entry, 'supportsAction')) {
-            return false;
+            return null;
         }
 
         return (bool) $entry->supportsAction($resolvedAction);

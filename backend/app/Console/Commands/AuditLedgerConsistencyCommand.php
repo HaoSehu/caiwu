@@ -8,6 +8,7 @@ use App\Constants\InvoiceStatus;
 use App\Services\System\LedgerConsistencyCheck;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * 资金流水一致性审计（只读，不改数据）
@@ -59,14 +60,35 @@ class AuditLedgerConsistencyCommand extends Command
     }
 
     /**
+     * 台账数据源：优先新表 finance_ledger_entries；新表不存在时回退旧表（切换前环境）。
+     * 归档后旧表改名 archived_account_transactions，回退分支会命中旧表名但带存在性判断。
+     */
+    private function resolveLedgerTable(): string
+    {
+        if (Schema::hasTable('finance_ledger_entries')) {
+            return 'finance_ledger_entries';
+        }
+
+        if (Schema::hasTable('account_transactions')) {
+            return 'account_transactions';
+        }
+
+        return 'finance_ledger_entries';
+    }
+
+    /**
      * @return array<string,mixed>
      */
     private function buildReport(int $sampleLimit): array
     {
-        $ledgerCount = (int) DB::table('account_transactions')->count();
-        $noSourceType = (int) DB::table('account_transactions')->whereNull('source_type')->count();
-        $noSourceId = (int) DB::table('account_transactions')->whereNull('source_id')->count();
-        $noTrace = (int) DB::table('account_transactions')->whereNull('trace_id')->count();
+        // 台账真源已切到 finance_ledger_entries（2026-10-20 重构）；旧表只在 T+7 归档前
+        // 作为历史参照，归档后（archived_account_transactions）直接查询会 1146。
+        // 这里按表存在性选择数据源，绝不写死旧表名。
+        $ledgerTable = $this->resolveLedgerTable();
+        $ledgerCount = (int) DB::table($ledgerTable)->count();
+        $noSourceType = (int) DB::table($ledgerTable)->whereNull('source_type')->count();
+        $noSourceId = (int) DB::table($ledgerTable)->whereNull('source_id')->count();
+        $noTrace = (int) DB::table($ledgerTable)->whereNull('trace_id')->count();
 
         $balanceVsLedger = $this->ledgerConsistencyCheck->cashBalanceSumMismatches();
         $rechargeBridgeGap = $this->rechargeBridgeGap();
@@ -135,9 +157,10 @@ class AuditLedgerConsistencyCommand extends Command
     {
         $s = $report['summary'];
 
-        return (int) $s['ledger_no_source_type'] > 0
-            || (int) $s['balance_vs_ledger_mismatch_users'] > 0
-            || (int) $s['recharge_invoice_bridge_gap'] > 0;
+        // --strict 只对「金额级」异常退出（余额 vs 流水不一致）。
+        // source_type 缺失与充值桥接缺口属于存量数据质量项：历史行永远存在，
+        // 计入会让 strict 永久红灯、调度报警被忽略（P1-5 已复现）。
+        return (int) $s['balance_vs_ledger_mismatch_users'] > 0;
     }
 
     /**

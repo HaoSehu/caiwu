@@ -128,13 +128,17 @@ class BackfillOrderRefundAmountCommand extends Command
      */
     private function resolveProjection(int $orderId): array
     {
+        // 退款真源已切到 finance_refunds（2026-10-20 重构）；旧表 refunds 在 T+7 会被
+        // 改名为 archived_refunds，继续查旧表会 1146。按表存在性选择数据源。
+        $refundTable = Schema::hasTable('finance_refunds') ? 'finance_refunds' : 'refunds';
+
         // selectRaw 别名走 DB::table 形态避免 Larastan 对模型动态属性的 property.notFound。
-        $aggregate = DB::table('refunds')
-            ->join('invoices', 'invoices.id', '=', 'refunds.invoice_id')
+        $aggregate = DB::table($refundTable)
+            ->join('invoices', 'invoices.id', '=', $refundTable.'.invoice_id')
             ->where('invoices.order_id', $orderId)
-            ->where('refunds.status', FinanceRefund::STATUS_COMPLETED)
-            ->selectRaw('COALESCE(SUM(refunds.amount), 0) as refunded_total')
-            ->selectRaw('MAX(refunds.refunded_at) as last_refunded_at')
+            ->where($refundTable.'.status', FinanceRefund::STATUS_COMPLETED)
+            ->selectRaw('COALESCE(SUM('.$refundTable.'.amount), 0) as refunded_total')
+            ->selectRaw('MAX('.$refundTable.'.refunded_at) as last_refunded_at')
             ->first();
 
         $refundedTotal = $aggregate === null

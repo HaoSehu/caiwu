@@ -74,12 +74,25 @@ final readonly class PluginPaymentGateway implements PaymentGatewayInterface
     }
 
     /**
+     * 是否声明支持某个可选动作（三态）：true/false 为插件明确表态，null 为旧插件未表态。
+     */
+    public function supportsActionDeclaration(string $action): ?bool
+    {
+        return $this->runtime->probeGatewayActionDeclaration($this->manifest, $action);
+    }
+
+    /**
      * @return array<int, array<string, mixed>>
      */
     public function paymentOptions(): array
     {
-        // 可选动作不能依赖 supportsAction 短路：旧插件未必自报能力但可能已实现该动作，
-        // 真实执行失败即视为插件不提供支付方式
+        // 已升级的插件明确声明「不支持 payment.options」时直接跳过，不再执行一次插件、
+        // 再靠异常文案兜底（P1-4：支付宝每次列支付方式都会多一次跨插件调用）。
+        // 旧插件（supportsActionDeclaration 返回 null）维持执行探测，保证兼容。
+        if ($this->supportsActionDeclaration('payment.options') === false) {
+            return [];
+        }
+
         try {
             $data = $this->executeData('payment.options', []);
         } catch (BusinessException) {

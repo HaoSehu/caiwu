@@ -6,6 +6,7 @@ namespace App\Services\Integrations\Payments;
 
 use App\Constants\PaymentGatewayCode;
 use App\Contracts\Integrations\Payments\PaymentGatewayInterface;
+use App\Services\Integrations\Plugins\Adapters\PluginPaymentGateway;
 use Illuminate\Support\Facades\Log;
 
 final readonly class PaymentGatewayManager
@@ -77,8 +78,16 @@ final readonly class PaymentGatewayManager
         $key = PaymentGatewayCode::normalize($gateway->key());
         $options = [];
 
-        if (method_exists($gateway, 'paymentOptions')) {
-            $options = collect($gateway->paymentOptions())
+        // 能力位短路（P1-4）：插件网关先看三态声明，明确不支持就不再执行插件；
+        // 旧插件（未声明，返回 null）与系统内网关维持既有执行探测。
+        $declared = $gateway instanceof PluginPaymentGateway
+            ? $gateway->supportsActionDeclaration('payment.options')
+            : null;
+
+        $rawOptions = $declared === false ? [] : $this->readPaymentOptions($gateway);
+
+        if ($rawOptions !== []) {
+            $options = collect($rawOptions)
                 ->map(fn (array $option): ?array => $this->normalizeGatewayOption($option, $key, $gateway->name()))
                 ->filter()
                 ->values()
@@ -86,6 +95,22 @@ final readonly class PaymentGatewayManager
         }
 
         return $options !== [] ? $options : [$this->defaultGatewayOption($key, $gateway->name())];
+    }
+
+    /**
+     * 读取网关自报的支付方式（接口层无此方法，故用 method_exists 探测）。
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function readPaymentOptions(PaymentGatewayInterface $gateway): array
+    {
+        if (! method_exists($gateway, 'paymentOptions')) {
+            return [];
+        }
+
+        $raw = $gateway->paymentOptions();
+
+        return is_array($raw) ? $raw : [];
     }
 
     /**
