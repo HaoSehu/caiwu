@@ -19,6 +19,7 @@ use App\Services\System\OperationLogService;
 use App\Services\Upstream\Contracts\ProvidesConsoleRuntime;
 use App\Services\Upstream\ProviderResolver;
 use App\Services\Upstream\Support\WebSessionCookieParser;
+use App\Support\LikeEscape;
 use App\Support\ServiceHostname;
 use App\Support\TextSanitizer;
 use Carbon\Carbon;
@@ -281,13 +282,14 @@ class ServiceDetailService
         $keyword = trim((string) ($filters['keyword'] ?? ''));
         if ($keyword !== '') {
             $query->where(function (Builder $builder) use ($keyword) {
-                $builder->where('action', 'like', '%'.$keyword.'%')
-                    ->orWhere('context->summary', 'like', '%'.$keyword.'%')
-                    ->orWhere('context->actor_name', 'like', '%'.$keyword.'%')
-                    ->orWhere('context->operator_name', 'like', '%'.$keyword.'%')
-                    ->orWhere('context->service_name', 'like', '%'.$keyword.'%')
-                    ->orWhere('context->group_name', 'like', '%'.$keyword.'%')
-                    ->orWhere('context->forwarding_name', 'like', '%'.$keyword.'%');
+                $likeKeyword = LikeEscape::contains($keyword);
+                $builder->where('action', 'like', $likeKeyword)
+                    ->orWhere('context->summary', 'like', $likeKeyword)
+                    ->orWhere('context->actor_name', 'like', $likeKeyword)
+                    ->orWhere('context->operator_name', 'like', $likeKeyword)
+                    ->orWhere('context->service_name', 'like', $likeKeyword)
+                    ->orWhere('context->group_name', 'like', $likeKeyword)
+                    ->orWhere('context->forwarding_name', 'like', $likeKeyword);
             });
         }
 

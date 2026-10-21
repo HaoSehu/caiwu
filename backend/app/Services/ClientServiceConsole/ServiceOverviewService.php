@@ -11,6 +11,7 @@ use App\Models\SecondProductGroup;
 use App\Models\Service;
 use App\Models\ThirdProductGroup;
 use App\Models\User;
+use App\Support\LikeEscape;
 use App\Support\ProductGroupHierarchyFields;
 use App\Support\SchemaMetadataCache;
 use Carbon\Carbon;
@@ -59,12 +60,12 @@ class ServiceOverviewService
         $keyword = trim((string) ($filters['keyword'] ?? ''));
         if ($keyword !== '') {
             $query->where(function ($builder) use ($keyword) {
-                $builder->where('name', 'like', '%'.$keyword.'%')
-                    ->orWhere('domain', 'like', '%'.$keyword.'%')
-                    ->orWhereHas('invoice', fn ($q) => $q->where('invoice_no', 'like', '%'.$keyword.'%'));
+                $builder->where('name', 'like', LikeEscape::contains($keyword))
+                    ->orWhere('domain', 'like', LikeEscape::contains($keyword))
+                    ->orWhereHas('invoice', fn ($q) => $q->where('invoice_no', 'like', LikeEscape::contains($keyword)));
 
                 if ($this->hasConnectionSnapshotTable()) {
-                    $likeKeyword = '%'.$keyword.'%';
+                    $likeKeyword = LikeEscape::contains($keyword);
                     $builder->orWhereExists(function ($subQuery) use ($likeKeyword): void {
                         $subQuery
                             ->selectRaw('1')
@@ -81,7 +82,7 @@ class ServiceOverviewService
                             });
                     });
                 } else {
-                    $builder->orWhere('provision_data->custom_hostname', 'like', '%'.$keyword.'%');
+                    $builder->orWhere('provision_data->custom_hostname', 'like', LikeEscape::contains($keyword));
                 }
             });
         }

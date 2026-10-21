@@ -20,6 +20,7 @@ use App\Services\System\NotificationService;
 use App\Services\System\UploadedAssetReferenceService;
 use App\Support\AdminPermissions;
 use App\Support\AdminPrivacy;
+use App\Support\LikeEscape;
 use App\Support\MediaAssetTypes;
 use App\Support\PublicUrl;
 use App\Support\SchemaMetadataCache;
@@ -646,12 +647,12 @@ class TicketService
         $keyword = trim($keyword);
         if ($keyword !== '') {
             $query->where(function ($builder) use ($keyword) {
-                $builder->where('name', 'like', '%'.$keyword.'%')
-                    ->orWhere('domain', 'like', '%'.$keyword.'%')
+                $likeKeyword = LikeEscape::contains($keyword);
+                $builder->where('name', 'like', $likeKeyword)
+                    ->orWhere('domain', 'like', $likeKeyword)
                     ->orWhere('id', $keyword);
 
                 if (self::tableExists('service_connection_snapshots')) {
-                    $likeKeyword = '%'.$keyword.'%';
                     $builder->orWhereExists(function ($subQuery) use ($likeKeyword): void {
                         $subQuery
                             ->selectRaw('1')
@@ -668,7 +669,7 @@ class TicketService
                             });
                     });
                 } else {
-                    $builder->orWhere('provision_data->requested_host', 'like', '%'.$keyword.'%');
+                    $builder->orWhere('provision_data->requested_host', 'like', $likeKeyword);
                 }
             });
         }

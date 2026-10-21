@@ -3,6 +3,7 @@
 namespace App\Services\Content;
 
 use App\Models\MediaFile;
+use App\Support\LikeEscape;
 use App\Support\UploadedImage;
 use App\Support\UploadUrl;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -65,7 +66,7 @@ class MediaFileService
         }
 
         if (! empty($filters['keyword'])) {
-            $query->where('filename', 'like', '%'.trim($filters['keyword']).'%');
+            $query->where('filename', 'like', LikeEscape::contains(trim($filters['keyword'])));
         }
 
         $type = strtolower(trim((string) ($filters['type'] ?? '')));

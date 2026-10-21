@@ -18,6 +18,7 @@ class ApiResponseBuilder
             'message' => $message,
             'data' => $data,
             'timestamp' => time(),
+            'request_id' => self::requestId(),
         ], $status, [], self::JSON_ENCODING_OPTIONS);
     }
 
@@ -28,6 +29,7 @@ class ApiResponseBuilder
             'message' => $message,
             'data' => $data,
             'timestamp' => time(),
+            'request_id' => self::requestId(),
         ], $status ?? self::httpStatusForErrorCode($code), [], self::JSON_ENCODING_OPTIONS);
     }
 
@@ -56,6 +58,19 @@ class ApiResponseBuilder
             'page' => $paginator->currentPage(),
             'page_size' => $paginator->perPage(),
         ], $extra);
+    }
+
+    /**
+     * 响应信封里的请求标识：与响应头 X-Request-Id 同源，客户端报障时可直接对日志。
+     * 控制台/队列环境无请求时返回空串（保持字段存在，避免客户端判空分支）。
+     */
+    private static function requestId(): string
+    {
+        if (app()->runningInConsole()) {
+            return '';
+        }
+
+        return (string) (request()->headers->get('X-Request-Id') ?? '');
     }
 
     public static function httpStatusForErrorCode(int $code): int

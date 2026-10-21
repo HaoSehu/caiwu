@@ -29,7 +29,10 @@ return [
             'table' => env('DB_QUEUE_TABLE', 'jobs'),
             'queue' => env('DB_QUEUE', 'default'),
             'retry_after' => 3900,
-            'after_commit' => false,
+            // 事务内 dispatch 的 Job 必须等提交后再入队。after_commit=false 时 worker
+            // 可能在事务提交前取走任务，进程若崩溃则「任务已执行、数据已回滚」，
+            // 资金类派发（返佣、履约、通知）会出现不可逆的不一致。
+            'after_commit' => true,
         ],
 
         'redis' => [
@@ -38,7 +41,7 @@ return [
             'queue' => env('REDIS_QUEUE', 'default'),
             'retry_after' => (int) env('REDIS_QUEUE_RETRY_AFTER', 1500),
             'block_for' => env('REDIS_QUEUE_BLOCK_FOR'),
-            'after_commit' => false,
+            'after_commit' => true,
         ],
     ],
 

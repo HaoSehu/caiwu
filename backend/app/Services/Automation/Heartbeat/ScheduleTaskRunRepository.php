@@ -8,6 +8,7 @@ use App\Models\ScheduleTaskRun;
 use App\Models\ScheduleTick;
 use App\Services\Automation\Heartbeat\Contracts\ScheduledTask;
 use App\Services\Automation\Heartbeat\Contracts\TriggerRule;
+use App\Support\LikeEscape;
 use Carbon\CarbonInterface;
 use DateTimeInterface;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -636,9 +637,9 @@ class ScheduleTaskRunRepository
         if (($keyword = trim((string) ($filters['keyword'] ?? ''))) !== '') {
             $query->where(function (Builder $nested) use ($keyword): void {
                 $nested
-                    ->where('task_key', 'like', '%'.$keyword.'%')
-                    ->orWhere('task_name', 'like', '%'.$keyword.'%')
-                    ->orWhere('error_msg', 'like', '%'.$keyword.'%');
+                    ->where('task_key', 'like', LikeEscape::contains($keyword))
+                    ->orWhere('task_name', 'like', LikeEscape::contains($keyword))
+                    ->orWhere('error_msg', 'like', LikeEscape::contains($keyword));
             });
         }
 

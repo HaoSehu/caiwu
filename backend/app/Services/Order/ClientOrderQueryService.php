@@ -13,6 +13,7 @@ use App\Models\Invoice;
 use App\Models\Order;
 use App\Services\ProductCatalog\ProductFullPathResolver;
 use App\Support\Concerns\FiltersDateRange;
+use App\Support\LikeEscape;
 
 class ClientOrderQueryService
 {
@@ -44,7 +45,7 @@ class ClientOrderQueryService
             $query->where('type', $filters['type']);
         }
         if (! empty($filters['keyword'])) {
-            $query->where('order_no', 'like', '%'.trim((string) $filters['keyword']).'%');
+            $query->where('order_no', 'like', LikeEscape::contains(trim((string) $filters['keyword'])));
         }
         $this->applyDateFilter($query, $filters);
 
