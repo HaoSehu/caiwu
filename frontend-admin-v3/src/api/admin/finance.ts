@@ -108,6 +108,14 @@ function normalizeV2AdminOrderDetail(payload: V2AdminOrderDetailPayload): OrderR
   const audit = toRecord(order.audit);
   const timestamps = toRecord(order.timestamps);
 
+  const invoiceIdentity = invoice.id as number | string | undefined;
+  if (!invoiceIdentity) {
+    console.warn(
+      '[admin/finance] 订单详情缺少内嵌 invoice 对象，退款与关联账单入口不可用：',
+      basic.order_no ?? order.id,
+    );
+  }
+
   return {
     id: order.id as OrderRecord['id'],
     order_no: basic.order_no as string | undefined,
@@ -131,7 +139,13 @@ function normalizeV2AdminOrderDetail(payload: V2AdminOrderDetailPayload): OrderR
     refund_status: financial.refund_status as number | undefined,
     user_id: toRecord(order.user).id as number | string | undefined,
     user: order.user as Record<string, unknown> | undefined,
-    invoice_id: invoice.id,
+    // invoice_id 没有订单表列可读，完全依赖后端订单详情资源内嵌的 order.invoice 对象
+    // （AdminOrderDetailResource 继承 AdminOrderSummaryResource，HasOne 组装在
+    // backend/app/Http/Resources/Admin/V2/AdminOrderSummaryResource.php:116-134 的 invoice()）。
+    // 该对象缺失时订单详情页 `v-if="order.invoice_id"`（pages/finance/orders/detail/index.vue:23/185）
+    // 的退款/看账单入口会静默消失，
+    // 这里显式判空并告警，让降级可见；不抛错，避免整页详情因缺账单而不可用。
+    invoice_id: invoiceIdentity,
     invoice: order.invoice as Record<string, unknown> | null,
     product_id: product.id,
     product_name: product.name as string | undefined,

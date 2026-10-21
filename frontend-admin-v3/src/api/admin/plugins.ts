@@ -173,9 +173,11 @@ export const pluginsApi = {
 
     return normalizeV2PluginRecord(detail.plugin);
   },
+  // 路由为复数 upgrades（backend/routes/v2-admin.php:374 注册为 {plugin}/upgrades），
+  // 单数 upgrade 未注册会直接 404，切勿改回单数。
   upgrade: (id: number | string) =>
     request.post<IntegrationPluginUpgradeResponse>({
-      url: `/v2/admin/integration-plugins/${id}/upgrade`,
+      url: `/v2/admin/integration-plugins/${id}/upgrades`,
     }),
   detail: async (id: number | string) => {
     const [detail, schema] = await Promise.all([
