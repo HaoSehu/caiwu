@@ -8,6 +8,7 @@ use App\Services\Finance\Core\FinanceAccountService;
 use App\Services\User\AccountService;
 use App\Support\LikeEscape;
 use App\Support\Money;
+use App\Support\SchemaMetadataCache;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -18,7 +19,6 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Schema;
 use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
@@ -117,9 +117,9 @@ class User extends Authenticatable
         // T+7 归档（000015 删列）后热备列不存在：必须回退内核余额，否则属性读取为空、
         // 管理端余额显示成 0.00。
         if (
-            Schema::hasColumn('user_accounts', 'cash_balance')
-            && $this->relationLoaded('account')
+            $this->relationLoaded('account')
             && $this->getRelation('account') instanceof UserAccount
+            && SchemaMetadataCache::hasColumn('user_accounts', 'cash_balance')
         ) {
             return $this->normalizeDecimalString($this->getRelation('account')->cash_balance);
         }
