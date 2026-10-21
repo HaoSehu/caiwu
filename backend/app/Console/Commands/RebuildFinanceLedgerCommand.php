@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Constants\FinanceLedgerEventType;
 use App\Models\FinanceAccount;
 use App\Models\FinanceConsumption;
 use App\Models\FinanceFundingLot;
@@ -42,12 +43,15 @@ final class RebuildFinanceLedgerCommand extends Command
 
     protected $description = '把旧财务台账/退款/余额迁移到新账本（默认 dry-run）';
 
+    /**
+     * 阶段文案：校准阶段不在此维护，统一取 FinanceLedgerEventType::label('calibration')，
+     * 避免命令自建映射与台账事件标签两套文案漂移。
+     */
     private const PHASE_LABELS = [
         'snapshot' => '基线快照',
         'accounts' => '账户复制',
         'ledger' => '台账复制',
         'lots' => '批次回放',
-        'calibration' => '存量校准',
         'refunds' => '退款迁移',
         'verify' => '闸门校验',
     ];
@@ -478,7 +482,7 @@ final class RebuildFinanceLedgerCommand extends Command
                 continue;
             }
 
-            $entry = $ledger->append($account, 'calibration', $diff, $balance, [
+            $entry = $ledger->append($account, FinanceLedgerEventType::CALIBRATION, $diff, $balance, [
                 'source_type' => 'migration',
                 'operator_type' => 'system',
                 'operator_name' => 'finance:rebuild',
@@ -784,12 +788,17 @@ final class RebuildFinanceLedgerCommand extends Command
      */
     private function phase(string $runNo, string $phase, string $status, array $stats): void
     {
+        // 校准阶段与台账事件类型同名，文案直接复用常量类，保证与流水页标签一致
+        $phaseMessage = $phase === FinanceLedgerEventType::CALIBRATION
+            ? FinanceLedgerEventType::label($phase)
+            : (self::PHASE_LABELS[$phase] ?? $phase);
+
         FinanceMigrationRun::query()->create([
             'run_no' => $runNo,
             'phase' => $phase,
             'status' => $status,
             'stats' => $stats,
-            'message' => self::PHASE_LABELS[$phase] ?? $phase,
+            'message' => $phaseMessage,
             'started_at' => date('Y-m-d H:i:s'),
             'finished_at' => date('Y-m-d H:i:s'),
         ]);
