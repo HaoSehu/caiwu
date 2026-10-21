@@ -73,10 +73,8 @@ function normalizeV2AdminInvoiceDetail(payload: V2AdminInvoiceDetailPayload): In
       refund_status_label: financial.refund_status_label,
       is_partially_refunded: financial.is_partially_refunded,
       refunds: Array.isArray(invoice.refund_records) ? (invoice.refund_records as Record<string, unknown>[]) : [],
-      can_mark_refund: actions.can_mark_refund,
       can_refund_to_balance: actions.can_refund_to_balance,
       refundable_amount_for_balance: financial.refundable_amount_for_balance,
-      has_manual_mark_refund: financial.has_manual_mark_refund,
       billing_cycle: basic.billing_cycle,
       quantity: basic.quantity,
       summary: display.summary,
@@ -166,13 +164,21 @@ export const invoiceApi = {
     normalizeV2AdminInvoiceDetail(await request.get<V2AdminInvoiceDetailPayload>({ url: `/v2/admin/invoices/${id}` })),
   cancel: (id: number | string) => request.post({ url: `/v2/admin/invoices/${id}/cancellations` }),
   // 退款到余额（唯一退款通道，动资金：加余额 + 台账 + 批次 + 红字账单）。
-  // manual_mark 纯标记通道已于 2026-10-20 裁决移除；每次发起生成幂等键与 X-Request-Id，
-  // 网络重试携带同键时服务端直接返回既有结果，不会二次扣款。
-  refundToBalance: (id: number | string, payload: { amount: number | string; remark: string }) =>
+  // manual_mark 纯标记通道已于 2026-10-20 裁决移除。
+  // 幂等键必须由调用方（退款弹窗）在「打开弹窗时」生成并在重试中复用：
+  // 每次调用现生成会让网络重试/双击变成两笔独立退款，服务端幂等层形同虚设。
+  refundToBalance: (
+    id: number | string,
+    payload: { amount: number | string; remark: string; idempotency_key: string; request_id?: string },
+  ) =>
     request.post({
       url: `/v2/admin/invoices/${id}/refunds`,
-      data: { ...payload, idempotency_key: crypto.randomUUID() },
-      headers: { 'X-Request-Id': crypto.randomUUID() },
+      data: {
+        amount: payload.amount,
+        remark: payload.remark,
+        idempotency_key: payload.idempotency_key,
+      },
+      headers: { 'X-Request-Id': payload.request_id || payload.idempotency_key },
     }),
 };
 
@@ -184,12 +190,20 @@ export const orderApi = {
     }),
   detail: async (id: number | string) =>
     normalizeV2AdminOrderDetail(await request.get<V2AdminOrderDetailPayload>({ url: `/v2/admin/orders/${id}` })),
-  // 订单侧退款到余额：后端解析关联账单后走同一服务（无关联账单直接拒绝）
-  refundToBalance: (id: number | string, payload: { amount: number | string; remark: string }) =>
+  // 订单侧退款到余额：后端解析关联账单后走同一服务（无关联账单直接拒绝）。
+  // 幂等键同样由调用方持有，理由见 invoices.refundToBalance。
+  refundToBalance: (
+    id: number | string,
+    payload: { amount: number | string; remark: string; idempotency_key: string; request_id?: string },
+  ) =>
     request.post({
       url: `/v2/admin/orders/${id}/refunds`,
-      data: { ...payload, idempotency_key: crypto.randomUUID() },
-      headers: { 'X-Request-Id': crypto.randomUUID() },
+      data: {
+        amount: payload.amount,
+        remark: payload.remark,
+        idempotency_key: payload.idempotency_key,
+      },
+      headers: { 'X-Request-Id': payload.request_id || payload.idempotency_key },
     }),
 };
 

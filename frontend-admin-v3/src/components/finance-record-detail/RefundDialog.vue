@@ -80,8 +80,12 @@ const props = defineProps<{
   /** 可退上限（服务端累计口径的轻量近似，提交以服务端守卫为准） */
   refundableAmount: number;
   canRefund: boolean;
-  /** 提交动作（由父组件实现 API 调用与刷新；抛错即弹窗保持打开）。 */
-  submit: (payload: { amount: number; remark: string }) => Promise<void>;
+  /**
+   * 提交动作（由父组件实现 API 调用与刷新；抛错即弹窗保持打开）。
+   * idempotencyKey 由弹窗在打开时生成、重试中复用，父组件必须原样透传给服务端，
+   * 否则网络重试/双击会变成两笔独立退款。
+   */
+  submit: (payload: { amount: number; remark: string; idempotencyKey: string }) => Promise<void>;
 }>();
 
 const emit = defineEmits<{
@@ -97,6 +101,19 @@ const formRef = ref<FormInstanceFunctions>();
 const submitting = ref(false);
 const form = reactive({ amount: 0, remark: '' });
 
+/**
+ * 幂等键生命周期：每次打开弹窗生成一次，重试/双击复用同一个键，成功后清空。
+ * 服务端同键同体重放返回既有结果，同键异体返回 409。
+ */
+const idempotencyKey = ref('');
+
+function resetIdempotencyKey(): void {
+  idempotencyKey.value =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `refund-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 const rules: FormProps['rules'] = {
   amount: [required('请输入退款金额')],
   remark: [required('请填写退款原因')],
@@ -110,6 +127,7 @@ watch(
     if (visible) {
       form.amount = 0;
       form.remark = '';
+      resetIdempotencyKey();
     }
   },
   { immediate: true },
@@ -143,9 +161,19 @@ async function handleSubmit(): Promise<void> {
     MessagePlugin.info('部分退款不会改变账单与订单状态，仅全额退款时才收口为「已退款」');
   }
 
+  if (!idempotencyKey.value) {
+    resetIdempotencyKey();
+  }
+
   submitting.value = true;
   try {
-    await props.submit({ amount, remark: form.remark.trim() });
+    await props.submit({
+      amount,
+      remark: form.remark.trim(),
+      idempotencyKey: idempotencyKey.value,
+    });
+    // 成功后才作废本键：失败重试继续复用，避免「失败一次换一个键」绕过幂等。
+    idempotencyKey.value = '';
     emit('update:visible', false);
   } catch (error) {
     MessagePlugin.error(errorMessage(error, '退款处理失败'));

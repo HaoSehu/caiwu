@@ -117,9 +117,13 @@ function openRefundDialog(): void {
   refundVisible.value = true;
 }
 
-async function submitRefund(payload: { amount: number; remark: string }): Promise<void> {
+async function submitRefund(payload: { amount: number; remark: string; idempotencyKey: string }): Promise<void> {
   if (!invoice.value.id) return;
-  await adminApi.invoices.refundToBalance(invoice.value.id, { amount: payload.amount, remark: payload.remark });
+  await adminApi.invoices.refundToBalance(invoice.value.id, {
+    amount: payload.amount,
+    remark: payload.remark,
+    idempotency_key: payload.idempotencyKey,
+  });
   MessagePlugin.success('已退款至用户余额');
   await load();
 }

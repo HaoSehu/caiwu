@@ -400,6 +400,10 @@ export const FINANCE_LEDGER_EVENT_MAP = {
   },
   system_adjustment: { label: "系统调账", tagType: "info", direction: "in" },
   verification_fee: { label: "实名认证费", tagType: "danger", direction: "out" },
+  // 财务核心重构的切换校准行（实库 25 行 / 99,742.91）：不映射会在流水页裸露英文。
+  calibration: { label: "存量校准", tagType: "warning", direction: "in" },
+  // 管理员创建用户时写入的初始余额。
+  initial_balance: { label: "初始余额", tagType: "info", direction: "in" },
 };
 
 export const ACCOUNT_TRANSACTION_EVENT_MAP = {
