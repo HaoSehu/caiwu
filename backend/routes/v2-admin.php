@@ -369,6 +369,10 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
         Route::put('/integration-plugins/{plugin}/config', [IntegrationPluginController::class, 'updateConfig']);
         Route::patch('/integration-plugins/{plugin}/status', [IntegrationPluginController::class, 'updateStatus']);
         Route::delete('/integration-plugins/{plugin}', [IntegrationPluginController::class, 'destroy']);
+        // 升级会重写插件清单与配置结构（涉及资金插件的密钥/网关配置），
+        // 控制器与 Service 早已实现但此前漏注册路由，前端无法触达；限流防止误连点。
+        Route::post('/integration-plugins/{plugin}/upgrades', [IntegrationPluginController::class, 'upgrade'])
+            ->middleware('throttle:10,1,admin-integration-plugin-upgrade');
     });
 
     Route::middleware(['permission:'.AdminPermissions::INTEGRATION_PLUGIN_TEST])->group(function (): void {

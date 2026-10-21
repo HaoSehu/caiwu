@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -108,6 +109,16 @@ function isDirectory(filePath) {
   }
 }
 
+/**
+ * 是否被 .gitignore 忽略（例如 docs/AGENTS.md 是本机 agent 入口，不入库）。
+ * 被忽略的文件不是文档真源的一部分，既不登记 catalog 也不该被 frontmatter 校验卡住。
+ */
+function isGitIgnored(filePath) {
+  const result = spawnSync("git", ["check-ignore", "-q", filePath], { cwd: root });
+
+  return result.status === 0;
+}
+
 function walkMarkdown(directoryPath) {
   if (!isDirectory(directoryPath)) {
     return [];
@@ -127,6 +138,10 @@ function walkMarkdown(directoryPath) {
 
       files.push(...walkMarkdown(entryPath));
     } else if (entry.isFile() && /\.md$/i.test(entry.name)) {
+      if (isGitIgnored(entryPath)) {
+        continue;
+      }
+
       files.push(entryPath);
     }
   }
