@@ -12,7 +12,9 @@ use App\Services\Integrations\Plugins\PluginConfigRepository;
 use App\Services\Integrations\Plugins\PluginInstaller;
 use App\Services\Integrations\Plugins\PluginRuntimeRegistry;
 use App\Services\Integrations\Plugins\PluginScanner;
+use Caiwu\Plugins\Certification\BaiduFace\Logic\BaiduFaceClient;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
@@ -132,6 +134,49 @@ class PluginLifecycleCorePathTest extends TestCase
             ['plugin_id' => (int) $plugin->id, 'driver_key' => 'lifecycle-mail-test'],
             $resolver->mailContext(),
         );
+    }
+
+    public function test_config_save_invokes_manifest_cache_clear_hook_for_previous_and_current_config(): void
+    {
+        $installer = app(PluginInstaller::class);
+        $scanner = app(PluginScanner::class);
+        $repository = app(PluginConfigRepository::class);
+
+        $plugin = $installer->install('verification', 'baidu_face');
+        $manifest = $scanner->requireManifest('verification', 'baidu_face');
+
+        // 清单 info.extra.config_saved_cache_clear 声明了百度人脸的 access_token 清理钩子。
+        $this->assertSame(
+            ['class' => BaiduFaceClient::class, 'method' => 'forgetAccessTokenCacheForConfig'],
+            $manifest->extra['config_saved_cache_clear'] ?? null,
+        );
+
+        $previousConfig = ['api_key' => 'key-old', 'secret_key' => 'secret-old', 'h5_plan_id' => 25921];
+        $currentConfig = ['api_key' => 'key-new', 'secret_key' => 'secret-new', 'h5_plan_id' => 25921];
+        $repository->save($plugin, $manifest, $previousConfig);
+
+        // 预先塞入「改动前」「改动后」以及无关 API Key 的令牌缓存：
+        // 钩子应分别用两份配置各清一次，且不能一刀切清空其他凭据的缓存。
+        $previousKey = BaiduFaceClient::accessTokenCacheKeyForConfig($previousConfig);
+        $currentKey = BaiduFaceClient::accessTokenCacheKeyForConfig($currentConfig);
+        $unrelatedKey = BaiduFaceClient::accessTokenCacheKeyForConfig(['api_key' => 'key-other', 'secret_key' => 'secret-other']);
+        $this->assertNotNull($previousKey);
+        $this->assertNotNull($currentKey);
+        $this->assertNotNull($unrelatedKey);
+
+        Cache::put($previousKey, 'token-old', 600);
+        Cache::put($currentKey, 'token-new', 600);
+        Cache::put($unrelatedKey, 'token-other', 600);
+
+        $repository->save($plugin, $manifest, $currentConfig);
+
+        // 保存前配置触发的清理。
+        $this->assertFalse(Cache::has($previousKey));
+        // 保存后配置触发的清理。
+        $this->assertFalse(Cache::has($currentKey));
+        // 精准失效：无关凭据的令牌不受影响。
+        $this->assertTrue(Cache::has($unrelatedKey));
+        $this->assertSame('key-new', $repository->resolvedConfig($plugin->fresh() ?? $plugin)['api_key'] ?? null);
     }
 
     public function test_probe_actions_skip_success_runtime_log(): void

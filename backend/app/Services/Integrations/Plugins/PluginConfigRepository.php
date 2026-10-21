@@ -11,6 +11,7 @@ use App\Models\IntegrationPluginConfig;
 use App\Support\SchemaMetadataCache;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class PluginConfigRepository
 {
@@ -147,6 +148,10 @@ class PluginConfigRepository
      */
     public function save(IntegrationPlugin $plugin, PluginManifest $manifest, array $input, ?AdminUser $admin = null): array
     {
+        // 保存前先采集当前解析后的配置：插件需要对比“改动前/改动后”两份配置来精准失效运行时缓存
+        // （例如百度人脸只清理受影响 app_id 的 access_token，而不是一刀切全清）。
+        $previousResolvedConfig = $this->resolvedConfig($plugin);
+
         [$nonSecretPayload, $secretPayload] = $this->partitionConfigPayload($manifest, $input, $plugin);
         $hasSecretValues = array_map(static fn (mixed $value): bool => $value !== null && $value !== '', $secretPayload);
         $this->assertRequiredFields($manifest, array_merge($nonSecretPayload, $secretPayload));
@@ -162,6 +167,9 @@ class PluginConfigRepository
                 ]
             );
         });
+
+        // 配置已落库，通知插件清理按配置缓存的运行时数据；钩子失败只告警，不影响保存结果。
+        $this->clearConfigSavedRuntimeCaches($manifest, $previousResolvedConfig, array_merge($nonSecretPayload, $secretPayload));
 
         return $this->displayConfig($plugin->fresh('config') ?? $plugin);
     }
@@ -251,6 +259,47 @@ class PluginConfigRepository
     private function isDisplayOnlySchemaItem(array $item): bool
     {
         return in_array((string) ($item['type'] ?? ''), ['notice', 'divider', 'readonly'], true);
+    }
+
+    /**
+     * 配置保存后清理插件自身的运行时缓存。
+     *
+     * 插件在 config.php 的 info.extra.config_saved_cache_clear 里声明 {class, method}，
+     * 这里按清单反射调用静态方法，分别传入「保存前」「保存后」两份解析后配置，
+     * 让插件只失效真正受影响的缓存（例如百度人脸按 app_id 清理 access_token）。
+     * 钩子属于尽力而为：插件文件加载失败或方法抛错都只记 warning，不能回滚已保存的配置。
+     *
+     * @param  array<string, mixed>  $previousResolvedConfig
+     * @param  array<string, mixed>  $currentResolvedConfig
+     */
+    private function clearConfigSavedRuntimeCaches(PluginManifest $manifest, array $previousResolvedConfig, array $currentResolvedConfig): void
+    {
+        $hook = is_array($manifest->extra['config_saved_cache_clear'] ?? null) ? $manifest->extra['config_saved_cache_clear'] : [];
+        $class = trim((string) ($hook['class'] ?? ''));
+        $method = trim((string) ($hook['method'] ?? ''));
+
+        if ($class === '' || $method === '') {
+            return;
+        }
+
+        try {
+            app(PluginFileLoader::class)->ensureLoaded($manifest);
+
+            if (! class_exists($class) || ! method_exists($class, $method)) {
+                return;
+            }
+
+            $class::$method($previousResolvedConfig);
+            $class::$method($currentResolvedConfig);
+        } catch (\Throwable $exception) {
+            Log::warning('[plugins] config saved cache clear hook failed', [
+                'domain' => $manifest->domain,
+                'slug' => $manifest->slug,
+                'class' => $class,
+                'method' => $method,
+                'message' => $exception->getMessage(),
+            ]);
+        }
     }
 
     private function isBlankConfigValue(mixed $value): bool
