@@ -24,8 +24,10 @@ class RefundInvoiceToBalanceRequest extends AdminFormRequest
             // 金额必须显式给出：正数、最多两位小数；上限由服务层按原单可退额校验
             'amount' => ['required', 'numeric', 'min:0.01', 'max:999999', 'regex:/^\d{1,6}(?:\.\d{1,2})?$/'],
             'remark' => ['required', 'string', 'min:2', 'max:200'],
-            // 幂等键：前端每次发起生成 UUID；网络重试携带同键时服务端直接返回既有结果
+            // 幂等键由退款弹窗在打开时生成、重试复用；同键同体重放返回既有结果
             'idempotency_key' => ['required', 'string', 'min:8', 'max:64', 'regex:/^[\w\-.:]+$/'],
+            // 仅 warn 模式生效：已交付服务的账单退款需显式二次确认（默认 block 直接拒绝）。
+            'confirm_delivered_refund' => ['sometimes', 'boolean'],
             ...$this->allPaginationRules(),
         ];
     }
@@ -51,6 +53,7 @@ class RefundInvoiceToBalanceRequest extends AdminFormRequest
             'amount',
             'remark',
             'idempotency_key',
+            'confirm_delivered_refund',
         ]);
     }
 }

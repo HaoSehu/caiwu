@@ -12,18 +12,22 @@ use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
 use App\Exceptions\BusinessException;
 use App\Jobs\SendTemplateEmailJob;
+use App\Models\FinanceConsumption;
 use App\Models\FinanceLedgerEntry;
 use App\Models\FinanceRefund;
+use App\Models\FinanceRefundAllocation;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\User;
+use App\Services\Finance\Core\Data\CashMutation;
 use App\Services\Finance\Core\FinanceAccountService;
 use App\Services\Finance\Core\FinanceIdempotencyService;
 use App\Services\Referral\ReferralService;
 use App\Services\System\ActivityLogService;
 use App\Services\System\NotificationService;
 use App\Support\Money;
+use App\Support\SchemaMetadataCache;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -42,7 +46,6 @@ class InvoiceRefundService
         private FinanceAccountService $accounts,
         private FinanceDocumentService $financeDocumentService,
         private PaymentCallbackProjector $callbackProjector,
-        private MixPaymentService $mixPaymentService,
         private ReferralService $referralService,
         private TradeLifecycleService $tradeLifecycleService,
         private FinanceIdempotencyService $idempotency,
@@ -51,16 +54,11 @@ class InvoiceRefundService
     ) {}
 
     /**
-     * 退款标记通道的可退上限（累计口径，供 InvoiceRefundMarkService 守卫）。
+     * 账单可退上限（累计口径，供详情页能力位与退款标记类历史消费者复用）。
      *
-     * 与真退款的单次口径（remainingRefundableAmount）差异是刻意为之：后者只取
-     * 「主支付单金额」——真退款一次把一笔钱退回余额，多笔支付需人工分次发起；
-     * 退款标记是**累计登记线下已退事实**，上限必须是整笔实收，否则「订单拆分
-     * 支付 50+50」场景第一次标记 50 后可退归零，剩余 50 永远标不了、
-     * 账单无法收口 REFUNDED。
-     *
-     * 公式：实收基数 max(paid_amount, amount) − 已转余额的异常支付金额
-     * − 已完成退款累计（refunds 表口径，纯标记与真退款同表）。
+     * 2026-10-21 起与真退款完全同口径：实收基数 max(paid_amount, amount)
+     * − 已转余额的异常支付金额 − 已完成退款累计。原先「真退款只取主支付单金额」
+     * 的差异已随拆分支付截断缺陷一并取消，两处不再分叉。
      */
     public function markRefundableAmountOf(Invoice $invoice): float
     {
@@ -122,12 +120,24 @@ class InvoiceRefundService
                                 new BusinessException('充值/补录账单不支持退回余额')
                             );
 
+                            // 系统外收款闸（2026-10-21）：补录订单/手工入账的 Payment.gateway 固定
+                            // manual，该笔资金从未进入系统；对它退款等于凭空增加余额。类型闸只覆盖
+                            // recharge/manual 两种账单，补录订单产出的是 type=new，必须按支付单再拦一道。
+                            $invoicePayments = $lockedInvoice->payments;
+                            $realPaymentCount = $invoicePayments
+                                ->filter(fn ($item): bool => $item instanceof Payment
+                                    && $item->gatewayKey() !== PaymentGatewayCode::MANUAL)
+                                ->count();
+                            if ($invoicePayments->isNotEmpty() && $realPaymentCount === 0) {
+                                throw new BusinessException('该账单为系统外收款（补录/手工入账），不支持退款到余额');
+                            }
+
                             // 纯标记通道已于 2026-10-20 裁决移除：历史 manual_mark 行只读保留，
                             // 新退款一律为「退回余额」，不再需要双通道互斥守卫。
 
                             // 交付守卫（finance.refund.delivery_guard）：block 已交付拒绝退款，
                             // warn 把交付快照随退款单落 delivery_evidence 证据。
-                            $deliveryEvidence = $this->deliveryGuard->inspect($lockedInvoice);
+                            $deliveryEvidence = $this->deliveryGuard->inspect($lockedInvoice, $payload);
 
                             $order = $lockedInvoice->order;
 
@@ -170,7 +180,7 @@ class InvoiceRefundService
                                 ];
                             }
 
-                            $refundableAmount = $this->remainingRefundableAmount($lockedInvoice, $payment);
+                            $refundableAmount = $this->remainingRefundableAmount($lockedInvoice);
                             $refundAmount = round((float) ($payload['amount'] ?? $refundableAmount), 2);
                             throw_if(
                                 $refundAmount <= 0,
@@ -178,7 +188,7 @@ class InvoiceRefundService
                                     ? '该账单款项已通过重复支付转入余额，无需再退款'
                                     : '退款金额不正确')
                             );
-                            throw_if($refundAmount - $refundableAmount > 0.00001, new BusinessException('退款金额超过原单可退金额'));
+                            throw_if(Money::greaterThan($refundAmount, $refundableAmount), new BusinessException('退款金额超过原单可退金额'));
 
                             $refundReason = trim((string) ($payload['remark'] ?? ''));
                             if ($refundReason === '') {
@@ -216,6 +226,11 @@ class InvoiceRefundService
                                 Money::toCents($refundAmount),
                             );
 
+                            // 退款批次证据（P1-3）：退款入账本身产生一笔新批次（new_lot），
+                            // 必须落到 finance_refund_allocations，否则「退的是哪一笔钱」
+                            // 在账上无法回答——这正是财务核心重构的立项理由之一。
+                            // 记录在退款单落库之后由 FinanceDocumentService 补写（见下）。
+
                             $refundRecord = [
                                 'refund_method' => $refundMethod,
                                 'refund_method_label' => $refundMethodLabel,
@@ -243,7 +258,18 @@ class InvoiceRefundService
                                     'delivery_evidence' => $deliveryEvidence,
                                 ]),
                             );
-                            $isFullyRefunded = abs($refundAmount - $refundableAmount) <= 0.00001;
+                            // 退款批次证据（P1-3）：new_lot 指向本次退款入账产生的新批次，
+                            // consumption_mark 指向被追认的原消费（markRefundedConsumptions 已标记）。
+                            $this->recordRefundAllocations(
+                                (int) $documents['refund']->id,
+                                $mutation,
+                                (int) $lockedUser->id,
+                                'invoice',
+                                (int) $lockedInvoice->id,
+                                Money::toCents($refundAmount),
+                            );
+
+                            $isFullyRefunded = Money::lessThanOrEqual(abs($refundAmount - $refundableAmount), 0.0);
 
                             if ($payment instanceof Payment) {
                                 $callbackRaw = (array) ($payment->callback_raw ?? []);
@@ -271,6 +297,14 @@ class InvoiceRefundService
                                 $this->referralService->reverseRewardForRefundedInvoice(
                                     $lockedInvoice,
                                     $refundTraceId !== '' ? "refund:{$refundTraceId}" : "refund:invoice:{$lockedInvoice->id}",
+                                );
+                            } else {
+                                // 部分退款：状态保持 PAID，但账单/订单的 refund_amount 必须累计回写，
+                                // 否则订单列表显示「部分退款」值为 0，运营会重复发起或误判可退额。
+                                $this->tradeLifecycleService->markInvoicePartiallyRefunded(
+                                    $lockedInvoice,
+                                    $refundMethod,
+                                    (string) ($context['trace_id'] ?? ''),
                                 );
                             }
 
@@ -387,7 +421,10 @@ class InvoiceRefundService
         // 已转入余额的异常支付（重复支付/超额支付）不得作为主退款支付单：
         // 其金额已通过 creditCapturedPaymentToBalance 退回用户余额，再按其原路/全额退款会造成双重退款。
         $isRefundablePayment = fn (Payment $payment): bool => in_array((int) $payment->status, [PaymentStatus::SUCCESS, PaymentStatus::REFUNDED], true)
-            && ! PaymentCallbackRaw::isCreditedToBalance($payment);
+            && ! PaymentCallbackRaw::isCreditedToBalance($payment)
+            // 系统外收款（补录/手工入账）不是真实资金流入，不得作为退款主支付单：
+            // 否则会把系统外收到的钱再"退"进用户余额，凭空增加账面余额。
+            && $payment->gatewayKey() !== PaymentGatewayCode::MANUAL;
 
         return $payments
             ->first(fn (Payment $payment) => $isRefundablePayment($payment)
@@ -395,18 +432,17 @@ class InvoiceRefundService
             ?? $payments->first($isRefundablePayment);
     }
 
-    private function resolveBalanceRefundableAmount(Invoice $invoice, ?Payment $payment): float
+    private function resolveBalanceRefundableAmount(Invoice $invoice): float
     {
-        $mixBalanceAmount = $payment instanceof Payment ? $this->mixPaymentService->resolveMixBalanceAmount($payment) : 0.0;
-        if ($mixBalanceAmount > 0 || $this->invoiceHasBalancePayment($invoice)) {
-            $grossRefundable = round(max((float) ($invoice->paid_amount ?? 0), (float) ($invoice->amount ?? 0)), 2);
+        // 账单级累计口径（2026-10-21 统一）：可退上限 = 实收基数 − 已转余额的异常支付金额。
+        // 历史上「单笔支付单金额」分支在拆分支付（50+50）与补录+网关混合支付下会把可退额
+        // 截断成单笔金额，导致退 50 就收口、剩余款永久不可退；混付分支口径本就正确，
+        // 现统一收敛到同一公式，不再按支付单金额切分。
+        $grossRefundable = round(max((float) ($invoice->paid_amount ?? 0), (float) ($invoice->amount ?? 0)), 2);
 
-            // 扣除已转入余额的异常支付（重复支付/超额支付）金额：
-            // 该部分已退回用户余额，若退款时未扣除会造成与"转入余额"重复返还。
-            return round(max($grossRefundable - $this->invoiceCreditedToBalanceAmount($invoice), 0), 2);
-        }
-
-        return $payment instanceof Payment ? round((float) $payment->amount, 2) : 0.0;
+        // 扣除已转入余额的异常支付（重复支付/超额支付）金额：
+        // 该部分已退回用户余额，若退款时未扣除会造成与"转入余额"重复返还。
+        return round(max($grossRefundable - $this->invoiceCreditedToBalanceAmount($invoice), 0), 2);
     }
 
     /**
@@ -430,32 +466,93 @@ class InvoiceRefundService
             )), 2);
     }
 
-    private function invoiceHasBalancePayment(Invoice $invoice): bool
-    {
-        // 台账 INVOICE_PAYMENT 行的 source_id 统一为账单 ID（历史错挂订单 ID 的
-        // 存量已由订正迁移 2026_08_31_000001 归位），此处只需精确匹配账单本身。
-        return FinanceLedgerEntry::query()
-            ->where('user_id', (int) $invoice->user_id)
-            ->where('event_type', FinanceLedgerEventType::INVOICE_PAYMENT)
-            ->where('source_type', 'invoice')
-            ->where('source_id', (int) $invoice->id)
-            ->exists();
-    }
-
-    private function remainingRefundableAmount(Invoice $invoice, ?Payment $payment): float
+    private function remainingRefundableAmount(Invoice $invoice): float
     {
         $refundedAmount = $this->completedRefundAmount($invoice);
 
-        return round(max($this->resolveBalanceRefundableAmount($invoice, $payment) - $refundedAmount, 0), 2);
+        return round(max($this->resolveBalanceRefundableAmount($invoice) - $refundedAmount, 0), 2);
     }
 
     private function completedRefundAmount(Invoice $invoice): float
     {
+        // 口径统一（2026-10-21）：真实退款（funds_moved=1）与历史纯标记（funds_moved=0）
+        // 同表记录、都是「已确认退过」的事实，累计必须全部计入；只算 funds_moved=1
+        // 会让「先标记 30、再真退 100」叠出 130 的超额退款。
         return round((float) FinanceRefund::query()
             ->where('invoice_id', (int) $invoice->id)
-            ->where('funds_moved', 1)
             ->where('status', FinanceRefund::STATUS_COMPLETED)
             ->sum('amount'), 2);
+    }
+
+    /**
+     * 写入退款批次证据（P1-3）。
+     *
+     * new_lot：退款入账（credit）产生的新批次，一笔退款必有且仅有一条；
+     * consumption_mark：被本次退款追认的原消费行，按 markRefundedConsumptions 的标记结果取。
+     * 幂等：allocation_key 唯一，重复调用被忽略。
+     *
+     * @param  CashMutation  $mutation  退款入账结果（含 allocations）
+     */
+    private function recordRefundAllocations(
+        int $refundId,
+        CashMutation $mutation,
+        int $userId,
+        string $sourceType,
+        int $sourceId,
+        int $amountCents,
+    ): void {
+        if ($refundId <= 0 || ! SchemaMetadataCache::hasTable('finance_refund_allocations')) {
+            return;
+        }
+
+        $now = now();
+        $rows = [];
+
+        foreach ($mutation->allocations as $allocation) {
+            $lotId = (int) $allocation['lot_id'];
+            if ($lotId <= 0) {
+                continue;
+            }
+
+            $rows[] = [
+                'allocation_key' => 'refund:'.$refundId.':new_lot:'.$lotId,
+                'refund_id' => $refundId,
+                'allocation_type' => FinanceRefundAllocation::TYPE_NEW_LOT,
+                'lot_id' => $lotId,
+                'consumption_id' => $allocation['consumption_id'] ?? null,
+                'amount' => Money::formatCents($amountCents),
+                'created_at' => $now,
+            ];
+        }
+
+        // 原消费映射：按账单来源取本次被标记的消费行（refunded_amount > 0），
+        // 作为退款血缘证据。表结构：source_type/source_id 指向账单，refunded_amount 为已追认金额。
+        if ($rows !== [] && SchemaMetadataCache::hasTable('finance_consumptions')) {
+            $markedConsumptions = FinanceConsumption::query()
+                ->where('user_id', $userId)
+                ->where('source_type', $sourceType)
+                ->where('source_id', $sourceId)
+                ->where('refunded_amount', '>', 0)
+                ->orderByDesc('id')
+                ->limit(20)
+                ->get(['id']);
+
+            foreach ($markedConsumptions as $consumption) {
+                $rows[] = [
+                    'allocation_key' => 'refund:'.$refundId.':consumption:'.(int) $consumption->id,
+                    'refund_id' => $refundId,
+                    'allocation_type' => FinanceRefundAllocation::TYPE_CONSUMPTION_MARK,
+                    'lot_id' => null,
+                    'consumption_id' => (int) $consumption->id,
+                    'amount' => Money::formatCents($amountCents),
+                    'created_at' => $now,
+                ];
+            }
+        }
+
+        foreach ($rows as $row) {
+            DB::table('finance_refund_allocations')->insertOrIgnore($row);
+        }
     }
 
     private function resolvePaymentGatewayLabel(string $gateway): string

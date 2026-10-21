@@ -45,10 +45,15 @@ class InvoiceV2QueryService
     {
         $query = Invoice::query()
             ->with($this->invoiceListRelations())
-            ->withSum(
-                // 退款投影（列表轻量口径）与 adminList 同源，预加载避免逐行 N+1。
-                ['refunds' => fn ($refundQuery) => $refundQuery->where('status', FinanceRefund::STATUS_COMPLETED)],
-                'amount'
+            ->select('invoices.*')
+            ->selectSub(
+                // 退款投影（列表轻量口径）与 adminList 同源，预加载避免逐行 N+1；
+                // 别名必须与读取点 refund_completed_total 一致（withSum 会给 refunds_sum_amount）。
+                FinanceRefund::query()
+                    ->selectRaw('COALESCE(SUM(amount), 0)')
+                    ->whereColumn('finance_refunds.invoice_id', 'invoices.id')
+                    ->where('status', FinanceRefund::STATUS_COMPLETED),
+                'refund_completed_total'
             )
             ->where('user_id', $userId)
             ->orderByDesc('id');

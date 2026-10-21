@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Constants;
 
+use App\Support\Money;
+
 /**
  * 退款状态（派生态，不落库）。
  *
@@ -42,10 +44,10 @@ class RefundStatus
      */
     public static function derive(float $refundedTotal, float $paidBase): int
     {
-        if ($refundedTotal <= 0.00001) {
+        if (Money::lessThanOrEqual($refundedTotal, 0)) {
             return self::NONE;
         }
 
-        return $paidBase - $refundedTotal > 0.00001 ? self::PARTIAL : self::FULL;
+        return Money::greaterThan($paidBase, $refundedTotal) ? self::PARTIAL : self::FULL;
     }
 }

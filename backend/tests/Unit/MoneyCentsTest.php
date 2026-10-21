@@ -82,6 +82,19 @@ final class MoneyCentsTest extends TestCase
         $this->assertSame(0.0, Money::fromCents(0));
     }
 
+    public function test_to_cents_avoids_float_multiplication_at_extremes(): void
+    {
+        // 0.29 * 100 在 IEEE754 下是 28.999999999999996；定点解析必须精确得到 29。
+        $this->assertSame(29, Money::toCents('0.29'));
+        $this->assertSame(57, Money::toCents('0.57'));
+        $this->assertSame(1150, Money::toCents('11.50'));
+
+        // decimal(12,2) 上界：9999999999.99 乘 100 超出 float 精确整数范围（2^53≈9e15 内，
+        // 但 9999999999.99*100 的中间结果已不可靠），定点解析必须一分不差。
+        $this->assertSame(999999999999, Money::toCents('9999999999.99'));
+        $this->assertSame(-999999999999, Money::toCents('-9999999999.99'));
+    }
+
     public function test_from_cents_round_trips_integer_cents(): void
     {
         foreach ([123456, -7, 1, 99999999] as $cents) {

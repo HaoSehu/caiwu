@@ -7,8 +7,10 @@ namespace App\Services\Finance;
 use App\Constants\InvoiceStatus;
 use App\Constants\OrderStatus;
 use App\Exceptions\BusinessException;
+use App\Models\FinanceRefund;
 use App\Models\Invoice;
 use App\Models\Order;
+use App\Support\Money;
 use App\Support\SchemaMetadataCache;
 use Illuminate\Support\Facades\DB;
 
@@ -151,8 +153,25 @@ class TradeLifecycleService
             $payload['refunded_at'] = $refundedAt !== '' ? $refundedAt : now();
         }
 
+        // 退款金额取「账单级累计」而不是本次金额（2026-10-21）：真实退款与纯标记通道
+        // 共用同一张 finance_refunds 表，累计口径以它为准；历史无表记录（对账修复路径）
+        // 回退到本次金额，保证账单 refund_amount 永远不为 NULL、不与订单投影分叉。
+        $cumulativeRefundAmount = $this->completedRefundTotal($invoice);
+        if (Money::lessThan($cumulativeRefundAmount, $normalizedRefundAmount)) {
+            $cumulativeRefundAmount = $normalizedRefundAmount;
+        }
+        $cumulativeRefundAmount = number_format($cumulativeRefundAmount, 2, '.', '');
+
+        // 守恒守卫：累计退款不得超过账单实收，越界一律拒绝（防止状态机被错误调用
+        // 收口一笔多退的钱，形成账实不符）。
+        $paidBase = max((float) ($invoice->paid_amount ?? 0), (float) ($invoice->amount ?? 0));
+        throw_if(
+            Money::greaterThan($cumulativeRefundAmount, $paidBase),
+            new BusinessException('退款累计金额超过账单实收，禁止收口')
+        );
+
         if (SchemaMetadataCache::hasColumn('invoices', 'refund_amount')) {
-            $payload['refund_amount'] = $normalizedRefundAmount;
+            $payload['refund_amount'] = $cumulativeRefundAmount;
         }
 
         if (SchemaMetadataCache::hasColumn('invoices', 'refund_method')) {
@@ -171,7 +190,16 @@ class TradeLifecycleService
             ? Order::query()->lockForUpdate()->find((int) $invoice->order_id)
             : null;
         if ($refundedOrder instanceof Order) {
-            $refundedOrder->forceFill(['status' => OrderStatus::REFUNDED])->save();
+            $orderPayload = ['status' => OrderStatus::REFUNDED];
+            // 订单退款投影与账单同值（账单是真源）：全额收口时补齐金额与时间，
+            // 否则管理端订单列表会显示「已全额退款 + 退款 ¥0.00」。
+            if (SchemaMetadataCache::hasColumn('orders', 'refund_amount')) {
+                $orderPayload['refund_amount'] = $cumulativeRefundAmount;
+            }
+            if (SchemaMetadataCache::hasColumn('orders', 'refunded_at')) {
+                $orderPayload['refunded_at'] = now();
+            }
+            $refundedOrder->forceFill($orderPayload)->save();
         }
 
         $this->couponService->syncInvoiceCouponUsage($invoice);
@@ -180,52 +208,37 @@ class TradeLifecycleService
     }
 
     /**
-     * 退款标记投影（纯标记通道）：refund_amount 累加 + 订单侧投影同步，不动资金。
+     * 账单名下已完成退款的累计金额（finance_refunds 口径）。
      *
-     * 与 markInvoiceRefunded（覆盖写、无条件收口 REFUNDED）语义不同：
-     * - refund_amount 逐次累加（部分退款标记可多次），基数以锁内真值为准（存量 NULL 视为 0）；
-     * - 仅全额（$isFullyRefunded，由调用方按锁内可退基数判定传入）才置账单
-     *   REFUNDED 并级联订单、触发券消耗（全额退款后券不返还）；部分退款不改状态、
-     *   不重算券（部分退款账单仍 PAID，重算是无谓写放大）。
-     *
-     * 锁顺序：先 Invoice 后 Order（与既有状态机一致）。
-     * 退款列全部走 SchemaMetadataCache 条件写（灰度期未跑迁移的库不报错）；
-     * 订单投影金额与账单投影取同值（账单为真源，订单投影向真源对齐）。
-     *
-     * @param  array<string, mixed>  $context  预留 trace 传播位
+     * 真实退款（funds_moved=1）与历史纯标记行（funds_moved=0）同表，累计一律计入：
+     * 历史标记行代表「当时已确认退过」，若排除会让账单 refund_amount 与实际收口不一致。
      */
-    public function markInvoiceRefundMarked(
-        Invoice $invoice,
-        float $refundAmount,
-        string $refundMethod,
-        string $traceId = '',
-        bool $isFullyRefunded = false,
-        array $context = [],
-    ): Invoice {
-        return DB::transaction(function () use ($invoice, $refundAmount, $refundMethod, $traceId, $isFullyRefunded) {
+    private function completedRefundTotal(Invoice $invoice): float
+    {
+        return round((float) FinanceRefund::query()
+            ->where('invoice_id', (int) $invoice->id)
+            ->where('status', FinanceRefund::STATUS_COMPLETED)
+            ->sum('amount'), 2);
+    }
+
+    /**
+     * 部分退款投影：累计回写账单与订单的 refund_amount/refunded_at，不改状态。
+     *
+     * 由 InvoiceRefundService 在部分退款成功后调用（全额仍走 markInvoiceRefunded）。
+     * 金额从 finance_refunds 重新取累计值，避免调用方传入值漂移；锁顺序先 Invoice 后 Order。
+     */
+    public function markInvoicePartiallyRefunded(Invoice $invoice, string $refundMethod, string $traceId = ''): Invoice
+    {
+        return DB::transaction(function () use ($invoice, $refundMethod, $traceId) {
             $lockedInvoice = Invoice::query()->lockForUpdate()->findOrFail((int) $invoice->id);
-
-            if ($isFullyRefunded) {
-                throw_if(
-                    (int) $lockedInvoice->status !== InvoiceStatus::PAID,
-                    new BusinessException('账单状态异常，无法收口退款标记')
-                );
-            }
-
-            $normalizedMethod = trim($refundMethod) !== '' ? trim($refundMethod) : 'balance';
-            $nextRefundAmount = number_format(
-                round((float) ($lockedInvoice->refund_amount ?? 0) + max(round($refundAmount, 2), 0), 2),
-                2,
-                '.',
-                ''
-            );
+            $cumulative = $this->completedRefundTotal($lockedInvoice);
 
             $payload = [];
             if (SchemaMetadataCache::hasColumn('invoices', 'refund_amount')) {
-                $payload['refund_amount'] = $nextRefundAmount;
+                $payload['refund_amount'] = number_format($cumulative, 2, '.', '');
             }
             if (SchemaMetadataCache::hasColumn('invoices', 'refund_method')) {
-                $payload['refund_method'] = $normalizedMethod;
+                $payload['refund_method'] = trim($refundMethod) !== '' ? trim($refundMethod) : 'balance';
             }
             if (SchemaMetadataCache::hasColumn('invoices', 'refunded_at')) {
                 $payload['refunded_at'] = now();
@@ -237,31 +250,24 @@ class TradeLifecycleService
                     $payload['trace_id'] = $traceId;
                 }
             }
-            if ($isFullyRefunded) {
-                $payload['status'] = InvoiceStatus::REFUNDED;
-            }
-            $lockedInvoice->forceFill($payload)->save();
-
-            $orderPayload = [];
-            if (SchemaMetadataCache::hasColumn('orders', 'refund_amount')) {
-                $orderPayload['refund_amount'] = $nextRefundAmount;
-            }
-            if (SchemaMetadataCache::hasColumn('orders', 'refunded_at')) {
-                $orderPayload['refunded_at'] = now();
-            }
-            if ($isFullyRefunded) {
-                $orderPayload['status'] = OrderStatus::REFUNDED;
+            if ($payload !== []) {
+                $lockedInvoice->forceFill($payload)->save();
             }
 
             $refundedOrder = $lockedInvoice->order_id
                 ? Order::query()->lockForUpdate()->find((int) $lockedInvoice->order_id)
                 : null;
-            if ($refundedOrder instanceof Order && $orderPayload !== []) {
-                $refundedOrder->forceFill($orderPayload)->save();
-            }
-
-            if ($isFullyRefunded) {
-                $this->couponService->syncInvoiceCouponUsage($lockedInvoice);
+            if ($refundedOrder instanceof Order) {
+                $orderPayload = [];
+                if (SchemaMetadataCache::hasColumn('orders', 'refund_amount')) {
+                    $orderPayload['refund_amount'] = number_format($cumulative, 2, '.', '');
+                }
+                if (SchemaMetadataCache::hasColumn('orders', 'refunded_at')) {
+                    $orderPayload['refunded_at'] = now();
+                }
+                if ($orderPayload !== []) {
+                    $refundedOrder->forceFill($orderPayload)->save();
+                }
             }
 
             return $lockedInvoice;
@@ -272,6 +278,10 @@ class TradeLifecycleService
      * 部分支付投影递减：组合支付预扣余额回补时，同步递减账单与订单的
      * paid_amount（不为负）。不改变状态——递减到 0 也不回退 PAID，
      * 状态流转一律经 markInvoicePaid / cancelTrade。
+     *
+     * 并发安全：读-算-写改为单条原子 UPDATE，并用 GREATEST 钳到 0。
+     * 原实现依赖「调用方持锁」的隐式契约，一旦某条路径没加锁，
+     * 预扣与回补交错就会把 paid_amount 写成错值。
      */
     public function decrementPaidProjection(Invoice $invoice, float $balanceAmount): void
     {
@@ -280,23 +290,7 @@ class TradeLifecycleService
             return;
         }
 
-        $nextInvoicePaidAmount = number_format(
-            max(round((float) ($invoice->paid_amount ?? 0) - $decrement, 2), 0),
-            2,
-            '.',
-            ''
-        );
-        $invoice->forceFill(['paid_amount' => $nextInvoicePaidAmount])->save();
-
-        if ($invoice->order instanceof Order) {
-            $nextOrderPaidAmount = number_format(
-                max(round((float) ($invoice->order->paid_amount ?? 0) - $decrement, 2), 0),
-                2,
-                '.',
-                ''
-            );
-            $invoice->order->forceFill(['paid_amount' => $nextOrderPaidAmount])->save();
-        }
+        $this->applyPaidProjectionDelta($invoice, -$decrement);
     }
 
     /**
@@ -311,14 +305,48 @@ class TradeLifecycleService
             return;
         }
 
-        $invoice->forceFill([
-            'paid_amount' => number_format(round((float) ($invoice->paid_amount ?? 0) + $increment, 2), 2, '.', ''),
-        ])->save();
+        $this->applyPaidProjectionDelta($invoice, $increment);
+    }
 
-        if ($invoice->order instanceof Order) {
-            $invoice->order->forceFill([
-                'paid_amount' => number_format(round((float) ($invoice->order->paid_amount ?? 0) + $increment, 2), 2, '.', ''),
-            ])->save();
+    /**
+     * 账单与订单两侧 paid_amount 的原子增量。
+     *
+     * - 单条 SQL（paid_amount = GREATEST(...)），不再依赖行锁与旧快照；
+     * - 递增时直接相加；递减时用 GREATEST 钳到 0，避免负投影；
+     * - 订单侧必须显式 loadMissing，不能因为关系未加载就静默跳过一次更新
+     *   （那正是「漏加载则订单侧漏减」的成因）。
+     */
+    private function applyPaidProjectionDelta(Invoice $invoice, float $delta): void
+    {
+        $amount = number_format(abs($delta), 2, '.', '');
+        $isDecrement = $delta < 0;
+
+        $invoiceExpression = $isDecrement
+            ? 'GREATEST(CAST(paid_amount AS DECIMAL(12,2)) - '.$amount.', 0)'
+            : 'CAST(paid_amount AS DECIMAL(12,2)) + '.$amount;
+
+        Invoice::query()
+            ->whereKey((int) $invoice->id)
+            ->update(['paid_amount' => DB::raw($invoiceExpression)]);
+
+        $invoice->loadMissing('order');
+        $order = $invoice->order;
+
+        if (! $order instanceof Order) {
+            $invoice->refresh();
+
+            return;
         }
+
+        $orderExpression = $isDecrement
+            ? 'GREATEST(CAST(paid_amount AS DECIMAL(12,2)) - '.$amount.', 0)'
+            : 'CAST(paid_amount AS DECIMAL(12,2)) + '.$amount;
+
+        Order::query()
+            ->whereKey((int) $order->id)
+            ->update(['paid_amount' => DB::raw($orderExpression)]);
+
+        $invoice->refresh();
+        $order->refresh();
     }
 }

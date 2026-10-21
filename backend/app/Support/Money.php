@@ -17,6 +17,37 @@ final class Money
     private const SCALE = 2;
 
     /**
+     * 金额比较口径（文档常量）：所有比较一律走 toCents 的整数分比较，等价于
+     * 「差额 < 0.005 视为相等」。历史上 0.00001 与 0.0001 两套阈值并存，
+     * 两处边界会给出不同结论；此常量仅作口径说明，比较实现见 compare()。
+     */
+    public const EPSILON = 0.005;
+
+    /** 前者是否大于后者（分口径比较，容忍浮点误差）。 */
+    public static function greaterThan(mixed $a, mixed $b): bool
+    {
+        return self::compare($a, $b) > 0;
+    }
+
+    /** 前者是否小于后者（分口径比较）。 */
+    public static function lessThan(mixed $a, mixed $b): bool
+    {
+        return self::compare($a, $b) < 0;
+    }
+
+    /** 前者是否大于等于后者（分口径比较）。 */
+    public static function greaterThanOrEqual(mixed $a, mixed $b): bool
+    {
+        return self::compare($a, $b) >= 0;
+    }
+
+    /** 前者是否小于等于后者（分口径比较）。 */
+    public static function lessThanOrEqual(mixed $a, mixed $b): bool
+    {
+        return self::compare($a, $b) <= 0;
+    }
+
+    /**
      * 从账单还原目录价（应收基数）。
      *
      * 唯一还原口径：目录价 = 应付价 + 优惠券减免 + 会员折扣减免。
@@ -53,7 +84,18 @@ final class Money
      */
     public static function toCents(mixed $value): int
     {
-        return (int) round(self::round($value) * 100);
+        // 走字符串定点解析而不是 float 乘法：0.29 * 100 在 IEEE754 下是 28.999999999999996，
+        // 依赖外层 round 才勉强得到 29；大额（如 9999999999.99）乘 100 已超出 float 的
+        // 精确整数范围（2^53），直接乘法可能丢 1 分。这里把金额归一成两位小数字符串后
+        // 按整数取分，全程不经过浮点乘除。
+        $normalized = number_format(self::round($value), self::SCALE, '.', '');
+        $negative = str_starts_with($normalized, '-');
+        $absolute = $negative ? substr($normalized, 1) : $normalized;
+
+        [$integer, $fraction] = array_pad(explode('.', $absolute, 2), 2, '0');
+        $cents = ((int) $integer) * 100 + (int) str_pad(substr($fraction, 0, 2), 2, '0');
+
+        return $negative ? -$cents : $cents;
     }
 
     /**

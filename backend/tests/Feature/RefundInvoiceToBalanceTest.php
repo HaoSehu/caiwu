@@ -13,6 +13,7 @@ use App\Constants\PaymentStatus;
 use App\Exceptions\BusinessException;
 use App\Models\FinanceLedgerEntry;
 use App\Models\FinanceRefund;
+use App\Models\FinanceRefundAllocation;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Payment;
@@ -80,6 +81,14 @@ class RefundInvoiceToBalanceTest extends TestCase
 
         // 原账单收口为已退款。
         $this->assertSame(InvoiceStatus::REFUNDED, (int) $invoice->refresh()->status);
+
+        // 退款批次证据（P1-3）：new_lot 指向退款入账产生的新批次，一笔退款至少一条。
+        $allocation = FinanceRefundAllocation::query()
+            ->where('refund_id', (int) $refund->id)
+            ->where('allocation_type', FinanceRefundAllocation::TYPE_NEW_LOT)
+            ->first();
+        $this->assertNotNull($allocation, '退款必须写批次证据（否则无法回答「退的是哪一笔钱」）');
+        $this->assertSame('40.00', (string) $allocation->amount);
     }
 
     public function test_full_refund_gateway_paid_invoice_with_order_reverses_referral_reward(): void

@@ -56,10 +56,9 @@ class AdminInvoiceDetailResource extends AdminInvoiceSummaryResource
                 'refund_status' => (int) ($invoice['refund_status'] ?? 0),
                 'refund_status_label' => (string) ($invoice['refund_status_label'] ?? ''),
                 'is_partially_refunded' => (bool) ($invoice['is_partially_refunded'] ?? false),
-                // 退款到余额（真退款）口径：可退额为单次口径的轻量近似，
-                // has_manual_mark_refund 供前端置灰互斥方式（一单只选一种）
+                // 退款到余额（唯一通道）：可退额为单次口径的轻量近似，真值以服务端守卫为准。
+                // manual_mark 纯标记通道已于 2026-10-20 移除，对应能力位不再下发。
                 'refundable_amount_for_balance' => (string) ($invoice['refundable_amount_for_balance'] ?? '0.00'),
-                'has_manual_mark_refund' => (bool) ($invoice['has_manual_mark_refund'] ?? false),
             ],
             'user' => $this->user($invoice['user'] ?? null),
             'order' => $this->order($invoice['order'] ?? null),
@@ -92,7 +91,6 @@ class AdminInvoiceDetailResource extends AdminInvoiceSummaryResource
             ],
             'actions' => [
                 'can_cancel' => (bool) ($invoice['can_cancel'] ?? false),
-                'can_mark_refund' => (bool) ($invoice['can_mark_refund'] ?? false),
                 'can_refund_to_balance' => (bool) ($invoice['can_refund_to_balance'] ?? false),
             ],
             'timestamps' => [
