@@ -70,7 +70,10 @@ class UserService
             ->withReadAggregates()
             // 列表行会经 AdminUserListItemResource 读 $user->balance：
             // 预载账户关系后访问器直接读热备列，避免逐行回查财务内核（N+1）
-            ->with('account:id,user_id,cash_balance')
+            // T+7 归档后 cash_balance 列会被删除：这里不能再显式点名该列，
+            // 否则删列当日管理端会员列表直接 500；全列加载由 User::getBalanceAttribute
+            // 在列不存在时回退内核余额。
+            ->with('account')
             ->select([
                 'id',
                 'email',

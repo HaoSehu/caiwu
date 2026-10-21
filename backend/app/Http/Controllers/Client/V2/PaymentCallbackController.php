@@ -4,10 +4,9 @@ namespace App\Http\Controllers\Client\V2;
 
 use App\Constants\PaymentGatewayCode;
 use App\Http\Controllers\Controller;
-use App\Models\FinanceCutoverInbox;
+use App\Services\Finance\FinanceCutoverInboxService;
 use App\Services\Finance\GatewayInvoicePaymentService;
 use App\Services\Integrations\Payments\PaymentGatewayManager;
-use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Log;
@@ -17,6 +16,7 @@ class PaymentCallbackController extends Controller
     public function __construct(
         private GatewayInvoicePaymentService $paymentService,
         private PaymentGatewayManager $paymentGatewayManager,
+        private FinanceCutoverInboxService $cutoverInbox,
     ) {}
 
     /**
@@ -99,58 +99,16 @@ class PaymentCallbackController extends Controller
     }
 
     /**
-     * 切换窗口收件箱：`finance.cutover.inbox_enabled` 开启期间，支付回调只存
-     * 原始报文并按网关约定 ack 成功（防止渠道重试风暴），窗口解除后由
-     * `finance:replay-cutover-inbox` 统一重放入账。
+     * 切换窗口收件箱：窗口开启期间只落库并 ack 成功，业务判定延迟到重放。
      *
-     * 设计取舍：不验签、不入账、不判断支付单是否存在——窗口内只做「诚实存储」，
-     * 一切业务判定延迟到重放时进行（重放走正常 handleGatewayNotify 全链路）。
+     * 收件箱的存储与并发策略已下沉到 FinanceCutoverInboxService（P1-8）：
+     * 控制器只保留「是否已接管」的协议判断。
      */
     private function captureDuringCutover(string $gateway, Request $request): ?Response
     {
-        if (! (bool) config('finance.cutover.inbox_enabled')) {
+        if (! $this->cutoverInbox->capture($gateway, $request)) {
             return null;
         }
-
-        $payload = $request->all();
-        // 无原生通知 ID 的渠道用「商户单号:渠道单号:报文摘要」拼唯一键；
-        // 同一回调在窗口内被渠道重试时 updateOrCreate 幂等覆盖，不产生重复行。
-        // updateOrCreate 存在并发竞态（两请求同时 INSERT 撞唯一键），
-        // 公开端点不允许 500：撞键时降级为 update 重试一次。
-        $notificationId = (string) ($payload['out_trade_no'] ?? '')
-            .':'.(string) ($payload['trade_no'] ?? '')
-            .':'.substr(md5((string) $request->getContent()), 0, 16);
-
-        $attributes = [
-            'request_uri' => (string) $request->getRequestUri(),
-            'payload' => json_encode($payload, JSON_UNESCAPED_UNICODE),
-            'headers' => collect($request->headers->all())
-                ->only(['user-agent', 'content-type', 'x-request-id'])
-                ->map(static fn ($values) => $values[0] ?? '')
-                ->filter(static fn ($value) => (string) $value !== '')
-                ->all(),
-            'status' => FinanceCutoverInbox::STATUS_PENDING,
-            'received_at' => now(),
-            'replayed_at' => null,
-            'error_msg' => null,
-        ];
-        $keys = ['channel' => $gateway, 'notification_id' => $notificationId];
-
-        try {
-            FinanceCutoverInbox::query()->updateOrCreate($keys, $attributes);
-        } catch (QueryException $exception) {
-            if ((int) ($exception->errorInfo[1] ?? 0) !== 1062) {
-                throw $exception;
-            }
-
-            FinanceCutoverInbox::query()->where($keys)->update($attributes);
-        }
-
-        Log::warning('[切换窗口] 支付回调已入收件箱，待窗口解除后重放', [
-            'gateway' => $gateway,
-            'notification_id' => $notificationId,
-            'out_trade_no' => (string) ($payload['out_trade_no'] ?? ''),
-        ]);
 
         try {
             return $this->paymentGatewayManager->gateway($gateway)->buildNotifyResponse(true);

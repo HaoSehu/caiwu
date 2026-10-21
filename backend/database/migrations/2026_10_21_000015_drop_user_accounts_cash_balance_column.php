@@ -31,11 +31,87 @@ return new class extends Migration
             );
         }
 
+        // 同窗自检：删列与「代码不再读写该列」必须落在同一个发布窗，
+        // 否则删列后残留的读写点会直接 SQL 报错（P1-5）。这里在真正删列前
+        // 扫描应用代码，仍存在 cash_balance 读写点就硬失败，把问题挡在迁移期。
+        $residues = $this->findCashBalanceWriters();
+        if ($residues !== []) {
+            throw new RuntimeException(
+                '仍存在 user_accounts.cash_balance 的代码读写点，禁止删列：'.implode('、', $residues)
+                .'。请在同一发布窗内清理后再执行本迁移。',
+            );
+        }
+
         Schema::table('user_accounts', function (Blueprint $table): void {
             if (Schema::hasColumn('user_accounts', 'cash_balance')) {
                 $table->dropColumn('cash_balance');
             }
         });
+    }
+
+    /**
+     * 扫描 app/ 下仍在直接写/读 user_accounts.cash_balance 的文件。
+     *
+     * 白名单：迁移文件本身、重建命令（已归档护栏会先拒绝）、一致性检查（有 hasColumn 短路）。
+     *
+     * @return list<string>
+     */
+    private function findCashBalanceWriters(): array
+    {
+        // 白名单：迁移期/重建期仍需要读旧列，且各自已有列存在性判断或归档护栏。
+        // FinanceAccountService 的写是「切换期热备」，必须随 FINANCE_HOT_STANDBY=false 一起退出，
+        // 因此保留在名单内由热备开关控制（关闭后不再执行）。
+        $allowlist = [
+            'Services/System/LedgerConsistencyCheck.php',
+            // 热备漂移命令按「列存在才比三重口径、列不存在只比余额 vs 批次」降级，
+            // 已在命令内用 Schema::hasColumn 短路；不列入白名单会让 T+7 被自身扫描硬阻断。
+            'Console/Commands/FinanceHotStandbyDriftCommand.php',
+            'Console/Commands/RebuildFinanceLedgerCommand.php',
+            'Console/Commands/MigrateIdentityUserAccountsCommand.php',
+            'Console/Commands/ReconcileAccountDomainCommand.php',
+            'Services/System/AccountMigrationService.php',
+            'Services/Finance/Core/FinanceAccountService.php',
+            'Models/UserAccount.php',
+            'Models/User.php',
+            'Services/User/AccountService.php',
+            'Services/User/UserAccountProjectionService.php',
+            // 响应/投影字段名恰好叫 cash_balance，不是对 user_accounts 的读写
+            'Http/Resources/Admin/V2/AdminUserDetailResource.php',
+            'Http/Resources/Admin/V2/AdminUserListItemResource.php',
+            'Http/Resources/Client/V2/ClientUserInfoResource.php',
+            'Services/Auth/AuthService.php',
+            'Services/Finance/FinanceLedgerQueryService.php',
+            'Services/Finance/ClientInvoicePaymentWorkflowService.php',
+        ];
+
+        $root = base_path('app');
+        if (! is_dir($root)) {
+            return [];
+        }
+
+        $offenders = [];
+        $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root));
+
+        foreach ($iterator as $file) {
+            if (! $file instanceof SplFileInfo || $file->getExtension() !== 'php') {
+                continue;
+            }
+
+            $relative = str_replace('\\', '/', substr($file->getPathname(), strlen($root) + 1));
+            if (in_array($relative, $allowlist, true)) {
+                continue;
+            }
+
+            $contents = (string) file_get_contents($file->getPathname());
+            // 只认「以数组键方式写 cash_balance」：模型属性注解、注释、SQL 字符串不算。
+            if (preg_match("/'cash_balance'\s*=>/", $contents) === 1) {
+                $offenders[] = $relative;
+            }
+        }
+
+        sort($offenders);
+
+        return $offenders;
     }
 
     public function down(): void

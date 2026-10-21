@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\System;
 
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * 资金账本一致性核对（只读，不改数据）。
@@ -40,8 +41,15 @@ class LedgerConsistencyCheck
      */
     public function snapshotBalanceDiffs(): array
     {
+        // T+7 归档（000015 删 cash_balance）后旧列不存在，SQL 会在解析期直接报 1064/42S22；
+        // cash 分支必须按列存在性降级：新库只读 finance_accounts 真源，切回热备列仅作兜底。
+        $hasHotStandbyColumn = Schema::hasColumn('user_accounts', 'cash_balance');
+        $cashSource = $hasHotStandbyColumn
+            ? 'COALESCE(fa.available_amount, ua.cash_balance)'
+            : 'fa.available_amount';
+
         $caseColumn = implode(' ', [
-            "WHEN 'cash' THEN COALESCE(fa.available_amount, ua.cash_balance)",
+            "WHEN 'cash' THEN {$cashSource}",
             ...array_map(
                 static fn (string $type, string $column): string => "WHEN '{$type}' THEN ua.{$column}",
                 array_keys(self::REFERRAL_TYPE_TO_COLUMN),
@@ -100,8 +108,9 @@ class LedgerConsistencyCheck
         $rows = DB::table('finance_accounts as fa')
             ->leftJoinSub($ledgerSub, 'lt', 'lt.user_id', '=', 'fa.user_id')
             ->where(function ($query): void {
-                $query->whereNull('lt.ledger_sum')
-                    ->orWhereColumn('fa.available_amount', '<>', 'lt.ledger_sum');
+                // 与下方 count 同口径：只有「金额差异 > 0.01」才算不一致，
+                // 「余额 0 且无流水」是正常开户，样本里也不应出现（否则报告自相矛盾）。
+                $query->whereRaw('ABS(COALESCE(fa.available_amount, 0) - COALESCE(lt.ledger_sum, 0)) > 0.01');
             })
             ->select([
                 'fa.user_id',
@@ -121,7 +130,25 @@ class LedgerConsistencyCheck
             ->values()
             ->all();
 
-        return ['count' => count($samples), 'samples' => $samples];
+        // 计数必须独立 COUNT(*) 而不是样本条数：limit 只约束样本，用 count($samples)
+        // 会把「真实 368 户」报成 200 户（P1-5 已复现），并让 --strict 永久红灯。
+        // 同时排除「余额为 0 且无任何现金流水」的正常开户：金额差异实际为 0，
+        // 计入即 100% 误报。
+        $total = DB::query()
+            ->fromSub(
+                DB::table('finance_accounts as fa')
+                    ->leftJoinSub($ledgerSub, 'lt', 'lt.user_id', '=', 'fa.user_id')
+                    ->where(function ($query): void {
+                        $query->whereNull('lt.ledger_sum')
+                            ->orWhereColumn('fa.available_amount', '<>', 'lt.ledger_sum');
+                    })
+                    ->select(['fa.user_id', 'fa.available_amount', 'lt.ledger_sum']),
+                'mismatch'
+            )
+            ->whereRaw('ABS(COALESCE(mismatch.available_amount, 0) - COALESCE(mismatch.ledger_sum, 0)) > 0.01')
+            ->count();
+
+        return ['count' => (int) $total, 'samples' => $samples];
     }
 
     /**

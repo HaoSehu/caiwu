@@ -20,6 +20,7 @@ use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 // 新建文件/目录为组可写（664/775），避免 root cron 先创建当日日志后 PHP-FPM(www) 因 644 写入失败
@@ -64,6 +65,14 @@ return Application::configure(basePath: dirname(__DIR__))
 
             return '/';
         });
+
+        // 维护模式豁免支付回调：切换窗口 php artisan down 期间，网关回调必须仍能到达控制器，
+        // 由 FinanceCutoverInboxService 落库并 ack 成功（否则网关重试耗尽、回调永久丢失）。
+        // 与 Runbook「回调会进收件箱」承诺对齐；业务端点仍按维护模式返回 503。
+        $middleware->preventRequestsDuringMaintenance(except: [
+            'api/v2/client/payment/notify/*',
+            'api/v2/client/payment/alipay/notify',
+        ]);
 
         // api/* 走 api 中间件组本身不含 CSRF 校验，回调等路径无需任何例外配置。
         $middleware->validateCsrfTokens();
@@ -120,6 +129,24 @@ return Application::configure(basePath: dirname(__DIR__))
                 return ApiResponseBuilder::error(42900, '请求过于频繁，请稍后再试', null, 429);
             }
 
+            return null;
+        });
+
+        // 维护模式必须原样保留 503：切换窗口用 php artisan down 时，业务端点要返回可识别的
+        // 503（而不是被兜底渲染成 500）；支付回调则显式豁免维护模式（见 withMiddleware 的
+        // preventRequestsDuringMaintenance），由 FinanceCutoverInboxService 落库并 ack 成功。
+        $exceptions->render(function (Throwable $exception, Request $request) {
+            if (! $exception instanceof HttpExceptionInterface || $exception->getStatusCode() !== 503) {
+                return null;
+            }
+
+            // api 侧显式回 503 信封：兜底 renderer 会把任何 Throwable 吞成 500，
+            // 客户端与网关都无法区分「维护中」和「服务器炸了」。
+            if ($request->is('api/*')) {
+                return ApiResponseBuilder::error(50300, '系统维护中，请稍后再试', null, 503);
+            }
+
+            // 非 api 交给框架默认维护页。
             return null;
         });
 

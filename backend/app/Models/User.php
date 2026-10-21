@@ -6,6 +6,7 @@ use App\Casts\LegacyEncrypted;
 use App\Models\Concerns\ReleasesUniqueKeysOnDelete;
 use App\Services\Finance\Core\FinanceAccountService;
 use App\Services\User\AccountService;
+use App\Support\LikeEscape;
 use App\Support\Money;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
@@ -17,8 +18,8 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Schema;
 use Laravel\Sanctum\HasApiTokens;
-use App\Support\LikeEscape;
 
 class User extends Authenticatable
 {
@@ -113,7 +114,13 @@ class User extends Authenticatable
 
         // 已预载账户关系（列表场景）时直接读热备列：与内核同一事务写入，值一致，
         // 且避免逐行回查 finance_accounts 造成 N+1；未预载时才回源财务内核。
-        if ($this->relationLoaded('account') && $this->getRelation('account') instanceof UserAccount) {
+        // T+7 归档（000015 删列）后热备列不存在：必须回退内核余额，否则属性读取为空、
+        // 管理端余额显示成 0.00。
+        if (
+            Schema::hasColumn('user_accounts', 'cash_balance')
+            && $this->relationLoaded('account')
+            && $this->getRelation('account') instanceof UserAccount
+        ) {
             return $this->normalizeDecimalString($this->getRelation('account')->cash_balance);
         }
 
@@ -260,9 +267,40 @@ class User extends Authenticatable
         return trim((string) $this->phone);
     }
 
+    /**
+     * 实名是否已完成。verification_status 为唯一真源，is_verified 只做历史兼容派生，
+     * 二者不再各自判真（历史双轨曾出现一列改、另一列没改的漂移）。
+     */
     public function hasCompletedVerification(): bool
     {
-        return (int) $this->is_verified === 1 || (int) $this->verification_status === 2;
+        return (int) $this->verification_status === 2
+            || ((int) $this->verification_status === 0 && (int) $this->is_verified === 1);
+    }
+
+    /**
+     * is_verified 的单点写口：写入时同步派生 verification_status。
+     *
+     * 只保留三态语义：1 → 已认证(2)；0 → 未认证(0)，但不得覆盖已认证/认证失败等
+     * 细分状态（那是 verification_status 自己写的）。这样任何写 is_verified 的旧
+     * 调用点都不会再产生「两列不一致」的行。
+     */
+    public function setIsVerifiedAttribute(mixed $value): void
+    {
+        $verified = (int) $value === 1 ? 1 : 0;
+        $this->attributes['is_verified'] = $verified;
+
+        $currentStatus = (int) ($this->attributes['verification_status'] ?? 0);
+
+        if ($verified === 1) {
+            $this->attributes['verification_status'] = 2;
+
+            return;
+        }
+
+        // 仅在「未认证/待认证」区间内回落，避免把认证失败(3)、已解绑(5) 抹平
+        if (in_array($currentStatus, [0, 1, 2], true)) {
+            $this->attributes['verification_status'] = 0;
+        }
     }
 
     public const VERIFICATION_STATUS_LABELS = [
