@@ -1,0 +1,277 @@
+{
+    "description": "迁移账本中保留、但代码包中已无对应文件的已知历史迁移。这些是 2026-04 至 2026-08 期间被直接删除且未归档的历史迁移文件，在 idc / idc_test 的 migrations 表里仍保留执行记录。只允许人工确认后追加，禁止脚本自动写入；新增条目会削弱升级守卫的拦截能力。",
+    "generated_by": "backend/scripts/export_orphan_manifest.php",
+    "recorded_at": "2026-10-21",
+    "orphans": [
+        {
+            "migration": "0001_01_01_000000_create_users_table",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "0001_01_01_000001_create_admin_tables",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "0001_01_01_000002_create_product_tables",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "0001_01_01_000003_create_order_tables",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "0001_01_01_000004_create_finance_tables",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "0001_01_01_000005_create_support_tables",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "0001_01_01_000006_create_suppliers_table",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "2026_03_11_135826_create_personal_access_tokens_table",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "2026_03_12_000001_add_verification_to_users_table",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "2026_03_12_000002_enhance_verification_fields_on_users_table",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "2026_03_12_000003_expand_encrypted_id_card_column",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "2026_03_12_000005_create_sms_logs_table",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "2026_03_12_000006_create_email_logs_table",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "2026_03_13_000007_create_verification_histories_table",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "2026_03_13_000008_add_interface_type_to_suppliers_table",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "2026_03_13_000009_add_zjmf_credentials_to_suppliers_table",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "2026_03_13_000010_enhance_product_catalog_tables",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "2026_03_13_000020_add_supplier_mapping_fields_to_products_table",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "2026_03_16_000021_add_product_type_to_product_groups_table",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "2026_03_18_000022_add_query_indexes_to_users_table",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "2026_03_18_000023_add_login_email_alert_to_users_table",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "2026_03_18_000024_enable_login_email_alert_by_default",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "2026_03_18_000025_add_performance_indexes_to_hot_tables",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "2026_03_19_000026_create_content_articles_table",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "2026_03_19_000027_create_content_categories_table",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "2026_03_19_000028_add_referral_fields_to_users_table",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "2026_03_19_000029_create_referral_rewards_table",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "2026_03_19_000030_create_member_levels_table",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "2026_03_19_000031_upgrade_referral_reward_workflow",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "2026_03_19_000032_create_referral_account_logs_table",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "2026_03_20_000033_add_alipay_qr_code_to_referral_withdrawals",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "2026_03_20_000033_add_company_qq_admin_note_to_users_table",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "2026_03_20_000034_add_alipay_account_fields_to_users_table",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "2026_03_23_223800_create_queue_tables",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "2026_03_24_000035_create_automation_logs_table",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "2026_03_27_000001_add_missing_performance_indexes",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "2026_03_28_000002_make_user_contacts_nullable_and_add_phone_index",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "2026_03_29_000003_add_purchase_requires_to_products_table",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "2026_03_31_000004_add_locked_pricing_to_services_table",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "2026_03_31_000005_refine_schema_naming",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "2026_03_31_000006_refine_product_relation_naming",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "2026_03_31_000007_refine_product_type_naming",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "2026_03_31_000008_refine_content_type_naming",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "2026_03_31_000009_refine_content_category_naming",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "2026_04_01_120000_add_email_to_admin_users_table",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "2026_04_01_130000_add_template_code_to_email_logs_table",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "2026_04_02_000001_drop_alipay_qr_code_columns",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "2026_04_03_190000_add_config_pricing_snapshot_to_orders_table",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "2026_06_21_000001_add_invoices_user_status_created_idx",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "2026_07_11_000001_create_agent_applications_table",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "2026_07_11_000002_add_api_key_to_agent_applications",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "2026_07_16_000001_rebuild_product_groups_as_separate_tables",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "2026_08_23_000001_update_refunds_status_comment",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "2026_08_26_000001_add_activity_logs_module_subject_index",
+            "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
+            "recorded_at": "2026-10-21"
+        }
+    ]
+}

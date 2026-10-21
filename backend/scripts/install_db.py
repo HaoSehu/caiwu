@@ -21,6 +21,7 @@ schema baseline 更新方式：
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import secrets
 import shlex
@@ -144,6 +145,24 @@ def read_env_value(key: str) -> str:
             value = value[1:-1]
 
     return value
+
+
+def read_version_manifest() -> str:
+    """读取 backend/version.json 中的代码版本号，供 db:upgrade --adopt 使用。"""
+    manifest = BACKEND_DIR / "version.json"
+    if not manifest.is_file():
+        fail(f"未找到版本清单 {manifest}，无法写入升级账本")
+
+    try:
+        payload = json.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        fail(f"版本清单 {manifest} 读取或解析失败：{exc}")
+
+    version = str(payload.get("version", "")).strip()
+    if not version:
+        fail(f"版本清单 {manifest} 缺少 version 字段")
+
+    return version
 
 
 def mask_secret(value: str) -> str:
@@ -623,6 +642,15 @@ def main() -> int:
 
         run_command(
             migrate_args,
+            cwd=BACKEND_DIR,
+            dry_run=args.dry_run,
+        )
+
+        # 新装库也要写入升级账本，否则后续 db:upgrade 会认为「尚未采纳」
+        # 而拒绝升级。这里用 adopt 语义：结构已由上面的迁移建好，只需记账。
+        log("采纳数据库版本到升级账本")
+        run_command(
+            ["php", "artisan", "db:upgrade", "--adopt=" + read_version_manifest(), "--force"],
             cwd=BACKEND_DIR,
             dry_run=args.dry_run,
         )

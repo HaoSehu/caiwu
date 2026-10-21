@@ -49,7 +49,10 @@ final class ProvisionRetryFailedTask implements ScheduledTask
 
     public function handle(TaskContext $context): array
     {
-        $exitCode = Artisan::call(self::COMMAND);
+        // 补偿窗口从 60 分钟下调到 10 分钟：afterResponse/terminating 一旦被 FPM 中断，
+        // 支付成功到「打标待人工」之间的空窗就是用户投诉窗口；开通重试本身有幂等守卫，
+        // 高频扫描不会重复开通，只会更早发现丢任务。
+        $exitCode = Artisan::call(self::COMMAND, ['--stale-minutes' => 10]);
         $output = trim(Artisan::output());
 
         $summary = [

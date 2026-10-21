@@ -299,6 +299,15 @@ else
   run_cmd php artisan migrate --force
 fi
 
+# 新装库也要写入升级账本，否则后续 db:upgrade 会认为「尚未采纳」而拒绝升级。
+log "采纳数据库版本到升级账本"
+APP_VERSION=$(php -r 'echo json_decode(file_get_contents(__DIR__."/version.json"), true)["version"] ?? "";' 2>/dev/null || true)
+if [[ -z "${APP_VERSION}" ]]; then
+  echo "[ERROR] 无法从 backend/version.json 读取版本号" >&2
+  exit 1
+fi
+run_cmd php artisan db:upgrade --adopt="${APP_VERSION}" --force
+
 log "初始化默认配置和通知模板"
 run_default_data_bootstrap
 

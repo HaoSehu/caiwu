@@ -12,7 +12,6 @@ use App\Models\Order;
 use App\Models\Service;
 use App\Services\Finance\InvoicePaidOrchestrator;
 use App\Services\Provisioning\ProvisionService;
-use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -142,17 +141,22 @@ class RetryFailedProvisionCommand extends Command
     /**
      * 扫描超时未履约的已付新购账单并打 requires_refund 标记（幂等，自动执行）。
      *
-     * 停留时长以 config_snapshot.fulfillment_pending_at 为准；存量标记（无该键）
-     * 回退到 invoice.updated_at 兜底。单条异常不中断整批，继续处理其余账单。
+     * 停留时长以独立列 fulfillment_pending_at 为准（原 config_snapshot JSON 键已迁列，
+     * 大表上 JSON_EXTRACT 无法走索引）。单条异常不中断整批，继续处理其余账单。
      */
     private function markStalePendingInvoices(int $staleMinutes): int
     {
         $threshold = now()->subMinutes($staleMinutes);
 
         try {
+            // 状态与时间都走列，命中 (fulfillment_pending, fulfillment_pending_at) 复合索引；
+            // requires_refund 在 SQL 侧排除，避免已标记账单每轮重复扫出来。
             $invoices = Invoice::query()
                 ->where('status', InvoiceStatus::PAID)
-                ->whereRaw("JSON_EXTRACT(config_snapshot, '$.fulfillment_pending') = true")
+                ->where('fulfillment_pending', true)
+                ->where('requires_refund', false)
+                ->whereNotNull('fulfillment_pending_at')
+                ->where('fulfillment_pending_at', '<=', $threshold)
                 ->whereHas('order', fn ($query) => $query->where('type', 'new'))
                 ->orderBy('id')
                 ->limit(200)
@@ -170,22 +174,6 @@ class RetryFailedProvisionCommand extends Command
         $marked = 0;
 
         foreach ($invoices as $invoice) {
-            $snapshot = is_array($invoice->config_snapshot ?? null) ? $invoice->config_snapshot : [];
-
-            // 已标记的账单直接跳过，省一次订单查询。
-            if (! empty($snapshot['requires_refund'])) {
-                continue;
-            }
-
-            $pendingAtRaw = $snapshot['fulfillment_pending_at'] ?? null;
-            $pendingAt = $pendingAtRaw !== null
-                ? Carbon::parse((string) $pendingAtRaw)
-                : $invoice->updated_at;
-
-            if ($pendingAt === null || $pendingAt->greaterThan($threshold)) {
-                continue;
-            }
-
             $order = $invoice->order;
             if (! $order instanceof Order) {
                 continue;

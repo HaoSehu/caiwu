@@ -1,0 +1,16 @@
+{
+    "description": "迁移 lint 豁免清单：已入库且已在 idc / idc_test 执行过的历史迁移，修改它们会违反「迁移只新增、不改写已执行文件」原则，因此在静态检查中显式豁免。新增豁免必须写明原因与登记日期，禁止为了通过检查而无理由追加。",
+    "recorded_at": "2026-10-21",
+    "exemptions": [
+        {
+            "file": "2026_08_26_000001_add_excerpt_to_content_articles_table.php",
+            "reason": "已在 2026-08-26 入库并于 idc / idc_test 执行；补充 hasColumn 守卫属于修改已执行迁移，违反只追加原则。若需重试保护，应新增前向修复迁移。",
+            "recorded_at": "2026-10-21"
+        },
+        {
+            "file": "2026_10_10_000005_fix_log_status_column_defaults.php",
+            "reason": "已在 2026-10-10 入库并于 idc / idc_test 执行；ALTER COLUMN SET/DROP DEFAULT 为元数据级操作且本身可按当前值重复执行，但修改已执行文件仍违反只追加原则。",
+            "recorded_at": "2026-10-21"
+        }
+    ]
+}

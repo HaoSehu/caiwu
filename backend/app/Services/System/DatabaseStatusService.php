@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\System;
 
 use App\Exceptions\BusinessException;
+use App\Support\MysqlDumpBinary;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
@@ -360,32 +361,15 @@ class DatabaseStatusService
         );
     }
 
+    /**
+     * 解析 mysqldump 路径。
+     *
+     * 候选路径与探测逻辑统一收敛在 App\Support\MysqlDumpBinary，
+     * 避免管理端下载备份与升级前备份各自维护一份而出现「一处能备份、另一处找不到」。
+     */
     private function resolveMysqldumpBinary(): string
     {
-        // 用 config() 而非 env()：config:cache 启用后 env() 读取 .env 会失效，
-        // 但 config() 仍能拿到缓存里的值（见 config/database.php:mysqldump_path）。
-        $candidates = array_values(array_filter([
-            config('database.mysqldump_path'),
-            'D:\\BtSoft\\mysql\\MySQL8.0\\bin\\mysqldump.exe',
-            'D:\\BtSoft\\mysql\\MySQL5.7\\bin\\mysqldump.exe',
-            '/www/server/mysql/bin/mysqldump',
-            '/usr/bin/mysqldump',
-            '/usr/local/mysql/bin/mysqldump',
-            'mysqldump',
-        ], static fn (mixed $path): bool => is_string($path) && trim($path) !== ''));
-
-        foreach ($candidates as $candidate) {
-            $path = trim($candidate);
-            if ($path === 'mysqldump') {
-                return $path;
-            }
-
-            if (is_file($path)) {
-                return $path;
-            }
-        }
-
-        throw new RuntimeException('未找到 mysqldump，请配置 MYSQLDUMP_PATH 或安装 MySQL 客户端');
+        return MysqlDumpBinary::resolve();
     }
 
     private function pruneOldBackups(string $directory): void
