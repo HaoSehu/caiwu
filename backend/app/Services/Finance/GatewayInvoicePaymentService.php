@@ -14,6 +14,7 @@ use App\Models\User;
 use App\Services\Integrations\Payments\PaymentGatewayManager;
 use App\Services\Integrations\Payments\PaymentGatewayOperationService;
 use App\Services\Integrations\Plugins\PaymentGatewayBindingResolver;
+use App\Support\Money;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -180,7 +181,7 @@ class GatewayInvoicePaymentService
 
         $notifyAmount = round((float) ($params['total_amount'] ?? $params['amount'] ?? $params['money'] ?? 0), 2);
         $expectedAmount = round((float) $payment->amount, 2);
-        if ($notifyAmount <= 0 || abs($notifyAmount - $expectedAmount) > 0.0001) {
+        if ($notifyAmount <= 0 || ! Money::equals($notifyAmount, $expectedAmount)) {
             Log::warning("[{$gatewayLabel}回调] 金额校验失败", [
                 'payment_no' => $paymentNo,
                 'expected_amount' => $expectedAmount,
@@ -353,7 +354,7 @@ class GatewayInvoicePaymentService
         // 金额校验（total_amount 缺失或为零均视为异常，拒绝入账）
         $queryAmount = round((float) ($queryResult['total_amount'] ?? 0), 2);
         $expectedAmount = round((float) $payment->amount, 2);
-        if ($queryAmount <= 0 || abs($queryAmount - $expectedAmount) > 0.0001) {
+        if ($queryAmount <= 0 || ! Money::equals($queryAmount, $expectedAmount)) {
             Log::warning("[{$gatewayLabel}主动查询] 金额校验失败", [
                 'payment_no' => $payment->payment_no,
                 'expected' => $expectedAmount,

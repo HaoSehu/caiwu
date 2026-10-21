@@ -70,7 +70,7 @@ final class FinanceAccountService
             throw new BusinessException('恢复金额必须大于零', 42200, 422);
         }
 
-        return DB::transaction(function () use ($userId, $amountCents, $eventType, $sourceType, $sourceId, $meta): CashMutation {
+        return $this->withVersionRetry(fn (): CashMutation => DB::transaction(function () use ($userId, $amountCents, $eventType, $sourceType, $sourceId, $meta): CashMutation {
             [$account, $balance] = $this->lockAccount($userId);
             $balanceAfter = $balance + $amountCents;
 
@@ -94,7 +94,7 @@ final class FinanceAccountService
                 entryId: (int) $result['entry']->id,
                 entryNo: (string) $result['entry']->entry_no,
             );
-        });
+        }));
     }
 
     /**
@@ -147,6 +147,47 @@ final class FinanceAccountService
      * @param  array<string, mixed>  $meta
      */
     private function mutate(int $userId, int $changeCents, string $eventType, array $meta): CashMutation
+    {
+        return $this->withVersionRetry(
+            fn (): CashMutation => $this->runMutation($userId, $changeCents, $eventType, $meta),
+        );
+    }
+
+    /**
+     * CAS 冲突重试外壳。
+     *
+     * 原实现 version 条件更新失败直接抛 409，同一用户的并发资金操作（例如
+     * 支付回调与用户点击支付几乎同时）会直接失败给前端。这里只对
+     * 「账户余额已被并发修改」做有限的进程内重试：事务已回滚，重试会重新加锁
+     * 并重算余额，语义安全；其他业务异常（余额不足等）不重试。
+     */
+    private function withVersionRetry(callable $operation): mixed
+    {
+        $attempts = max((int) config('finance.version_retry_attempts', 3), 1);
+        $baseDelayMs = max((int) config('finance.version_retry_delay_ms', 20), 0);
+
+        for ($attempt = 1; ; $attempt++) {
+            try {
+                return $operation();
+            } catch (BusinessException $exception) {
+                $isVersionConflict = $exception->getErrorCode() === 40900
+                    && str_contains($exception->getMessage(), '账户余额已被并发修改');
+
+                if (! $isVersionConflict || $attempt >= $attempts) {
+                    throw $exception;
+                }
+
+                if ($baseDelayMs > 0) {
+                    usleep($baseDelayMs * 1000 * $attempt);
+                }
+            }
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $meta
+     */
+    private function runMutation(int $userId, int $changeCents, string $eventType, array $meta): CashMutation
     {
         return DB::transaction(function () use ($userId, $changeCents, $eventType, $meta): CashMutation {
             [$account, $balance] = $this->lockAccount($userId);

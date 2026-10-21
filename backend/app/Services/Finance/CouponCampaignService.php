@@ -9,6 +9,7 @@ use App\Exceptions\BusinessException;
 use App\Models\AutomationLog;
 use App\Models\Coupon;
 use App\Models\CouponCampaign;
+use App\Support\LikeEscape;
 use App\Support\Money;
 use App\Support\SchemaMetadataCache;
 use Carbon\CarbonImmutable;
@@ -320,9 +321,9 @@ class CouponCampaignService
             ->when($keyword !== '', function ($query) use ($keyword) {
                 $query->where(function ($builder) use ($keyword) {
                     $builder
-                        ->where('name', 'like', '%'.$keyword.'%')
-                        ->orWhere('description', 'like', '%'.$keyword.'%')
-                        ->orWhere('remark', 'like', '%'.$keyword.'%');
+                        ->where('name', 'like', LikeEscape::contains($keyword))
+                        ->orWhere('description', 'like', LikeEscape::contains($keyword))
+                        ->orWhere('remark', 'like', LikeEscape::contains($keyword));
                 });
             })
             ->when($applyStatusFilter && $status !== '', fn ($query) => $query->where('status', (int) $status));

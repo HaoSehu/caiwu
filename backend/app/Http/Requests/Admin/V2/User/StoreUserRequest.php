@@ -34,6 +34,8 @@ class StoreUserRequest extends AdminFormRequest
             ],
             'status' => ['nullable', 'in:0,1'],
             'credit_limit' => ['nullable', 'numeric', 'min:0'],
+            // 初始余额走内核入账：必须是非负数，且不接受超过 decimal(12,2) 的金额
+            'balance' => ['nullable', 'numeric', 'min:0', 'max:9999999999.99'],
         ];
 
         $rules['phone'][0] = 'required';
@@ -50,6 +52,7 @@ class StoreUserRequest extends AdminFormRequest
             'phone',
             'status',
             'credit_limit',
+            'balance',
         ]);
     }
 }

@@ -22,6 +22,7 @@ use App\Models\User;
 use App\Models\UserCoupon;
 use App\Services\ProductCatalog\InstanceSpecCatalogService;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
+use App\Support\LikeEscape;
 use App\Support\Money;
 use App\Support\ProductGroupHierarchyFields;
 use App\Support\SchemaMetadataCache;
@@ -272,10 +273,21 @@ class CouponService
                 new BusinessException('该优惠券仍有关联订单或账单，不能删除')
             );
 
+            // 软删（CMP-P1-7）：券模板与用户领取记录都是业务历史，物理删除会让
+            // 「谁在什么时候领过/用过」永久消失，也无法回溯运营误删。
+            // 券本身走 SoftDeletes；未使用/已过期的领取记录改为 REVOKED 状态回收，
+            // 保留领取时间与来源（已使用、已核销的记录一律不动）。
             if ($this->hasUserCouponsTable()) {
                 UserCoupon::query()
                     ->where('coupon_id', $lockedCoupon->id)
-                    ->delete();
+                    // 只回收「未使用」的领取记录（=1）。已使用(2) 是核销历史必须保留；
+                    // 3 是已回收终态，无需重复处理。
+                    ->where('status', UserCouponStatus::OWNED)
+                    ->update([
+                        'status' => UserCouponStatus::REVOKED,
+                        'reserved_until' => null,
+                        'updated_at' => now(),
+                    ]);
             }
 
             $deleted = Coupon::query()
@@ -728,8 +740,8 @@ class CouponService
             ->when($keyword !== '', function ($query) use ($keyword) {
                 $query->where(function ($builder) use ($keyword) {
                     $builder
-                        ->where('name', 'like', '%'.$keyword.'%')
-                        ->orWhere('description', 'like', '%'.$keyword.'%');
+                        ->where('name', 'like', LikeEscape::contains($keyword))
+                        ->orWhere('description', 'like', LikeEscape::contains($keyword));
                 });
             })
             ->when($discountType !== '', fn ($query) => $query->where('discount_type', $discountType))
@@ -772,12 +784,14 @@ class CouponService
         $query = UserCoupon::query()
             ->select('user_coupons.*')
             ->join('coupons', 'coupons.id', '=', 'user_coupons.coupon_id')
+            // 原生 join 不享受 Eloquent 的 SoftDeletes 全局作用域，必须显式排除已删券
+            ->whereNull('coupons.deleted_at')
             ->with('coupon')
             ->where('user_coupons.user_id', $userId)
             ->when($keyword !== '', function ($builder) use ($keyword) {
                 $builder->where(function ($query) use ($keyword) {
-                    $query->where('coupons.name', 'like', '%'.$keyword.'%')
-                        ->orWhere('coupons.description', 'like', '%'.$keyword.'%');
+                    $query->where('coupons.name', 'like', LikeEscape::contains($keyword))
+                        ->orWhere('coupons.description', 'like', LikeEscape::contains($keyword));
                 });
             })
             ->selectRaw('('.$this->ownedCouponUsageCountSql().') as user_used_count', [$userId, InvoiceStatus::CANCELLED]);
@@ -862,8 +876,8 @@ class CouponService
             ->when($keyword !== '', function ($query) use ($keyword) {
                 $query->where(function ($builder) use ($keyword) {
                     $builder
-                        ->where('name', 'like', '%'.$keyword.'%')
-                        ->orWhere('description', 'like', '%'.$keyword.'%');
+                        ->where('name', 'like', LikeEscape::contains($keyword))
+                        ->orWhere('description', 'like', LikeEscape::contains($keyword));
                 });
             })
             ->withCount('userCoupons')
@@ -901,8 +915,8 @@ class CouponService
             })
             ->when($keyword !== '', function ($builder) use ($keyword) {
                 $builder->where(function ($query) use ($keyword) {
-                    $query->where('name', 'like', '%'.$keyword.'%')
-                        ->orWhere('description', 'like', '%'.$keyword.'%');
+                    $query->where('name', 'like', LikeEscape::contains($keyword))
+                        ->orWhere('description', 'like', LikeEscape::contains($keyword));
                 });
             })
             ->withCount('userCoupons');
@@ -1708,6 +1722,9 @@ class CouponService
             );
         }
 
+        // 唯一的「一人一份」约束来自表结构 UK(coupon_id,user_id)，
+        // 因此 per_user_limit 在领取口径下恒等于 1（>1 的配置在领取侧不生效，
+        // 管理端保存时已由 CouponService::assertPerUserLimitCompatible 拒绝）。
         throw_if(
             UserCoupon::query()->where('coupon_id', $coupon->id)->where('user_id', $userId)->exists(),
             new BusinessException('你已经领取过这张优惠券')
@@ -2127,6 +2144,11 @@ class CouponService
             ? $coupon->per_user_limit
             : $this->normalizePositiveInteger($payload['per_user_limit'] ?? null);
 
+        // 注意 per_user_limit 的真实语义是「同一张券对该用户的核销次数上限」
+        // （见 ownedCouponUsageCountSql 的使用次数口径），不是「可领取张数」：
+        // 领取张数由表结构 UK(coupon_id,user_id) 固定为每人 1 张，两者不冲突。
+        // 历史文档/表单文案容易混淆，此处显式记录以免后续误判为重复领取限制。
+
         $status = $isUpdate && ! array_key_exists('status', $payload)
             ? (int) $coupon->status
             : (int) ($payload['status'] ?? CouponStatus::ACTIVE);
@@ -2310,6 +2332,7 @@ class CouponService
                 $query->selectRaw('1')
                     ->from('coupons')
                     ->whereColumn('coupons.id', 'invoices.coupon_id')
+                    ->whereNull('coupons.deleted_at')
                     ->where('coupons.first_order_only', 1);
             })
             ->exists();

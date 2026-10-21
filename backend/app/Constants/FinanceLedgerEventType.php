@@ -36,6 +36,9 @@ class FinanceLedgerEventType
 
     public const SYSTEM_ADJUSTMENT = 'system_adjustment';
 
+    /** 管理员创建用户时写入的初始余额 */
+    public const INITIAL_BALANCE = 'initial_balance';
+
     /** 实名认证费用扣款 */
     public const VERIFICATION_FEE = 'verification_fee';
 
@@ -95,6 +98,7 @@ class FinanceLedgerEventType
             self::REFERRAL_WITHDRAW_APPROVED => '提现通过',
             self::REFERRAL_WITHDRAW_REJECTED => '提现驳回',
             self::SYSTEM_ADJUSTMENT => '系统调账',
+            self::INITIAL_BALANCE => '开户初始余额',
             self::VERIFICATION_FEE => '实名认证费用',
         ];
     }
@@ -105,7 +109,7 @@ class FinanceLedgerEventType
 
         return match ($normalized) {
             self::INVOICE_PAYMENT, self::MANUAL_DEDUCTION, self::VERIFICATION_FEE => self::DIRECTION_OUT,
-            self::INVOICE_REFUND, self::RECHARGE, self::MANUAL_RECHARGE, self::REFERRAL_CREDIT_CASH => self::DIRECTION_IN,
+            self::INVOICE_REFUND, self::RECHARGE, self::MANUAL_RECHARGE, self::INITIAL_BALANCE, self::REFERRAL_CREDIT_CASH => self::DIRECTION_IN,
             default => $amount < 0 ? self::DIRECTION_OUT : self::DIRECTION_IN,
         };
     }
@@ -114,7 +118,7 @@ class FinanceLedgerEventType
     {
         return match (self::normalize($eventType)) {
             self::INVOICE_PAYMENT, self::INVOICE_REFUND => self::CATEGORY_INVOICE,
-            self::RECHARGE, self::MANUAL_RECHARGE, self::MANUAL_DEDUCTION, self::SYSTEM_ADJUSTMENT, self::VERIFICATION_FEE => self::CATEGORY_BALANCE,
+            self::RECHARGE, self::MANUAL_RECHARGE, self::MANUAL_DEDUCTION, self::SYSTEM_ADJUSTMENT, self::INITIAL_BALANCE, self::VERIFICATION_FEE => self::CATEGORY_BALANCE,
             self::REFERRAL_CREDIT_CASH,
             self::REFERRAL_REWARD_FROZEN,
             self::REFERRAL_REWARD_RELEASED,

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Constants\InvoiceStatus;
+use App\Constants\UserCouponStatus;
 use App\Exceptions\BusinessException;
 use App\Models\Coupon;
 use App\Models\Invoice;
@@ -313,7 +314,11 @@ class CouponCrudContractTest extends TestCase
 
     // ------------------------------------------------------------ 删除契约
 
-    public function test_delete_removes_coupon_and_its_user_coupon_records(): void
+    /**
+     * 删除契约（2026-10-21 起）：券模板软删（deleted_at），未使用的领取记录改 REVOKED，
+     * 历史行全部保留可追溯——原契约是物理删除模板与领取记录。
+     */
+    public function test_delete_soft_deletes_coupon_and_revokes_unused_records(): void
     {
         $user = User::factory()->create();
         $coupon = $this->service()->createCoupon([
@@ -329,8 +334,16 @@ class CouponCrudContractTest extends TestCase
 
         $this->service()->deleteCoupon(Coupon::query()->findOrFail($couponId), ['operator' => 'tester']);
 
+        // 模板软删：默认作用域查不到，但带 withTrashed 历史行还在
         $this->assertNull(Coupon::query()->find($couponId));
-        $this->assertSame(0, UserCoupon::query()->where('coupon_id', $couponId)->count());
+        $trashed = Coupon::withTrashed()->find($couponId);
+        $this->assertNotNull($trashed);
+        $this->assertNotNull($trashed->deleted_at);
+
+        // 领取记录不物理删除，改为 REVOKED 保留领取轨迹（定向发放路径可能不写 claimed_at）
+        $record = UserCoupon::query()->where('coupon_id', $couponId)->firstOrFail();
+        $this->assertSame(UserCouponStatus::REVOKED, (int) $record->status);
+        $this->assertNotNull($record->created_at);
     }
 
     public function test_delete_rejects_coupon_with_recorded_usage(): void

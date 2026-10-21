@@ -8,6 +8,7 @@ use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
 use App\Models\Payment;
 use App\Support\Concerns\FiltersDateRange;
+use App\Support\LikeEscape;
 
 class ClientPaymentQueryService
 {
@@ -41,9 +42,9 @@ class ClientPaymentQueryService
         if (! empty($filters['keyword'])) {
             $keyword = trim((string) $filters['keyword']);
             $query->where(function ($builder) use ($keyword): void {
-                $builder->where('payment_no', 'like', '%'.$keyword.'%')
-                    ->orWhere('trade_no', 'like', '%'.$keyword.'%')
-                    ->orWhereHas('invoice', fn ($invoiceQuery) => $invoiceQuery->where('invoice_no', 'like', '%'.$keyword.'%'));
+                $builder->where('payment_no', 'like', LikeEscape::contains($keyword))
+                    ->orWhere('trade_no', 'like', LikeEscape::contains($keyword))
+                    ->orWhereHas('invoice', fn ($invoiceQuery) => $invoiceQuery->where('invoice_no', 'like', LikeEscape::contains($keyword)));
             });
         }
         $this->applyDateFilter($query, $filters);

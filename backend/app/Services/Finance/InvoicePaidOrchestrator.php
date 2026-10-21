@@ -10,6 +10,7 @@ use App\Constants\PaymentGatewayCode;
 use App\Constants\ServiceStatus;
 use App\Constants\UserNotificationType;
 use App\Exceptions\BusinessException;
+use App\Jobs\ProcessPaidOrderReferralRewardJob;
 use App\Jobs\SendTemplateEmailJob;
 use App\Models\AutomationLog;
 use App\Models\Invoice;
@@ -274,10 +275,32 @@ class InvoicePaidOrchestrator
     }
 
     /**
-     * 对无订单的账单触发推荐奖励（after-response / 同步兜底）
+     * 对无订单的账单触发推荐奖励。
+     *
+     * 优先投队列：terminating 回调在 FPM 被客户端断连/超时强杀时会整体丢失，
+     * 而返佣没有任何等价巡检兜底（履约侧有 provision:retry-failed）。队列任务自带
+     * 重试与失败表，进程重启后仍能被 worker 捡起。队列不可用（sync 驱动 / jobs 表缺失）
+     * 时才退回 after-response，保持本地与测试环境行为不变。
+     *
+     * 幂等由 ReferralService::resolveRewardCore 的「锁 + invoice_id 唯一索引」兜底，
+     * 重复投递不会重复发放。
      */
     private function dispatchInvoiceOnlyReferralReward(Invoice $invoice, ?string $traceId): void
     {
+        if ($this->shouldQueueInvoiceReferralReward()) {
+            try {
+                ProcessPaidOrderReferralRewardJob::dispatch(0, $traceId, (int) $invoice->id);
+
+                return;
+            } catch (\Throwable $exception) {
+                Log::warning('[支付后推荐奖励] 入队失败，回退 after-response', [
+                    'invoice_id' => $invoice->id,
+                    'message' => $exception->getMessage(),
+                    'exception' => $exception::class,
+                ]);
+            }
+        }
+
         $callback = function () use ($invoice, $traceId): void {
             try {
                 $this->referralService->rewardForPaidInvoice($invoice, $traceId);
@@ -299,6 +322,47 @@ class InvoicePaidOrchestrator
         }
 
         app()->terminating($callback);
+    }
+
+    private function shouldQueueInvoiceReferralReward(): bool
+    {
+        $driver = (string) config('queue.default', 'sync');
+
+        if ($driver === '' || $driver === 'sync') {
+            return false;
+        }
+
+        if ($driver === 'database') {
+            $table = (string) config('queue.connections.database.table', 'jobs');
+
+            return $table !== '' && SchemaMetadataCache::hasTable($table);
+        }
+
+        return true;
+    }
+
+    /**
+     * 无订单账单的返佣处理入口（队列任务调用）。
+     */
+    public function processPaidInvoiceReferralRewardById(int $invoiceId, ?string $traceId = null): void
+    {
+        $invoice = Invoice::query()->with(['user', 'product'])->find($invoiceId);
+
+        if (! $invoice instanceof Invoice) {
+            return;
+        }
+
+        try {
+            $this->referralService->rewardForPaidInvoice($invoice, $traceId);
+        } catch (\Throwable $exception) {
+            Log::error('[支付后推荐奖励] 基于账单的奖励处理失败', [
+                'invoice_id' => $invoiceId,
+                'invoice_no' => $invoice->invoice_no ?? '',
+                'trace_id' => $traceId,
+                'message' => $exception->getMessage(),
+                'exception' => $exception::class,
+            ]);
+        }
     }
 
     public function processPaidOrderReferralRewardById(int $orderId, ?string $traceId = null): void
@@ -455,19 +519,27 @@ class InvoicePaidOrchestrator
         return $product instanceof Product && (int) $product->auto_setup === 1;
     }
 
+    /**
+     * 履约中标记：写独立列（不再与业务快照共用 config_snapshot）。
+     *
+     * 状态与业务快照分离的意义：saveQuietly 无行锁，配置快照同时被履约、
+     * 退款标记、管理端改备注等多处读改写，共用 JSON 会互相覆盖（lost update），
+     * 而履约标志一旦丢失就会静默漏开通。
+     */
     private function markFulfillmentPending(Invoice $invoice, string $invoiceType): Invoice
     {
-        $configSnapshot = is_array($invoice->config_snapshot ?? null) ? $invoice->config_snapshot : [];
-        if (! empty($configSnapshot['fulfillment_pending']) || ! empty($configSnapshot['fulfillment_cleared_at'])) {
+        if ((bool) $invoice->fulfillment_pending || $invoice->fulfillment_cleared_at !== null) {
             return $invoice;
         }
 
-        $configSnapshot['fulfillment_pending'] = true;
-        // 首次标记时间：超时未履约巡检（provision:retry-failed）以此判定等待时长；
-        // 存量标记（无该键）由巡检回退到 invoice.updated_at 兜底。
-        $configSnapshot['fulfillment_pending_at'] = now()->toDateTimeString();
-        $configSnapshot['fulfillment_type'] = $invoiceType;
+        $invoice->forceFill([
+            'fulfillment_pending' => true,
+            // 首次标记时间：超时未履约巡检（provision:retry-failed）以此判定等待时长
+            'fulfillment_pending_at' => now(),
+        ])->saveQuietly();
 
+        $configSnapshot = is_array($invoice->config_snapshot ?? null) ? $invoice->config_snapshot : [];
+        $configSnapshot['fulfillment_type'] = $invoiceType;
         $invoice->forceFill(['config_snapshot' => $configSnapshot])->saveQuietly();
 
         return $invoice->fresh(['order.product']) ?? $invoice;
@@ -504,24 +576,18 @@ class InvoicePaidOrchestrator
             return false;
         }
 
-        $configSnapshot = is_array($invoice->config_snapshot ?? null) ? $invoice->config_snapshot : [];
-
         // 幂等：已标记的账单不重复写
-        if (! empty($configSnapshot['requires_refund'])) {
+        if ((bool) $invoice->requires_refund) {
             return false;
         }
 
         // 复查履约仍处于 pending：扫描列表/重试耗尽与打标之间履约可能恰好完成
         // （clearFulfillmentPending 已清标志），此时不得给已成功履约的账单打标。
-        // 所有进入开通流程的新购账单在派发前都先经 markFulfillmentPending 落标志，
-        // 缺失该键的存量已付账单不属于本兜底口径，跳过。
-        if (empty($configSnapshot['fulfillment_pending'])) {
+        if (! (bool) $invoice->fulfillment_pending) {
             return false;
         }
 
-        $invoice->forceFill([
-            'config_snapshot' => array_merge($configSnapshot, ['requires_refund' => true]),
-        ])->save();
+        $invoice->forceFill(['requires_refund' => true])->save();
 
         Log::error('[支付后自动开通] 履约重试耗尽，已付账单标记 requires_refund 待人工处理', [
             'order_id' => $orderId,
@@ -537,22 +603,14 @@ class InvoicePaidOrchestrator
     private function clearFulfillmentPending(Invoice $invoice): void
     {
         $freshInvoice = $invoice->fresh();
-        if (! $freshInvoice instanceof Invoice) {
+        if (! $freshInvoice instanceof Invoice || ! (bool) $freshInvoice->fulfillment_pending) {
             return;
         }
 
-        $configSnapshot = is_array($freshInvoice->config_snapshot ?? null)
-            ? $freshInvoice->config_snapshot
-            : [];
-
-        if (empty($configSnapshot['fulfillment_pending'])) {
-            return;
-        }
-
-        $configSnapshot['fulfillment_pending'] = false;
-        $configSnapshot['fulfillment_cleared_at'] = now()->toDateTimeString();
-
-        $freshInvoice->forceFill(['config_snapshot' => $configSnapshot])->saveQuietly();
+        $freshInvoice->forceFill([
+            'fulfillment_pending' => false,
+            'fulfillment_cleared_at' => now(),
+        ])->saveQuietly();
     }
 
     /**

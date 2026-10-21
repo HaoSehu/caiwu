@@ -188,7 +188,6 @@ class RechargePaymentService
      * 余额调整成功后的审计收尾：重放命中时不重复写审计。
      *
      * @param  array<string, mixed>  $context
-     * @param  FinanceOperationResult  $result
      * @return array<string, mixed>
      */
     private function finishBalanceAdjustment(User $user, float $amount, FinanceOperationResult $result, array $context, string $idempotencyKey): array
@@ -333,7 +332,7 @@ class RechargePaymentService
             // 金额校验：轮询路径不经过签名验证，必须与异步通知同级的金额比对，防止异常金额入账
             $queryAmount = round((float) ($result['total_amount'] ?? 0), 2);
             $expectedAmount = round((float) $payment->amount, 2);
-            if ($queryAmount <= 0 || abs($queryAmount - $expectedAmount) > 0.0001) {
+            if ($queryAmount <= 0 || ! Money::equals($queryAmount, $expectedAmount)) {
                 Log::warning('[充值主动查询] 金额校验失败，拒绝入账', [
                     'payment_no' => $payment->payment_no,
                     'expected' => $expectedAmount,

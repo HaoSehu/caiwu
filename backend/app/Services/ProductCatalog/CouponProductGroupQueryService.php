@@ -9,6 +9,7 @@ use App\Models\FirstProductGroup;
 use App\Models\Product;
 use App\Models\SecondProductGroup;
 use App\Models\ThirdProductGroup;
+use App\Support\LikeEscape;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -28,8 +29,8 @@ class CouponProductGroupQueryService
                 $keyword = $this->keyword($filters);
                 $query->where(function (Builder $builder) use ($keyword): void {
                     $builder
-                        ->where('name', 'like', '%'.$keyword.'%')
-                        ->orWhere('code', 'like', '%'.$keyword.'%');
+                        ->where('name', 'like', LikeEscape::contains($keyword))
+                        ->orWhere('code', 'like', LikeEscape::contains($keyword));
                 });
             })
             ->when($this->status($filters) !== null, fn (Builder $query) => $query->where('is_visible', $this->status($filters)))
@@ -121,9 +122,9 @@ class CouponProductGroupQueryService
                 $keyword = $this->keyword($filters);
                 $query->where(function (Builder $builder) use ($keyword): void {
                     $builder
-                        ->where('custom_display_name', 'like', '%'.$keyword.'%')
-                        ->orWhere('product_type', 'like', '%'.$keyword.'%')
-                        ->orWhere('service_type_code', 'like', '%'.$keyword.'%');
+                        ->where('custom_display_name', 'like', LikeEscape::contains($keyword))
+                        ->orWhere('product_type', 'like', LikeEscape::contains($keyword))
+                        ->orWhere('service_type_code', 'like', LikeEscape::contains($keyword));
                 });
             })
             ->when($this->status($filters) !== null, fn (Builder $query) => $query->where('status', $this->status($filters)))

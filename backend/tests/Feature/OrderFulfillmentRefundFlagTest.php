@@ -29,8 +29,7 @@ class OrderFulfillmentRefundFlagTest extends TestCase
 
         $this->runFailedHook((int) $order->id);
 
-        $snapshot = (array) ($invoice->fresh()->config_snapshot ?? []);
-        $this->assertTrue((bool) ($snapshot['requires_refund'] ?? false));
+        $this->assertTrue((bool) $invoice->fresh()->requires_refund);
     }
 
     public function test_failed_skips_renew_refunded_and_unpaid_scenarios(): void
@@ -38,18 +37,18 @@ class OrderFulfillmentRefundFlagTest extends TestCase
         // 续费订单：有自己的恢复与退款链路，不在本 Job 打标
         [$renewOrder, $renewInvoice] = $this->makePaidUnfulfilledStack('renew');
         $this->runFailedHook((int) $renewOrder->id);
-        $this->assertFalse((bool) (($renewInvoice->fresh()->config_snapshot ?? [])['requires_refund'] ?? false));
+        $this->assertFalse((bool) $renewInvoice->fresh()->requires_refund);
 
         // 已退款订单：资金已退，无悬挂
         [$refundedOrder, $refundedInvoice] = $this->makePaidUnfulfilledStack();
         $refundedOrder->forceFill(['status' => OrderStatus::REFUNDED])->save();
         $this->runFailedHook((int) $refundedOrder->id);
-        $this->assertFalse((bool) (($refundedInvoice->fresh()->config_snapshot ?? [])['requires_refund'] ?? false));
+        $this->assertFalse((bool) $refundedInvoice->fresh()->requires_refund);
 
         // 未支付账单：没有资金悬挂
         [$unpaidOrder, $unpaidInvoice] = $this->makePaidUnfulfilledStack('new', InvoiceStatus::UNPAID);
         $this->runFailedHook((int) $unpaidOrder->id);
-        $this->assertFalse((bool) (($unpaidInvoice->fresh()->config_snapshot ?? [])['requires_refund'] ?? false));
+        $this->assertFalse((bool) $unpaidInvoice->fresh()->requires_refund);
     }
 
     public function test_failed_is_idempotent_and_preserves_snapshot(): void
@@ -59,9 +58,9 @@ class OrderFulfillmentRefundFlagTest extends TestCase
         $this->runFailedHook((int) $order->id);
         $this->runFailedHook((int) $order->id);
 
-        $snapshot = (array) ($invoice->fresh()->config_snapshot ?? []);
-        $this->assertTrue((bool) ($snapshot['requires_refund'] ?? false));
+        $this->assertTrue((bool) $invoice->fresh()->requires_refund);
         // 原有快照内容不被覆盖
+        $snapshot = (array) ($invoice->fresh()->config_snapshot ?? []);
         $this->assertSame('basic', (string) ($snapshot['plan'] ?? ''));
     }
 
@@ -71,47 +70,39 @@ class OrderFulfillmentRefundFlagTest extends TestCase
         // provision:retry-failed 以 fulfillment_pending 停留时长兜底判定"履约已放弃"。
         [$order, $invoice] = $this->makePaidUnfulfilledStack();
         $invoice->forceFill([
-            'config_snapshot' => [
-                'plan' => 'basic',
-                'fulfillment_pending' => true,
-                'fulfillment_pending_at' => now()->subHours(2)->toDateTimeString(),
-            ],
+            'fulfillment_pending' => true,
+            'fulfillment_pending_at' => now()->subHours(2),
         ])->save();
 
         $this->artisan('provision:retry-failed')->assertExitCode(0);
 
-        $snapshot = (array) ($invoice->fresh()->config_snapshot ?? []);
-        $this->assertTrue((bool) ($snapshot['requires_refund'] ?? false));
+        $this->assertTrue((bool) $invoice->fresh()->requires_refund);
     }
 
     public function test_recent_pending_invoice_is_not_marked(): void
     {
         [$order, $invoice] = $this->makePaidUnfulfilledStack();
         $invoice->forceFill([
-            'config_snapshot' => [
-                'plan' => 'basic',
-                'fulfillment_pending' => true,
-                'fulfillment_pending_at' => now()->subMinutes(5)->toDateTimeString(),
-            ],
+            'fulfillment_pending' => true,
+            'fulfillment_pending_at' => now()->subMinutes(5),
         ])->save();
 
         $this->artisan('provision:retry-failed')->assertExitCode(0);
 
-        $snapshot = (array) ($invoice->fresh()->config_snapshot ?? []);
-        $this->assertFalse((bool) ($snapshot['requires_refund'] ?? false));
+        $this->assertFalse((bool) $invoice->fresh()->requires_refund);
     }
 
-    public function test_legacy_pending_without_timestamp_falls_back_to_updated_at(): void
+    public function test_pending_without_timestamp_is_not_marked(): void
     {
-        // 存量标记无 fulfillment_pending_at 键，回退 updated_at 判定超时。
+        // 迁移后 fulfillment_pending_at 缺失的异常行不做超时判定：
+        // 宁可漏标待人工核对，也不能凭 updated_at 误判正在履约的账单。
         [$order, $invoice] = $this->makePaidUnfulfilledStack();
-        $invoice->forceFill(['config_snapshot' => ['plan' => 'basic', 'fulfillment_pending' => true]])->save();
+        $invoice->forceFill(['fulfillment_pending' => true, 'fulfillment_pending_at' => null])->save();
         Invoice::query()->whereKey((int) $invoice->id)->update(['updated_at' => now()->subHours(3)]);
 
         $this->artisan('provision:retry-failed')->assertExitCode(0);
 
-        $snapshot = (array) ($invoice->fresh()->config_snapshot ?? []);
-        $this->assertTrue((bool) ($snapshot['requires_refund'] ?? false));
+        $this->assertFalse((bool) $invoice->fresh()->requires_refund);
     }
 
     /**
@@ -153,7 +144,9 @@ class OrderFulfillmentRefundFlagTest extends TestCase
             'paid_amount' => $invoiceStatus === InvoiceStatus::PAID ? '88.00' : '0.00',
             'status' => $invoiceStatus,
             'paid_at' => $invoiceStatus === InvoiceStatus::PAID ? now() : null,
-            'config_snapshot' => ['plan' => 'basic', 'fulfillment_pending' => true],
+            'config_snapshot' => ['plan' => 'basic'],
+            'fulfillment_pending' => true,
+            'fulfillment_pending_at' => now(),
         ]);
 
         return [$order->refresh(), $invoice];

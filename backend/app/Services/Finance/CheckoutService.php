@@ -17,6 +17,7 @@ use App\Models\Order;
 use App\Models\Payment;
 use App\Models\Product;
 use App\Models\User;
+use App\Services\Finance\Core\FinanceIdempotencyService;
 use App\Services\Order\Concerns\HandlesOrderCalculation;
 use App\Services\Pricing\MemberGroupDiscountService;
 use App\Services\ProductCatalog\ProductCatalogService;
@@ -52,6 +53,7 @@ class CheckoutService
         private AdminOrderNotificationService $adminOrderNotificationService,
         private PaymentCallbackProjector $callbackProjector,
         private TradeLifecycleService $tradeLifecycleService,
+        private FinanceIdempotencyService $idempotency,
         private ?ProductDisplayNameResolver $productDisplayNameResolver = null,
         private ?MemberGroupDiscountService $memberGroupDiscountService = null,
     ) {}
@@ -76,9 +78,55 @@ class CheckoutService
     }
 
     /**
-     * 创建新购账单
+     * 创建新购账单。
+     *
+     * 幂等事实落库（finance_operations），Redis 幂等键只作为快路径：
+     * 原实现只有 900s/180s 的缓存键，Redis 重启、键过期或 check-then-set 竞态
+     * 都会重复建单，且没有任何数据库约束兜底。
+     *
+     * 注意：幂等外壳必须在业务事务之外（FinanceIdempotencyService 的契约），
+     * 本方法内部自己开事务，因此这里不能包在 DB::transaction 里调用。
      */
     public function create(int $userId, array $data, array $context = []): Invoice
+    {
+        $idempotencyKey = trim((string) ($context['idempotency_key'] ?? ''));
+        $quoteToken = trim((string) ($data['quote_token'] ?? ''));
+
+        // 键缺失时保持原有「抛错」行为，由内部执行体做具体校验与报错
+        if ($idempotencyKey === '' || $quoteToken === '') {
+            return $this->createInvoiceTransaction($userId, $data, $context);
+        }
+
+        $result = $this->idempotency->execute(
+            'checkout',
+            'user',
+            $userId,
+            'checkout:'.$userId.':'.$idempotencyKey,
+            [
+                'product_id' => (int) ($data['product_id'] ?? 0),
+                'billing_cycle' => trim((string) ($data['billing_cycle'] ?? '')),
+                'config' => (array) ($data['config'] ?? []),
+                'user_coupon_id' => (int) ($data['user_coupon_id'] ?? 0),
+                'quote_token_hash' => hash('sha256', $quoteToken),
+            ],
+            fn (): array => ['invoice_id' => (int) $this->createInvoiceTransaction($userId, $data, $context)->id],
+            ['resource_type' => 'invoice'],
+        );
+
+        $invoiceId = (int) ($result->payload['invoice_id'] ?? 0);
+        $invoice = $invoiceId > 0 ? $this->freshCheckoutInvoice($invoiceId) : null;
+
+        if (! $invoice instanceof Invoice) {
+            throw new BusinessException('幂等命中但账单已不存在或已取消，请重新下单');
+        }
+
+        return $invoice;
+    }
+
+    /**
+     * 下单事务体（原 create 实现）。
+     */
+    private function createInvoiceTransaction(int $userId, array $data, array $context = []): Invoice
     {
         $productId = (int) ($data['product_id'] ?? 0);
         $billingCycle = trim((string) ($data['billing_cycle'] ?? ''));
@@ -407,6 +455,16 @@ class CheckoutService
 
     public function cancelExpiredUnpaidInvoicesForUser(int $userId, array $context = []): int
     {
+        // GET 端点携带写副作用（客户端账单列表/详情会调用本方法做懒清理）。
+        // 高频刷新会把读取放大成高频写事务，这里按用户 60 秒节流：
+        // 短期内没有任何过期账单可清时直接跳过，避免无意义的行锁与事务。
+        // 真实过期账单本来就有 TTL 语义，晚 60 秒收口不影响业务。
+        $throttleKey = 'checkout:expired-sweep:'.$userId;
+
+        if (! Cache::add($throttleKey, 1, 60)) {
+            return 0;
+        }
+
         $threshold = now()->subSeconds(CheckoutSecurityService::paymentSessionTtlSeconds());
         $count = 0;
 

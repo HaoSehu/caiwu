@@ -10,6 +10,7 @@ use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
 use App\Exceptions\BusinessException;
 use App\Models\FinanceLedgerEntry;
+use App\Models\FinanceReconciliationDiff;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\User;
@@ -19,6 +20,7 @@ use App\Services\Integrations\Payments\PaymentGatewayOperationService;
 use App\Services\Integrations\Plugins\PaymentGatewayBindingResolver;
 use App\Support\Money;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 /**
  * 混合支付流 + 预扣余额回补/异常网关款转余额群：
@@ -176,11 +178,25 @@ class MixPaymentService
                 $context
             );
         } catch (\Throwable $exception) {
-            $this->restoreReservedMixBalance($gatewayPayment, [
-                'trace_id' => $traceId,
-                'closed_reason' => "{$gateway}_precreate_failed",
-                'suppress_logs' => true,
-            ]);
+            // 补偿本身也可能失败（DB 抖动/死锁）：失败时不能把预扣余额丢在无人认领的状态，
+            // 落一条 open 的对账差异，由 finance:replay-mix-restore 心跳重放（P1-2）。
+            try {
+                $this->restoreReservedMixBalance($gatewayPayment, [
+                    'trace_id' => $traceId,
+                    'closed_reason' => "{$gateway}_precreate_failed",
+                    'suppress_logs' => true,
+                ]);
+            } catch (\Throwable $restoreException) {
+                $this->recordPendingMixRestore($gatewayPayment, $restoreException, $traceId);
+
+                Log::error('[组合支付] 预下单失败且预扣余额回收失败，已登记待回补', [
+                    'payment_id' => (int) $gatewayPayment->id,
+                    'payment_no' => (string) $gatewayPayment->payment_no,
+                    'invoice_id' => (int) $gatewayPayment->invoice_id,
+                    'trace_id' => $traceId,
+                    'restore_error' => $restoreException->getMessage(),
+                ]);
+            }
 
             throw $exception;
         }
@@ -193,6 +209,93 @@ class MixPaymentService
             'paid_amount' => number_format((float) $lockedInvoice->paid_amount, 2, '.', ''),
             'payable_amount' => number_format($remainingAmount, 2, '.', ''),
         ];
+    }
+
+    /**
+     * 登记一条「预扣余额待回补」对账差异（幂等：同一 payment 只有一条 open 记录）。
+     *
+     * 复用 finance_reconciliation_diffs 的 check_type 维度，不新增表：
+     * 该表本身就是「无法自动核平、需后续处理」的凭证载体，且已有 status 生命周期。
+     */
+    private function recordPendingMixRestore(Payment $payment, \Throwable $error, string $traceId): void
+    {
+        $balanceAmount = $this->resolveMixBalanceAmount($payment);
+
+        FinanceReconciliationDiff::query()->updateOrCreate(
+            [
+                'check_type' => 'mix_balance_pending_restore',
+                'scope_type' => 'payment',
+                'scope_id' => (int) $payment->id,
+            ],
+            [
+                'expected_value' => number_format($balanceAmount, 2, '.', ''),
+                'actual_value' => '0.00',
+                'diff_value' => number_format($balanceAmount, 2, '.', ''),
+                'details' => [
+                    'payment_no' => (string) $payment->payment_no,
+                    'invoice_id' => (int) $payment->invoice_id,
+                    'trace_id' => $traceId,
+                    'restore_error' => mb_substr($error->getMessage(), 0, 500),
+                ],
+                'status' => FinanceReconciliationDiff::STATUS_OPEN,
+                'detected_at' => now(),
+                'resolved_at' => null,
+            ],
+        );
+    }
+
+    /**
+     * 重放待回补记录（心跳命令调用）。返回成功回补的条数。
+     */
+    public function replayPendingMixRestores(int $limit = 100): int
+    {
+        $diffs = FinanceReconciliationDiff::query()
+            ->where('check_type', 'mix_balance_pending_restore')
+            ->where('status', FinanceReconciliationDiff::STATUS_OPEN)
+            ->orderBy('id')
+            ->limit(max(1, $limit))
+            ->get();
+
+        $restored = 0;
+
+        foreach ($diffs as $diff) {
+            $payment = Payment::query()->find((int) $diff->scope_id);
+            if (! $payment instanceof Payment) {
+                $diff->forceFill([
+                    'status' => FinanceReconciliationDiff::STATUS_IGNORED,
+                    'resolved_at' => now(),
+                ])->save();
+
+                continue;
+            }
+
+            try {
+                $done = $this->restoreReservedMixBalance($payment, [
+                    'trace_id' => 'replay:mix-restore:'.$diff->id,
+                    'closed_reason' => 'mix_precreate_failed_replay',
+                    'suppress_logs' => true,
+                ]);
+
+                // 已经回补过（幂等闸拦截）也视为闭环，否则记录会永远挂着。
+                $diff->forceFill([
+                    'status' => FinanceReconciliationDiff::STATUS_RESOLVED,
+                    'resolved_at' => now(),
+                ])->save();
+
+                if ($done) {
+                    $restored++;
+                }
+            } catch (\Throwable $exception) {
+                // cast 声明 details 为 array，模型层已保证；这里防御的是历史行 NULL
+                $details = (array) ($diff->details ?? []);
+                $details['last_replay_error'] = mb_substr($exception->getMessage(), 0, 500);
+                $details['last_replay_at'] = now()->toDateTimeString();
+
+                $diff->forceFill(['details' => $details])->save();
+            }
+        }
+
+        return $restored;
     }
 
     /**

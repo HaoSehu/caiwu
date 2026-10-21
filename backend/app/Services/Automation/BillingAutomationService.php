@@ -599,25 +599,23 @@ class BillingAutomationService
      */
     private function recoverStuckFulfillments(): int
     {
+        // 用独立列 + 索引过滤（原实现全表取回后 PHP 过滤，账单量大时是内存与
+        // 扫描双热点）。pending_at 超时只捞停留超过 5 分钟的行，避免扫描到正在履约的账单。
         $stuckInvoices = Invoice::query()
             ->with(['service.product.supplier'])
             ->where('status', InvoiceStatus::PAID)
             ->where('type', OrderType::RENEW)
-            ->whereNotNull('config_snapshot')
-            ->get()
-            ->filter(function (Invoice $invoice): bool {
-                $config = is_array($invoice->config_snapshot ?? null) ? $invoice->config_snapshot : [];
-
-                return ! empty($config['fulfillment_pending']);
-            });
+            ->where('fulfillment_pending', true)
+            ->where('fulfillment_pending_at', '<=', now()->subMinutes(5))
+            ->get();
 
         $count = 0;
 
         foreach ($stuckInvoices as $invoice) {
             try {
-                // 检查是否已被其他进程处理
-                $config = is_array($invoice->config_snapshot ?? null) ? $invoice->config_snapshot : [];
-                if (empty($config['fulfillment_pending'])) {
+                // 检查是否已被其他进程处理（重新读取，不复用列表快照）
+                $invoice->refresh();
+                if (! (bool) $invoice->fulfillment_pending) {
                     continue;
                 }
 
@@ -627,9 +625,10 @@ class BillingAutomationService
                     $renewProvisionData = is_array($service->provision_data ?? null) ? $service->provision_data : [];
                     if ((int) ($renewProvisionData['last_renew_invoice_id'] ?? 0) === (int) $invoice->id) {
                         // 实际已履约完成，仅需清除标记
-                        $config['fulfillment_pending'] = false;
-                        $config['fulfillment_cleared_at'] = now()->toDateTimeString();
-                        $invoice->forceFill(['config_snapshot' => $config])->saveQuietly();
+                        $invoice->forceFill([
+                            'fulfillment_pending' => false,
+                            'fulfillment_cleared_at' => now(),
+                        ])->saveQuietly();
                         $count++;
 
                         continue;
@@ -647,9 +646,10 @@ class BillingAutomationService
                     continue;
                 }
 
-                $config['fulfillment_pending'] = false;
-                $config['fulfillment_cleared_at'] = now()->toDateTimeString();
-                $invoice->forceFill(['config_snapshot' => $config])->saveQuietly();
+                $invoice->forceFill([
+                    'fulfillment_pending' => false,
+                    'fulfillment_cleared_at' => now(),
+                ])->saveQuietly();
 
                 Log::info('[定时任务] 续费履约补偿恢复成功', [
                     'invoice_id' => $invoice->id,

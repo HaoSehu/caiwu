@@ -819,6 +819,8 @@ class VerificationService
         $userPayload = [];
 
         if (array_key_exists('verification_status', $payload)) {
+            // 单一写口：verification_status 是实名状态真源，is_verified 只作为
+            // 历史兼容列由这里派生维护，其他任何地方不得独立写 is_verified。
             $status = (int) $payload['verification_status'];
             $userPayload['verification_status'] = $status;
             $userPayload['is_verified'] = $status === 2 ? 1 : 0;

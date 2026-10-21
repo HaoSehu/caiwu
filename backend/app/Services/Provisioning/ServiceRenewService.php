@@ -1371,14 +1371,12 @@ class ServiceRenewService
      */
     private function flagFailedPaidRenewForRefund(Invoice $invoice): void
     {
-        $configSnapshot = is_array($invoice->config_snapshot ?? null) ? $invoice->config_snapshot : [];
-        if (! empty($configSnapshot['requires_refund'])) {
+        // 履约标记已迁独立列：与业务快照分离，避免读改写 JSON 时互相覆盖。
+        if ((bool) $invoice->requires_refund) {
             return;
         }
 
-        $invoice->forceFill([
-            'config_snapshot' => array_merge($configSnapshot, ['requires_refund' => true]),
-        ])->save();
+        $invoice->forceFill(['requires_refund' => true])->save();
 
         Log::warning('[服务续费·账单] 已支付续费账单履约失败，已标记退款并放行后续续费', [
             'invoice_id' => (int) $invoice->id,
@@ -1441,10 +1439,7 @@ class ServiceRenewService
                 'exception' => $exception::class,
             ]);
 
-            $configSnapshot = is_array($invoice->config_snapshot ?? null) ? $invoice->config_snapshot : [];
-            $invoice->forceFill([
-                'config_snapshot' => array_merge($configSnapshot, ['requires_refund' => true]),
-            ])->save();
+            $invoice->forceFill(['requires_refund' => true])->save();
         }
     }
 

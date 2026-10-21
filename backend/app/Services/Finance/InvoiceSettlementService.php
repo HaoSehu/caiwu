@@ -11,6 +11,7 @@ use App\Exceptions\BusinessException;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Services\System\ActivityLogService;
+use App\Support\Money;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -62,6 +63,15 @@ class InvoiceSettlementService
     ): array {
         return $this->withLock($lockKey, 30, function () use ($payment, $tradeNo, $payload, $logLabel, $closeReason, $abnormalStatusMessage) {
             $settlement = DB::transaction(function () use ($payment, $tradeNo, $payload, $logLabel, $closeReason, $abnormalStatusMessage) {
+                // 全库统一写锁序：Invoice → Payment（按 id 升序）。取消链路
+                // （CheckoutService::cancel 先锁 Invoice 再锁同批 PENDING Payment）与本链路
+                // 曾相反，高并发下构成 ABBA 死锁窗口；死锁虽会被 InnoDB 检测并回滚重试，
+                // 但支付回调重放会让同一笔钱多一次入账机会。锁序必须在所有写入侧一致。
+                $invoiceId = (int) ($payment->invoice_id ?? 0);
+                $invoice = $invoiceId > 0
+                    ? Invoice::query()->lockForUpdate()->with('order')->find($invoiceId)
+                    : null;
+
                 $lockedPayment = Payment::query()
                     ->lockForUpdate()
                     ->with(['invoice.order'])
@@ -70,14 +80,10 @@ class InvoiceSettlementService
                 if (! $lockedPayment || (int) $lockedPayment->status === PaymentStatus::SUCCESS) {
                     return [
                         'dispatch' => false,
-                        'invoice' => $lockedPayment?->invoice,
+                        'invoice' => $lockedPayment ? $lockedPayment->invoice : $invoice,
                         'payment_no' => (string) ($lockedPayment?->payment_no ?? ''),
                     ];
                 }
-
-                $invoice = $lockedPayment->invoice_id
-                    ? Invoice::query()->lockForUpdate()->with('order')->find($lockedPayment->invoice_id)
-                    : null;
 
                 if (! $invoice) {
                     return ['dispatch' => false, 'invoice' => null, 'payment_no' => (string) $lockedPayment->payment_no];
@@ -144,7 +150,7 @@ class InvoiceSettlementService
                     $payload
                 );
 
-                if (abs(round((float) $lockedPayment->amount, 2) - $this->invoicePayableAmount($invoice)) > 0.0001) {
+                if (! Money::equals($lockedPayment->amount, $this->invoicePayableAmount($invoice))) {
                     $this->mixPaymentService->creditCapturedPaymentToBalance($lockedPayment, $invoice, $tradeNo, $payload, 'payable_amount_mismatch');
 
                     Log::warning("[{$logLabel}] 支付金额与账单当前应付不匹配，已转入余额", [

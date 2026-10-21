@@ -10,14 +10,14 @@ use Illuminate\Database\Eloquent\Model;
  * 用户账户投影（旧表）：现金真源为 finance_accounts，
  * cash_balance 仅为切换期热备列（T+7 由 000015 删除）。
  *
- * @property int    $user_id
+ * @property int $user_id
  * @property string $cash_balance
  * @property string $credit_limit
  * @property string $referral_frozen_balance
  * @property string $referral_available_balance
  * @property string $referral_pending_withdrawal_balance
  * @property string $referral_withdrawn_balance
- * @property int    $version
+ * @property int $version
  */
 class UserAccount extends Model
 {

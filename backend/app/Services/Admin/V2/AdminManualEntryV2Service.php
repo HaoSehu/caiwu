@@ -295,7 +295,7 @@ class AdminManualEntryV2Service
                     $reversibleAmount = round((float) ($original->paid_amount ?: $original->amount), 2);
                     $reversalAmount = round((float) ($payload['amount'] ?? $reversibleAmount), 2);
                     throw_if($reversalAmount <= 0, new BusinessException('红字冲抵金额必须大于 0'));
-                    throw_if($reversalAmount - $reversibleAmount > 0.00001, new BusinessException('红字冲抵金额超过原单入账金额'));
+                    throw_if(Money::greaterThan($reversalAmount, $reversibleAmount), new BusinessException('红字冲抵金额超过原单入账金额'));
 
                     $operatorName = (string) ($context['operator_name'] ?? '');
 
