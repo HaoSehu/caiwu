@@ -204,6 +204,28 @@ final class CacheKey
     }
 
     /**
+     * 管理员双因素登录挑战凭证：auth:admin_mfa_challenge:<sha256 摘要>。
+     *
+     * 密码通过但尚未完成动态码校验时签发，只存 5 分钟且一次性消费，
+     * 目的是让「密码正确」与「拿到令牌」之间不产生任何可直接使用的会话。
+     */
+    public static function adminMfaChallenge(string $token): string
+    {
+        return 'auth:admin_mfa_challenge:'.hash('sha256', $token);
+    }
+
+    /**
+     * 管理员双因素绑定草稿：auth:admin_mfa_setup:<管理员 ID>。
+     *
+     * 绑定分两步（生成密钥 → 用验证码确认），草稿密钥在确认前不落库，
+     * 避免「扫了码但没确认」把账号锁在门外。
+     */
+    public static function adminMfaSetup(int $adminId): string
+    {
+        return 'auth:admin_mfa_setup:'.$adminId;
+    }
+
+    /**
      * 管理端登录失败计数：admin-login-fail:account:<sha1 摘要>。
      */
     public static function adminLoginFailure(string $normalizedUsername): string

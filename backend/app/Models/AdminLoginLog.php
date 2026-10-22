@@ -26,6 +26,9 @@ class AdminLoginLog extends Model
     /** 账号已停用 */
     public const REASON_ACCOUNT_DISABLED = 'account_disabled';
 
+    /** 双因素验证码错误或挑战凭证失效 */
+    public const REASON_MFA_INVALID = 'mfa_invalid';
+
     protected $fillable = [
         'admin_user_id',
         'username',

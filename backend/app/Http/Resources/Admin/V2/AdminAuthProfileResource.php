@@ -22,6 +22,7 @@ class AdminAuthProfileResource extends JsonResource
                 'email' => (string) ($this->resource['email'] ?? ''),
                 'role' => (string) ($this->resource['role'] ?? 'unknown'),
                 'permissions' => array_values((array) ($this->resource['permissions'] ?? [])),
+                'mfa_enabled' => (bool) ($this->resource['mfa_enabled'] ?? false),
             ];
         }
 
@@ -32,6 +33,7 @@ class AdminAuthProfileResource extends JsonResource
             'email' => (string) ($this->resource->email ?? ''),
             'role' => (string) ($this->resource->resolvedRoleLabel() ?: 'unknown'),
             'permissions' => $this->resource->resolvedPermissions(),
+            'mfa_enabled' => $this->resource->hasMfaEnabled(),
         ];
     }
 }

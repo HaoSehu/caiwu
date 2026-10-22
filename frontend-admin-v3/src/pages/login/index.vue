@@ -3,9 +3,16 @@
     <div class="login-card">
       <div class="login-header">
         <h1>管理后台</h1>
-        <p>请登录您的管理员账号</p>
+        <p>{{ mfaChallenge ? '请输入身份验证器中的 6 位动态码' : '请登录您的管理员账号' }}</p>
       </div>
-      <t-form ref="formRef" :data="formData" :rules="formRules" label-align="top" @submit="handleLogin">
+      <t-form
+        v-if="!mfaChallenge"
+        ref="formRef"
+        :data="formData"
+        :rules="formRules"
+        label-align="top"
+        @submit="handleLogin"
+      >
         <t-form-item label="账号" name="account">
           <t-input
             v-model="formData.account"
@@ -30,6 +37,32 @@
           <span class="sr-only" role="alert" aria-live="assertive">{{ errorMessage }}</span>
         </t-form-item>
       </t-form>
+      <t-form
+        v-else
+        ref="mfaFormRef"
+        :data="mfaFormData"
+        :rules="mfaFormRules"
+        label-align="top"
+        @submit="handleVerifyMfa"
+      >
+        <t-form-item label="动态验证码" name="code">
+          <t-input
+            v-model="mfaFormData.code"
+            placeholder="6 位动态码，或一条恢复码"
+            size="large"
+            clearable
+            autocomplete="one-time-code"
+            :maxlength="32"
+          />
+        </t-form-item>
+        <t-form-item class="login-submit-item">
+          <t-button block theme="primary" size="large" type="submit" :loading="loading"> 验证并登录 </t-button>
+          <t-button block variant="text" size="large" :disabled="loading" @click="handleBackToPassword">
+            返回账号密码登录
+          </t-button>
+          <span class="sr-only" role="alert" aria-live="assertive">{{ errorMessage }}</span>
+        </t-form-item>
+      </t-form>
       <div class="login-footer">
         <span>© {{ currentYear }} Caiwu 管理后台</span>
       </div>
@@ -49,6 +82,7 @@ const router = useRouter();
 const userStore = useUserStore();
 const permissionStore = getPermissionStore();
 const formRef = ref<FormInstanceFunctions>();
+const mfaFormRef = ref<FormInstanceFunctions>();
 const loading = ref(false);
 const errorMessage = ref('');
 const currentYear = computed(() => new Date().getFullYear());
@@ -63,6 +97,14 @@ const formRules: Record<string, FormRule[]> = {
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
 };
 
+// 双因素第二步状态：挑战凭证只在内存里，不写 localStorage/Cookie，
+// 刷新页面即失效，与后端「5 分钟一次性」的语义保持一致。
+const mfaChallenge = ref('');
+const mfaFormData = ref({ code: '' });
+const mfaFormRules: Record<string, FormRule[]> = {
+  code: [{ required: true, message: '请输入动态验证码', trigger: 'blur' }],
+};
+
 function canAccessPath(path: string): boolean {
   const resolved = router.resolve(path);
   // 未注册路由（已下架/角色权限不全）不应放行，交由兜底处理
@@ -72,53 +114,103 @@ function canAccessPath(path: string): boolean {
   return hasPermissionInList(userStore.userInfo?.permissions || [], required);
 }
 
+/**
+ * 登录成功后的统一收尾：建菜单 → 选落地页 → 处理 redirect。
+ * 账号密码登录与双因素登录都必须走同一段逻辑，避免两条路径行为分叉。
+ */
+async function enterConsole(): Promise<void> {
+  MessagePlugin.success('登录成功');
+  // 先构建权限菜单，无仪表盘权限角色也能落到其首个可访问页面而非 403
+  if (!permissionStore.menuBuilt || !userStore.userInfo?.name) {
+    try {
+      await permissionStore.setupMenus(userStore.userInfo?.permissions || []);
+    } catch {
+      errorMessage.value = '菜单初始化失败，请刷新页面重试';
+      MessagePlugin.error(errorMessage.value);
+      return;
+    }
+  }
+  const fallbackPath = permissionStore.firstAccessibleAdminPath;
+  if (!canAccessPath(fallbackPath)) {
+    errorMessage.value = '当前账号无可用页面，请联系管理员';
+    MessagePlugin.error(errorMessage.value);
+    return;
+  }
+  const redirect = router.currentRoute.value.query.redirect;
+  if (redirect && typeof redirect === 'string') {
+    try {
+      const decoded = decodeURIComponent(redirect);
+      // redirect 目标若不在当前角色权限内，回退到首个可访问页面，避免落入 403
+      if (decoded.startsWith('/') && !decoded.startsWith('//') && canAccessPath(decoded)) {
+        router.push(decoded);
+      } else {
+        router.push(fallbackPath);
+      }
+    } catch {
+      router.push(fallbackPath);
+    }
+  } else {
+    router.push(fallbackPath);
+  }
+}
+
+function handleBackToPassword() {
+  mfaChallenge.value = '';
+  mfaFormData.value.code = '';
+  errorMessage.value = '';
+}
+
 async function handleLogin() {
   const valid = await formRef.value?.validate();
   if (valid !== true) return;
 
   loading.value = true;
   try {
-    await userStore.login({
+    const result = await userStore.login({
       account: formData.value.account,
       password: formData.value.password,
     });
-    MessagePlugin.success('登录成功');
-    // 先构建权限菜单，无仪表盘权限角色也能落到其首个可访问页面而非 403
-    if (!permissionStore.menuBuilt || !userStore.userInfo?.name) {
-      try {
-        await permissionStore.setupMenus(userStore.userInfo?.permissions || []);
-      } catch {
-        errorMessage.value = '菜单初始化失败，请刷新页面重试';
+
+    if (result.mfaRequired) {
+      if (!result.challengeToken) {
+        errorMessage.value = '双因素登录凭证获取失败，请重新登录';
         MessagePlugin.error(errorMessage.value);
         return;
       }
-    }
-    const fallbackPath = permissionStore.firstAccessibleAdminPath;
-    if (!canAccessPath(fallbackPath)) {
-      errorMessage.value = '当前账号无可用页面，请联系管理员';
-      MessagePlugin.error(errorMessage.value);
+      mfaChallenge.value = result.challengeToken;
+      mfaFormData.value.code = '';
+      errorMessage.value = '';
       return;
     }
-    const redirect = router.currentRoute.value.query.redirect;
-    if (redirect && typeof redirect === 'string') {
-      try {
-        const decoded = decodeURIComponent(redirect);
-        // redirect 目标若不在当前角色权限内，回退到首个可访问页面，避免落入 403
-        if (decoded.startsWith('/') && !decoded.startsWith('//') && canAccessPath(decoded)) {
-          router.push(decoded);
-        } else {
-          router.push(fallbackPath);
-        }
-      } catch {
-        router.push(fallbackPath);
-      }
-    } else {
-      router.push(fallbackPath);
-    }
+
+    await enterConsole();
   } catch (error) {
     const msg = error instanceof Error ? error.message : '登录失败，请检查账号密码';
     errorMessage.value = msg;
     MessagePlugin.error(msg);
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function handleVerifyMfa() {
+  const valid = await mfaFormRef.value?.validate();
+  if (valid !== true) return;
+
+  loading.value = true;
+  try {
+    await userStore.completeMfaLogin(mfaChallenge.value, mfaFormData.value.code.trim());
+    mfaChallenge.value = '';
+    mfaFormData.value.code = '';
+    await enterConsole();
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : '验证失败，请重新登录';
+    errorMessage.value = msg;
+    MessagePlugin.error(msg);
+    // 后端挑战凭证一次性消费，验证码错一次即失效，必须退回密码登录。
+    if (msg.includes('重新登录')) {
+      handleBackToPassword();
+    }
   } finally {
     loading.value = false;
   }
@@ -200,6 +292,10 @@ async function handleLogin() {
 .login-submit-item {
   :deep(.t-form__label) {
     display: none;
+  }
+
+  :deep(.t-button + .t-button) {
+    margin-top: 8px;
   }
 }
 

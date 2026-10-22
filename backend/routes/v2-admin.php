@@ -43,11 +43,21 @@ use Illuminate\Support\Facades\Route;
 
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1,v2-admin-login');
 
+// 双因素第二步独立限流：按 IP 每分钟 10 次，既容许输错重试，又不给 6 位码留枚举空间。
+Route::post('/login/mfa', [AuthController::class, 'verifyMfa'])->middleware('throttle:10,1,v2-admin-login-mfa');
+
 Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
     Route::get('/auth/info', [AuthController::class, 'info']);
     Route::put('/auth/profile', [AuthController::class, 'updateProfile']);
     Route::put('/auth/password', [AuthController::class, 'updatePassword']);
     Route::post('/auth/logout', [AuthController::class, 'logout']);
+
+    // 双因素绑定/解绑：绑定本身不敏感，但解绑等于削弱账号安全，故单独限流。
+    // setup 也在限流之列：每次调用都会生成新密钥并覆盖待启用状态，不限流的话
+    // 一个被盗用的会话可以反复刷写，把管理员正在扫码绑定的密钥挤掉。
+    Route::post('/auth/mfa/setup', [AuthController::class, 'setupMfa'])->middleware('throttle:10,1,v2-admin-mfa-setup');
+    Route::post('/auth/mfa/enable', [AuthController::class, 'enableMfa'])->middleware('throttle:10,1,v2-admin-mfa-enable');
+    Route::post('/auth/mfa/disable', [AuthController::class, 'disableMfa'])->middleware('throttle:10,1,v2-admin-mfa-disable');
 
     Route::middleware(['permission:'.AdminPermissions::DASHBOARD_VIEW])->group(function (): void {
         Route::get('/dashboard/stats', [DashboardController::class, 'stats']);

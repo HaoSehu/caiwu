@@ -18,6 +18,10 @@ class AdminAuthSessionResource extends JsonResource
 
         return [
             'token' => (string) ($payload['token'] ?? ''),
+            // 双因素未完成时不签令牌，前端据 mfa_required 切到验证码步骤，
+            // challenge_token 只用于一次 /login/mfa 调用。
+            'mfa_required' => (bool) ($payload['mfa_required'] ?? false),
+            'challenge_token' => (string) ($payload['challenge_token'] ?? ''),
             'admin' => (new AdminAuthProfileResource((array) ($payload['admin'] ?? [])))->resolve(),
         ];
     }

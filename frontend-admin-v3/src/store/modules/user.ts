@@ -4,6 +4,19 @@ import { adminAuthApi } from '@/api/auth';
 import { getAdminToken, removeAdminToken, setAdminToken } from '@/app/runtime/session';
 import type { UserInfo } from '@/types/interface';
 
+/** 登录结果：要么直接拿到令牌，要么停在双因素第二步。 */
+export interface AdminLoginResult {
+  mfaRequired: boolean;
+  challengeToken: string;
+}
+
+interface AdminLoginResponse {
+  token?: string;
+  mfa_required?: boolean;
+  challenge_token?: string;
+  admin?: Partial<UserInfo> & { permissions?: string[] };
+}
+
 const InitUserInfo: UserInfo = {
   name: '', // 用户名，用于展示在页面右上角头像处
   roles: [], // 前端权限模型使用 如果使用请配置modules/permission-fe.ts使用
@@ -20,18 +33,36 @@ export const useUserStore = defineStore('user', {
     },
   },
   actions: {
-    async login(userInfo: Record<string, unknown>) {
+    async login(userInfo: Record<string, unknown>): Promise<AdminLoginResult> {
       const username = String(userInfo.username || userInfo.account || '');
       const payload = {
         ...userInfo,
         username,
       };
-      const res = (await adminAuthApi.login(payload)) as {
-        token: string;
-        admin?: Partial<UserInfo> & { permissions?: string[] };
-      };
-      setAdminToken(res.token);
-      this.token = res.token;
+      const res = (await adminAuthApi.login(payload)) as AdminLoginResponse;
+
+      // 启用双因素时后端不签令牌，只发 5 分钟一次性挑战凭证。
+      // 此时绝不能写入任何会话状态，否则刷新页面会带着空 token 进入受保护路由。
+      if (res.mfa_required) {
+        removeAdminToken();
+        this.token = '';
+        this.userInfo = { ...InitUserInfo };
+        return { mfaRequired: true, challengeToken: String(res.challenge_token || '') };
+      }
+
+      this.applySession(res);
+      return { mfaRequired: false, challengeToken: '' };
+    },
+    // 双因素第二步：用挑战凭证 + 动态码换令牌，成功后才落会话。
+    async completeMfaLogin(challengeToken: string, code: string): Promise<void> {
+      const res = (await adminAuthApi.verifyMfa({ challenge_token: challengeToken, code })) as AdminLoginResponse;
+      this.applySession(res);
+    },
+    // 登录成功后的会话落地（账号密码登录与双因素登录共用同一口径）。
+    applySession(res: AdminLoginResponse) {
+      const token = String(res.token || '');
+      setAdminToken(token);
+      this.token = token;
       const admin = res.admin || {};
       const role = typeof admin.role === 'string' && admin.role ? admin.role : '';
       // 后端字段先展开，再由本地归一化字段覆盖：

@@ -30,6 +30,9 @@ class AuthService
 {
     private const ADMIN_LOGIN_AS_CODE_TTL_SECONDS = 120;
 
+    /** 管理员双因素登录挑战凭证有效期：只够输完一次 6 位码。 */
+    private const ADMIN_MFA_CHALLENGE_TTL_SECONDS = 300;
+
     private const ADMIN_LOGIN_MAX_FAILED_ATTEMPTS = 5;
 
     private const ADMIN_LOGIN_FAILED_WINDOW_SECONDS = 1800;
@@ -61,6 +64,7 @@ class AuthService
         private LoginRiskControlService $loginRiskControlService,
         private LegacyPasswordVerifier $legacyPasswordVerifier,
         private AdminLoginLogService $adminLoginLogService,
+        private AdminMfaService $adminMfaService,
     ) {}
 
     /**
@@ -671,6 +675,113 @@ class AuthService
 
         $this->clearAdminLoginFailures($normalizedUsername);
 
+        // 已启用双因素时，密码正确只是第一步：此处不写登录成功痕迹、不签令牌，
+        // 只发一张 5 分钟一次性挑战凭证。否则「密码正确」就等于「拿到会话」，
+        // 双因素会退化成登录成功后的一道空提示。
+        if ($this->adminMfaService->isEnabled($admin)) {
+            return [
+                'mfa_required' => true,
+                'challenge_token' => $this->issueAdminMfaChallenge($admin, $ip, $userAgent),
+                'admin' => [
+                    'id' => $admin->id,
+                    'username' => $admin->username,
+                    'nickname' => $admin->nickname,
+                    'email' => (string) ($admin->email ?? ''),
+                    // 前端据此在验证码步骤后仍能显示「已启用双因素」，
+                    // 不必等登录成功再查一次 /auth/info。
+                    'mfa_enabled' => true,
+                ],
+            ];
+        }
+
+        return $this->completeAdminLogin($admin, $ip, $userAgent);
+    }
+
+    /**
+     * 管理员双因素登录第二步：用挑战凭证 + 动态码换取正式令牌。
+     */
+    public function verifyAdminMfaLogin(string $challengeToken, string $code, string $ip, ?string $userAgent = null): array
+    {
+        $challengeToken = trim($challengeToken);
+        if ($challengeToken === '') {
+            throw new BusinessException('登录已失效，请重新登录', 42200, 422);
+        }
+
+        $cacheKey = CacheKey::adminMfaChallenge($challengeToken);
+        /** @var array<string, mixed>|null $challenge */
+        $challenge = Cache::store('redis_volatile')->pull($cacheKey);
+
+        if (! is_array($challenge)) {
+            throw new BusinessException('验证码已过期，请重新登录', 41000, 410);
+        }
+
+        $adminId = (int) ($challenge['admin_id'] ?? 0);
+        $admin = $adminId > 0 ? AdminUser::query()->with('role')->find($adminId) : null;
+
+        if ($admin === null) {
+            $this->adminLoginLogService->recordFailure(null, '', $ip, $userAgent, AdminLoginLog::REASON_MFA_INVALID);
+
+            throw new BusinessException('验证码已过期，请重新登录', 41000, 410);
+        }
+
+        if ($admin->status !== 1) {
+            $this->adminLoginLogService->recordFailure(
+                $admin,
+                (string) $admin->username,
+                $ip,
+                $userAgent,
+                AdminLoginLog::REASON_ACCOUNT_DISABLED,
+            );
+
+            throw new BusinessException('账号已被禁用', 40300, 403);
+        }
+
+        // 环境校验：挑战只在签发它的浏览器里有效。IP 不校验，理由与代登录一致
+        // （Admin 端与 Client 端可能经过不同代理链，IP 经常不一致），UA 摘要
+        // 是这里唯一可用且稳定的环境指纹。挑战已在上面 pull 消费，校验失败也
+        // 不会留下可复用凭证，必须重新走密码登录。
+        $issuedUserAgentHash = trim((string) ($challenge['issued_user_agent_hash'] ?? ''));
+        $currentUserAgentHash = $this->hashLoginAsUserAgent((string) ($userAgent ?? ''));
+        if (
+            $issuedUserAgentHash !== ''
+            && ($currentUserAgentHash === '' || ! hash_equals($issuedUserAgentHash, $currentUserAgentHash))
+        ) {
+            $this->adminLoginLogService->recordFailure(
+                $admin,
+                (string) $admin->username,
+                $ip,
+                $userAgent,
+                AdminLoginLog::REASON_MFA_INVALID,
+            );
+
+            throw new BusinessException('登录环境校验失败，请重新登录', 40300, 403);
+        }
+
+        if (! $this->adminMfaService->verify($admin, $code)) {
+            // 挑战凭证已被 pull 消费，输错一次必须重新走密码登录：
+            // 这是刻意的——不留下可被反复爆破的中间态。
+            $this->adminLoginLogService->recordFailure(
+                $admin,
+                (string) $admin->username,
+                $ip,
+                $userAgent,
+                AdminLoginLog::REASON_MFA_INVALID,
+            );
+
+            throw new BusinessException('验证码不正确，请重新登录', 40100, 401);
+        }
+
+        return $this->completeAdminLogin($admin, $ip, $userAgent);
+    }
+
+    /**
+     * 登录成功后的收尾：写登录痕迹、同步角色、记审计、发提醒、签令牌。
+     *
+     * adminLogin（未启用双因素）与 verifyAdminMfaLogin（双因素通过）共用，
+     * 保证两条路径的成功口径完全一致，不会一条记日志一条不记。
+     */
+    private function completeAdminLogin(AdminUser $admin, string $ip, ?string $userAgent): array
+    {
         $admin->update([
             'last_login_at' => now(),
             'last_login_ip' => $ip,
@@ -697,6 +808,33 @@ class AuthService
                 'permissions' => $admin->resolvedPermissions(),
             ],
         ];
+    }
+
+    /**
+     * 签发双因素挑战凭证：随机 64 字符，缓存里只按 sha256 摘要存索引，
+     * 明文只在这一次响应里出现，服务端不保留可直接使用的副本。
+     *
+     * 挑战是「密码已验证、只差动态码」的中间态，必须继续绑定原浏览器：
+     * 凭证一旦泄露到别的设备，攻击者只差一个动态码就能拿到正式令牌。
+     * 与代登录凭证共用 hashLoginAsUserAgent() 的归一化口径，避免两边
+     * 一个存原始串、一个存归一化串导致校验必然失败。
+     */
+    private function issueAdminMfaChallenge(AdminUser $admin, string $ip, ?string $userAgent): string
+    {
+        $challengeToken = Str::random(64);
+
+        Cache::store('redis_volatile')->put(
+            CacheKey::adminMfaChallenge($challengeToken),
+            [
+                'admin_id' => (int) $admin->id,
+                'issued_ip' => $ip,
+                'issued_user_agent_hash' => $this->hashLoginAsUserAgent((string) $userAgent),
+                'issued_at' => now()->toIso8601String(),
+            ],
+            now()->addSeconds(self::ADMIN_MFA_CHALLENGE_TTL_SECONDS),
+        );
+
+        return $challengeToken;
     }
 
     /**

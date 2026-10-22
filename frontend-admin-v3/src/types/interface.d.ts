@@ -27,6 +27,8 @@ export interface UserInfo {
   email?: string;
   role?: string;
   permissions?: string[];
+  /** 是否已启用双因素认证（后端 /auth/info 与登录响应都会返回） */
+  mfa_enabled?: boolean;
 }
 
 export interface NotificationItem {

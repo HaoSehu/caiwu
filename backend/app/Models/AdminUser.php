@@ -22,16 +22,31 @@ class AdminUser extends Authenticatable
     protected $fillable = [
         'username', 'password', 'role_id', 'nickname', 'email',
         'status', 'last_login_at', 'last_login_ip',
+        'mfa_secret', 'mfa_enabled_at', 'mfa_recovery_codes',
     ];
 
-    protected $hidden = ['password'];
+    /**
+     * mfa_secret 是可直接生成验证码的密钥，mfa_recovery_codes 是等价凭据，
+     * 一旦随模型序列化泄漏就等于绕过双因素，必须与 password 同级隐藏。
+     */
+    protected $hidden = ['password', 'mfa_secret', 'mfa_recovery_codes'];
 
     protected function casts(): array
     {
         return [
             'last_login_at' => 'datetime',
             'password' => 'hashed',
+            'mfa_enabled_at' => 'datetime',
+            'mfa_recovery_codes' => 'array',
         ];
+    }
+
+    /**
+     * 是否已启用双因素认证。
+     */
+    public function hasMfaEnabled(): bool
+    {
+        return $this->mfa_enabled_at !== null && trim((string) ($this->mfa_secret ?? '')) !== '';
     }
 
     public function role(): BelongsTo
