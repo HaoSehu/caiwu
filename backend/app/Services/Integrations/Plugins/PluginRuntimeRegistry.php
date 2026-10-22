@@ -41,11 +41,24 @@ class PluginRuntimeRegistry
 
     private const RUNTIME_META_PREVIEW_BYTES = 4096;
 
+    /**
+     * 包摘要校验结果缓存，键为 `domain:slug:recorded_hash:enforce`。
+     *
+     * 插件类在常驻进程首次加载后即驻留内存，文件替换必须重启才可能生效，
+     * 因此同一进程内重复计算全量摘要没有额外安全收益，只会把插件注册和
+     * 每次插件动作都拖成目录遍历。键携带安装时记录的摘要值，重装或升级后自动失效。
+     *
+     * @var array<string, bool>
+     */
+    private static array $packageIntegrityCache = [];
+
     public function __construct(
         private readonly Container $container,
         private readonly PluginScanner $scanner,
         private readonly PluginFileLoader $fileLoader,
         private readonly PluginConfigRepository $configRepository,
+        private readonly PluginPackageHasher $packageHasher,
+        private readonly PluginCompatibility $compatibility,
     ) {}
 
     /**
@@ -120,6 +133,15 @@ class PluginRuntimeRegistry
     private function executePlugin(IntegrationPlugin $plugin, string $resolvedAction, array $payload = [], array $context = []): array
     {
         $manifest = $this->scanner->requireManifest((string) $plugin->domain, (string) $plugin->slug);
+
+        // resolveEntries 只在启动期过滤；动作执行是另一条独立加载路径，必须再校验一次。
+        if (! $this->assertPackageIntegrity($plugin, $manifest)) {
+            throw new BusinessException('插件包内容与安装记录不一致，已阻止执行，请联系管理员', 42200);
+        }
+
+        // 宿主版本区间同样要二次校验：跳过注册表不等于外部无法按 slug 直接调用。
+        $this->compatibility->assertCompatible($manifest);
+
         $entry = $this->makeExecutableEntry($manifest);
         $startedAt = microtime(true);
         $traceId = $this->resolveTraceId($context);
@@ -447,6 +469,8 @@ class PluginRuntimeRegistry
             return [];
         }
 
+        // 单次解析只读一次宿主版本，避免逐个插件重复查询安装表。
+        $hostCoreVersion = $this->compatibility->hostCoreVersion();
         $entries = [];
         $resolvedKeys = [];
 
@@ -463,6 +487,14 @@ class PluginRuntimeRegistry
                     'plugin_id' => $plugin->id,
                 ]);
 
+                continue;
+            }
+
+            if (! $this->assertPackageIntegrity($plugin, $manifest)) {
+                continue;
+            }
+
+            if (! $this->assertRuntimeCompatible($plugin, $manifest, $hostCoreVersion)) {
                 continue;
             }
 
@@ -487,6 +519,117 @@ class PluginRuntimeRegistry
         }
 
         return $entries;
+    }
+
+    /**
+     * 校验插件声明的宿主环境要求；不满足时跳过加载并记 error，保留注册记录供人工处置。
+     *
+     * @param  IntegrationPlugin  $plugin  已启用插件注册记录
+     * @param  PluginManifest  $manifest  当前磁盘清单
+     * @param  string|null  $hostCoreVersion  宿主程序版本，单次解析内复用
+     * @return bool 是否允许进入运行时注册表
+     */
+    private function assertRuntimeCompatible(IntegrationPlugin $plugin, PluginManifest $manifest, ?string $hostCoreVersion): bool
+    {
+        $problems = $this->compatibility->violations($manifest->requires, $hostCoreVersion);
+        if ($problems === []) {
+            return true;
+        }
+
+        Log::error('[plugins] 插件与当前宿主环境不兼容：已跳过运行时加载', [
+            'domain' => $plugin->domain,
+            'slug' => $plugin->slug,
+            'plugin_id' => $plugin->id,
+            'requires' => $manifest->requires,
+            'problems' => $problems,
+        ]);
+
+        return false;
+    }
+
+    /**
+     * 校验插件包内容摘要与安装时记录一致，防止审核后替换文件。
+     *
+     * 三条件缺一不可：已记录 source_hash、当前目录摘要一致、摘要未被改动。
+     * 存量插件在回填命令执行前 source_hash 为空，此时放行并记 error，
+     * 不用「未知」状态阻断已在运行的能力；开关 plugin_integrity_enforce 为 true 后，
+     * 摘要不一致会直接跳过该插件（不删注册记录、不自动禁用，保留人工处置入口）。
+     *
+     * @param  IntegrationPlugin  $plugin  已启用插件注册记录
+     * @param  PluginManifest  $manifest  当前磁盘清单
+     * @return bool 是否允许进入运行时注册表
+     */
+    private function assertPackageIntegrity(IntegrationPlugin $plugin, PluginManifest $manifest): bool
+    {
+        $recorded = trim((string) ($plugin->source_hash ?? ''));
+        if ($recorded === '') {
+            Log::error('[plugins] 插件包摘要缺失：插件缺少安装时记录的 source_hash', [
+                'domain' => $plugin->domain,
+                'slug' => $plugin->slug,
+                'plugin_id' => $plugin->id,
+                'suggestion' => 'php artisan plugins:backfill-source-hash --execute',
+            ]);
+
+            return true;
+        }
+
+        $enforced = $this->integrityEnforced();
+        $cacheKey = $plugin->domain.':'.$plugin->slug.':'.$recorded.':'.($enforced ? '1' : '0');
+        if (array_key_exists($cacheKey, self::$packageIntegrityCache)) {
+            return self::$packageIntegrityCache[$cacheKey];
+        }
+
+        $allowed = $this->evaluatePackageIntegrity($plugin, $manifest, $recorded);
+        self::$packageIntegrityCache[$cacheKey] = $allowed;
+
+        return $allowed;
+    }
+
+    /**
+     * 实际比对包摘要；结果由 {@see self::assertPackageIntegrity()} 缓存。
+     *
+     * @param  IntegrationPlugin  $plugin  已启用插件注册记录
+     * @param  PluginManifest  $manifest  当前磁盘清单
+     * @param  string  $recorded  安装时记录的包摘要
+     * @return bool 是否允许加载或执行
+     */
+    private function evaluatePackageIntegrity(IntegrationPlugin $plugin, PluginManifest $manifest, string $recorded): bool
+    {
+        try {
+            $current = $this->packageHasher->packageHash($manifest->basePath);
+        } catch (\Throwable $exception) {
+            Log::error('[plugins] 插件包摘要计算失败：插件包不可读或含禁止路径', [
+                'domain' => $plugin->domain,
+                'slug' => $plugin->slug,
+                'plugin_id' => $plugin->id,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return ! $this->integrityEnforced();
+        }
+
+        if (hash_equals($recorded, $current)) {
+            return true;
+        }
+
+        Log::error('[plugins] 插件包内容与安装时记录不一致：疑似审核后替换源码', [
+            'domain' => $plugin->domain,
+            'slug' => $plugin->slug,
+            'plugin_id' => $plugin->id,
+            'recorded_hash' => $recorded,
+            'current_hash' => $current,
+            'enforced' => $this->integrityEnforced(),
+        ]);
+
+        return ! $this->integrityEnforced();
+    }
+
+    /**
+     * 是否强制阻断完整性不一致的插件；默认观察模式，仅记日志不阻断。
+     */
+    private function integrityEnforced(): bool
+    {
+        return (bool) config('integrations.plugin_integrity_enforce', false);
     }
 
     public function healthCheck(IntegrationPlugin $plugin): array

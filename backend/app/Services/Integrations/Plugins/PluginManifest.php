@@ -10,6 +10,7 @@ final readonly class PluginManifest
      * @param  array<int, string>  $capabilities
      * @param  array<int, array<string, mixed>>  $configSchema
      * @param  array<string, mixed>  $extra
+     * @param  array{core?: string, php?: string}  $requires  宿主环境要求，未声明表示不限版本
      */
     public function __construct(
         public string $domain,
@@ -23,6 +24,7 @@ final readonly class PluginManifest
         public array $configSchema,
         public string $basePath,
         public array $extra = [],
+        public array $requires = [],
     ) {}
 
     public function configPath(): string
@@ -47,6 +49,7 @@ final readonly class PluginManifest
             'config_schema' => $this->configSchema,
             'base_path' => $this->basePath,
             'extra' => $this->extra,
+            'requires' => $this->requires,
         ];
     }
 }

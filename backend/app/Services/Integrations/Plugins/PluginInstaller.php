@@ -33,6 +33,8 @@ class PluginInstaller
         private readonly PluginConfigRepository $configRepository,
         private readonly PluginProviderRegistry $providerRegistry,
         private readonly ScheduledTaskValidator $scheduledTaskValidator,
+        private readonly PluginPackageHasher $packageHasher,
+        private readonly PluginCompatibility $compatibility,
         private readonly Container $container,
     ) {}
 
@@ -57,6 +59,9 @@ class PluginInstaller
                     'capabilities_json' => $manifest->capabilities,
                     'config_schema_json' => $manifest->configSchema,
                     'manifest_hash' => $this->scanner->manifestContentHash($manifest->domain, $manifest->slug),
+                    // 包摘要覆盖插件目录全部运行文件：安装时记录审核过的内容，
+                    // 之后运行期据此判断「被实例化的代码」是否仍是审核过的那份。
+                    'source_hash' => $this->packageHasher->packageHash($manifest->basePath),
                     'installed_at' => now(),
                 ]
             );
@@ -111,6 +116,7 @@ class PluginInstaller
                 'capabilities_json' => $manifest->capabilities,
                 'config_schema_json' => $manifest->configSchema,
                 'manifest_hash' => $this->scanner->manifestContentHash($manifest->domain, $manifest->slug),
+                'source_hash' => $this->packageHasher->packageHash($manifest->basePath),
             ])->save();
         });
 
@@ -342,6 +348,9 @@ class PluginInstaller
 
     private function assertManifestExecutable(PluginManifest $manifest): void
     {
+        // 兼容性先于类加载判定：不满足宿主版本区间的插件不应被安装/升级/启用。
+        $this->compatibility->assertCompatible($manifest);
+
         $this->fileLoader->ensureLoaded($manifest);
 
         // 插件声明的类必须位于插件目录内：manifest 可被污染，若指向任意已加载类，

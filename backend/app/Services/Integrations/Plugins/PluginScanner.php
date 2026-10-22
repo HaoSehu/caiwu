@@ -36,10 +36,14 @@ class PluginScanner
      */
     private static array $manifestHashVerified = [];
 
+    /**
+     * @param  string|null  $pluginsBasePath  插件根目录；缺省为项目内 plugins/，测试可指向临时目录
+     */
     public function __construct(
         private readonly Filesystem $files,
+        ?string $pluginsBasePath = null,
     ) {
-        $this->pluginsBasePath = base_path('plugins');
+        $this->pluginsBasePath = $pluginsBasePath ?? base_path('plugins');
     }
 
     /**
@@ -166,7 +170,10 @@ class PluginScanner
     }
 
     /**
-     * 轻量篡改检测：已安装插件清单内容哈希与安装时记录不一致时记 warning（不阻断运行）。
+     * 轻量篡改检测：已安装插件清单内容哈希与安装时记录不一致时记 error（不阻断运行）。
+     *
+     * 真阻断由 PluginRuntimeRegistry 的包摘要校验负责；这里只补一条显式告警，
+     * 让「只改清单不碰运行文件」这种绕过包摘要的改动也能留下可检索记录。
      */
     private function assertManifestHash(string $domain, string $slug, PluginManifest $manifest): void
     {
@@ -196,7 +203,7 @@ class PluginScanner
 
             $current = $this->configHashFor($manifest);
             if ($current !== null && hash_equals((string) $recorded, $current) === false) {
-                Log::warning('[plugins] 插件清单被篡改：清单文件内容与安装时记录不一致', [
+                Log::error('[plugins] 插件清单被篡改：清单文件内容与安装时记录不一致', [
                     'domain' => $domain,
                     'slug' => $slug,
                     'recorded_hash' => $recorded,
@@ -262,6 +269,13 @@ class PluginScanner
 
         try {
             return $this->buildManifest($domain, basename($normalizedDirectory), $normalizedDirectory, is_array($payload) ? $payload : []);
+        } catch (BusinessException $exception) {
+            // 清单内容层面的受控错误（如 requires 格式非法）保留原始消息，便于安装接口直接回显。
+            if ($ignoreInvalid) {
+                return null;
+            }
+
+            throw $exception;
         } catch (\Throwable) {
             if ($ignoreInvalid) {
                 return null;
@@ -327,6 +341,9 @@ class PluginScanner
             $extra['demo'] = true;
         }
 
+        // 宿主环境要求先做格式校验：非法声明在安装/升级/扫描阶段就要暴露，不能等到运行时。
+        $requires = PluginCompatibility::normalize($extra['requires'] ?? null);
+
         return new PluginManifest(
             domain: $domain,
             slug: $slug,
@@ -339,6 +356,7 @@ class PluginScanner
             configSchema: $configSchema,
             basePath: $basePath,
             extra: $extra,
+            requires: $requires,
         );
     }
 

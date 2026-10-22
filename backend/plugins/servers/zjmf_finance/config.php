@@ -42,6 +42,10 @@ return [
             ProvidesStatusSync::class,
         ],
         'extra' => [
+            // 宿主兼容性要求：core 取 system_installation.app_version，未声明视为不限版本。
+            'requires' => [
+                'core' => '>=1.0.0',
+            ],
             'scheduled_tasks' => [
                 ZjmfScheduledAuthRefreshTask::class,
                 ZjmfInventoryAndServiceSyncTask::class,

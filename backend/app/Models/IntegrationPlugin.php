@@ -30,6 +30,7 @@ class IntegrationPlugin extends Model
         'status',
         'installed_at',
         'manifest_hash',
+        'source_hash',
     ];
 
     protected $casts = [

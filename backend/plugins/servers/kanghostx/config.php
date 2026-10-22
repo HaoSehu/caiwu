@@ -24,6 +24,12 @@ return [
             ProvidesRenewal::class,
             ProvidesStatusSync::class,
         ],
+        // 宿主兼容性要求：core 取 system_installation.app_version，未声明视为不限版本。
+        'extra' => [
+            'requires' => [
+                'core' => '>=1.0.0',
+            ],
+        ],
     ],
     'config' => [
         'kanghostx_notice' => [
