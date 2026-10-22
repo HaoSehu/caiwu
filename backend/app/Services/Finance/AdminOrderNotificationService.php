@@ -112,6 +112,8 @@ class AdminOrderNotificationService
             return;
         }
 
+        $failures = [];
+
         foreach ($recipients as $admin) {
             $ruleKey = 'admin:'.(int) $admin->id;
 
@@ -153,6 +155,12 @@ class AdminOrderNotificationService
                     ]
                 );
             } catch (\Throwable $exception) {
+                $failures[] = [
+                    'admin_id' => (int) $admin->id,
+                    'email' => (string) $admin->email,
+                    'message' => $exception->getMessage(),
+                ];
+
                 Log::warning('[管理员账单通知] 邮件发送失败', [
                     'action' => 'invoice_paid',
                     'invoice_id' => $invoice->id,
@@ -162,6 +170,10 @@ class AdminOrderNotificationService
                     'message' => $exception->getMessage(),
                 ]);
             }
+        }
+
+        if ($failures !== []) {
+            throw new \RuntimeException($this->buildNotificationFailureMessage('付款通知', $invoice, $failures));
         }
     }
 
@@ -185,6 +197,8 @@ class AdminOrderNotificationService
         if ($recipients->isEmpty()) {
             return;
         }
+
+        $failures = [];
 
         foreach ($recipients as $admin) {
             $ruleKey = 'admin:'.(int) $admin->id;
@@ -225,6 +239,12 @@ class AdminOrderNotificationService
                     ]
                 );
             } catch (\Throwable $exception) {
+                $failures[] = [
+                    'admin_id' => (int) $admin->id,
+                    'email' => (string) $admin->email,
+                    'message' => $exception->getMessage(),
+                ];
+
                 Log::warning('[管理员账单通知] 新订单邮件发送失败', [
                     'action' => 'invoice_created',
                     'invoice_id' => $invoice->id,
@@ -235,6 +255,38 @@ class AdminOrderNotificationService
                 ]);
             }
         }
+
+        if ($failures !== []) {
+            throw new \RuntimeException($this->buildNotificationFailureMessage('新订单通知', $invoice, $failures));
+        }
+    }
+
+    /**
+     * 把逐条失败聚合成一条可读的中文消息。
+     * 聚合而不是首个异常即中断：一次重试要覆盖全部收件人，提前退出会让后面的管理员永远收不到信；
+     * 但失败又必须让队列看到异常才能重试，所以收集完再抛。
+     *
+     * @param  array<int, array{admin_id: int, email: string, message: string}>  $failures
+     */
+    private function buildNotificationFailureMessage(string $label, Invoice $invoice, array $failures): string
+    {
+        $details = array_map(
+            static fn (array $failure): string => sprintf(
+                'admin#%d(%s) %s',
+                (int) $failure['admin_id'],
+                (string) $failure['email'],
+                (string) $failure['message'],
+            ),
+            $failures,
+        );
+
+        return sprintf(
+            '%s发送失败 %d 位管理员（账单 %s）：%s',
+            $label,
+            count($failures),
+            (string) ($invoice->invoice_no ?? ('#'.(int) $invoice->id)),
+            implode('；', $details),
+        );
     }
 
     private function resolveRecipients(): Collection
