@@ -165,6 +165,7 @@ API 直接重构已完成，后续遵循以下 V2 边界：
 | `40300` | 无权限、角色不匹配、账号被禁用   | `ensure.admin` / `ensure.client` / `permission` |
 | `40301` | 邮箱验证或实名认证前置条件未满足 | `EnsureEmailIsVerified`                         |
 | `40400` | 资源不存在                       | 控制器内资源查询失败                            |
+| `40901` | 实例开通租约被其他任务占用       | `ProvisionLeaseBusyException`                   |
 | `42200` | 参数验证失败或一般业务校验失败   | `ValidationException`、`BusinessException`      |
 | `50000` | 通用服务端错误                   | 未分类服务异常                                  |
 
