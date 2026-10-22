@@ -64,9 +64,11 @@ class PaidOrderBusinessFlowDispatcher
         }
 
         // HTTP：支付响应先返回，开通在响应后立即执行（terminate，不走队列）。
+        // 但同步执行失败时必须把履约转进队列：terminate 阶段用户已经拿到「支付成功」，
+        // 只记一行日志等于这单永远不会再被开通，用户付了钱拿不到服务。
         $this->terminateSafely('履约', $orderId, $traceId, function () use ($orderId): void {
             app(InvoicePaidOrchestrator::class)->processPaidOrderFulfillmentById($orderId);
-        });
+        }, retryFulfillmentOnFailure: true);
 
         if (! $shouldDispatchReferralReward) {
             return;
@@ -114,9 +116,9 @@ class PaidOrderBusinessFlowDispatcher
      * afterResponse 任务中先执行者抛异常，其后注册者会被整体跳过。履约与返佣
      * 互不依赖，必须各自独立执行——任一失败不得阻断另一方。
      */
-    private function terminateSafely(string $label, int $orderId, ?string $traceId, callable $task): void
+    private function terminateSafely(string $label, int $orderId, ?string $traceId, callable $task, bool $retryFulfillmentOnFailure = false): void
     {
-        app()->terminating(function () use ($label, $orderId, $traceId, $task): void {
+        app()->terminating(function () use ($label, $orderId, $traceId, $task, $retryFulfillmentOnFailure): void {
             try {
                 $task();
             } catch (\Throwable $exception) {
@@ -126,8 +128,63 @@ class PaidOrderBusinessFlowDispatcher
                     'message' => $exception->getMessage(),
                     'exception' => $exception::class,
                 ]);
+
+                if ($retryFulfillmentOnFailure) {
+                    $this->retryFulfillmentViaQueue($orderId, $traceId, $exception);
+                }
             }
         });
+    }
+
+    /**
+     * 响应后同步履约失败时的兜底：把同一订单交给队列重试。
+     *
+     * 队列不可用（sync 驱动 / 队列表缺失）时不派发，只保留上面那条错误日志——
+     * 此时没有任何可靠的异步通道，硬派发会在请求结束后再炸一次。
+     * 派发本身失败也只记日志：terminate 阶段的异常无人接管，抛出去只会污染日志。
+     */
+    private function retryFulfillmentViaQueue(int $orderId, ?string $traceId, \Throwable $failure): void
+    {
+        if (! $this->shouldUseQueue()) {
+            Log::error('[支付后业务流] 履约同步失败且队列不可用，无法转入异步重试', [
+                'order_id' => $orderId,
+                'trace_id' => (string) ($traceId ?? ''),
+                'message' => $failure->getMessage(),
+            ]);
+
+            return;
+        }
+
+        // ShouldBeUnique 的重复派发会被 PendingDispatch 静默丢弃（不抛异常），
+        // 直接 dispatch 后写「已转入队列重试」会制造假证据。先探测唯一锁：
+        // 已有人在队列里跑就如实记「跳过」，让日志与真实行为一致。
+        if (ProcessPaidOrderFulfillmentJob::isUniqueLocked($orderId)) {
+            Log::warning('[支付后业务流] 同订单履约任务已在队列中，跳过重复派发', [
+                'order_id' => $orderId,
+                'trace_id' => (string) ($traceId ?? ''),
+                'message' => $failure->getMessage(),
+            ]);
+
+            return;
+        }
+
+        try {
+            ProcessPaidOrderFulfillmentJob::dispatch($orderId);
+
+            Log::warning('[支付后业务流] 履约同步失败，已转入队列重试', [
+                'order_id' => $orderId,
+                'trace_id' => (string) ($traceId ?? ''),
+                'message' => $failure->getMessage(),
+            ]);
+        } catch (\Throwable $dispatchException) {
+            Log::error('[支付后业务流] 履约同步失败且转入队列也失败，需人工介入', [
+                'order_id' => $orderId,
+                'trace_id' => (string) ($traceId ?? ''),
+                'message' => $failure->getMessage(),
+                'dispatch_message' => $dispatchException->getMessage(),
+                'exception' => $dispatchException::class,
+            ]);
+        }
     }
 
     private function shouldUseQueue(): bool

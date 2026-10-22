@@ -4,6 +4,7 @@ namespace App\Services\Provisioning;
 
 use App\Constants\ServiceStatus;
 use App\Exceptions\BusinessException;
+use App\Exceptions\ProvisionLeaseBusyException;
 use App\Exceptions\UpstreamStockShortageException;
 use App\Jobs\SendTemplateEmailJob;
 use App\Models\AutomationLog;
@@ -33,6 +34,7 @@ use App\Support\ServiceHostname;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class ProvisionService
@@ -58,6 +60,17 @@ class ProvisionService
         18 => 'bw',
         19 => 'system_disk_size',
     ];
+
+    /**
+     * 实例级开通租约的初始时长（秒）。
+     *
+     * 它只覆盖「抢占 → 进入上游调用」这一瞬，不负责撑满整段 checkout：进入上游前
+     * 会调 renewProvisionLease() 把到期时间推到购物车锁同口径（默认 1260 秒），
+     * 避免通用驱动串行 HTTP（清购物车→加购→checkout→fund→查实例）跑到一半租约过期、
+     * 被第三个执行者接管后对同一实例重复下单。租约过期后仍允许接管，旧执行者靠
+     * 回写前的令牌比对自我否决。
+     */
+    private const PROVISION_LEASE_SECONDS = 180;
 
     private ?ServiceUpstreamBindingWriter $serviceBindingWriter = null;
 
@@ -103,7 +116,7 @@ class ProvisionService
             return $service;
         }
 
-        if (! $this->shouldAutoProvision($order->product)) {
+        if (! $this->shouldAutoProvision($order->product, $service)) {
             $this->markPending($order, $service, '待人工开通');
 
             return $service;
@@ -119,6 +132,10 @@ class ProvisionService
         }
 
         $this->assertNoUnresolvedUpstreamProvisionInvoice($service);
+
+        // 首次提交前冻结端点与标识：本单后续的所有重试都必须打回同一上游，
+        // 否则后台改绑供应商后，重试会对着新端点重新下单。
+        $this->freezeProvisionCredentialSnapshot($order, $service);
 
         return $this->submitUpstreamProvision($order, $service);
     }
@@ -192,7 +209,7 @@ class ProvisionService
 
         $service = $this->ensureLocalService($order);
 
-        if (! $this->shouldAutoProvision($order->product)) {
+        if (! $this->shouldAutoProvision($order->product, $service)) {
             throw new BusinessException('当前商品未接入自动开通上游，无法重新提交上游购买');
         }
 
@@ -202,9 +219,33 @@ class ProvisionService
 
         $this->assertNoUnresolvedUpstreamProvisionInvoice($service);
 
-        $this->prepareServiceForProvisionRetry($order, $service);
+        // 租约必须在任何状态改动之前抢到：prepareServiceForProvisionRetry 会把服务打回 PENDING
+        // 并清空 suspended_reason。若先改状态再在 submitUpstreamProvision 里发现租约被占，
+        // 管理员会看到「重试失败」但人工暂停的服务已被改成待开通，暂停原因也丢了。
+        $leaseToken = $this->acquireProvisionLease($service);
+        if ($leaseToken === null) {
+            Log::warning('[自动开通] 实例开通租约被占用，跳过本次重试', [
+                'order_id' => (int) $order->id,
+                'service_id' => (int) $service->id,
+            ]);
 
-        return $this->submitUpstreamProvision($order, $service, true);
+            throw new ProvisionLeaseBusyException;
+        }
+
+        try {
+            $this->prepareServiceForProvisionRetry($order, $service);
+
+            // 重试沿用首次快照：prepareServiceForProvisionRetry 只清理运行态键，不动 credential_snapshot。
+            $this->freezeProvisionCredentialSnapshot($order, $service);
+        } catch (\Throwable $exception) {
+            // 状态准备阶段失败同样要归还租约，否则服务会被挂到租约自然过期，
+            // 期间所有执行者都只能收到 409。
+            $this->releaseProvisionLease($service, $leaseToken);
+
+            throw $exception;
+        }
+
+        return $this->submitUpstreamProvision($order, $service, true, $leaseToken);
     }
 
     public function retryFailedProvisionByInvoice(Invoice $invoice): Service
@@ -218,12 +259,53 @@ class ProvisionService
         throw new BusinessException('账单未关联订单，暂不支持重新提交上游开通');
     }
 
-    private function submitUpstreamProvision(Order $order, Service $service, bool $throwOnFailure = true): Service
+    /**
+     * @param  string|null  $leaseToken  调用方已抢占的租约；为 null 时由本方法自行抢占
+     */
+    private function submitUpstreamProvision(Order $order, Service $service, bool $throwOnFailure = true, ?string $leaseToken = null): Service
     {
-        $this->markPending($order, $service);
-        $providerKey = $this->resolveProviderKeyForProduct($order->product);
+        // 实例级开通租约：订单锁只串行化「支付后同步履约」这一条入口，失败补偿命令、
+        // 人工重试与上游回调都可能绕过它并发提交同一实例，导致重复 checkout。
+        // 租约必须在改服务状态之前抢占：抢不到说明已有执行者正在开通，不能再把服务打回 PENDING。
+        if ($leaseToken === null) {
+            $leaseToken = $this->acquireProvisionLease($service);
+        }
+        if ($leaseToken === null) {
+            Log::warning('[自动开通] 实例开通租约被占用，跳过本次提交', [
+                'order_id' => (int) $order->id,
+                'service_id' => (int) $service->id,
+            ]);
+
+            // 必须抛而不是静默返回：调用方（管理员手动重试、补偿命令、支付后履约）
+            // 都是「调用成功即认为已提交」。静默返回会让管理员界面上显示开通已提交、
+            // 操作日志记 submitted，实际一次上游请求都没发。租约被占是「本次没做」，
+            // 要用可识别的异常让它落成 failed 并提示稍后重试。
+            throw new ProvisionLeaseBusyException;
+        }
+
+        // 租约续期：初始 180 秒只够抢占，上游 checkout 最坏耗时可能到数分钟。
+        // 进入上游调用前把到期时间推到购物车锁同口径（默认 1260 秒），
+        // 保证整个上游窗口内租约有效，不会出现「还在 checkout，租约已过期」的假接管。
+        // 必须放在 markPending 之前：它会把人工暂停的服务打回 PENDING 并清空 suspended_reason，
+        // 续期失败时若已经改过状态，就等于白改一次业务状态再抛错。
+        if (! $this->renewProvisionLease($service, $leaseToken)) {
+            Log::warning('[自动开通] 实例开通租约在进入上游前已失效，放弃本次提交', [
+                'order_id' => (int) $order->id,
+                'service_id' => (int) $service->id,
+            ]);
+
+            throw new ProvisionLeaseBusyException;
+        }
+
+        $providerKey = '';
 
         try {
+            // 改业务状态与解析驱动类也必须留在 try 内：它们会写库、会走容器解析，
+            // 一旦在这里抛异常而租约还没进 finally，这个实例就会被挂到租约自然过期，
+            // 期间所有执行者只能收到 409。
+            $this->markPending($order, $service);
+            $providerKey = $this->resolveProviderKeyForProduct($order->product, $service);
+
             // 第二遍库存闸门：提交上游购物车结算前按上游实时库存复核（排除本单预留额度），
             // 上游已无货时直接拦截，不再空走清购物车→加购→checkout 流程；失败统一落 provision_error。
             if ($order->product instanceof Product) {
@@ -234,6 +316,24 @@ class ProvisionService
             $hostDetail = $result['host_detail'];
             $serviceStatus = $this->resolveServiceStatusFromUpstream($hostDetail);
 
+            // 回写前自证租约：上游 checkout 可能超过 180 秒，过期后他人已接管。
+            // 此时旧执行者写状态会把接管者已开通的结果覆盖回旧配置；但上游账单/实例标识
+            // 是防重复下单的唯一凭据，仍必须落库，所以只放弃服务状态回写。
+            if (! $this->provisionLeaseHeld($service, $leaseToken)) {
+                Log::error('[自动开通] 租约已失效且有其他执行者接管，放弃本次服务状态回写', [
+                    'order_id' => (int) $order->id,
+                    'service_id' => (int) $service->id,
+                ]);
+                $this->persistPartialUpstreamProvisionIdentifiers(
+                    $service,
+                    (int) ($result['upstream_invoice_id'] ?? 0),
+                    (array) ($result['upstream_host_ids'] ?? []),
+                    (int) $order->id
+                );
+
+                return $service->fresh() ?? $service;
+            }
+
             $service->forceFill([
                 'status' => $serviceStatus,
                 'name' => (string) ($service->name ?: $order->display_product_name ?: $order->product?->name ?: '未命名服务'),
@@ -242,12 +342,12 @@ class ProvisionService
                 'suspended_reason' => null,
                 'provision_data' => array_merge($this->serviceProvisionData($service), [
                     'provider_key' => $providerKey,
-                    'supplier_id' => $this->resolveProductSupplierId($order->product),
+                    'supplier_id' => $this->resolveProductSupplierId($order->product, $service),
                     'requested_host' => $result['requested_host'],
                     'upstream_invoice_id' => $result['upstream_invoice_id'],
                     'upstream_host_id' => $result['upstream_host_id'],
                     'upstream_host_ids' => $result['upstream_host_ids'],
-                    'upstream_product_id' => $this->resolveUpstreamProductId($order->product),
+                    'upstream_product_id' => $this->resolveUpstreamProductId($order->product, $service),
                     'upstream_product_name' => trim((string) ($hostDetail['product_name'] ?? '')),
                     'upstream_status' => (string) ($hostDetail['domainstatus'] ?? ''),
                     'dedicated_ip' => (string) ($hostDetail['dedicatedip'] ?? ''),
@@ -277,8 +377,8 @@ class ProvisionService
                 [
                     'order_id' => (int) $order->id,
                     'order_no' => (string) $order->order_no,
-                    'supplier_id' => $this->resolveProductSupplierId($order->product),
-                    'upstream_product_id' => $this->resolveUpstreamProductId($order->product),
+                    'supplier_id' => $this->resolveProductSupplierId($order->product, $service),
+                    'upstream_product_id' => $this->resolveUpstreamProductId($order->product, $service),
                     'requested_host' => $result['requested_host'] ?? null,
                 ],
                 [
@@ -301,16 +401,43 @@ class ProvisionService
                 ? $exception->getMessage()
                 : '上游开通失败，请检查供应商配置或日志';
 
+            // 失败回写同样要自证租约：接管者可能已开通成功，旧执行者把状态写回 PENDING
+            // 会覆盖掉已经生效的结果。上游账单/实例标识由 provisionViaUpstream 的
+            // 部分成功持久化落库，不在这里丢弃。
+            if (! $this->provisionLeaseHeld($service, $leaseToken)) {
+                Log::error('[自动开通] 租约已失效且有其他执行者接管，放弃本次失败状态回写', [
+                    'order_id' => (int) $order->id,
+                    'service_id' => (int) $service->id,
+                    'message' => $message,
+                ]);
+
+                if ($throwOnFailure) {
+                    throw $exception instanceof BusinessException
+                        ? $exception
+                        : new BusinessException($message);
+                }
+
+                return $service->fresh() ?? $service;
+            }
+
+            // 失败回写必须保住首次冻结的端点快照（serviceProvisionData 已带出 legacy 里的快照），
+            // 否则一次失败就会把快照冲掉，重试会打回改绑后的新上游。
+            $failedProvisionData = $this->serviceProvisionData($service);
+            // markPending/驱动类解析本身失败时 $providerKey 还没赋值，这里回落到实时解析，
+            // 避免把 provision_data.provider_key 写成空串冲掉已有标识。
+            $fallbackProduct = $order->product instanceof Product ? $order->product : null;
+            $failedProvisionData['provider_key'] = $providerKey !== ''
+                ? $providerKey
+                : $this->resolveProviderKeyForProduct($fallbackProduct, $service);
+            $failedProvisionData['supplier_id'] = $this->resolveProductSupplierId($order->product, $service);
+            $failedProvisionData['upstream_product_id'] = $this->resolveUpstreamProductId($order->product, $service);
+            $failedProvisionData['last_provision_attempt_at'] = now()->format('Y-m-d H:i:s');
+            $failedProvisionData['provision_error'] = $message;
+
             $service->forceFill([
                 'status' => ServiceStatus::PENDING,
                 'suspended_reason' => mb_substr($message, 0, 200),
-                'provision_data' => array_merge($this->serviceProvisionData($service), [
-                    'provider_key' => $providerKey,
-                    'supplier_id' => $this->resolveProductSupplierId($order->product),
-                    'upstream_product_id' => $this->resolveUpstreamProductId($order->product),
-                    'last_provision_attempt_at' => now()->format('Y-m-d H:i:s'),
-                    'provision_error' => $message,
-                ]),
+                'provision_data' => $failedProvisionData,
             ])->save();
             $this->serviceBindingWriter()->recordProvisionAttempt(
                 $service,
@@ -321,8 +448,8 @@ class ProvisionService
                 [
                     'order_id' => (int) $order->id,
                     'order_no' => (string) $order->order_no,
-                    'supplier_id' => $this->resolveProductSupplierId($order->product),
-                    'upstream_product_id' => $this->resolveUpstreamProductId($order->product),
+                    'supplier_id' => $this->resolveProductSupplierId($order->product, $service),
+                    'upstream_product_id' => $this->resolveUpstreamProductId($order->product, $service),
                 ]
             );
 
@@ -335,8 +462,8 @@ class ProvisionService
                 'order_id' => $order->id,
                 'order_no' => $order->order_no,
                 'service_id' => $service->id,
-                'supplier_id' => $this->resolveProductSupplierId($order->product),
-                'upstream_product_id' => $this->resolveUpstreamProductId($order->product),
+                'supplier_id' => $this->resolveProductSupplierId($order->product, $service),
+                'upstream_product_id' => $this->resolveUpstreamProductId($order->product, $service),
                 'message' => $message,
                 'exception' => $exception::class,
             ]);
@@ -348,6 +475,10 @@ class ProvisionService
             }
 
             return $service;
+        } finally {
+            // 状态与审计流水写完后再释放租约，让后续重试与运维操作能立即接管；
+            // 只清理仍属于本次执行的令牌，接管者的租约不会被误删。
+            $this->releaseProvisionLease($service, $leaseToken);
         }
     }
 
@@ -531,18 +662,151 @@ class ProvisionService
         }
     }
 
-    private function shouldAutoProvision(Product $product): bool
+    /**
+     * 抢占实例级开通租约，返回本次持有的令牌；返回 null 表示租约被占用。
+     *
+     * 用单条 UPDATE 做原子 CAS（无租约或租约已过期才可抢），避免并发执行者
+     * 各自「读—判断—写入」同时通过。抢到后在同一语句里累加开通尝试次数。
+     * 存量库没有租约列时返回空串，表示本次运行不启用租约（保持旧行为）。
+     */
+    private function acquireProvisionLease(Service $service): ?string
+    {
+        if (! $this->supportsProvisionLease()) {
+            return '';
+        }
+
+        $serviceId = (int) $service->id;
+        if ($serviceId <= 0) {
+            return null;
+        }
+
+        $token = bin2hex(random_bytes(24));
+        $now = now()->format('Y-m-d H:i:s');
+
+        $affected = DB::table('services')
+            ->where('id', $serviceId)
+            ->where(function ($query) use ($now): void {
+                $query->whereNull('provision_lease_until')
+                    ->orWhere('provision_lease_until', '<=', $now);
+            })
+            ->update([
+                'provision_lease_token' => $token,
+                'provision_lease_until' => now()->addSeconds(self::PROVISION_LEASE_SECONDS)->format('Y-m-d H:i:s'),
+                'provision_attempts' => DB::raw('provision_attempts + 1'),
+            ]);
+
+        return $affected > 0 ? $token : null;
+    }
+
+    /**
+     * 续期租约，把到期时间推到上游窗口结束（购物车锁同口径）。
+     *
+     * 初始 180 秒只够抢占与短暂提交；通用驱动的清购物车→加购→checkout→fund→查实例
+     * 是串行 HTTP，最坏情况远超 180 秒。不续期的话，旧执行者还在 checkout 时租约
+     * 已过期，第三个执行者可以接管并对同一实例发起第二笔下单。续期只在令牌仍归
+     * 自己时生效，被接管后返回 false，由调用方立刻放弃本次提交。
+     */
+    private function renewProvisionLease(Service $service, string $leaseToken): bool
+    {
+        if (! $this->supportsProvisionLease()) {
+            return true;
+        }
+
+        if ($leaseToken === '' || (int) $service->id <= 0) {
+            return false;
+        }
+
+        $affected = DB::table('services')
+            ->where('id', (int) $service->id)
+            ->where('provision_lease_token', $leaseToken)
+            ->update([
+                'provision_lease_until' => now()->addSeconds($this->supplierCartLockTtl())->format('Y-m-d H:i:s'),
+            ]);
+
+        return $affected > 0;
+    }
+
+    /**
+     * 释放租约：只清理仍属于本次执行的令牌，绝不覆盖接管者的租约。
+     */
+    private function releaseProvisionLease(Service $service, string $leaseToken): void
+    {
+        if (! $this->supportsProvisionLease() || $leaseToken === '' || (int) $service->id <= 0) {
+            return;
+        }
+
+        DB::table('services')
+            ->where('id', (int) $service->id)
+            ->where('provision_lease_token', $leaseToken)
+            ->update([
+                'provision_lease_token' => null,
+                'provision_lease_until' => null,
+            ]);
+    }
+
+    /**
+     * 回写前自证租约仍归本次执行所有。
+     *
+     * 上游 checkout 可能超过租约时长，过期后允许他人接管；旧执行者若继续写入，
+     * 会把接管者已开通的结果覆盖回 PENDING 或旧配置。无租约列时恒为 true。
+     */
+    private function provisionLeaseHeld(Service $service, string $leaseToken): bool
+    {
+        if (! $this->supportsProvisionLease() || $leaseToken === '') {
+            return true;
+        }
+
+        $serviceId = (int) $service->id;
+        if ($serviceId <= 0) {
+            return false;
+        }
+
+        $current = DB::table('services')->where('id', $serviceId)->value('provision_lease_token');
+
+        return is_string($current) && hash_equals($leaseToken, $current);
+    }
+
+    /**
+     * 租约列是否就绪（存量库迁移前保持旧行为）。
+     */
+    private function supportsProvisionLease(): bool
+    {
+        return SchemaMetadataCache::hasColumn('services', 'provision_lease_token');
+    }
+
+    private function shouldAutoProvision(Product $product, ?Service $service = null): bool
     {
         $this->ensureProductBinding($product);
 
-        return (int) $product->auto_setup === 1
-            && $this->resolveProductSupplierId($product) > 0
-            && $this->resolveUpstreamProductId($product) > 0
-            && $this->providerResolver->resolveForProduct($product)->supports(ProvidesProvisioning::class);
+        if ((int) $product->auto_setup !== 1) {
+            return false;
+        }
+
+        if ($this->resolveProductSupplierId($product, $service) <= 0) {
+            return false;
+        }
+
+        if ($this->resolveUpstreamProductId($product, $service) <= 0) {
+            return false;
+        }
+
+        // 驱动类判定同样要读冻结快照：换绑到不支持开通的供应商后，
+        // 在途订单的重试必须继续用首次冻结的 provider_key，否则会在
+        // 「是否可自动开通」这一步就被实时绑定拦下，快照根本没机会生效。
+        return $this->providerResolver->resolveByRawKey($this->resolveProviderKeyForProduct($product, $service))
+            ->supports(ProvidesProvisioning::class);
     }
 
-    private function resolveProviderKeyForProduct(?Product $product): string
+    private function resolveProviderKeyForProduct(?Product $product, ?Service $service = null): string
     {
+        // 在途订单的驱动类必须跟端点一起冻结：换绑后 provider_key 变了，
+        // 实时解析会拿旧供应商端点配新供应商驱动，两个上游的口径会串。
+        $snapshot = $this->provisionCredentialSnapshot($service);
+        $frozenProviderKey = $snapshot !== null ? trim((string) ($snapshot['provider_key'] ?? '')) : '';
+        if ($frozenProviderKey !== '') {
+            return $frozenProviderKey;
+        }
+
         if ($product instanceof Product) {
             $this->ensureProductBinding($product);
             $resolved = $this->providerResolver->resolveForProduct($product);
@@ -557,28 +821,29 @@ class ProvisionService
     private function provisionViaUpstream(Order $order, ?Service $service = null): array
     {
         $product = $order->product;
-        $supplier = $this->resolveProductSupplier($product);
+        $resolvedService = $service instanceof Service ? $service : ($order->service instanceof Service ? $order->service : null);
+        $supplier = $this->resolveProductSupplier($product, $resolvedService);
 
         if (! $supplier instanceof Supplier) {
             throw new BusinessException('供应商信息不存在，无法自动开通');
         }
 
-        $provisioning = $this->resolveProvisioningCapability($product);
+        $provisioning = $this->resolveProvisioningCapability($product, $resolvedService);
         if (method_exists($provisioning, 'provisionOrder')) {
-            $this->resolveProvisionHostname($order);
+            $this->resolveProvisionHostname($order, $resolvedService);
             $cartLockKey = $this->supplierCartLockKey($supplier);
 
             try {
-                return Cache::lock($cartLockKey, $this->supplierCartLockTtl())->block(10, function () use ($order, $supplier, $provisioning, $service) {
+                return Cache::lock($cartLockKey, $this->supplierCartLockTtl())->block(10, function () use ($order, $supplier, $provisioning, $resolvedService) {
                     // 锁内基于 DB 最新状态复查幂等：并发"队列履约 + 管理员手动重试"时，
                     // 另一路径可能已 checkout 并提交 checkpoint（upstream_invoice_id/upstream_host_id 已落库）。
                     // 必须用 fresh 数据做幂等回查，避免基于旧内存值重复走购物车流程造成上游二次开通。
-                    $freshService = ($service ?? $order->service)?->fresh();
+                    $freshService = $resolvedService?->fresh();
                     if ($freshService instanceof Service) {
                         $this->assertNoUnresolvedUpstreamProvisionInvoice($freshService);
                     }
 
-                    return $provisioning->provisionOrder($order, $supplier, $freshService ?? $service ?? $order->service);
+                    return $provisioning->provisionOrder($order, $supplier, $freshService ?? $resolvedService ?? $order->service);
                 });
             } catch (UpstreamStockShortageException $exception) {
                 // 上游加购/结算是唯一真实库存闸门：被「库存不足」拒绝说明本地快照
@@ -655,7 +920,7 @@ class ProvisionService
 
         $startedAt = microtime(true);
 
-        return Cache::lock($cartLockKey, $this->supplierCartLockTtl())->block(10, function () use ($order, $product, $supplier, $startedAt, $provisioning, $service) {
+        return Cache::lock($cartLockKey, $this->supplierCartLockTtl())->block(10, function () use ($order, $product, $supplier, $startedAt, $provisioning, $service, $resolvedService) {
             $latency = [
                 'cart_lock_wait_ms' => 0,
                 'login_ms' => 0,
@@ -689,18 +954,18 @@ class ProvisionService
                 $provisioning->request($supplier, 'DELETE', '/v1/cart/clear', [], $jwt);
                 $latency['clear_cart_before_ms'] = $this->elapsedMilliseconds($stepStartedAt);
 
-                $payload = $this->buildUpstreamCartPayload($order);
+                $payload = $this->buildUpstreamCartPayload($order, $resolvedService);
                 $requestedHost = (string) ($payload['host'] ?? '');
 
                 $stepStartedAt = microtime(true);
                 $addCartResponse = $this->addProductToUpstreamCart($provisioning, $supplier, $jwt, $payload);
                 $latency['add_cart_ms'] = $this->elapsedMilliseconds($stepStartedAt);
-                $this->assertUpstreamSuccess($addCartResponse, [200], '加入上游购物车', $this->resolveProviderKeyForProduct($product));
+                $this->assertUpstreamSuccess($addCartResponse, [200], '加入上游购物车', $this->resolveProviderKeyForProduct($product, $resolvedService));
 
                 $stepStartedAt = microtime(true);
                 $cartResponse = $provisioning->get($supplier, '/v1/cart', $jwt);
                 $latency['get_cart_ms'] = $this->elapsedMilliseconds($stepStartedAt);
-                $this->assertUpstreamSuccess($cartResponse, [200], '读取上游购物车', $this->resolveProviderKeyForProduct($product));
+                $this->assertUpstreamSuccess($cartResponse, [200], '读取上游购物车', $this->resolveProviderKeyForProduct($product, $resolvedService));
                 $cartPayload = $this->extractPayload($cartResponse);
                 $gateway = $this->resolveGateway($cartPayload);
 
@@ -710,7 +975,7 @@ class ProvisionService
                     'position' => [0],
                 ], $jwt);
                 $latency['checkout_ms'] = $this->elapsedMilliseconds($stepStartedAt);
-                $this->assertUpstreamSuccess($checkoutResponse, [200, 1001], '上游购物车结算', $this->resolveProviderKeyForProduct($product));
+                $this->assertUpstreamSuccess($checkoutResponse, [200, 1001], '上游购物车结算', $this->resolveProviderKeyForProduct($product, $resolvedService));
 
                 $checkoutPayload = $this->extractPayload($checkoutResponse);
                 $invoiceId = $this->extractInvoiceId($checkoutResponse, $checkoutPayload);
@@ -720,7 +985,7 @@ class ProvisionService
                     $stepStartedAt = microtime(true);
                     $fundResponse = $provisioning->post($supplier, "/v1/invoices/{$invoiceId}/fund", [], $jwt);
                     $latency['fund_invoice_ms'] = $this->elapsedMilliseconds($stepStartedAt);
-                    $this->assertUpstreamSuccess($fundResponse, [200, 1001], '使用供应商余额支付上游账单', $this->resolveProviderKeyForProduct($product));
+                    $this->assertUpstreamSuccess($fundResponse, [200, 1001], '使用供应商余额支付上游账单', $this->resolveProviderKeyForProduct($product, $resolvedService));
                     $fundPayload = $this->extractPayload($fundResponse);
                     $hostIds = $this->extractHostIds($fundResponse, $fundPayload);
 
@@ -747,7 +1012,7 @@ class ProvisionService
                 $stepStartedAt = microtime(true);
                 $detailResponse = $provisioning->get($supplier, "/v1/hosts/{$hostId}", $jwt);
                 $latency['host_detail_ms'] = $this->elapsedMilliseconds($stepStartedAt);
-                $this->assertUpstreamSuccess($detailResponse, [200], '读取上游产品详情', $this->resolveProviderKeyForProduct($product));
+                $this->assertUpstreamSuccess($detailResponse, [200], '读取上游产品详情', $this->resolveProviderKeyForProduct($product, $resolvedService));
                 $detailPayload = $this->extractPayload($detailResponse);
                 $hostDetail = is_array($detailPayload['host'] ?? null) ? $detailPayload['host'] : [];
 
@@ -792,7 +1057,7 @@ class ProvisionService
                     'order_id' => (int) $order->id,
                     'order_no' => (string) $order->order_no,
                     'supplier_id' => (int) $supplier->id,
-                    'upstream_product_id' => $this->resolveUpstreamProductId($product),
+                    'upstream_product_id' => $this->resolveUpstreamProductId($product, $resolvedService),
                     'requested_host' => $requestedHost,
                     'upstream_invoice_id' => $invoiceId,
                     'upstream_host_id' => $hostId,
@@ -874,14 +1139,16 @@ class ProvisionService
         }
     }
 
-    private function buildUpstreamCartPayload(Order $order): array
+    private function buildUpstreamCartPayload(Order $order, ?Service $service = null): array
     {
         $product = $order->product;
         $configSnapshot = array_merge(
             (array) (($product->purchase_requires ?? [])['upstream_default_config'] ?? []),
             (array) ($order->config_snapshot ?? [])
         );
-        $hostname = $this->resolveProvisionHostname($order);
+        // 调用方传入的 service 才是本次履约上下文；直接读 order->service 会在
+        // 「显式传入 service 但订单关系未加载」时丢掉 credential_snapshot，回落到实时绑定。
+        $hostname = $this->resolveProvisionHostname($order, $service ?? $order->service);
         $password = trim((string) ($configSnapshot['password'] ?? ''));
 
         if ($password === '') {
@@ -891,7 +1158,7 @@ class ProvisionService
         $configOptionMap = $this->buildUpstreamConfigOptionMap($product, $configSnapshot);
 
         return [
-            'product_id' => $this->resolveUpstreamProductId($product),
+            'product_id' => $this->resolveUpstreamProductId($product, $service),
             'billingcycle' => (string) $order->billing_cycle,
             'qty' => 1,
             'host' => $hostname,
@@ -1163,7 +1430,8 @@ class ProvisionService
 
     private function prepareServiceForProvisionRetry(Order $order, Service $service): void
     {
-        $hostname = $this->resolveProvisionHostname($order);
+        // 重试沿用凭据快照：主机名规则也要按冻结的那个上游去取，否则改绑后会按新规则改名。
+        $hostname = $this->resolveProvisionHostname($order, $service);
         $provisionData = $this->serviceProvisionData($service, includeSecrets: true);
 
         foreach ([
@@ -1231,14 +1499,14 @@ class ProvisionService
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
     }
 
-    private function resolveProvisionHostname(Order $order): string
+    private function resolveProvisionHostname(Order $order, ?Service $service = null): string
     {
         $configSnapshot = (array) ($order->config_snapshot ?? []);
         $hostnameConfig = $this->settingService->getProvisionHostnameConfig();
         $productHostnameRule = ProductProvisionHostname::fromPurchaseRequires(
             is_array($order->product?->purchase_requires ?? null) ? $order->product->purchase_requires : []
         );
-        $upstreamHostnameRule = $this->resolveUpstreamProvisionHostnameRule($order);
+        $upstreamHostnameRule = $this->resolveUpstreamProvisionHostnameRule($order, $service);
         $snapshotHostname = $this->settingService->normalizeHostname((string) ($configSnapshot['hostname'] ?? ''));
         $hostnameMode = (string) ($productHostnameRule['mode'] ?? ProductProvisionHostname::MODE_SYSTEM);
         $enforceSystemRule = (bool) ($hostnameConfig['enforce'] ?? false);
@@ -1288,20 +1556,21 @@ class ProvisionService
         return $hostname;
     }
 
-    private function resolveUpstreamProvisionHostnameRule(Order $order): array
+    private function resolveUpstreamProvisionHostnameRule(Order $order, ?Service $service = null): array
     {
         $product = $order->product;
-        $supplier = $product instanceof Product ? $this->resolveProductSupplier($product) : null;
+        // 与提交同源：在途订单读冻结快照，避免改绑后用新上游的规则生成旧上游的主机名。
+        $supplier = $product instanceof Product ? $this->resolveProductSupplier($product, $service) : null;
 
         if (! $product instanceof Product || ! $supplier instanceof Supplier) {
             return [];
         }
 
-        if (! $this->shouldAutoProvision($product)) {
+        if (! $this->shouldAutoProvision($product, $service)) {
             return [];
         }
 
-        $supplierProductId = $this->resolveUpstreamProductId($product);
+        $supplierProductId = $this->resolveUpstreamProductId($product, $service);
         if ($supplierProductId <= 0) {
             return [];
         }
@@ -1312,9 +1581,9 @@ class ProvisionService
             return $cachedRule;
         }
 
-        $rule = (function () use ($product, $supplier, $supplierProductId) {
+        $rule = (function () use ($product, $supplier, $supplierProductId, $service) {
             try {
-                $provisioning = $this->resolveProvisioningCapability($product);
+                $provisioning = $this->resolveProvisioningCapability($product, $service);
                 if (method_exists($provisioning, 'getProductProvisionConfig')) {
                     $response = $provisioning->getProductProvisionConfig($supplier, $supplierProductId);
 
@@ -1350,9 +1619,19 @@ class ProvisionService
         return $rule;
     }
 
-    private function resolveProvisioningCapability(?Product $product): object
+    private function resolveProvisioningCapability(?Product $product, ?Service $service = null): object
     {
         throw_if(! $product instanceof Product, new BusinessException('商品信息不存在，无法解析供应商接口', 42200));
+
+        // 驱动类同样属于「本单履约凭据」：换绑 provider_key 后实时解析会拿新驱动打旧端点，
+        // 上游协议差异会让在途重试变成不可解释的报错，所以优先按冻结快照选驱动。
+        $snapshot = $this->provisionCredentialSnapshot($service);
+        $frozenProviderKey = $snapshot !== null ? trim((string) ($snapshot['provider_key'] ?? '')) : '';
+        if ($frozenProviderKey !== '') {
+            return $this->providerResolver
+                ->resolveByRawKey($frozenProviderKey)
+                ->require(ProvidesProvisioning::class, '当前商品未接入可自动开通的供应商接口');
+        }
 
         return $this->providerResolver
             ->resolveForProduct($product)
@@ -1627,8 +1906,15 @@ class ProvisionService
         return (int) round((microtime(true) - $startedAt) * 1000);
     }
 
-    private function resolveProductSupplierId(Product $product): int
+    private function resolveProductSupplierId(Product $product, ?Service $service = null): int
     {
+        // 履约上下文存在冻结快照时必须用快照里的供应商：后台改绑供应商后，
+        // 在途订单的回写与审计仍要落在真正下单的那一家，否则账单会挂到新供应商名下。
+        $snapshot = $this->provisionCredentialSnapshot($service);
+        if ($snapshot !== null && (int) ($snapshot['supplier_id'] ?? 0) > 0) {
+            return (int) $snapshot['supplier_id'];
+        }
+
         $this->ensureProductBinding($product);
 
         $supplierId = (int) (($this->pluginBindingResolver()->supplierIdForProduct($product) ?? 0) ?: 0);
@@ -1639,7 +1925,47 @@ class ProvisionService
         return 0;
     }
 
-    private function resolveProductSupplier(Product $product): ?Supplier
+    /**
+     * 解析开通所用的供应商实例。
+     *
+     * 存在冻结快照时以快照的 supplier_id / provider_key / upstream_base_url 为准：
+     * 后台改绑供应商或改端点后，在途订单的重试仍要打回原上游，否则会对着新供应商
+     * 重复下单或直接查不到原账单。密钥不进快照（轮换频繁），仍从当前绑定实时取。
+     */
+    private function resolveProductSupplier(Product $product, ?Service $service = null): ?Supplier
+    {
+        $snapshot = $this->provisionCredentialSnapshot($service);
+        if ($snapshot !== null) {
+            $frozenSupplier = Supplier::query()->find((int) ($snapshot['supplier_id'] ?? 0));
+            if ($frozenSupplier instanceof Supplier) {
+                $frozenSupplier = $this->pluginBindingResolver()->supplierWithRuntimeCredentials($frozenSupplier);
+
+                $frozenProviderKey = trim((string) ($snapshot['provider_key'] ?? ''));
+                if ($frozenProviderKey !== '') {
+                    $frozenSupplier->setAttribute('provider_key', $frozenProviderKey);
+                }
+
+                $frozenBaseUrl = rtrim(trim((string) ($snapshot['upstream_base_url'] ?? '')), '/');
+                if ($frozenBaseUrl !== '') {
+                    $frozenSupplier->setAttribute('api_url', $frozenBaseUrl);
+                }
+
+                return $frozenSupplier;
+            }
+
+            // 快照指向的供应商已被物理删除时退回实时解析，避免在途订单彻底卡死；
+            // 这里的回退是「快照失效」的信号，必须留日志：否则在途订单会静默改用当前绑定
+            // 的供应商下单，账单挂到错误的上游而无人知晓。
+            Log::warning('[自动开通] 冻结快照指向的供应商已不存在，回退实时绑定解析', [
+                'service_id' => (int) $service->id,
+                'frozen_supplier_id' => (int) ($snapshot['supplier_id'] ?? 0),
+            ]);
+        }
+
+        return $this->resolveLiveProductSupplier($product);
+    }
+
+    private function resolveLiveProductSupplier(Product $product): ?Supplier
     {
         $this->ensureProductBinding($product);
 
@@ -1651,8 +1977,82 @@ class ProvisionService
         return null;
     }
 
-    private function resolveUpstreamProductId(Product $product): int
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function provisionCredentialSnapshot(?Service $service): ?array
     {
+        if (! $service instanceof Service) {
+            return null;
+        }
+
+        $provisionData = is_array($service->provision_data ?? null) ? $service->provision_data : [];
+        $snapshot = $provisionData['credential_snapshot'] ?? null;
+        if (! is_array($snapshot) || (int) ($snapshot['supplier_id'] ?? 0) <= 0) {
+            return null;
+        }
+
+        return $snapshot;
+    }
+
+    /**
+     * 首次提交上游前冻结端点与标识，之后的重试沿用同一份快照。
+     * 不冻结密钥：密钥轮换是常态，冻结会引入「密钥过期」这一新的故障面。
+     */
+    private function freezeProvisionCredentialSnapshot(Order $order, Service $service): void
+    {
+        $product = $order->product;
+        if (! $product instanceof Product) {
+            return;
+        }
+
+        // 只改 legacy provision_data：投影键由绑定表派生，不该被写回快照。
+        $provisionData = is_array($service->provision_data ?? null) ? $service->provision_data : [];
+        $existing = $provisionData['credential_snapshot'] ?? null;
+        $existing = is_array($existing) ? $existing : [];
+
+        // 存量快照（升级前冻结的）只有 supplier_id 等标识、没有 upstream_product_id：
+        // 此时要补全缺失键而不是整段覆盖，否则会把已冻结的旧端点改写成当前绑定的新端点，
+        // 在途订单的重试就打到了错误的上游。
+        if ((int) ($existing['supplier_id'] ?? 0) > 0 && (int) ($existing['upstream_product_id'] ?? 0) > 0) {
+            return;
+        }
+
+        $supplier = $this->resolveLiveProductSupplier($product);
+        if (! $supplier instanceof Supplier) {
+            // 解析不到供应商时不在快照里留半截数据：后续代码会按原口径抛错，人工修好绑定后重试仍能正常冻结。
+            return;
+        }
+
+        $frozenSnapshot = $existing;
+        $frozenSnapshot['supplier_id'] = (int) ($existing['supplier_id'] ?? 0) > 0 ? (int) $existing['supplier_id'] : (int) $supplier->id;
+        $frozenSnapshot['provider_key'] = trim((string) ($existing['provider_key'] ?? '')) !== ''
+            ? trim((string) $existing['provider_key'])
+            : trim((string) ($supplier->provider_key ?? ''));
+        $frozenSnapshot['upstream_base_url'] = rtrim(trim((string) ($existing['upstream_base_url'] ?? '')), '/') !== ''
+            ? rtrim(trim((string) $existing['upstream_base_url']), '/')
+            : rtrim(trim((string) ($supplier->api_url ?? '')), '/');
+        $frozenSnapshot['upstream_product_id'] = (int) ($existing['upstream_product_id'] ?? 0) > 0
+            ? (int) $existing['upstream_product_id']
+            : $this->resolveUpstreamProductId($product);
+        $frozenSnapshot['frozen_at'] = (string) ($existing['frozen_at'] ?? '') !== ''
+            ? (string) $existing['frozen_at']
+            : now()->format('Y-m-d H:i:s');
+
+        $provisionData['credential_snapshot'] = $frozenSnapshot;
+
+        $service->forceFill(['provision_data' => $provisionData])->save();
+    }
+
+    private function resolveUpstreamProductId(Product $product, ?Service $service = null): int
+    {
+        // 上游商品号是真正下单的 product_id，也必须随快照冻结：
+        // 换绑商品后重试若读实时绑定，会拿旧端点配新商品号，上游直接下错单。
+        $snapshot = $this->provisionCredentialSnapshot($service);
+        if ($snapshot !== null && (int) ($snapshot['upstream_product_id'] ?? 0) > 0) {
+            return (int) $snapshot['upstream_product_id'];
+        }
+
         $this->ensureProductBinding($product);
 
         $upstreamProductId = $this->pluginBindingResolver()->upstreamProductIdForProduct($product);

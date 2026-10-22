@@ -5,12 +5,17 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Exceptions\BusinessException;
+use App\Jobs\ProcessPaidOrderFulfillmentJob;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\User;
 use App\Services\Finance\InvoicePaidOrchestrator;
 use App\Services\Order\PaidOrderBusinessFlowDispatcher;
+use Illuminate\Bus\UniqueLock;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Tests\TestCase;
 
 /**
@@ -132,6 +137,103 @@ class PaidOrderBusinessFlowDispatchIsolationTest extends TestCase
         }
 
         $this->assertSame(['fulfillment', 'referral'], $executed, '前一个回调抛异常不得阻断后续业务流');
+    }
+
+    public function test_http_fulfillment_failure_is_retried_through_queue(): void
+    {
+        // HTTP 路径：响应后同步履约失败，不能只留一行日志。用户已经拿到「支付成功」，
+        // 这单必须进队列继续重试，否则就是付了钱永远不开通。
+        config(['queue.default' => 'database']);
+
+        $dispatcher = app(PaidOrderBusinessFlowDispatcher::class);
+        $app = app();
+
+        $property = new \ReflectionProperty($app, 'terminatingCallbacks');
+        $property->setAccessible(true);
+        $before = count((array) $property->getValue($app));
+
+        $method = new \ReflectionMethod($dispatcher, 'terminateSafely');
+        $method->setAccessible(true);
+        $method->invoke($dispatcher, '履约', 9527, 'trace-queue-retry', function (): void {
+            throw new \RuntimeException('履约同步执行失败模拟');
+        }, true);
+
+        $registered = array_slice((array) $property->getValue($app), $before);
+        $this->assertCount(1, $registered);
+
+        $registered[0]();
+
+        $job = DB::table('jobs')->where('payload', 'like', '%ProcessPaidOrderFulfillmentJob%')->first();
+        $this->assertNotNull($job, '同步履约失败后必须把履约任务派发到队列');
+        $this->assertSame('provision', (string) $job->queue);
+    }
+
+    public function test_http_fulfillment_failure_with_queue_unavailable_only_logs(): void
+    {
+        // 队列不可用（sync）时没有可靠异步通道，不能硬派发，也不能让 terminate 回调抛异常。
+        config(['queue.default' => 'sync']);
+
+        $dispatcher = app(PaidOrderBusinessFlowDispatcher::class);
+        $app = app();
+
+        $property = new \ReflectionProperty($app, 'terminatingCallbacks');
+        $property->setAccessible(true);
+        $before = count((array) $property->getValue($app));
+
+        $method = new \ReflectionMethod($dispatcher, 'terminateSafely');
+        $method->setAccessible(true);
+        $method->invoke($dispatcher, '履约', 9528, 'trace-no-queue', function (): void {
+            throw new \RuntimeException('履约同步执行失败模拟');
+        }, true);
+
+        $registered = array_slice((array) $property->getValue($app), $before);
+        $registered[0]();
+
+        $this->assertSame(0, DB::table('jobs')->where('payload', 'like', '%ProcessPaidOrderFulfillmentJob%')->count());
+    }
+
+    public function test_http_fulfillment_failure_skips_dispatch_when_unique_lock_is_held(): void
+    {
+        // 队列里已有同订单任务时，ShouldBeUnique 会在 PendingDispatch 析构里静默丢弃重复派发，
+        // 不抛异常。兜底路径必须自己探测到这一点，否则日志会写「已转入队列重试」的假证据。
+        config(['queue.default' => 'database']);
+
+        $orderId = 9529;
+        $lock = Cache::lock(UniqueLock::getKey(new ProcessPaidOrderFulfillmentJob($orderId)), 1500);
+        $this->assertTrue($lock->get(), '前置条件：必须占住同订单的唯一锁');
+
+        try {
+            Log::spy();
+
+            $dispatcher = app(PaidOrderBusinessFlowDispatcher::class);
+            $app = app();
+
+            $property = new \ReflectionProperty($app, 'terminatingCallbacks');
+            $property->setAccessible(true);
+            $before = count((array) $property->getValue($app));
+
+            $method = new \ReflectionMethod($dispatcher, 'terminateSafely');
+            $method->setAccessible(true);
+            $method->invoke($dispatcher, '履约', $orderId, 'trace-unique-lock', function (): void {
+                throw new \RuntimeException('履约同步执行失败模拟');
+            }, true);
+
+            $registered = array_slice((array) $property->getValue($app), $before);
+            $registered[0]();
+
+            $this->assertSame(
+                0,
+                DB::table('jobs')->where('payload', 'like', '%ProcessPaidOrderFulfillmentJob%')->count(),
+                '唯一锁被占时不得重复派发注定会被丢弃的任务',
+            );
+            Log::shouldHaveReceived('warning')->withArgs(
+                static fn (string $message, array $context = []): bool => str_contains($message, '同订单履约任务已在队列中'),
+            );
+            // 全程只允许出现这一条 warning：若还有「已转入队列重试」就是假证据
+            Log::shouldHaveReceived('warning')->once();
+        } finally {
+            $lock->release();
+        }
     }
 
     /**

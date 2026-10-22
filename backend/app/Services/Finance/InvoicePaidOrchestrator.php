@@ -388,6 +388,12 @@ class InvoicePaidOrchestrator
         }
     }
 
+    /**
+     * 履约入口的并发口径是「跳过」而不是「报错」：调用方既有队列 Job，也有
+     * HTTP 响应后同步执行，重复进入只说明另一条路径正在跑同一订单，抛出会让
+     * 队列对一个注定重复的任务反复重试。因此这里记日志后直接返回，不用异常；
+     * 与开通租约（实例级，被占表示本次确实没提交，必须让调用方看见失败）不同。
+     */
     public function processPaidOrderFulfillmentById(int $orderId): void
     {
         if ($orderId <= 0) {
@@ -409,7 +415,9 @@ class InvoicePaidOrchestrator
         }
 
         if (! $acquired) {
-            Log::info('[支付后自动开通] 已有同订单履约正在执行，跳过重复请求', [
+            // 记 warning 而不是 info：重复请求被跳过时，若那条正在跑的路径最终失败，
+            // 这里就是唯一能解释「为什么没有第二次尝试」的线索，不能埋在 info 里。
+            Log::warning('[支付后自动开通] 已有同订单履约正在执行，跳过重复请求', [
                 'order_id' => $orderId,
             ]);
 

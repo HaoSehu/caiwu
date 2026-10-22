@@ -10,6 +10,7 @@ use App\Jobs\ProcessPaidOrderFulfillmentJob;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\User;
+use Illuminate\Contracts\Queue\Job;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\TestCase;
 
@@ -64,6 +65,43 @@ class OrderFulfillmentRefundFlagTest extends TestCase
         $this->assertSame('basic', (string) ($snapshot['plan'] ?? ''));
     }
 
+    public function test_sync_first_failure_does_not_mark_requires_refund(): void
+    {
+        // dispatchSync 第一次失败就会调用 failed()，但这不是「重试耗尽」：
+        // 后续还有 provision:retry-failed 巡检兜底，直接打退款标记属于误判。
+        [$order, $invoice] = $this->makePaidUnfulfilledStack();
+
+        $this->runFailedHook((int) $order->id, 'sync', 1);
+
+        $this->assertFalse((bool) $invoice->fresh()->requires_refund);
+
+        // 真跑 sync 队列：异常冒泡但账单不被打标
+        config(['queue.default' => 'sync']);
+        try {
+            ProcessPaidOrderFulfillmentJob::dispatchSync((int) $order->id);
+        } catch (\Throwable) {
+            // 履约失败在 sync 驱动下会抛回调用方，这里只关心打标行为
+        }
+
+        $this->assertFalse((bool) $invoice->fresh()->requires_refund);
+    }
+
+    public function test_non_final_attempt_does_not_mark_requires_refund(): void
+    {
+        // 队列驱动每次失败都会调用 failed()：第 1、2 次失败仍会重试，不能打标。
+        [$order, $invoice] = $this->makePaidUnfulfilledStack();
+
+        $this->runFailedHook((int) $order->id, 'redis', 1);
+        $this->assertFalse((bool) $invoice->fresh()->requires_refund);
+
+        $this->runFailedHook((int) $order->id, 'redis', 2);
+        $this->assertFalse((bool) $invoice->fresh()->requires_refund);
+
+        // 第 3 次 = tries 用尽，此时才允许打标
+        $this->runFailedHook((int) $order->id, 'redis', 3);
+        $this->assertTrue((bool) $invoice->fresh()->requires_refund);
+    }
+
     public function test_stale_pending_invoice_is_marked_by_provision_retry_failed(): void
     {
         // 开通改同步/响应后执行后，队列 failed() 钩子不再触发；
@@ -106,11 +144,18 @@ class OrderFulfillmentRefundFlagTest extends TestCase
     }
 
     /**
-     * 直接触发失败钩子：failed() 在重试耗尽后由队列框架调用，这里等价模拟。
+     * 直接触发失败钩子：failed() 由队列框架在每次失败时调用，不一定代表重试耗尽。
+     * 这里用假 job 明确给出「哪条连接、第几次尝试」，覆盖「耗尽才打标」的判据。
      */
-    private function runFailedHook(int $orderId): void
+    private function runFailedHook(int $orderId, string $connection = 'redis', int $attempts = 3): void
     {
-        (new ProcessPaidOrderFulfillmentJob($orderId))->failed(new \RuntimeException('履约失败模拟'));
+        $job = new ProcessPaidOrderFulfillmentJob($orderId);
+        $queueJob = \Mockery::mock(Job::class);
+        $queueJob->shouldReceive('attempts')->andReturn($attempts);
+        $queueJob->shouldReceive('getConnectionName')->andReturn($connection);
+        $job->job = $queueJob;
+
+        $job->failed(new \RuntimeException('履约失败模拟'));
     }
 
     private function makePaidUnfulfilledStack(
