@@ -4,7 +4,6 @@ import { computed, onMounted, reactive, ref, shallowRef, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import clientApi from '@/api/client';
-import { localStorageKeys, readLocalStorage, writeLocalStorage } from '@/utils/storage';
 import type {
   CouponOption,
   RenewCouponBindingInfo,
@@ -16,6 +15,7 @@ import type {
 } from '@/types/client';
 import { getErrorMessage } from '@/utils/error';
 import { copyText, formatMoney } from '@/utils/format';
+import { localStorageKeys, readLocalStorage, writeLocalStorage } from '@/utils/storage';
 
 export const OS_ICON_MAP: Record<string, string> = {
   windows: '/img/os/Windows.svg',

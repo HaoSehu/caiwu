@@ -164,7 +164,8 @@
                   @click.stop="removeUploadFile(index)"
                   @keydown.enter.stop.prevent="removeUploadFile(index)"
                   @keydown.space.stop.prevent="removeUploadFile(index)"
-                >删除</span>
+                  >删除</span
+                >
               </button>
             </div>
           </div>

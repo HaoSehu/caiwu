@@ -47,7 +47,10 @@ export function useDashboardSecondary(fetchUnreadCount: (silent?: boolean) => Pr
 
   // 分页穷尽拉取：图表聚合依赖全量数据，单页截断会导致金额少算（上限防失控）
   async function fetchAllPagedList<T>(
-    fetcher: (params: { page: number; page_size: number }) => Promise<{ data: { list?: T[] } | T[] | null | undefined }>,
+    fetcher: (params: {
+      page: number;
+      page_size: number;
+    }) => Promise<{ data: { list?: T[] } | T[] | null | undefined }>,
     extraParams: Record<string, unknown> = {},
     maxPages = 20,
   ): Promise<T[]> {

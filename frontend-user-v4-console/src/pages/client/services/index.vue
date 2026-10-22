@@ -421,10 +421,7 @@ const {
 // 是否存在生效筛选：空态区分“暂无数据”与“未检索到匹配结果”（DESIGN.md §4.3）
 const hasActiveFilters = computed(
   () =>
-    filters.keyword.trim() !== '' ||
-    filters.catalog_type !== '' ||
-    filters.status !== '' ||
-    filters.auto_renew !== '',
+    filters.keyword.trim() !== '' || filters.catalog_type !== '' || filters.status !== '' || filters.auto_renew !== '',
 );
 
 const columns: PrimaryTableCol[] = [

@@ -136,11 +136,7 @@
           </div>
         </t-form-item>
         <t-form-item label="新密码" name="password" :rules="newPasswordRules">
-          <t-input
-            v-model="resetForm.password"
-            type="password"
-            placeholder="至少 6 位"
-          />
+          <t-input v-model="resetForm.password" type="password" placeholder="至少 6 位" />
         </t-form-item>
         <t-form-item label="确认密码" name="confirmPassword" :rules="confirmPasswordRulesReset">
           <t-input v-model="resetForm.confirmPassword" type="password" />
@@ -328,7 +324,7 @@ const phoneRules: FormRule[] = [
 ];
 const emailRules: FormRule[] = [
   ...requiredBlur('请输入新邮箱'),
-  { pattern: /^\S+@\S+\.\S+$/, message: '邮箱格式不正确', trigger: 'blur' },
+  { pattern: /^\S[^\s@]*@\S[^\s.]*\.\S+$/, message: '邮箱格式不正确', trigger: 'blur' },
 ];
 
 async function validateForm(formRef: FormInstanceFunctions | undefined) {

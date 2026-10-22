@@ -29,10 +29,12 @@ function jsonFail(message: string) {
 /** 控制台首屏的三个基础端点（详情 / 运行状态 / 连接信息）。 */
 async function mockConsoleBase(page: Page) {
   await page.route('**/api/v2/client/services/1', (route) => route.fulfill(jsonOk({ service: SERVICE_DETAIL })));
-  await page.route('**/api/v2/client/services/1/runtime', (route) =>
-    route.fulfill(jsonOk({ runtime: { power_state: 'running', power_label: '运行中' } })));
-  await page.route('**/api/v2/client/services/1/connection', (route) =>
-    route.fulfill(jsonOk({ connection: { dedicated_ip: '203.0.113.10' } })));
+  await page.route('**/api/v2/client/services/1/runtime', (route) => {
+    return route.fulfill(jsonOk({ runtime: { power_state: 'running', power_label: '运行中' } }));
+  });
+  await page.route('**/api/v2/client/services/1/connection', (route) => {
+    return route.fulfill(jsonOk({ connection: { dedicated_ip: '203.0.113.10' } }));
+  });
 }
 
 /** 按范围构造监控 batch 响应：3h 为旧特征数据，其余范围为各自特征数据。 */
@@ -80,28 +82,37 @@ test('服务控制台：标签懒加载——首屏不发监控/日志/财务请
   });
   await page.route('**/api/v2/client/services/1/operation-logs*', (route) => {
     counters.logs += 1;
-    return route.fulfill(jsonOk({
-      list: [
-        {
-          id: 1,
-          created_at: '2026-01-01 10:00:00',
-          action_label: '开机',
-          summary: 'E2E 开机操作',
-          actor_name: '测试用户',
-          ip_address: '1.2.3.4',
+    return route.fulfill(
+      jsonOk({
+        list: [
+          {
+            id: 1,
+            created_at: '2026-01-01 10:00:00',
+            action_label: '开机',
+            summary: 'E2E 开机操作',
+            actor_name: '测试用户',
+            ip_address: '1.2.3.4',
+          },
+        ],
+        total: 1,
+        summary: {
+          total: 1,
+          today_total: 1,
+          latest_created_at: '2026-01-01 10:00:00',
+          service_name: '云服务器 E2E-01',
         },
-      ],
-      total: 1,
-      summary: { total: 1, today_total: 1, latest_created_at: '2026-01-01 10:00:00', service_name: '云服务器 E2E-01' },
-    }));
+      }),
+    );
   });
   await page.route('**/api/v2/client/ledger*', (route) => {
     counters.ledger += 1;
-    return route.fulfill(jsonOk({
-      list: [],
-      total: 0,
-      summary: { total_in: '0.00', total_out: '0.00', refund_in: '0.00', total_count: 0 },
-    }));
+    return route.fulfill(
+      jsonOk({
+        list: [],
+        total: 0,
+        summary: { total_in: '0.00', total_out: '0.00', refund_in: '0.00', total_count: 0 },
+      }),
+    );
   });
 
   const sidebar = await openConsole(page);
@@ -160,33 +171,45 @@ test('服务控制台：安全组首次加载失败展示错误态，切回后�
   let groupsFailing = true;
   const counters = { groups: 0 };
   // 注意 glob 的 `*` 不跨 `/`，列表与 rules 子路径必须分开拦截
-  await page.route('**/api/v2/client/services/1/security-groups/*/rules', (route) =>
-    route.fulfill(jsonOk({
-      list: [
-        {
-          id: 1,
-          direction: 'in',
-          direction_label: '入站',
-          protocol: 'tcp',
-          protocol_label: 'TCP',
-          port: '80',
-          ip: '0.0.0.0/0',
-          description: 'HTTP 入站',
-        },
-      ],
-    })));
+  await page.route('**/api/v2/client/services/1/security-groups/*/rules', (route) => {
+    return route.fulfill(
+      jsonOk({
+        list: [
+          {
+            id: 1,
+            direction: 'in',
+            direction_label: '入站',
+            protocol: 'tcp',
+            protocol_label: 'TCP',
+            port: '80',
+            ip: '0.0.0.0/0',
+            description: 'HTTP 入站',
+          },
+        ],
+      }),
+    );
+  });
   await page.route('**/api/v2/client/services/1/security-groups', (route) => {
     counters.groups += 1;
     if (groupsFailing) {
       return route.fulfill(jsonFail('加载安全组失败'));
     }
-    return route.fulfill(jsonOk({
-      supported: true,
-      can_create: true,
-      groups: [
-        { id: 1, name: 'E2E 安全组', description: 'E2E 安全组描述', is_applied: true, can_view: true, can_add_rule: true },
-      ],
-    }));
+    return route.fulfill(
+      jsonOk({
+        supported: true,
+        can_create: true,
+        groups: [
+          {
+            id: 1,
+            name: 'E2E 安全组',
+            description: 'E2E 安全组描述',
+            is_applied: true,
+            can_view: true,
+            can_add_rule: true,
+          },
+        ],
+      }),
+    );
   });
 
   const sidebar = await openConsole(page);

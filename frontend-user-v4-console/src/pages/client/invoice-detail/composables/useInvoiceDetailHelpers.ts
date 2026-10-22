@@ -3,7 +3,8 @@
  * 拆分日期：2026-10-11（纯机械搬移，零行为变化）
  */
 import { CreditcardIcon, LogoAlipayFilledIcon, LogoWechatpayFilledIcon, WalletIcon } from 'tdesign-icons-vue-next';
-import { computed, onBeforeUnmount, onMounted, ref, watch, type Ref } from 'vue';
+import type { Ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 import { formatMoney } from '@/domains/finance/useInvoices';
 import { formatBillingCycle, pricingSnapshotItems } from '@/domains/finance/useRecords';

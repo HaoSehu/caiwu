@@ -4,12 +4,7 @@
       <h1>推广大使</h1>
     </header>
 
-    <data-state
-      v-if="loadError && !loading"
-      error
-      error-text="推广大使数据加载失败，请重试"
-      @retry="loadAll"
-    />
+    <data-state v-if="loadError && !loading" error error-text="推广大使数据加载失败，请重试" @retry="loadAll" />
     <t-loading v-else :loading="loading" text="数据加载中...">
       <div class="referral-stats">
         <t-card v-for="item in summaryCards" :key="item.key" class="referral-stat" :bordered="false">
@@ -104,7 +99,9 @@
                 ><span class="referral-money">¥{{ money(row.order_amount) }}</span></template
               >
               <template #amount="{ row }"
-                ><span class="referral-money">¥{{ money(row.reward_amount) }}({{ Number(row.reward_rate || 0) }}%)</span></template
+                ><span class="referral-money"
+                  >¥{{ money(row.reward_amount) }}({{ Number(row.reward_rate || 0) }}%)</span
+                ></template
               >
               <template #status="{ row }">
                 <t-tag :theme="rewardStatus(row.status).theme" variant="light">{{
@@ -179,10 +176,9 @@
   </section>
 </template>
 <script setup lang="ts">
+import DataState from '@shared/user-v3/components/DataState.vue';
 import { LinkIcon } from 'tdesign-icons-vue-next';
 import type { PrimaryTableCol } from 'tdesign-vue-next';
-
-import DataState from '@shared/user-v3/components/DataState.vue';
 
 import { accountEventLabel, money, rewardStatus, useReferral, withdrawStatus } from '@/domains/marketing/useReferral';
 

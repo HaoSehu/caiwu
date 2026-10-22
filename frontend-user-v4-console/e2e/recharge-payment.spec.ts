@@ -14,29 +14,35 @@ test('充值：生成二维码后自动轮询支付状态，成功后停止轮�
   await mockAuthenticatedSession(page);
 
   let statusCalls = 0;
-  await page.route('**/api/v2/client/recharge/gateways', (route) =>
-    route.fulfill(jsonOk({
-      list: [
-        { key: 'alipay', option_key: 'alipay:alipay', name: '支付宝', label: '支付宝扫码', payment_type: 'alipay' },
-      ],
-    })));
-  await page.route('**/api/v2/client/recharge', (route) =>
-    route.fulfill(jsonOk({
-      payment_no: PAYMENT_NO,
-      qr_code: 'https://pay.e2e.example.com/qr/E2E-PAY-0001',
-      amount: 50,
-      gateway: 'alipay',
-      poll_token: POLL_TOKEN,
-    })));
+  await page.route('**/api/v2/client/recharge/gateways', (route) => {
+    return route.fulfill(
+      jsonOk({
+        list: [
+          { key: 'alipay', option_key: 'alipay:alipay', name: '支付宝', label: '支付宝扫码', payment_type: 'alipay' },
+        ],
+      }),
+    );
+  });
+  await page.route('**/api/v2/client/recharge', (route) => {
+    return route.fulfill(
+      jsonOk({
+        payment_no: PAYMENT_NO,
+        qr_code: 'https://pay.e2e.example.com/qr/E2E-PAY-0001',
+        amount: 50,
+        gateway: 'alipay',
+        poll_token: POLL_TOKEN,
+      }),
+    );
+  });
   await page.route(`**/api/v2/client/recharge/${PAYMENT_NO}/status*`, (route) => {
     statusCalls += 1;
     // 第 1 次轮询待支付，之后返回已支付（成功后 clearPollingTimer 应停止轮询）
     const paid = statusCalls >= 2;
-    return route.fulfill(jsonOk(
-      paid
-        ? { paid: true, cash_balance: '1050.00', message: '支付成功' }
-        : { paid: false, message: '等待支付' },
-    ));
+    return route.fulfill(
+      jsonOk(
+        paid ? { paid: true, cash_balance: '1050.00', message: '支付成功' } : { paid: false, message: '等待支付' },
+      ),
+    );
   });
 
   await page.goto('/client/recharge', { waitUntil: 'domcontentloaded' });

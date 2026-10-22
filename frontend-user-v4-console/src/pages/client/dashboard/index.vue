@@ -1,11 +1,6 @@
 <template>
   <section class="client-dashboard">
-    <data-state
-      v-if="loadError && !loading"
-      error
-      error-text="控制台数据加载失败，请重试"
-      @retry="loadDashboard"
-    />
+    <data-state v-if="loadError && !loading" error error-text="控制台数据加载失败，请重试" @retry="loadDashboard" />
     <loading-state v-else :loading="loading" text="数据加载中...">
       <div class="summary-grid">
         <t-card class="account-card dashboard-card" :bordered="false">
@@ -301,7 +296,7 @@ import type {
 import { getErrorMessage } from '@/utils/error';
 import { formatMoney, formatMoneyText, formatShortDateTime as formatDate } from '@/utils/format';
 
-import { resolvePagedList, toNumber, toDateText, useDashboardSecondary } from './composables/useDashboardSecondary';
+import { resolvePagedList, toDateText, toNumber, useDashboardSecondary } from './composables/useDashboardSecondary';
 
 interface ProductCard {
   key: string;

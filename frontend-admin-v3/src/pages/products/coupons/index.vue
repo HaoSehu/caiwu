@@ -220,11 +220,7 @@
 
             <section class="coupon-drawer-section" data-title="优惠规则">
               <div class="coupon-form-grid">
-                <t-form-item
-                  :label="discountValueLabel"
-                  name="discount_value"
-                  :help="discountValueHelp"
-                >
+                <t-form-item :label="discountValueLabel" name="discount_value" :help="discountValueHelp">
                   <t-input-number
                     v-model="form.discount_value"
                     :min="form.discount_type === 'override' ? 0.01 : 0"
@@ -274,7 +270,11 @@
                 <t-form-item label="仅限首单可用" name="first_order_only" help="面向从未成交的用户；与「仅老客」互斥">
                   <t-switch v-model="form.first_order_only" />
                 </t-form-item>
-                <t-form-item label="仅老客可用" name="only_old_client" help="面向已有成交订单的用户；与「仅限首单」互斥">
+                <t-form-item
+                  label="仅老客可用"
+                  name="only_old_client"
+                  help="面向已有成交订单的用户；与「仅限首单」互斥"
+                >
                   <t-switch v-model="form.only_old_client" />
                 </t-form-item>
                 <t-form-item

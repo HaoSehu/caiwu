@@ -176,7 +176,8 @@
                       @click.stop="removeReplyAttachment(index)"
                       @keydown.enter.stop.prevent="removeReplyAttachment(index)"
                       @keydown.space.stop.prevent="removeReplyAttachment(index)"
-                    >删除</span>
+                      >删除</span
+                    >
                   </button>
                 </div>
                 <div class="reply-composer__bar">
