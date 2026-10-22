@@ -44,10 +44,14 @@
     "audit:plugins": [
       "@php artisan plugins:audit-registrations"
     ],
+    "api:spec": [
+      "@php scripts/upload_apifox_openapi.php --dry-run --output=storage/app/openapi.json"
+    ],
     "verify": [
       "@format:check",
       "@analyse",
       "@audit:plugins",
+      "@api:spec",
       "@php artisan test"
     ],
     "post-autoload-dump": [

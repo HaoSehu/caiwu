@@ -1,0 +1,30 @@
+name: Docs
+
+# 文档门禁：链接/目录覆盖检查与复核期限扫描。只跑 push 到 main 与 pull_request，不自动部署。
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: 文档门禁
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: 文档检查
+        run: npm run docs:check
+
+      - name: 复核期限扫描
+        run: npm run docs:freshness

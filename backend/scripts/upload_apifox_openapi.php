@@ -29,6 +29,24 @@ if ($projectId === '' || $token === '') {
     $token = $token !== '' ? $token : $configToken;
 }
 
+$openApi = buildOpenApiSpec();
+$endpointCount = countOpenApiOperations($openApi);
+
+if (isset($options['output'])) {
+    file_put_contents((string) $options['output'], json_encode($openApi, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)."\n");
+}
+
+// dry-run 只生成不上传，必须先于凭据校验返回：CI 里没有 Apifox 凭据，
+// 把凭据校验挡在前面会让契约生成门禁永远红，生成能力也就无法被持续验证。
+if (array_key_exists('dry-run', $options)) {
+    fwrite(STDOUT, sprintf(
+        "已生成 OpenAPI，接口数: %d，路径数: %d，未上传（dry-run）。\n",
+        $endpointCount,
+        count($openApi['paths'])
+    ));
+    exit(0);
+}
+
 if ($projectId === '') {
     fwrite(STDERR, "缺少 Apifox projectId，请传 --project-id=xxx 或配置 caiwu-apifox-mcp。\n");
     exit(1);
@@ -37,22 +55,6 @@ if ($projectId === '') {
 if ($token === '') {
     fwrite(STDERR, "缺少 APIFOX_ACCESS_TOKEN，请设置环境变量或配置 caiwu-apifox-mcp.env。\n");
     exit(1);
-}
-
-$openApi = buildOpenApiSpec();
-$endpointCount = countOpenApiOperations($openApi);
-
-if (isset($options['output'])) {
-    file_put_contents((string) $options['output'], json_encode($openApi, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)."\n");
-}
-
-if (array_key_exists('dry-run', $options)) {
-    fwrite(STDOUT, sprintf(
-        "已生成 OpenAPI，接口数: %d，路径数: %d，未上传（dry-run）。\n",
-        $endpointCount,
-        count($openApi['paths'])
-    ));
-    exit(0);
 }
 
 $payload = [

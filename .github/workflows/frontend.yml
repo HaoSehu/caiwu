@@ -1,0 +1,37 @@
+name: Frontend
+
+# 前端门禁：lint、类型检查、三端构建。只跑 push 到 main 与 pull_request，不自动部署。
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: frontend-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: 前端门禁
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint:frontends
+
+      - name: 类型检查
+        run: npm run typecheck:frontends
+
+      - name: 构建三端
+        run: npm run build:frontends

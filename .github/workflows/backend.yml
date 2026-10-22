@@ -1,0 +1,108 @@
+name: Backend
+
+# 后端门禁：格式、静态分析、插件来源审计、OpenAPI 规格生成、全量测试。
+# 只跑 push 到 main 与 pull_request，不自动部署。
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: backend-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: 后端门禁
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: idc_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+          --default-authentication-plugin=mysql_native_password
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      DB_CONNECTION: mysql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_DATABASE: idc_test
+      DB_USERNAME: root
+      DB_PASSWORD: root
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: 6379
+      CACHE_STORE: array
+      QUEUE_CONNECTION: sync
+      MAIL_MAILER: array
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, ctype, json, openssl, pdo_mysql, tokenizer, xml, dom, fileinfo, redis
+          coverage: none
+
+      - name: 安装 Composer 依赖
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: 生成环境文件
+        # .env.example 里 DB_* 是空值，CI 必须写成 service 容器的真实连接值；
+        # APP_KEY 供加密类用例使用，testing 之外的 artisan 命令同样需要可启动。
+        run: |
+          cp .env.example .env
+          sed -i "s|^DB_HOST=.*|DB_HOST=${DB_HOST}|" .env
+          sed -i "s|^DB_PORT=.*|DB_PORT=${DB_PORT}|" .env
+          sed -i "s|^DB_DATABASE=.*|DB_DATABASE=${DB_DATABASE}|" .env
+          sed -i "s|^DB_USERNAME=.*|DB_USERNAME=${DB_USERNAME}|" .env
+          sed -i "s|^DB_PASSWORD=.*|DB_PASSWORD=${DB_PASSWORD}|" .env
+          php artisan key:generate --force
+
+      - name: 安装 MySQL 客户端
+        # migrate:fresh 加载 database/schema/mysql-schema.sql 依赖 PATH 中的 mysql 命令；
+        # 基础镜像通常自带，缺失时补装，避免在删表后才发现客户端不存在。
+        run: |
+          if ! command -v mysql >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends mysql-client
+          fi
+
+      - name: 重建测试库
+        run: php artisan test:prepare --force
+
+      - name: 代码格式检查
+        run: composer format:check
+
+      - name: 静态分析
+        run: composer analyse
+
+      - name: 插件来源审计
+        run: composer audit:plugins
+
+      - name: OpenAPI 规格生成
+        # 只生成到 storage/app/openapi.json，不上传 Apifox：生成失败即失败。
+        run: composer api:spec
+
+      - name: 全量测试
+        run: php artisan test
