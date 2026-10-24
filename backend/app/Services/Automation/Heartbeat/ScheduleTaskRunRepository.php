@@ -563,18 +563,47 @@ class ScheduleTaskRunRepository
             ]);
     }
 
-    public function latestRunForTask(string $taskKey): ?array
+    /**
+     * 批量取各任务最近一次运行记录，按 task_key 建映射。
+     *
+     * 总览一次列出全部任务；逐任务查询会让 SQL 条数随任务行数线性增长，
+     * 这里用一次分组查询取各任务最大 id，再一次性取回记录。
+     *
+     * @param  list<string>  $taskKeys
+     * @return array<string, array<string, mixed>>
+     */
+    public function latestRunsForTasks(array $taskKeys): array
     {
-        if (! $this->tableReady()) {
-            return null;
+        $keys = [];
+        foreach ($taskKeys as $taskKey) {
+            $taskKey = trim($taskKey);
+            if ($taskKey !== '') {
+                $keys[$taskKey] = true;
+            }
         }
 
-        $run = ScheduleTaskRun::query()
-            ->where('task_key', $taskKey)
-            ->latest('id')
-            ->first();
+        if ($keys === [] || ! $this->tableReady()) {
+            return [];
+        }
 
-        return $run instanceof ScheduleTaskRun ? $this->serializeRun($run) : null;
+        $latestIds = ScheduleTaskRun::query()
+            ->whereIn('task_key', array_keys($keys))
+            ->selectRaw('MAX(id) as latest_id')
+            ->groupBy('task_key')
+            ->pluck('latest_id')
+            ->all();
+
+        if ($latestIds === []) {
+            return [];
+        }
+
+        $map = [];
+
+        foreach (ScheduleTaskRun::query()->whereIn('id', array_map('intval', $latestIds))->get() as $run) {
+            $map[(string) $run->task_key] = $this->serializeRun($run);
+        }
+
+        return $map;
     }
 
     /**

@@ -46,6 +46,10 @@ class ScheduleTaskService
         $thirdPartyTaskKeys = $this->thirdPartyTaskKeys();
         // 插件 Provider 可能在扫描过程中更新降级状态，环境快照应反映本次扫描结果。
         $runtimeState = $this->resolveScheduleRuntimeState();
+        // 任务清单一次取出：last_log 的「最近一次运行/最近一次旧日志」改为批量预载，
+        // 避免每个任务各发两条单行查询，使 SQL 条数随任务行数线性增长。
+        $tasks = $this->registry->enabledTasks();
+        $lastLogs = $this->resolveTaskLastLogs($tasks);
 
         return [
             'environment' => [
@@ -72,8 +76,8 @@ class ScheduleTaskService
                 'plugin_tasks' => $runtimeState['plugin_tasks'],
             ],
             'commands' => $this->buildCommands($phpBinary, $artisanPath),
-            'tasks' => collect($this->registry->enabledTasks())
-                ->map(fn (ScheduledTask $task): array => $this->serializeTask($task, $appTimezone, $thirdPartyTaskKeys))
+            'tasks' => collect($tasks)
+                ->map(fn (ScheduledTask $task): array => $this->serializeTask($task, $appTimezone, $thirdPartyTaskKeys, $lastLogs))
                 ->values()
                 ->all(),
             'runs_summary' => $this->taskRuns->runStatsSummary(),
@@ -106,8 +110,9 @@ class ScheduleTaskService
 
     /**
      * @param  array<string, bool>  $thirdPartyTaskKeys
+     * @param  array<string, array<string, mixed>>  $lastLogs
      */
-    private function serializeTask(ScheduledTask $task, string $appTimezone, array $thirdPartyTaskKeys): array
+    private function serializeTask(ScheduledTask $task, string $appTimezone, array $thirdPartyTaskKeys, array $lastLogs): array
     {
         $now = now($appTimezone);
         $nextRunAt = collect($task->triggers())
@@ -138,7 +143,7 @@ class ScheduleTaskService
             'without_overlapping' => true,
             'run_in_background' => false,
             'overlap_expires_minutes' => max(1, (int) ceil($task->lockTtlSeconds() / 60)),
-            'last_log' => $this->taskRuns->latestRunForTask($task->key()) ?? $this->latestLegacyLogForTask($task->title(), $task->key()),
+            'last_log' => $lastLogs[$task->key()] ?? null,
         ];
     }
 
@@ -331,31 +336,97 @@ class ScheduleTaskService
             ->all();
     }
 
-    private function latestLegacyLogForTask(string $taskName, string $taskKey): ?array
+    /**
+     * 批量取各任务最近一次运行记录与最近一次旧日志，按 task_key 建映射。
+     *
+     * 运行台账优先；没有运行记录时回退到旧表 schedule_run_logs（按 task_name 匹配）。
+     * 两条链路各只发一次分组查询，条数与任务行数无关。
+     *
+     * @param  list<ScheduledTask>  $tasks
+     * @return array<string, array<string, mixed>>
+     */
+    private function resolveTaskLastLogs(array $tasks): array
     {
-        if (! SchemaMetadataCache::hasTable('schedule_run_logs')) {
-            return null;
+        $taskKeys = [];
+        $legacyNames = [];
+
+        foreach ($tasks as $task) {
+            $taskKey = trim($task->key());
+            if ($taskKey !== '') {
+                $taskKeys[$taskKey] = true;
+                $legacyNames[$task->title()][] = $taskKey;
+            }
         }
 
-        $log = ScheduleRunLog::query()
-            ->where('task_name', $taskName)
-            ->latest('id')
-            ->first();
-
-        if (! $log instanceof ScheduleRunLog) {
-            return null;
+        if ($taskKeys === []) {
+            return [];
         }
 
-        return [
-            'time' => $log->finished_at?->toDateTimeString() ?? $log->created_at?->toDateTimeString(),
-            'level' => strtoupper((string) $log->status),
-            'message' => (string) $log->task_name,
-            'task_key' => $taskKey,
-            'status' => (string) $log->status,
-            'duration_ms' => $log->duration_ms,
-            'summary' => $log->summary,
-            'error_msg' => $log->error_msg,
-        ];
+        $logs = $this->taskRuns->latestRunsForTasks(array_keys($taskKeys));
+
+        $pendingNames = [];
+        foreach ($legacyNames as $taskName => $taskKeyList) {
+            foreach ($taskKeyList as $taskKey) {
+                if (! isset($logs[$taskKey])) {
+                    $pendingNames[$taskName] = true;
+                }
+            }
+        }
+
+        if ($pendingNames === []) {
+            return $logs;
+        }
+
+        foreach ($this->latestLegacyLogsForTasks(array_keys($pendingNames)) as $taskName => $log) {
+            foreach ($legacyNames[$taskName] ?? [] as $taskKey) {
+                if (! isset($logs[$taskKey])) {
+                    $taskLog = $log;
+                    $taskLog['task_key'] = $taskKey;
+                    $logs[$taskKey] = $taskLog;
+                }
+            }
+        }
+
+        return $logs;
+    }
+
+    /**
+     * @param  list<string>  $taskNames
+     * @return array<string, array<string, mixed>>
+     */
+    private function latestLegacyLogsForTasks(array $taskNames): array
+    {
+        if ($taskNames === [] || ! SchemaMetadataCache::hasTable('schedule_run_logs')) {
+            return [];
+        }
+
+        $latestIds = ScheduleRunLog::query()
+            ->whereIn('task_name', $taskNames)
+            ->selectRaw('MAX(id) as latest_id')
+            ->groupBy('task_name')
+            ->pluck('latest_id')
+            ->all();
+
+        if ($latestIds === []) {
+            return [];
+        }
+
+        $map = [];
+
+        foreach (ScheduleRunLog::query()->whereIn('id', array_map('intval', $latestIds))->get() as $log) {
+            $map[(string) $log->task_name] = [
+                'time' => $log->finished_at?->toDateTimeString() ?? $log->created_at?->toDateTimeString(),
+                'level' => strtoupper((string) $log->status),
+                'message' => (string) $log->task_name,
+                'task_key' => null,
+                'status' => (string) $log->status,
+                'duration_ms' => $log->duration_ms,
+                'summary' => $log->summary,
+                'error_msg' => $log->error_msg,
+            ];
+        }
+
+        return $map;
     }
 
     private function resolveQueueRuntimeMode(bool $jobsTableReady): string
