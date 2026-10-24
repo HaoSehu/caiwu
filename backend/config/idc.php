@@ -58,7 +58,6 @@ return [
         'ca_bundle' => env('HOSTING_PANEL_API_CA_BUNDLE', ''),
         'allowed_hosts' => env('HOSTING_PANEL_API_ALLOWED_HOSTS', ''),
         'jwt_cache_store' => env('HOSTING_PANEL_API_JWT_CACHE_STORE', 'redis'),
-        'dns_resolver_timeout' => (int) env('HOSTING_PANEL_API_DNS_TIMEOUT', 3),
         'connect_timeout' => (int) env('HOSTING_PANEL_API_CONNECT_TIMEOUT', 15),
         // 单次上游请求总超时（连接+响应）。此前硬编码 900 秒：上游挂起时单个 PHP-FPM worker
         // 最长阻塞 15 分钟，并发即耗尽 worker 池。默认 60 秒覆盖重操作（如开通提交），

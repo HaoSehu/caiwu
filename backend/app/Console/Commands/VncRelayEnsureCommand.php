@@ -6,6 +6,7 @@ namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
+use Symfony\Component\Process\Process;
 use Throwable;
 
 /**
@@ -74,14 +75,34 @@ class VncRelayEnsureCommand extends Command
         return false;
     }
 
+    /**
+     * 拉起后台 Relay 进程。
+     *
+     * 通过 Symfony Process 调用，不直接使用 popen/exec，避免依赖被宝塔默认禁用的函数；
+     * create_new_console 让子进程脱离当前控制台，Process 对象销毁时不会把它停掉。
+     */
     private function spawnRelay(string $host, int $port): void
+    {
+        $process = Process::fromShellCommandline($this->relayLaunchCommand($host, $port));
+        $process->setOptions(['create_new_console' => true]);
+        // 输出已由 shell 重定向到 vnc-relay.log，这里丢弃管道输出，避免子进程句柄泄漏。
+        $process->disableOutput();
+        $process->setTimeout(10);
+        $process->run();
+
+        if (! $process->isSuccessful()) {
+            throw new \RuntimeException('拉起 vnc:relay 失败（退出码 '.$process->getExitCode().'）');
+        }
+    }
+
+    private function relayLaunchCommand(string $host, int $port): string
     {
         $phpBinary = PHP_BINARY ?: 'php';
         $artisan = base_path('artisan');
         $logFile = storage_path('logs/vnc-relay.log');
 
         if (PHP_OS_FAMILY === 'Windows') {
-            $cmd = sprintf(
+            return sprintf(
                 'start /B "" %s %s vnc:relay --host=%s --port=%d >> %s 2>&1',
                 escapeshellarg($phpBinary),
                 escapeshellarg($artisan),
@@ -89,17 +110,15 @@ class VncRelayEnsureCommand extends Command
                 $port,
                 escapeshellarg($logFile),
             );
-            \pclose(\popen($cmd, 'r'));
-        } else {
-            $cmd = sprintf(
-                'nohup %s %s vnc:relay --host=%s --port=%d >> %s 2>&1 &',
-                escapeshellarg($phpBinary),
-                escapeshellarg($artisan),
-                escapeshellarg($host),
-                $port,
-                escapeshellarg($logFile),
-            );
-            exec($cmd);
         }
+
+        return sprintf(
+            'nohup %s %s vnc:relay --host=%s --port=%d >> %s 2>&1 &',
+            escapeshellarg($phpBinary),
+            escapeshellarg($artisan),
+            escapeshellarg($host),
+            $port,
+            escapeshellarg($logFile),
+        );
     }
 }

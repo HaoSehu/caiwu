@@ -2,6 +2,12 @@
     "version": 1,
     "records": [
         {
+            "path": "执行计划/进行中/外部进程与被禁用函数依赖收敛-2026-10-22.md",
+            "status": "active",
+            "summary": "对照 zjmf 只读分析逐项裁决对 caiwu 的适用性：上游 HostingPanelApiTransport 的 DNS 解析去掉 proc_open 子进程改纯 PHP 两级兜底（删除 dns_resolver_timeout 配置），vnc:ensure-relay 改用 Symfony Process 去掉 popen/exec，调度同进程与纯 PHP 备份两项明确不照搬。",
+            "review_by": "2026-11-22"
+        },
+        {
             "path": "执行计划/进行中/安防与履约加固改造-2026-10-21.md",
             "status": "active",
             "summary": "按 howstack 对照清单落地的八批改造：插件包完整性摘要（source_hash 全文件哈希 + 三条件实例化）与宿主版本区间、管理员 TOTP MFA、履约租约与凭据冻结、管理员通知异常不吞、CI 门禁与 OpenAPI 接入。",

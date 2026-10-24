@@ -27,8 +27,6 @@ use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Symfony\Component\Process\Exception\ProcessTimedOutException;
-use Symfony\Component\Process\Process;
 use Throwable;
 
 class HostingPanelApiTransport extends UpstreamJwtSessionManager implements ProvidesConsoleAccess, ProvidesConsoleCatalog, ProvidesConsoleNetwork, ProvidesConsoleRuntime, ProvidesConsoleSecurity, ProvidesProvisioning, ProvidesRenewal, ProvidesScheduledAuthRefresh, ProvidesStatusSync
@@ -39,10 +37,8 @@ class HostingPanelApiTransport extends UpstreamJwtSessionManager implements Prov
     private const DNS_CACHE_TTL_SECONDS = 900;
 
     // 解析失败负缓存：解析故障（域名失效、本地 resolver 异常）时避免每个上游请求都重付
-    // "spawn 子进程 + dns_get_record + gethostbynamel" 三级串行兜底的等待成本。
+    // "dns_get_record + gethostbynamel" 两级兜底的等待成本。
     private const DNS_NEGATIVE_CACHE_TTL_SECONDS = 60;
-
-    private const DEFAULT_DNS_RESOLVER_TIMEOUT_SECONDS = 3;
 
     // 配置项归一化使用的映射常量已随 6 个归一化方法收敛到
     // UpstreamConfigOptionNormalizer（D3B-04）；此处的 CONFIG_OPTION_FIELD_MAP
@@ -86,10 +82,6 @@ class HostingPanelApiTransport extends UpstreamJwtSessionManager implements Prov
                 explode(',', (string) ($defaultConfig['allowed_hosts'] ?? ''))
             ))),
             'jwt_cache_store' => trim((string) ($defaultConfig['jwt_cache_store'] ?? 'redis')) ?: 'redis',
-            'dns_resolver_timeout' => max(
-                (int) ($defaultConfig['dns_resolver_timeout'] ?? self::DEFAULT_DNS_RESOLVER_TIMEOUT_SECONDS),
-                1
-            ),
             'timeout' => max((int) ($defaultConfig['timeout'] ?? 30), 1),
             'connect_timeout' => max((int) ($defaultConfig['connect_timeout'] ?? 10), 1),
         ];
@@ -1076,25 +1068,13 @@ class HostingPanelApiTransport extends UpstreamJwtSessionManager implements Prov
     {
         $addresses = [];
 
-        try {
-            $addresses = $this->runDnsLookupProcess($host, (int) $this->serviceConfig['dns_resolver_timeout']);
-        } catch (Throwable $e) {
-            if ($e instanceof ProcessTimedOutException) {
-                $this->safeLog('warning', '[主机面板接口] 异步DNS解析超时', ['host' => $host, 'message' => $e->getMessage()]);
-            } else {
-                $this->safeLog('warning', '[主机面板接口] 异步DNS解析失败', ['host' => $host, 'message' => $e->getMessage()]);
-            }
-        }
+        $records = @dns_get_record($host, DNS_A + DNS_AAAA);
 
-        if ($addresses === []) {
-            $records = @dns_get_record($host, DNS_A + DNS_AAAA);
-
-            if (is_array($records)) {
-                foreach ($records as $record) {
-                    $ipAddress = (string) ($record['ip'] ?? $record['ipv6'] ?? '');
-                    if ($ipAddress !== '') {
-                        $addresses[] = $ipAddress;
-                    }
+        if (is_array($records)) {
+            foreach ($records as $record) {
+                $ipAddress = (string) ($record['ip'] ?? $record['ipv6'] ?? '');
+                if ($ipAddress !== '') {
+                    $addresses[] = $ipAddress;
                 }
             }
         }
@@ -1131,67 +1111,6 @@ class HostingPanelApiTransport extends UpstreamJwtSessionManager implements Prov
         }
 
         return false;
-    }
-
-    /**
-     * @return array<int, string>
-     */
-    protected function runDnsLookupProcess(string $host, int $timeoutSeconds): array
-    {
-        $phpBinary = trim((string) PHP_BINARY);
-        if ($phpBinary === '') {
-            return [];
-        }
-
-        $script = <<<'PHP'
-$host = (string) ($argv[1] ?? '');
-$addresses = [];
-
-if ($host !== '') {
-    $records = @dns_get_record($host, DNS_A + DNS_AAAA);
-
-    if (is_array($records)) {
-        foreach ($records as $record) {
-            $ipAddress = (string) ($record['ip'] ?? $record['ipv6'] ?? '');
-            if ($ipAddress !== '') {
-                $addresses[] = $ipAddress;
-            }
-        }
-    }
-
-    if ($addresses === []) {
-        $fallback = @gethostbynamel($host);
-        if (is_array($fallback)) {
-            foreach ($fallback as $ipAddress) {
-                $ipAddress = (string) $ipAddress;
-                if ($ipAddress !== '') {
-                    $addresses[] = $ipAddress;
-                }
-            }
-        }
-    }
-}
-
-echo json_encode(array_values(array_unique($addresses)));
-PHP;
-
-        $process = new Process([$phpBinary, '-r', $script, $host]);
-        $process->setTimeout(max($timeoutSeconds, 1));
-        $process->run();
-
-        if (! $process->isSuccessful()) {
-            return [];
-        }
-
-        $decoded = json_decode((string) $process->getOutput(), true);
-        if (! is_array($decoded)) {
-            return [];
-        }
-
-        return collect($decoded)
-            ->filter(fn ($ipAddress) => is_string($ipAddress) && trim($ipAddress) !== '')
-            ->values()
-            ->all();
     }
 
     private function resolveHttpCode(array $responseHeaders): int
