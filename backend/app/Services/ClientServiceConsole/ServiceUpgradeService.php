@@ -146,7 +146,7 @@ class ServiceUpgradeService
         }
 
         $invoice = DB::transaction(function () use ($service, $product, $context, $quotePayload, $productId, $billingCycle, $promoCode, $amount) {
-            $displayPayload = (new ProductDisplayNameResolver)->resolveForProduct($product);
+            $displayPayload = app(ProductDisplayNameResolver::class)->resolveForProduct($product);
             $productSpecDisplay = (string) ($displayPayload['product_spec_display'] ?? '');
 
             $invoice = Invoice::query()->create([
@@ -270,7 +270,7 @@ class ServiceUpgradeService
                 return null;
             }
 
-            $displayPayload = (new ProductDisplayNameResolver)->resolveForProduct($product);
+            $displayPayload = app(ProductDisplayNameResolver::class)->resolveForProduct($product);
             $productSpecDisplay = (string) ($lockedInvoice->product_spec_snapshot
                 ?: $displayPayload['product_spec_display']);
 

@@ -2027,7 +2027,7 @@ class ProductSyncService
 
     private function resolveProductDisplayName(Product $product): string
     {
-        $resolver = $this->productDisplayNameResolver ?? new ProductDisplayNameResolver;
+        $resolver = $this->productDisplayNameResolver ?? app(ProductDisplayNameResolver::class);
         $displayName = trim((string) ($resolver->resolveForProduct($product)['product_display_name'] ?? ''));
 
         return $displayName !== '' ? $displayName : ('未配置规格 #'.(int) $product->id);

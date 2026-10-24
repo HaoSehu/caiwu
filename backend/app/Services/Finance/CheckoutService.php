@@ -594,7 +594,7 @@ class CheckoutService
 
     private function resolveProductDisplayNameResolver(): ProductDisplayNameResolver
     {
-        return $this->productDisplayNameResolver ??= new ProductDisplayNameResolver;
+        return $this->productDisplayNameResolver ??= app(ProductDisplayNameResolver::class);
     }
 
     private function withProductDisplaySnapshot(Product $product, array $configSnapshot, string $productDisplayName): array

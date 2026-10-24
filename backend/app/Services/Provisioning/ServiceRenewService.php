@@ -428,7 +428,7 @@ class ServiceRenewService
                 ]));
             }
 
-            $displayPayload = (new ProductDisplayNameResolver)->resolveForProduct($effectiveProduct);
+            $displayPayload = app(ProductDisplayNameResolver::class)->resolveForProduct($effectiveProduct);
             $productSpecDisplay = (string) ($displayPayload['product_spec_display'] ?? '');
             $couponApplication = $this->resolveRenewCoupon($service, $user, $userCouponId, $effectiveProduct, $cycle, $couponBaseAmount, true, $memberDiscountAmount > 0);
             $couponPayload = $couponApplication['coupon_payload'] ?? [];

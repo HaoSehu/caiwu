@@ -200,7 +200,7 @@ class ServiceTrafficPackageService
             $sameAmount = round((float) ($existingInvoice->amount ?? 0), 2) === round((float) $quote['pricing']['amount'], 2);
 
             if ($sameConfigOption && $sameAmount) {
-                $displayPayload = (new ProductDisplayNameResolver)->resolveForProduct($product, (array) ($existingInvoice->config_snapshot ?? []));
+                $displayPayload = app(ProductDisplayNameResolver::class)->resolveForProduct($product, (array) ($existingInvoice->config_snapshot ?? []));
                 $productSpecDisplay = (string) ($displayPayload['product_spec_display'] ?? $displayPayload['combined_display_name'] ?? '');
                 $this->ensureTrafficPackageOrderForInvoice($existingInvoice, $service, $product, $productSpecDisplay, $context);
                 $existingInvoice = $existingInvoice->fresh(['product:id,product_type,product_group_id,service_type_code,config_options,purchase_requires', 'service', 'order']) ?? $existingInvoice;
@@ -227,7 +227,7 @@ class ServiceTrafficPackageService
         }
 
         $invoice = DB::transaction(function () use ($service, $product, $quote, $context) {
-            $displayPayload = (new ProductDisplayNameResolver)->resolveForProduct($product);
+            $displayPayload = app(ProductDisplayNameResolver::class)->resolveForProduct($product);
             $productSpecDisplay = (string) ($displayPayload['product_spec_display'] ?? $displayPayload['combined_display_name'] ?? '');
             $orderNo = Order::generateOrderNo();
             $invoice = Invoice::query()->create([

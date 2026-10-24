@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace TestsUnit;
+namespace Tests\Unit;
 
 use App\Exceptions\BusinessException;
 use App\Services\Automation\Heartbeat\ScheduledTaskValidator;

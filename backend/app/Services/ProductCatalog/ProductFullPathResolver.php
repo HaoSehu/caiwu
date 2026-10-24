@@ -191,6 +191,6 @@ class ProductFullPathResolver
 
     private function resolveDisplayNameResolver(): ProductDisplayNameResolver
     {
-        return $this->displayNameResolver ?? new ProductDisplayNameResolver;
+        return $this->displayNameResolver ?? app(ProductDisplayNameResolver::class);
     }
 }

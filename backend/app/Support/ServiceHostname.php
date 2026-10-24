@@ -20,7 +20,7 @@ class ServiceHostname
             return trim($fallback);
         }
 
-        $displayPayload = (new ProductDisplayNameResolver)->resolveForProduct($product, $configSnapshot);
+        $displayPayload = app(ProductDisplayNameResolver::class)->resolveForProduct($product, $configSnapshot);
         $instanceSpecText = trim((string) ($displayPayload['instance_spec_text'] ?? ''));
         $productSpecDisplay = trim((string) ($displayPayload['product_spec_display'] ?? ''));
         $combinedDisplayName = trim((string) ($displayPayload['combined_display_name'] ?? ''));
