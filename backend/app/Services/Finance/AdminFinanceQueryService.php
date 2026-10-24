@@ -67,6 +67,12 @@ class AdminFinanceQueryService
         $this->applyDateFilter($query, $filters, 'created_at');
 
         $paginator = $query->orderByDesc('id')->paginate($perPage);
+
+        // 无 product_spec_snapshot 的订单，transformOrder() 会经 ProductFullPathResolver 逐行回源解析
+        // 展示名与全路径；拆分商品的源商品、以及商品投影刻意未取的 custom_display_name 都是逐行单查，
+        // 会随每页行数放大成 N 次往返。按当页商品一次预载，行输出不变。
+        $this->preloadOrderProductDisplayNames($paginator->items());
+
         $paginator->setCollection(
             $paginator->getCollection()->map(fn (Order $order) => $this->transformOrder($order))
         );
@@ -196,6 +202,9 @@ class AdminFinanceQueryService
             ->get()
             ->keyBy('id');
 
+        // 拆分商品的源商品一次预载：下面按商品逐行解析展示名，逐行回源会随收入行数放大成 N 次单查。
+        $this->productDisplayNameResolver->preloadSourceProducts($products);
+
         $grouped = [];
         foreach ($rows as $row) {
             $productId = (int) $row->product_id;
@@ -257,6 +266,11 @@ class AdminFinanceQueryService
                 'user:id,email,nickname,phone',
                 'invoice:id,invoice_no,order_id,type,status,amount,paid_amount,paid_at,due_date,created_at',
                 'product:id,product_type,service_type_code,product_group_id,remark,config_options,purchase_requires',
+                // 附加配置行同样输出 product_full_path：缺三级分组预载时，
+                // ProductFullPathResolver::segmentsForProduct() 会对每行 loadMissing 三次分组查询。
+                'product.productGroup:id,second_product_group_id,name',
+                'product.productGroup.secondProductGroup:id,first_product_group_id,name',
+                'product.productGroup.secondProductGroup.firstProductGroup:id,code,name',
                 'service:id,name,domain,status,expires_at',
             ])
             ->where('type', OrderType::UPGRADE);
@@ -274,6 +288,10 @@ class AdminFinanceQueryService
         $this->applyDateFilter($query, $filters, 'created_at');
 
         $paginator = $query->orderByDesc('id')->paginate($perPage);
+
+        // 同续费列表：附加配置行同样经 transformOrder() 逐行回源解析展示名与全路径。
+        $this->preloadOrderProductDisplayNames($paginator->items());
+
         $paginator->setCollection(
             $paginator->getCollection()->map(function (Order $order): array {
                 $item = $this->transformOrder($order);
@@ -647,6 +665,32 @@ class AdminFinanceQueryService
 
     private function productFullPathResolver(): ProductFullPathResolver
     {
-        return $this->productFullPathResolver ?? new ProductFullPathResolver($this->productDisplayNameResolver);
+        // 必须与容器单例一致：它内部持有同一个 ProductDisplayNameResolver 单例，
+        // 预载写进容器实例后这里若再 new 一个孤儿实例，整页预载就全被架空。
+        return $this->productFullPathResolver ?? app(ProductFullPathResolver::class);
+    }
+
+    /**
+     * 按当页订单一次预载商品展示名解析所需的商品数据。
+     *
+     * transformOrder() 内 nameForOrder()/pathForOrder() 在订单缺 product_spec_snapshot 时会逐行回源：
+     * 拆分商品的源商品按 purchase_requires.upstream_split.source_product_id 单查、
+     * 商品投影刻意未取的 custom_display_name 也会按 id 单查，条数随每页行数线性增长（N+1）。
+     * 预载后解析阶段只读内存，行输出不变。
+     *
+     * @param  array<int, Order>  $orders
+     */
+    private function preloadOrderProductDisplayNames(array $orders): void
+    {
+        $products = collect($orders)
+            ->map(static function (Order $order): ?Product {
+                $product = $order->product;
+
+                return $product instanceof Product ? $product : null;
+            })
+            ->filter();
+
+        $this->productDisplayNameResolver->preloadSourceProducts($products);
+        $this->productDisplayNameResolver->preloadCustomDisplayNames($products);
     }
 }

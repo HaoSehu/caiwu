@@ -16,7 +16,9 @@ use App\Models\FinanceRefund;
 use App\Models\Invoice;
 use App\Models\MemberLevel;
 use App\Models\MessageLog;
+use App\Models\Order;
 use App\Models\Payment;
+use App\Models\Product;
 use App\Models\PromotionAmbassador;
 use App\Models\RechargeRecord;
 use App\Models\ReferralReward;
@@ -31,6 +33,7 @@ use App\Services\Finance\Core\FinanceAccountService;
 use App\Services\Finance\FinanceLedgerQueryService;
 use App\Services\Finance\InvoiceService;
 use App\Services\Finance\TradeLifecycleService;
+use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Services\Provisioning\ProvisionService;
 use App\Services\Referral\ReferralService;
 use App\Services\System\OperationLogService;
@@ -42,6 +45,7 @@ use App\Support\Money;
 use App\Support\SchemaMetadataCache;
 use App\Support\TextSanitizer;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 
@@ -470,16 +474,33 @@ class UserService
     public function invoices(User $user, array $filters, int $perPage = 20)
     {
         $query = $user->invoices()->with([
+            // 账单行会逐个读取 user / 支付回调 / 商品展示名，必须在父集合一次预载，
+            // 否则每行各发一次 users、payment_callbacks、products 查询（N+1）。
+            'user:id,email,nickname,phone',
             'order:id,order_no,status,type,service_id,paid_at,product_id,billing_cycle',
+            // 商品投影刻意不含 custom_display_name：该列一旦随投影加载，Product::getNameAttribute()
+            // 会直接返回裸自定义名，丢掉规格后缀，改变用户账单既有响应值；展示名所需列改为
+            // 分页后由解析器按 id 一次 whereIn 预载（见下方 preloadInvoiceProductDisplayNames）。
             'order.product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
+            // 账单行输出的 product_full_path 会经 ProductFullPathResolver 读取订单商品的三级分组，
+            'order.product.productGroup:id,second_product_group_id,name',
+            'order.product.productGroup.secondProductGroup:id,first_product_group_id,name',
+            'order.product.productGroup.secondProductGroup.firstProductGroup:id,code,name',
+            // 未预载时每个商品实例各发三条查询（third/second/first_product_groups）。注意放大口径是
+            // 「当页不同商品数」而非行数：同一商品在多张账单间共享 Product 实例，只会懒加载一次。
             'product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
             'service:id,name,status,expires_at',
-            'payments',
+            'payments.callbacks:payment_id,callback_type,payload_json',
             'items',
-        ])->withSum(
-            // 退款投影（列表轻量口径）与财务/客户端账单列表同源，预加载避免逐行 N+1。
-            ['refunds' => fn ($refundQuery) => $refundQuery->where('status', FinanceRefund::STATUS_COMPLETED)],
-            'amount'
+        ])->select('invoices.*')->selectSub(
+            // 退款投影（列表轻量口径）与财务/客户端账单列表同源，单子查询预加载避免逐行 N+1。
+            // 必须用 selectSub 显式命名：withSum 生成的属性名是 refunds_sum_amount，
+            // 读取点取 refund_completed_total 会恒为 NULL，退化成逐行聚合查询。
+            FinanceRefund::query()
+                ->selectRaw('COALESCE(SUM(amount), 0)')
+                ->whereColumn('finance_refunds.invoice_id', 'invoices.id')
+                ->where('status', FinanceRefund::STATUS_COMPLETED),
+            'refund_completed_total'
         );
 
         if (($filters['status'] ?? '') === '5') {
@@ -509,6 +530,12 @@ class UserService
         }
 
         $paginator = $query->orderByDesc('id')->paginate($perPage);
+
+        // 账单行的展示名由 ProductDisplayNameResolver 解析：拆分商品的源商品、以及未随投影取出的
+        // custom_display_name 都会逐行单查，随每页行数放大成 N 次往返。按当页两类商品一次预载，
+        // 解析阶段只读内存，行输出不变。
+        $this->preloadInvoiceProductDisplayNames($paginator->items());
+
         $paginator->setCollection(
             $paginator->getCollection()->map(fn (Invoice $invoice) => $this->transformInvoiceListItem($invoice))
         );
@@ -765,6 +792,42 @@ class UserService
             'offline' => '线下支付',
             default => '手动入账',
         };
+    }
+
+    /**
+     * 按当页账单一次性预载展示名解析所需的商品数据（源商品 + custom_display_name）。
+     *
+     * @param  array<int, Model>  $invoices  分页器 items() 的静态类型是基类 Model
+     */
+    private function preloadInvoiceProductDisplayNames(array $invoices): void
+    {
+        $products = collect($invoices)
+            ->filter(static fn ($invoice): bool => $invoice instanceof Invoice)
+            ->flatMap(static function (Invoice $invoice): array {
+                // 只读已预载关系，避免把一次预载退化成又一轮逐行查询。
+                $products = [];
+
+                $order = $invoice->getRelation('order');
+                if ($order instanceof Order && $order->getRelation('product') instanceof Product) {
+                    $products[] = $order->getRelation('product');
+                }
+                if ($invoice->getRelation('product') instanceof Product) {
+                    $products[] = $invoice->getRelation('product');
+                }
+
+                return $products;
+            })
+            ->filter()
+            ->unique(static fn (Product $product): int => (int) $product->id)
+            ->values();
+
+        if ($products->isEmpty()) {
+            return;
+        }
+
+        $resolver = app(ProductDisplayNameResolver::class);
+        $resolver->preloadSourceProducts($products);
+        $resolver->preloadCustomDisplayNames($products);
     }
 
     private function transformInvoiceListItem(Invoice $invoice): array

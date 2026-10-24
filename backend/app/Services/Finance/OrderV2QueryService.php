@@ -7,6 +7,7 @@ namespace App\Services\Finance;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\Product;
+use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Support\Concerns\FiltersDateRange;
 use App\Support\LikeEscape;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -54,9 +55,27 @@ class OrderV2QueryService
 
         $this->applyFilters($query, $filters);
 
-        return $query
+        $paginator = $query
             ->orderByDesc('id')
             ->paginate($this->pageSize($filters));
+
+        // 订单缺 product_spec_snapshot 时，AdminOrderSummaryResource 的展示名与商品全路径会在
+        // ProductFullPathResolver 内回源到 ProductDisplayNameResolver；其中拆分商品的源商品是
+        // 按 purchase_requires.upstream_split.source_product_id 逐行 find()，会随每页行数放大成 N 次往返。
+        // 按当页商品一次预载源商品与 custom_display_name，解析阶段只读内存，行输出不变。
+        $products = collect($paginator->items())
+            ->map(static function (Order $order): ?Product {
+                $product = $order->product;
+
+                return $product instanceof Product ? $product : null;
+            })
+            ->filter();
+
+        $displayNameResolver = app(ProductDisplayNameResolver::class);
+        $displayNameResolver->preloadSourceProducts($products);
+        $displayNameResolver->preloadCustomDisplayNames($products);
+
+        return $paginator;
     }
 
     public function findAdminOrder(int $id): Order

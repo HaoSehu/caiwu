@@ -2382,10 +2382,18 @@ class CouponService
             return [];
         }
 
-        return Product::query()
+        $products = Product::query()
             ->select(['id', 'pricing', 'purchase_requires', 'config_options'])
             ->whereIn('id', $productIds)
-            ->get()
+            ->get();
+
+        // 展示名解析要回源拆分商品的源商品，并补齐投影里没有的 custom_display_name，
+        // 不预载会随券数量逐行回源（管理端券列表 / 客户端券列表同一条链）。
+        $resolver = $this->resolveProductDisplayNameResolver();
+        $resolver->preloadSourceProducts($products);
+        $resolver->preloadCustomDisplayNames($products);
+
+        return $products
             ->mapWithKeys(function (Product $product) {
                 $displayName = (string) ($this->resolveProductDisplayNameResolver()->resolveForProduct($product)['product_display_name'] ?? '');
 
@@ -2663,6 +2671,7 @@ class CouponService
 
     private function resolveProductDisplayNameResolver(): ProductDisplayNameResolver
     {
-        return $this->productDisplayNameResolver ?? new ProductDisplayNameResolver;
+        // 必须与容器单例一致：列表预载写在单例上，这里若新建实例，预载会被架空、逐行解析仍各发一次查询。
+        return $this->productDisplayNameResolver ?? app(ProductDisplayNameResolver::class);
     }
 }

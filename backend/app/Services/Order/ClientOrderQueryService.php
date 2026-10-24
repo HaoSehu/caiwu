@@ -11,6 +11,8 @@ use App\Constants\OrderType;
 use App\Models\Coupon;
 use App\Models\Invoice;
 use App\Models\Order;
+use App\Models\Product;
+use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Services\ProductCatalog\ProductFullPathResolver;
 use App\Support\Concerns\FiltersDateRange;
 use App\Support\LikeEscape;
@@ -50,6 +52,19 @@ class ClientOrderQueryService
         $this->applyDateFilter($query, $filters);
 
         $paginator = $query->paginate(max(1, min((int) ($filters['page_size'] ?? 15), 100)));
+
+        // 订单缺 product_spec_snapshot 时，展示名与商品全路径会在 listItem() 内逐行回源解析；
+        // 拆分商品的源商品、以及商品投影刻意未取的 custom_display_name 都是逐行单查，
+        // 会随每页行数放大成 N 次往返（N+1）。按当页商品一次预载，行输出不变。
+        $products = collect($paginator->items())
+            ->map(static function (Order $order): ?Product {
+                $product = $order->product;
+
+                return $product instanceof Product ? $product : null;
+            })
+            ->filter();
+        app(ProductDisplayNameResolver::class)->preloadSourceProducts($products);
+        app(ProductDisplayNameResolver::class)->preloadCustomDisplayNames($products);
 
         return [
             'list' => collect($paginator->items())

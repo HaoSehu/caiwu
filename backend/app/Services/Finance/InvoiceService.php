@@ -25,6 +25,7 @@ use App\Support\AdminPrivacy;
 use App\Support\Concerns\FiltersDateRange;
 use App\Support\LikeEscape;
 use App\Support\Money;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -283,6 +284,11 @@ class InvoiceService
         $this->applyDateFilter($query, $filters);
 
         $paginator = $query->orderByDesc('id')->paginate($perPage);
+
+        // 展示名解析会回源拆分商品的源商品、并补齐投影里没有的 custom_display_name，
+        // 逐行解析会随当页账单行数增长；必须在渲染前按当页商品一次性预载。
+        $this->preloadInvoiceProductDisplayNames($paginator->items());
+
         $paginator->setCollection(
             $paginator->getCollection()->map(fn (Invoice $invoice) => $this->transformAdminInvoiceListItem($invoice))
         );
@@ -1371,7 +1377,44 @@ class InvoiceService
 
     private function resolveProductDisplayNameResolver(): ProductDisplayNameResolver
     {
-        return $this->productDisplayNameResolver ?? new ProductDisplayNameResolver;
+        // 必须与容器单例一致：列表预载写在单例上，这里若新建实例，预载会被架空、逐行解析仍各发一次查询。
+        return $this->productDisplayNameResolver ?? app(ProductDisplayNameResolver::class);
+    }
+
+    /**
+     * 按当页账单一次性预载展示名解析所需的商品数据（源商品 + custom_display_name）。
+     *
+     * @param  array<int, Model>  $invoices  分页器 items() 的静态类型是基类 Model
+     */
+    private function preloadInvoiceProductDisplayNames(array $invoices): void
+    {
+        $products = collect($invoices)
+            ->filter(static fn ($invoice): bool => $invoice instanceof Invoice)
+            ->flatMap(static function (Invoice $invoice): array {
+                // 只读已预载关系，避免把一次预载退化成又一轮逐行查询。
+                $products = [];
+
+                $order = $invoice->getRelation('order');
+                if ($order instanceof Order && $order->getRelation('product') instanceof Product) {
+                    $products[] = $order->getRelation('product');
+                }
+                if ($invoice->getRelation('product') instanceof Product) {
+                    $products[] = $invoice->getRelation('product');
+                }
+
+                return $products;
+            })
+            ->filter()
+            ->unique(static fn (Product $product): int => (int) $product->id)
+            ->values();
+
+        if ($products->isEmpty()) {
+            return;
+        }
+
+        $resolver = $this->resolveProductDisplayNameResolver();
+        $resolver->preloadSourceProducts($products);
+        $resolver->preloadCustomDisplayNames($products);
     }
 
     public function markPaidManually(Invoice $invoice, array $payload, array $context = []): Invoice
