@@ -163,6 +163,7 @@ npm run verify:frontends
 ```
 
 根 `package.json` 只保留当前真实 workspace。新增前端项目时，必须同步更新 `package.json`、`package-lock.json`、`AGENTS.md`、`docs/参考资料/运维/本地启动指南.md` 和本规范。
+
 ## 8. 依赖版本口径
 
 - `unplugin-vue-components` 三端统一锁 `^0.27.5`。`frontend-user-v4-console` 曾声明 `^28.8.0`，但该大版本改写了 `ComponentResolverObject` 契约与解析时机，与两端现有自定义 `createTDesignResolver()` 实现不匹配；两端各装一个主版本还会让 Vite 按 workspace 分别解析，出现「同一份 `vite.config.ts` 在 admin 生效、在 console 失效」的难查故障。降回 0.27.5 后三端 dedupe 到同一份实现，按需引入行为一致。
