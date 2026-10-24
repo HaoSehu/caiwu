@@ -1,22 +1,27 @@
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { checkFrontendBudget } from './frontend_budget.mjs';
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(scriptDirectory, '..', '..');
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 
+// directory 用于构建后按端校验产物体积（见 frontend_budget.mjs）。
 const applications = {
   admin: {
     workspace: 'caiwu-admin-v3',
+    directory: 'frontend-admin-v3',
     assetVariable: 'VITE_ADMIN_ASSET_BASE_URL',
   },
   www: {
     workspace: 'caiwu-user-v3-www',
+    directory: 'frontend-user-v3-www',
     assetVariable: 'VITE_WWW_ASSET_BASE_URL',
   },
   console: {
     workspace: 'caiwu-user-v4-console',
+    directory: 'frontend-user-v4-console',
     assetVariable: 'VITE_CONSOLE_ASSET_BASE_URL',
   },
 };
@@ -103,6 +108,16 @@ for (const [name, application] of selectedApplications) {
       ...buildEnvironment,
       [application.assetVariable]: '/',
     },
+  );
+
+  // 构建后立即校验产物体积，越线直接失败，避免 D1 这类回归再次漏过（审查条目 D5）。
+  // name 是预算表的键，必须显式传入：application 字面量里没有该字段，
+  // 漏传会让 FIRST_SCREEN_BUDGETS / CHUNK_BUDGETS 查表得到 undefined 而整道门禁静默放行。
+  const { firstScreenBytes, firstScreenBudget } = checkFrontendBudget({ ...application, name }, repositoryRoot);
+  console.log(
+    firstScreenBudget
+      ? `${name} 首屏 gzip ${firstScreenBytes} B，预算 ${firstScreenBudget} B，通过。`
+      : `${name} 首屏 gzip ${firstScreenBytes} B，未配置预算。`,
   );
 }
 

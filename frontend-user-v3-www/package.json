@@ -20,12 +20,12 @@
     "@element-plus/icons-vue": "^2.3.0",
     "axios": "^1.18.1",
     "element-plus": "^2.9.0",
-    "markdown-it": "^14.3.0",
     "pinia": "^3.0.4",
     "vue": "^3.5.18",
     "vue-router": "^4.6.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@vitejs/plugin-vue": "^5.1.0",
     "autoprefixer": "^10",
     "sass": "^1.80.0",

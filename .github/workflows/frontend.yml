@@ -27,6 +27,13 @@ jobs:
       - name: 安装依赖
         run: npm ci
 
+      - name: 共享层与构建配置单元测试
+        # test:shared 覆盖共享运行时/金额格式等纯逻辑，test:build-config 覆盖体积门禁
+        # 自身的拦截能力（含「缺 name 必须失败」）。两者此前不在 CI 里，门禁脚本回归无人守。
+        run: |
+          npm run test:shared
+          npm run test:build-config
+
       - name: Lint
         run: npm run lint:frontends
 

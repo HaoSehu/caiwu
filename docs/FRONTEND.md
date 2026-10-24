@@ -1,6 +1,6 @@
 ---
 status: current
-updated: 2026-07-02
+updated: 2026-10-24
 owner: frontend-platform
 ---
 
@@ -154,9 +154,18 @@ npm run dev:user-v3-www
 npm run dev:user-v4-console
 
 npm run build:frontends
+npm run build:frontends:dry
+npm run lint:frontends
 npm run typecheck:frontends
-npm run test:frontends
+npm run test:shared
+npm run test:build-config
 npm run verify:frontends
 ```
 
 根 `package.json` 只保留当前真实 workspace。新增前端项目时，必须同步更新 `package.json`、`package-lock.json`、`AGENTS.md`、`docs/参考资料/运维/本地启动指南.md` 和本规范。
+## 8. 依赖版本口径
+
+- `unplugin-vue-components` 三端统一锁 `^0.27.5`。`frontend-user-v4-console` 曾声明 `^28.8.0`，但该大版本改写了 `ComponentResolverObject` 契约与解析时机，与两端现有自定义 `createTDesignResolver()` 实现不匹配；两端各装一个主版本还会让 Vite 按 workspace 分别解析，出现「同一份 `vite.config.ts` 在 admin 生效、在 console 失效」的难查故障。降回 0.27.5 后三端 dedupe 到同一份实现，按需引入行为一致。
+- `vue-tsc` 锁 `3.3.11`（不写 `^`）。`vue-tsc` 的次版本会改变类型推导严格度，放开版本会让 CI 与本地在不同时间得出不同结果。
+- `@playwright/test` 三端统一 `^1.62.1`；e2e 产物目录（`dist-e2e/`、`test-results/`、`playwright-report/`）一律不入库。
+- 体积门禁预算在 `backend/scripts/frontend_budget.mjs`：首屏 gzip admin 560,000 B、www 115,000 B、console 420,000 B。改动构建配置（按需引入、manualChunks、依赖增删）后必须跑 `npm run build:frontends`，超预算即失败。

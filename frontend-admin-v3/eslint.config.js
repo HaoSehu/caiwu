@@ -152,6 +152,7 @@ export default antfu(
       // Playwright 产物：跑完 e2e 后这些目录会让 lint 扫到压缩包体并撑爆 formatter。
       '**/playwright-report',
       '**/test-results',
+      '**/dist-e2e',
       '!**/.prettierrc.js',
     ]),
   ],

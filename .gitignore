@@ -27,6 +27,7 @@ frontend-admin-v3/*.err.log
 frontend-admin-v3/*.out.log
 frontend-admin-v3/playwright-report/
 frontend-admin-v3/test-results/
+frontend-admin-v3/dist-e2e/
 frontend-admin-v3/.auth/
 frontend-user-v3-www/node_modules/
 frontend-user-v3-www/dist/
@@ -96,6 +97,8 @@ __pycache__/
 *.pyc
 *.pyo
 backend/scripts/__pycache__/
+# 临时探针脚本误写到 os.tmpdir() 落空时的产物目录（形状如 undefined/temp/xxx.php），不得入库
+/undefined/
 
 # Local tools
 php.bat
