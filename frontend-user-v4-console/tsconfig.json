@@ -16,7 +16,6 @@
     "allowImportingTsExtensions": true,
     "paths": {
       "@/*": ["./src/*"],
-      "@shared/*": ["../shared/*"],
       "@caiwu/shared": ["../shared/index.ts"],
       "@caiwu/shared/*": ["../shared/*"]
     },

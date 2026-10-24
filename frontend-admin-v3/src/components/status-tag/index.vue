@@ -10,7 +10,7 @@
   </t-tag>
 </template>
 <script setup lang="ts">
-import { getStatusConfig } from '@shared/statusConfig';
+import { getStatusConfig, resolveTdTagTheme } from '@caiwu/shared/statusConfig';
 import type { PropType } from 'vue';
 import { computed } from 'vue';
 
@@ -21,20 +21,9 @@ const props = defineProps({
   variant: { type: String as PropType<'dark' | 'light' | 'outline' | 'light-outline'>, default: 'light' },
 });
 
-// shared/statusConfig 的 tagType 用 Element Plus 命名（success/info/warning/danger/''/purple），
-// TDesign theme 仅有 default/primary/success/warning/danger。
-// 与现有各页 *StatusTheme helper 行为对齐：info/purple/'' 统一落到 default（灰），其余同名。
-const TDESIGN_THEME_MAP: Record<string, string> = {
-  success: 'success',
-  warning: 'warning',
-  danger: 'danger',
-  info: 'default',
-  purple: 'default',
-  primary: 'primary',
-  default: 'default',
-};
-
+// tagType 的 TDesign 映射已下沉到 shared/statusConfig 的 resolveTdTagTheme，
+// 与控制台 StatusTag 共用同一套规则（info/purple/'' 统一落到 default）。
 const config = computed(() => getStatusConfig(props.statusMap, props.status));
-const tagTheme = computed(() => TDESIGN_THEME_MAP[config.value?.tagType] || 'default');
+const tagTheme = computed(() => resolveTdTagTheme(config.value?.tagType || ''));
 const label = computed(() => config.value?.label ?? '-');
 </script>

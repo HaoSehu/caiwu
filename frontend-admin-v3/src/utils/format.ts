@@ -1,4 +1,5 @@
-import { MessagePlugin } from 'tdesign-vue-next';
+import { formatMoneyAmount, formatMoneyText } from '@caiwu/shared/finance';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 
 /**
  * 通用格式化工具。所有业务页面应从本模块导入，禁止本地重写。
@@ -15,21 +16,34 @@ export function formatDateTime(value?: unknown): string {
   )}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
-/** 金额格式化：¥X.XX，空值视为 0，非有限数值返回 '-' */
+/**
+ * 金额格式化：¥X.XX（千分位分组，负数符号在 ¥ 之前）。
+ *
+ * 口径由 shared/finance/money 统一，管理端、用户控制台与官网共用同一实现（审查条目 A7）。
+ * 空值视为 0。
+ *
+ * 与旧本地实现的可见差异（审查条目 P2-B，均为有意统一）：
+ * - 非有限值（NaN/Infinity）由 '-' 变为 '¥0.00'；
+ * - 增加千分位分组（旧实现只有 toFixed）；
+ * - 负数符号由 '¥-5.00' 改为 '-¥5.00'，符合 docs/DESIGN.md §6 金额规范。
+ */
 export function formatMoney(value?: unknown): string {
-  const amount = Number(value ?? 0);
-  if (!Number.isFinite(amount)) return '-';
-  return `¥${amount.toFixed(2)}`;
+  return formatMoneyText(value);
 }
 
-/** 大额金额紧凑格式化：≥1 万折算为「万」单位，用于指标卡等窄容器展示；非有限数值返回 '-' */
+/**
+ * 大额金额紧凑格式化：≥1 万折算为「万」单位，用于指标卡等窄容器展示。
+ *
+ * 空值口径与 formatMoney 有意不同：列表/详情里的金额是账务事实，空值按 0 显示为 ¥0.00；
+ * 指标卡是聚合统计，非有限值（NaN/Infinity）说明上游数据异常，显示 '-' 才能与「真的是 0」区分。
+ */
 export function formatCompactMoney(value?: unknown): string {
   const amount = Number(value ?? 0);
   if (!Number.isFinite(amount)) return '-';
   if (Math.abs(amount) >= 10000) {
     return `¥${(amount / 10000).toFixed(2)}万`;
   }
-  return `¥${amount.toFixed(2)}`;
+  return `¥${formatMoneyAmount(amount)}`;
 }
 
 /** 字段值兜底：空字符串/undefined/null 显示 '-'，其余转为字符串返回 */

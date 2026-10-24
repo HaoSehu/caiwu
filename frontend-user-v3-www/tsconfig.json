@@ -6,7 +6,6 @@
     "ignoreDeprecations": "5.0",
     "paths": {
       "@/*": ["./src/*"],
-      "@shared/*": ["../shared/*"],
       "@caiwu/shared": ["../shared/index.ts"],
       "@caiwu/shared/*": ["../shared/*"]
     },

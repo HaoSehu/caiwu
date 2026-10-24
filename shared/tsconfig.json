@@ -2,7 +2,7 @@
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
     "paths": {
-      "@shared/*": ["./*"]
+      "@caiwu/shared/*": ["./*"]
     },
     "noEmit": true,
     "allowImportingTsExtensions": true

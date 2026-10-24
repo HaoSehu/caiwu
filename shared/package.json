@@ -29,6 +29,6 @@
   "scripts": {
     "lint": "eslint . --ext .js,.ts,.vue",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --experimental-strip-types ./tests/runtime.test.mjs && node --experimental-strip-types ./tests/finance-snapshot.test.mjs && node --experimental-strip-types ./tests/sanitizer.test.mjs && node --experimental-strip-types ./tests/http-validation.test.mjs && node --experimental-strip-types ./tests/http-core.test.mjs && node --experimental-strip-types ./tests/http-client.test.mjs && node --experimental-strip-types ./tests/content-normalizer.test.mjs"
+    "test": "node --experimental-strip-types ./tests/runtime.test.mjs && node --experimental-strip-types ./tests/finance-snapshot.test.mjs && node --experimental-strip-types ./tests/money.test.mjs && node --experimental-strip-types ./tests/sanitizer.test.mjs && node --experimental-strip-types ./tests/http-validation.test.mjs && node --experimental-strip-types ./tests/http-core.test.mjs && node --experimental-strip-types ./tests/http-client.test.mjs && node --experimental-strip-types ./tests/content-normalizer.test.mjs"
   }
 }

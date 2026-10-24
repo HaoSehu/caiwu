@@ -1,16 +1,15 @@
-import { MessagePlugin } from 'tdesign-vue-next';
+import { formatMoneyAmount, formatMoneyText as formatSharedMoneyText } from '@caiwu/shared/finance';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 
 /**
  * 金额格式化（不含货币符号，¥ 由模板/调用方拼接）。
  *
- * 收敛自各 domain 内重复定义的 formatMoney，行为保持一致：
+ * 口径由 shared/finance/money 统一，与管理端、官网共用同一实现（审查条目 A7）：
  * - 非有限数字 → '0.00'
  * - 其余 → 千分位分组 + 两位小数
  */
 export function formatMoney(value: unknown): string {
-  const amount = Number(value ?? 0);
-  if (!Number.isFinite(amount)) return '0.00';
-  return amount.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return formatMoneyAmount(value);
 }
 
 /**
@@ -21,9 +20,7 @@ export function formatMoney(value: unknown): string {
  * 凡是取值可能为负（流水 change_amount、折扣、账户余额）的展示位一律用本函数，不要手写 `¥` 前缀。
  */
 export function formatMoneyText(value: unknown): string {
-  const amount = Number(value ?? 0);
-  if (!Number.isFinite(amount)) return '¥0.00';
-  return `${amount < 0 ? '-' : ''}¥${formatMoney(Math.abs(amount))}`;
+  return formatSharedMoneyText(value);
 }
 
 const pad = (num: number) => String(num).padStart(2, '0');

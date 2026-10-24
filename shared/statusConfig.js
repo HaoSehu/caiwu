@@ -468,6 +468,31 @@ export function getStatusColor(statusMap, status) {
   return getStatusConfig(statusMap, status).color;
 }
 
+// ===================== TDesign 适配函数 =====================
+
+// TDesign Tag 支持的 theme 取值
+const VALID_TD_THEMES = new Set([
+  "primary",
+  "success",
+  "warning",
+  "danger",
+  "default",
+]);
+
+/**
+ * 将通用 tagType 转为 TDesign t-tag 可接受的 theme
+ * - 空字符串 / info / purple 等非 TDesign 语义值统一回落为 'default'（灰）
+ * - primary/success/warning/danger/default 原样返回
+ * 管理端与本仓库的 shared StatusTag 都通过本函数映射，避免各自维护一份表。
+ */
+export function resolveTdTagTheme(tagType) {
+  if (!tagType) {
+    return "default";
+  }
+
+  return VALID_TD_THEMES.has(tagType) ? tagType : "default";
+}
+
 // ===================== Element Plus 适配函数 =====================
 // 以下函数仅供 Element Plus 端使用，TDesign 端无需调用
 

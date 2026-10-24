@@ -53,6 +53,7 @@ export function getStatusColor(statusMap: StatusMapInput, status: string | numbe
 
 export function resolveElTagType(tagType: string): string
 export function resolveElTagClass(tagType: string): string
+export function resolveTdTagTheme(tagType: string): string
 
 export function toSelectOptions(
   statusMap: StatusMapInput,
