@@ -15,7 +15,7 @@ class QueueDrainCommand extends Command
 {
     protected $signature = 'queue:drain';
 
-    protected $description = '消费业务与 automation 队列，由 schedule:run 每分钟后台触发';
+    protected $description = '消费业务、备份与 automation 队列，由 schedule:run 每分钟后台触发';
 
     public function handle(QueueDrainService $queueDrain): int
     {

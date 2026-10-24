@@ -53,6 +53,7 @@ class AdminScheduleOverviewResource extends JsonResource
             'app_timezone' => $this->compactScalar($environment['app_timezone'] ?? null),
             'queue_driver' => $this->compactScalar($environment['queue_driver'] ?? null),
             'business_queue' => $this->compactScalar($environment['business_queue'] ?? null),
+            'backup_queue' => $this->compactScalar($environment['backup_queue'] ?? null),
             'automation_queue' => $this->compactScalar($environment['automation_queue'] ?? null),
             'queue_connection' => $this->compactScalar($environment['queue_connection'] ?? null),
             'jobs_table' => $this->compactScalar($environment['jobs_table'] ?? null),

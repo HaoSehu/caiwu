@@ -7,6 +7,7 @@ namespace App\Services\Automation\Heartbeat;
 use App\Services\Automation\Heartbeat\Contracts\ScheduledTask;
 use App\Services\Automation\Heartbeat\Contracts\TriggerRule;
 use App\Services\Automation\Heartbeat\Rules\CronRule;
+use App\Support\QueueTopology;
 use Cron\CronExpression;
 use InvalidArgumentException;
 
@@ -75,17 +76,18 @@ final class ScheduledTaskValidator
         }
     }
 
-    /** @return list<string> */
+    /**
+     * 四组 Worker 实际消费的队列，用于校验任务声明的 queue 是否真的有人消费。
+     * 口径与 queue:drain / app:serve 共用 QueueTopology，backup 也可作为任务队列。
+     *
+     * @return list<string>
+     */
     public function consumableQueues(): array
     {
         $queues = [];
-        foreach ([
-            (string) config('queue.caiwu_business_queues', ''),
-            (string) config('queue.caiwu_schedule_queue', ''),
-        ] as $configured) {
-            foreach (explode(',', $configured) as $queue) {
-                $queue = trim($queue);
-                if ($queue !== '' && ! in_array($queue, $queues, true)) {
+        foreach (QueueTopology::resolve() as $group) {
+            foreach ($group as $queue) {
+                if (! in_array($queue, $queues, true)) {
                     $queues[] = $queue;
                 }
             }

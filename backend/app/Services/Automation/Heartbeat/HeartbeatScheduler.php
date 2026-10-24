@@ -11,6 +11,7 @@ use App\Services\Automation\Heartbeat\Contracts\ScheduledTask;
 use App\Services\Automation\Heartbeat\Data\TickContext;
 use App\Services\Automation\Heartbeat\Data\TickSummary;
 use App\Support\CacheKey;
+use App\Support\QueueTopology;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Cache\Lock;
 use Illuminate\Support\Facades\Cache;
@@ -252,14 +253,12 @@ class HeartbeatScheduler
                 return 0;
             }
 
+            // 用 QueueTopology 解析四组 Worker 实际消费的队列，backup 队列积压同样计入告警：
+            // mysqldump 卡住时 backup 会持续堆积，这正是最需要告警的场景之一。
             $queues = [];
-            foreach ([
-                (string) config('queue.caiwu_business_queues', ''),
-                (string) config('queue.caiwu_schedule_queue', ''),
-            ] as $configured) {
-                foreach (explode(',', $configured) as $queue) {
-                    $queue = trim($queue);
-                    if ($queue !== '' && ! in_array($queue, $queues, true)) {
+            foreach (QueueTopology::resolve() as $group) {
+                foreach ($group as $queue) {
+                    if (! in_array($queue, $queues, true)) {
                         $queues[] = $queue;
                     }
                 }
@@ -269,7 +268,7 @@ class HeartbeatScheduler
                 return 0;
             }
 
-            // 统计全部可消费队列的待执行任务，业务队列积压超过阈值时同样告警。
+            // 统计全部可消费队列的待执行任务，业务与备份队列积压超过阈值时同样告警。
             return DB::connection($connection)->table($table)
                 ->whereIn('queue', $queues)
                 ->whereNull('reserved_at')

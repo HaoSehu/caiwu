@@ -1009,13 +1009,17 @@ const scheduleEnvAlerts = computed(() => {
   });
 
   const businessQueue = String(env.business_queue || '');
+  const backupQueue = String(env.backup_queue || '');
   const automationQueue = String(env.automation_queue || '');
   if (businessQueue && automationQueue) {
     alerts.push({
       key: 'queue_isolation',
       label: '队列隔离',
-      value: '业务与定时已分离',
-      detail: `业务：${businessQueue}；定时：${automationQueue}`,
+      value: '业务、备份与定时已分离',
+      // 备份队列独立成组后可回填该槽位是否已生效，避免备份与业务抢同一队列时被误判为已隔离
+      detail: backupQueue
+        ? `业务：${businessQueue}；备份：${backupQueue}；定时：${automationQueue}`
+        : `业务：${businessQueue}；定时：${automationQueue}`,
       theme: 'success',
     });
   }

@@ -9,6 +9,9 @@ return [
     'caiwu_provision_queues' => env('CAIWU_PROVISION_QUEUES', 'provision'),
     'caiwu_business_queues' => env('CAIWU_BUSINESS_QUEUES', 'referral,notification,coupon,default'),
     'caiwu_schedule_queue' => env('CAIWU_SCHEDULE_QUEUE', 'automation'),
+    // 数据库备份单独成组：mysqldump 的 timeout 是 900s，而 queue:work 对逗号队列列表是
+    // 严格优先级消费，混在 business 组里会让导出期间全部通知/优惠券/默认业务排队等它。
+    'caiwu_backup_queue' => env('CAIWU_BACKUP_QUEUE', 'backup'),
     'caiwu_worker_timeout' => 1200,
     'caiwu_worker_max_timeout' => 3600,
     'caiwu_worker_tries' => 3,

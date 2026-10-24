@@ -454,6 +454,10 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
     Route::middleware(['permission:'.AdminPermissions::DATABASE_MANAGE])->group(function (): void {
         Route::post('/database/optimizations', [DatabaseStatusController::class, 'optimize']);
         Route::post('/database/backups', [DatabaseStatusController::class, 'exportBackup']);
+        Route::get('/database/backups/{taskId}', [DatabaseStatusController::class, 'showBackup'])
+            ->where('taskId', '[0-9a-fA-F-]{36}');
+        Route::get('/database/backups/{taskId}/download', [DatabaseStatusController::class, 'downloadBackup'])
+            ->where('taskId', '[0-9a-fA-F-]{36}');
     });
 
     Route::middleware(['permission:'.AdminPermissions::STAFF_LIST])->group(function (): void {

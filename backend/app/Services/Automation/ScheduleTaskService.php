@@ -15,6 +15,8 @@ use App\Services\Automation\Heartbeat\ScheduleTaskRunRepository;
 use App\Services\System\SettingService;
 use App\Services\Upstream\Integration\UpstreamScheduledTaskProvider;
 use App\Support\AutomationScheduleExpression;
+use App\Support\BackupQueue;
+use App\Support\QueueTopology;
 use App\Support\SchemaMetadataCache;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Pagination\LengthAwarePaginator as ConcreteLengthAwarePaginator;
@@ -60,6 +62,7 @@ class ScheduleTaskService
                 'schedule_source' => base_path('routes/console.php'),
                 'queue_driver' => (string) config('queue.default', 'sync'),
                 'business_queue' => (string) config('queue.caiwu_business_queues', 'referral,notification,coupon,default'),
+                'backup_queue' => QueueTopology::backupName(),
                 'automation_queue' => (string) config('queue.caiwu_schedule_queue', 'automation'),
                 'queue_connection' => $jobsConnection,
                 'jobs_table' => $jobsTable,
@@ -240,9 +243,17 @@ class ScheduleTaskService
     {
         $quotedPhp = $this->quoteShellArgument($phpBinary);
         $quotedArtisan = $this->quoteShellArgument($artisanPath);
-        $provisionQueues = (string) config('queue.caiwu_provision_queues', 'provision');
-        $businessQueues = (string) config('queue.caiwu_business_queues', 'referral,notification,coupon,default');
-        $automationQueue = (string) config('queue.caiwu_schedule_queue', 'automation');
+        // 分组口径与 queue:drain、app:serve 共用 QueueTopology，本地按清单手工起 Worker
+        // 时才不会和 drain 抢同一队列（900s 的 mysqldump 会顺着 backup 堵住业务队列）。
+        // 备份队列名配置非法时 QueueTopology 只让 backup 组缺席并回传原因，
+        // 这里不能抛出去：整张清单失败会让管理端定时任务页整体 500。
+        $queueErrors = [];
+        $groups = QueueTopology::resolve($queueErrors);
+        $backupQueueError = $queueErrors[0] ?? null;
+        $provisionQueues = implode(',', $groups['provision']);
+        $businessQueues = implode(',', $groups['business']);
+        $backupQueue = $groups['backup'] !== [] ? implode(',', $groups['backup']) : BackupQueue::DEFAULT_NAME;
+        $automationQueue = implode(',', $groups['automation']);
         $queueWorkerTries = (int) config('queue.caiwu_worker_tries', 3);
         $queueWorkerTimeout = max(
             (int) config('queue.caiwu_worker_timeout', 1200),
@@ -253,7 +264,7 @@ class ScheduleTaskService
             [
                 'key' => 'schedule_run',
                 'title' => '调度入口',
-                'description' => '宝塔生产环境请仅保留这一条，每 1 分钟运行一次；心跳派发定时任务，queue:drain 后台消费业务与 automation 队列。',
+                'description' => '宝塔生产环境请仅保留这一条，每 1 分钟运行一次；心跳派发定时任务，queue:drain 后台消费业务、备份与 automation 队列。',
                 'command' => "{$quotedPhp} {$quotedArtisan} schedule:run",
             ],
             [
@@ -265,7 +276,7 @@ class ScheduleTaskService
             [
                 'key' => 'queue_drain',
                 'title' => '队列消费命令',
-                'description' => '由 schedule:run 每分钟后台触发；排查时可手动执行一次消费业务与 automation 队列。',
+                'description' => '由 schedule:run 每分钟后台触发；排查时可手动执行一次消费业务、备份与 automation 队列。',
                 'command' => "{$quotedPhp} {$quotedArtisan} queue:drain",
             ],
             [
@@ -291,6 +302,14 @@ class ScheduleTaskService
                 'title' => '业务队列 Worker',
                 'description' => '独立消费新购、续费履约、通知、返佣、优惠券和默认业务队列。',
                 'command' => "{$quotedPhp} {$quotedArtisan} queue:work --queue={$businessQueues} --sleep=1 --tries={$queueWorkerTries} --timeout={$queueWorkerTimeout}",
+            ],
+            [
+                'key' => 'queue_work_backup',
+                'title' => '备份队列 Worker',
+                'description' => $backupQueueError === null
+                    ? '只消费 backup 队列。mysqldump 最长 900s，独立成组避免导出期间阻塞业务队列。'
+                    : '备份队列配置无效（'.$backupQueueError.'），以下命令回退为默认队列名，请先修正 CAIWU_BACKUP_QUEUE。',
+                'command' => "{$quotedPhp} {$quotedArtisan} queue:work --queue={$backupQueue} --sleep=1 --tries={$queueWorkerTries} --timeout={$queueWorkerTimeout}",
             ],
             [
                 'key' => 'queue_work_automation',

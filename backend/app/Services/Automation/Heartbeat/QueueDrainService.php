@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Automation\Heartbeat;
 
 use App\Support\CacheKey;
+use App\Support\QueueTopology;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -58,9 +59,12 @@ class QueueDrainService
         $locks = [];
 
         try {
-            [$definitions, $locks, $busyWorkers] = $this->acquireAvailableWorkerLocks($this->workerDefinitions());
+            // 备份队列名配置非法时只让 backup 组缺席，其余三组照常消费：
+            // 一处配置写错不应该让整个 queue:drain 退出、把业务队列一起停掉。
+            $definitionErrors = [];
+            [$definitions, $locks, $busyWorkers] = $this->acquireAvailableWorkerLocks($this->workerDefinitions($definitionErrors));
 
-            if ($definitions === []) {
+            if ($definitions === [] && $definitionErrors === []) {
                 return [
                     'status' => 'skipped',
                     'reason' => 'queue_drains_in_progress',
@@ -69,18 +73,22 @@ class QueueDrainService
                 ];
             }
 
-            return $this->runWorkersInParallel($definitions, $locks, $busyWorkers);
+            return $this->runWorkersInParallel($definitions, $locks, $busyWorkers, $definitionErrors);
         } finally {
             $this->releaseWorkerLocks($locks);
         }
     }
 
     /**
+     * @param  list<string>  $definitionErrors  队列分组配置错误（这些组不会启动）
      * @return array<string, mixed>
      */
-    protected function runWorkersInParallel(array $definitions = [], array &$locks = [], array $busyWorkers = []): array
+    protected function runWorkersInParallel(array $definitions = [], array &$locks = [], array $busyWorkers = [], array $definitionErrors = []): array
     {
-        $definitions = $definitions !== [] ? $definitions : $this->workerDefinitions();
+        if ($definitions === [] && $definitionErrors === []) {
+            $definitions = $this->workerDefinitions();
+        }
+
         $processes = [];
         $outputs = [];
 
@@ -146,7 +154,7 @@ class QueueDrainService
         }
 
         $workers = [];
-        $failures = [];
+        $failures = $definitionErrors;
         foreach ($processes as $name => $process) {
             $exitCode = $process->getExitCode();
             $worker = [
@@ -188,50 +196,22 @@ class QueueDrainService
     }
 
     /**
+     * 分组口径来自 QueueTopology，与 app:serve、定时任务页命令清单共用同一实现，
+     * 避免本地手工 Worker 和 queue:drain 抢同一队列。
+     *
+     * @param  list<string>  $errors  备份队列名配置非法时写入原因，backup 组随之缺席
      * @return array<string, string>
      */
-    protected function workerDefinitions(): array
+    protected function workerDefinitions(array &$errors = []): array
     {
-        $provision = $this->normalizeQueueList(
-            (string) config('queue.caiwu_provision_queues', 'provision')
-        );
-        $business = $this->normalizeQueueList(
-            (string) config('queue.caiwu_business_queues', 'referral,notification,coupon,default')
-        );
-
-        // 已在 provision 组里的队列要从 business 组剔除：存量部署的 .env 里
-        // CAIWU_BUSINESS_QUEUES 仍可能包含 provision，不剔除就会有两个 worker
-        // 同时消费同一队列，把分组拆分想避免的队头阻塞与并发又带回来。
-        $business = array_values(array_diff($business, $provision));
-
         $definitions = [];
-        if ($provision !== []) {
-            $definitions['provision'] = implode(',', $provision);
-        }
-        if ($business !== []) {
-            $definitions['business'] = implode(',', $business);
-        }
-
-        $automation = $this->normalizeQueueList(
-            (string) config('queue.caiwu_schedule_queue', 'automation')
-        );
-        if ($automation !== []) {
-            $definitions['automation'] = implode(',', $automation);
+        foreach (QueueTopology::resolve($errors) as $name => $queues) {
+            if ($queues !== []) {
+                $definitions[$name] = implode(',', $queues);
+            }
         }
 
         return $definitions;
-    }
-
-    /**
-     * 把逗号分隔的队列列表规整为去空、去重、保序的数组。
-     *
-     * @return list<string>
-     */
-    private function normalizeQueueList(string $queues): array
-    {
-        $items = array_map('trim', explode(',', $queues));
-
-        return array_values(array_unique(array_filter($items, static fn (string $queue): bool => $queue !== '')));
     }
 
     /**

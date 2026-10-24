@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Support\QueueTopology;
 use Illuminate\Console\Command;
 use Symfony\Component\Process\Process;
 
@@ -43,6 +44,8 @@ class ServeBackendStackCommand extends Command
     private ?Process $relayProcess = null;
 
     private ?Process $queueProcess = null;
+
+    private ?Process $backupProcess = null;
 
     private ?Process $scheduleProcess = null;
 
@@ -110,13 +113,21 @@ class ServeBackendStackCommand extends Command
         $relayPath = $this->normalizeRelayPath((string) config('idc.vnc_relay.path', '/ws/vnc'));
         $this->info(sprintf('统一入口已启动：http://%s:%d', $publicHost, $publicPort));
         $this->info(sprintf('VNC WebSocket 入口：ws://%s:%d%s', $publicHost, $publicPort, $relayPath));
-        $this->line($this->scheduleProcess instanceof Process
-            ? ($this->relayProcess instanceof Process
-                ? '已同时托管 Laravel HTTP、VNC Relay、调度 Worker；队列由 queue:drain 后台消费。'
-                : '已托管 Laravel HTTP、调度 Worker；VNC Relay 由独立进程托管，队列由 queue:drain 后台消费。')
-            : ($this->relayProcess instanceof Process
-                ? '已托管 Laravel HTTP、VNC Relay、队列 Worker；计划任务需独立运行。'
-                : '已托管 Laravel HTTP、队列 Worker；VNC Relay 由独立进程托管，计划任务需独立运行。'));
+        $hosted = ['Laravel HTTP'];
+        if ($this->relayProcess instanceof Process) {
+            $hosted[] = 'VNC Relay';
+        }
+        if ($this->queueProcess instanceof Process) {
+            $hosted[] = '业务队列 Worker';
+        }
+        if ($this->backupProcess instanceof Process) {
+            $hosted[] = '备份队列 Worker';
+        }
+        if ($this->scheduleProcess instanceof Process) {
+            $hosted[] = '调度 Worker';
+        }
+        $this->line('已托管 '.implode('、', $hosted)
+            .($this->scheduleProcess instanceof Process ? '；队列由 queue:drain 后台消费。' : '；计划任务需独立运行。'));
         $this->line('对外只需要这一组地址，内部 HTTP 与 Relay 端口不需要暴露。');
         $this->line('按 Ctrl+C 可同时停止整个后端栈。');
 
@@ -146,6 +157,12 @@ class ServeBackendStackCommand extends Command
 
         if ($this->queueProcess instanceof Process && ! $this->queueProcess->isSuccessful()) {
             $this->error('队列 Worker 已退出。');
+
+            return self::FAILURE;
+        }
+
+        if ($this->backupProcess instanceof Process && ! $this->backupProcess->isSuccessful()) {
+            $this->error('备份队列 Worker 已退出。');
 
             return self::FAILURE;
         }
@@ -186,19 +203,45 @@ class ServeBackendStackCommand extends Command
         }
 
         if (! (bool) $this->option('without-queue') && ! (bool) $this->option('with-schedule')) {
-            $this->queueProcess = new Process([
-                ...$phpProcessArgs,
-                $artisan,
-                'queue:work',
-                // 与 queue:drain 的分组口径一致：business 组不含 provision（provision 单独成组，避免长任务队头阻塞）。
-                '--queue='.(string) config('queue.caiwu_business_queues', 'referral,notification,coupon,default'),
-                '--sleep=1',
-                '--tries='.(string) config('queue.caiwu_worker_tries', 3),
-                '--timeout='.max(
-                    (int) config('queue.caiwu_worker_timeout', 1200),
-                    (int) config('queue.caiwu_worker_max_timeout', 3600),
-                ),
-            ], base_path());
+            // 分组口径与 queue:drain 共用 QueueTopology：business 组不含 provision 与 backup，
+            // 否则本地手工 Worker 会和 queue:drain 抢同一队列，900s 的 mysqldump 会堵住业务队列。
+            $errors = [];
+            $groups = QueueTopology::resolve($errors);
+            foreach ($errors as $error) {
+                $this->warn('队列分组配置异常：'.$error);
+            }
+
+            if ($groups['business'] !== []) {
+                $this->queueProcess = new Process([
+                    ...$phpProcessArgs,
+                    $artisan,
+                    'queue:work',
+                    '--queue='.implode(',', $groups['business']),
+                    '--sleep=1',
+                    '--tries='.(string) config('queue.caiwu_worker_tries', 3),
+                    '--timeout='.max(
+                        (int) config('queue.caiwu_worker_timeout', 1200),
+                        (int) config('queue.caiwu_worker_max_timeout', 3600),
+                    ),
+                ], base_path());
+            }
+
+            // 备份队列独立成组（mysqldump 最长 900s），本地也要起自己的 Worker，
+            // 否则备份任务会一直停在 queued。
+            if ($groups['backup'] !== []) {
+                $this->backupProcess = new Process([
+                    ...$phpProcessArgs,
+                    $artisan,
+                    'queue:work',
+                    '--queue='.implode(',', $groups['backup']),
+                    '--sleep=1',
+                    '--tries='.(string) config('queue.caiwu_worker_tries', 3),
+                    '--timeout='.max(
+                        (int) config('queue.caiwu_worker_timeout', 1200),
+                        (int) config('queue.caiwu_worker_max_timeout', 3600),
+                    ),
+                ], base_path());
+            }
         }
 
         if ((bool) $this->option('with-schedule')) {
@@ -236,6 +279,7 @@ class ServeBackendStackCommand extends Command
         $this->flushWorkerOutput('HTTP', $this->httpProcess);
         $this->flushWorkerOutput('Relay', $this->relayProcess);
         $this->flushWorkerOutput('Queue', $this->queueProcess);
+        $this->flushWorkerOutput('Backup', $this->backupProcess);
         $this->flushWorkerOutput('Schedule', $this->scheduleProcess);
     }
 
@@ -665,6 +709,7 @@ class ServeBackendStackCommand extends Command
             $this->httpProcess,
             $this->relayProcess,
             $this->queueProcess,
+            $this->backupProcess,
             $this->scheduleProcess,
         ], static fn ($process) => $process instanceof Process));
     }

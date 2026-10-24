@@ -105,7 +105,31 @@ const columns = computed<PrimaryTableCol<TableRowData>[]>(() => [
 
 onMounted(() => {
   void loadStatus();
+  void resumePendingBackup();
 });
+
+/**
+ * 备份在服务端后台执行，刷新页面不能丢掉下载入口：本地若有未收敛的
+ * taskId，回到本页时接着轮询并在完成后自动下载。
+ */
+async function resumePendingBackup() {
+  const taskId = databaseApi.pendingBackupTaskId();
+  if (!taskId || !canManage.value) {
+    return;
+  }
+
+  exporting.value = true;
+  try {
+    await databaseApi.waitBackupAndDownload(taskId);
+    MessagePlugin.success('备份已就绪，已开始下载');
+  } catch (error) {
+    const message = errorMessage(error, '导出数据库备份失败');
+    // 任务已过期/被清理属于预期收敛，提示后不再纠缠
+    MessagePlugin.warning(message);
+  } finally {
+    exporting.value = false;
+  }
+}
 
 async function loadStatus() {
   loading.value = true;
@@ -174,15 +198,16 @@ function handleExportBackup() {
 
   const dialog = DialogPlugin.confirm({
     header: '导出数据库备份',
-    body: '确认导出当前数据库完整 SQL 备份？文件可能较大，导出期间请勿重复点击。',
+    body: '确认导出当前数据库完整 SQL 备份？备份在后台执行，完成后会自动下载，期间可以继续留在本页。',
     confirmBtn: { content: '确定', theme: 'primary' },
     cancelBtn: '取消',
     onConfirm: async () => {
       exporting.value = true;
+      dialog.destroy();
+      MessagePlugin.info('备份任务已提交，正在后台导出，完成后自动下载');
       try {
         await databaseApi.exportBackup();
-        MessagePlugin.success('备份导出已开始下载');
-        dialog.destroy();
+        MessagePlugin.success('备份导出完成，已开始下载');
       } catch (error) {
         MessagePlugin.error(errorMessage(error, '导出数据库备份失败'));
       } finally {

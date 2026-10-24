@@ -278,6 +278,28 @@ final class CacheKey
     }
 
     /**
+     * 管理端数据库备份任务状态。
+     *
+     * 备份改为队列执行后没有 job_batches 表可用，任务状态（排队/执行中/完成/失败）
+     * 存缓存，按任务 ID 查询，两小时后自动过期。
+     */
+    public static function databaseBackupTask(string $taskId): string
+    {
+        return 'system:database:backup:'.$taskId;
+    }
+
+    /**
+     * 数据库备份在途标记（值是在途任务 ID）。
+     *
+     * 用于接口层去重：同一时间只允许一个备份任务在排队或执行，避免管理员
+     * 连续点击产出多份 dump 并互相挤占保留配额。任务收敛时按任务 ID 比对清除。
+     */
+    public static function databaseBackupInFlight(): string
+    {
+        return 'system:database:backup:in_flight';
+    }
+
+    /**
      * 分布式互斥锁键：顶层段 + 具体锁名。
      *
      * 现存调度器族锁以 scheduler 为顶层段（心跳槽位锁、队列 Worker 互斥锁），

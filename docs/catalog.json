@@ -8,6 +8,12 @@
             "review_by": "2026-11-22"
         },
         {
+            "path": "执行计划/进行中/管理端数据库备份队列化-2026-10-22.md",
+            "status": "active",
+            "summary": "管理端「导出数据库备份」由 FPM 请求内同步 mysqldump 改为队列任务：DatabaseBackupTaskService 用缓存承载任务状态（2 小时 TTL）并以 Cache::add 做在途去重、ExportDatabaseBackupJob（tries=1/timeout=900/独占 backup 队列，由 queue:drain 起第 4 个 worker 消费）、队列名经 BackupQueue 兜底空配置避免回退 default 队列且拒绝逗号分隔的多队列写法、状态与下载接口、备份先写 .sql.part 再原子改名并清理超龄残片、备份文件名白名单防穿越、前端改 2 秒轮询并自动下载且刷新后按本地 taskId 续轮询；备份队列名配置非法时只跳过 backup 组（其余三组照常消费）、overview 回退默认名并标注配置错误、导出接口返回 42200、投递失败的任务收敛为 failed。",
+            "review_by": "2026-11-22"
+        },
+        {
             "path": "执行计划/进行中/安防与履约加固改造-2026-10-21.md",
             "status": "active",
             "summary": "按 howstack 对照清单落地的八批改造：插件包完整性摘要（source_hash 全文件哈希 + 三条件实例化）与宿主版本区间、管理员 TOTP MFA、履约租约与凭据冻结、管理员通知异常不吞、CI 门禁与 OpenAPI 接入。",

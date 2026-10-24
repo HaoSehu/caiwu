@@ -21,6 +21,12 @@ class DatabaseStatusService
 
     private const MAX_BACKUP_RETENTION = 10;
 
+    /**
+     * .part 半成品的最长保留时间（秒）。超过这个时间说明导出进程已被强杀，
+     * 产物不可能再被改名，可以安全清理。
+     */
+    private const STALE_PARTIAL_SECONDS = 60 * 60;
+
     private const OPTIMIZE_MINIMUM_FREE_BYTES = 8 * 1024 * 1024;
 
     private const OPTIMIZE_MINIMUM_FREE_RATIO = 0.10;
@@ -237,6 +243,9 @@ class DatabaseStatusService
 
         $filename = sprintf('backup_%s_%s.sql', date('YmdHis'), Str::lower(Str::random(6)));
         $absolutePath = $directory.DIRECTORY_SEPARATOR.$filename;
+        // mysqldump 先写 .part 再原子改名：Process::timeout 超时会直接抛异常，
+        // 半成品若直接叫 .sql，就会被下载接口识别成可用备份、还会占掉保留配额。
+        $partialPath = $absolutePath.'.part';
         $mysqldump = $this->resolveMysqldumpBinary();
 
         $command = [
@@ -249,27 +258,36 @@ class DatabaseStatusService
             '--triggers',
             '--events',
             '--default-character-set=utf8mb4',
-            '--result-file='.$absolutePath,
+            '--result-file='.$partialPath,
             ...$this->backupIgnoreTableOptions($database),
             $database,
         ];
 
-        $result = Process::timeout(600)
-            ->env([
-                'MYSQL_PWD' => $password,
-            ])
-            ->run($command);
+        try {
+            $result = Process::timeout(600)
+                ->env([
+                    'MYSQL_PWD' => $password,
+                ])
+                ->run($command);
+        } catch (Throwable $exception) {
+            $this->removeBackupFile($partialPath);
 
-        if (! $result->successful() || ! File::exists($absolutePath) || File::size($absolutePath) <= 0) {
-            if (File::exists($absolutePath)) {
-                File::delete($absolutePath);
-            }
+            throw $exception;
+        }
+
+        if (! $result->successful() || ! File::exists($partialPath) || File::size($partialPath) <= 0) {
+            $this->removeBackupFile($partialPath);
+            $this->removeBackupFile($absolutePath);
 
             $error = trim($result->errorOutput() ?: $result->output());
             throw new RuntimeException($error !== '' ? $error : '导出数据库备份失败');
         }
 
-        $this->pruneOldBackups($directory);
+        if (! File::move($partialPath, $absolutePath)) {
+            $this->removeBackupFile($partialPath);
+
+            throw new RuntimeException('导出数据库备份失败：整理备份文件时出错');
+        }
 
         $sizeBytes = (int) File::size($absolutePath);
 
@@ -286,6 +304,11 @@ class DatabaseStatusService
             ],
             ipAddress: $ipAddress,
         );
+
+        // 先写操作日志再裁剪：裁剪依赖文件 mtime 排序，时钟回拨等异常下若先删后记，
+        // 会出现「产物已被删掉但操作日志仍以为备份可用」。日志落盘后再淘汰旧备份，
+        // 保留策略只影响更早的历史产物。
+        $this->pruneOldBackups($directory);
 
         return [
             'absolute_path' => $absolutePath,
@@ -348,6 +371,27 @@ class DatabaseStatusService
     }
 
     /**
+     * 备份文件名形态：backup_YYYYmmddHHMMSS_六位随机后缀.sql。
+     *
+     * 任务 ID 与文件名都来自服务端，下载接口只用它做最后一次形态校验，
+     * 保证拼进 storage 路径的永远是这份受控产物。
+     */
+    public static function isBackupFilename(string $filename): bool
+    {
+        return preg_match('/^backup_\d{14}_[a-z0-9]{6}\.sql$/', $filename) === 1;
+    }
+
+    /**
+     * 按文件名解析备份文件的绝对路径，供下载接口使用。
+     *
+     * 只接受服务端生成的文件名，绝不接受客户端传入的路径片段。
+     */
+    public function backupPath(string $filename): string
+    {
+        return $this->backupDirectory().DIRECTORY_SEPARATOR.basename($filename);
+    }
+
+    /**
      * mysqldump 的 --ignore-table 选项：每张排除日志表一个参数，
      * 供测试以单元级断言验证参数构造，无需真实执行备份。
      *
@@ -381,6 +425,36 @@ class DatabaseStatusService
 
         foreach ($files->slice(self::MAX_BACKUP_RETENTION) as $file) {
             File::delete($file->getPathname());
+        }
+
+        $this->pruneStalePartials($directory);
+    }
+
+    /**
+     * 清理超龄的 .part 半成品。
+     *
+     * 进程被强杀（OOM、部署重启）时无法走到 catch 分支，.part 会留在目录里；
+     * 保留一小时内的文件，避免误删正在导出的产物。
+     */
+    private function pruneStalePartials(string $directory): void
+    {
+        $expiredBefore = now()->getTimestamp() - self::STALE_PARTIAL_SECONDS;
+
+        foreach (File::files($directory) as $file) {
+            if (! str_ends_with(strtolower($file->getFilename()), '.sql.part')) {
+                continue;
+            }
+
+            if ($file->getMTime() < $expiredBefore) {
+                File::delete($file->getPathname());
+            }
+        }
+    }
+
+    private function removeBackupFile(string $path): void
+    {
+        if (File::exists($path)) {
+            File::delete($path);
         }
     }
 }
