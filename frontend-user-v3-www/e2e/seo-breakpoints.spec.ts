@@ -81,7 +81,10 @@ test("992/768 阈值视口首页无横向溢出", async ({ page }) => {
   for (const width of [992, 768]) {
     await page.setViewportSize({ width, height: 800 });
     await page.goto("/", { waitUntil: "domcontentloaded" });
-    await page.waitForTimeout(400);
+    // 等到首页容器与首屏轮播真正渲染（数据加载完成后 homeHeroReady 才为真），
+    // 再量宽度，避免拿骨架屏阶段的布局做溢出结论。
+    await page.locator("#main-content .home-page").waitFor({ state: "visible" });
+    await page.locator(".hero-section").first().waitFor({ state: "visible" });
 
     const overflow = await page.evaluate(
       () =>

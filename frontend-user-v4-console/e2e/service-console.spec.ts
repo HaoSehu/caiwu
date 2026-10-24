@@ -117,8 +117,10 @@ test('服务控制台：标签懒加载——首屏不发监控/日志/财务请
 
   const sidebar = await openConsole(page);
 
-  // 首屏稳定后，懒加载标签的接口都不应被触发
-  await page.waitForTimeout(1500);
+  // 懒加载是负向断言，只能靠观测窗口：先等概览面板真正渲染完成（可观察状态），
+  // 再给一段短宽限让挂载期的异步副作用请求有机会发出，避免把「还没挂载」误判成「没有请求」。
+  await expect(page.locator('.console-overview-grid')).toBeVisible();
+  await page.waitForTimeout(300);
   expect(counters.monitor).toBe(0);
   expect(counters.logs).toBe(0);
   expect(counters.ledger).toBe(0);
@@ -152,14 +154,20 @@ test('服务控制台：监控范围切换竞态——慢的旧响应不得覆�
 
   const sidebar = await openConsole(page);
 
+  // 把「3h 慢响应已返回」绑定成可等待的事实。必须在点击前注册，否则响应可能先到而被错过。
+  const slowResponseArrived = page.waitForResponse(
+    (response) => response.url().includes('/monitor/batch') && response.url().includes('range=3h'),
+    { timeout: 15_000 },
+  );
+
   // 进入监控标签触发默认范围（3h，慢）请求，随后立刻切换到 24h（快）
   await sidebar.filter({ hasText: '监控信息' }).click();
   await page.getByText('24 小时', { exact: true }).click();
 
   // 新范围数据先到达并渲染
   await expect(page.getByText('CPU 负载（24h 窗口）')).toBeVisible({ timeout: 10_000 });
-  // 慢的旧响应到达后：既不能覆盖新数据，也不能渲染旧数据
-  await page.waitForTimeout(3000);
+  // 慢的旧响应确实返回之后，再断言它既没有覆盖新数据，也没有渲染旧数据
+  await slowResponseArrived;
   await expect(page.getByText('CPU 负载（24h 窗口）')).toBeVisible();
   await expect(page.getByText('CPU 负载（3 小时窗口）')).toHaveCount(0);
 });
@@ -215,10 +223,10 @@ test('服务控制台：安全组首次加载失败展示错误态，切回后�
   const sidebar = await openConsole(page);
 
   // 首次进入安全组：持续 500 → 错误态提示，不出内容。
-  // 注意 HTTP 层对 5xx 有自动重试（约 300ms 起、指数退避），先等重试耗尽再断言。
+  // HTTP 层对 5xx 有自动重试（约 300ms 起、指数退避），错误提示要等重试耗尽才出现；
+  // toBeVisible 自带轮询，直接等它即可，不再用固定等待。
   await sidebar.filter({ hasText: '安全组' }).click();
-  await page.waitForTimeout(2000);
-  await expect(page.locator('.console-inline-alert')).toBeVisible();
+  await expect(page.locator('.console-inline-alert')).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText('E2E 安全组描述')).toHaveCount(0);
   expect(counters.groups).toBeGreaterThanOrEqual(1);
 

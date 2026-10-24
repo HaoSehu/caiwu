@@ -62,7 +62,9 @@ test('充值：生成二维码后自动轮询支付状态，成功后停止轮�
   // 轮询成功：二维码区覆盖为成功态（useRecharge：paid → rechargePaid）
   await expect(page.locator('.qrcode-success')).toBeVisible({ timeout: 15_000 });
 
-  // 轮询已停止：记录成功时的请求数，等待超过一个轮询周期后数量不再增长
+  // 轮询已停止：记录成功时的请求数，跨过一个轮询周期（useRecharge.ts 的 pollingInterval = 2000ms）后
+  // 数量不再增长。这里必须真的等满一个周期——「没有新请求」是负向事实，没有可轮询的 DOM 状态可断言，
+  // 所以保留固定等待并把周期写在注释里（3200 = 2000 + 余量），改周期时同步改这里。
   const callsAtSuccess = statusCalls;
   expect(callsAtSuccess).toBeGreaterThanOrEqual(2);
   await page.waitForTimeout(3200);
