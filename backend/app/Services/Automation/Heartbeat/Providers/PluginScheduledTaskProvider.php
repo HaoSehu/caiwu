@@ -9,12 +9,14 @@ use App\Services\Automation\Heartbeat\Contracts\ScheduledTask;
 use App\Services\Automation\Heartbeat\Contracts\ScheduledTaskProvider;
 use App\Services\Automation\Heartbeat\ScheduleDeclarationNormalizer;
 use App\Services\Automation\Heartbeat\ScheduledTaskValidator;
+use App\Services\Automation\ScheduleHookService;
 use App\Services\Integrations\Plugins\PluginFileLoader;
 use App\Services\Integrations\Plugins\PluginManifest;
 use App\Services\Integrations\Plugins\PluginScanner;
+use App\Support\SchemaMetadataCache;
 use Illuminate\Contracts\Container\Container;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Schema;
 
 class PluginScheduledTaskProvider implements ScheduledTaskProvider
 {
@@ -38,26 +40,8 @@ class PluginScheduledTaskProvider implements ScheduledTaskProvider
             'error_count' => 0,
         ]]);
 
-        try {
-            if (! Schema::hasTable('integration_plugins')) {
-                $this->markDegraded();
-                Log::warning('[定时任务] 插件表不可用，已跳过插件任务注册');
-
-                return [];
-            }
-
-            $plugins = IntegrationPlugin::query()
-                ->where('status', IntegrationPlugin::STATUS_ENABLED)
-                ->orderBy('domain')
-                ->orderBy('slug')
-                ->get();
-        } catch (\Throwable $exception) {
-            $this->markDegraded();
-            Log::error('[定时任务] 查询已启用插件失败，已隔离插件任务注册', [
-                'message' => $exception->getMessage(),
-                'exception' => $exception::class,
-            ]);
-
+        $plugins = $this->enabledPlugins();
+        if ($plugins === null) {
             return [];
         }
 
@@ -145,6 +129,60 @@ class PluginScheduledTaskProvider implements ScheduledTaskProvider
 
             return null;
         }
+    }
+
+    /**
+     * 读取已启用的插件集合，并与 ScheduleHookService 共享同一个作用域内的缓存槽。
+     *
+     * 为什么不能逐 hook 重复查询：ScheduleHookService 会为 8 个固定 hook 各解析一次插件监听器，
+     * 本 Provider 又在同一次总览请求中被两处调用，若每次都重新探测表并重查插件集合，SQL 会随
+     * 任务数线性放大。插件启停状态在单次请求内不变，因此两处共用同一份结果。
+     *
+     * 异常语义保持原样：表不存在时降级并记 warning，查询异常时降级并记 error，且失败结果不写入
+     * 缓存槽，后续调用仍会各自重试、各自记录日志，markDegraded() 的计数行为不受影响。
+     *
+     * @return Collection<int, IntegrationPlugin>|null
+     */
+    private function enabledPlugins(): ?Collection
+    {
+        // 取共享槽也在 try 内：槽依赖容器 scoped 注册与 request 解析，
+        // HEAD 版 tasks() 的所有查询都在 try 内，这里必须保持同等异常兜底，
+        // 否则容器异常会绕过 markDegraded() 直接冒出 tasks()。
+        try {
+            $slot = ScheduleHookService::enabledPluginsSlot($this->container);
+
+            $cached = $slot->offsetExists('plugins') ? $slot->offsetGet('plugins') : null;
+            if ($cached instanceof Collection) {
+                /** @var Collection<int, IntegrationPlugin> $cached */
+                return $cached;
+            }
+
+            if (! SchemaMetadataCache::hasTable('integration_plugins')) {
+                $this->markDegraded();
+                Log::warning('[定时任务] 插件表不可用，已跳过插件任务注册');
+
+                return null;
+            }
+
+            $plugins = IntegrationPlugin::query()
+                ->where('status', IntegrationPlugin::STATUS_ENABLED)
+                ->orderBy('domain')
+                ->orderBy('slug')
+                ->get();
+
+            $slot->offsetSet('plugins', $plugins);
+            ScheduleHookService::markEnabledPluginsStored($slot);
+        } catch (\Throwable $exception) {
+            $this->markDegraded();
+            Log::error('[定时任务] 查询已启用插件失败，已隔离插件任务注册', [
+                'message' => $exception->getMessage(),
+                'exception' => $exception::class,
+            ]);
+
+            return null;
+        }
+
+        return $plugins;
     }
 
     private function markDegraded(): void
