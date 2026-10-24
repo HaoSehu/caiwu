@@ -553,19 +553,33 @@ class ReferralService
     {
         $this->releaseMaturedRewards($user);
 
-        return ReferralReward::query()
+        $paginator = ReferralReward::query()
             ->with(array_merge(
                 $this->referralUserWithRelations('referredUser'),
                 [
                     'invoice:id,invoice_no,product_id,product_spec_snapshot,config_snapshot,paid_at',
                     'order:id,order_no,type,product_id,product_spec_snapshot,config_snapshot,paid_at',
+                    // 展示名解析会回溯 order.product 与三级分组；不预载则逐行懒加载（N+1）。
+                    'order.product:id,product_type,service_type_code,product_group_id,custom_display_name,config_options,purchase_requires',
+                    'order.product.productGroup:id,second_product_group_id,name',
+                    'order.product.productGroup.secondProductGroup:id,first_product_group_id,name',
+                    'order.product.productGroup.secondProductGroup.firstProductGroup:id,code,name',
+                    // 奖励商品自身刻意不带 custom_display_name：一旦带上，Product::getNameAttribute()
+                    // 会提前命中「已加载自定义展示名」分支，把带规格后缀的展示名改成裸自定义名，改变响应值。
                     'product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
+                    'product.productGroup:id,second_product_group_id,name',
+                    'product.productGroup.secondProductGroup:id,first_product_group_id,name',
+                    'product.productGroup.secondProductGroup.firstProductGroup:id,code,name',
                 ]
             ))
             ->where('referrer_user_id', $user->id)
             ->orderByDesc('rewarded_at')
             ->orderByDesc('id')
             ->paginate($perPage);
+
+        $this->preloadRewardProductDisplayNames($paginator->items());
+
+        return $paginator;
     }
 
     public function accountLogs(User $user, array $filters, int $perPage = 20): LengthAwarePaginator
@@ -695,7 +709,16 @@ class ReferralService
                 $this->referralUserWithRelations('referredUser'),
                 [
                     'order:id,order_no,product_id,product_spec_snapshot,config_snapshot',
+                    // 同客户端列表：展示名解析回溯 order.product 与三级分组，必须一次预载。
+                    'order.product:id,product_type,service_type_code,product_group_id,custom_display_name,config_options,purchase_requires',
+                    'order.product.productGroup:id,second_product_group_id,name',
+                    'order.product.productGroup.secondProductGroup:id,first_product_group_id,name',
+                    'order.product.productGroup.secondProductGroup.firstProductGroup:id,code,name',
+                    // 同上：奖励商品自身不带 custom_display_name，展示名仍由解析器按需补规格后缀。
                     'product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
+                    'product.productGroup:id,second_product_group_id,name',
+                    'product.productGroup.secondProductGroup:id,first_product_group_id,name',
+                    'product.productGroup.secondProductGroup.firstProductGroup:id,code,name',
                 ]
             ));
 
@@ -745,7 +768,40 @@ class ReferralService
             });
         }
 
-        return $query->orderByDesc('rewarded_at')->orderByDesc('id')->paginate($perPage);
+        $paginator = $query->orderByDesc('rewarded_at')->orderByDesc('id')->paginate($perPage);
+
+        $this->preloadRewardProductDisplayNames($paginator->items());
+
+        return $paginator;
+    }
+
+    /**
+     * 推荐奖励列表的展示名会经 ProductFullPathResolver 回溯拆分母商品的源商品。
+     *
+     * 源商品是按 purchase_requires.upstream_split.source_product_id 逐行 find() 的，
+     * 不预载就会随每页行数线性放大成 N 次往返；这里按当页商品一次 whereIn 建 map。
+     *
+     * @param  array<int, ReferralReward>  $rewards
+     */
+    private function preloadRewardProductDisplayNames(array $rewards): void
+    {
+        $products = collect($rewards)
+            ->map(static function (ReferralReward $reward): ?Product {
+                // 这里只取已预载的关系：本方法的目的就是给「已查出的当页数据」补解析缓存，
+                // 若退化成懒加载会把一次预载变成又一轮逐行查询。用 getRelation() 而不是属性访问，
+                // 同时也避免给模型新增一处魔术属性引用（phpstan 基线对 $reward->product 有计数约束）。
+                $product = $reward->getRelation('product');
+
+                return $product instanceof Product ? $product : null;
+            })
+            ->filter();
+
+        // 商品投影刻意不含 custom_display_name：带上该列会让 Product::getNameAttribute() 提前命中
+        // 「已加载自定义展示名」分支，把带规格后缀的展示名改成裸名，改变响应值。
+        // 这里改为在解析器内部按 id 一次 whereIn 取回该列写入行级缓存，输出值不变，也避免逐行回源。
+        $resolver = $this->resolveProductDisplayNameResolver();
+        $resolver->preloadSourceProducts($products);
+        $resolver->preloadCustomDisplayNames($products);
     }
 
     public function resolveRewardProductDisplayName(ReferralReward $reward): string
@@ -763,7 +819,12 @@ class ReferralService
         }
 
         if ($reward->product instanceof Product) {
-            $resolved = $this->resolveProductDisplayNameResolver()->resolveForProduct(
+            // 禁止在此逐行预载源商品：preloadSourceProducts() 是「整批替换」语义，单行调用会清空
+            // 列表阶段已批量建好的源商品映射，随后每行再各发一次 whereIn + 一次 find()，反而放大成 N+1。
+            // 列表路径由 preloadRewardProductDisplayNames() 一次性预载；单行路径沿用既有的按需回源。
+            $resolver = $this->resolveProductDisplayNameResolver();
+
+            $resolved = $resolver->resolveForProduct(
                 $reward->product,
                 (array) ($reward->order?->config_snapshot ?? [])
             );
@@ -1499,10 +1560,18 @@ class ReferralService
             return [];
         }
 
-        return Product::query()
+        $products = Product::query()
             ->select(['id', 'product_type', 'purchase_requires', 'config_options'])
             ->limit($limit)
-            ->get()
+            ->get();
+
+        // 关键词匹配会逐行解析展示名：源商品与 custom_display_name 都必须先整批预载。
+        // 投影本就不含 custom_display_name，缺这一步会退化成每行一次 column 单查。
+        $resolver = $this->resolveProductDisplayNameResolver();
+        $resolver->preloadSourceProducts($products);
+        $resolver->preloadCustomDisplayNames($products);
+
+        return $products
             ->filter(function (Product $product) use ($keyword): bool {
                 $displayName = trim((string) ($this->resolveProductDisplayNameResolver()->resolveForProduct($product)['product_display_name'] ?? ''));
 
@@ -1750,7 +1819,8 @@ class ReferralService
 
     private function resolveProductDisplayNameResolver(): ProductDisplayNameResolver
     {
-        return $this->productDisplayNameResolver ?? new ProductDisplayNameResolver;
+        // 必须与容器单例一致：预载写在别的实例上等于没预载，逐行解析仍会各发一次源商品查询。
+        return $this->productDisplayNameResolver ?? app(ProductDisplayNameResolver::class);
     }
 
     private function resolveBuyerReferrerUserId(User $buyer): ?int
