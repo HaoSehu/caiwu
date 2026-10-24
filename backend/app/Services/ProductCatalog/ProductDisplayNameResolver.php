@@ -6,6 +6,7 @@ namespace App\Services\ProductCatalog;
 
 use App\Models\Product;
 use App\Support\Money;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
 
 class ProductDisplayNameResolver
@@ -38,9 +39,123 @@ class ProductDisplayNameResolver
      */
     private array $customDisplayNameCache = [];
 
+    /**
+     * 拆分商品的源商品缓存，键为源商品 id；值为 null 表示该 id 已预载但不存在。
+     *
+     * @var array<int, Product|null>
+     */
+    private array $sourceProductMap = [];
+
     public function __construct(
         private readonly ?InstanceSpecCatalogService $instanceSpecCatalogService = null,
     ) {}
+
+    /**
+     * 批量预载拆分商品的源商品，供 resolveForProduct() 复用。
+     *
+     * 源商品是按 purchase_requires.upstream_split.source_product_id 逐行引用的；
+     * 若在解析时逐行 find()，SQL 条数会随返回行数线性增长（N+1）。
+     * 这里一次 whereIn() 把本批涉及的源商品全部取回并建 map，解析阶段只读内存。
+     * 调用方需在开始逐行解析之前传入完整的商品集合；预载不到的行仍退回单查。
+     *
+     * 契约：每次调用都以「本次传入的集合」整体替换缓存，因此禁止在逐行循环里调用。
+     * 逐行调用会把上一行的映射清空、只剩当行，解析阶段仍逐行回源，等于把 N+1 又还原回来。
+     * 正确用法是先收集整页/整批商品、一次性调用本方法，再进入逐行解析；
+     * 需要追加商品时同样重新传入「本批完整集合」，而不是按单个商品循环调用。
+     *
+     * 入参放宽到 Eloquent 模型：分页器 items()、whereIn()->get() 的静态类型都是基类 Model，
+     * 真实类型在运行时用 instanceof 收敛，避免每个调用点各自做一次类型转换。
+     *
+     * @param  iterable<int, Model>  $products
+     */
+    public function preloadSourceProducts(iterable $products): void
+    {
+        $sourceIds = [];
+
+        foreach ($products as $product) {
+            if (! $product instanceof Product) {
+                continue;
+            }
+
+            $sourceProductId = $this->resolveSourceProductId($product);
+            if ($sourceProductId > 0) {
+                $sourceIds[$sourceProductId] = true;
+            }
+        }
+
+        // 每次预载都是一次全新的批次口径：先整体替换，避免上一批的源商品快照残留（商品可能已被改价或软删）。
+        $this->sourceProductMap = [];
+
+        if ($sourceIds === []) {
+            return;
+        }
+
+        $sourceProducts = Product::query()
+            ->select(['id', 'purchase_requires', 'config_options'])
+            ->whereIn('id', array_keys($sourceIds))
+            ->get();
+
+        // 缺失的 id 也要落 null：否则被软删的源商品仍会逐行回源，行数一多又变成 N+1。
+        $map = array_fill_keys(array_keys($sourceIds), null);
+        foreach ($sourceProducts as $sourceProduct) {
+            $map[(int) $sourceProduct->id] = $sourceProduct;
+        }
+
+        $this->sourceProductMap = $map;
+    }
+
+    /**
+     * 批量预载商品的 custom_display_name 列，供 resolveCustomDisplayNameText() 复用。
+     *
+     * 列表路径的商品投影刻意不带 custom_display_name：一旦带上，Product::getNameAttribute()
+     * 会提前命中「已加载自定义展示名」分支，直接返回裸自定义名而丢掉规格后缀，改变响应值。
+     * 因此改为在解析器内部按 id 一次 whereIn 取回该列写入行级缓存，解析阶段只读内存，
+     * 既不改变输出值，也不会随返回行数逐行回源（N+1）。
+     *
+     * 与 preloadSourceProducts() 的整体替换不同，本方法按 id 增量写入（已在缓存里的 id 不重复查询），
+     * 因此允许分批多次调用。
+     *
+     * @param  iterable<int, Model>  $products
+     */
+    public function preloadCustomDisplayNames(iterable $products): void
+    {
+        if (Product::optionalSelectColumns(['custom_display_name']) === []) {
+            return;
+        }
+
+        $productIds = [];
+        foreach ($products as $product) {
+            if (! $product instanceof Product) {
+                continue;
+            }
+
+            $productId = (int) $product->id;
+            // 列已在模型属性里时解析阶段读的是属性本身，单查本来就不会发生，无需预载。
+            if ($productId <= 0 || array_key_exists('custom_display_name', $product->getAttributes())) {
+                continue;
+            }
+
+            $productIds[$productId] = true;
+        }
+
+        $pendingIds = [];
+        foreach (array_keys($productIds) as $productId) {
+            if (! array_key_exists($productId, $this->customDisplayNameCache)) {
+                $pendingIds[] = $productId;
+            }
+        }
+
+        if ($pendingIds === []) {
+            return;
+        }
+
+        $names = Product::query()->whereIn('id', $pendingIds)->pluck('custom_display_name', 'id');
+
+        // 缺失的 id 也要落空串：否则被软删的商品仍会逐行回源，行数一多又变成 N+1。
+        foreach ($pendingIds as $productId) {
+            $this->customDisplayNameCache[$productId] = trim((string) $names->get($productId));
+        }
+    }
 
     /**
      * @return array{
@@ -247,15 +362,21 @@ class ProductDisplayNameResolver
      */
     private function resolveSourceSplitFallbackConfig(Product $product): array
     {
-        $split = (array) (($product->purchase_requires ?? [])['upstream_split'] ?? []);
-        $sourceProductId = (int) ($split['source_product_id'] ?? 0);
-        if ($sourceProductId <= 0 || $sourceProductId === (int) $product->id) {
+        $sourceProductId = $this->resolveSourceProductId($product);
+        if ($sourceProductId <= 0) {
             return [];
         }
 
-        $sourceProduct = Product::query()
-            ->select(['id', 'purchase_requires', 'config_options'])
-            ->find($sourceProductId);
+        $sourceProduct = array_key_exists($sourceProductId, $this->sourceProductMap)
+            ? $this->sourceProductMap[$sourceProductId]
+            : null;
+
+        // 未参与预载的 id（例如详情页单条解析）才回源单查；预载过的 id 即使为空也不再查询。
+        if (! array_key_exists($sourceProductId, $this->sourceProductMap)) {
+            $sourceProduct = Product::query()
+                ->select(['id', 'purchase_requires', 'config_options'])
+                ->find($sourceProductId);
+        }
         if (! $sourceProduct instanceof Product) {
             return [];
         }
@@ -274,6 +395,21 @@ class ProductDisplayNameResolver
         }
 
         return $config;
+    }
+
+    /**
+     * 取拆分商品的源商品 id；未配置、非法或自引用时返回 0。
+     */
+    private function resolveSourceProductId(Product $product): int
+    {
+        $split = (array) (($product->purchase_requires ?? [])['upstream_split'] ?? []);
+        $sourceProductId = (int) ($split['source_product_id'] ?? 0);
+
+        if ($sourceProductId <= 0 || $sourceProductId === (int) $product->id) {
+            return 0;
+        }
+
+        return $sourceProductId;
     }
 
     private function resolveFirstVisibleOptionValue(Product $product, string $field): string

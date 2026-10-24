@@ -135,6 +135,10 @@ class InstanceSpecCatalogService
      */
     private function normalizeCatalog(array $catalog, bool $strict = false): array
     {
+        // 绑定商品的展示名投影一次性批量取回：逐条 find() 会让 products 查询次数随
+        // 绑定商品行数线性增长（目录越大越慢），且无法被解析器自身的预载覆盖。
+        $displayProducts = $this->loadDisplayProducts($this->collectBindingProductIds($catalog));
+
         $normalizedItems = [];
         $seenValues = [];
 
@@ -164,7 +168,7 @@ class InstanceSpecCatalogService
                 'note' => $this->limitText((string) ($item['note'] ?? ''), 255),
                 'status' => $this->normalizeStatus($item['status'] ?? '仅文本'),
                 'sort_order' => $index + 1,
-                'bindings' => $this->normalizeBindings($item['bindings'] ?? [], $text, $strict),
+                'bindings' => $this->normalizeBindings($item['bindings'] ?? [], $text, $strict, $displayProducts),
             ];
         }
 
@@ -172,9 +176,10 @@ class InstanceSpecCatalogService
     }
 
     /**
+     * @param  array<int, Product>  $displayProducts
      * @return array<int, array<string, mixed>>
      */
-    private function normalizeBindings(mixed $bindings, string $specText, bool $strict): array
+    private function normalizeBindings(mixed $bindings, string $specText, bool $strict, array $displayProducts): array
     {
         if ($bindings === null || $bindings === '') {
             return [];
@@ -210,7 +215,7 @@ class InstanceSpecCatalogService
             }
 
             $seenProductIds[$productId] = true;
-            $displayPayload = $this->resolveBindingDisplayPayload($productId);
+            $displayPayload = $this->resolveBindingDisplayPayload($productId, $displayProducts);
 
             $normalizedBindings[] = [
                 'product_id' => $productId,
@@ -401,27 +406,20 @@ class InstanceSpecCatalogService
      *     combined_display_name: string
      * }
      */
-    private function resolveBindingDisplayPayload(int $productId): array
+    private function resolveBindingDisplayPayload(int $productId, array $displayProducts): array
     {
         $fallback = $productId > 0 ? '未配置规格 #'.$productId : '';
         if ($productId <= 0) {
             return $this->emptyBindingDisplayPayload($fallback);
         }
 
-        if (! SchemaMetadataCache::hasTable('products')) {
-            return $this->emptyBindingDisplayPayload($fallback);
-        }
-
-        $product = Product::query()
-            ->select(['id', 'purchase_requires', 'config_options'])
-            ->find($productId);
+        $product = $displayProducts[$productId] ?? null;
 
         if (! $product instanceof Product) {
             return $this->emptyBindingDisplayPayload($fallback);
         }
 
-        $resolver = $this->productDisplayNameResolver ?? new ProductDisplayNameResolver;
-        $resolved = $resolver->resolveForProduct($product);
+        $resolved = $this->resolveProductDisplayNameResolver()->resolveForProduct($product);
         $customDisplayName = trim((string) ($resolved['custom_display_name'] ?? ''));
         $cpuMemorySlugDisplay = trim((string) ($resolved['cpu_memory_slug_display'] ?? ''));
         $productSpecDisplay = trim((string) ($resolved['product_spec_display'] ?? ''));
@@ -438,6 +436,59 @@ class InstanceSpecCatalogService
             'product_spec_display' => $productSpecDisplay,
             'combined_display_name' => $combinedDisplayName,
         ];
+    }
+
+    /**
+     * @param  array<int, mixed>  $catalog
+     * @return array<int, bool>
+     */
+    private function collectBindingProductIds(array $catalog): array
+    {
+        $productIds = [];
+
+        foreach ($catalog as $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+
+            foreach ((array) ($item['bindings'] ?? []) as $binding) {
+                $productId = is_array($binding) ? (int) ($binding['product_id'] ?? 0) : 0;
+                if ($productId > 0) {
+                    $productIds[$productId] = true;
+                }
+            }
+        }
+
+        return $productIds;
+    }
+
+    /**
+     * @param  array<int, bool>  $productIds
+     * @return array<int, Product>
+     */
+    private function loadDisplayProducts(array $productIds): array
+    {
+        if ($productIds === [] || ! SchemaMetadataCache::hasTable('products')) {
+            return [];
+        }
+
+        $products = Product::query()
+            ->select(['id', 'purchase_requires', 'config_options', 'custom_display_name'])
+            ->whereIn('id', array_keys($productIds))
+            ->get()
+            ->keyBy('id')
+            ->all();
+
+        // 拆分商品的展示名依赖 upstream_split.source_product_id 回源，必须整批预载；
+        // 逐条解析时解析器会各自 find() 一次，绑定行数越多越慢。
+        $this->resolveProductDisplayNameResolver()->preloadSourceProducts($products);
+
+        return $products;
+    }
+
+    private function resolveProductDisplayNameResolver(): ProductDisplayNameResolver
+    {
+        return $this->productDisplayNameResolver ?? app(ProductDisplayNameResolver::class);
     }
 
     /**
