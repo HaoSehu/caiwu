@@ -43,19 +43,14 @@
       "prettier --write"
     ],
     "frontend-user-v3-www/**/*.{js,jsx,ts,tsx,vue}": [
-      "eslint --fix --no-warn-ignored --config frontend-user-v3-www/eslint.config.js",
-      "prettier --write"
+      "eslint --fix --no-warn-ignored --config frontend-user-v3-www/eslint.config.js"
     ],
     "frontend-user-v4-console/**/*.{js,jsx,ts,tsx,vue}": [
       "eslint --fix --no-warn-ignored --config frontend-user-v4-console/eslint.config.js",
       "prettier --write"
     ],
     "shared/**/*.{js,jsx,ts,tsx,vue}": [
-      "eslint --fix --no-warn-ignored --config shared/eslint.config.js",
-      "prettier --write"
-    ],
-    "*.{css,scss,json,md}": [
-      "prettier --write"
+      "eslint --fix --no-warn-ignored --config shared/eslint.config.js"
     ],
     "backend/**/*.php": [
       "php backend/vendor/bin/pint --test"
