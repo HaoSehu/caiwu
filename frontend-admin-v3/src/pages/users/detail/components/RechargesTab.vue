@@ -103,9 +103,11 @@ function entryTypeLabel(value: unknown) {
   return ENTRY_TYPE_LABELS[String(value)] || String(value || '-');
 }
 
+// 后端退款冲抵记录的 amount 本身已带负号（FinanceDocumentService 的 refund_offset），
+// 因此这里只能由 formatMoney 统一排负号，不能再按 direction 手工拼一次前缀，
+// 否则会渲染成「--¥100.00」（docs/DESIGN.md §6 金额符号口径）。
 function signedAmount(row: UserRechargeRecord) {
-  const number = Number.parseFloat(String(row.amount ?? 0)) || 0;
-  return `${row.direction === 'out' ? '-' : '+'}${formatMoney(number)}`;
+  return formatMoney(row.amount);
 }
 
 async function load() {
