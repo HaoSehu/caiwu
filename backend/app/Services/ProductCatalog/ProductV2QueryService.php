@@ -85,6 +85,9 @@ class ProductV2QueryService
         // 浏览覆盖：目录页当页商品拉上游实时库存展示并回写快照（失败降级快照，不阻塞列表）。
         $this->catalog->overlayLiveStockForBrowse(new Collection($paginator->getCollection()->all()));
 
+        // 拆分商品的源商品按当页一次预载：逐行解析展示名时回源会随行数变成 N 次单查（N+1）。
+        app(ProductDisplayNameResolver::class)->preloadSourceProducts($paginator->items());
+
         return $this->attachCpuModelPayloads($paginator);
     }
 

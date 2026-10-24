@@ -85,14 +85,20 @@ class ProductAdminService
         if ($sortColumn !== null) {
             $direction = strtolower((string) ($filters['sort_order'] ?? 'asc')) === 'desc' ? 'desc' : 'asc';
 
-            return $query->orderBy($sortColumn, $direction)->orderByDesc('id')->paginate($perPage);
+            $paginator = $query->orderBy($sortColumn, $direction)->orderByDesc('id')->paginate($perPage);
+        } else {
+            $paginator = $query
+                ->orderBy('sort_order')
+                ->orderByDesc('status')
+                ->orderByDesc('id')
+                ->paginate($perPage);
         }
 
-        return $query
-            ->orderBy('sort_order')
-            ->orderByDesc('status')
-            ->orderByDesc('id')
-            ->paginate($perPage);
+        // 拆分商品的展示名要回源商品取规格，逐行 find() 会让 SQL 条数随行数线性增长（N+1），
+        // 这里在本页返回前一次性 whereIn() 预载，渲染阶段只读内存。
+        $this->resolveProductDisplayNameResolver()->preloadSourceProducts($paginator->items());
+
+        return $paginator;
     }
 
     /**
@@ -804,6 +810,13 @@ class ProductAdminService
             ->select(['id', 'product_type', 'purchase_requires', 'config_options'])
             ->orderBy('id')
             ->chunkById(500, function (Collection $products) use ($keyword, &$matchedProductIds): void {
+                // 关键词匹配会逐行解析展示名，先把本批源商品一次预载，避免按行回源单查；
+                // 本批 select 不含 custom_display_name，必须同时按 id 增量预载该列，
+                // 否则解析器会退回逐行 value('custom_display_name') 单查。
+                $resolver = $this->resolveProductDisplayNameResolver();
+                $resolver->preloadSourceProducts($products);
+                $resolver->preloadCustomDisplayNames($products);
+
                 $products
                     ->filter(fn (Product $product): bool => $this->productDisplayNameContains($product, $keyword))
                     ->pluck('id')
@@ -1876,7 +1889,8 @@ class ProductAdminService
 
     private function resolveProductDisplayNameResolver(): ProductDisplayNameResolver
     {
-        return $this->productDisplayNameResolver ?? new ProductDisplayNameResolver;
+        // 必须与容器内单例一致：预载写在同一个实例上，渲染阶段才读得到，否则等于没预载。
+        return $this->productDisplayNameResolver ?? app(ProductDisplayNameResolver::class);
     }
 
     private function upstreamBindingWriter(): UpstreamBindingWriter

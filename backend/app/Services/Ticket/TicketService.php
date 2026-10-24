@@ -16,6 +16,7 @@ use App\Models\TicketReply;
 use App\Services\ClientServiceConsole\ServiceTransformService;
 use App\Services\Integrations\Plugins\PluginBindingResolver;
 use App\Services\Notification\UserNotificationService;
+use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Services\System\NotificationService;
 use App\Services\System\UploadedAssetReferenceService;
 use App\Support\AdminPermissions;
@@ -674,15 +675,33 @@ class TicketService
             });
         }
 
-        return $query->orderByDesc('id')
+        $services = $query->orderByDesc('id')
             ->limit(max(1, min($limit, 50)))
-            ->get()
+            ->get();
+
+        // 下面逐行解析商品展示名：商品投影刻意不含 custom_display_name，拆分商品还要按
+        // purchase_requires.upstream_split.source_product_id 取源商品，不预载时每个服务各回源一次，
+        // 条数随返回行数放大。两个批次都在逐行解析之前一次 whereIn 建 map。
+        $products = $services
+            ->map(static fn (Service $service): ?Product => $service->product)
+            ->filter(static fn (?Product $product): bool => $product instanceof Product);
+        $resolver = app(ProductDisplayNameResolver::class);
+        $resolver->preloadSourceProducts($products);
+        $resolver->preloadCustomDisplayNames($products);
+
+        // 行的 domain 由 provision 投影决定，投影按服务逐行读绑定/运行快照/连接快照三张表；
+        // 预载与逐行投影必须落在同一个解析器实例上（该类未注册单例，app() 每次都新建），
+        // 因此这里显式持有实例并传进 serviceProvisionData()，查询数从每行 3 条降为每页 3 条。
+        $bindingResolver = app(PluginBindingResolver::class);
+        $bindingResolver->preloadServiceProjections($services->pluck('id'));
+
+        return $services
             ->map(fn (Service $service) => [
                 'id' => (int) $service->id,
                 'name' => $this->resolveServiceDisplayName($service),
                 'service_name' => trim((string) $service->name),
                 'product_name' => trim((string) ($service->product?->name ?? '')),
-                'domain' => ServiceHostname::resolveDisplayDomain($service, $this->serviceProvisionData($service)),
+                'domain' => ServiceHostname::resolveDisplayDomain($service, $this->serviceProvisionData($service, false, $bindingResolver)),
                 'status' => (int) $service->status,
                 'status_label' => ServiceStatus::$labels[(int) $service->status] ?? (string) $service->status,
             ])
@@ -1281,10 +1300,15 @@ class TicketService
     /**
      * @return array<string, mixed>
      */
-    private function serviceProvisionData(Service $service, bool $includeSecrets = false): array
-    {
+    private function serviceProvisionData(
+        Service $service,
+        bool $includeSecrets = false,
+        ?PluginBindingResolver $bindingResolver = null
+    ): array {
+        // 列表路径需要把 preloadServiceProjections() 预载好的实例传进来才命中行级缓存；
+        // 单行路径不传，退回容器解析（该类未注册单例，与预载实例无关也不影响正确性）。
         $legacy = is_array($service->provision_data ?? null) ? $service->provision_data : [];
-        $projection = app(PluginBindingResolver::class)->serviceProvisionProjection($service, $includeSecrets);
+        $projection = ($bindingResolver ?? app(PluginBindingResolver::class))->serviceProvisionProjection($service, $includeSecrets);
 
         return $projection === [] ? $legacy : array_replace($legacy, $projection);
     }

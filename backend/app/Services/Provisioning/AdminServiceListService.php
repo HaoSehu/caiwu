@@ -6,6 +6,7 @@ namespace App\Services\Provisioning;
 
 use App\Constants\ServiceStatus;
 use App\Models\Invoice;
+use App\Models\Product;
 use App\Models\Service;
 use App\Services\Integrations\Plugins\PluginBindingResolver;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
@@ -54,6 +55,8 @@ class AdminServiceListService
             ])
             ->with([
                 'user:id,nickname,email,phone,status',
+                // custom_display_name 刻意不随商品投影取出：该列一旦加载，Product::getNameAttribute()
+                // 会直接返回裸自定义名，改变既有响应值；展示名统一交给解析器批量预载取得。
                 'product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
                 'product.productGroup:id,second_product_group_id,name,description,slug',
                 'product.productGroup.secondProductGroup:id,first_product_group_id,name,description,slug',
@@ -82,6 +85,15 @@ class AdminServiceListService
             collect($paginator->items())->map(static fn (Service $service): int => (int) $service->id)
         );
 
+        // 拆分商品的源商品与自定义展示名按当页一次预载：下面逐行解析展示名，
+        // 逐行回源会随每页行数放大成 N 次单查（N+1）。两者都必须解析器单例上预载。
+        $pageProducts = collect($paginator->items())
+            ->map(static fn (Service $service): ?Product => $service->product)
+            ->filter(static fn (?Product $product): bool => $product instanceof Product)
+            ->values();
+        $this->productDisplayNameResolver()->preloadSourceProducts($pageProducts);
+        $this->productDisplayNameResolver()->preloadCustomDisplayNames($pageProducts);
+
         return [
             'list' => collect($paginator->items())
                 ->map(fn (Service $service) => $this->transform($service))
@@ -102,7 +114,7 @@ class AdminServiceListService
         $invoice = $this->resolvePrimaryInvoice($service);
         $order = $invoice ? null : $service->order;
         // D3B-01：产品名/路径与客户端控制台共用单一口径（ServiceListPresentation）
-        $productDisplayName = ServiceListPresentation::productDisplayName($service, $this->productDisplayNameResolver);
+        $productDisplayName = ServiceListPresentation::productDisplayName($service, $this->productDisplayNameResolver());
 
         return [
             'id' => $service->id,
@@ -197,6 +209,14 @@ class AdminServiceListService
             ->unique()
             ->values()
             ->all();
+    }
+
+    /**
+     * 展示名解析器必须与容器单例一致：批量预载写在单例上，另起实例会让预载失效并退回逐行回源。
+     */
+    private function productDisplayNameResolver(): ProductDisplayNameResolver
+    {
+        return $this->productDisplayNameResolver ?? app(ProductDisplayNameResolver::class);
     }
 
     private function normalizeStringList(mixed $value): array

@@ -215,6 +215,8 @@ class AdminConfigurationV2QueryService
     {
         $query = Supplier::query();
         if (SchemaMetadataCache::hasTable('supplier_plugin_bindings')) {
+            // 必须整关系预载：PluginBindingResolver 把「已加载且为空」当作无绑定，
+            // 一旦这里带 status 过滤，被过滤掉的启用行会让集合变空，绑定就会被误判为不存在。
             $query->with('pluginBindings');
         }
 
@@ -773,6 +775,9 @@ class AdminConfigurationV2QueryService
         }
 
         $localProducts = $this->localProductsByUpstreamProductIds($supplier, $productIds);
+
+        // 本地商品若为拆分商品，其源商品一次预载：下面逐行解析展示名，逐行回源会随映射行数放大成 N 次单查。
+        app(ProductDisplayNameResolver::class)->preloadSourceProducts($localProducts);
 
         $mapProduct = function (array $item) use ($localProducts): array {
             $localProduct = $localProducts->get((int) ($item['id'] ?? 0));

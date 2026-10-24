@@ -266,6 +266,9 @@ class ProductSiteService
             ->get()
             ->groupBy(fn (Product $product) => (int) $product->product_group_id);
 
+        // 拆分商品的源商品一次预载：目录会把本批商品逐行解析展示名，逐行回源会随行数放大成 N 次单查（N+1）。
+        $this->resolveProductDisplayNameResolver()->preloadSourceProducts($productsByGroup->flatten(1));
+
         $instanceSpecMap = $this->instanceSpecCatalogService->resolveProductSpecMap(
             collect($productsByGroup)
                 ->flatten(1)
@@ -423,7 +426,8 @@ class ProductSiteService
             return $this->productDisplayNameResolver;
         }
 
-        return new ProductDisplayNameResolver($this->instanceSpecCatalogService);
+        // 必须与容器单例一致：预载写在别的实例上等于没预载，逐行解析仍会各发一次源商品查询。
+        return app(ProductDisplayNameResolver::class);
     }
 
     private function normalizeSiteGroupIds(array $groupIds): array

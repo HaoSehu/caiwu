@@ -7,10 +7,12 @@ namespace App\Services\ClientServiceConsole;
 use App\Constants\ProductType;
 use App\Constants\ServiceStatus;
 use App\Models\FirstProductGroup;
+use App\Models\Product;
 use App\Models\SecondProductGroup;
 use App\Models\Service;
 use App\Models\ThirdProductGroup;
 use App\Models\User;
+use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Support\LikeEscape;
 use App\Support\ProductGroupHierarchyFields;
 use App\Support\SchemaMetadataCache;
@@ -134,6 +136,19 @@ class ServiceOverviewService
         // 列表路径批量预载绑定与快照：每页 3 次往返替代每行约 10 次绑定解析（D4B-01），行输出不变
         $this->transformService->preloadServiceProvisions($paginator->items());
 
+        // can_manage() 在服务无自身绑定时回退到所属商品的上游绑定：按当页商品一次预载，
+        // 否则每行各查一次 product_upstream_bindings（N+1）。
+        $this->transformService->preloadProductProvisions($paginator->items());
+
+        // 拆分商品的源商品按当页一次预载：下面逐行解析展示名，逐行回源会随每页行数放大成 N 次单查（N+1）。
+        $products = collect($paginator->items())
+            ->map(static fn (Service $service): ?Product => $service->product)
+            ->filter(static fn (?Product $product): bool => $product instanceof Product);
+        app(ProductDisplayNameResolver::class)->preloadSourceProducts($products);
+        // custom_display_name 刻意不随商品投影取出（会改变 Product::getNameAttribute() 的取值），
+        // 改在解析器内批量预载：逐行 value() 单查同样会随每页行数放大成 N+1。
+        app(ProductDisplayNameResolver::class)->preloadCustomDisplayNames($products);
+
         return [
             'list' => collect($paginator->items())
                 ->map(fn (Service $service) => $this->transformService->transformListItem($service))
@@ -179,6 +194,15 @@ class ServiceOverviewService
             ->where('user_id', $user->id)
             ->orderByDesc('id')
             ->get();
+
+        // 分组总览的 items 逐行读 product->name（展示名解析器会回源拆分商品的源商品），
+        // 按用户全部服务一次预载，避免每个卡片项各查一次。
+        $products = $services
+            ->map(static fn (Service $service): ?Product => $service->product)
+            ->filter(static fn (?Product $product): bool => $product instanceof Product);
+        app(ProductDisplayNameResolver::class)->preloadSourceProducts($products);
+        // 同列表路径：custom_display_name 不随投影取出，改由解析器批量预载，避免逐行单查。
+        app(ProductDisplayNameResolver::class)->preloadCustomDisplayNames($products);
 
         $expiringDeadline = now()->addDays(7);
         // 用户端“已开通产品”按一级菜单分组（first_product_groups.code），

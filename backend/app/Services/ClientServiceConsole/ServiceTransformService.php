@@ -113,6 +113,17 @@ class ServiceTransformService
         );
     }
 
+    /**
+     * 列表路径批量预载商品级上游绑定：canManageService() 在服务没有自身绑定时
+     * 会回退到所属商品的上游绑定，逐行回源会随每页行数放大成 N 次单查（N+1）。
+     */
+    public function preloadProductProvisions(iterable $services): void
+    {
+        $this->bindingResolver()->preloadProductBindings(
+            collect($services)->map(static fn (mixed $service): int => (int) ($service->product_id ?? 0))
+        );
+    }
+
     // ── List item transform ────────────────────────────────────────────────
 
     public function transformListItem(Service $service): array
@@ -1583,7 +1594,8 @@ class ServiceTransformService
     private function resolveCombinedDisplayName(Service $service): string
     {
         if ($service->product instanceof Product) {
-            $resolver = $this->productDisplayNameResolver ?? new ProductDisplayNameResolver;
+            // 必须与容器单例一致：列表批量预载写在单例上，另起实例会让预载失效、逐行回源重新变成 N+1。
+            $resolver = $this->productDisplayNameResolver ?? app(ProductDisplayNameResolver::class);
             $resolved = $resolver->resolveForProduct(
                 $service->product,
                 (array) ($service->order?->config_snapshot ?? [])

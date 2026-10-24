@@ -16,6 +16,10 @@ use Illuminate\Database\Eloquent\Collection;
 
 class CouponProductGroupQueryService
 {
+    public function __construct(
+        private ?ProductDisplayNameResolver $productDisplayNameResolver = null,
+    ) {}
+
     public function paginateFirstGroups(array $filters, int $page, int $pageSize): LengthAwarePaginator
     {
         return FirstProductGroup::query()
@@ -117,7 +121,7 @@ class CouponProductGroupQueryService
             throw new BusinessException('商品分组层级不正确');
         }
 
-        return $query
+        $paginator = $query
             ->when($this->keyword($filters) !== '', function (Builder $query) use ($filters): void {
                 $keyword = $this->keyword($filters);
                 $query->where(function (Builder $builder) use ($keyword): void {
@@ -131,6 +135,12 @@ class CouponProductGroupQueryService
             ->orderBy('sort_order')
             ->orderBy('id')
             ->paginate($pageSize, ['*'], 'page', $page);
+
+        // 拆分商品的展示名要回源商品取规格，逐行 find() 会让 SQL 条数随行数线性增长（N+1），
+        // 这里在本页返回前一次性 whereIn() 预载，渲染阶段只读内存。
+        $this->productDisplayNameResolver()->preloadSourceProducts($paginator->items());
+
+        return $paginator;
     }
 
     /**
@@ -144,6 +154,7 @@ class CouponProductGroupQueryService
     public function batchProducts(array $groups): array
     {
         $result = [];
+        $batchProducts = [];
 
         foreach ($groups as $group) {
             $groupId = (int) ($group['id'] ?? 0);
@@ -179,9 +190,24 @@ class CouponProductGroupQueryService
                 ->get();
 
             $result[$level.':'.$groupId] = $products;
+            foreach ($products as $product) {
+                $batchProducts[] = $product;
+            }
+        }
+
+        // 预载是「一次批次」口径（内部整体替换源商品 map），必须在所有分组都查完之后统一调用一次；
+        // 放进循环里会被下一组覆盖，先前分组渲染时又会退回逐行回源（每组最多 500 条）。
+        if ($batchProducts !== []) {
+            $this->productDisplayNameResolver()->preloadSourceProducts($batchProducts);
         }
 
         return $result;
+    }
+
+    private function productDisplayNameResolver(): ProductDisplayNameResolver
+    {
+        // 必须与容器内单例一致：预载写在同一个实例上，渲染阶段才读得到，否则等于没预载。
+        return $this->productDisplayNameResolver ?? app(ProductDisplayNameResolver::class);
     }
 
     private function firstGroup(int $id): FirstProductGroup
