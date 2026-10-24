@@ -405,6 +405,49 @@ class PluginBindingResolver
     }
 
     /**
+     * 列表路径批量预载商品级上游绑定：整页商品一次 whereIn 取绑定行写入行级缓存，
+     * 后续逐行 supplierIdForProduct() 全部命中缓存（查询数从每行 1 条降为每页 1 条）。
+     * 只填充缓存，不改变单行取数优先级与排序（status 倒序、id 倒序）。
+     */
+    public function preloadProductBindings(iterable $productIds): void
+    {
+        $ids = collect($productIds)
+            ->map(static fn (mixed $id): int => (int) $id)
+            ->filter(static fn (int $id): bool => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($ids === [] || ! $this->hasTable('product_upstream_bindings')) {
+            return;
+        }
+
+        $query = DB::table('product_upstream_bindings as pub')
+            ->whereIn('pub.product_id', $ids)
+            ->orderByDesc('pub.status')
+            ->orderByDesc('pub.id');
+
+        $columns = ['pub.*'];
+        if ($this->hasTable('supplier_plugin_bindings')) {
+            $query->leftJoin('supplier_plugin_bindings as spb', 'spb.id', '=', 'pub.supplier_plugin_binding_id');
+            $columns[] = 'spb.supplier_id';
+        }
+
+        foreach ($query->get($columns) as $row) {
+            $productId = (int) ($row->product_id ?? 0);
+            if ($productId <= 0 || array_key_exists($productId, $this->productBindingCache)) {
+                continue;
+            }
+            $this->productBindingCache[$productId] = $row;
+        }
+
+        // 无绑定行的商品同样缓存空结果，避免逐行 transform 时的重复空查询
+        foreach ($ids as $productId) {
+            $this->productBindingCache[$productId] ??= null;
+        }
+    }
+
+    /**
      * 全局倒序排列的行集合按 service_id 分组取首行——与单行查询
      * where(service_id)->orderByDesc(id)->first() 取到的行完全一致。
      *
@@ -439,13 +482,22 @@ class PluginBindingResolver
             ->first();
     }
 
+    /**
+     * 取供应商当前绑定行。
+     *
+     * 前置契约（预载方必须遵守，否则取数语义会变）：pluginBindings 一旦被标记为已加载，
+     * 这里就以该集合为准、空集合即「无绑定」，不再回退单行查询。
+     * 因此预载必须整关系加载——不得附带 status/priority 过滤，也不得只 select 部分列：
+     * 被过滤掉的启用行会让集合变空或只剩子集，这里就会把「有绑定」误判成「无绑定」，
+     * 与单行查询 where(supplier_id)->orderByDesc(status, priority, id)->first() 的结果不一致。
+     * 当前唯一预载点见 AdminConfigurationV2QueryService::suppliers()，为无约束的 with('pluginBindings')。
+     */
     private function supplierBindingForSupplier(Supplier $supplier): ?object
     {
         if ($supplier->relationLoaded('pluginBindings')) {
-            $binding = $this->supplierBindingFromLoadedRelation($supplier);
-            if ($binding !== null) {
-                return $binding;
-            }
+            // 关系已预载时以集合为准：空集合即“无绑定”，不得再退回逐行查询，
+            // 否则列表页每个供应商都会各发一次 supplier_plugin_bindings 查询（N+1）。
+            return $this->supplierBindingFromLoadedRelation($supplier);
         }
 
         return $this->supplierBinding((int) $supplier->id);
@@ -473,6 +525,14 @@ class PluginBindingResolver
             ->first();
     }
 
+    /**
+     * 取商品当前上游绑定行。
+     *
+     * 前置契约（预载方必须遵守）：upstreamBindings 一旦被标记为已加载，就以该集合为准、
+     * 空集合即「无绑定」，不再回退单行查询。预载必须整关系加载，不得附带 status 过滤或列裁剪，
+     * 否则被过滤掉的启用行会让集合变空/变子集，与单行查询 orderByDesc(status, id)->first() 不一致。
+     * 同时需保持 supplierPluginBinding 关系已加载，否则 supplier_id 回填会缺失。
+     */
     private function productBindingForProduct(Product $product): ?object
     {
         if ($product->relationLoaded('upstreamBindings')) {
