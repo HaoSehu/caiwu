@@ -22,6 +22,17 @@ export const CHUNK_BUDGETS = {
   console: 1120 * 1000,
 };
 
+// 单分片 raw 预算（CSS）。JS 预算只能兜住「JS 膨胀」，样式一旦回退成全量引入，
+// 增量会落在 CSS 分片上：admin 的 vendor-tdesign 从 302,911 B 回退到 462,351 B 只多 159,440 B raw /
+// 16,316 B gzip，而首屏预算余量还有 36,161 B —— 首屏汇总拦不住这种组合，必须单独设限。
+// 基线取 2026-10-24 实测最大单文件：admin 302,911 B、console 264,090 B、www 56,866 B，统一放宽约 15%。
+// www 用 Element Plus 且未做按需样式拆分，基线低但同属防回退哨兵。
+export const CSS_CHUNK_BUDGETS = {
+  admin: 350 * 1000,
+  console: 305 * 1000,
+  www: 70 * 1000,
+};
+
 const INDEX_ASSET_PATTERN = /(?:src|href)="([^"]*\.(?:js|css))"/g;
 
 function collectEntryAssets(html) {
@@ -60,7 +71,11 @@ export function checkFrontendBudget(application, repositoryRoot) {
   if (!application?.name) {
     throw new Error('体积门禁未收到应用标识 name：预算按 name 查表，缺失会被静默跳过');
   }
-  if (!(application.name in FIRST_SCREEN_BUDGETS) && !(application.name in CHUNK_BUDGETS)) {
+  if (
+    !(application.name in FIRST_SCREEN_BUDGETS) &&
+    !(application.name in CHUNK_BUDGETS) &&
+    !(application.name in CSS_CHUNK_BUDGETS)
+  ) {
     throw new Error(`体积门禁未配置 ${application.name} 的预算`);
   }
 
@@ -85,30 +100,33 @@ export function checkFrontendBudget(application, repositoryRoot) {
     );
   }
 
-  const chunkBudget = CHUNK_BUDGETS[application.name];
-  if (chunkBudget) {
-    const assetsDirectory = path.join(distDirectory, 'assets', 'js');
-    const oversizedChunks = fs.existsSync(assetsDirectory)
-      ? fs
-          .readdirSync(assetsDirectory)
-          .filter((file) => file.endsWith('.js'))
-          .map((file) => ({
-            file,
-            bytes: fs.statSync(path.join(assetsDirectory, file)).size,
-          }))
-          .filter((chunk) => chunk.bytes > chunkBudget)
-      : [];
+  // 单分片体积：JS 与 CSS 分别设限。CSS 需要独立上限的原因是样式回退的增量小到能被首屏汇总吸收，
+  // 见文件头 CSS_CHUNK_BUDGETS 的说明。
+  const chunkChecks = [
+    { budget: CHUNK_BUDGETS[application.name], directory: 'js', extension: '.js', label: '单分片' },
+    { budget: CSS_CHUNK_BUDGETS[application.name], directory: 'css', extension: '.css', label: '样式分片' },
+  ].filter((check) => check.budget);
 
-    oversizedChunks.forEach((chunk) => {
-      failures.push(
-        `${application.name} 单分片 ${chunk.file} ${formatBytes(chunk.bytes)} 超出预算 ${formatBytes(chunkBudget)}`,
-      );
-    });
-  }
+  chunkChecks.forEach((check) => {
+    const assetsDirectory = path.join(distDirectory, 'assets', check.directory);
+    if (!fs.existsSync(assetsDirectory)) return;
+    fs.readdirSync(assetsDirectory)
+      .filter((file) => file.endsWith(check.extension))
+      .map((file) => ({ file, bytes: fs.statSync(path.join(assetsDirectory, file)).size }))
+      .filter((asset) => asset.bytes > check.budget)
+      .forEach((asset) => {
+        failures.push(
+          `${application.name} ${check.label} ${asset.file} ${formatBytes(asset.bytes)} 超出预算 ${formatBytes(check.budget)}`,
+        );
+      });
+  });
+
+  const chunkBudget = CHUNK_BUDGETS[application.name];
+  const cssChunkBudget = CSS_CHUNK_BUDGETS[application.name];
 
   if (failures.length > 0) {
     throw new Error(`前端体积门禁未通过：\n- ${failures.join('\n- ')}`);
   }
 
-  return { firstScreenBytes, firstScreenBudget, chunkBudget, entryAssets };
+  return { firstScreenBytes, firstScreenBudget, chunkBudget, cssChunkBudget, entryAssets };
 }

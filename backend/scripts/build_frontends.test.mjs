@@ -57,6 +57,15 @@ for (const target of ['admin', 'www', 'console']) {
     'console 单分片预算必须高于当前实测 972,583 B，否则门禁会在健康构建上直接误报',
   );
   assert.deepEqual(Object.keys(budgetModule.FIRST_SCREEN_BUDGETS).sort(), ['admin', 'console', 'www']);
+  // CSS 分片预算：三端都要有，且必须高于当前实测最大单文件，否则健康构建会误报（审查条目 P3-4）。
+  assert.deepEqual(Object.keys(budgetModule.CSS_CHUNK_BUDGETS).sort(), ['admin', 'console', 'www']);
+  const cssBaselines = { admin: 302911, console: 264090, www: 56866 };
+  Object.entries(cssBaselines).forEach(([name, baseline]) => {
+    assert.ok(
+      budgetModule.CSS_CHUNK_BUDGETS[name] > baseline,
+      `${name} 的 CSS 分片预算必须高于当前实测 ${baseline} B，否则门禁会在健康构建上误报`,
+    );
+  });
   // 预算必须低于优化前基线 605,762 B，否则「优化收益被整体回退」不会被这道闸拦住（审查条目 P2-D）。
   assert.ok(
     budgetModule.FIRST_SCREEN_BUDGETS.admin < 605762,
@@ -95,6 +104,20 @@ for (const target of ['admin', 'www', 'console']) {
   );
 
   fs.rmSync(sandboxRoot, { recursive: true, force: true });
+
+  // CSS 分片同样要被拦住：只查 assets/js 的实现会漏掉样式回退（审查条目 P3-4）。
+  const cssSandboxRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'caiwu-budget-css-'));
+  const cssDist = path.join(cssSandboxRoot, 'frontend-admin-v3', 'dist');
+  const cssDirectory = path.join(cssDist, 'assets', 'css');
+  fs.mkdirSync(cssDirectory, { recursive: true });
+  fs.writeFileSync(path.join(cssDirectory, 'oversized.css'), randomBytes(400 * 1000));
+  fs.writeFileSync(path.join(cssDist, 'index.html'), '<!doctype html><html><head></head><body></body></html>');
+  assert.throws(
+    () => budgetModule.checkFrontendBudget({ name: 'admin', directory: 'frontend-admin-v3' }, cssSandboxRoot),
+    /样式分片 oversized\.css .* 超出预算/,
+    'CSS 分片超限时必须抛错，否则样式回退能被首屏汇总吸收',
+  );
+  fs.rmSync(cssSandboxRoot, { recursive: true, force: true });
 }
 
 // TDesign 按需引入的覆盖自检（审查条目 P3-5）。
