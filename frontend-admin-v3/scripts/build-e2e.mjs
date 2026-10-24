@@ -10,10 +10,12 @@
  * 本脚本只负责让产物里的基址不再指向线上。
  */
 import { spawnSync } from 'node:child_process';
-import path from 'node:path';
+
+import { resolveBin } from '../../backend/scripts/e2e_runner.mjs';
 
 const CWD = process.cwd();
-const VITE_BIN = path.resolve(CWD, '../node_modules/vite/bin/vite.js');
+// 不写死 ../node_modules：单端安装依赖时 vite 可能装在本端目录，按 package.json 解析才可靠。
+const VITE_BIN = resolveBin(CWD, 'vite');
 
 const result = spawnSync(process.execPath, [VITE_BIN, 'build', '--mode', 'e2e', '--outDir', 'dist-e2e'], {
   cwd: CWD,
