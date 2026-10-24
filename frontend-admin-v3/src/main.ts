@@ -15,7 +15,7 @@ import i18n from './locales';
 // 也不经过包入口 barrel（barrel 会拉起全部组件入口，其样式 sideEffects 不可摇除，导致 CSS 全量进包）。
 // 因此这里只需补一份基础变量与基础类。
 import 'tdesign-vue-next/es/style/index.css';
-import '../../theme.css';
+// theme.css（设计令牌）由 @/style/index.less 首行引入，与用户控制台保持同一级联顺序
 import '@/style/index.less';
 import './permission';
 

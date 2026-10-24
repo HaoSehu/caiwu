@@ -36,8 +36,8 @@ const className = computed(() => {
 });
 </script>
 <style lang="less" scoped>
-@import '@/style/index.less';
-
+// 全局样式入口由 main.ts 提供，组件内不要再 @import 全量样式，否则 scoped 会把它编译成一份带
+// data-v 死选择器的重复副本（实测一份 4.9KB）
 .thumbnail {
   &-container {
     display: inline-block;
