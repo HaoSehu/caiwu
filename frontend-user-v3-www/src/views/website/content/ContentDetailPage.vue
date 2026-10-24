@@ -667,7 +667,7 @@ watch(
   }
 }
 
-@media (max-width: $breakpoint-narrow) {
+@media (max-width: $breakpoint-mobile-max) {
   .reader-article {
     padding: 18px 16px 22px;
   }

@@ -1,5 +1,5 @@
-/* 平板端大弹窗/抽屉宽度兜底：769-1024px 区间限制最大宽度 */
-@media (width >= 769px) and (width <= 1024px) {
+/* 平板端大弹窗/抽屉宽度兜底：768-1024px 区间限制最大宽度（768 属 sm，与 docs/DESIGN.md §7 一致） */
+@media (min-width: 768px) and (max-width: 1024px) {
   .t-dialog {
     max-width: calc(100vw - 32px) !important;
   }
@@ -10,7 +10,7 @@
   }
 }
 
-@media (width <= 768px) {
+@media (max-width: 767.98px) {
   .t-dialog__position {
     align-items: center !important;
     min-height: 100vh;
@@ -106,7 +106,7 @@
   }
 }
 
-@media (width <= 420px) {
+@media (max-width: 420px) {
   .drawer-actions {
     grid-template-columns: 1fr;
   }

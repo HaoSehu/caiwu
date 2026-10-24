@@ -40,11 +40,13 @@
             :src="g.icon"
             :alt="g.label"
             class="mop-item-icon"
+            loading="lazy"
+            decoding="async"
           />
           <span v-else class="mop-item-abbr">{{ g.label.slice(0, 2) }}</span>
           {{ g.label }}
         </button>
-        <div v-if="!osGroups.length" class="mop-empty">暂无可用系统</div>
+        <div v-if="!osGroups.length" class="mop-empty">暂无系统</div>
         <div class="mop-spacer" :style="{ height: spacerH + 'px' }"></div>
       </div>
 
@@ -73,7 +75,7 @@
         </button>
         <div v-if="!osGroups.length" class="mop-empty">请先选择系统</div>
         <div v-else-if="!currentVersions.length" class="mop-empty">
-          暂无可用版本
+          暂无版本
         </div>
         <div class="mop-spacer" :style="{ height: spacerH + 'px' }"></div>
       </div>

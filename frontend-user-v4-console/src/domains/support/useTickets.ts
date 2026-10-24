@@ -1,5 +1,6 @@
-import { getStatusLabel, SERVICE_STATUS_MAP } from '@shared/statusConfig';
-import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
+import { getStatusLabel, SERVICE_STATUS_MAP } from '@caiwu/shared/statusConfig';
+import { DialogPlugin } from 'tdesign-vue-next/es/dialog/plugin';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, onMounted, reactive, ref, shallowRef, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 

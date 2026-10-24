@@ -1,5 +1,6 @@
 import { ORDER_STATUS_FILTER_OPTIONS, ORDER_TYPE_MAP } from '@caiwu/shared/statusConfig';
-import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
+import { DialogPlugin } from 'tdesign-vue-next/es/dialog/plugin';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { ref, shallowRef } from 'vue';
 
 import clientApi from '@/api/client';

@@ -99,7 +99,7 @@
               <strong>{{ item.title }}</strong>
             </router-link>
           </div>
-          <t-empty v-else description="暂无内容" />
+          <t-empty v-else description="暂无数据" />
         </t-card>
 
         <t-card class="content-card" :bordered="false">
@@ -110,14 +110,14 @@
               <span>{{ item.publish_at || item.created_at || '--' }}</span>
             </router-link>
           </div>
-          <t-empty v-else description="暂无内容" />
+          <t-empty v-else description="暂无数据" />
         </t-card>
       </aside>
     </div>
   </section>
 </template>
 <script setup lang="ts">
-import DataState from '@shared/user-v3/components/DataState.vue';
+import DataState from '@caiwu/shared/user-v3/components/DataState.vue';
 import { SearchIcon } from 'tdesign-icons-vue-next';
 
 import { useContentList } from '@/domains/content/useContent';
@@ -341,7 +341,7 @@ async function handleMarkAllRead() {
   }
 }
 
-@media (max-width: @screen-sm-rem) {
+@media (max-width: @screen-mobile-max) {
   .hero-card,
   .content-sidebar {
     grid-template-columns: 1fr;

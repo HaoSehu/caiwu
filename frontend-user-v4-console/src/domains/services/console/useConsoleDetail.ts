@@ -1,4 +1,4 @@
-import { MessagePlugin } from 'tdesign-vue-next';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, reactive, ref, shallowRef } from 'vue';
 import { useRoute } from 'vue-router';
 

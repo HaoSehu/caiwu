@@ -155,7 +155,7 @@ function go(to: string) {
   width: 40px;
   height: 40px;
   border-radius: var(--td-radius-medium);
-  font-size: 20px;
+  font-size: var(--td-font-size-title-extraLarge);
 
   &.is-brand {
     background: var(--td-brand-color-light);
@@ -201,7 +201,7 @@ function go(to: string) {
 
   strong {
     color: var(--td-text-color-primary);
-    font-size: 24px;
+    font-size: var(--td-font-size-headline-small);
     font-weight: 600;
     font-variant-numeric: tabular-nums;
     line-height: 1.2;
@@ -224,13 +224,13 @@ function go(to: string) {
   color: var(--td-text-color-placeholder);
 }
 
-@media (width <= 1200px) {
+@media (max-width: 1200px) {
   .todo-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
-@media (width <= 640px) {
+@media (max-width: 640px) {
   .todo-grid {
     grid-template-columns: minmax(0, 1fr);
   }

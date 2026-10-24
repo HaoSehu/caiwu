@@ -123,7 +123,7 @@
   }
 }
 
-@media (max-width: $breakpoint-narrow) {
+@media (max-width: $breakpoint-mobile-max) {
   .record-toolbar-grid,
   .record-toolbar-grid--col2 {
     grid-template-columns: 1fr;

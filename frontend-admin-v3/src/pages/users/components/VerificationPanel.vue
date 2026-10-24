@@ -218,7 +218,7 @@
 <script setup lang="ts">
 import { ChevronLeftIcon, SearchIcon } from 'tdesign-icons-vue-next';
 import type { FormInstanceFunctions, FormRule, PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
-import { MessagePlugin } from 'tdesign-vue-next';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { onMounted, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 
@@ -692,7 +692,7 @@ onMounted(() => {
   background: var(--td-bg-color-container);
 }
 
-@media (width <= 768px) {
+@media (max-width: 767.98px) {
   .verification-filter {
     flex-direction: column;
     align-items: stretch;
@@ -746,7 +746,7 @@ onMounted(() => {
   }
 }
 
-@media (width <= 360px) {
+@media (max-width: 360px) {
   .verification-filter {
     grid-template-columns: 1fr 110px;
   }

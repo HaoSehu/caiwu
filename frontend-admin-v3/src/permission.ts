@@ -1,7 +1,7 @@
 import 'nprogress/nprogress.css'; // progress bar style
 
 import NProgress from 'nprogress'; // progress bar
-import { MessagePlugin } from 'tdesign-vue-next';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 
 import { hasPermissionInList } from '@/constants/permissions';
 import router from '@/router';

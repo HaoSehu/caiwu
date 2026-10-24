@@ -574,7 +574,7 @@
       :header="clearQueueDialogTitle"
       theme="danger"
       width="460px"
-      :confirm-btn="{ content: '确认清空', theme: 'danger', loading: clearingQueue }"
+      :confirm-btn="{ content: '确定', theme: 'danger', loading: clearingQueue }"
       :close-on-overlay-click="false"
       @close="clearQueueDialogVisible = false"
       @confirm="confirmClearQueue"
@@ -589,7 +589,7 @@ import './index.less';
 
 import { SearchIcon } from 'tdesign-icons-vue-next';
 import type { PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
-import { MessagePlugin } from 'tdesign-vue-next';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
@@ -612,7 +612,7 @@ type RecordRow = Record<string, unknown>;
 const route = useRoute();
 const router = useRouter();
 const userStore = useUserStore();
-const isMobile = useMediaQuery('(max-width: 768px)');
+const isMobile = useMediaQuery('(max-width: 767.98px)');
 const validTabs: LogsTab[] = [
   'activity',
   'runtime',

@@ -194,7 +194,7 @@
   </section>
 </template>
 <script setup lang="ts">
-import DataState from '@shared/user-v3/components/DataState.vue';
+import DataState from '@caiwu/shared/user-v3/components/DataState.vue';
 import { SearchIcon } from 'tdesign-icons-vue-next';
 import { computed } from 'vue';
 
@@ -573,7 +573,7 @@ function mergeCouponProductHierarchy(data: CouponHierarchyItem[]): MergedCouponH
   }
 }
 
-@media (max-width: @screen-sm-rem) {
+@media (max-width: @screen-mobile-max) {
   .coupon-page {
     padding: var(--td-comp-paddingTB-l) var(--td-comp-paddingLR-l);
   }

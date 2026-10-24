@@ -5,7 +5,7 @@ import {
   PAYMENT_STATUS_MAP,
   toSelectOptions,
 } from '@caiwu/shared/statusConfig';
-import { MessagePlugin } from 'tdesign-vue-next';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, onMounted, reactive, ref, shallowRef, watch } from 'vue';
 import type { LocationQuery } from 'vue-router';
 import { useRoute, useRouter } from 'vue-router';
@@ -313,7 +313,7 @@ export function useRecordList<T>(options: RecordListOptions<T>) {
 
   const hasRows = computed(() => list.value.length > 0);
 
-  // 是否存在生效筛选（关键词/状态/类型/日期）：用于空态区分“暂无数据”与“未检索到匹配结果”（DESIGN.md §4.3）
+  // 是否存在生效筛选（关键词/状态/类型/日期）：用于空态区分“暂无数据”与“未找到匹配结果”（DESIGN.md §4.3）
   const hasActiveFilters = computed(
     () =>
       filters.keyword.trim() !== '' ||

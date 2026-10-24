@@ -117,7 +117,7 @@ function go(to: string) {
   flex: none;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
+  font-size: var(--td-font-size-title-large);
   color: var(--td-brand-color);
 }
 
@@ -132,13 +132,13 @@ function go(to: string) {
   padding: var(--td-comp-paddingTB-xl) 0;
 }
 
-@media (width <= 1200px) {
+@media (max-width: 1200px) {
   .quick-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
-@media (width <= 640px) {
+@media (max-width: 640px) {
   .quick-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

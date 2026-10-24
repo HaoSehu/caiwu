@@ -1,5 +1,5 @@
-import { SERVICE_STATUS, SERVICE_STATUS_MAP, toSelectOptions } from '@shared/statusConfig';
-import { MessagePlugin } from 'tdesign-vue-next';
+import { SERVICE_STATUS, SERVICE_STATUS_MAP, toSelectOptions } from '@caiwu/shared/statusConfig';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, onMounted, reactive, ref, shallowRef, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 

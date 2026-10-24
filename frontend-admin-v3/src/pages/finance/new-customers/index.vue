@@ -69,7 +69,7 @@
 import './index.less';
 
 import type { PrimaryTableCol } from 'tdesign-vue-next';
-import { MessagePlugin } from 'tdesign-vue-next';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, onMounted, ref } from 'vue';
 
 import type { NewCustomerDailyRecord } from '@/api/admin';
@@ -81,7 +81,7 @@ defineOptions({
   name: 'AdminFinanceNewCustomers',
 });
 
-const isMobile = useMediaQuery('(max-width: 768px)');
+const isMobile = useMediaQuery('(max-width: 767.98px)');
 const loading = ref(false);
 const dailyList = ref<NewCustomerDailyRecord[]>([]);
 const summaryData = ref<Record<string, number | string>>({});

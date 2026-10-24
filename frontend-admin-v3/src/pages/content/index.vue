@@ -64,6 +64,9 @@
 
       <div v-if="!isMobile" class="table-scroll">
         <t-table row-key="id" :data="articles" :columns="columns" hover table-layout="fixed">
+          <template #empty>
+            <t-empty :description="loading ? '加载中…' : hasActiveFilters ? '未找到匹配结果' : '暂无数据'" />
+          </template>
           <template #title="{ row }">
             <button class="title-button" type="button" @click="goEditArticle(row.id)">
               {{ fieldValue(row.title) }}
@@ -205,6 +208,9 @@
         <t-card :bordered="false" :loading="categoryLoading">
           <template #title>分类列表</template>
           <t-table row-key="id" :data="categories" :columns="categoryColumns" hover table-layout="fixed">
+            <template #empty>
+              <t-empty :description="categoryLoading ? '加载中…' : '暂无数据'" />
+            </template>
             <template #status="{ row }">
               <t-tag :theme="Number(row.status) === 1 ? 'success' : 'default'" variant="light">
                 {{ Number(row.status) === 1 ? '启用' : '停用' }}
@@ -227,7 +233,8 @@ import './index.less';
 
 import { AddIcon, FolderIcon, SearchIcon } from 'tdesign-icons-vue-next';
 import type { DropdownOption, FormInstanceFunctions, FormRule, PrimaryTableCol } from 'tdesign-vue-next';
-import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
+import { DialogPlugin } from 'tdesign-vue-next/es/dialog/plugin';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
@@ -310,7 +317,15 @@ const categoryRules: Record<string, FormRule[]> = {
 const contentType = computed<ContentType>(() => (route.meta.contentType === 'help' ? 'help' : 'notice'));
 const pageTitle = computed(() => (contentType.value === 'help' ? '帮助中心' : '系统公告'));
 const articleLabel = computed(() => (contentType.value === 'help' ? '帮助文章' : '公告'));
-const isMobile = useMediaQuery('(max-width: 768px)');
+const isMobile = useMediaQuery('(max-width: 767.98px)');
+// 空态文案区分「未筛选但无数据」与「筛选后无匹配」（docs/DESIGN.md 术语表）
+const hasActiveFilters = computed(
+  () =>
+    Boolean(String(filters.keyword || '').trim()) ||
+    filters.category_id !== '' ||
+    filters.status !== '' ||
+    filters.is_pinned !== '',
+);
 
 const columns: PrimaryTableCol<ContentArticleRecord>[] = [
   { colKey: 'id', title: 'ID', width: 80 },

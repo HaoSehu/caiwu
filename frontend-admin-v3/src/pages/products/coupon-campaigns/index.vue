@@ -320,7 +320,8 @@ import './index.less';
 
 import { AddIcon, SearchIcon } from 'tdesign-icons-vue-next';
 import type { DropdownOption, FormInstanceFunctions, FormRule, PrimaryTableCol } from 'tdesign-vue-next';
-import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
+import { DialogPlugin } from 'tdesign-vue-next/es/dialog/plugin';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, reactive, ref } from 'vue';
 
 import type { CouponCampaignPayload, CouponCampaignRecord } from '@/api/admin';
@@ -380,7 +381,7 @@ const saving = ref(false);
 const dialogVisible = ref(false);
 const formRef = ref<FormInstanceFunctions>();
 const rowActionState = reactive<Record<string, string>>({});
-const isMobile = useMediaQuery('(max-width: 768px)');
+const isMobile = useMediaQuery('(max-width: 767.98px)');
 const canManage = computed(() => hasAdminPermission(AdminPermissions.COUPON_MANAGE));
 
 interface CampaignFilter {

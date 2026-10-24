@@ -222,7 +222,7 @@
     </t-loading>
 
     <t-dialog v-model:visible="previewVisible" header="图片预览" width="720px" :footer="false">
-      <img v-if="previewUrl" class="preview-image" :src="previewUrl" alt="图片预览" />
+      <img v-if="previewUrl" class="preview-image" :src="previewUrl" alt="图片预览" loading="lazy" decoding="async" />
       <div class="preview-dialog-actions">
         <t-button variant="outline" @click="previewVisible = false">
           <template #icon><close-circle-icon /></template>
@@ -236,7 +236,8 @@
 import './index.less';
 
 import { ChevronLeftIcon, CloseCircleIcon, UploadIcon } from 'tdesign-icons-vue-next';
-import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
+import { DialogPlugin } from 'tdesign-vue-next/es/dialog/plugin';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 

@@ -139,10 +139,11 @@
 <script setup lang="ts">
 import './index.less';
 
-import { INVOICE_STATUS_MAP, INVOICE_TYPE_MAP, toLabelMap } from '@shared/statusConfig';
+import { INVOICE_STATUS_MAP, INVOICE_TYPE_MAP, toLabelMap } from '@caiwu/shared/statusConfig';
 import { SearchIcon } from 'tdesign-icons-vue-next';
 import type { DropdownOption, PrimaryTableCol } from 'tdesign-vue-next';
-import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
+import { DialogPlugin } from 'tdesign-vue-next/es/dialog/plugin';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 
@@ -174,7 +175,7 @@ interface InvoiceFilter {
 const cancelLoadingId = ref<number | string | null>(null);
 const userStore = useUserStore();
 const router = useRouter();
-const isMobile = useMediaQuery('(max-width: 768px)');
+const isMobile = useMediaQuery('(max-width: 767.98px)');
 
 const {
   filters,

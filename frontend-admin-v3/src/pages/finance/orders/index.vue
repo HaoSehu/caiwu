@@ -146,10 +146,10 @@
 <script setup lang="ts">
 import './index.less';
 
-import { ORDER_STATUS_FILTER_OPTIONS, ORDER_STATUS_MAP, ORDER_TYPE_MAP } from '@shared/statusConfig';
+import { ORDER_STATUS_FILTER_OPTIONS, ORDER_STATUS_MAP, ORDER_TYPE_MAP } from '@caiwu/shared/statusConfig';
 import { SearchIcon } from 'tdesign-icons-vue-next';
 import type { PrimaryTableCol } from 'tdesign-vue-next';
-import { MessagePlugin } from 'tdesign-vue-next';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
@@ -178,7 +178,7 @@ const ORDER_TAB_OPTIONS = [
 
 const route = useRoute();
 const router = useRouter();
-const isMobile = useMediaQuery('(max-width: 768px)');
+const isMobile = useMediaQuery('(max-width: 767.98px)');
 
 function normalizeMode(value: unknown): FinanceOrderMode | null {
   return ORDER_TAB_OPTIONS.some((o) => o.value === value) ? (value as FinanceOrderMode) : null;

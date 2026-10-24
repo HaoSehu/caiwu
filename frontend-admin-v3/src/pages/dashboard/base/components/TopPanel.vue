@@ -196,7 +196,7 @@ function go(to?: string) {
 .stat-card__value {
   overflow: hidden;
   color: var(--td-text-color-primary);
-  font-size: 26px;
+  font-size: var(--td-font-size-headline-medium);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   line-height: 1.2;
@@ -225,7 +225,7 @@ function go(to?: string) {
   white-space: nowrap;
 
   .t-icon {
-    font-size: 12px;
+    font-size: var(--td-font-size-body-small);
   }
 
   /* 国内看板约定：涨红跌绿，与欧美配色相反 */
@@ -271,7 +271,7 @@ function go(to?: string) {
   border-radius: var(--td-radius-extraLarge, 12px);
 
   .t-icon {
-    font-size: 24px;
+    font-size: var(--td-font-size-headline-small);
   }
 
   &.is-brand {
@@ -290,19 +290,19 @@ function go(to?: string) {
   }
 }
 
-@media (width <= 1024px) {
+@media (max-width: 1024px) {
   .top-panel {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
-@media (width <= 640px) {
+@media (max-width: 640px) {
   .top-panel {
     grid-template-columns: minmax(0, 1fr);
   }
 
   .stat-card__value {
-    font-size: 22px;
+    font-size: var(--td-font-size-headline-small);
   }
 }
 </style>

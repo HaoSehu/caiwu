@@ -140,7 +140,8 @@ import './index.less';
 
 import { AddIcon } from 'tdesign-icons-vue-next';
 import type { FormInstanceFunctions, FormRule, PrimaryTableCol } from 'tdesign-vue-next';
-import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
+import { DialogPlugin } from 'tdesign-vue-next/es/dialog/plugin';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, onMounted, reactive, ref } from 'vue';
 
 import type { CpuModelGroupRecord, CpuModelRecord, ProductBindingRecord } from '@/api/admin';

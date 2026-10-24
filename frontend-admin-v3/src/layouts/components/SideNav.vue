@@ -3,6 +3,7 @@
     <div
       v-if="isMobile && settingStore.isMobileSidebarVisible"
       :class="`${prefix}-side-nav-mask`"
+      aria-hidden="true"
       @click="closeMobileSidebar"
     ></div>
     <nav :class="sideNavCls" :aria-label="t('layout.sideNavLabel')">
@@ -47,7 +48,7 @@ import { useRouter } from 'vue-router';
 
 import AssetLogoFull from '@/assets/assets-logo-full.svg?component';
 import AssetLogo from '@/assets/assets-t-logo.svg?component';
-import { prefix } from '@/config/global';
+import { MOBILE_BREAKPOINT, prefix, TABLET_BREAKPOINT } from '@/config/global';
 import { t } from '@/locales';
 import { getActive } from '@/router';
 import { useSettingStore } from '@/store';
@@ -87,8 +88,8 @@ const { menu, showLogo, isFixed, layout, theme, isCompact } = defineProps({
   },
 });
 
-const MIN_POINT = 992 - 1;
-const MOBILE_POINT = 768;
+const MIN_POINT = TABLET_BREAKPOINT - 1;
+const MOBILE_POINT = MOBILE_BREAKPOINT;
 
 const router = useRouter();
 const settingStore = useSettingStore();
@@ -175,7 +176,7 @@ const menuCls = computed(() => {
 });
 
 const autoCollapsed = () => {
-  const mobile = window.innerWidth <= MOBILE_POINT;
+  const mobile = window.innerWidth < MOBILE_POINT;
   const isCompact = !mobile && window.innerWidth <= MIN_POINT;
   const isMobileSidebarVisible = mobile ? settingStore.isMobileSidebarVisible : false;
 
@@ -195,15 +196,24 @@ const autoCollapsed = () => {
   });
 };
 
+// 移动端抽屉打开后遮罩盖住顶部按钮，补 Esc 作为纯键盘用户唯一的关闭路径
+function handleSidebarEscKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape') {
+    closeMobileSidebar();
+  }
+}
+
 onMounted(() => {
   getExpanded();
   autoCollapsed();
 
   window.addEventListener('resize', autoCollapsed);
+  document.addEventListener('keydown', handleSidebarEscKeydown);
 });
 
 onUnmounted(() => {
   window.removeEventListener('resize', autoCollapsed);
+  document.removeEventListener('keydown', handleSidebarEscKeydown);
 });
 
 const goHome = () => {

@@ -1,4 +1,4 @@
-import { MessagePlugin } from 'tdesign-vue-next';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, onMounted, reactive, ref } from 'vue';
 
 import clientApi from '@/api/client';

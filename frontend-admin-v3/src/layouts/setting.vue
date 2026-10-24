@@ -54,6 +54,7 @@
 import { computed, onMounted, onUnmounted, ref, watchEffect } from 'vue';
 
 import Thumbnail from '@/components/thumbnail/index.vue';
+import { MOBILE_BREAKPOINT } from '@/config/global';
 import STYLE_CONFIG from '@/config/style';
 import { t } from '@/locales';
 import { useSettingStore } from '@/store';
@@ -63,11 +64,11 @@ const settingStore = useSettingStore();
 const LAYOUT_OPTION = ['side', 'top'];
 const LAYOUT_THUMBNAILS = Object.fromEntries(LAYOUT_OPTION.map((item) => [item, createLayoutThumbnail(item)]));
 
-const MOBILE_POINT = 768;
+const MOBILE_POINT = MOBILE_BREAKPOINT;
 const isMobile = ref(false);
 
 const updateIsMobile = () => {
-  isMobile.value = window.innerWidth <= MOBILE_POINT;
+  isMobile.value = window.innerWidth < MOBILE_POINT;
 };
 
 onMounted(() => {
@@ -117,6 +118,11 @@ const handleCloseDrawer = () => {
   });
 };
 
+/**
+ * 生成布局缩略图。
+ * 这里的十六进制颜色刻意保留字面量：缩略图需要固定呈现「各布局在主题色下的效果」，
+ * 不能跟随当前主题变量变化，否则选择器本身会失去对照意义（审查条目 C3 的豁免项）。
+ */
 function createLayoutThumbnail(type: string): string {
   const hasSide = type !== 'top';
   const hasTop = type !== 'side';
@@ -139,7 +145,8 @@ watchEffect(() => {
   settingStore.updateConfig(formData.value);
 });
 </script>
-<!-- teleport导致drawer 内 scoped样式问题无法生效 先规避下 -->
+<!-- teleport 导致 drawer 内 scoped 样式无法生效，故保留非 scoped；
+     规则全部以 .tdesign-setting 命名空间收口（审查条目 C5） -->
 <!-- eslint-disable-next-line vue-scoped-css/enforce-style-type -->
 <style lang="less">
 .tdesign-setting {
@@ -292,7 +299,7 @@ watchEffect(() => {
 }
 
 /* 手机端不提供导航布局切换，显示灰色不可用 */
-@media (width <= 768px) {
+@media (max-width: 767.98px) {
   .setting-drawer-container .setting-container .t-form {
     > .setting-group-title {
       color: var(--td-text-color-disabled);

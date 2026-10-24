@@ -37,6 +37,9 @@
         table-layout="auto"
         @page-change="handlePageChange"
       >
+        <template #empty>
+          <t-empty :description="loading ? '加载中…' : hasActiveFilters ? '未找到匹配结果' : '暂无数据'" />
+        </template>
         <template #preview="{ row }">
           <div class="media-preview">
             <video
@@ -115,7 +118,8 @@ import './media-library.less';
 
 import { RefreshIcon, SearchIcon, UploadIcon } from 'tdesign-icons-vue-next';
 import type { PageInfo, PrimaryTableCol } from 'tdesign-vue-next';
-import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
+import { DialogPlugin } from 'tdesign-vue-next/es/dialog/plugin';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, onMounted, reactive, ref } from 'vue';
 
 import type { MediaFileRecord } from '@/api/admin';
@@ -131,6 +135,8 @@ const typeOptions = [
 
 const loading = ref(false);
 const uploading = ref(false);
+/** 列表请求序号，用于丢弃过期响应 */
+let requestSeq = 0;
 const reindexing = ref(false);
 const deletingId = ref('');
 const fileInputRef = ref<HTMLInputElement | null>(null);
@@ -184,6 +190,8 @@ function formatDimensions(row: MediaFileRecord) {
 }
 
 async function loadMediaList() {
+  // 请求竞态防护：连续筛选/翻页时只允许最后一次请求回写结果（docs/FRONTEND.md）
+  const currentSeq = ++requestSeq;
   loading.value = true;
   try {
     const response = await adminApi.media.list({
@@ -193,16 +201,21 @@ async function loadMediaList() {
       page_size: filters.page_size,
     });
 
+    if (currentSeq !== requestSeq) return;
     items.value = response.list || [];
     total.value = Number(response.total || 0);
   } catch (error) {
+    if (currentSeq !== requestSeq) return;
     MessagePlugin.error(errorMessage(error, '加载媒体库失败'));
     items.value = [];
     total.value = 0;
   } finally {
-    loading.value = false;
+    if (currentSeq === requestSeq) loading.value = false;
   }
 }
+
+// 空态文案区分「未筛选但无数据」与「筛选后无匹配」（docs/DESIGN.md 术语表）
+const hasActiveFilters = computed(() => Boolean(filters.keyword.trim()) || Boolean(filters.type));
 
 function handleSearch() {
   filters.page = 1;

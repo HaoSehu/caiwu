@@ -4,6 +4,8 @@
     <record-detail-page
       :loading="loading"
       :ready="Boolean(invoice.id || invoice.invoice_no)"
+      :error="error"
+      :error-text="errorText"
       :show-back="embedded"
       eyebrow="账单详情"
       :title="fieldValue(invoice.invoice_no || invoice.id)"
@@ -15,6 +17,7 @@
       :active-tab="activeTab"
       empty-text="账单不存在"
       @refresh="emit('refresh')"
+      @retry="emit('refresh')"
       @back="handleBack"
       @update:active-tab="(value) => (activeTab = value)"
     >
@@ -230,8 +233,10 @@ import {
   INVOICE_TYPE_MAP,
   PAYMENT_STATUS_MAP,
   REFUND_STATUS,
-} from '@shared/statusConfig';
+} from '@caiwu/shared/statusConfig';
 import { FileCopyIcon } from 'tdesign-icons-vue-next';
+// 抽屉模式必须绑 TDrawer 组件对象：删掉 app.use(TDesign) 后，'t-drawer' 字符串会被 Vue 当成未知元素
+import { Drawer as TDrawer } from 'tdesign-vue-next/es/drawer/index';
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
@@ -245,6 +250,9 @@ const props = withDefaults(
   defineProps<{
     visible: boolean;
     loading?: boolean;
+    /** 首次加载失败，交由详情组件的失败态呈现（含重新加载按钮） */
+    error?: boolean;
+    errorText?: string;
     invoice?: InvoiceRecord;
     payments?: Record<string, unknown>[];
     items?: Record<string, unknown>[];
@@ -258,6 +266,8 @@ const props = withDefaults(
   }>(),
   {
     loading: false,
+    error: false,
+    errorText: '',
     invoice: () => ({}),
     payments: () => [],
     items: () => [],
@@ -282,11 +292,11 @@ const emit = defineEmits<{
   (event: 'view-user', id: unknown): void;
 }>();
 
-const isMobile = useMediaQuery('(max-width: 768px)');
+const isMobile = useMediaQuery('(max-width: 767.98px)');
 const drawerSize = computed(() => (isMobile.value ? '100%' : '780px'));
 
-// 外壳切换：抽屉模式套 t-drawer；embedded 模式渲染为页面内容（复用同一套详情 UI）
-const shellComponent = computed(() => (props.embedded ? 'div' : 't-drawer'));
+// 外壳切换：抽屉模式套 TDrawer；embedded 模式渲染为页面内容（复用同一套详情 UI）
+const shellComponent = computed(() => (props.embedded ? 'div' : TDrawer));
 const shellProps = computed(() =>
   props.embedded
     ? { class: 'invoice-detail-embedded' }
@@ -567,7 +577,7 @@ function toRecord(value: unknown): Record<string, unknown> {
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 767.98px) {
   .detail-kv-grid {
     grid-template-columns: 1fr;
   }
@@ -595,7 +605,7 @@ function toRecord(value: unknown): Record<string, unknown> {
   min-width: 0;
 }
 
-@media (width <= 560px) {
+@media (max-width: 560px) {
   .finance-detail-grid {
     grid-template-columns: 1fr;
   }

@@ -24,6 +24,9 @@
 
       <div class="table-scroll">
         <t-table row-key="id" :data="specs" :columns="columns" :loading="loading" hover table-layout="fixed">
+          <template #empty>
+            <t-empty :description="loading ? '加载中…' : hasActiveFilters ? '未找到匹配结果' : '暂无数据'" />
+          </template>
           <template #spec="{ row }">
             <div class="spec-cell">
               <strong>{{ row.text || '-' }}</strong>
@@ -96,8 +99,9 @@ import './index.less';
 
 import { AddIcon, SearchIcon } from 'tdesign-icons-vue-next';
 import type { FormInstanceFunctions, FormRule, PrimaryTableCol } from 'tdesign-vue-next';
-import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
-import { onMounted, reactive, ref } from 'vue';
+import { DialogPlugin } from 'tdesign-vue-next/es/dialog/plugin';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
+import { computed, onMounted, reactive, ref } from 'vue';
 
 import type { InstanceSpecRecord, ProductBindingRecord } from '@/api/admin';
 import { adminApi } from '@/api/admin';
@@ -132,6 +136,9 @@ const filters = reactive({
   keyword: '',
   binding_status: '',
 });
+
+// 空态文案区分「未筛选但无数据」与「筛选后无匹配」（docs/DESIGN.md 术语表）
+const hasActiveFilters = computed(() => Boolean(filters.keyword.trim()) || Boolean(filters.binding_status));
 
 const specForm = reactive({
   text: '',

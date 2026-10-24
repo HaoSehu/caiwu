@@ -4,6 +4,8 @@
       embedded
       :visible="true"
       :loading="loading"
+      :error="loadError"
+      :error-text="loadErrorText"
       :invoice="invoice"
       :payments="payments"
       :items="items"
@@ -31,8 +33,9 @@
   </div>
 </template>
 <script setup lang="ts">
-import { INVOICE_STATUS, INVOICE_STATUS_MAP, toLabelMap, toTagTypeMap } from '@shared/statusConfig';
-import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
+import { INVOICE_STATUS, INVOICE_STATUS_MAP, toLabelMap, toTagTypeMap } from '@caiwu/shared/statusConfig';
+import { DialogPlugin } from 'tdesign-vue-next/es/dialog/plugin';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
@@ -66,6 +69,8 @@ const hasInvoiceManagePermission = computed(() => {
 });
 
 const loading = ref(false);
+const loadError = ref(false);
+const loadErrorText = ref('');
 const cancelLoading = ref(false);
 const detail = ref<InvoiceDetailResponse>({} as InvoiceDetailResponse);
 
@@ -100,10 +105,18 @@ async function load(): Promise<void> {
     return;
   }
   loading.value = true;
+  loadError.value = false;
+  loadErrorText.value = '';
   try {
     detail.value = await adminApi.invoices.detail(id);
   } catch (error) {
-    MessagePlugin.error(errorMessage(error, '加载账单详情失败'));
+    // 首次加载失败交给详情组件的失败态呈现（含重新加载），刷新失败仍用 toast 不打断已展示内容
+    if (!invoice.value.id) {
+      loadError.value = true;
+      loadErrorText.value = errorMessage(error, '加载账单详情失败');
+    } else {
+      MessagePlugin.error(errorMessage(error, '加载账单详情失败'));
+    }
   } finally {
     loading.value = false;
   }
@@ -133,7 +146,7 @@ async function handleCancel(): Promise<void> {
   const confirmed = await DialogPlugin.confirm({
     header: '取消账单',
     body: '取消后账单不可继续支付，确认取消？',
-    confirmBtn: { content: '确认取消', theme: 'danger' },
+    confirmBtn: { content: '确定', theme: 'danger' },
     cancelBtn: '再想想',
   });
   if (!confirmed) return;
@@ -153,9 +166,9 @@ async function handleCancel(): Promise<void> {
 onMounted(load);
 </script>
 <style lang="less" scoped>
+// 页面边距由布局层统一提供（docs/DESIGN.md §3.3），根元素只负责布局
 .invoice-detail-page {
   min-height: 100%;
-  padding: var(--td-comp-margin-l);
   background: var(--td-bg-color-page);
 }
 </style>

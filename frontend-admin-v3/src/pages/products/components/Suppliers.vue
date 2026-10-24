@@ -43,7 +43,7 @@
         <t-empty
           :description="
             supplierLoading
-              ? '加载中...'
+              ? '加载中…'
               : supplierFilters.keyword || supplierFilters.status !== ''
                 ? '未找到匹配结果'
                 : '暂无提供商'
@@ -447,7 +447,8 @@
 <script setup lang="ts">
 import { AddIcon, ChevronRightIcon, SearchIcon } from 'tdesign-icons-vue-next';
 import type { PageInfo, PrimaryTableCol } from 'tdesign-vue-next';
-import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
+import { DialogPlugin } from 'tdesign-vue-next/es/dialog/plugin';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, onMounted, reactive, ref } from 'vue';
 
 import type { ProductCategoryRecord, ProductRecord } from '@/api/product';
@@ -526,6 +527,9 @@ const supplierSubmitting = ref(false);
 const supplierActionLoading = ref<number | string | null>(null);
 const supplierCardActionLoading = ref<string | null>(null);
 let supplierLoadBatchId = 0;
+/** 提供商类型与列表的请求序号，用于丢弃过期响应（docs/FRONTEND.md） */
+let supplierTypeRequestVersion = 0;
+let supplierListRequestVersion = 0;
 
 const suppliers = ref<SupplierRecord[]>([]);
 const supplierTotal = ref(0);
@@ -759,15 +763,20 @@ function handleSupplierPageChange(pageInfo: PageInfo) {
 }
 
 async function loadProviderTypes() {
+  const requestVersion = ++supplierTypeRequestVersion;
   try {
     const response = await supplierApi.providerTypes();
+    if (requestVersion !== supplierTypeRequestVersion) return;
     providerTypes.value = normalizeProviderTypeOptions(response);
   } catch {
+    if (requestVersion !== supplierTypeRequestVersion) return;
     providerTypes.value = [];
   }
 }
 
 async function loadSuppliers() {
+  // 请求竞态防护：连续筛选/翻页时只允许最后一次请求回写结果（docs/FRONTEND.md）
+  const currentSeq = ++supplierListRequestVersion;
   supplierLoadBatchId += 1;
   supplierLoading.value = true;
   try {
@@ -776,17 +785,18 @@ async function loadSuppliers() {
       page: supplierPage.value,
       page_size: supplierPageSize.value,
     });
+    if (currentSeq !== supplierListRequestVersion) return;
     suppliers.value = Array.isArray(response.list) ? response.list : [];
     supplierTotal.value = Number(response.total || 0);
     supplierPage.value = Number(response.page || supplierPage.value);
     supplierPageSize.value = Number(response.page_size || supplierPageSize.value);
   } catch (error) {
-    supplierLoadBatchId += 1;
+    if (currentSeq !== supplierListRequestVersion) return;
     suppliers.value = [];
     supplierTotal.value = 0;
     MessagePlugin.error(errorMessage(error, '加载提供商失败'));
   } finally {
-    supplierLoading.value = false;
+    if (currentSeq === supplierListRequestVersion) supplierLoading.value = false;
   }
 }
 

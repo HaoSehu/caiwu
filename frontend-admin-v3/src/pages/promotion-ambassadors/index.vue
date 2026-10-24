@@ -15,7 +15,10 @@
       </template>
 
       <div v-if="!isMobile" class="table-scroll">
-        <t-table row-key="id" :data="ambassadors" :columns="columns" hover table-layout="fixed">
+        <t-table row-key="id" :data="ambassadors" :columns="columns" :loading="loading" hover table-layout="fixed">
+          <template #empty>
+            <t-empty :description="loading ? '加载中…' : '暂无数据'" />
+          </template>
           <template #name="{ row }">
             <div class="stack-cell">
               <strong>{{ fieldValue(row.name) }}</strong>
@@ -111,7 +114,8 @@ import './index.less';
 
 import { AddIcon } from 'tdesign-icons-vue-next';
 import type { DropdownOption, FormInstanceFunctions, FormRule, PrimaryTableCol } from 'tdesign-vue-next';
-import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
+import { DialogPlugin } from 'tdesign-vue-next/es/dialog/plugin';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { onMounted, reactive, ref } from 'vue';
 
 import type { PromotionAmbassadorPayload, PromotionAmbassadorRecord } from '@/api/admin';
@@ -135,7 +139,7 @@ const saving = ref(false);
 const dialogVisible = ref(false);
 const formRef = ref<FormInstanceFunctions>();
 const ambassadors = ref<PromotionAmbassadorRecord[]>([]);
-const isMobile = useMediaQuery('(max-width: 768px)');
+const isMobile = useMediaQuery('(max-width: 767.98px)');
 
 const form = reactive<AmbassadorForm>(createDefaultForm());
 

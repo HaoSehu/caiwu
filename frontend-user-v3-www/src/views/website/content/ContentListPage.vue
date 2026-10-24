@@ -166,7 +166,7 @@
               <span class="ranking-item__title">{{ item.title }}</span>
             </router-link>
           </div>
-          <el-empty v-else description="暂无内容" />
+          <el-empty v-else description="暂无数据" />
         </section>
 
         <section class="sidebar-card">
@@ -185,7 +185,7 @@
               }}</span>
             </router-link>
           </div>
-          <el-empty v-else description="暂无内容" />
+          <el-empty v-else description="暂无数据" />
         </section>
       </aside>
     </div>

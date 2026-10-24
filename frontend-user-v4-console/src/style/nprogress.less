@@ -1,0 +1,9 @@
+/* NProgress 的 .bar 由运行库注入到 body，不带 SFC 作用域属性，
+ * 因此进度条配色必须放在全局样式里，不能在 App.vue 的 scoped 块中声明
+ * （scoped 会编译成 .bar[data-v-xxx]，永远无法命中运行库注入的节点）。
+ * 取值沿用品牌色变量，与控制台其余品牌元素一致。 */
+
+/* 选择器比 nprogress 自带的 `#nprogress .bar` 多一级 html，保证无论样式打包顺序如何都能覆盖默认的 #29d。 */
+html #nprogress .bar {
+  background: var(--td-brand-color);
+}

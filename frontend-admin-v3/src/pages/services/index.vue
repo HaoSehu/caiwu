@@ -182,10 +182,10 @@
 <script setup lang="ts">
 import './index.less';
 
-import { SERVICE_STATUS_MAP, toSelectOptions } from '@shared/statusConfig';
+import { SERVICE_STATUS_MAP, toSelectOptions } from '@caiwu/shared/statusConfig';
 import { SearchIcon } from 'tdesign-icons-vue-next';
 import type { PrimaryTableCol } from 'tdesign-vue-next';
-import { MessagePlugin } from 'tdesign-vue-next';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
@@ -218,7 +218,7 @@ const selectedRowKeys = ref<Array<string | number>>([]);
 const hostnameDialogVisible = ref(false);
 const hostnameSubmitting = ref(false);
 const hostnameRows = ref<HostnameRow[]>([]);
-const isMobile = useMediaQuery('(max-width: 768px)');
+const isMobile = useMediaQuery('(max-width: 767.98px)');
 
 const {
   filters,

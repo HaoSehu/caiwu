@@ -361,14 +361,14 @@ onBeforeUnmount(() => {
   }
 }
 
-@media (width <= 1200px) {
+@media (max-width: 1200px) {
   .chart-grid,
   .side-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 }
 
-@media (width <= 640px) {
+@media (max-width: 640px) {
   .chart-box {
     height: 260px;
   }

@@ -149,7 +149,8 @@ import './index.less';
 
 import { AddIcon } from 'tdesign-icons-vue-next';
 import type { DropdownOption, FormInstanceFunctions, FormRule, PrimaryTableCol } from 'tdesign-vue-next';
-import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
+import { DialogPlugin } from 'tdesign-vue-next/es/dialog/plugin';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { onMounted, reactive, ref } from 'vue';
 
 import type { MemberLevelPayload, MemberLevelRecord } from '@/api/admin';
@@ -182,7 +183,7 @@ const dialogVisible = ref(false);
 const formRef = ref<FormInstanceFunctions>();
 const levels = ref<MemberLevelRecord[]>([]);
 const matrixGroups = ref<MatrixGroupRow[]>([]);
-const isMobile = useMediaQuery('(max-width: 768px)');
+const isMobile = useMediaQuery('(max-width: 767.98px)');
 
 const discountTypeOptions = [
   { label: '百分比（折后保留，90=九折）', value: 1 },

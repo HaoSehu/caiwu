@@ -70,7 +70,7 @@
   </section>
 </template>
 <script setup lang="ts">
-import DataState from '@shared/user-v3/components/DataState.vue';
+import DataState from '@caiwu/shared/user-v3/components/DataState.vue';
 import { ChevronRightIcon } from 'tdesign-icons-vue-next';
 
 import { useContentDetail } from '@/domains/content/useContent';
@@ -273,7 +273,7 @@ const {
   }
 }
 
-@media (max-width: @screen-sm-rem) {
+@media (max-width: @screen-mobile-max) {
   .content-detail-page {
     padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-s);
   }

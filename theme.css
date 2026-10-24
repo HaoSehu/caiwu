@@ -1,5 +1,5 @@
-:root,
-:root[theme-mode='light'] {
+/* 仅浅色主题：主体变量挂在 :root 上，不再区分 theme-mode 属性（docs/DESIGN.md §2）。 */
+:root {
   --td-brand-color-1: #e8f1ff;
   --td-brand-color-2: #c9dbff;
   --td-brand-color-3: #94bfff;
@@ -121,100 +121,7 @@
   --td-scroll-track-color: var(--td-gray-color-2);
 }
 
-:root[theme-mode='dark'] {
-  --td-brand-color-1: #001b92;
-  --td-brand-color-2: #0935ad;
-  --td-brand-color-3: #134fc8;
-  --td-brand-color-4: #1c6ae4;
-  --td-brand-color-5: #2684ff;
-  --td-brand-color-6: #4a99ff;
-  --td-brand-color-7: #6eadff;
-  --td-brand-color-8: #92c2ff;
-  --td-brand-color-9: #b7d6ff;
-  --td-brand-color-10: #dbebff;
-  --td-warning-color-1: #723b16;
-  --td-warning-color-2: #8c581e;
-  --td-warning-color-3: #a67426;
-  --td-warning-color-4: #bf912e;
-  --td-warning-color-5: #d9ae36;
-  --td-warning-color-6: #dfbc57;
-  --td-warning-color-7: #e6c979;
-  --td-warning-color-8: #ecd79a;
-  --td-warning-color-9: #f2e4bc;
-  --td-warning-color-10: #f9f2de;
-  --td-error-color-1: #5d1d34;
-  --td-error-color-2: #742536;
-  --td-error-color-3: #8c2c39;
-  --td-error-color-4: #a3333b;
-  --td-error-color-5: #bb3b3d;
-  --td-error-color-6: #c65c5d;
-  --td-error-color-7: #d27c7e;
-  --td-error-color-8: #dd9d9e;
-  --td-error-color-9: #e8bebe;
-  --td-error-color-10: #f4dedf;
-  --td-success-color-1: #064e3a;
-  --td-success-color-2: #07623f;
-  --td-success-color-3: #097545;
-  --td-success-color-4: #0a894a;
-  --td-success-color-5: #0c9d4f;
-  --td-success-color-6: #34ad6c;
-  --td-success-color-7: #5dbe8a;
-  --td-success-color-8: #85cea7;
-  --td-success-color-9: #aedec4;
-  --td-success-color-10: #d7efe2;
-  --td-gray-color-1: #f3f4f7;
-  --td-gray-color-2: #e7eaef;
-  --td-gray-color-3: #cfd5de;
-  --td-gray-color-4: #b7c1ce;
-  --td-gray-color-5: #9eacbe;
-  --td-gray-color-6: #8697ad;
-  --td-gray-color-7: #6e829d;
-  --td-gray-color-8: #60708a;
-  --td-gray-color-9: #425472;
-  --td-gray-color-10: #344158;
-  --td-gray-color-11: #262f3e;
-  --td-gray-color-12: #1e222d;
-  --td-gray-color-13: #151822;
-  --td-gray-color-14: #090a0f;
-  --td-font-white-1: rgba(255, 255, 255, 0.9);
-  --td-font-white-2: rgba(255, 255, 255, 0.55);
-  --td-font-white-3: rgba(255, 255, 255, 0.35);
-  --td-font-white-4: rgba(255, 255, 255, 0.22);
-  --td-brand-color: var(--td-brand-color-5);
-  --td-warning-color: var(--td-warning-color-5);
-  --td-error-color: var(--td-error-color-6);
-  --td-success-color: var(--td-success-color-6);
-  --td-bg-color-page: var(--td-gray-color-14);
-  --td-bg-color-container: var(--td-gray-color-13);
-  --td-bg-color-container-hover: var(--td-gray-color-12);
-  --td-bg-color-container-active: var(--td-gray-color-10);
-  --td-bg-color-container-select: var(--td-gray-color-9);
-  --td-bg-color-secondarycontainer: var(--td-gray-color-12);
-  --td-bg-color-secondarycontainer-hover: var(--td-gray-color-11);
-  --td-bg-color-secondarycontainer-active: var(--td-gray-color-9);
-  --td-bg-color-component: var(--td-gray-color-11);
-  --td-bg-color-component-hover: var(--td-gray-color-10);
-  --td-bg-color-component-active: var(--td-gray-color-9);
-  --td-bg-color-secondarycomponent: var(--td-gray-color-10);
-  --td-bg-color-secondarycomponent-hover: var(--td-gray-color-9);
-  --td-bg-color-secondarycomponent-active: var(--td-gray-color-8);
-  --td-bg-color-component-disabled: var(--td-gray-color-12);
-  --td-bg-color-specialcomponent: transparent;
-  --td-text-color-primary: var(--td-font-white-1);
-  --td-text-color-secondary: var(--td-font-white-2);
-  --td-text-color-placeholder: var(--td-font-white-3);
-  --td-text-color-disabled: var(--td-font-white-4);
-  --td-text-color-anti: #fff;
-  --td-text-color-brand: var(--td-brand-color-5);
-  --td-text-color-link: var(--td-brand-color-5);
-  --td-border-level-1-color: var(--td-gray-color-11);
-  --td-component-stroke: var(--td-gray-color-11);
-  --td-border-level-2-color: var(--td-gray-color-10);
-  --td-component-border: var(--td-gray-color-10);
-  --td-scrollbar-color: rgba(255, 255, 255, 0.1);
-  --td-scrollbar-hover-color: rgba(255, 255, 255, 0.3);
-  --td-scroll-track-color: #333;
-}
+/* 仅浅色模式（docs/DESIGN.md §2）：原 :root[theme-mode='dark'] 暗色变量块已删除，禁止重新引入。 */
 
 :root {
   --td-radius-small: 2px;
@@ -521,81 +428,8 @@
   display: none;
 }
 
-#app .tdesign-starter-content-layout {
-  padding: 20px 24px;
-}
-
 #app .tdesign-starter-layout {
   background: var(--td-bg-color-page);
-}
-
-#app .record-page .record-table,
-#app .client-invoices .invoice-table-card,
-#app .client-services .service-table-card,
-#app .client-tickets .ticket-table-shell,
-#app .referral-page .t-table {
-  background: transparent;
-  border: 0;
-  box-shadow: none;
-}
-
-#app .record-page .record-table .t-table,
-#app .client-invoices .invoice-table-card .t-table,
-#app .client-services .service-table-card .t-table,
-#app .client-tickets .ticket-table-shell .t-table,
-#app .referral-page .t-table {
-  background: transparent;
-}
-
-#app .record-page .record-table table,
-#app .client-invoices .invoice-table-card table,
-#app .client-services .service-table-card table,
-#app .client-tickets .ticket-table-shell table,
-#app .referral-page .t-table table {
-  border-collapse: collapse;
-}
-
-#app .record-page .record-table th,
-#app .record-page .record-table td,
-#app .client-invoices .invoice-table-card th,
-#app .client-invoices .invoice-table-card td,
-#app .client-services .service-table-card th,
-#app .client-services .service-table-card td,
-#app .client-tickets .ticket-table-shell th,
-#app .client-tickets .ticket-table-shell td,
-#app .referral-page .t-table th,
-#app .referral-page .t-table td {
-  height: 42px;
-  padding: 10px 18px;
-  background: var(--td-bg-color-container) !important;
-  border-bottom: 1px solid var(--td-component-stroke);
-}
-
-#app .record-page .record-table th,
-#app .client-invoices .invoice-table-card th,
-#app .client-services .service-table-card th,
-#app .client-tickets .ticket-table-shell th,
-#app .referral-page .t-table th {
-  color: var(--td-text-color-secondary);
-  font: var(--td-font-body-small);
-  font-weight: 400;
-}
-
-#app .record-page .record-table td,
-#app .client-invoices .invoice-table-card td,
-#app .client-services .service-table-card td,
-#app .client-tickets .ticket-table-shell td,
-#app .referral-page .t-table td {
-  color: var(--td-text-color-primary);
-  font: var(--td-font-body-small);
-}
-
-#app .record-page .record-table tr:hover td,
-#app .client-invoices .invoice-table-card tr:hover td,
-#app .client-services .service-table-card tr:hover td,
-#app .client-tickets .ticket-table-shell tr:hover td,
-#app .referral-page .t-table tr:hover td {
-  background: var(--td-brand-color-1) !important;
 }
 
 #app .tdesign-starter-layout-tabs-nav {
@@ -846,6 +680,40 @@
   }
 }
 
+/* 推荐页表格：admin 与 console 两端共用 .referral-page，故保留在跨端 theme.css（不能下沉到 console 专属样式） */
+#app .referral-page .t-table {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+#app .referral-page .t-table table {
+  border-collapse: collapse;
+}
+
+#app .referral-page .t-table th,
+#app .referral-page .t-table td {
+  height: 42px;
+  padding: 10px 18px;
+  background: var(--td-bg-color-container) !important;
+  border-bottom: 1px solid var(--td-component-stroke);
+}
+
+#app .referral-page .t-table th {
+  color: var(--td-text-color-secondary);
+  font: var(--td-font-body-small);
+  font-weight: 400;
+}
+
+#app .referral-page .t-table td {
+  color: var(--td-text-color-primary);
+  font: var(--td-font-body-small);
+}
+
+#app .referral-page .t-table tr:hover td {
+  background: var(--td-brand-color-1) !important;
+}
+
 #app .metric-grid,
 #app .chart-grid,
 #app .users-page,
@@ -860,11 +728,8 @@
   gap: var(--td-comp-margin-l);
 }
 
-@media (max-width: 767.98px) {
-  #app .tdesign-starter-content-layout {
-    padding: 12px;
-  }
-
+/* ≤991px 统一 12px 页面边距由各端 layout.less 的布局层规则提供（DESIGN.md §3.3），此处只收窄卡片内边距与业务根类 */
+@media (max-width: 991px) {
   #app .t-card__body {
     padding: 12px;
   }
@@ -876,7 +741,7 @@
   }
 }
 
-/* 浅底状态标签文字改用深色阶，满足 WCAG AA（变量随主题模式切换，dark 下为浅色阶同样达标） */
+/* 浅底状态标签文字改用深色阶，满足 WCAG AA（仅浅色模式，docs/DESIGN.md §2） */
 #app .t-tag--success.t-tag--light,
 #app .t-tag--success.t-tag--light-outline {
   color: var(--td-success-color-9);

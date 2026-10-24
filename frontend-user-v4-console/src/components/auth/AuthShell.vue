@@ -8,6 +8,7 @@
             :src="authLogoSrc"
             :alt="siteBranding.siteName"
             class="auth-brand__logo"
+            loading="eager"
             @error="handleLogoError"
           />
           <template v-else>

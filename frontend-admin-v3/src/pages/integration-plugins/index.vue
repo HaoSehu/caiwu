@@ -379,7 +379,8 @@ import './index.less';
 
 import { BrowseIcon, BrowseOffIcon, MoreIcon } from 'tdesign-icons-vue-next';
 import type { DropdownOption } from 'tdesign-vue-next';
-import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
+import { DialogPlugin } from 'tdesign-vue-next/es/dialog/plugin';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 

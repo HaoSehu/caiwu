@@ -3,6 +3,8 @@
     <record-detail-page
       :loading="detailLoading"
       :ready="Boolean(order.id)"
+      :error="orderLoadError"
+      :error-text="orderLoadErrorText"
       back-text="返回订单列表"
       eyebrow="订单详情"
       :title="fieldValue(order.order_no || order.id)"
@@ -13,6 +15,7 @@
       :tabs="tabs"
       :active-tab="activeTab"
       empty-text="订单不存在"
+      @retry="loadDetail"
       @back="goBack"
       @refresh="loadDetail"
       @update:active-tab="(value) => (activeTab = value)"
@@ -342,6 +345,8 @@
     <invoice-detail-drawer
       v-model:visible="invoiceDrawer.visible"
       :loading="invoiceDrawer.loading"
+      :error="invoiceDrawer.error"
+      :error-text="invoiceDrawer.errorText"
       :invoice="currentInvoice"
       :payments="invoicePayments"
       :items="invoiceItems"
@@ -369,7 +374,7 @@
 <script setup lang="ts">
 import './index.less';
 
-import { withDefaultSystemDisk } from '@shared/finance';
+import { withDefaultSystemDisk } from '@caiwu/shared/finance';
 import {
   getStatusLabel,
   getStatusTagType,
@@ -379,9 +384,9 @@ import {
   PAYMENT_STATUS_MAP,
   toLabelMap,
   toTagTypeMap,
-} from '@shared/statusConfig';
+} from '@caiwu/shared/statusConfig';
 import { FileCopyIcon } from 'tdesign-icons-vue-next';
-import { MessagePlugin } from 'tdesign-vue-next';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
@@ -422,6 +427,8 @@ const router = useRouter();
 
 const detailLoading = ref(false);
 const detailRequestSeq = ref(0);
+const orderLoadError = ref(false);
+const orderLoadErrorText = ref('');
 const invoiceRequestSeq = ref(0);
 const order = ref<OrderRecord>({} as OrderRecord);
 const activeTab = ref('basic');
@@ -434,6 +441,8 @@ const invoiceStatusTypeMap = toTagTypeMap(INVOICE_STATUS_MAP);
 const invoiceDrawer = reactive({
   visible: false,
   loading: false,
+  error: false,
+  errorText: '',
   currentId: 0,
   detail: { invoice: {}, payments: [], items: [], logs: [] } as {
     invoice: InvoiceRecord;
@@ -713,13 +722,21 @@ async function loadDetail() {
   }
   const seq = ++detailRequestSeq.value;
   detailLoading.value = true;
+  orderLoadError.value = false;
+  orderLoadErrorText.value = '';
   try {
     const response = await adminApi.orders.detail(rawId);
     if (seq !== detailRequestSeq.value) return;
     order.value = response;
   } catch (error) {
     if (seq !== detailRequestSeq.value) return;
-    MessagePlugin.error(errorMessage(error, '加载订单详情失败'));
+    // 首次加载失败交给详情组件的失败态呈现（含重新加载），刷新失败仍用 toast 不打断已展示内容
+    if (!order.value.id) {
+      orderLoadError.value = true;
+      orderLoadErrorText.value = errorMessage(error, '加载订单详情失败');
+    } else {
+      MessagePlugin.error(errorMessage(error, '加载订单详情失败'));
+    }
   } finally {
     if (seq === detailRequestSeq.value) detailLoading.value = false;
   }
@@ -750,13 +767,21 @@ async function reloadInvoiceDetail() {
   if (!invoiceDrawer.currentId) return;
   const seq = ++invoiceRequestSeq.value;
   invoiceDrawer.loading = true;
+  invoiceDrawer.error = false;
+  invoiceDrawer.errorText = '';
   try {
     const response = await adminApi.invoices.detail(invoiceDrawer.currentId);
     if (seq !== invoiceRequestSeq.value) return;
     invoiceDrawer.detail = normalizeInvoiceDetail(response, currentInvoice.value);
   } catch (error) {
     if (seq !== invoiceRequestSeq.value) return;
-    MessagePlugin.error(errorMessage(error, '加载账单详情失败'));
+    // 首次打开失败交给抽屉内详情的失败态呈现（含重新加载），刷新失败仍用 toast
+    if (!currentInvoice.value.id) {
+      invoiceDrawer.error = true;
+      invoiceDrawer.errorText = errorMessage(error, '加载账单详情失败');
+    } else {
+      MessagePlugin.error(errorMessage(error, '加载账单详情失败'));
+    }
   } finally {
     if (seq === invoiceRequestSeq.value) invoiceDrawer.loading = false;
   }

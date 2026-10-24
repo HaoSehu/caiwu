@@ -3,7 +3,7 @@ import { defineStore } from 'pinia';
 import { Color } from 'tvision-color';
 
 import type { TColorSeries } from '@/config/color';
-import { DARK_CHART_COLORS, LIGHT_CHART_COLORS } from '@/config/color';
+import { LIGHT_CHART_COLORS } from '@/config/color';
 import STYLE_CONFIG from '@/config/style';
 import { store } from '@/store';
 import type { ModeType } from '@/types/interface';
@@ -26,55 +26,29 @@ export const useSettingStore = defineStore('setting', {
     showSidebar: (state) => state.layout !== 'top',
     showSidebarLogo: (state) => state.layout === 'side',
     showHeaderLogo: (state) => state.layout !== 'side' && !state.hideHeaderLogo,
-    displayMode: (state): ModeType => {
-      if (state.mode === 'auto') {
-        const media = window.matchMedia('(prefers-color-scheme:dark)');
-        if (media.matches) {
-          return 'dark';
-        }
-        return 'light';
-      }
-      return state.mode as ModeType;
-    },
+    // docs/DESIGN.md §2：系统仅提供浅色（Light）模式，暂时不提供暗黑主题。
+    // 与 frontend-user-v4-console 的 setting store 保持同向，禁止按 prefers-color-scheme 自动切暗色。
+    displayMode: (): ModeType => 'light',
     displaySideMode: (state): ModeType => {
       return state.sideMode as ModeType;
     },
   },
   actions: {
-    async changeMode(mode: ModeType | 'auto') {
-      let theme = mode;
+    async changeMode() {
+      // 仅浅色：保留方法作为 updateConfig('mode') 的收敛点，不再写入 theme-mode。
+      document.documentElement.setAttribute('theme-mode', '');
 
-      if (mode === 'auto') {
-        theme = this.getMediaColor();
-        // auto 模式：监听系统主题变化，切回其他模式时移除监听。
-        watchSystemTheme();
-      } else {
-        unwatchSystemTheme();
-      }
-
-      const isDarkMode = theme === 'dark';
-
-      document.documentElement.setAttribute('theme-mode', isDarkMode ? 'dark' : '');
-
-      this.chartColors = isDarkMode ? DARK_CHART_COLORS : LIGHT_CHART_COLORS;
+      this.chartColors = LIGHT_CHART_COLORS;
     },
     async changeSideMode(mode: ModeType) {
+      // sideMode 是侧边菜单配色（深/浅），不是暗色主题，docs/DESIGN.md §2 不约束此项，保持原行为。
       const isDarkMode = mode === 'dark';
 
       document.documentElement.setAttribute('side-mode', isDarkMode ? 'dark' : '');
     },
-    getMediaColor() {
-      const media = window.matchMedia('(prefers-color-scheme:dark)');
-
-      if (media.matches) {
-        return 'dark';
-      }
-      return 'light';
-    },
     changeBrandTheme(brandTheme: string) {
-      const mode = this.displayMode;
-      // 以主题色加显示模式作为键
-      const colorKey = `${brandTheme}[${mode}]`;
+      // 仅浅色模式：色阶缓存键不再拼接显示模式
+      const colorKey = brandTheme;
       let colorMap = this.colorList[colorKey];
       // 如果不存在色阶，就需要计算
       if (colorMap === undefined) {
@@ -83,11 +57,11 @@ export const useSettingStore = defineStore('setting', {
           step: 10,
           remainInput: false, // 是否保留输入 不保留会矫正不合适的主题色
         });
-        colorMap = generateColorMap(brandTheme, newPalette, mode, brandColorIndex);
+        colorMap = generateColorMap(brandTheme, newPalette, brandColorIndex);
         this.colorList[colorKey] = colorMap;
       }
       // TODO 需要解决不停切换时有反复插入 style 的问题
-      insertThemeStylesheet(brandTheme, colorMap, mode);
+      insertThemeStylesheet(brandTheme, colorMap);
       document.documentElement.setAttribute('theme-color', brandTheme);
     },
     updateConfig(payload: Partial<TState>) {
@@ -96,7 +70,7 @@ export const useSettingStore = defineStore('setting', {
           this[key as TStateKey] = payload[key as TStateKey];
         }
         if (key === 'mode') {
-          this.changeMode(payload[key] as ModeType);
+          this.changeMode();
         }
         if (key === 'sideMode') {
           this.changeSideMode(payload[key] as ModeType);
@@ -114,42 +88,4 @@ export const useSettingStore = defineStore('setting', {
 
 export function getSettingStore() {
   return useSettingStore(store);
-}
-
-// auto 模式系统主题监听：模块级变量，不参与持久化。
-let systemThemeMedia: MediaQueryList | null = null;
-let systemThemeHandler: ((event: MediaQueryListEvent) => void) | null = null;
-
-function watchSystemTheme(): void {
-  if (typeof window === 'undefined' || !window.matchMedia) {
-    return;
-  }
-  if (systemThemeMedia && systemThemeHandler) {
-    return; // 已监听，避免重复挂载
-  }
-  systemThemeMedia = window.matchMedia('(prefers-color-scheme:dark)');
-  systemThemeHandler = () => {
-    // 仅当仍处于 auto 模式时跟随系统主题变化。
-    if (getSettingStore().mode === 'auto') {
-      getSettingStore().changeMode('auto');
-    }
-  };
-  if (typeof systemThemeMedia.addEventListener === 'function') {
-    systemThemeMedia.addEventListener('change', systemThemeHandler);
-  } else {
-    // 旧浏览器兼容
-    systemThemeMedia.addListener(systemThemeHandler);
-  }
-}
-
-function unwatchSystemTheme(): void {
-  if (systemThemeMedia && systemThemeHandler) {
-    if (typeof systemThemeMedia.removeEventListener === 'function') {
-      systemThemeMedia.removeEventListener('change', systemThemeHandler);
-    } else {
-      systemThemeMedia.removeListener(systemThemeHandler);
-    }
-    systemThemeMedia = null;
-    systemThemeHandler = null;
-  }
 }

@@ -1,4 +1,4 @@
-import { MessagePlugin } from 'tdesign-vue-next';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import type { App } from 'vue';
 
 import { errorMessage } from '@/utils/userMessage';

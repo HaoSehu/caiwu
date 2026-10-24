@@ -58,7 +58,7 @@
         :empty="!loading && !error && !list.length"
         :error="!loading && Boolean(error)"
         :error-text="error || ''"
-        :description="hasActiveFilters ? '未检索到匹配结果，请调整筛选条件' : '当前还没有任何服务实例'"
+        :description="hasActiveFilters ? '未找到匹配结果' : '当前还没有任何服务实例'"
         @retry="loadData"
       >
         <template v-if="!hasActiveFilters" #empty-action>
@@ -101,6 +101,8 @@
                     :src="resolveServiceOsIcon(item)"
                     :alt="String(resolveServiceOsText(item) || resolveServiceName(item))"
                     class="service-system-icon__image"
+                    loading="lazy"
+                    decoding="async"
                     @error="markServiceOsIconFailed(item)"
                   />
                   <span v-else class="service-system-icon__fallback">{{ resolveServiceMark(item) }}</span>
@@ -185,6 +187,8 @@
                       :src="resolveServiceOsIcon(row)"
                       :alt="String(resolveServiceOsText(row) || resolveServiceName(row))"
                       class="service-system-icon__image"
+                      loading="lazy"
+                      decoding="async"
                       @error="markServiceOsIconFailed(row)"
                     />
                     <span v-else class="service-system-icon__fallback">{{ resolveServiceMark(row) }}</span>
@@ -272,7 +276,7 @@
     </div>
 
     <t-dialog v-model:visible="renewVisible" header="服务续费" width="min(34rem, calc(100vw - 2rem))" destroy-on-close>
-      <loading-state :loading="renewPreviewLoading" text="数据加载中..." compact>
+      <loading-state :loading="renewPreviewLoading" text="数据加载中…" compact>
         <template v-if="renewData">
           <div class="renew-summary-card">
             <div class="renew-summary-row">
@@ -356,8 +360,8 @@
   </section>
 </template>
 <script setup lang="ts">
-import DataState from '@shared/user-v3/components/DataState.vue';
-import LoadingState from '@shared/user-v3/components/LoadingState.vue';
+import DataState from '@caiwu/shared/user-v3/components/DataState.vue';
+import LoadingState from '@caiwu/shared/user-v3/components/LoadingState.vue';
 import { CatalogIcon, DashboardIcon, EditIcon, SearchIcon } from 'tdesign-icons-vue-next';
 import type { PrimaryTableCol } from 'tdesign-vue-next';
 import { computed } from 'vue';
@@ -418,7 +422,7 @@ const {
   router,
 } = useServiceCenter();
 
-// 是否存在生效筛选：空态区分“暂无数据”与“未检索到匹配结果”（DESIGN.md §4.3）
+// 是否存在生效筛选：空态区分“暂无数据”与“未找到匹配结果”（DESIGN.md §4.3）
 const hasActiveFilters = computed(
   () =>
     filters.keyword.trim() !== '' || filters.catalog_type !== '' || filters.status !== '' || filters.auto_renew !== '',

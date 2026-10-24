@@ -62,7 +62,7 @@
         aria-label="工单列表"
       >
         <template #empty>
-          <t-empty :description="loading ? '加载中...' : hasActiveFilters ? '未找到匹配结果' : '暂无工单记录'" />
+          <t-empty :description="loading ? '加载中…' : hasActiveFilters ? '未找到匹配结果' : '暂无工单记录'" />
         </template>
         <template #subject="{ row }">
           <button class="ticket-subject" type="button" @click="openDetail(row.id)">
@@ -106,7 +106,7 @@ import './index.less';
 
 import { SearchIcon } from 'tdesign-icons-vue-next';
 import type { PrimaryTableCol } from 'tdesign-vue-next';
-import { MessagePlugin } from 'tdesign-vue-next';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { useRouter } from 'vue-router';
 
 import type { TicketRecord } from '@/api/admin';

@@ -134,7 +134,7 @@
 import { toUserMessage } from '@caiwu/shared/runtime';
 import { LockOnIcon, UserIcon } from 'tdesign-icons-vue-next';
 import type { FormInstanceFunctions, FormRule, FormValidateMessage, SubmitContext } from 'tdesign-vue-next';
-import { MessagePlugin } from 'tdesign-vue-next';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 

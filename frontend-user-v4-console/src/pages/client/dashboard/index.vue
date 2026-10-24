@@ -1,7 +1,7 @@
 <template>
   <section class="client-dashboard">
     <data-state v-if="loadError && !loading" error error-text="控制台数据加载失败，请重试" @retry="loadDashboard" />
-    <loading-state v-else :loading="loading" text="数据加载中...">
+    <loading-state v-else :loading="loading" text="数据加载中…">
       <div class="summary-grid">
         <t-card class="account-card dashboard-card" :bordered="false">
           <div class="account-card__user">
@@ -88,7 +88,7 @@
                 </div>
               </template>
 
-              <t-loading :loading="!invoicesLoaded" text="加载中...">
+              <t-loading :loading="!invoicesLoaded" text="加载中…">
                 <div v-if="invoicesLoadFailed" class="chart-load-failed">
                   <span>图表数据加载失败</span>
                   <t-button theme="primary" variant="text" size="small" @click="loadConsumptionCharts">重试</t-button>
@@ -130,7 +130,7 @@
                 </div>
               </template>
 
-              <t-loading :loading="!balanceLogsLoaded" text="加载中...">
+              <t-loading :loading="!balanceLogsLoaded" text="加载中…">
                 <div v-if="balanceLogsLoadFailed" class="chart-load-failed">
                   <span>图表数据加载失败</span>
                   <t-button theme="primary" variant="text" size="small" @click="loadConsumptionCharts">重试</t-button>
@@ -234,7 +234,14 @@
           <t-card class="dashboard-card" :bordered="false">
             <template #title>{{ supportGroupTitle }}</template>
             <div class="support-box">
-              <img v-if="supportQr" :src="supportQr" alt="QQ 群二维码" class="support-box__qr" />
+              <img
+                v-if="supportQr"
+                :src="supportQr"
+                alt="QQ 群二维码"
+                class="support-box__qr"
+                loading="lazy"
+                decoding="async"
+              />
               <div v-else class="support-box__qr support-box__qr--empty">{{ siteBranding.brandInitials }}</div>
               <div class="support-box__content">
                 <strong>{{ supportGroupText }}</strong>
@@ -258,8 +265,8 @@
   </section>
 </template>
 <script setup lang="ts">
-import DataState from '@shared/user-v3/components/DataState.vue';
-import LoadingState from '@shared/user-v3/components/LoadingState.vue';
+import DataState from '@caiwu/shared/user-v3/components/DataState.vue';
+import LoadingState from '@caiwu/shared/user-v3/components/LoadingState.vue';
 import {
   CouponIcon,
   DashboardIcon,
@@ -274,7 +281,7 @@ import {
   UserSafetyIcon,
   WalletIcon,
 } from 'tdesign-icons-vue-next';
-import { MessagePlugin } from 'tdesign-vue-next';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import type { Component } from 'vue';
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';

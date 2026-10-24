@@ -994,7 +994,7 @@ onBeforeUnmount(() => {
   transition: opacity 0.8s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-@media (min-width: $breakpoint-narrow + 1px) {
+@media (min-width: $breakpoint-narrow) {
   .hero-bg__video--active {
     will-change: opacity;
   }

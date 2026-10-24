@@ -17,6 +17,9 @@
         table-layout="fixed"
         @page-change="handlePageChange"
       >
+        <template #empty>
+          <t-empty :description="state.loading ? '加载中…' : hasActiveFilters ? '未找到匹配结果' : '暂无数据'" />
+        </template>
         <template #recordTime="{ row }">{{ formatDateTime(row.created_at) }}</template>
         <template #recordAmount="{ row }">
           <span :class="row.direction === 'out' ? 'amount-down' : 'amount-up'">{{ signedAmount(row) }}</span>
@@ -33,7 +36,7 @@
 </template>
 <script setup lang="ts">
 import type { PageInfo, PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
-import { MessagePlugin } from 'tdesign-vue-next';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, onMounted, reactive } from 'vue';
 
 import type { PageParams, UserRechargeRecord } from '@/api/user';
@@ -73,6 +76,12 @@ const state = reactive<TabPageState>({
   filters: { direction: '' },
 });
 
+// 空态文案区分「未筛选但无数据」与「筛选后无匹配」（docs/DESIGN.md 术语表）
+const hasActiveFilters = computed(() => Boolean(state.filters.direction));
+
+/** 列表请求序号，用于丢弃过期响应 */
+let requestSeq = 0;
+
 const columns: PrimaryTableCol<TableRowData>[] = [
   { title: '时间', colKey: 'recordTime', width: 180 },
   { title: '充值单号', colKey: 'record_no', width: 220 },
@@ -100,18 +109,22 @@ function signedAmount(row: UserRechargeRecord) {
 }
 
 async function load() {
+  // 请求竞态防护：连续筛选/翻页时只允许最后一次请求回写结果（docs/FRONTEND.md）
+  const currentSeq = ++requestSeq;
   state.loading = true;
   try {
     const params: PageParams = { ...state.filters, page: state.page, page_size: state.pageSize };
     const response = await userApi.rechargeRecords(props.userId, params);
+    if (currentSeq !== requestSeq) return;
     state.list = Array.isArray(response.list) ? response.list : [];
     state.total = Number(response.total || 0);
     state.page = Number(response.page || state.page);
     state.pageSize = Number(response.page_size || state.pageSize);
   } catch (error) {
+    if (currentSeq !== requestSeq) return;
     MessagePlugin.error(errorMessage(error, '加载充值记录失败'));
   } finally {
-    state.loading = false;
+    if (currentSeq === requestSeq) state.loading = false;
   }
 }
 

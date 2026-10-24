@@ -5,7 +5,7 @@
     width="min(34rem, calc(100vw - 2rem))"
     destroy-on-close
   >
-    <loading-state :loading="reinstallState.loading" text="数据加载中..." compact>
+    <loading-state :loading="reinstallState.loading" text="数据加载中…" compact>
       <div class="dialog-form">
         <label>
           <span>系统分组</span>
@@ -40,7 +40,7 @@
   </t-dialog>
 </template>
 <script setup lang="ts">
-import LoadingState from '@shared/user-v3/components/LoadingState.vue';
+import LoadingState from '@caiwu/shared/user-v3/components/LoadingState.vue';
 
 import { useServiceConsoleContext } from '../context';
 

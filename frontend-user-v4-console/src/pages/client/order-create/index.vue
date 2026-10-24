@@ -68,7 +68,7 @@ function openProducts() {
   justify-content: center;
 }
 
-@media (max-width: @screen-sm-rem) {
+@media (max-width: @screen-mobile-max) {
   .client-order-create {
     align-items: stretch;
     min-height: auto;

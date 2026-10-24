@@ -22,8 +22,19 @@
       </div>
     </div>
 
-    <t-loading :loading="loading" size="small">
-      <div v-if="ready" class="record-detail-shell">
+    <!-- 首次进入的三态统一复用 shared 的 DataState（与用户控制台同一套加载/空态表达）；
+         已加载完成后的刷新仍用 t-loading 原位覆盖，避免整页被替换（审查条目 A5） -->
+    <data-state
+      v-if="!ready"
+      :loading="loading"
+      :error="error"
+      :error-text="errorText"
+      :empty="!loading && !error"
+      :description="emptyText"
+      @retry="emit('retry')"
+    />
+    <t-loading v-else :loading="loading" size="small">
+      <div class="record-detail-shell">
         <!-- 顶部核心摘要卡片 -->
         <section class="record-detail-summary">
           <div class="record-detail-summary__identity">
@@ -86,13 +97,13 @@
           </div>
         </section>
       </div>
-      <t-empty v-else-if="!loading" :description="emptyText" />
     </t-loading>
   </div>
 </template>
 <script setup lang="ts">
+import DataState from '@caiwu/shared/user-v3/components/DataState.vue';
 import { ChevronLeftIcon, FileCopyIcon, RefreshIcon } from 'tdesign-icons-vue-next';
-import { MessagePlugin } from 'tdesign-vue-next';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed } from 'vue';
 
 export interface RecordDetailMetric {
@@ -112,6 +123,9 @@ const props = withDefaults(
   defineProps<{
     loading?: boolean;
     ready?: boolean;
+    /** 首次加载失败：与 loading / empty 三态互斥，交由 DataState 呈现失败与重试 */
+    error?: boolean;
+    errorText?: string;
     showBack?: boolean;
     showRefresh?: boolean;
     showToolbar?: boolean;
@@ -129,6 +143,8 @@ const props = withDefaults(
   {
     loading: false,
     ready: false,
+    error: false,
+    errorText: '',
     showBack: true,
     showRefresh: true,
     showToolbar: true,
@@ -148,6 +164,7 @@ const props = withDefaults(
 const emit = defineEmits<{
   (event: 'back'): void;
   (event: 'refresh'): void;
+  (event: 'retry'): void;
   (event: 'update:activeTab', value: string): void;
 }>();
 
@@ -354,7 +371,7 @@ async function copyText(text: string) {
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 767.98px) {
   .record-detail-summary {
     padding: 16px;
 

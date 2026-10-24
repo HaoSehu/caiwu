@@ -363,7 +363,12 @@
           :key="item.url"
           class="cover-drawer-card"
           :class="{ 'is-selected': pendingImageField && String(form[pendingImageField.key]) === item.url }"
+          role="button"
+          tabindex="0"
+          :aria-pressed="pendingImageField ? String(form[pendingImageField.key]) === item.url : false"
           @click="selectMediaFromDrawer(item)"
+          @keydown.enter.prevent="selectMediaFromDrawer(item)"
+          @keydown.space.prevent="selectMediaFromDrawer(item)"
         >
           <video
             v-if="item.isVideo"
@@ -407,7 +412,12 @@
           :key="opt.value"
           class="video-drawer-card"
           :class="{ 'is-selected': videoDrawerCurrentSrc === opt.value }"
+          role="button"
+          tabindex="0"
+          :aria-pressed="videoDrawerCurrentSrc === opt.value"
           @click="selectVideoFromDrawer(opt.value)"
+          @keydown.enter.prevent="selectVideoFromDrawer(opt.value)"
+          @keydown.space.prevent="selectVideoFromDrawer(opt.value)"
           @mouseenter="onVideoCardEnter($event)"
           @mouseleave="onVideoCardLeave($event)"
         >
@@ -464,7 +474,8 @@ import {
   UploadIcon,
   VideoIcon,
 } from 'tdesign-icons-vue-next';
-import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
+import { DialogPlugin } from 'tdesign-vue-next/es/dialog/plugin';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 

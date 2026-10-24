@@ -23,6 +23,9 @@
             table-layout="fixed"
             @row-click="openTemplate"
           >
+            <template #empty>
+              <t-empty :description="templatesLoading ? '加载中…' : '暂无数据'" />
+            </template>
             <template #name="{ row }">
               <div class="stack-cell">
                 <strong>{{ row.name }}</strong>
@@ -200,6 +203,9 @@
             <template #subtitle>Showing {{ filteredApiItems.length }} / {{ apiItems.length }}</template>
             <div class="table-scroll">
               <t-table row-key="id" :data="filteredApiItems" :columns="apiColumns" hover table-layout="fixed">
+                <template #empty>
+                  <t-empty :description="hasActiveApiFilters ? '未找到匹配结果' : '暂无数据'" />
+                </template>
                 <template #category="{ row }">
                   <div class="stack-cell">
                     <strong>{{ row.scopeLabel }} / {{ row.moduleLabel }}</strong>
@@ -298,7 +304,7 @@ import './index.less';
 
 import { SearchIcon } from 'tdesign-icons-vue-next';
 import type { PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
-import { MessagePlugin } from 'tdesign-vue-next';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
@@ -377,7 +383,7 @@ const apiItems = (apiCatalog.items || []).map((item) => ({
   sourceFiles: item.sourceFiles || [],
 }));
 
-const isMobile = useMediaQuery('(max-width: 768px)');
+const isMobile = useMediaQuery('(max-width: 767.98px)');
 const isTemplateTab = computed(() => activeTab.value === 'email-templates' || activeTab.value === 'sms-templates');
 const templateChannel = computed<TemplateChannel>(() => (activeTab.value === 'sms-templates' ? 'sms' : 'email'));
 const templateTitle = computed(() => (templateChannel.value === 'sms' ? '短信模板' : '邮件模板'));
@@ -427,6 +433,15 @@ const filteredTemplates = computed(() =>
   templateChannel.value === 'email'
     ? templateRows.value.filter((item) => item.audience === templateAudience.value)
     : templateRows.value,
+);
+// 空态文案区分「未筛选但无数据」与「筛选后无匹配」（docs/DESIGN.md 术语表）
+const hasActiveApiFilters = computed(
+  () =>
+    Boolean(apiFilters.keyword.trim()) ||
+    apiFilters.access !== 'all' ||
+    apiFilters.method !== 'all' ||
+    apiFilters.source !== 'all' ||
+    selectedApiModule.value !== 'all',
 );
 const apiModules = computed(() => {
   const moduleMap = new Map<string, { key: string; label: string; count: number }>();

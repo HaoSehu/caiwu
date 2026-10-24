@@ -217,7 +217,7 @@ import {
   VideoIcon,
 } from 'tdesign-icons-vue-next';
 import type { FormInstanceFunctions, FormRule } from 'tdesign-vue-next';
-import { MessagePlugin } from 'tdesign-vue-next';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 

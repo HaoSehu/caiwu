@@ -347,7 +347,7 @@
   font-weight: 600;
 }
 
-@media (max-width: $breakpoint-narrow) {
+@media (max-width: $breakpoint-mobile-max) {
   // 配置区自身仅保留常规余量；fixed 结算栏的避让由 .shop-wrap 的动态
   // padding-bottom（--allocation-footer-height 联动）承担，避免 footer 增高时遮挡配置区
   .shop-main {

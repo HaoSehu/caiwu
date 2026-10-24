@@ -3,7 +3,7 @@
     :visible="visible"
     :header="`退款到余额 · ${targetLabel}`"
     width="600px"
-    :confirm-btn="{ content: '确认退款', loading: submitting, theme: 'warning', disabled: !canRefund }"
+    :confirm-btn="{ content: '确定', loading: submitting, theme: 'danger', disabled: !canRefund }"
     @cancel="handleCancel"
     @confirm="handleSubmit"
   >
@@ -60,7 +60,7 @@
 </template>
 <script setup lang="ts">
 import type { FormInstanceFunctions, FormProps } from 'tdesign-vue-next';
-import { MessagePlugin } from 'tdesign-vue-next';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, reactive, ref, watch } from 'vue';
 
 import { formatMoney } from '@/utils/format';

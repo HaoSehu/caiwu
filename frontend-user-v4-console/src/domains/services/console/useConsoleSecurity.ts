@@ -1,4 +1,5 @@
-import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
+import { DialogPlugin } from 'tdesign-vue-next/es/dialog/plugin';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, reactive, ref } from 'vue';
 
 import clientApi from '@/api/client';
@@ -28,6 +29,9 @@ export function useConsoleSecurity(options: UseConsoleSecurityOptions) {
   });
 
   const activeSecurityGroupId = ref(0);
+  // 竞态防护：安全组列表与规则都按序号丢弃过期响应（对齐 useConsoleTabs.ts 的 requestSeq 模式）
+  let securityGroupsRequestSeq = 0;
+  let securityRulesRequestSeq = 0;
   const groupVisible = ref(false);
   const groupForm = reactive({ name: '', description: '' });
   const ruleVisible = ref(false);
@@ -112,9 +116,11 @@ export function useConsoleSecurity(options: UseConsoleSecurityOptions) {
   }
 
   async function loadSecurityGroups(fresh = false): Promise<boolean> {
+    const requestSeq = ++securityGroupsRequestSeq;
     securityState.loading = true;
     try {
       const res = await clientApi.serviceSecurityGroups(serviceId.value, fresh ? { fresh: true } : undefined);
+      if (requestSeq !== securityGroupsRequestSeq) return false;
       const payload = res.data || {};
       securityState.supported = payload.supported !== false;
       securityState.canCreate = payload.can_create !== false;
@@ -134,22 +140,26 @@ export function useConsoleSecurity(options: UseConsoleSecurityOptions) {
       }
       return true;
     } catch (error: unknown) {
+      if (requestSeq !== securityGroupsRequestSeq) return false;
       securityState.error = resolveErrorMessage(error, '加载安全组失败');
       return false;
     } finally {
-      securityState.loading = false;
+      if (requestSeq === securityGroupsRequestSeq) securityState.loading = false;
     }
   }
 
   async function loadSecurityGroupRules(groupId: number | string) {
+    const requestSeq = ++securityRulesRequestSeq;
     securityState.rulesLoading = true;
     try {
       const res = await clientApi.serviceSecurityGroupRules(serviceId.value, groupId);
+      if (requestSeq !== securityRulesRequestSeq) return;
       securityState.rules = Array.isArray(res.data?.list) ? res.data.list : [];
     } catch (error: unknown) {
+      if (requestSeq !== securityRulesRequestSeq) return;
       MessagePlugin.error(resolveErrorMessage(error, '加载安全组规则失败'));
     } finally {
-      securityState.rulesLoading = false;
+      if (requestSeq === securityRulesRequestSeq) securityState.rulesLoading = false;
     }
   }
 

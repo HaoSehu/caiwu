@@ -108,7 +108,8 @@
   </t-dialog>
 </template>
 <script setup lang="ts">
-import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
+import { DialogPlugin } from 'tdesign-vue-next/es/dialog/plugin';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, reactive, ref } from 'vue';
 
 import type { ProductBindingRecord } from '@/api/admin';

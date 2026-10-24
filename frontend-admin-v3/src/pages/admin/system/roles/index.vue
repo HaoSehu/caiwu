@@ -176,7 +176,8 @@ import './index.less';
 
 import { AddIcon, SearchIcon } from 'tdesign-icons-vue-next';
 import type { FormInstanceFunctions, FormRule, PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
-import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
+import { DialogPlugin } from 'tdesign-vue-next/es/dialog/plugin';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 
 import type { PermissionItem, RolePayload, RoleRecord } from '@/api/admin-roles';
@@ -253,7 +254,7 @@ const rolePermissionPresets: RolePermissionPreset[] = [
 ] as const;
 
 const canManage = computed(() => hasPermission(AdminPermissions.ROLE_MANAGE));
-const isMobile = useMediaQuery('(max-width: 768px)');
+const isMobile = useMediaQuery('(max-width: 767.98px)');
 const hasAllPermissionSelected = computed(() => form.permissions.includes(AdminPermissions.ALL));
 const isReadonlySuperRole = computed(() => hasAllPermissionSelected.value);
 const currentRole = computed(() => roles.value.find((item) => String(item.id) === String(form.id)) || null);

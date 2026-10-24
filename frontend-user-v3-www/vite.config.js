@@ -213,7 +213,6 @@ export default defineConfig(({ mode }) => {
       dedupe: ["vue", "element-plus"],
       alias: {
         "@": path.resolve(__dirname, "src"),
-        "@shared": path.resolve(__dirname, "../shared"),
         "@caiwu/shared": path.resolve(__dirname, "../shared"),
         "element-plus": path.resolve(__dirname, "../node_modules/element-plus"),
       },
@@ -254,7 +253,9 @@ export default defineConfig(({ mode }) => {
       cssMinify: "esbuild",
       cssCodeSplit: true,
       reportCompressedSize: false,
-      chunkSizeWarningLimit: 500,
+      // 统一为 600：与 backend/scripts/frontend_budget.mjs 的首屏门禁同向（审查条目 D7）。
+      // www 当前构建最大分片实测 165,257 B（vendor-vue），600 KB 只作异常放大的哨兵，不用于压体积。
+      chunkSizeWarningLimit: 600,
       rollupOptions: {
         output: {
           entryFileNames: "assets/js/[name]-[hash].js",

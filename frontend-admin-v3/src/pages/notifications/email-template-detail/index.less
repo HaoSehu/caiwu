@@ -81,7 +81,7 @@
   gap: 6px;
   margin-bottom: 18px;
   padding: 12px 14px;
-  border: 1px solid var(--td-brand-color-light-active);
+  border: 1px solid var(--td-brand-color-light-hover);
   border-radius: var(--td-radius-large, 8px);
   background: var(--td-brand-color-light);
 }
@@ -282,13 +282,13 @@
   overflow-wrap: break-word;
 }
 
-@media (width <= 1024px) {
+@media (max-width: 1024px) {
   .editor-grid {
     grid-template-columns: 1fr;
   }
 }
 
-@media (width <= 768px) {
+@media (max-width: 767.98px) {
   .template-toolbar,
   .template-toolbar__left,
   .pane-header {

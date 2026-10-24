@@ -216,12 +216,12 @@
       header="附件预览"
       width="min(45rem, calc(100vw - var(--td-comp-margin-xl)))"
     >
-      <img v-if="previewUrl" :src="previewUrl" class="preview-image" alt="附件预览" />
+      <img v-if="previewUrl" :src="previewUrl" class="preview-image" alt="附件预览" loading="lazy" decoding="async" />
     </t-dialog>
   </section>
 </template>
 <script setup lang="ts">
-import DataState from '@shared/user-v3/components/DataState.vue';
+import DataState from '@caiwu/shared/user-v3/components/DataState.vue';
 import { AddIcon } from 'tdesign-icons-vue-next';
 
 import {
@@ -513,7 +513,7 @@ async function handleReplyUpload(event: Event) {
   width: 100%;
 }
 
-@media (max-width: @screen-sm-rem) {
+@media (max-width: @screen-mobile-max) {
   .ticket-detail-page {
     min-height: calc(100vh - var(--td-comp-size-xxxl));
   }

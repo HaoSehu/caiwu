@@ -12,6 +12,9 @@
         <template #title>推广达人排行</template>
         <div class="table-scroll">
           <t-table row-key="id" :data="overview.top_referrers" :columns="overviewColumns" hover table-layout="fixed">
+            <template #empty>
+              <t-empty :description="overviewLoading ? '加载中…' : '暂无数据'" />
+            </template>
             <template #user="{ row }">
               <div class="stack-cell">
                 <strong>{{ userName(row) }}</strong>
@@ -74,6 +77,11 @@
         <template #title>奖励记录</template>
         <div v-if="!isMobile" class="table-scroll">
           <t-table row-key="id" :data="rewardList" :columns="rewardColumns" hover table-layout="fixed">
+            <template #empty>
+              <t-empty
+                :description="rewardsLoading ? '加载中…' : hasActiveRewardFilters ? '未找到匹配结果' : '暂无数据'"
+              />
+            </template>
             <template #relation="{ row }">
               <div class="stack-cell">
                 <strong>{{ userName(row.referrer) }}</strong>
@@ -182,6 +190,13 @@
         <template #title>提现记录</template>
         <div v-if="!isMobile" class="table-scroll">
           <t-table row-key="id" :data="withdrawalList" :columns="withdrawalColumns" hover table-layout="fixed">
+            <template #empty>
+              <t-empty
+                :description="
+                  withdrawalsLoading ? '加载中…' : hasActiveWithdrawalFilters ? '未找到匹配结果' : '暂无数据'
+                "
+              />
+            </template>
             <template #user="{ row }">
               <div class="stack-cell">
                 <strong>{{ userName(row.user) }}</strong>
@@ -294,10 +309,10 @@
 <script setup lang="ts">
 import './index.less';
 
-import { REWARD_STATUS_MAP, toLabelMap, toSelectOptions, toTagTypeMap } from '@shared/statusConfig';
+import { REWARD_STATUS_MAP, toLabelMap, toSelectOptions, toTagTypeMap } from '@caiwu/shared/statusConfig';
 import { SearchIcon } from 'tdesign-icons-vue-next';
 import type { PrimaryTableCol } from 'tdesign-vue-next';
-import { MessagePlugin } from 'tdesign-vue-next';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 
@@ -335,6 +350,11 @@ watch(
 );
 const overviewLoading = ref(false);
 const withdrawalSubmitting = ref(false);
+// 空态文案区分「未筛选但无数据」与「筛选后无匹配」（docs/DESIGN.md 术语表）
+const hasActiveRewardFilters = computed(() => Boolean(rewardFilters.keyword.trim()) || rewardFilters.status !== '');
+const hasActiveWithdrawalFilters = computed(
+  () => Boolean(withdrawalFilters.keyword.trim()) || withdrawalFilters.status !== '',
+);
 
 const overview = ref<ReferralOverview>({
   summary: {},
@@ -403,7 +423,7 @@ const withdrawalDialog = reactive<{
   remark: '',
 });
 
-const isMobile = useMediaQuery('(max-width: 768px)');
+const isMobile = useMediaQuery('(max-width: 767.98px)');
 
 const rewardLabelMap = toLabelMap(REWARD_STATUS_MAP);
 const rewardTypeMap = toTagTypeMap(REWARD_STATUS_MAP);

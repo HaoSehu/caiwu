@@ -200,6 +200,8 @@ function handleCancel() {
 }
 </style>
 
+<!-- el-drawer 会被 teleport 到 body，scoped 作用域属性不会落到其内部节点；
+     此处保留非 scoped，但全部规则以 .ms-drawer 命名空间收口，不污染全局（审查条目 C5） -->
 <style lang="scss">
 .ms-drawer .el-drawer {
   border-radius: 18px 18px 0 0;

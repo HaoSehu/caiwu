@@ -29,6 +29,11 @@
 @screen-md-rem: 62rem;
 @screen-lg-rem: 75rem;
 
+// 移动端形态断点：docs/DESIGN.md §7 规定 xs 为 < 768px（768 属于 sm），
+// 因此手机形态查询必须用 767.98px 而不是 @screen-sm-rem（48rem = 768px 会把 768 也算进手机）。
+// 与 useDeviceLayout 的 isMobile（vueuse smaller(768) = max-width: 767.9px）及 theme.css 的 767.98px 同口径。
+@screen-mobile-max: 767.98px;
+
 // 动画
 @anim-time-fn-easing: cubic-bezier(0.38, 0, 0.24, 1);
 @anim-time-fn-ease-out: cubic-bezier(0, 0, 0.15, 1);

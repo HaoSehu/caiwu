@@ -128,7 +128,8 @@ import {
   UserCircleIcon,
   WalletIcon,
 } from 'tdesign-icons-vue-next';
-import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
+import { DialogPlugin } from 'tdesign-vue-next/es/dialog/plugin';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import type { PropType } from 'vue';
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
@@ -638,6 +639,8 @@ onMounted(() => {
   }
 }
 </style>
+<!-- dropdown 与 popup 内容由 popper 挂到组件作用域外，scoped 无法命中；
+     规则以 .operations-dropdown-container-item / .inbox-popup 命名空间收口（审查条目 C5） -->
 <!-- eslint-disable-next-line vue-scoped-css/enforce-style-type -->
 <style lang="less">
 .operations-dropdown-container-item {

@@ -29,7 +29,7 @@
   </t-drawer>
 </template>
 <script setup lang="ts">
-import { sanitizeRenderedHtml } from '@shared/htmlSanitizer';
+import { sanitizeRenderedHtml } from '@caiwu/shared/htmlSanitizer';
 import { ChevronLeftIcon } from 'tdesign-icons-vue-next';
 import { computed } from 'vue';
 

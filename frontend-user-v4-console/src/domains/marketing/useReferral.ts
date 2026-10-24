@@ -1,5 +1,5 @@
-import { ACCOUNT_TRANSACTION_EVENT_MAP, getStatusLabel } from '@shared/statusConfig';
-import { MessagePlugin } from 'tdesign-vue-next';
+import { ACCOUNT_TRANSACTION_EVENT_MAP, getStatusLabel } from '@caiwu/shared/statusConfig';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, onMounted, reactive, ref } from 'vue';
 
 import { clientAuthApi } from '@/api/auth';
@@ -14,7 +14,7 @@ import type {
   ReferralWithdrawalRecord,
 } from '@/types/client';
 import { getErrorMessage } from '@/utils/error';
-import { copyText } from '@/utils/format';
+import { copyText, formatMoney } from '@/utils/format';
 
 type TagTheme = 'default' | 'success' | 'warning' | 'primary' | 'danger';
 
@@ -29,7 +29,13 @@ interface WithdrawFormState {
   amount: string;
 }
 
+/** 金额文案：复用 shared 的千分位实现，与 admin formatMoney 同口径（docs/DESIGN.md §6）。 */
 export function money(value: unknown) {
+  return formatMoney(value);
+}
+
+/** 费率文案：百分比数值不带千分位，保留两位小数。 */
+export function ratePercent(value: unknown) {
   const amount = Number(value || 0);
   return Number.isFinite(amount) ? amount.toFixed(2) : '0.00';
 }
@@ -103,10 +109,10 @@ export function useReferral() {
   const withdrawnAmountText = computed(() => money(overview.referral_withdrawn_amount));
   const withdrawMinAmountText = computed(() => money(overview.withdraw_min_amount || 20));
   const rewardRateText = computed(
-    () => `${money(overview.reward_rate || overview.current_ambassador?.reward_rate || 0)}%`,
+    () => `${ratePercent(overview.reward_rate || overview.current_ambassador?.reward_rate || 0)}%`,
   );
   const renewalRewardRateText = computed(
-    () => `${money(overview.renewal_reward_rate || overview.current_ambassador?.renewal_reward_rate || 0)}%`,
+    () => `${ratePercent(overview.renewal_reward_rate || overview.current_ambassador?.renewal_reward_rate || 0)}%`,
   );
   const freezeDaysText = computed(() => String(Number(overview.reward_freeze_days || 0)));
   const levelName = computed(() => overview.current_ambassador?.name || '默认大使');

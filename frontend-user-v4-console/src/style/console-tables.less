@@ -1,0 +1,68 @@
+/**
+ * 用户控制台专属的表格外观覆写。
+ * 原先内嵌在根级 theme.css 中，但 admin 端也引入该文件，形成跨端耦合（审查条目 C6）。
+ * 拆出后仅在 console 的样式入口引入，theme.css 只保留跨端令牌与通用组件覆写。
+ *
+ * 例外：`.referral-page` 两端都在用（console 的 client/referral 与 admin 的 referral），
+ * 因此该组选择器保留在 theme.css，不能下沉到本文件，否则 admin 推荐页会丢失表格覆写。
+ */
+#app .record-page .record-table,
+#app .client-invoices .invoice-table-card,
+#app .client-services .service-table-card,
+#app .client-tickets .ticket-table-shell {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+#app .record-page .record-table .t-table,
+#app .client-invoices .invoice-table-card .t-table,
+#app .client-services .service-table-card .t-table,
+#app .client-tickets .ticket-table-shell .t-table {
+  background: transparent;
+}
+
+#app .record-page .record-table table,
+#app .client-invoices .invoice-table-card table,
+#app .client-services .service-table-card table,
+#app .client-tickets .ticket-table-shell table {
+  border-collapse: collapse;
+}
+
+#app .record-page .record-table th,
+#app .record-page .record-table td,
+#app .client-invoices .invoice-table-card th,
+#app .client-invoices .invoice-table-card td,
+#app .client-services .service-table-card th,
+#app .client-services .service-table-card td,
+#app .client-tickets .ticket-table-shell th,
+#app .client-tickets .ticket-table-shell td {
+  height: 42px;
+  padding: 10px 18px;
+  background: var(--td-bg-color-container) !important;
+  border-bottom: 1px solid var(--td-component-stroke);
+}
+
+#app .record-page .record-table th,
+#app .client-invoices .invoice-table-card th,
+#app .client-services .service-table-card th,
+#app .client-tickets .ticket-table-shell th {
+  color: var(--td-text-color-secondary);
+  font: var(--td-font-body-small);
+  font-weight: 400;
+}
+
+#app .record-page .record-table td,
+#app .client-invoices .invoice-table-card td,
+#app .client-services .service-table-card td,
+#app .client-tickets .ticket-table-shell td {
+  color: var(--td-text-color-primary);
+  font: var(--td-font-body-small);
+}
+
+#app .record-page .record-table tr:hover td,
+#app .client-invoices .invoice-table-card tr:hover td,
+#app .client-services .service-table-card tr:hover td,
+#app .client-tickets .ticket-table-shell tr:hover td {
+  background: var(--td-brand-color-1) !important;
+}

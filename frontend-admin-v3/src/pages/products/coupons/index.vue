@@ -426,7 +426,8 @@
 <script setup lang="ts">
 import { AddIcon, SearchIcon } from 'tdesign-icons-vue-next';
 import type { DropdownOption, FormInstanceFunctions, FormRule, PrimaryTableCol } from 'tdesign-vue-next';
-import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
+import { DialogPlugin } from 'tdesign-vue-next/es/dialog/plugin';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, defineAsyncComponent, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 
@@ -511,7 +512,7 @@ const userOptions = ref<UserOption[]>([]);
 const userSearchResults = ref<UserOption[]>([]);
 const userSearchKeyword = ref('');
 const userOptionsLoading = ref(false);
-const isMobile = useMediaQuery('(max-width: 768px)');
+const isMobile = useMediaQuery('(max-width: 767.98px)');
 const canManage = computed(() => hasAdminPermission(AdminPermissions.COUPON_MANAGE));
 
 interface CouponFilter {

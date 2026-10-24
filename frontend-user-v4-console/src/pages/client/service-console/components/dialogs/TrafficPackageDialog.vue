@@ -5,7 +5,7 @@
     width="min(36rem, calc(100vw - 2rem))"
     destroy-on-close
   >
-    <loading-state :loading="trafficLoading" text="数据加载中..." compact>
+    <loading-state :loading="trafficLoading" text="数据加载中…" compact>
       <template v-if="trafficData?.supported !== false && trafficPackages.length">
         <div class="traffic-summary">
           <div>
@@ -57,7 +57,7 @@
   </t-dialog>
 </template>
 <script setup lang="ts">
-import LoadingState from '@shared/user-v3/components/LoadingState.vue';
+import LoadingState from '@caiwu/shared/user-v3/components/LoadingState.vue';
 
 import { useServiceConsoleContext } from '../context';
 

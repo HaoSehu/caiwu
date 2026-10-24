@@ -45,7 +45,7 @@
 }
 
 // 平板断点：解除 760px 强制宽度，避免 769-1024 区间横向滚动
-@media (width <= 1024px) {
+@media (max-width: 1024px) {
   .t-layout.t-layout--with-sider {
     > .t-layout {
       min-width: 0;
@@ -64,7 +64,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-@media (width <= 768px) {
+@media (max-width: 767.98px) {
   html,
   body,
   #app {
@@ -85,10 +85,6 @@
       width: 100vw;
       overflow-x: hidden;
     }
-  }
-
-  .@{starter-prefix}-content-layout {
-    padding: 12px;
   }
 
   // 移动端折叠面包屑与多标签 tabs，释放纵向空间
@@ -252,11 +248,7 @@
   }
 }
 
-@media (width <= 480px) {
-  .@{starter-prefix}-content-layout {
-    padding: 8px;
-  }
-
+@media (max-width: 480px) {
   .@{starter-prefix}-sidebar-mobile {
     width: min(88vw, 280px);
   }
@@ -488,7 +480,7 @@
   }
 }
 
-@media (width <= 768px) {
+@media (max-width: 767.98px) {
   .@{starter-prefix}-sidebar-mobile .@{starter-prefix}-side-nav.t-default-menu.t-menu--light {
     width: 100%;
     padding: var(--td-comp-paddingTB-s) var(--td-comp-paddingLR-s);
@@ -510,8 +502,9 @@
     }
   }
 
+  // 页面边距唯一来源：桌面 20px 24px，≤991px 12px（docs/DESIGN.md §3.3）
   &-content-layout {
-    padding: var(--td-comp-paddingTB-xl) var(--td-comp-paddingLR-xl);
+    padding: 20px 24px;
   }
 
   &-layout {
@@ -650,4 +643,11 @@
 
 .container-base-margin-top {
   margin-top: 16px;
+}
+
+// 页面边距 ≤991px 统一 12px（docs/DESIGN.md §3.3）。放在文件末尾，确保覆盖上方 &-content-layout 的桌面值
+@media (max-width: 991px) {
+  .@{starter-prefix}-content-layout {
+    padding: 12px;
+  }
 }

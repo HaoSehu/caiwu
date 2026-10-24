@@ -1,4 +1,4 @@
-import { MessagePlugin } from 'tdesign-vue-next';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, ref } from 'vue';
 
 import type { ProductBindingRecord } from '@/api/admin';

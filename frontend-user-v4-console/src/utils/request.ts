@@ -1,5 +1,5 @@
 import { createHttpClient } from '@caiwu/shared/runtime';
-import { MessagePlugin } from 'tdesign-vue-next';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 
 import { getClientToken, removeClientToken } from '@/app/runtime/session';
 import router from '@/router';

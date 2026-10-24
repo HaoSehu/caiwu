@@ -209,6 +209,8 @@
                       class="os-logo-img"
                       width="28"
                       height="28"
+                      loading="lazy"
+                      decoding="async"
                     />
                     <span v-else class="os-logo">{{
                       os.label.slice(0, 2)
@@ -636,6 +638,8 @@
                           class="os-logo-img"
                           width="28"
                           height="28"
+                          loading="lazy"
+                          decoding="async"
                         />
                         <span v-else class="os-logo">{{
                           os.label.slice(0, 2)
@@ -1599,6 +1603,7 @@ import {
   parseMachineSpecFromText,
   resolveMachineSpecSelection,
 } from "@/domains/products/machineSpecResolver";
+import { formatMoneyAmount, formatMoneyText } from "@caiwu/shared/finance";
 
 const {
   pageLoading,
@@ -1778,18 +1783,6 @@ watch(isMobile, (mobile) => {
   }
 });
 
-function formatMoneyText(value) {
-  const amount = Number(value || 0);
-  if (Number.isNaN(amount)) {
-    return "0.00";
-  }
-  // 千分位仅用于展示
-  return amount.toLocaleString("zh-CN", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
-
 function formatProductListPrice(product) {
   const pricingEntries = Array.isArray(product?.pricing_entries)
     ? product.pricing_entries
@@ -1802,7 +1795,7 @@ function formatProductListPrice(product) {
     pricingEntries.find((item) => Number(item?.amount || 0) > 0);
 
   if (fallbackEntry) {
-    return `¥${formatMoneyText(fallbackEntry.amount)}/${fallbackEntry.label || "月"}`;
+    return `${formatMoneyText(fallbackEntry.amount)}/${fallbackEntry.label || "月"}`;
   }
 
   const pricing =
@@ -1811,11 +1804,11 @@ function formatProductListPrice(product) {
       : {};
   const monthlyAmount = Number(pricing.monthly || 0);
   if (monthlyAmount > 0) {
-    return `¥${formatMoneyText(monthlyAmount)}/月`;
+    return `${formatMoneyText(monthlyAmount)}/月`;
   }
 
   if (Number(product?.primary_price || 0) > 0) {
-    return `¥${formatMoneyText(product.primary_price)}/${product.primary_cycle === "monthly" ? "月" : "起"}`;
+    return `${formatMoneyText(product.primary_price)}/${product.primary_cycle === "monthly" ? "月" : "起"}`;
   }
 
   return "";
@@ -1998,7 +1991,7 @@ const mobileCostRows = computed(() => {
       detail:
         selectedProductSummaryName.value ||
         resolveProductDisplayName(selectedProduct.value),
-      amount: formatMoneyText(productBaseAmount),
+      amount: formatMoneyAmount(productBaseAmount),
     });
   }
 
@@ -2010,7 +2003,7 @@ const mobileCostRows = computed(() => {
       key: item.key,
       label: item.label,
       detail: item.value,
-      amount: formatMoneyText(matchedQuote?.amount || 0),
+      amount: formatMoneyAmount(matchedQuote?.amount || 0),
     });
   });
 

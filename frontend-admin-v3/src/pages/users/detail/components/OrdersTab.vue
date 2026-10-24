@@ -19,6 +19,9 @@
         table-layout="fixed"
         @page-change="handlePageChange"
       >
+        <template #empty>
+          <t-empty :description="state.loading ? '加载中…' : hasActiveFilters ? '未找到匹配结果' : '暂无数据'" />
+        </template>
         <template #orderProduct="{ row }">
           <strong>{{ fieldValue(row.product_full_path || row.product_name) }}</strong>
         </template>
@@ -107,9 +110,9 @@ import {
   toLabelMap,
   toSelectOptions,
   toTagTypeMap,
-} from '@shared/statusConfig';
+} from '@caiwu/shared/statusConfig';
 import type { FormInstanceFunctions, FormRule, PageInfo, PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
-import { MessagePlugin } from 'tdesign-vue-next';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
@@ -161,7 +164,13 @@ const state = reactive<TabPageState>({
   filters: { status: '', type: '' },
 });
 
+// 空态文案区分「未筛选但无数据」与「筛选后无匹配」（docs/DESIGN.md 术语表）
+const hasActiveFilters = computed(() => Boolean(state.filters.status) || Boolean(state.filters.type));
+
 const router = useRouter();
+
+/** 列表请求序号，用于丢弃过期响应 */
+let requestSeq = 0;
 
 /** 跳转财务订单详情页（订单↔账单联动详情，支持退款标记等操作入口）。 */
 function goToOrderDetail(row: TableRowData) {
@@ -221,18 +230,22 @@ function statusTheme(value: unknown): 'default' | 'success' | 'warning' | 'dange
 }
 
 async function load() {
+  // 请求竞态防护：连续筛选/翻页时只允许最后一次请求回写结果（docs/FRONTEND.md）
+  const currentSeq = ++requestSeq;
   state.loading = true;
   try {
     const params: PageParams = { ...state.filters, page: state.page, page_size: state.pageSize };
     const response = await userApi.orders(props.userId, params);
+    if (currentSeq !== requestSeq) return;
     state.list = Array.isArray(response.list) ? response.list : [];
     state.total = Number(response.total || 0);
     state.page = Number(response.page || state.page);
     state.pageSize = Number(response.page_size || state.pageSize);
   } catch (error) {
+    if (currentSeq !== requestSeq) return;
     MessagePlugin.error(errorMessage(error, '加载订单列表失败'));
   } finally {
-    state.loading = false;
+    if (currentSeq === requestSeq) state.loading = false;
   }
 }
 

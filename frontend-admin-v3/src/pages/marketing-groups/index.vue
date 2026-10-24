@@ -101,7 +101,8 @@ import './index.less';
 
 import { AddIcon } from 'tdesign-icons-vue-next';
 import type { DropdownOption, FormInstanceFunctions, FormRule, PrimaryTableCol } from 'tdesign-vue-next';
-import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
+import { DialogPlugin } from 'tdesign-vue-next/es/dialog/plugin';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { onMounted, reactive, ref } from 'vue';
 
 import type { MarketingProductGroupPayload, MarketingProductGroupRecord } from '@/api/admin';
@@ -126,7 +127,7 @@ const formRef = ref<FormInstanceFunctions>();
 const groups = ref<MarketingProductGroupRecord[]>([]);
 const pickTarget = ref<MarketingProductGroupRecord | null>(null);
 const pickProductIds = ref<Array<number | string>>([]);
-const isMobile = useMediaQuery('(max-width: 768px)');
+const isMobile = useMediaQuery('(max-width: 767.98px)');
 
 const form = reactive<GroupForm>(createDefaultForm());
 

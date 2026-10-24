@@ -1,4 +1,4 @@
-import { MessagePlugin } from 'tdesign-vue-next';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { reactive } from 'vue';
 
 import type { InvoiceRecord } from '@/api/admin';
@@ -7,6 +7,9 @@ import { errorMessage } from '@/utils/userMessage';
 export interface InvoiceDetailState {
   visible: boolean;
   loading: boolean;
+  /** 首次加载失败，交由详情组的失败态呈现（含重新加载） */
+  error: boolean;
+  errorText: string;
   cancelLoading: boolean;
   currentId: number;
   detail: {
@@ -34,6 +37,8 @@ export function useFinanceDetailDrawer(options: UseFinanceDetailDrawerOptions) {
   const detailState = reactive<InvoiceDetailState>({
     visible: false,
     loading: false,
+    error: false,
+    errorText: '',
     cancelLoading: false,
     currentId: 0,
     detail: {
@@ -78,13 +83,21 @@ export function useFinanceDetailDrawer(options: UseFinanceDetailDrawerOptions) {
   async function reloadDetail() {
     if (!detailState.currentId) return;
     detailState.loading = true;
+    detailState.error = false;
+    detailState.errorText = '';
     try {
       const response = await fetchDetail(detailState.currentId);
       detailState.detail = normalize
         ? normalize(response, detailState.detail.invoice)
         : normalizeInvoiceDetail(response, detailState.detail.invoice);
     } catch (error) {
-      MessagePlugin.error(errorMessage(error, errorFallback));
+      // 首次打开失败交给抽屉内详情的失败态呈现（含重新加载），刷新失败仍用 toast
+      if (!detailState.detail.invoice.id) {
+        detailState.error = true;
+        detailState.errorText = errorMessage(error, errorFallback);
+      } else {
+        MessagePlugin.error(errorMessage(error, errorFallback));
+      }
     } finally {
       detailState.loading = false;
     }
@@ -93,6 +106,8 @@ export function useFinanceDetailDrawer(options: UseFinanceDetailDrawerOptions) {
   function closeDetail() {
     detailState.visible = false;
     detailState.currentId = 0;
+    detailState.error = false;
+    detailState.errorText = '';
     detailState.cancelLoading = false;
     detailState.detail = { invoice: {} as InvoiceRecord, payments: [], items: [], logs: [] };
   }

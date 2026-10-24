@@ -27,6 +27,7 @@
                 :class="collapsed ? 'client-side-brand__logo--collapsed' : 'client-side-brand__logo--expanded'"
                 :src="brandLogoSrc"
                 :alt="siteBranding.siteName"
+                loading="eager"
               />
             </span>
           </span>

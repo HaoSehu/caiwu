@@ -349,100 +349,6 @@ ol {
   border-color: $divider-color !important;
 }
 
-.client-page {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  padding: 0;
-}
-
-@media (max-width: $breakpoint-narrow) {
-  .client-page {
-    gap: 14px;
-  }
-}
-
-@media (max-width: 480px) {
-  .client-page {
-    gap: 12px;
-  }
-}
-
-.client-page-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: center;
-  padding: 0;
-  border-radius: 0;
-  background: transparent;
-}
-
-.client-page-heading {
-  max-width: 780px;
-}
-
-.client-page-kicker {
-  display: none;
-}
-
-.client-page-heading h2 {
-  margin-top: 0;
-  color: $text-color-primary;
-  font-size: 20px;
-  font-weight: 600;
-  line-height: 1.4;
-}
-
-.client-page-heading p {
-  margin-top: 6px;
-  color: $text-color-secondary;
-  font-size: 13px;
-  line-height: 1.7;
-}
-
-.client-page-actions {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-.client-metric-strip {
-  display: none !important;
-}
-
-.client-metric-chip {
-  min-width: 0;
-  padding: 16px 18px;
-  border: 1px solid $border-color;
-  border-radius: $base-border-radius;
-  background: $bg-color-card;
-}
-
-.client-metric-chip span {
-  display: block;
-  color: $text-color-secondary;
-  font-size: 12px;
-}
-
-.client-metric-chip strong {
-  display: block;
-  margin-top: 8px;
-  color: $text-color-primary;
-  font-size: 24px;
-  font-weight: 700;
-  line-height: 1.1;
-}
-
-.client-metric-chip small {
-  display: block;
-  margin-top: 8px;
-  color: $text-color-placeholder;
-  font-size: 12px;
-  line-height: 1.5;
-}
-
 .site-shell-container {
   width: min(1280px, calc(100% - 48px));
   margin: 0 auto;
@@ -491,18 +397,6 @@ ol {
   }
 }
 
-@media (max-width: 1280px) {
-  .client-page-head {
-    justify-content: flex-start;
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .client-page-actions {
-    width: 100%;
-  }
-}
-
 @include meta.load-css("record-list");
 
 @media (max-width: $breakpoint-nav) {
@@ -512,19 +406,6 @@ ol {
 }
 
 @media (max-width: 640px) {
-  .client-page-actions {
-    justify-content: flex-start;
-  }
-
-  .client-page-actions > .el-button {
-    flex: 1 1 auto;
-    min-width: calc(50% - 6px);
-  }
-
-  .client-page-actions > .el-button + .el-button {
-    margin-left: 0;
-  }
-
   .page-header {
     gap: 8px;
   }
@@ -542,7 +423,7 @@ ol {
   }
 }
 
-@media (max-width: $breakpoint-narrow) {
+@media (max-width: $breakpoint-mobile-max) {
   .el-dialog {
     width: min(560px, calc(100vw - 24px)) !important;
     max-width: calc(100vw - 24px) !important;

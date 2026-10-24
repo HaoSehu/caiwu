@@ -136,7 +136,7 @@ function go(to: string) {
 .service-metric__value {
   margin-left: auto;
   color: var(--td-text-color-primary);
-  font-size: 22px;
+  font-size: var(--td-font-size-headline-small);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   line-height: 1.2;
@@ -187,7 +187,7 @@ function go(to: string) {
   line-height: 1.5;
 }
 
-@media (width <= 640px) {
+@media (max-width: 640px) {
   .service-metrics {
     grid-template-columns: minmax(0, 1fr);
   }

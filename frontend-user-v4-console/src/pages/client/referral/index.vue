@@ -5,7 +5,7 @@
     </header>
 
     <data-state v-if="loadError && !loading" error error-text="推广大使数据加载失败，请重试" @retry="loadAll" />
-    <t-loading v-else :loading="loading" text="数据加载中...">
+    <t-loading v-else :loading="loading" text="数据加载中…">
       <div class="referral-stats">
         <t-card v-for="item in summaryCards" :key="item.key" class="referral-stat" :bordered="false">
           <span>{{ item.label }}</span>
@@ -176,7 +176,7 @@
   </section>
 </template>
 <script setup lang="ts">
-import DataState from '@shared/user-v3/components/DataState.vue';
+import DataState from '@caiwu/shared/user-v3/components/DataState.vue';
 import { LinkIcon } from 'tdesign-icons-vue-next';
 import type { PrimaryTableCol } from 'tdesign-vue-next';
 
@@ -335,13 +335,13 @@ const logColumns: PrimaryTableCol[] = [
   }
 }
 
-@media (max-width: @screen-sm-rem) {
+@media (max-width: @screen-mobile-max) {
   .referral-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
-@media (max-width: @screen-sm-rem) {
+@media (max-width: @screen-mobile-max) {
   .referral-stats,
   .referral-link-row {
     grid-template-columns: 1fr;

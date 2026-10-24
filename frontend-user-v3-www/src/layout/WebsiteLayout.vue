@@ -12,6 +12,7 @@
             :src="logoSrc"
             :alt="appStore.siteName"
             class="logo-image"
+            loading="eager"
             @error="handleLogoError"
           />
           <span v-if="logoLoadFailed" class="logo-fallback">{{
@@ -391,6 +392,7 @@
       <div
         v-if="isMobile && mobileNavVisible"
         class="mobile-menu-mask"
+        aria-hidden="true"
         @click="mobileNavVisible = false"
       />
     </transition>
@@ -2477,13 +2479,5 @@ onBeforeUnmount(() => {
   .footer-col a {
     font-size: 12px;
   }
-}
-</style>
-
-<style lang="scss">
-.mobile-menu-panel::-webkit-scrollbar {
-  display: none;
-  width: 0;
-  height: 0;
 }
 </style>

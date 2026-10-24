@@ -71,7 +71,7 @@
 </template>
 <script setup lang="ts">
 import type { FormInstanceFunctions, FormRule } from 'tdesign-vue-next';
-import { MessagePlugin } from 'tdesign-vue-next';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
@@ -308,7 +308,7 @@ async function handleVerifyMfa() {
 }
 
 /* responsive: remove decorative glow on small screens */
-@media (width <= 640px) {
+@media (max-width: 640px) {
   .login-container {
     padding: 24px 16px;
 

@@ -70,7 +70,10 @@ $lg-border-radius: 16px;
 // 移动形态断点：992 对齐控制台 useDeviceLayout 的 tablet 上限（2026-10-11 X1 裁决），
 // CSS 与 JS（WebsiteLayout / useWebsiteProductsCatalog / router scrollBehavior）共用此值
 $breakpoint-nav: 992px;
+// sm 起点（>= 768px 属平板，docs/DESIGN.md §7）
 $breakpoint-narrow: 768px;
+// xs 上界：768 属于 sm，手机形态查询必须用 767.98px（与 theme.css、控制台 @screen-mobile-max 同口径）
+$breakpoint-mobile-max: $breakpoint-narrow - 0.02px;
 
 // 7. Shadow
 $shadow-sm: 0 2px 10px rgba(15, 23, 42, 0.04);

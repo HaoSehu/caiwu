@@ -110,6 +110,8 @@
     <invoice-detail-drawer
       v-model:visible="detailState.visible"
       :loading="detailState.loading"
+      :error="detailState.error"
+      :error-text="detailState.errorText"
       :invoice="currentInvoice"
       :payments="invoicePayments"
       :items="invoiceItems"
@@ -126,10 +128,10 @@
 <script setup lang="ts">
 import './index.less';
 
-import { PAYMENT_STATUS_MAP, toLabelMap, toTagTypeMap } from '@shared/statusConfig';
+import { PAYMENT_STATUS_MAP, toLabelMap, toTagTypeMap } from '@caiwu/shared/statusConfig';
 import { SearchIcon } from 'tdesign-icons-vue-next';
 import type { PrimaryTableCol } from 'tdesign-vue-next';
-import { MessagePlugin } from 'tdesign-vue-next';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 
@@ -159,7 +161,7 @@ interface RechargeFilter {
 }
 
 const router = useRouter();
-const isMobile = useMediaQuery('(max-width: 768px)');
+const isMobile = useMediaQuery('(max-width: 767.98px)');
 
 const {
   filters,

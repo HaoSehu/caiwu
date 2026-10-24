@@ -90,14 +90,14 @@
 <script setup lang="ts">
 import { ChevronDownIcon, HomeIcon, PoweroffIcon, SettingIcon, UserCircleIcon } from 'tdesign-icons-vue-next';
 import type { FormInstanceFunctions, FormRule } from 'tdesign-vue-next';
-import { MessagePlugin } from 'tdesign-vue-next';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import type { PropType } from 'vue';
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { adminAuthApi } from '@/api/auth';
 import LogoFull from '@/assets/assets-logo-full.svg?component';
-import { prefix } from '@/config/global';
+import { MOBILE_BREAKPOINT, prefix } from '@/config/global';
 import { t } from '@/locales';
 import { getActive } from '@/router';
 import { getPermissionStore, getTabsRouterStore, useSettingStore, useUserStore } from '@/store';
@@ -163,11 +163,11 @@ const toggleSettingPanel = () => {
   });
 };
 
-const MOBILE_POINT = 768;
+const MOBILE_POINT = MOBILE_BREAKPOINT;
 const isMobile = ref(false);
 
 const updateIsMobile = () => {
-  isMobile.value = window.innerWidth <= MOBILE_POINT;
+  isMobile.value = window.innerWidth < MOBILE_POINT;
 };
 
 onMounted(() => {
@@ -183,7 +183,7 @@ onUnmounted(() => {
 const isMobileSideHeader = computed(() => isMobile.value && layout === 'side' && !showLogo);
 
 const changeCollapsed = () => {
-  if (window.innerWidth <= 768) {
+  if (window.innerWidth < MOBILE_POINT) {
     settingStore.updateConfig({
       isMobileSidebarVisible: !settingStore.isMobileSidebarVisible,
     });
@@ -365,7 +365,7 @@ const handleLogout = async () => {
 }
 
 /* 手机端 side 布局：顶栏显示菜单按钮，隐藏 logo 为右侧操作区腾空间 */
-@media (width <= 768px) {
+@media (max-width: 767.98px) {
   .header-mobile-logo-bar {
     display: inline-flex;
     align-items: center;
@@ -421,6 +421,8 @@ const handleLogout = async () => {
   }
 }
 </style>
+<!-- dropdown 内容由 overlayClassName 挂到 popper 容器（组件作用域外），scoped 无法命中；
+     规则以 .operations-dropdown-container-item 命名空间收口（审查条目 C5） -->
 <!-- eslint-disable-next-line vue-scoped-css/enforce-style-type -->
 <style lang="less">
 .operations-dropdown-container-item {

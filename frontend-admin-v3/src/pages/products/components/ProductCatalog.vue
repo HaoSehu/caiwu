@@ -193,7 +193,7 @@
               <t-empty
                 :description="
                   productLoading
-                    ? '加载中...'
+                    ? '加载中…'
                     : catalogFilters.keyword ||
                         catalogFilters.status !== '' ||
                         catalogFilters.lifecycle_status !== 'active'
@@ -1062,7 +1062,8 @@ import {
   SettingIcon,
 } from 'tdesign-icons-vue-next';
 import type { DropdownOption, PageInfo, PrimaryTableCol } from 'tdesign-vue-next';
-import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
+import { DialogPlugin } from 'tdesign-vue-next/es/dialog/plugin';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
@@ -1249,6 +1250,8 @@ const categorySubmitting = ref(false);
 const categorySortLoadingId = ref('');
 let categoryRequestVersion = 0;
 let productRequestVersion = 0;
+/** 一级分类下拉请求序号，用于丢弃过期响应 */
+let productTypeRequestVersion = 0;
 const categoryForm = reactive({
   name: '',
   product_type: '' as string,
@@ -1847,17 +1850,21 @@ function categoryParentOptionLabel(item: ProductCategoryRecord) {
 
 // --- Data loading ---
 async function loadProductTypes() {
+  // 请求竞态防护：刷新分类期间只允许最后一次请求回写结果（docs/FRONTEND.md）
+  const requestVersion = ++productTypeRequestVersion;
   typeLoading.value = true;
   try {
     const response = await productApi.types();
+    if (requestVersion !== productTypeRequestVersion) return;
     productTypes.value = Array.isArray(response) ? response : response.list || [];
     if (!catalogFilters.product_type && productTypes.value[0]?.value) {
       catalogFilters.product_type = productTypes.value[0].value;
     }
   } catch (error) {
+    if (requestVersion !== productTypeRequestVersion) return;
     MessagePlugin.error(errorMessage(error, '加载一级分类失败'));
   } finally {
-    typeLoading.value = false;
+    if (requestVersion === productTypeRequestVersion) typeLoading.value = false;
   }
 }
 

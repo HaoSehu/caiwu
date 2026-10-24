@@ -1,5 +1,6 @@
 import { INVOICE_STATUS_MAP, INVOICE_TYPE_MAP, toSelectOptions } from '@caiwu/shared/statusConfig';
-import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
+import { DialogPlugin } from 'tdesign-vue-next/es/dialog/plugin';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 

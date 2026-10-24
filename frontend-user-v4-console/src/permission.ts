@@ -2,7 +2,7 @@ import 'nprogress/nprogress.css';
 
 import { toUserMessage } from '@caiwu/shared/runtime';
 import NProgress from 'nprogress';
-import { MessagePlugin } from 'tdesign-vue-next';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 
 import { getClientToken } from '@/app/runtime/session';
 import { useSiteBrandingStore } from '@/app/stores/siteBranding';

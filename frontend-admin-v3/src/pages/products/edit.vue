@@ -289,7 +289,7 @@
 </template>
 <script setup lang="ts">
 import { ChevronLeftIcon, DeleteIcon } from 'tdesign-icons-vue-next';
-import { MessagePlugin } from 'tdesign-vue-next';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
@@ -935,11 +935,11 @@ function goBack() {
 }
 </script>
 <style lang="less" scoped>
+// 页面边距由布局层统一提供（docs/DESIGN.md §3.3），根元素只负责布局
 .product-edit-page {
   display: flex;
   flex-direction: column;
   width: 100%;
-  padding: var(--td-comp-paddingTB-l) var(--td-comp-paddingLR-l);
   gap: var(--td-comp-margin-m);
 }
 
@@ -1293,7 +1293,7 @@ function goBack() {
   margin-bottom: 8px;
 
   &--header {
-    font-size: 12px;
+    font-size: var(--td-font-size-body-small);
     color: var(--td-text-color-placeholder);
     padding-bottom: 4px;
     border-bottom: 1px solid var(--td-component-border);
@@ -1309,7 +1309,7 @@ function goBack() {
   border-top: 1px solid var(--td-component-border);
 }
 
-@media (width <= 1024px) {
+@media (max-width: 1024px) {
   .product-edit-layout {
     grid-template-columns: 1fr;
     min-height: 0;
@@ -1352,14 +1352,10 @@ function goBack() {
   }
 }
 
-@media (width <= 768px) {
+@media (max-width: 767.98px) {
   :global(.product-edit-supplier-product-popup .t-popup__content) {
     width: calc(100vw - 24px);
     max-width: calc(100vw - 24px);
-  }
-
-  .product-edit-page {
-    padding: 12px;
   }
 
   .product-edit-toolbar {

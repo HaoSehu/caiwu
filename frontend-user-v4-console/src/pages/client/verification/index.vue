@@ -1,6 +1,6 @@
 <template>
   <section class="client-verification">
-    <loading-state :loading="loading" text="数据加载中...">
+    <loading-state :loading="loading" text="数据加载中…">
       <t-card class="verification-status-card" :bordered="false">
         <div class="verification-status-card__main">
           <div>
@@ -125,7 +125,7 @@
   </section>
 </template>
 <script setup lang="ts">
-import LoadingState from '@shared/user-v3/components/LoadingState.vue';
+import LoadingState from '@caiwu/shared/user-v3/components/LoadingState.vue';
 import { defineAsyncComponent, onMounted } from 'vue';
 
 const QrcodeVue = defineAsyncComponent(() => import('qrcode.vue'));
@@ -322,7 +322,7 @@ onMounted(async () => {
   font: var(--td-font-body-medium);
 }
 
-@media (max-width: @screen-sm-rem) {
+@media (max-width: @screen-mobile-max) {
   .verification-status-card__main,
   .verification-meta-grid,
   .verification-guide-grid {

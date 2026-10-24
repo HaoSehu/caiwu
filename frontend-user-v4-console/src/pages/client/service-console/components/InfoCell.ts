@@ -1,5 +1,5 @@
 import { CopyIcon } from 'tdesign-icons-vue-next';
-import { Popup as TPopup } from 'tdesign-vue-next';
+import { Popup as TPopup } from 'tdesign-vue-next/es/popup';
 import { defineComponent, h, nextTick, onMounted, onUpdated, ref } from 'vue';
 
 export const InfoCell = defineComponent({

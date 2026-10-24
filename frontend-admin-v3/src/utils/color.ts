@@ -2,7 +2,6 @@ import { trim } from 'lodash-es';
 import { Color } from 'tvision-color';
 
 import type { TColorToken } from '@/config/color';
-import type { ModeType } from '@/types/interface';
 
 /**
  * 依据主题类型获取颜色
@@ -29,18 +28,8 @@ export function getChartListColor(): Array<string> {
 /**
  * 根据当前主题色、模式等情景 计算最后生成的色阶
  */
-export function generateColorMap(theme: string, colorPalette: Array<string>, mode: ModeType, brandColorIdx: number) {
-  const isDarkMode = mode === 'dark';
-
-  if (isDarkMode) {
-    colorPalette.reverse().map((color) => {
-      const [h, s, l] = Color.colorTransform(color, 'hex', 'hsl');
-      return Color.colorTransform([h, Number(s) - 4, l], 'hsl', 'hex');
-    });
-    brandColorIdx = 5;
-    colorPalette[0] = `${colorPalette[brandColorIdx]}20`;
-  }
-
+export function generateColorMap(theme: string, colorPalette: Array<string>, brandColorIdx: number) {
+  // 仅浅色模式（docs/DESIGN.md §2）：原 dark 分支与 mode 参数已删除。
   const colorMap: TColorToken = {
     '--td-brand-color': colorPalette[brandColorIdx], // 主题色
     '--td-brand-color-1': colorPalette[0], // light
@@ -60,9 +49,9 @@ export function generateColorMap(theme: string, colorPalette: Array<string>, mod
 /**
  * 将生成的样式嵌入头部
  */
-export function insertThemeStylesheet(theme: string, colorMap: TColorToken, mode: ModeType) {
-  const isDarkMode = mode === 'dark';
-  const root = !isDarkMode ? `:root[theme-color='${theme}']` : `:root[theme-color='${theme}'][theme-mode='dark']`;
+export function insertThemeStylesheet(theme: string, colorMap: TColorToken) {
+  // 仅浅色模式：选择器固定为 :root[theme-color]，不再拼接 [theme-mode='dark']
+  const root = `:root[theme-color='${theme}']`;
 
   const styleSheet = document.createElement('style');
   styleSheet.type = 'text/css';

@@ -1,6 +1,6 @@
 <template>
   <t-dialog v-model:visible="renewVisible" header="服务续费" width="min(34rem, calc(100vw - 2rem))" destroy-on-close>
-    <loading-state :loading="renewLoading" text="数据加载中..." compact>
+    <loading-state :loading="renewLoading" text="数据加载中…" compact>
       <template v-if="renewData">
         <t-radio-group v-model="renewForm.billing_cycle" class="renew-cycle-group" @change="handleRenewCycleChange">
           <t-radio-button
@@ -51,7 +51,7 @@
   </t-dialog>
 </template>
 <script setup lang="ts">
-import LoadingState from '@shared/user-v3/components/LoadingState.vue';
+import LoadingState from '@caiwu/shared/user-v3/components/LoadingState.vue';
 
 import { useServiceConsoleContext } from '../context';
 

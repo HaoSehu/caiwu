@@ -197,7 +197,8 @@ import './index.less';
 
 import { SearchIcon, UserAddIcon } from 'tdesign-icons-vue-next';
 import type { FormInstanceFunctions, FormRule, PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
-import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
+import { DialogPlugin } from 'tdesign-vue-next/es/dialog/plugin';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, onMounted, reactive, ref } from 'vue';
 
 import type { CreateStaffPayload, StaffPayload, StaffRecord, StaffRoleOption } from '@/api/admin-staff';
@@ -263,7 +264,7 @@ const resetForm = reactive({ password: '', password_confirmation: '' });
 
 const canManage = computed(() => hasPermission(AdminPermissions.STAFF_MANAGE));
 const canEditStaffIdentity = computed(() => hasPermission(AdminPermissions.ALL));
-const isMobile = useMediaQuery('(max-width: 768px)');
+const isMobile = useMediaQuery('(max-width: 767.98px)');
 
 const formRules = computed<Record<string, FormRule[]>>(() => ({
   username: [

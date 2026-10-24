@@ -120,7 +120,7 @@
 </template>
 <script setup lang="ts">
 import type { FormInstanceFunctions, FormRule } from 'tdesign-vue-next';
-import { MessagePlugin } from 'tdesign-vue-next';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { onMounted, reactive, ref } from 'vue';
 
 import { adminAuthApi } from '@/api/auth';
@@ -328,7 +328,7 @@ const handleDisableMfa = async () => {
 
   code {
     padding: 8px 10px;
-    font-family: var(--td-font-family-mono, ui-monospace, monospace);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     font-size: 13px;
     letter-spacing: 0.06em;
     background: var(--td-bg-color-secondarycontainer, #f3f5f9);

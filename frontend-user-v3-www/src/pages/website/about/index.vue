@@ -73,7 +73,7 @@ h1 {
   gap: 20px;
 }
 
-@media (max-width: $breakpoint-narrow) {
+@media (max-width: $breakpoint-mobile-max) {
   .about-grid {
     grid-template-columns: 1fr;
   }

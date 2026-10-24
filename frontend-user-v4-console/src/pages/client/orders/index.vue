@@ -35,7 +35,7 @@
         :empty="!loading && !loadError && !hasRows"
         :error="!loading && loadError"
         :error-text="loadErrorText"
-        :description="hasActiveFilters ? '未检索到匹配结果，请调整筛选条件' : '暂无订单记录'"
+        :description="hasActiveFilters ? '未找到匹配结果' : '暂无订单记录'"
         @retry="loadList"
       >
         <template v-if="!hasActiveFilters" #empty-action>
@@ -184,8 +184,8 @@
 </template>
 <script setup lang="ts">
 import { ORDER_STATUS_MAP } from '@caiwu/shared/statusConfig';
-import DataState from '@shared/user-v3/components/DataState.vue';
-import StatusTag from '@shared/user-v3/components/StatusTag.vue';
+import DataState from '@caiwu/shared/user-v3/components/DataState.vue';
+import StatusTag from '@caiwu/shared/user-v3/components/StatusTag.vue';
 import { SearchIcon } from 'tdesign-icons-vue-next';
 import type { PrimaryTableCol } from 'tdesign-vue-next';
 import { useRouter } from 'vue-router';

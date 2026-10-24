@@ -28,7 +28,7 @@
         :empty="!loading && !loadError && !list.length"
         :error="!loading && loadError"
         :error-text="loadErrorText"
-        :description="hasActiveFilters ? '未检索到匹配结果，请调整筛选条件' : '暂无工单记录'"
+        :description="hasActiveFilters ? '未找到匹配结果' : '暂无工单记录'"
         @retry="loadTickets"
       >
         <template v-if="!hasActiveFilters" #empty-action>
@@ -156,7 +156,7 @@
                 class="attachment-thumb"
                 @click="previewUploadFile(file)"
               >
-                <img :src="file.url || file.path" alt="附件" />
+                <img :src="file.url || file.path" alt="附件" loading="lazy" decoding="async" />
                 <span
                   role="button"
                   tabindex="0"
@@ -178,12 +178,12 @@
       header="附件预览"
       width="min(45rem, calc(100vw - var(--td-comp-margin-xl)))"
     >
-      <img v-if="previewUrl" :src="previewUrl" class="preview-image" alt="附件预览" />
+      <img v-if="previewUrl" :src="previewUrl" class="preview-image" alt="附件预览" loading="lazy" decoding="async" />
     </t-dialog>
   </section>
 </template>
 <script setup lang="ts">
-import DataState from '@shared/user-v3/components/DataState.vue';
+import DataState from '@caiwu/shared/user-v3/components/DataState.vue';
 import { AddIcon } from 'tdesign-icons-vue-next';
 import type { PrimaryTableCol } from 'tdesign-vue-next';
 import { computed, onMounted } from 'vue';
@@ -228,7 +228,7 @@ const {
   openDetail,
 } = useTicketList();
 
-// 是否存在生效筛选：空态区分“暂无数据”与“未检索到匹配结果”（DESIGN.md §4.3）
+// 是否存在生效筛选：空态区分“暂无数据”与“未找到匹配结果”（DESIGN.md §4.3）
 const hasActiveFilters = computed(() => filters.keyword.trim() !== '' || filters.status !== undefined);
 
 const columns: PrimaryTableCol[] = [
@@ -418,7 +418,7 @@ onMounted(() => {
   width: 100%;
 }
 
-@media (max-width: @screen-sm-rem) {
+@media (max-width: @screen-mobile-max) {
   .client-tickets {
     padding: var(--td-comp-paddingTB-l) var(--td-comp-paddingLR-l);
   }

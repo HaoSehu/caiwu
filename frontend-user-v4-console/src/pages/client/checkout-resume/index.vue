@@ -27,8 +27,8 @@
   </section>
 </template>
 <script setup lang="ts">
-import LoadingState from '@shared/user-v3/components/LoadingState.vue';
-import { MessagePlugin } from 'tdesign-vue-next';
+import LoadingState from '@caiwu/shared/user-v3/components/LoadingState.vue';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
@@ -273,7 +273,7 @@ onMounted(async () => {
   justify-content: center;
 }
 
-@media (max-width: @screen-sm-rem) {
+@media (max-width: @screen-mobile-max) {
   .checkout-resume-page {
     align-items: stretch;
     min-height: auto;

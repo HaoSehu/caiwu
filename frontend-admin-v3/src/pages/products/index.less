@@ -468,6 +468,7 @@
 .type-icon-option .t-icon {
   width: 17px;
   height: 17px;
+  /* 图标字形尺寸须与 17px 盒子一致；标题字阶 token 为 18px 会溢出，故保留字面量 */
   font-size: 17px;
 }
 
@@ -610,7 +611,7 @@
 .type-manager-item__icon-meta .t-icon {
   flex: 0 0 auto;
   color: var(--td-brand-color);
-  font-size: 14px;
+  font-size: var(--td-font-size-title-small);
 }
 
 .type-manager-item__stats {
@@ -1029,6 +1030,7 @@
 .nav-dot--done {
   color: var(--td-success-color);
   font-size: 8px;
+  /* 状态角点用 8px 方点，属图形尺寸而非文本字号，故保留字面量（DESIGN.md 字阶不覆盖图形点） */
   margin-left: 4px;
   vertical-align: middle;
 }
@@ -1877,7 +1879,7 @@ button.supplier-tree-node__content {
   padding: 1px 4px;
   background: var(--td-bg-color-component);
   color: var(--td-text-color-secondary);
-  font-size: 11px;
+  font-size: var(--td-font-size-body-small);
   font-weight: 600;
   line-height: 16px;
   text-align: center;
@@ -1972,7 +1974,7 @@ button.supplier-tree-node__content {
   color: var(--caiwu-text-warning);
 }
 
-@media (width <= 1024px) {
+@media (max-width: 1024px) {
   /* Tablet: 树面板改为顶部横条并限制高度，隐藏次要表格列 */
   .catalog-shell .t-card__body {
     flex-direction: column;
@@ -2038,7 +2040,7 @@ button.supplier-tree-node__content {
   }
 }
 
-@media (width <= 768px) {
+@media (max-width: 767.98px) {
   .products-page,
   .catalog-page {
     gap: 12px;
@@ -2370,7 +2372,7 @@ button.supplier-tree-node__content {
   }
 }
 
-@media (width <= 480px) {
+@media (max-width: 480px) {
   .products-page,
   .catalog-page {
     gap: 10px;
@@ -2461,7 +2463,7 @@ button.supplier-tree-node__content {
 }
 
 /* Landscape phone: 横屏矮窗口保留左侧分类树 */
-@media (orientation: landscape) and (height <= 500px) and (width <= 1024px) {
+@media (orientation: landscape) and (max-height: 500px) and (max-width: 1024px) {
   .catalog-shell .t-card__body {
     flex-direction: row;
   }

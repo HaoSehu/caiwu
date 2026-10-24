@@ -88,11 +88,6 @@
     }
   }
 
-  // 手机端统一页面边距 12px
-  .tdesign-starter-content-layout {
-    padding: 12px !important;
-  }
-
   // 统一页面边距 12px（覆盖 TDesign token 默认值 14px/20px），仅移动端收窄，桌面保持 token 默认
   #app {
     --td-comp-paddingTB-l: 12px;
@@ -139,8 +134,9 @@ body.client-mobile-sidebar-locked {
     }
   }
 
+  // 页面边距唯一来源：桌面 20px 24px，≤991px 12px（docs/DESIGN.md §3.3）
   &-content-layout {
-    padding: var(--td-comp-paddingTB-xl) var(--td-comp-paddingLR-xl);
+    padding: 20px 24px;
   }
 
   &-layout {
@@ -304,4 +300,13 @@ body.client-mobile-sidebar-locked {
 
 .container-base-margin-top {
   margin-top: 16px;
+}
+
+// 页面边距 ≤991px 统一 12px（docs/DESIGN.md §3.3）。放在文件末尾，确保覆盖上方 &-content-layout 的桌面值。
+// 这里只负责布局层自身；.record-page 等业务根元素的 padding: 0 由 theme.css 末尾带 #app 的规则统一压制，
+// 不要在布局层重复声明业务页选择器——那条分支特异性低于 theme.css，永远不会生效。
+@media (max-width: @screen-sm-max) {
+  .@{starter-prefix}-content-layout {
+    padding: 12px;
+  }
 }

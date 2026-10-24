@@ -1,4 +1,4 @@
-import { ACCOUNT_TRANSACTION_EVENT_MAP, getStatusLabel } from '@shared/statusConfig';
+import { ACCOUNT_TRANSACTION_EVENT_MAP, getStatusLabel } from '@caiwu/shared/statusConfig';
 import type { PrimaryTableCol } from 'tdesign-vue-next';
 
 import type { FinanceLedgerRecord } from '@/types/client';

@@ -2,7 +2,7 @@
   <section class="service-console service-console--compute">
     <console-breadcrumb />
 
-    <loading-state :loading="detailLoading" text="数据加载中...">
+    <loading-state :loading="detailLoading" text="数据加载中…">
       <console-header />
       <console-alerts />
 
@@ -23,7 +23,7 @@
   </section>
 </template>
 <script setup lang="ts">
-import LoadingState from '@shared/user-v3/components/LoadingState.vue';
+import LoadingState from '@caiwu/shared/user-v3/components/LoadingState.vue';
 import { watch } from 'vue';
 import { useRouter } from 'vue-router';
 

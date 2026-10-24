@@ -56,13 +56,17 @@
         <template #rows="{ row }">{{ formatNumber(row.rows) }}</template>
         <template #size="{ row }">{{ formatSizeMb(row.size_mb) }}</template>
         <template #updateTime="{ row }">{{ row.update_time || '-' }}</template>
+        <template #empty>
+          <t-empty :description="loading ? '加载中…' : '暂无数据表'" />
+        </template>
       </t-table>
     </t-card>
   </div>
 </template>
 <script setup lang="ts">
 import type { PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
-import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
+import { DialogPlugin } from 'tdesign-vue-next/es/dialog/plugin';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, onMounted, ref } from 'vue';
 
 import type { DatabaseOptimizationCandidate, DatabaseStatus, DatabaseTableItem } from '@/api/admin/database';

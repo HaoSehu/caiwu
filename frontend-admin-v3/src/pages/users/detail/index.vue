@@ -144,6 +144,9 @@
           </div>
         </div>
         <t-table row-key="id" :data="recentReferrals" :columns="recentReferralColumns" table-layout="fixed">
+          <template #empty>
+            <t-empty description="暂无数据" />
+          </template>
           <template #referralUser="{ row }">
             <strong>{{ row.nickname || row.display_name || row.email || '-' }}</strong>
             <p class="table-subtext">{{ row.email || '-' }}</p>
@@ -186,6 +189,11 @@
             table-layout="fixed"
             @page-change="handleServicesPageChange"
           >
+            <template #empty>
+              <t-empty
+                :description="services.loading ? '加载中…' : hasActiveServiceFilters ? '未找到匹配结果' : '暂无数据'"
+              />
+            </template>
             <template #serviceName="{ row }">
               <strong>{{ serviceName(row) }}</strong>
               <p class="table-subtext">{{ row.domain || row.product?.group_name || '-' }}</p>
@@ -248,6 +256,11 @@
             table-layout="fixed"
             @page-change="handleInvoicesPageChange"
           >
+            <template #empty>
+              <t-empty
+                :description="invoices.loading ? '加载中…' : hasActiveInvoiceFilters ? '未找到匹配结果' : '暂无数据'"
+              />
+            </template>
             <template #invoiceAmount="{ row }">{{ formatMoney(row.amount) }}</template>
             <template #invoiceStatus="{ row }">
               <t-tag :theme="invoiceStatusTheme(row.status)" variant="light">{{
@@ -285,6 +298,9 @@
             table-layout="fixed"
             @page-change="handleTicketsPageChange"
           >
+            <template #empty>
+              <t-empty :description="tickets.loading ? '加载中…' : '暂无数据'" />
+            </template>
             <template #ticketPriority="{ row }">
               <t-tag :theme="priorityTheme(row.priority)" variant="light">{{ priorityLabel(row.priority) }}</t-tag>
             </template>
@@ -329,6 +345,9 @@
             table-layout="fixed"
             @page-change="handleLogsPageChange"
           >
+            <template #empty>
+              <t-empty :description="logs.loading ? '加载中…' : hasActiveLogFilters ? '未找到匹配结果' : '暂无数据'" />
+            </template>
             <template #logTime="{ row }">{{ formatDateTime(row.created_at) }}</template>
           </t-table>
         </div>
@@ -351,6 +370,9 @@
             table-layout="fixed"
             @page-change="handleNoticesPageChange"
           >
+            <template #empty>
+              <t-empty :description="notices.loading ? '加载中…' : '暂无数据'" />
+            </template>
             <template #noticeTarget="{ row }">{{ notices.channel === 'email' ? row.to_email : row.phone }}</template>
             <template #noticeTitle="{ row }">{{
               notices.channel === 'email' ? row.subject : row.template_code
@@ -905,11 +927,12 @@ import {
   toLabelMap,
   toSelectOptions,
   toTagTypeMap,
-} from '@shared/statusConfig';
+} from '@caiwu/shared/statusConfig';
 import dayjs from 'dayjs';
 import { ChevronLeftIcon, FileCopyIcon, SearchIcon } from 'tdesign-icons-vue-next';
 import type { FormInstanceFunctions, FormRule, PageInfo, PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
-import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
+import { DialogPlugin } from 'tdesign-vue-next/es/dialog/plugin';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
@@ -947,6 +970,10 @@ interface PageState {
 
 const route = useRoute();
 const router = useRouter();
+
+/** 详情与各标签页列表的请求序号，用于丢弃过期响应（docs/FRONTEND.md） */
+let detailRequestSeq = 0;
+const pageStateRequestSeq: Record<string, number> = {};
 
 const detailLoading = ref(false);
 const saveLoading = ref(false);
@@ -1124,6 +1151,17 @@ const notices = reactive<PageState>({
   filters: {},
   channel: 'email',
 });
+
+// 空态文案区分「未筛选但无数据」与「筛选后无匹配」（docs/DESIGN.md 术语表）
+const hasActiveServiceFilters = computed(
+  () => Boolean(String(services.filters.keyword || '').trim()) || Boolean(services.filters.status),
+);
+const hasActiveInvoiceFilters = computed(() => Boolean(invoices.filters.status) || Boolean(invoices.filters.type));
+const hasActiveLogFilters = computed(() =>
+  ['keyword', 'start_date', 'end_date', 'ip_address', 'source'].some((key) =>
+    Boolean(String(logs.filters[key] ?? '').trim()),
+  ),
+);
 
 const editRules: Record<string, FormRule[]> = {
   password: [{ validator: (val) => !val || String(val).length >= 6, message: '密码至少需要 6 位', type: 'warning' }],
@@ -1358,17 +1396,21 @@ async function loadDetail() {
     await router.replace('/admin/users');
     return;
   }
+  // 请求竞态防护：快速切换用户时只允许最后一次请求回写结果
+  const currentSeq = ++detailRequestSeq;
   detailLoading.value = true;
   try {
     const response = await userApi.detail(userId.value);
+    if (currentSeq !== detailRequestSeq) return;
     user.value = { id: userId.value, status: 1, ...(response.user || {}) };
     stats.value = response.stats || {};
     referral.value = response.referral || {};
     syncEditForm();
   } catch (error) {
+    if (currentSeq !== detailRequestSeq) return;
     MessagePlugin.error(errorMessage(error, '加载用户详情失败'));
   } finally {
-    detailLoading.value = false;
+    if (currentSeq === detailRequestSeq) detailLoading.value = false;
   }
 }
 
@@ -1407,18 +1449,23 @@ async function loadPageState(
   loader: (params: PageParams) => Promise<{ list?: Row[]; total?: number; page?: number; page_size?: number }>,
   loadedKey: string,
 ) {
+  // 请求竞态防护：同一标签页连续筛选/翻页时只允许最后一次请求回写结果
+  const currentSeq = (pageStateRequestSeq[loadedKey] || 0) + 1;
+  pageStateRequestSeq[loadedKey] = currentSeq;
   state.loading = true;
   try {
     const response = await loader({ ...state.filters, page: state.page, page_size: state.pageSize });
+    if (pageStateRequestSeq[loadedKey] !== currentSeq) return;
     state.list = Array.isArray(response.list) ? response.list : [];
     state.total = Number(response.total || 0);
     state.page = Number(response.page || state.page);
     state.pageSize = Number(response.page_size || state.pageSize);
     loadedTabs[loadedKey] = true;
   } catch (error) {
+    if (pageStateRequestSeq[loadedKey] !== currentSeq) return;
     MessagePlugin.error(errorMessage(error, '加载列表数据失败'));
   } finally {
-    state.loading = false;
+    if (pageStateRequestSeq[loadedKey] === currentSeq) state.loading = false;
   }
 }
 

@@ -262,7 +262,7 @@ import {
   LogoAlipayFilledIcon,
   LogoWechatpayFilledIcon,
 } from 'tdesign-icons-vue-next';
-import { DialogPlugin } from 'tdesign-vue-next';
+import { DialogPlugin } from 'tdesign-vue-next/es/dialog/plugin';
 import { computed, defineAsyncComponent, onMounted, ref } from 'vue';
 
 import { RECHARGE_PRESET_AMOUNTS, useRecharge } from '@/domains/finance/useRecharge';

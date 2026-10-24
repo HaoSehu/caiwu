@@ -64,7 +64,7 @@
 </template>
 <script setup lang="ts">
 import type { PrimaryTableCol } from 'tdesign-vue-next';
-import { MessagePlugin } from 'tdesign-vue-next';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, ref, watch } from 'vue';
 
 import { adminApi } from '@/api/admin';
@@ -92,6 +92,8 @@ const emit = defineEmits<{
 }>();
 
 const loading = ref(false);
+/** 列表请求序号，用于丢弃过期响应 */
+let requestSeq = 0;
 const rows = ref<RecordRow[]>([]);
 const total = ref(0);
 const page = ref(1);
@@ -127,6 +129,8 @@ const columns = computed<PrimaryTableCol<RecordRow>[]>(() => {
 
 async function load() {
   if (!props.visible) return;
+  // 请求竞态防护：快速翻页或切换队列时只允许最后一次请求回写结果（docs/FRONTEND.md）
+  const currentSeq = ++requestSeq;
   loading.value = true;
   try {
     const response = await adminApi.schedules.queueJobs({
@@ -134,15 +138,17 @@ async function load() {
       page: page.value,
       page_size: pageSize.value,
     });
+    if (currentSeq !== requestSeq) return;
     const list = Array.isArray(response.list) ? response.list : [];
     rows.value = list as RecordRow[];
     total.value = Number(response.total || 0);
   } catch (error) {
+    if (currentSeq !== requestSeq) return;
     rows.value = [];
     total.value = 0;
     MessagePlugin.error(errorMessage(error, '队列任务加载失败'));
   } finally {
-    loading.value = false;
+    if (currentSeq === requestSeq) loading.value = false;
   }
 }
 

@@ -167,8 +167,8 @@
 </template>
 <script setup lang="ts">
 import { INVOICE_STATUS_MAP, ORDER_STATUS_MAP, PAYMENT_STATUS_MAP } from '@caiwu/shared/statusConfig';
-import DataState from '@shared/user-v3/components/DataState.vue';
-import StatusTag from '@shared/user-v3/components/StatusTag.vue';
+import DataState from '@caiwu/shared/user-v3/components/DataState.vue';
+import StatusTag from '@caiwu/shared/user-v3/components/StatusTag.vue';
 import { RefreshIcon } from 'tdesign-icons-vue-next';
 import type { PrimaryTableCol } from 'tdesign-vue-next';
 import { computed, ref, watch } from 'vue';
