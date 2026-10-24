@@ -1,6 +1,6 @@
 <template>
   <div class="data-state">
-    <LoadingState v-if="loading" text="加载中" compact />
+    <LoadingState v-if="loading" text="加载中…" compact />
     <t-empty v-else-if="error" :description="errorText || '加载失败，请稍后重试'">
       <template #action>
         <t-button theme="primary" variant="outline" @click="emit('retry')">重新加载</t-button>
