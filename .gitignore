@@ -186,8 +186,9 @@ docs/*
 AGENTS.md
 .github/agents/
 
-# Git hooks 本地钩子不入库
-.husky/
+# Git hooks：husky 生成的 .husky/_ 是运行时壳，不入库；
+# 但 .husky/pre-commit 是真正的提交门禁，必须入库，否则换机器/重新 clone 后门禁消失。
+.husky/_/
 
 # 本地 AI 工具会话、计划与索引
 .zcode/

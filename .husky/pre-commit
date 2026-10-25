@@ -1,0 +1,17 @@
+#!/usr/bin/env sh
+# 提交门禁。本文件入库（.gitignore 只忽略 husky 生成的运行时壳 .husky/_/），
+# 换机器或重新 clone 后由 npm run prepare 安装 .husky/_ 的壳，pre-commit 本身随仓库分发。
+#
+# lint-staged 必须用 --config 锁定根 package.json：各端 package.json 也带 lint-staged 配置，
+# 裸跑 lint-staged 会把 5 份配置合并，触发 admin 的 stylelint:fix 把全部媒体查询改写成
+# Media Queries Level 4 的区间语法，一次提交就污染 44 个文件（已实际发生并回滚）。
+#
+# 根配置本身只对暂存的前端文件跑 eslint --fix。www 与 shared 目录没有 .prettierrc，
+# 跑 prettier 会按默认双引号风格重写几十个文件，违反「不整体格式化他人代码」，
+# 因此这两组以及根目录的 md/css 组都不接 prettier。
+npx lint-staged --config package.json
+
+# docs/ 的改动额外校验文档体系（docs/README.md、docs/治理/WORKING_RULES.md 已写明该行为）
+if git diff --cached --name-only | grep -q '^docs/'; then
+  npm run docs:check || exit 1
+fi
