@@ -8,7 +8,6 @@ use App\Constants\CouponStatus;
 use App\Constants\InvoiceStatus;
 use App\Constants\InvoiceType;
 use App\Constants\OrderStatus;
-use App\Constants\ProductType;
 use App\Constants\ServiceStatus;
 use App\Constants\UserCouponStatus;
 use App\Exceptions\BusinessException;
@@ -20,13 +19,13 @@ use App\Models\Product;
 use App\Models\Service;
 use App\Models\User;
 use App\Models\UserCoupon;
+use App\Services\Finance\Concerns\ResolvesCouponDisplayStatus;
+use App\Services\Finance\Concerns\ResolvesCouponProductDisplay;
 use App\Services\ProductCatalog\InstanceSpecCatalogService;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Support\LikeEscape;
 use App\Support\Money;
-use App\Support\ProductGroupHierarchyFields;
 use App\Support\SchemaMetadataCache;
-use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -35,6 +34,9 @@ use Illuminate\Support\Str;
 
 class CouponService
 {
+    use ResolvesCouponDisplayStatus;
+    use ResolvesCouponProductDisplay;
+
     public function __construct(
         private readonly ?ProductDisplayNameResolver $productDisplayNameResolver = null,
         private readonly ?InstanceSpecCatalogService $instanceSpecCatalogService = null,
@@ -74,13 +76,6 @@ class CouponService
     private const USED_ORDER_STATUSES = [
         OrderStatus::PAID,
         OrderStatus::REFUNDED,
-    ];
-
-    private const SUPPORTED_BILLING_CYCLE_LABELS = [
-        'monthly' => '月付',
-        'quarterly' => '季付',
-        'semiannually' => '半年付',
-        'annually' => '年付',
     ];
 
     public function adminSummary(array $filters = []): array
@@ -1125,7 +1120,7 @@ class CouponService
     {
         $productIds = $this->normalizeProductIds((array) ($coupon->product_ids ?? []));
         $rawBillingCycles = (array) ($coupon->billing_cycles ?? []);
-        $billingCycles = $this->normalizeBillingCycles($rawBillingCycles);
+        $billingCycles = CouponLabelFormatter::normalizeBillingCycles($rawBillingCycles);
         $displayStatus = $this->resolveAdminDisplayStatus($coupon);
         $canUpdate = $this->couponCanBeUpdatedForAdmin($coupon);
         $canDelete = $this->couponCanBeDeletedForAdmin($coupon);
@@ -1138,14 +1133,14 @@ class CouponService
             'name' => (string) $coupon->name,
             'description' => (string) ($coupon->description ?? ''),
             'distribution_type' => (string) ($coupon->distribution_type ?? 'public'),
-            'distribution_type_label' => $this->resolveDistributionTypeLabel((string) ($coupon->distribution_type ?? 'public')),
+            'distribution_type_label' => CouponLabelFormatter::resolveDistributionTypeLabel((string) ($coupon->distribution_type ?? 'public')),
             'discount_scope' => (string) ($coupon->discount_scope ?? 'first_month'),
-            'discount_scope_label' => $this->resolveDiscountScopeLabel((string) ($coupon->discount_scope ?? 'first_month')),
+            'discount_scope_label' => CouponLabelFormatter::resolveDiscountScopeLabel((string) ($coupon->discount_scope ?? 'first_month')),
             'discount_type' => (string) $coupon->discount_type,
-            'discount_type_label' => $this->resolveDiscountTypeLabel((string) $coupon->discount_type),
+            'discount_type_label' => CouponLabelFormatter::resolveDiscountTypeLabel((string) $coupon->discount_type),
             'discount_value' => Money::format((float) ($coupon->discount_value ?? 0)),
             'discount_value_raw' => (float) ($coupon->discount_value ?? 0),
-            'discount_label' => $this->buildDiscountLabel($coupon),
+            'discount_label' => CouponLabelFormatter::buildDiscountLabel($coupon),
             'min_amount' => Money::format((float) ($coupon->min_amount ?? 0)),
             'min_amount_raw' => (float) ($coupon->min_amount ?? 0),
             'max_discount_amount' => $coupon->max_discount_amount !== null
@@ -1155,13 +1150,13 @@ class CouponService
                 ? (float) $coupon->max_discount_amount
                 : null,
             'billing_cycles' => $billingCycles,
-            'billing_cycle_text' => $this->formatBillingCycleText($rawBillingCycles),
+            'billing_cycle_text' => CouponLabelFormatter::formatBillingCycleText($rawBillingCycles),
             'product_ids' => $productIds,
             'product_names' => array_values(array_filter(array_map(
                 fn (int $productId) => $productNameMap[$productId] ?? '',
                 $productIds
             ))),
-            'product_scope_text' => $this->formatProductScopeText($productIds, $productNameMap),
+            'product_scope_text' => CouponLabelFormatter::formatProductScopeText($productIds, $productNameMap),
             'requires_product_ids' => $this->normalizeProductIds((array) ($coupon->requires_product_ids ?? [])),
             'first_order_only' => (bool) $coupon->first_order_only,
             'only_old_client' => (bool) ($coupon->only_old_client ?? false),
@@ -1184,7 +1179,7 @@ class CouponService
             'sort_order' => (int) ($coupon->sort_order ?? 0),
             'starts_at' => $coupon->starts_at?->format('Y-m-d H:i:s'),
             'expires_at' => $coupon->expires_at?->format('Y-m-d H:i:s'),
-            'validity_text' => $this->formatValidityText($coupon),
+            'validity_text' => CouponLabelFormatter::formatValidityText($coupon),
             'remark' => (string) ($coupon->remark ?? ''),
             'operator' => (string) ($coupon->operator ?? ''),
             'trace_id' => (string) ($coupon->trace_id ?? ''),
@@ -1276,8 +1271,8 @@ class CouponService
                 $currentValue = $this->normalizeProductIds((array) ($currentValue ?? []));
                 $newValue = $this->normalizeProductIds((array) ($newValue ?? []));
             } elseif ($field === 'billing_cycles') {
-                $currentValue = $this->normalizeBillingCycles((array) ($currentValue ?? []));
-                $newValue = $this->normalizeBillingCycles((array) ($newValue ?? []));
+                $currentValue = CouponLabelFormatter::normalizeBillingCycles((array) ($currentValue ?? []));
+                $newValue = CouponLabelFormatter::normalizeBillingCycles((array) ($newValue ?? []));
             } elseif (in_array($field, ['discount_value', 'min_amount', 'max_discount_amount'], true)) {
                 $currentValue = round((float) ($currentValue ?? 0), 2);
                 $newValue = round((float) ($newValue ?? 0), 2);
@@ -1454,7 +1449,7 @@ class CouponService
                 'discount_scope' => 'first_month',
                 'discount_scope_label' => '新购优惠',
                 'receive_type' => (string) ($userCoupon->receive_type ?? 'claim'),
-                'receive_type_label' => $this->resolveReceiveTypeLabel((string) ($userCoupon->receive_type ?? 'claim')),
+                'receive_type_label' => CouponLabelFormatter::resolveReceiveTypeLabel((string) ($userCoupon->receive_type ?? 'claim')),
                 'discount_type' => '',
                 'discount_value' => '0.00',
                 'discount_label' => '不可用',
@@ -1486,7 +1481,7 @@ class CouponService
 
         $productIds = $this->normalizeProductIds((array) ($coupon->product_ids ?? []));
         $rawBillingCycles = (array) ($coupon->billing_cycles ?? []);
-        $billingCycles = $this->normalizeBillingCycles($rawBillingCycles);
+        $billingCycles = CouponLabelFormatter::normalizeBillingCycles($rawBillingCycles);
         $statusMeta = $this->resolveOwnedCouponStatus(
             $coupon,
             $userCoupon,
@@ -1507,14 +1502,14 @@ class CouponService
             'name' => (string) $coupon->name,
             'description' => (string) ($coupon->description ?? ''),
             'distribution_type' => (string) ($coupon->distribution_type ?? 'public'),
-            'distribution_type_label' => $this->resolveDistributionTypeLabel((string) ($coupon->distribution_type ?? 'public')),
+            'distribution_type_label' => CouponLabelFormatter::resolveDistributionTypeLabel((string) ($coupon->distribution_type ?? 'public')),
             'discount_scope' => (string) ($coupon->discount_scope ?? 'first_month'),
-            'discount_scope_label' => $this->resolveDiscountScopeLabel((string) ($coupon->discount_scope ?? 'first_month')),
+            'discount_scope_label' => CouponLabelFormatter::resolveDiscountScopeLabel((string) ($coupon->discount_scope ?? 'first_month')),
             'receive_type' => (string) ($userCoupon->receive_type ?? 'claim'),
-            'receive_type_label' => $this->resolveReceiveTypeLabel((string) ($userCoupon->receive_type ?? 'claim')),
+            'receive_type_label' => CouponLabelFormatter::resolveReceiveTypeLabel((string) ($userCoupon->receive_type ?? 'claim')),
             'discount_type' => (string) $coupon->discount_type,
             'discount_value' => Money::format((float) ($coupon->discount_value ?? 0)),
-            'discount_label' => $this->buildDiscountLabel($coupon),
+            'discount_label' => CouponLabelFormatter::buildDiscountLabel($coupon),
             'min_amount' => Money::format((float) ($coupon->min_amount ?? 0)),
             'max_discount_amount' => $coupon->max_discount_amount !== null
                 ? Money::format((float) $coupon->max_discount_amount)
@@ -1533,11 +1528,11 @@ class CouponService
                 fn (int $productId) => $productNameMap[$productId] ?? '',
                 $productIds
             ))),
-            'product_scope_text' => $this->formatProductScopeText($productIds, $productNameMap),
+            'product_scope_text' => CouponLabelFormatter::formatProductScopeText($productIds, $productNameMap),
             'products' => $this->resolveProductHierarchyList($productIds),
             'billing_cycles' => $billingCycles,
-            'billing_cycle_text' => $this->formatBillingCycleText($rawBillingCycles),
-            'validity_text' => $this->formatValidityText($coupon),
+            'billing_cycle_text' => CouponLabelFormatter::formatBillingCycleText($rawBillingCycles),
+            'validity_text' => CouponLabelFormatter::formatValidityText($coupon),
             'claimed_at' => $userCoupon->claimed_at?->format('Y-m-d H:i:s'),
             'used_at' => $userCoupon->used_at?->format('Y-m-d H:i:s'),
             'revoked_at' => $userCoupon->revoked_at?->format('Y-m-d H:i:s'),
@@ -1558,9 +1553,9 @@ class CouponService
             'name' => (string) $coupon->name,
             'description' => (string) ($coupon->description ?? ''),
             'discount_scope' => (string) ($coupon->discount_scope ?? 'first_month'),
-            'discount_scope_label' => $this->resolveDiscountScopeLabel((string) ($coupon->discount_scope ?? 'first_month')),
+            'discount_scope_label' => CouponLabelFormatter::resolveDiscountScopeLabel((string) ($coupon->discount_scope ?? 'first_month')),
             'discount_type' => (string) $coupon->discount_type,
-            'discount_label' => $this->buildDiscountLabel($coupon),
+            'discount_label' => CouponLabelFormatter::buildDiscountLabel($coupon),
             'min_amount' => Money::format((float) ($coupon->min_amount ?? 0)),
             'max_discount_amount' => $coupon->max_discount_amount !== null
                 ? Money::format((float) $coupon->max_discount_amount)
@@ -1577,9 +1572,9 @@ class CouponService
             'first_order_only' => (bool) $coupon->first_order_only,
             'product_ids' => $productIds,
             'products' => $this->resolveProductHierarchyList($productIds),
-            'product_scope_text' => $this->formatProductScopeText($productIds, $productNameMap),
-            'billing_cycle_text' => $this->formatBillingCycleText($rawBillingCycles),
-            'validity_text' => $this->formatValidityText($coupon),
+            'product_scope_text' => CouponLabelFormatter::formatProductScopeText($productIds, $productNameMap),
+            'billing_cycle_text' => CouponLabelFormatter::formatBillingCycleText($rawBillingCycles),
+            'validity_text' => CouponLabelFormatter::formatValidityText($coupon),
             'expires_at' => $coupon->expires_at?->format('Y-m-d H:i:s'),
         ];
     }
@@ -1600,7 +1595,7 @@ class CouponService
         throw_if($coupon->starts_at && $coupon->starts_at->gt($now), new BusinessException('优惠券尚未开始使用'));
         throw_if($coupon->expires_at && $coupon->expires_at->lt($now), new BusinessException('优惠券已过期'));
         throw_if(
-            ! $this->isCouponScopeAllowedForOrderType((string) ($coupon->discount_scope ?? 'first_month'), $orderType),
+            ! CouponLabelFormatter::isCouponScopeAllowedForOrderType((string) ($coupon->discount_scope ?? 'first_month'), $orderType),
             new BusinessException($orderType === 'renew' ? '该优惠券不支持续费使用' : '该优惠券仅支持续费使用')
         );
 
@@ -1632,8 +1627,8 @@ class CouponService
         }
 
         $rawBillingCycles = (array) ($coupon->billing_cycles ?? []);
-        $normalizedBillingCycles = $this->normalizeBillingCycles($rawBillingCycles);
-        if ($this->hasConfiguredBillingCycles($rawBillingCycles) && $normalizedBillingCycles === []) {
+        $normalizedBillingCycles = CouponLabelFormatter::normalizeBillingCycles($rawBillingCycles);
+        if (CouponLabelFormatter::hasConfiguredBillingCycles($rawBillingCycles) && $normalizedBillingCycles === []) {
             throw new BusinessException('当前优惠券未配置可用计费周期');
         }
 
@@ -1671,10 +1666,10 @@ class CouponService
             'name' => (string) $coupon->name,
             'description' => (string) ($coupon->description ?? ''),
             'discount_scope' => (string) ($coupon->discount_scope ?? 'first_month'),
-            'discount_scope_label' => $this->resolveDiscountScopeLabel((string) ($coupon->discount_scope ?? 'first_month')),
+            'discount_scope_label' => CouponLabelFormatter::resolveDiscountScopeLabel((string) ($coupon->discount_scope ?? 'first_month')),
             'discount_type' => (string) $coupon->discount_type,
             'discount_value' => Money::format((float) ($coupon->discount_value ?? 0)),
-            'discount_label' => $this->buildDiscountLabel($coupon),
+            'discount_label' => CouponLabelFormatter::buildDiscountLabel($coupon),
             'discount_amount' => Money::format($discountAmount),
             'final_amount' => Money::format(max($amount - $discountAmount, 0)),
             'min_amount' => Money::format((float) ($coupon->min_amount ?? 0)),
@@ -1684,12 +1679,12 @@ class CouponService
             'first_order_only' => (bool) $coupon->first_order_only,
             'per_user_limit' => $coupon->per_user_limit ? (int) $coupon->per_user_limit : null,
             'used_times' => $userUsedCount,
-            'product_scope_text' => $this->formatProductScopeText(
+            'product_scope_text' => CouponLabelFormatter::formatProductScopeText(
                 $normalizedProductIds,
                 $this->resolveProductNameMapFromCoupons(collect([$coupon]))
             ),
-            'billing_cycle_text' => $this->formatBillingCycleText($rawBillingCycles),
-            'validity_text' => $this->formatValidityText($coupon),
+            'billing_cycle_text' => CouponLabelFormatter::formatBillingCycleText($rawBillingCycles),
+            'validity_text' => CouponLabelFormatter::formatValidityText($coupon),
             'expires_at' => $coupon->expires_at?->format('Y-m-d H:i:s'),
         ];
     }
@@ -1906,113 +1901,6 @@ class CouponService
         throw_if(! $this->hasCouponsTable(), new BusinessException('当前系统未启用优惠券功能'));
     }
 
-    private function resolveAdminDisplayStatus(Coupon $coupon): array
-    {
-        $now = now();
-
-        if ((int) $coupon->status !== CouponStatus::ACTIVE) {
-            return ['status' => 'disabled', 'label' => '已停用', 'reason' => '管理员已手动停用'];
-        }
-
-        if ($coupon->starts_at && $coupon->starts_at->gt($now)) {
-            return ['status' => 'pending', 'label' => '未开始', 'reason' => '未到生效时间'];
-        }
-
-        if ($coupon->expires_at && $coupon->expires_at->lt($now)) {
-            return ['status' => 'expired', 'label' => '已过期', 'reason' => '已超过结束时间'];
-        }
-
-        return ['status' => 'active', 'label' => '生效中', 'reason' => '当前可正常使用'];
-    }
-
-    private function resolveOwnedCouponStatus(
-        Coupon $coupon,
-        UserCoupon $userCoupon,
-        int $userUsedCount,
-        bool $hasPlacedOrder,
-        bool $hasPendingInvoice = false,
-        bool $hasPaidInvoice = false,
-        bool $hasPendingFirstOrderUsage = false,
-    ): array {
-        $now = now();
-        if ((int) $userCoupon->status === UserCouponStatus::USED) {
-            return ['status' => 'used_up', 'label' => '已使用', 'reason' => '优惠券已被核销'];
-        }
-
-        if ((int) $userCoupon->status === UserCouponStatus::REVOKED) {
-            return ['status' => 'expired', 'label' => '已作废', 'reason' => '管理员已作废'];
-        }
-
-        if ((string) ($coupon->distribution_type ?? 'public') === 'private'
-            && (string) ($userCoupon->receive_type ?? 'claim') !== 'grant') {
-            return ['status' => 'expired', 'label' => '已失效', 'reason' => '当前优惠券已改为私有发放'];
-        }
-
-        if ((int) $userCoupon->status !== UserCouponStatus::OWNED || (int) $coupon->status !== CouponStatus::ACTIVE) {
-            return ['status' => 'expired', 'label' => '已失效', 'reason' => '当前优惠券已停用或失效'];
-        }
-
-        if ($coupon->starts_at && $coupon->starts_at->gt($now)) {
-            return ['status' => 'expired', 'label' => '未开始', 'reason' => '未到可使用时间'];
-        }
-
-        if ($coupon->expires_at && $coupon->expires_at->lt($now)) {
-            return ['status' => 'expired', 'label' => '已过期', 'reason' => '有效期已结束'];
-        }
-
-        // 已支付但异步核销尚未回写 user_coupon（仍为 OWNED）：按真实状态显示「已使用」，
-        // 与占用拦截的「已有已支付账单」兜底同一判定，避免「显示可使用但结账必败」。
-        // 置于有效性判定之后：券已失效/过期时仍归「已过期」，与分组归属保持一致。
-        if ($hasPaidInvoice) {
-            return ['status' => 'used_up', 'label' => '已使用', 'reason' => '优惠券已被核销'];
-        }
-
-        // 已占用：同券存在待支付账单或预留仍在窗口内。与结账可用券列表、占用拦截同一判定，
-        // 避免「列表显示可使用但结账必败」，也避免该券掉出全部三个分组
-        if ($hasPendingInvoice) {
-            return ['status' => 'used_up', 'label' => '已占用', 'reason' => '该优惠券已有待支付账单，请先完成支付或取消'];
-        }
-
-        $reservationActive = $userCoupon->reserved_until !== null
-            && CarbonImmutable::parse((string) $userCoupon->reserved_until)->gte($now);
-        if ($reservationActive) {
-            return ['status' => 'used_up', 'label' => '已占用', 'reason' => '该优惠券正在结算占用中，请稍后重试'];
-        }
-
-        if ($coupon->first_order_only && ($hasPlacedOrder || $hasPendingFirstOrderUsage)) {
-            return ['status' => 'used_up', 'label' => '已用完', 'reason' => '仅限首单用户使用'];
-        }
-
-        if ($coupon->per_user_limit && $userUsedCount >= (int) $coupon->per_user_limit) {
-            return ['status' => 'used_up', 'label' => '已用完', 'reason' => '已达到该优惠券使用上限'];
-        }
-
-        return ['status' => 'available', 'label' => '可使用', 'reason' => '满足条件后可直接抵扣'];
-    }
-
-    private function resolvePublicCouponStatus(Coupon $coupon, int $claimedCount): array
-    {
-        $now = now();
-
-        if ((int) $coupon->status !== CouponStatus::ACTIVE) {
-            return ['status' => 'expired', 'label' => '已失效', 'reason' => '当前优惠券已停用'];
-        }
-
-        if ($coupon->starts_at && $coupon->starts_at->gt($now)) {
-            return ['status' => 'expired', 'label' => '未开始', 'reason' => '未到领取时间'];
-        }
-
-        if ($coupon->expires_at && $coupon->expires_at->lt($now)) {
-            return ['status' => 'expired', 'label' => '已过期', 'reason' => '已超过领取时间'];
-        }
-
-        if ($coupon->total_usage_limit && $claimedCount >= (int) $coupon->total_usage_limit) {
-            return ['status' => 'used_up', 'label' => '已领完', 'reason' => '公开优惠券已被领取完'];
-        }
-
-        return ['status' => 'available', 'label' => '可领取', 'reason' => '领取后会进入你的优惠券账户'];
-    }
-
     private function normalizeAdminCouponPayload(array $payload, array $context = [], ?Coupon $coupon = null): array
     {
         $lockedFields = $coupon ? $this->resolveCouponLockedFields($coupon) : [];
@@ -2059,11 +1947,11 @@ class CouponService
 
         $startsAt = $isUpdate && ! array_key_exists('starts_at', $payload)
             ? $coupon->starts_at
-            : $this->normalizeDateTimeValue($payload['starts_at'] ?? null);
+            : CouponLabelFormatter::normalizeDateTimeValue($payload['starts_at'] ?? null);
 
         $expiresAt = $isUpdate && ! array_key_exists('expires_at', $payload)
             ? $coupon->expires_at
-            : $this->normalizeDateTimeValue($payload['expires_at'] ?? null);
+            : CouponLabelFormatter::normalizeDateTimeValue($payload['expires_at'] ?? null);
 
         $providedCode = trim((string) ($payload['code'] ?? ''));
         $code = $providedCode !== '' ? $providedCode : ($coupon?->code ?: $this->generateInternalCouponCode());
@@ -2101,8 +1989,8 @@ class CouponService
         }
 
         $billingCycles = $isUpdate && ! array_key_exists('billing_cycles', $payload)
-            ? $this->normalizeBillingCycles((array) ($coupon->billing_cycles ?? []))
-            : $this->normalizeBillingCycles((array) ($payload['billing_cycles'] ?? []));
+            ? CouponLabelFormatter::normalizeBillingCycles((array) ($coupon->billing_cycles ?? []))
+            : CouponLabelFormatter::normalizeBillingCycles((array) ($payload['billing_cycles'] ?? []));
 
         $productIds = $isUpdate && ! array_key_exists('product_ids', $payload)
             ? $this->normalizeProductIds((array) ($coupon->product_ids ?? []))
@@ -2138,11 +2026,11 @@ class CouponService
 
         $totalUsageLimit = $isUpdate && ! array_key_exists('total_usage_limit', $payload)
             ? $coupon->total_usage_limit
-            : $this->normalizePositiveInteger($payload['total_usage_limit'] ?? null);
+            : CouponLabelFormatter::normalizePositiveInteger($payload['total_usage_limit'] ?? null);
 
         $perUserLimit = $isUpdate && ! array_key_exists('per_user_limit', $payload)
             ? $coupon->per_user_limit
-            : $this->normalizePositiveInteger($payload['per_user_limit'] ?? null);
+            : CouponLabelFormatter::normalizePositiveInteger($payload['per_user_limit'] ?? null);
 
         // 注意 per_user_limit 的真实语义是「同一张券对该用户的核销次数上限」
         // （见 ownedCouponUsageCountSql 的使用次数口径），不是「可领取张数」：
@@ -2369,115 +2257,6 @@ class CouponService
             && $userCoupon->used_at !== null;
     }
 
-    private function resolveProductNameMapFromCoupons(Collection $coupons): array
-    {
-        $productIds = $coupons
-            ->filter()
-            ->flatMap(fn (Coupon $coupon) => $this->normalizeProductIds((array) ($coupon->product_ids ?? [])))
-            ->unique()
-            ->values()
-            ->all();
-
-        if ($productIds === []) {
-            return [];
-        }
-
-        $products = Product::query()
-            ->select(['id', 'pricing', 'purchase_requires', 'config_options'])
-            ->whereIn('id', $productIds)
-            ->get();
-
-        // 展示名解析要回源拆分商品的源商品，并补齐投影里没有的 custom_display_name，
-        // 不预载会随券数量逐行回源（管理端券列表 / 客户端券列表同一条链）。
-        $resolver = $this->resolveProductDisplayNameResolver();
-        $resolver->preloadSourceProducts($products);
-        $resolver->preloadCustomDisplayNames($products);
-
-        return $products
-            ->mapWithKeys(function (Product $product) {
-                $displayName = (string) ($this->resolveProductDisplayNameResolver()->resolveForProduct($product)['product_display_name'] ?? '');
-
-                return [
-                    (int) $product->id => $displayName !== '' ? $displayName : '未配置规格 #'.(int) $product->id,
-                ];
-            })
-            ->all();
-    }
-
-    /**
-     * @param  array<int, int>  $productIds
-     * @return array<int, array{id: int, name: string, type_label: string, parent_group_name: string, group_name: string}>
-     */
-    private function resolveProductHierarchyList(array $productIds): array
-    {
-        if ($productIds === []) {
-            return [];
-        }
-
-        $products = Product::query()
-            ->select([
-                'id',
-                'product_group_id',
-                'service_type_code',
-                'product_type',
-                'custom_display_name',
-                'pricing',
-                'purchase_requires',
-                'config_options',
-            ])
-            ->whereIn('id', $productIds)
-            ->with([
-                'productGroup.secondProductGroup.firstProductGroup',
-            ])
-            ->get();
-
-        $specMap = $this->instanceSpecCatalogService
-            ? $this->instanceSpecCatalogService->resolveProductSpecMap($productIds)
-            : [];
-
-        return $products
-            ->map(function (Product $product) use ($specMap) {
-                $hierarchy = ProductGroupHierarchyFields::fromProduct($product);
-                $typeCode = (string) ($hierarchy['product_type'] ?? ProductType::OTHER);
-                $instanceSpecText = (string) (($specMap[(int) $product->id] ?? [])['instance_spec_text'] ?? '');
-                $displayNamePayload = $this->resolveProductDisplayNameResolver()->resolveForProduct($product, [
-                    'instance_spec_text' => $instanceSpecText,
-                ]);
-                $combinedName = trim((string) ($displayNamePayload['combined_display_name'] ?? ''));
-                $productName = trim((string) ($displayNamePayload['product_display_name'] ?? ''));
-
-                return [
-                    'id' => (int) $product->id,
-                    'name' => $combinedName !== '' ? $combinedName : ($productName !== '' ? $productName : '未配置规格 #'.(int) $product->id),
-                    'product_type' => $typeCode,
-                    'product_type_label' => ProductType::businessLabelOf($typeCode),
-                    'service_type_code' => $typeCode,
-                    'service_type_label' => ProductType::businessLabelOf($typeCode),
-                    'first_product_group_id' => $hierarchy['first_product_group_id'] ?? null,
-                    'first_product_group_code' => trim((string) ($hierarchy['first_product_group_code'] ?? '')),
-                    'first_product_group_name' => trim((string) ($hierarchy['first_product_group_name'] ?? '')),
-                    'second_product_group_id' => $hierarchy['second_product_group_id'] ?? null,
-                    'second_product_group_name' => trim((string) ($hierarchy['second_product_group_name'] ?? '')),
-                    'third_product_group_id' => $hierarchy['third_product_group_id'] ?? null,
-                    'third_product_group_name' => trim((string) ($hierarchy['third_product_group_name'] ?? '')),
-                    'effective_product_group_id' => $hierarchy['effective_product_group_id'] ?? null,
-                    'effective_product_group_level' => $hierarchy['effective_product_group_level'] ?? null,
-                    '_sort_type' => $typeCode,
-                    '_sort_parent' => trim((string) ($hierarchy['second_product_group_name'] ?? '')),
-                    '_sort_group' => trim((string) ($hierarchy['third_product_group_name'] ?? '')),
-                ];
-            })
-            ->sortBy([
-                ['_sort_type', 'asc'],
-                ['_sort_parent', 'asc'],
-                ['_sort_group', 'asc'],
-                ['name', 'asc'],
-            ])
-            ->map(fn (array $item) => array_diff_key($item, ['_sort_type' => 0, '_sort_parent' => 0, '_sort_group' => 0]))
-            ->values()
-            ->all();
-    }
-
     private function normalizeProductIds(array $productIds): array
     {
         return collect($productIds)
@@ -2504,162 +2283,6 @@ class CouponService
             ->all();
     }
 
-    private function normalizeBillingCycles(array $billingCycles): array
-    {
-        return collect($billingCycles)
-            ->map(fn ($item) => trim((string) $item))
-            ->filter(fn (string $cycle) => $cycle !== '' && array_key_exists($cycle, self::SUPPORTED_BILLING_CYCLE_LABELS))
-            ->unique()
-            ->values()
-            ->all();
-    }
-
-    private function hasConfiguredBillingCycles(array $billingCycles): bool
-    {
-        return collect($billingCycles)
-            ->map(fn ($item) => trim((string) $item))
-            ->contains(fn (string $cycle) => $cycle !== '');
-    }
-
-    private function buildDiscountLabel(Coupon $coupon): string
-    {
-        $discountType = trim((string) $coupon->discount_type);
-        $discountValue = (float) ($coupon->discount_value ?? 0);
-
-        if ($discountType === 'fixed') {
-            return '立减 ¥'.Money::format($discountValue);
-        }
-
-        if ($discountType === 'percentage') {
-            return Money::trimZero(number_format($discountValue / 10, 1, '.', '')).' 折优惠';
-        }
-
-        if ($discountType === 'override') {
-            return '一口价 ¥'.Money::format($discountValue);
-        }
-
-        return '优惠券';
-    }
-
-    private function resolveDiscountTypeLabel(string $discountType): string
-    {
-        return match ($discountType) {
-            'fixed' => '满减券',
-            'percentage' => '折扣券',
-            'override' => '覆盖价券',
-            default => '优惠券',
-        };
-    }
-
-    private function resolveDistributionTypeLabel(string $distributionType): string
-    {
-        return match ($distributionType) {
-            'private' => '私有优惠券',
-            default => '公开优惠券',
-        };
-    }
-
-    private function resolveDiscountScopeLabel(string $discountScope): string
-    {
-        return match ($discountScope) {
-            'recurring' => '持续优惠',
-            'renew' => '续费优惠',
-            // first_month 实际语义是「新购专属」（对年付等整单打折，与自然月无关），标签如实描述
-            default => '新购优惠',
-        };
-    }
-
-    private function resolveReceiveTypeLabel(string $receiveType): string
-    {
-        return match ($receiveType) {
-            'grant' => '系统直发',
-            default => '手动领取',
-        };
-    }
-
-    private function isCouponScopeAllowedForOrderType(string $discountScope, string $orderType): bool
-    {
-        $normalizedOrderType = trim($orderType) === 'renew' ? 'renew' : 'new';
-
-        return match ($discountScope) {
-            'renew' => $normalizedOrderType === 'renew',
-            'recurring' => in_array($normalizedOrderType, ['new', 'renew'], true),
-            default => $normalizedOrderType === 'new',
-        };
-    }
-
-    private function formatBillingCycleText(array $billingCycles): string
-    {
-        if (! $this->hasConfiguredBillingCycles($billingCycles)) {
-            return '全部周期可用';
-        }
-
-        $normalizedBillingCycles = $this->normalizeBillingCycles($billingCycles);
-        if ($normalizedBillingCycles === []) {
-            return '未配置可用周期';
-        }
-
-        return collect($normalizedBillingCycles)
-            ->map(fn (string $cycle) => self::SUPPORTED_BILLING_CYCLE_LABELS[$cycle])
-            ->implode(' / ');
-    }
-
-    private function formatProductScopeText(array $productIds, array $productNameMap): string
-    {
-        if ($productIds === []) {
-            return '全站商品可用';
-        }
-
-        $productNames = array_values(array_filter(array_map(
-            fn (int $productId) => $productNameMap[$productId] ?? '',
-            $productIds
-        )));
-
-        if ($productNames === []) {
-            return '指定商品可用';
-        }
-
-        return implode(' / ', $productNames);
-    }
-
-    private function formatValidityText(Coupon $coupon): string
-    {
-        $start = $coupon->starts_at?->format('Y-m-d H:i');
-        $end = $coupon->expires_at?->format('Y-m-d H:i');
-
-        if ($start && $end) {
-            return $start.' - '.$end;
-        }
-
-        if ($end) {
-            return '截止至 '.$end;
-        }
-
-        if ($start) {
-            return '自 '.$start.' 起';
-        }
-
-        return '长期有效';
-    }
-
-    private function normalizePositiveInteger(mixed $value): ?int
-    {
-        if ($value === null || $value === '') {
-            return null;
-        }
-
-        $number = (int) $value;
-
-        return $number > 0 ? $number : null;
-    }
-
-    private function normalizeDateTimeValue(mixed $value): ?string
-    {
-        $text = trim((string) ($value ?? ''));
-
-        return $text !== '' ? $text : null;
-    }
-
     private function generateInternalCouponCode(): string
     {
         do {
@@ -2667,11 +2290,5 @@ class CouponService
         } while (Coupon::query()->where('code', $code)->exists());
 
         return $code;
-    }
-
-    private function resolveProductDisplayNameResolver(): ProductDisplayNameResolver
-    {
-        // 必须与容器单例一致：列表预载写在单例上，这里若新建实例，预载会被架空、逐行解析仍各发一次查询。
-        return $this->productDisplayNameResolver ?? app(ProductDisplayNameResolver::class);
     }
 }
