@@ -140,6 +140,9 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
         Route::get('/users/{user}/email-logs', [UserController::class, 'emailLogs']);
         Route::get('/users/{user}/services/{service}/connection', [UserServiceController::class, 'connection']);
         Route::get('/users/{user}/services/{service}/remote-status', [UserServiceController::class, 'remoteStatus']);
+        // 服务控制台：实例级操作日志与历史跟踪列表（只读，跟 user.detail 权限）
+        Route::get('/users/{user}/services/{service}/operation-logs', [UserServiceController::class, 'operationLogs']);
+        Route::get('/users/{user}/services/{service}/tracking-records', [UserServiceController::class, 'trackingList']);
         Route::get('/users/{user}/services/{service}', [UserServiceController::class, 'show']);
     });
 
@@ -158,6 +161,10 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
         Route::delete('/users/{user}/services/{service}', [UserServiceController::class, 'destroy']);
         Route::post('/users/{user}/services/{service}/power-actions', [UserController::class, 'servicePower']);
         Route::post('/users/{user}/services/{service}/password-resets', [UserController::class, 'resetServicePassword']);
+        // 服务控制台：历史跟踪备注（新增/删除）与截图上传
+        Route::post('/users/{user}/services/{service}/tracking-records', [UserServiceController::class, 'trackingStore']);
+        Route::delete('/users/{user}/services/{service}/tracking-records/{tracking}', [UserServiceController::class, 'trackingDestroy']);
+        Route::post('/users/{user}/services/{service}/tracking-images', [UserServiceController::class, 'trackingUploadImage']);
     });
 
     Route::middleware(['permission:'.AdminPermissions::USER_LOGIN_AS])->group(function (): void {

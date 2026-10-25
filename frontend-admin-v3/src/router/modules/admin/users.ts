@@ -52,4 +52,17 @@ export const usersRoutes: RouteRecordRaw[] = [
       hidden: true,
     },
   },
+  {
+    path: 'users/:id/services/:serviceId',
+    name: 'AdminUserServiceConsole',
+    component: () => import('@/pages/users/service-console/index.vue'),
+    meta: {
+      title: {
+        zh_CN: '服务控制台',
+        en_US: 'Service Console',
+      },
+      permission: 'user.detail',
+      hidden: true,
+    },
+  },
 ];

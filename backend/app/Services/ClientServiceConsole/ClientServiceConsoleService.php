@@ -80,8 +80,18 @@ class ClientServiceConsoleService
         return $this->detailService->getServiceConfigForUser($user, $serviceId);
     }
 
-    public function getDetailForUser(User $user, int $serviceId, bool $refreshRemote = false, bool $includeSensitiveConnection = true): array
-    {
+    public function getDetailForUser(
+        User $user,
+        int $serviceId,
+        bool $refreshRemote = false,
+        bool $includeSensitiveConnection = true,
+        bool $syncRemote = true
+    ): array {
+        // 不需要同步上游时直接走本地快照，避免管理端首屏等待上游四段串行网络往返
+        if (! $syncRemote) {
+            return $this->getBaseDetailForUser($user, $serviceId, $includeSensitiveConnection);
+        }
+
         return $this->sanitizeConnectionDetail(
             $this->detailService->getDetailForUser($user, $serviceId, $refreshRemote),
             $includeSensitiveConnection
@@ -109,9 +119,9 @@ class ClientServiceConsoleService
         return $this->transformService->sanitizeClientDetail($detail);
     }
 
-    public function getOperationLogsForUser(User $user, int $serviceId, array $filters = [], int $perPage = 10): array
+    public function getOperationLogsForUser(User $user, int $serviceId, array $filters = [], int $perPage = 10, bool $includeAdminOperations = false): array
     {
-        return $this->detailService->getOperationLogsForUser($user, $serviceId, $filters, $perPage);
+        return $this->detailService->getOperationLogsForUser($user, $serviceId, $filters, $perPage, $includeAdminOperations);
     }
 
     public function updateRemarkForUser(User $user, int $serviceId, ?string $remark, array $context = []): array

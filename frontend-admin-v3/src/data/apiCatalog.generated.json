@@ -1,7 +1,7 @@
 {
     "meta": {
-        "generatedAt": "2026-10-25 14:57:12",
-        "total": 386,
+        "generatedAt": "2026-10-25 17:21:22",
+        "total": 391,
         "baseURL": "/api/v2",
         "dataSource": "php artisan route:list --json v2-only",
         "scopeLabels": {
@@ -21,14 +21,14 @@
             "permission": "登录 + 权限"
         },
         "scopeCounts": {
-            "admin": 239,
+            "admin": 244,
             "client": 128,
             "site": 18,
             "system": 1
         },
         "accessCounts": {
             "auth": 121,
-            "permission": 230,
+            "permission": 235,
             "public": 35
         },
         "moduleCount": 78
@@ -5333,6 +5333,29 @@
             "sourceFiles": []
         },
         {
+            "id": "GET:/api/v2/admin/users/{user}/services/{service}/operation-logs",
+            "scope": "admin",
+            "scopeLabel": "管理端",
+            "module": "users",
+            "moduleLabel": "用户",
+            "method": "GET",
+            "methods": [
+                "GET"
+            ],
+            "callPath": "/admin/users/{user}/services/{service}/operation-logs",
+            "backendPath": "/api/v2/admin/users/{user}/services/{service}/operation-logs",
+            "normalizedPath": "/admin/users/{param}/services/{param}/operation-logs",
+            "access": "permission",
+            "accessLabel": "登录 + 权限",
+            "permission": "user.detail",
+            "throttle": "",
+            "guards": [],
+            "handler": "App\\Http\\Controllers\\Admin\\V2\\UserServiceController@operationLogs",
+            "sourceApps": [],
+            "sourceAppLabels": [],
+            "sourceFiles": []
+        },
+        {
             "id": "POST:/api/v2/admin/users/{user}/services/{service}/password-resets",
             "scope": "admin",
             "scopeLabel": "管理端",
@@ -5397,6 +5420,98 @@
             "throttle": "",
             "guards": [],
             "handler": "App\\Http\\Controllers\\Admin\\V2\\UserServiceController@remoteStatus",
+            "sourceApps": [],
+            "sourceAppLabels": [],
+            "sourceFiles": []
+        },
+        {
+            "id": "POST:/api/v2/admin/users/{user}/services/{service}/tracking-images",
+            "scope": "admin",
+            "scopeLabel": "管理端",
+            "module": "users",
+            "moduleLabel": "用户",
+            "method": "POST",
+            "methods": [
+                "POST"
+            ],
+            "callPath": "/admin/users/{user}/services/{service}/tracking-images",
+            "backendPath": "/api/v2/admin/users/{user}/services/{service}/tracking-images",
+            "normalizedPath": "/admin/users/{param}/services/{param}/tracking-images",
+            "access": "permission",
+            "accessLabel": "登录 + 权限",
+            "permission": "user.manage",
+            "throttle": "",
+            "guards": [],
+            "handler": "App\\Http\\Controllers\\Admin\\V2\\UserServiceController@trackingUploadImage",
+            "sourceApps": [],
+            "sourceAppLabels": [],
+            "sourceFiles": []
+        },
+        {
+            "id": "GET:/api/v2/admin/users/{user}/services/{service}/tracking-records",
+            "scope": "admin",
+            "scopeLabel": "管理端",
+            "module": "users",
+            "moduleLabel": "用户",
+            "method": "GET",
+            "methods": [
+                "GET"
+            ],
+            "callPath": "/admin/users/{user}/services/{service}/tracking-records",
+            "backendPath": "/api/v2/admin/users/{user}/services/{service}/tracking-records",
+            "normalizedPath": "/admin/users/{param}/services/{param}/tracking-records",
+            "access": "permission",
+            "accessLabel": "登录 + 权限",
+            "permission": "user.detail",
+            "throttle": "",
+            "guards": [],
+            "handler": "App\\Http\\Controllers\\Admin\\V2\\UserServiceController@trackingList",
+            "sourceApps": [],
+            "sourceAppLabels": [],
+            "sourceFiles": []
+        },
+        {
+            "id": "POST:/api/v2/admin/users/{user}/services/{service}/tracking-records",
+            "scope": "admin",
+            "scopeLabel": "管理端",
+            "module": "users",
+            "moduleLabel": "用户",
+            "method": "POST",
+            "methods": [
+                "POST"
+            ],
+            "callPath": "/admin/users/{user}/services/{service}/tracking-records",
+            "backendPath": "/api/v2/admin/users/{user}/services/{service}/tracking-records",
+            "normalizedPath": "/admin/users/{param}/services/{param}/tracking-records",
+            "access": "permission",
+            "accessLabel": "登录 + 权限",
+            "permission": "user.manage",
+            "throttle": "",
+            "guards": [],
+            "handler": "App\\Http\\Controllers\\Admin\\V2\\UserServiceController@trackingStore",
+            "sourceApps": [],
+            "sourceAppLabels": [],
+            "sourceFiles": []
+        },
+        {
+            "id": "DELETE:/api/v2/admin/users/{user}/services/{service}/tracking-records/{tracking}",
+            "scope": "admin",
+            "scopeLabel": "管理端",
+            "module": "users",
+            "moduleLabel": "用户",
+            "method": "DELETE",
+            "methods": [
+                "DELETE"
+            ],
+            "callPath": "/admin/users/{user}/services/{service}/tracking-records/{tracking}",
+            "backendPath": "/api/v2/admin/users/{user}/services/{service}/tracking-records/{tracking}",
+            "normalizedPath": "/admin/users/{param}/services/{param}/tracking-records/{param}",
+            "access": "permission",
+            "accessLabel": "登录 + 权限",
+            "permission": "user.manage",
+            "throttle": "",
+            "guards": [],
+            "handler": "App\\Http\\Controllers\\Admin\\V2\\UserServiceController@trackingDestroy",
             "sourceApps": [],
             "sourceAppLabels": [],
             "sourceFiles": []

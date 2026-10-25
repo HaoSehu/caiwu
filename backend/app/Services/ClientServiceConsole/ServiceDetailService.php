@@ -179,7 +179,9 @@ class ServiceDetailService
             'invoice.order:id,order_no',
         ]);
 
-        $cacheKey = $this->buildDetailResponseCacheKey($service);
+        // 本地快照必须用独立作用域，不能写权威 detail 键：base 路径写入的是未同步上游的旧快照，
+        // 若与 getDetailForUser 共用同一键，后续缺省请求在同一秒（updated_at 未轮转）内会读到它。
+        $cacheKey = $this->buildDetailResponseCacheKey($service, 'snapshot');
         $cached = Cache::get($cacheKey);
         if (is_array($cached) && $cached !== []) {
             return $cached;
@@ -265,7 +267,16 @@ class ServiceDetailService
         return 'service_console:remote_status:'.$service->id.':'.$service->user_id.':'.optional($service->updated_at)?->timestamp;
     }
 
-    public function getOperationLogsForUser(User $user, int $serviceId, array $filters = [], int $perPage = 10): array
+    /**
+     * 服务实例操作日志。
+     *
+     * 客户端只应看到客户侧操作；管理端需要完整审计视图，因此通过
+     * $includeAdminOperations 放行 actor_type=admin 的记录（默认保持客户端口径）。
+     *
+     * @param  array<string, mixed>  $filters
+     * @return array<string, mixed>
+     */
+    public function getOperationLogsForUser(User $user, int $serviceId, array $filters = [], int $perPage = 10, bool $includeAdminOperations = false): array
     {
         $service = $this->findUserService($user, $serviceId);
         $query = ActivityLog::query()
@@ -273,11 +284,14 @@ class ServiceDetailService
                 $builder->where(function (Builder $serviceBuilder) use ($serviceId) {
                     $serviceBuilder->where('module', 'service')->where('subject_id', $serviceId);
                 })->orWhere('context->service_id', $serviceId);
-            })
-            ->where(function (Builder $builder) {
+            });
+
+        if (! $includeAdminOperations) {
+            $query->where(function (Builder $builder) {
                 $builder->where('context->actor_type', '!=', 'admin')
                     ->orWhereNull('context->actor_type');
             });
+        }
 
         $keyword = trim((string) ($filters['keyword'] ?? ''));
         if ($keyword !== '') {
@@ -845,9 +859,11 @@ class ServiceDetailService
 
     // ── Cache key helpers ──────────────────────────────────────────────────
 
-    public function buildDetailResponseCacheKey(Service $service): string
+    public function buildDetailResponseCacheKey(Service $service, string $scope = ''): string
     {
-        return 'service_console:detail:v2:'.$service->id.':'.$service->user_id.':'
+        $prefix = $scope !== '' ? 'service_console:detail:v2:'.$scope : 'service_console:detail:v2';
+
+        return $prefix.':'.$service->id.':'.$service->user_id.':'
             .optional($service->updated_at)?->timestamp.':'
             .optional($service->product?->updated_at)?->timestamp;
     }
@@ -874,6 +890,7 @@ class ServiceDetailService
     public function forgetDetailCaches(Service $service): void
     {
         Cache::forget($this->buildDetailResponseCacheKey($service));
+        Cache::forget($this->buildDetailResponseCacheKey($service, 'snapshot'));
         Cache::forget($this->buildServiceConfigCacheKey($service));
         Cache::forget($this->buildRemoteStatusCacheKey($service));
 

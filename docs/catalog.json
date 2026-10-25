@@ -2,6 +2,24 @@
     "version": 1,
     "records": [
         {
+            "path": "执行计划/进行中/管理端服务控制台首屏两段式加载-2026-10-25.md",
+            "status": "active",
+            "summary": "服务控制台独立页首屏被 ServiceDetailService 的上游四段串行同步（login→getHostDetail→fetchModuleStatusPayload→fetchNatRemoteConnection，实测 3–7.9 秒）阻塞：新增 sync_remote 可选参数，管理端首屏传 0 只读本地快照并在渲染后异步拉 /remote-status 补丁，显式「刷新远程」保留；sync_remote 缺省 true 保持既有调用方行为，补 feature 四例与 e2e 两段式断言。",
+            "review_by": "2026-11-28"
+        },
+        {
+            "path": "执行计划/进行中/管理端服务控制台独立页与历史跟踪-2026-10-25.md",
+            "status": "active",
+            "summary": "管理端「服务控制台」由用户详情页抽屉重构为独立路由页 /admin/users/:id/services/:serviceId，五个页签（概览/相关订单/相关账单/操作日志/历史跟踪）；订单与账单复用既有列表接口并新增 service_id 过滤；操作日志改为服务维度并新增 includeAdminOperations 开关；历史跟踪新建 service_tracking_records 表与列表/新增/删除/图片上传四个接口，操作人由当前登录管理员注入；删除详情页抽屉与相关弹窗、脚本、样式，补管理端 e2e。",
+            "review_by": "2026-11-27"
+        },
+        {
+            "path": "执行计划/进行中/管理端实例操作下线绑定服务-2026-10-25.md",
+            "status": "active",
+            "summary": "管理端用户详情「服务控制台」实例操作区下线「绑定服务」：删除 PUT /v2/admin/users/{user}/services/{service}/manual-provision 路由、控制器动作、ManualProvisionUserServiceRequest、HandlesAdminUserServices::manualProvisionService、ServiceTransformService::canManualProvisionService 与 actions.manual_provision 能力位，前端删除按钮/弹窗/API 方法并补 e2e；保留上游绑定与电源操作，ProvisionService 两个重试方法因孤儿单补偿命令与既有测试仍调用而不动。",
+            "review_by": "2026-11-27"
+        },
+        {
             "path": "执行计划/进行中/外部进程与被禁用函数依赖收敛-2026-10-22.md",
             "status": "active",
             "summary": "对照 zjmf 只读分析逐项裁决对 caiwu 的适用性：上游 HostingPanelApiTransport 的 DNS 解析去掉 proc_open 子进程改纯 PHP 两级兜底（删除 dns_resolver_timeout 配置），vnc:ensure-relay 改用 Symfony Process 去掉 popen/exec，调度同进程与纯 PHP 备份两项明确不照搬。",

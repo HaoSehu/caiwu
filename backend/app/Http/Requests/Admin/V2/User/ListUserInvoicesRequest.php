@@ -13,6 +13,8 @@ class ListUserInvoicesRequest extends AdminFormRequest
             'status' => ['nullable', 'in:0,1,5'],
             // 覆盖详情页账单类型筛选的全部选项；normal 为 new 的历史别名，查询侧两者合并。
             'type' => ['nullable', 'in:normal,new,renew,recharge,upgrade,deduction,refund,referral_credit,manual'],
+            // 服务控制台「相关账单」按实例过滤；用户详情账单页不传该参数，行为不变。
+            'service_id' => ['nullable', 'integer', 'min:1'],
         ], $this->legacyPaginationRules());
     }
 
@@ -21,6 +23,7 @@ class ListUserInvoicesRequest extends AdminFormRequest
         return $this->safe()->only([
             'status',
             'type',
+            'service_id',
         ]);
     }
 }

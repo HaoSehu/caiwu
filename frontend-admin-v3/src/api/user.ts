@@ -160,9 +160,13 @@ function normalizeV2ServicePayload(payload: UserServiceV2DetailPayload | Record<
   };
 }
 
-async function v2UserServiceDetail(id: number | string, serviceId: number | string) {
+async function v2UserServiceDetail(id: number | string, serviceId: number | string, syncRemote = true) {
   const [detailPayload, connectionPayload] = await Promise.all([
-    request.get<UserServiceV2DetailPayload>({ url: `/v2/admin/users/${id}/services/${serviceId}` }),
+    request.get<UserServiceV2DetailPayload>({
+      url: `/v2/admin/users/${id}/services/${serviceId}`,
+      // sync_remote=0 时后端只用本地快照，跳过上游四段串行网络往返；远程状态由页面异步补丁
+      params: syncRemote ? undefined : { sync_remote: 0 },
+    }),
     request.get<UserServiceV2ConnectionPayload>({ url: `/v2/admin/users/${id}/services/${serviceId}/connection` }),
   ]);
   const service = normalizeV2ServicePayload(detailPayload);
@@ -255,7 +259,8 @@ export const userApi = {
       url: `/v2/admin/users/${id}/email-logs`,
       params,
     }),
-  serviceDetail: (id: number | string, serviceId: number | string) => v2UserServiceDetail(id, serviceId),
+  serviceDetail: (id: number | string, serviceId: number | string, syncRemote = true) =>
+    v2UserServiceDetail(id, serviceId, syncRemote),
   serviceRemoteStatus: (id: number | string, serviceId: number | string) =>
     request
       .get<UserServiceV2DetailPayload>({ url: `/v2/admin/users/${id}/services/${serviceId}/remote-status` })
@@ -281,6 +286,39 @@ export const userApi = {
     }),
   serviceDelete: (id: number | string, serviceId: number | string) =>
     request.delete({ url: `/v2/admin/users/${id}/services/${serviceId}` }),
+  serviceOperationLogs: (id: number | string, serviceId: number | string, params: PageParams) =>
+    request.get<{
+      list?: Record<string, unknown>[];
+      total?: number;
+      page?: number;
+      page_size?: number;
+      summary?: Record<string, unknown>;
+    }>({
+      url: `/v2/admin/users/${id}/services/${serviceId}/operation-logs`,
+      params,
+    }),
+  serviceTrackingRecords: (id: number | string, serviceId: number | string, params: PageParams) =>
+    request.get<{ list?: Record<string, unknown>[]; total?: number; page?: number; page_size?: number }>({
+      url: `/v2/admin/users/${id}/services/${serviceId}/tracking-records`,
+      params,
+    }),
+  serviceTrackingStore: (
+    id: number | string,
+    serviceId: number | string,
+    data: { tracked_at: string; content: string; images?: Array<{ url: string; name?: string }> },
+  ) =>
+    request.post<{ record?: Record<string, unknown> }>({
+      url: `/v2/admin/users/${id}/services/${serviceId}/tracking-records`,
+      data,
+    }),
+  serviceTrackingDelete: (id: number | string, serviceId: number | string, recordId: number | string) =>
+    request.delete({ url: `/v2/admin/users/${id}/services/${serviceId}/tracking-records/${recordId}` }),
+  serviceTrackingUpload: (id: number | string, serviceId: number | string, data: FormData) =>
+    request.post<{ image?: { id?: number; url?: string; filename?: string } }>({
+      url: `/v2/admin/users/${id}/services/${serviceId}/tracking-images`,
+      data,
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
   updateServiceMeta: (id: number | string, serviceId: number | string, data: ServiceMetaPayload) =>
     request
       .put<UserServiceV2DetailPayload>({ url: `/v2/admin/users/${id}/services/${serviceId}/meta`, data })

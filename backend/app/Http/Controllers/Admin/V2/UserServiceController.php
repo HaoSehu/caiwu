@@ -6,19 +6,26 @@ namespace App\Http\Controllers\Admin\V2;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\V2\UserService\DeleteUserServiceRequest;
+use App\Http\Requests\Admin\V2\UserService\DeleteUserServiceTrackingRequest;
+use App\Http\Requests\Admin\V2\UserService\ListUserServiceOperationLogsRequest;
 use App\Http\Requests\Admin\V2\UserService\ListUserServicesRequest;
+use App\Http\Requests\Admin\V2\UserService\ListUserServiceTrackingRequest;
 use App\Http\Requests\Admin\V2\UserService\RefreshUserServiceStatusesRequest;
 use App\Http\Requests\Admin\V2\UserService\ShowUserServiceConnectionRequest;
 use App\Http\Requests\Admin\V2\UserService\ShowUserServiceRemoteStatusRequest;
 use App\Http\Requests\Admin\V2\UserService\ShowUserServiceRequest;
 use App\Http\Requests\Admin\V2\UserService\StoreUserServiceRequest;
+use App\Http\Requests\Admin\V2\UserService\StoreUserServiceTrackingRequest;
 use App\Http\Requests\Admin\V2\UserService\UpdateUserServiceMetaRequest;
+use App\Http\Requests\Admin\V2\UserService\UploadUserServiceTrackingImageRequest;
 use App\Http\Resources\Admin\V2\AdminUserServiceListItemResource;
 use App\Http\Resources\Admin\V2\AdminUserServiceRefreshResultResource;
+use App\Http\Resources\Admin\V2\AdminUserServiceTrackingRecordResource;
 use App\Http\Resources\Service\V2\ServiceConnectionResource;
 use App\Http\Resources\Service\V2\ServiceDetailResource;
 use App\Http\Resources\Service\V2\ServiceRuntimeResource;
 use App\Models\User;
+use App\Services\Admin\V2\AdminServiceTrackingService;
 use App\Services\User\UserService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -28,6 +35,7 @@ class UserServiceController extends Controller
 {
     public function __construct(
         private readonly UserService $users,
+        private readonly AdminServiceTrackingService $tracking,
     ) {}
 
     public function index(ListUserServicesRequest $request, User $user): JsonResponse
@@ -64,7 +72,8 @@ class UserServiceController extends Controller
             $user,
             $service,
             $request->boolean('refresh'),
-            true
+            true,
+            $request->boolean('sync_remote', true)
         );
 
         return $this->success([
@@ -114,6 +123,53 @@ class UserServiceController extends Controller
         $this->users->deleteService($user, $service, $this->adminContext($request));
 
         return $this->success(null, '服务记录已删除');
+    }
+
+    /**
+     * 实例操作日志：管理端需要看到管理员侧操作，与客户端日志口径不同。
+     */
+    public function operationLogs(ListUserServiceOperationLogsRequest $request, User $user, int $service): JsonResponse
+    {
+        $result = $this->users->serviceOperationLogs($user, $service, $request->filters(), $request->perPage(10, 50));
+
+        return $this->success($result);
+    }
+
+    public function trackingList(ListUserServiceTrackingRequest $request, User $user, int $service): JsonResponse
+    {
+        $paginator = $this->tracking->list($user, $service, $request->filters(), $request->perPage());
+
+        return $this->paginate($paginator, AdminUserServiceTrackingRecordResource::class);
+    }
+
+    public function trackingStore(StoreUserServiceTrackingRequest $request, User $user, int $service): JsonResponse
+    {
+        $record = $this->tracking->store($user, $service, $request->payload(), $this->adminContext($request));
+
+        return $this->success([
+            'record' => AdminUserServiceTrackingRecordResource::make($record)->resolve(),
+        ], '跟踪记录已新增');
+    }
+
+    public function trackingDestroy(DeleteUserServiceTrackingRequest $request, User $user, int $service, int $tracking): JsonResponse
+    {
+        $this->tracking->delete($user, $service, $tracking, $this->adminContext($request));
+
+        return $this->success(null, '跟踪记录已删除');
+    }
+
+    public function trackingUploadImage(UploadUserServiceTrackingImageRequest $request, User $user, int $service): JsonResponse
+    {
+        $context = $this->adminContext($request);
+
+        $image = $this->tracking->uploadImage(
+            adminId: (int) $context['operator_id'],
+            user: $user,
+            serviceId: $service,
+            file: $request->file('file'),
+        );
+
+        return $this->success(['image' => $image], '图片上传成功');
     }
 
     /**

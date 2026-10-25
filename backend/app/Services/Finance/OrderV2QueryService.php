@@ -148,6 +148,12 @@ class OrderV2QueryService
             $query->where('user_id', $userId);
         }
 
+        // 服务控制台按实例维度列出订单：走 orders(service_id,status,id) 复合索引前缀。
+        $serviceId = (int) ($filters['service_id'] ?? 0);
+        if ($serviceId > 0) {
+            $query->where('service_id', $serviceId);
+        }
+
         $type = trim((string) ($filters['type'] ?? ''));
         if ($type !== '') {
             $query->where('type', $type);

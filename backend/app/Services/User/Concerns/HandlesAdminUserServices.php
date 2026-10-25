@@ -55,9 +55,20 @@ trait HandlesAdminUserServices
     /**
      * 用户服务详情
      */
-    public function serviceDetail(User $user, int $serviceId, bool $refreshRemote = false, bool $includeSensitiveConnection = true): array
-    {
-        return $this->clientServiceConsoleService->getDetailForUser($user, $serviceId, $refreshRemote, $includeSensitiveConnection);
+    public function serviceDetail(
+        User $user,
+        int $serviceId,
+        bool $refreshRemote = false,
+        bool $includeSensitiveConnection = true,
+        bool $syncRemote = true
+    ): array {
+        return $this->clientServiceConsoleService->getDetailForUser(
+            $user,
+            $serviceId,
+            $refreshRemote,
+            $includeSensitiveConnection,
+            $syncRemote
+        );
     }
 
     public function serviceBaseDetail(User $user, int $serviceId, bool $includeSensitiveConnection = true): array
@@ -68,6 +79,17 @@ trait HandlesAdminUserServices
     public function serviceRemoteStatusPatch(User $user, int $serviceId, bool $includeSensitiveConnection = true): array
     {
         return $this->clientServiceConsoleService->getRemoteStatusPatchForUser($user, $serviceId, $includeSensitiveConnection);
+    }
+
+    /**
+     * 服务实例操作日志（管理端口径：包含管理员操作）
+     *
+     * @param  array<string, mixed>  $filters
+     * @return array<string, mixed>
+     */
+    public function serviceOperationLogs(User $user, int $serviceId, array $filters, int $perPage = 20): array
+    {
+        return $this->clientServiceConsoleService->getOperationLogsForUser($user, $serviceId, $filters, $perPage, true);
     }
 
     public function refreshServiceStatuses(User $user, array $serviceIds = []): array

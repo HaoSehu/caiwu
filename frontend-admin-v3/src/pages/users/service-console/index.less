@@ -1,0 +1,463 @@
+.service-console-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--td-comp-margin-l);
+}
+
+/* 顶部动作条：与详情页工具栏保持一致的 36px 紧凑高度 */
+.console-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--td-comp-margin-s);
+
+  .t-input,
+  .t-select {
+    width: 180px;
+  }
+
+  &__search {
+    width: 220px;
+  }
+
+  &__title {
+    font-size: var(--td-font-size-body-large, 14px);
+    font-weight: 600;
+    color: var(--td-text-color-primary);
+  }
+}
+
+.console-toolbar--page {
+  justify-content: space-between;
+  min-height: 36px;
+  margin-bottom: var(--td-comp-margin-m);
+
+  .console-toolbar__back {
+    font-weight: 500;
+    color: var(--td-text-color-secondary);
+    padding: 0 4px;
+
+    &:hover {
+      color: var(--td-brand-color);
+    }
+  }
+
+  .console-toolbar__actions {
+    display: flex;
+    align-items: center;
+    gap: var(--td-comp-margin-s);
+  }
+}
+
+/* 服务摘要卡：沿用详情页 summary 的视觉层级 */
+.console-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 20px 24px;
+  border: 1px solid var(--td-component-border);
+  border-radius: var(--td-radius-large, 8px);
+  background: var(--td-bg-color-container);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 4%);
+  margin-bottom: var(--td-comp-margin-l);
+}
+
+.console-summary__identity {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+
+  .identity-eyebrow {
+    font-size: var(--td-font-size-body-small, 12px);
+    color: var(--td-text-color-placeholder);
+    letter-spacing: 0.5px;
+  }
+
+  .identity-headline {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--td-comp-margin-s);
+    min-width: 0;
+  }
+
+  .identity-title {
+    overflow: hidden;
+    color: var(--td-text-color-primary);
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 32px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .identity-description {
+    overflow: hidden;
+    margin: 0;
+    color: var(--td-text-color-placeholder);
+    font-size: var(--td-font-size-body-small, 12px);
+    line-height: 20px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.console-summary__metrics {
+  display: flex;
+  flex-shrink: 0;
+  gap: var(--td-comp-margin-l);
+}
+
+.summary-metric-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 110px;
+  padding: var(--td-comp-paddingTB-s) var(--td-comp-paddingLR-m);
+  border-radius: var(--td-radius-medium, 6px);
+  background: var(--td-bg-color-secondarycontainer);
+
+  .metric-label {
+    color: var(--td-text-color-placeholder);
+    font-size: var(--td-font-size-body-small, 12px);
+    line-height: 20px;
+  }
+
+  .metric-value {
+    overflow: hidden;
+    color: var(--td-text-color-primary);
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 24px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+/* 概览面板 */
+.console-overview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--td-comp-margin-l);
+  padding-top: var(--td-comp-margin-m);
+}
+
+.console-alert {
+  margin-top: var(--td-comp-margin-s);
+}
+
+.console-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--td-comp-margin-s);
+
+  &__title {
+    margin: 0;
+    color: var(--td-text-color-primary);
+    font-size: var(--td-font-size-body-large, 14px);
+    font-weight: 600;
+    line-height: 22px;
+  }
+}
+
+.console-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--td-comp-margin-s);
+}
+
+.console-field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--td-comp-margin-s);
+}
+
+.console-field-grid--compact {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--td-comp-margin-s) var(--td-comp-margin-l);
+}
+
+.console-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: var(--td-comp-paddingTB-s) var(--td-comp-paddingLR-m);
+  border-radius: var(--td-radius-medium, 6px);
+  background: var(--td-bg-color-secondarycontainer);
+
+  span {
+    color: var(--td-text-color-placeholder);
+    font-size: var(--td-font-size-body-small, 12px);
+    line-height: 20px;
+  }
+
+  strong {
+    color: var(--td-text-color-primary);
+    font-size: var(--td-font-size-body-medium, 14px);
+    font-weight: 600;
+    line-height: 22px;
+    word-break: normal;
+  }
+}
+
+.console-field--plain {
+  gap: 0;
+  padding: 0;
+  background: transparent;
+}
+
+/* 列表型 tab（订单/账单/操作日志）共用 */
+.console-tab-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--td-comp-margin-m);
+  padding-top: var(--td-comp-margin-m);
+}
+
+.console-table-scroll {
+  width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+
+  .t-table {
+    min-width: 860px;
+  }
+}
+
+.console-row-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--td-comp-margin-xs);
+}
+
+.console-pagination {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.console-actor {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--td-comp-margin-xs);
+
+  &__badge {
+    padding: 0 6px;
+    border-radius: var(--td-radius-small, 4px);
+    background: var(--td-bg-color-secondarycontainer);
+    color: var(--td-text-color-secondary);
+    font-size: var(--td-font-size-body-small, 12px);
+    line-height: 18px;
+  }
+}
+
+/* 操作详情弹窗 */
+.console-log-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--td-comp-margin-m);
+
+  &__summary {
+    color: var(--td-text-color-primary);
+    font-size: var(--td-font-size-body-medium, 14px);
+    line-height: 22px;
+  }
+
+  &__items {
+    display: flex;
+    flex-direction: column;
+    gap: var(--td-comp-margin-xs);
+  }
+
+  &__item {
+    display: grid;
+    grid-template-columns: 120px minmax(0, 1fr);
+    gap: var(--td-comp-margin-s);
+    font-size: var(--td-font-size-body-small, 12px);
+    line-height: 20px;
+
+    span {
+      color: var(--td-text-color-placeholder);
+    }
+
+    strong {
+      color: var(--td-text-color-primary);
+      font-weight: 500;
+      word-break: normal;
+    }
+  }
+}
+
+/* 历史跟踪 */
+.tracking-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--td-comp-margin-m);
+}
+
+.tracking-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--td-comp-margin-s);
+  padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-l);
+  border: 1px solid var(--td-component-border);
+  border-radius: var(--td-radius-medium, 6px);
+  background: var(--td-bg-color-container);
+
+  &__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--td-comp-margin-m);
+  }
+
+  &__time {
+    color: var(--td-text-color-primary);
+    font-size: var(--td-font-size-body-medium, 14px);
+    font-weight: 600;
+    line-height: 22px;
+  }
+
+  &__operator {
+    color: var(--td-text-color-placeholder);
+    font-size: var(--td-font-size-body-small, 12px);
+    line-height: 20px;
+  }
+
+  &__delete {
+    margin-left: auto;
+  }
+
+  &__content {
+    margin: 0;
+    color: var(--td-text-color-primary);
+    font-size: var(--td-font-size-body-medium, 14px);
+    line-height: 22px;
+    white-space: pre-wrap;
+    word-break: normal;
+  }
+
+  &__images {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--td-comp-margin-s);
+  }
+}
+
+.tracking-thumb {
+  display: block;
+  width: 96px;
+  height: 96px;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--td-component-border);
+  border-radius: var(--td-radius-medium, 6px);
+  background: var(--td-bg-color-secondarycontainer);
+  cursor: pointer;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+}
+
+.tracking-preview {
+  display: block;
+  width: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+}
+
+/* 调价弹窗内的续费周期行 */
+.pricing-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--td-comp-margin-s);
+  margin-top: var(--td-comp-margin-l);
+}
+
+.pricing-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 180px;
+  gap: var(--td-comp-margin-m);
+  align-items: center;
+  padding: var(--td-comp-paddingTB-s) var(--td-comp-paddingLR-m);
+  border: 1px solid var(--td-component-border);
+  border-radius: var(--td-radius-medium, 6px);
+  background: var(--td-bg-color-container);
+
+  > div {
+    display: flex;
+    flex-direction: column;
+    gap: var(--td-comp-margin-xs);
+    min-width: 0;
+
+    span {
+      color: var(--td-text-color-placeholder);
+      font-size: var(--td-font-size-body-small, 12px);
+      line-height: 20px;
+    }
+
+    strong {
+      color: var(--td-text-color-primary);
+      font-size: var(--td-font-size-body-medium, 14px);
+      font-weight: 600;
+      line-height: 22px;
+    }
+  }
+}
+
+.dialog-form {
+  margin-top: var(--td-comp-margin-l);
+}
+
+@media (width <= 1024px) {
+  .console-summary {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .console-summary__metrics {
+    flex-wrap: wrap;
+  }
+
+  .console-field-grid,
+  .console-field-grid--compact {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (width <= 767.98px) {
+  .console-actions,
+  .console-row-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+
+    .t-button {
+      min-width: 0;
+    }
+  }
+
+  .console-field-grid,
+  .console-field-grid--compact {
+    grid-template-columns: 1fr;
+  }
+
+  .pricing-row {
+    grid-template-columns: 1fr;
+  }
+
+  .console-log-detail__item {
+    grid-template-columns: 1fr;
+  }
+
+  .console-summary__metrics {
+    flex-direction: column;
+  }
+}

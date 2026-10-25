@@ -208,7 +208,7 @@
             <template #serviceExpires="{ row }">{{ formatDateTime(row.expires_at) }}</template>
             <template #serviceOperation="{ row }">
               <div class="row-actions">
-                <t-button variant="text" theme="primary" size="small" @click="openServiceDrawer(row)">管理</t-button>
+                <t-button variant="text" theme="primary" size="small" @click="goToServiceConsole(row)">管理</t-button>
                 <t-button
                   variant="text"
                   theme="default"
@@ -600,252 +600,6 @@
       </t-form>
     </t-dialog>
 
-    <t-drawer v-model:visible="serviceDrawer.visible" size="680px" :footer="false" @close="closeServiceDrawer">
-      <template #header>
-        <div class="drawer-header">
-          <t-button variant="text" size="small" class="drawer-header__back" @click="closeServiceDrawer">
-            <template #icon><chevron-left-icon /></template>
-            返回
-          </t-button>
-          <span class="drawer-header__title">服务控制台</span>
-        </div>
-      </template>
-      <t-loading :loading="serviceDrawer.loading" size="small">
-        <div class="service-console">
-          <section class="console-hero">
-            <div class="console-hero__main">
-              <strong>{{ serviceConsoleTitle }}</strong>
-              <p v-if="serviceConsolePath">{{ serviceConsolePath }}</p>
-            </div>
-            <div class="console-hero__tags">
-              <t-tag :theme="serviceStatusTheme(serviceDrawer.detail.status)" variant="light">
-                {{ serviceStatusLabel(serviceDrawer.detail.status) }}
-              </t-tag>
-              <t-tag v-if="serviceRuntimeLabel" :theme="serviceRuntimeTheme" variant="light">
-                {{ serviceRuntimeLabel }}
-              </t-tag>
-              <t-tooltip v-else content="上游暂未返回实例的电源状态">
-                <t-tag theme="warning" variant="light">运行状态未知</t-tag>
-              </t-tooltip>
-            </div>
-          </section>
-
-          <div class="console-metrics">
-            <div class="console-metric">
-              <span>金额</span>
-              <strong>{{ formatMoney(serviceDrawer.detail.amount) }}</strong>
-            </div>
-            <div class="console-metric">
-              <span>计费周期</span>
-              <strong>{{ fieldValue(serviceDrawer.detail.billing_cycle_label) }}</strong>
-            </div>
-            <div class="console-metric">
-              <span>到期时间</span>
-              <strong>{{ formatDateTime(serviceDrawer.detail.expires_at) }}</strong>
-            </div>
-          </div>
-
-          <div v-if="serviceDrawer.detail.upstream?.remote_error" class="drawer-alert">
-            <t-alert theme="warning" :message="serviceDrawer.detail.upstream.remote_error" />
-          </div>
-
-          <section class="console-section">
-            <h4 class="console-section__title">实例操作</h4>
-            <div class="console-actions">
-              <t-button
-                v-if="canPowerOn"
-                theme="success"
-                size="small"
-                :loading="serviceDrawer.actionLoading === 'power:on'"
-                @click="handleServicePower('on')"
-                >开机</t-button
-              >
-              <t-button
-                v-if="canPowerOff"
-                theme="danger"
-                variant="outline"
-                size="small"
-                :loading="serviceDrawer.actionLoading === 'power:off'"
-                @click="handleServicePower('off')"
-                >关机</t-button
-              >
-              <t-button
-                v-if="canReboot"
-                theme="warning"
-                variant="outline"
-                size="small"
-                :loading="serviceDrawer.actionLoading === 'power:reboot'"
-                @click="handleServicePower('reboot')"
-                >重启</t-button
-              >
-              <t-button
-                theme="default"
-                size="small"
-                :loading="serviceDrawer.actionLoading === 'remote-status'"
-                @click="handleRefreshConsoleRemoteStatus"
-                >刷新远程</t-button
-              >
-              <t-button
-                theme="default"
-                size="small"
-                :disabled="!serviceActions.password_reset"
-                :loading="serviceDrawer.actionLoading === 'reset-password'"
-                @click="openResetPasswordDialog"
-                >重置密码</t-button
-              >
-              <t-button theme="default" size="small" @click="openServiceUpstreamDialog">上游绑定</t-button>
-              <t-button theme="default" size="small" @click="openServicePricingDialog">调价</t-button>
-              <t-button theme="default" size="small" @click="openServiceNameDialog">改名称</t-button>
-              <t-tag v-if="isServiceRefunded" theme="danger" variant="light">已退款</t-tag>
-            </div>
-          </section>
-
-          <section class="console-section">
-            <h4 class="console-section__title">连接信息</h4>
-            <div class="console-field-grid">
-              <div class="console-field">
-                <span>公网 IP</span>
-                <strong>{{
-                  fieldValue(
-                    serviceDrawer.detail.connection?.dedicated_ip || serviceDrawer.detail.upstream?.dedicated_ip,
-                  )
-                }}</strong>
-              </div>
-              <div class="console-field">
-                <span>登录账号</span>
-                <strong>{{ fieldValue(serviceDrawer.detail.connection?.username) }}</strong>
-              </div>
-              <div class="console-field">
-                <span>登录端口</span>
-                <strong>{{ serviceConnectionPort }}</strong>
-              </div>
-              <div v-if="serviceDrawer.detail.connection?.internal_ip" class="console-field">
-                <span>内网 IP</span>
-                <strong>{{ fieldValue(serviceDrawer.detail.connection.internal_ip) }}</strong>
-              </div>
-            </div>
-          </section>
-
-          <section v-if="serviceSpecs.length" class="console-section">
-            <h4 class="console-section__title">规格参数</h4>
-            <div class="console-field-grid console-field-grid--compact">
-              <div v-for="item in serviceSpecs" :key="item.label" class="console-field console-field--plain">
-                <span>{{ item.label }}</span>
-                <strong>{{ item.value }}</strong>
-              </div>
-            </div>
-          </section>
-
-          <section class="console-section">
-            <h4 class="console-section__title">订单与上游</h4>
-            <div class="console-field-grid">
-              <div class="console-field">
-                <span>账单号</span>
-                <strong>{{
-                  fieldValue(serviceDrawer.detail.invoice?.invoice_no || serviceDrawer.detail.order?.invoice_no)
-                }}</strong>
-              </div>
-              <div class="console-field">
-                <span>上游</span>
-                <strong>{{ serviceUpstreamText }}</strong>
-              </div>
-              <div class="console-field">
-                <span>创建时间</span>
-                <strong>{{ formatDateTime(serviceDrawer.detail.created_at) }}</strong>
-              </div>
-            </div>
-          </section>
-        </div>
-      </t-loading>
-    </t-drawer>
-
-    <t-dialog
-      v-model:visible="resetPasswordVisible"
-      header="重置登录密码"
-      width="420px"
-      :confirm-btn="{ content: '确定', loading: serviceDrawer.actionLoading === 'reset-password' }"
-      @cancel="resetPasswordVisible = false"
-      @confirm="handleResetServicePassword"
-    >
-      <t-form ref="resetPasswordFormRef" :data="resetPasswordForm" :rules="resetPasswordRules" label-align="top">
-        <t-form-item label="新密码" name="password">
-          <t-input v-model="resetPasswordForm.password" type="password" placeholder="至少 8 位" />
-        </t-form-item>
-      </t-form>
-    </t-dialog>
-
-    <t-dialog
-      v-model:visible="serviceUpstreamVisible"
-      header="上游绑定"
-      width="520px"
-      :confirm-btn="{ content: '确定', loading: serviceUpstreamSubmitting }"
-      @cancel="serviceUpstreamVisible = false"
-      @confirm="submitServiceUpstream"
-    >
-      <t-form ref="serviceUpstreamFormRef" :data="serviceUpstreamForm" :rules="serviceUpstreamRules" label-align="top">
-        <t-form-item label="上游接口" name="supplier_id">
-          <t-select
-            v-model="serviceUpstreamForm.supplier_id"
-            clearable
-            filterable
-            :loading="serviceUpstreamLoading"
-            placeholder="请选择上游接口"
-          >
-            <t-option v-for="item in serviceUpstreamOptions" :key="item.id" :label="item.label" :value="item.id" />
-          </t-select>
-        </t-form-item>
-        <t-form-item label="上游实例 ID" name="upstream_host_id">
-          <t-input-number v-model="serviceUpstreamForm.upstream_host_id" :min="1" style="width: 100%" />
-        </t-form-item>
-      </t-form>
-    </t-dialog>
-
-    <t-dialog
-      v-model:visible="servicePricingVisible"
-      header="调整价格"
-      width="620px"
-      :confirm-btn="{ content: '确定', loading: servicePricingSubmitting }"
-      @cancel="servicePricingVisible = false"
-      @confirm="submitServicePricing"
-    >
-      <t-form ref="servicePricingFormRef" :data="servicePricingForm" :rules="servicePricingRules" label-align="top">
-        <t-form-item label="购买价格" name="amount">
-          <t-input-number v-model="servicePricingForm.amount" :min="0" :decimal-places="2" style="width: 100%" />
-        </t-form-item>
-        <div v-if="servicePricingEntries.length" class="pricing-list">
-          <div v-for="item in servicePricingEntries" :key="item.cycle" class="pricing-row">
-            <div>
-              <strong>{{ item.label }}</strong>
-              <span>基础价 {{ item.base_amount ? formatMoney(item.base_amount) : '未配置' }}</span>
-            </div>
-            <t-switch v-model="servicePricingForm.locked_pricing[item.cycle].enabled" />
-            <t-input-number
-              v-model="servicePricingForm.locked_pricing[item.cycle].manual_amount"
-              :min="0"
-              :decimal-places="2"
-              placeholder="手动价"
-            />
-          </div>
-          <t-checkbox v-model="servicePricingForm.clear_locked_pricing">恢复默认续费价格</t-checkbox>
-        </div>
-      </t-form>
-    </t-dialog>
-
-    <t-dialog
-      v-model:visible="serviceNameVisible"
-      header="编辑实例名称"
-      width="420px"
-      :confirm-btn="{ content: '确定', loading: serviceNameSubmitting }"
-      @cancel="serviceNameVisible = false"
-      @confirm="submitServiceName"
-    >
-      <t-form :data="serviceNameForm" label-align="top">
-        <t-form-item label="实例名称">
-          <t-input v-model="serviceNameForm.service_name" :maxlength="120" placeholder="填写便于识别的实例名称" />
-        </t-form-item>
-      </t-form>
-    </t-dialog>
-
     <t-dialog
       v-model:visible="manualInvoiceVisible"
       header="补录账单"
@@ -919,7 +673,6 @@ import type { ProductBindingRecord } from '@/api/admin';
 import { adminApi } from '@/api/admin';
 import type { ProductRecord } from '@/api/product';
 import { productApi } from '@/api/product';
-import { supplierApi } from '@/api/supplier';
 import type { AdminUser, ManualPaymentGateway, PageParams } from '@/api/user';
 import { userApi } from '@/api/user';
 import ProductBindingTreeSelect from '@/components/product-binding-tree-select/index.vue';
@@ -932,12 +685,7 @@ import { errorMessage } from '@/utils/userMessage';
 import OrdersTab from './components/OrdersTab.vue';
 import RechargesTab from './components/RechargesTab.vue';
 import { useLoginAs } from './composables/useLoginAs';
-import {
-  buildServiceListItem,
-  createLockedPricingForm,
-  mergeServiceDetail,
-  normalizeServiceDetail,
-} from './serviceDetailModel';
+import { buildServiceListItem } from './serviceDetailModel';
 import {
   invoiceStatusLabel,
   invoiceStatusTheme,
@@ -1007,20 +755,9 @@ const addServiceVisible = ref(false);
 const addServiceLoading = ref(false);
 const addServiceSubmitting = ref(false);
 const addServiceOsLoading = ref(false);
-const serviceUpstreamVisible = ref(false);
-const serviceUpstreamLoading = ref(false);
-const serviceUpstreamSubmitting = ref(false);
-const servicePricingVisible = ref(false);
-const servicePricingSubmitting = ref(false);
-const serviceNameVisible = ref(false);
-const serviceNameSubmitting = ref(false);
-const resetPasswordVisible = ref(false);
 const editFormRef = ref<FormInstanceFunctions>();
 const rechargeFormRef = ref<FormInstanceFunctions>();
 const addServiceFormRef = ref<FormInstanceFunctions>();
-const serviceUpstreamFormRef = ref<FormInstanceFunctions>();
-const servicePricingFormRef = ref<FormInstanceFunctions>();
-const resetPasswordFormRef = ref<FormInstanceFunctions>();
 const editForm = reactive({
   nickname: '',
   phone: '',
@@ -1078,21 +815,6 @@ const addServiceForm = reactive({
   os: '',
   remark: '',
 });
-const serviceUpstreamForm = reactive({
-  supplier_id: undefined as number | undefined,
-  upstream_host_id: undefined as number | undefined,
-});
-const servicePricingForm = reactive({
-  amount: 0,
-  locked_pricing: {} as Record<
-    string,
-    { enabled: boolean; base_amount?: number | string | null; manual_amount?: number | null | '' }
-  >,
-  clear_locked_pricing: false,
-});
-const serviceNameForm = reactive({ service_name: '' });
-const resetPasswordForm = reactive({ password: '' });
-const serviceDrawer = reactive({ visible: false, loading: false, actionLoading: '', serviceId: 0, detail: {} as Row });
 const canLoginAs = computed(() => hasAdminPermission(AdminPermissions.USER_LOGIN_AS));
 const canManualInvoice = computed(() => hasAdminPermission(AdminPermissions.INVOICE_MANUAL_ENTRY));
 const ordersTabRef = ref<InstanceType<typeof OrdersTab>>();
@@ -1107,7 +829,6 @@ const addServiceProductIdArray = computed<(string | number)[]>({
 });
 const addServiceProductDetail = ref<ProductRecord | null>(null);
 const addServiceOsOptions = ref<Row[]>([]);
-const serviceUpstreamOptions = ref<Array<{ id: number; label: string }>>([]);
 
 const services = reactive<PageState>({
   loading: false,
@@ -1170,16 +891,6 @@ const addServiceRules: Record<string, FormRule[]> = {
   billing_cycle: [required('请选择计费周期')],
   status: [required('请选择服务状态')],
   amount: [required('请输入服务金额')],
-};
-const serviceUpstreamRules: Record<string, FormRule[]> = {
-  supplier_id: [{ validator: validateUpstreamPair, message: '选择上游接口时必须填写上游实例 ID', type: 'error' }],
-  upstream_host_id: [{ validator: validateUpstreamPair, message: '填写上游实例 ID 时必须选择上游接口', type: 'error' }],
-};
-const servicePricingRules: Record<string, FormRule[]> = {
-  amount: [required('请输入购买价格')],
-};
-const resetPasswordRules: Record<string, FormRule[]> = {
-  password: [{ validator: (val) => String(val || '').length >= 8, message: '密码长度至少 8 位', type: 'error' }],
 };
 
 const serviceStatusOptions = toSelectOptions(SERVICE_STATUS_MAP, false);
@@ -1252,80 +963,6 @@ const recentReferrals = computed(() =>
 );
 const addServiceBillingOptions = computed(() => resolveBillingOptions(addServiceProductDetail.value));
 const addServiceOsFlatOptions = computed(() => flattenOptionTree(addServiceOsOptions.value));
-const serviceActions = computed(() => serviceDrawer.detail.actions || {});
-// 快照元数据（_schema_*、商品分组路径）对管理员无展示价值，只保留真实规格字段
-const serviceSpecHiddenLabels = ['product_full_path', 'product_path_segments'];
-const serviceSpecs = computed(() =>
-  (Array.isArray(serviceDrawer.detail.specs) ? serviceDrawer.detail.specs : [])
-    .filter((item: Row) => {
-      const label = String(item.label || item.name || item.key || '');
-      return (
-        label !== '' &&
-        !label.startsWith('_') &&
-        !label.endsWith('_product_group_name') &&
-        !serviceSpecHiddenLabels.includes(label)
-      );
-    })
-    .map((item: Row) => ({
-      label: item.label || item.name || '-',
-      value: item.value || '-',
-    })),
-);
-const serviceConsoleTitle = computed(() => fieldValue(serviceDrawer.detail.name || serviceDrawer.detail.domain));
-const serviceConsolePath = computed(() =>
-  String(serviceDrawer.detail.product_full_path || serviceDrawer.detail.product?.display_name || '').trim(),
-);
-const serviceUpstreamText = computed(() => {
-  const providerKey = String(serviceDrawer.detail.upstream?.provider_key || '').trim();
-  const hostId = serviceDrawer.detail.upstream?.host_id;
-  if (!providerKey && !hostId) return '-';
-  return hostId ? `${providerKey || '未登记上游'} / host #${hostId}` : providerKey;
-});
-const serviceRuntimeLabel = computed(() =>
-  String(serviceDrawer.detail.runtime?.power_label || serviceDrawer.detail.runtime?.description || '').trim(),
-);
-const serviceConnectionPort = computed(() => {
-  const port = Number(serviceDrawer.detail.connection?.port || 0);
-  return port > 0 ? String(port) : '-';
-});
-const serviceRuntimeTheme = computed<'default' | 'success' | 'warning'>(() => {
-  const state = String(serviceDrawer.detail.runtime?.power_state || '').toLowerCase();
-  if (state === 'running') return 'success';
-  if (['stopped', 'stop', 'shutdown'].includes(state)) return 'default';
-  return 'warning';
-});
-const canPowerOn = computed(() => {
-  const available = serviceActions.value.available || [];
-  return (
-    Array.isArray(available) &&
-    available.includes('power:on') &&
-    serviceDrawer.detail.runtime?.power_state !== 'running'
-  );
-});
-const canPowerOff = computed(() => {
-  const available = serviceActions.value.available || [];
-  return (
-    Array.isArray(available) &&
-    available.includes('power:off') &&
-    serviceDrawer.detail.runtime?.power_state === 'running'
-  );
-});
-const canReboot = computed(() => {
-  const available = serviceActions.value.available || [];
-  return (
-    Array.isArray(available) &&
-    available.includes('power:reboot') &&
-    serviceDrawer.detail.runtime?.power_state === 'running'
-  );
-});
-const isServiceRefunded = computed(() => [5, 6].includes(Number(serviceDrawer.detail.status)));
-const servicePricingEntries = computed(() =>
-  Object.entries(servicePricingForm.locked_pricing || {}).map(([cycle, item]) => ({
-    cycle,
-    label: billingCycleLabel(cycle),
-    base_amount: item?.base_amount || null,
-  })),
-);
 const statCards = computed(() => [
   { key: 'ticket_open', label: '在线工单', value: stats.value.ticket_open || 0, tone: 'warning' },
   { key: 'cash_balance', label: '余额', value: formatMoney(user.value.cash_balance), tone: 'success' },
@@ -1835,226 +1472,11 @@ function handleDeleteServiceRow(row: Row) {
   });
 }
 
-async function openServiceDrawer(row: Row) {
-  serviceDrawer.visible = true;
-  serviceDrawer.loading = true;
-  serviceDrawer.serviceId = Number(row.id || 0);
-  serviceDrawer.detail = { ...row };
-  try {
-    const detail = await userApi.serviceDetail(userId.value, row.id);
-    serviceDrawer.detail = normalizeServiceDetail(detail);
-    patchServiceListItem(detail);
-  } catch (error) {
-    MessagePlugin.error(errorMessage(error, '加载实例详情失败'));
-  } finally {
-    serviceDrawer.loading = false;
-  }
-}
-
-function closeServiceDrawer() {
-  serviceDrawer.visible = false;
-  serviceDrawer.loading = false;
-  serviceDrawer.actionLoading = '';
-  serviceDrawer.serviceId = 0;
-  serviceDrawer.detail = {};
-}
-
-async function reloadServiceDrawer() {
-  if (!serviceDrawer.serviceId) return;
-  serviceDrawer.loading = true;
-  try {
-    const detail = await userApi.serviceDetail(userId.value, serviceDrawer.serviceId);
-    serviceDrawer.detail = normalizeServiceDetail(detail);
-    patchServiceListItem(detail);
-  } catch (error) {
-    MessagePlugin.error(errorMessage(error, '加载实例详情失败'));
-  } finally {
-    serviceDrawer.loading = false;
-  }
-}
-
-async function handleRefreshConsoleRemoteStatus() {
-  if (!serviceDrawer.serviceId) return;
-  serviceDrawer.actionLoading = 'remote-status';
-  try {
-    const detail = await userApi.serviceRemoteStatus(userId.value, serviceDrawer.serviceId);
-    serviceDrawer.detail = mergeServiceDetail(serviceDrawer.detail, detail);
-    patchServiceListItem(detail);
-    MessagePlugin.success('远程状态已刷新');
-  } catch (error) {
-    MessagePlugin.error(errorMessage(error, '刷新远程状态失败'));
-  } finally {
-    serviceDrawer.actionLoading = '';
-  }
-}
-
-function handleServicePower(action: string) {
-  if (!serviceDrawer.serviceId || !action) return;
-  const label = ({ on: '开机', off: '关机', reboot: '重启' } as Record<string, string>)[action] || action;
-  const dialog = DialogPlugin.confirm({
-    header: `${label}确认`,
-    body: `确认对实例执行“${label}”操作？`,
-    confirmBtn: { content: '确定', theme: 'warning' },
-    cancelBtn: '取消',
-    theme: 'warning',
-    async onConfirm() {
-      serviceDrawer.actionLoading = `power:${action}`;
-      try {
-        const response = await userApi.servicePower(userId.value, serviceDrawer.serviceId, { action });
-        if (response.detail) serviceDrawer.detail = mergeServiceDetail(serviceDrawer.detail, response.detail);
-        MessagePlugin.success(response.message || `${label}指令已下发`);
-        dialog.hide();
-        await handleRefreshConsoleRemoteStatus();
-      } catch (error) {
-        MessagePlugin.error(errorMessage(error, `${label}失败`));
-      } finally {
-        serviceDrawer.actionLoading = '';
-      }
-    },
-  });
-}
-
-function openResetPasswordDialog() {
-  resetPasswordForm.password = '';
-  resetPasswordVisible.value = true;
-  resetPasswordFormRef.value?.clearValidate?.();
-}
-
-async function handleResetServicePassword() {
-  const result = await resetPasswordFormRef.value?.validate?.();
-  if (!isValidationPass(result) || !serviceDrawer.serviceId) return;
-  serviceDrawer.actionLoading = 'reset-password';
-  try {
-    await userApi.serviceResetPassword(userId.value, serviceDrawer.serviceId, { password: resetPasswordForm.password });
-    MessagePlugin.success('密码重置指令已下发');
-    resetPasswordVisible.value = false;
-    await reloadServiceDrawer();
-  } catch (error) {
-    MessagePlugin.error(errorMessage(error, '密码重置失败'));
-  } finally {
-    serviceDrawer.actionLoading = '';
-  }
-}
-
-async function openServiceUpstreamDialog() {
-  await loadServiceUpstreamOptions();
-  serviceUpstreamForm.supplier_id = Number(serviceDrawer.detail.upstream?.supplier_id || 0) || undefined;
-  serviceUpstreamForm.upstream_host_id = Number(serviceDrawer.detail.upstream?.host_id || 0) || undefined;
-  serviceUpstreamVisible.value = true;
-  serviceUpstreamFormRef.value?.clearValidate?.();
-}
-
-async function loadServiceUpstreamOptions() {
-  if (serviceUpstreamOptions.value.length) return;
-  serviceUpstreamLoading.value = true;
-  try {
-    const response = await supplierApi.list({ status: 1, page: 1, page_size: 100 });
-    serviceUpstreamOptions.value = (Array.isArray(response.list) ? response.list : [])
-      .map((item) => {
-        const id = Number(item.id || 0);
-        const upstreamBinding =
-          item.upstream_binding && typeof item.upstream_binding === 'object' ? (item.upstream_binding as Row) : {};
-        const type = item.provider_label || upstreamBinding.provider_key || '上游';
-        return { id, label: `${item.name || `接口 #${item.id}`} · ${type}` };
-      })
-      .filter((item) => item.id > 0);
-  } catch (error) {
-    MessagePlugin.error(errorMessage(error, '加载上游接口失败'));
-  } finally {
-    serviceUpstreamLoading.value = false;
-  }
-}
-
-async function submitServiceUpstream() {
-  const result = await serviceUpstreamFormRef.value?.validate?.();
-  if (!isValidationPass(result) || !serviceDrawer.serviceId) return;
-  serviceUpstreamSubmitting.value = true;
-  serviceDrawer.actionLoading = 'meta-update';
-  try {
-    const detail = await userApi.updateServiceMeta(userId.value, serviceDrawer.serviceId, {
-      supplier_id: serviceUpstreamForm.supplier_id ? Number(serviceUpstreamForm.supplier_id) : null,
-      upstream_host_id: serviceUpstreamForm.upstream_host_id ? Number(serviceUpstreamForm.upstream_host_id) : null,
-    });
-    serviceDrawer.detail = mergeServiceDetail(serviceDrawer.detail, detail);
-    patchServiceListItem(serviceDrawer.detail);
-    serviceUpstreamVisible.value = false;
-    MessagePlugin.success('上游绑定已更新');
-  } catch (error) {
-    MessagePlugin.error(errorMessage(error, '更新上游绑定失败'));
-  } finally {
-    serviceUpstreamSubmitting.value = false;
-    serviceDrawer.actionLoading = '';
-  }
-}
-
-function openServicePricingDialog() {
-  servicePricingForm.amount = toNumber(serviceDrawer.detail.amount);
-  servicePricingForm.locked_pricing = createLockedPricingForm(serviceDrawer.detail);
-  servicePricingForm.clear_locked_pricing = false;
-  servicePricingVisible.value = true;
-  servicePricingFormRef.value?.clearValidate?.();
-}
-
-async function submitServicePricing() {
-  const result = await servicePricingFormRef.value?.validate?.();
-  if (!isValidationPass(result) || !serviceDrawer.serviceId) return;
-  const payload: Row = { amount: toNumber(servicePricingForm.amount) };
-  if (servicePricingForm.clear_locked_pricing) {
-    payload.clear_locked_pricing = true;
-  } else {
-    payload.locked_pricing = Object.entries(servicePricingForm.locked_pricing).reduce(
-      (resultMap, [cycle, item]) => {
-        resultMap[cycle] = {
-          enabled: Boolean(item.enabled),
-          manual_amount:
-            item.manual_amount === '' || item.manual_amount === null || item.manual_amount === undefined
-              ? null
-              : toNumber(item.manual_amount),
-        };
-        return resultMap;
-      },
-      {} as Record<string, { enabled: boolean; manual_amount: number | null }>,
-    );
-  }
-  servicePricingSubmitting.value = true;
-  serviceDrawer.actionLoading = 'meta-update';
-  try {
-    const detail = await userApi.updateServiceMeta(userId.value, serviceDrawer.serviceId, payload);
-    serviceDrawer.detail = mergeServiceDetail(serviceDrawer.detail, detail);
-    patchServiceListItem(serviceDrawer.detail);
-    servicePricingVisible.value = false;
-    MessagePlugin.success('价格信息已更新');
-  } catch (error) {
-    MessagePlugin.error(errorMessage(error, '更新价格信息失败'));
-  } finally {
-    servicePricingSubmitting.value = false;
-    serviceDrawer.actionLoading = '';
-  }
-}
-
-function openServiceNameDialog() {
-  serviceNameForm.service_name = String(serviceDrawer.detail.custom_service_name || serviceDrawer.detail.name || '');
-  serviceNameVisible.value = true;
-}
-
-async function submitServiceName() {
-  if (!serviceDrawer.serviceId) return;
-  serviceNameSubmitting.value = true;
-  serviceDrawer.actionLoading = 'meta-update';
-  try {
-    const detail = await userApi.updateServiceMeta(userId.value, serviceDrawer.serviceId, {
-      service_name: serviceNameForm.service_name,
-    });
-    serviceDrawer.detail = mergeServiceDetail(serviceDrawer.detail, detail);
-    patchServiceListItem(serviceDrawer.detail);
-    serviceNameVisible.value = false;
-    MessagePlugin.success('实例名称已更新');
-  } catch (error) {
-    MessagePlugin.error(errorMessage(error, '更新实例名称失败'));
-  } finally {
-    serviceNameSubmitting.value = false;
-    serviceDrawer.actionLoading = '';
-  }
+/** 打开服务控制台独立页（服务维度聚合订单、账单、日志与跟踪记录）。 */
+function goToServiceConsole(row: Row) {
+  const id = Number(row?.id ?? 0);
+  if (!id) return;
+  router.push(`/admin/users/${userId.value}/services/${id}`);
 }
 
 /** 账单详情跳转财务账单详情页（与订单 tab 的「详情」行为一致）。 */
@@ -2173,11 +1595,6 @@ function flattenOptionTree(items: Row[] = []) {
 }
 function normalizeSelectionArray(value: unknown): string[] {
   return (Array.isArray(value) ? value : [value]).map((item) => String(item || '').trim()).filter(Boolean);
-}
-function validateUpstreamPair() {
-  const supplierId = Number(serviceUpstreamForm.supplier_id || 0);
-  const hostId = Number(serviceUpstreamForm.upstream_host_id || 0);
-  return (supplierId <= 0 && hostId <= 0) || (supplierId > 0 && hostId > 0);
 }
 function isValidationPass(result: unknown) {
   return result === true || result === undefined;

@@ -527,6 +527,13 @@ class UserService
             }
         }
 
+        // 服务控制台按实例维度列出账单：invoice.service_id 直接落列并建有索引，
+        // 不再经 order 二次关联，避免同一订单多账单时漏选。
+        $serviceId = (int) ($filters['service_id'] ?? 0);
+        if ($serviceId > 0) {
+            $query->where('service_id', $serviceId);
+        }
+
         $paginator = $query->orderByDesc('id')->paginate($perPage);
 
         // 账单行的展示名由 ProductDisplayNameResolver 解析：拆分商品的源商品、以及未随投影取出的
