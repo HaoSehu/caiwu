@@ -106,9 +106,7 @@ class SettingService
             'ticket_auto_close_schedule_mode' => AutomationScheduleExpression::MODE_HOURLY,
             'ticket_auto_close_schedule_time' => '00:00:00',
             'pending_order_cleanup_enabled' => true,
-            'pending_order_cleanup_after_hours' => 1,
             'pending_recharge_cleanup_enabled' => true,
-            'pending_recharge_cleanup_after_days' => 3,
             'order_cleanup_schedule_mode' => AutomationScheduleExpression::MODE_EVERY_FIFTEEN_MINUTES,
             'order_cleanup_schedule_time' => '00:00:00',
         ];
@@ -286,9 +284,7 @@ class SettingService
             'ticket_auto_close_schedule_mode' => $this->getScheduleMode('automation', 'ticket_auto_close_schedule_mode', $defaults['ticket_auto_close_schedule_mode']),
             'ticket_auto_close_schedule_time' => $this->getScheduleTime('automation', 'ticket_auto_close_schedule_time', $defaults['ticket_auto_close_schedule_time']),
             'pending_order_cleanup_enabled' => $this->getBool('automation', 'pending_order_cleanup_enabled', $defaults['pending_order_cleanup_enabled']),
-            'pending_order_cleanup_after_hours' => $this->getInt('automation', 'pending_order_cleanup_after_hours', $defaults['pending_order_cleanup_after_hours'], 1, 720),
             'pending_recharge_cleanup_enabled' => $this->getBool('automation', 'pending_recharge_cleanup_enabled', $defaults['pending_recharge_cleanup_enabled']),
-            'pending_recharge_cleanup_after_days' => $this->getInt('automation', 'pending_recharge_cleanup_after_days', $defaults['pending_recharge_cleanup_after_days'], 0, 365),
             'order_cleanup_schedule_mode' => $this->getScheduleMode('automation', 'order_cleanup_schedule_mode', $defaults['order_cleanup_schedule_mode']),
             'order_cleanup_schedule_time' => $this->getScheduleTime('automation', 'order_cleanup_schedule_time', $defaults['order_cleanup_schedule_time']),
         ];
