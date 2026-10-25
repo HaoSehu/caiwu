@@ -22,7 +22,6 @@ class ProductUpstreamBinding extends Model
         'status',
         'last_synced_at',
         'last_sync_error',
-        'backfill_batch_id',
     ];
 
     protected function casts(): array

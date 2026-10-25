@@ -113,9 +113,9 @@ class ProductCategorySoftDeleteCleanupTest extends TestCase
     }
 
     /**
-     * 给商品挂一条服务实例（含已软删的服务行，其外键引用仍会阻塞商品物理删除）。
+     * 给商品挂一条服务实例（服务外键引用会阻塞商品物理删除）。
      */
-    private function attachServiceInstance(Product $product, bool $trashed = false): int
+    private function attachServiceInstance(Product $product): int
     {
         $userId = (int) DB::table('users')->insertGetId([
             'email' => 'cat-cleanup-'.uniqid().'@test.local',
@@ -127,7 +127,6 @@ class ProductCategorySoftDeleteCleanupTest extends TestCase
             'product_id' => (int) $product->id,
             'billing_cycle' => 'monthly',
             'amount' => 100,
-            'deleted_at' => $trashed ? now() : null,
         ]);
     }
 
@@ -156,13 +155,13 @@ class ProductCategorySoftDeleteCleanupTest extends TestCase
 
     /**
      * 有服务实例的软删商品：分类删除被阻断并给清晰错误，商品与分组原样保留。
-     * 已软删的服务行同样算服务实例——它的外键引用仍会阻塞商品物理删除。
+     * 服务实例本身已无软删态（2026-10-25 裁决），活服务的外键引用同样阻塞商品物理删除。
      */
     public function test_delete_third_group_blocked_by_soft_deleted_product_with_service(): void
     {
         $groupIds = $this->createIsolatedGroupTree();
         $product = $this->createProductInThirdGroup($groupIds['third']);
-        $this->attachServiceInstance($product, trashed: true);
+        $this->attachServiceInstance($product);
         $product->delete();
 
         try {

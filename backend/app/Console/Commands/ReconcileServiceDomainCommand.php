@@ -22,7 +22,6 @@ class ReconcileServiceDomainCommand extends Command
 
         $serviceInstances = $service->deriveServiceInstancePayloads();
         $lifecycleLogs = $service->deriveServiceLifecycleLogPayloads();
-        $operationLogs = $service->deriveServiceOperationLogPayloads();
         $remoteSnapshots = $service->deriveServiceRemoteSnapshotPayloads();
 
         $summary = [
@@ -33,10 +32,6 @@ class ReconcileServiceDomainCommand extends Command
             'service_lifecycle_logs' => [
                 'old_derived' => count($lifecycleLogs),
                 'new' => $service->targetCount('service_lifecycle_logs'),
-            ],
-            'service_operation_logs' => [
-                'old_derived' => count($operationLogs),
-                'new' => $service->targetCount('service_operation_logs'),
             ],
             'service_remote_snapshots' => [
                 'old_derived' => count($remoteSnapshots),
@@ -53,9 +48,6 @@ class ReconcileServiceDomainCommand extends Command
             )[0]->cnt) ?? 0),
             'service_lifecycle_logs.service_instance_id' => (int) (($service->targetQuery(
                 'SELECT COUNT(*) AS cnt FROM service_lifecycle_logs WHERE service_instance_id NOT IN (SELECT id FROM service_instances)'
-            )[0]->cnt) ?? 0),
-            'service_operation_logs.service_instance_id' => (int) (($service->targetQuery(
-                'SELECT COUNT(*) AS cnt FROM service_operation_logs WHERE service_instance_id NOT IN (SELECT id FROM service_instances)'
             )[0]->cnt) ?? 0),
             'service_remote_snapshots.service_instance_id' => (int) (($service->targetQuery(
                 'SELECT COUNT(*) AS cnt FROM service_remote_snapshots WHERE service_instance_id NOT IN (SELECT id FROM service_instances)'

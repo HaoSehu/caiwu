@@ -19,8 +19,7 @@ class OperationLogService
         array $detail = [],
         ?string $ipAddress = null,
     ): void {
-        // activity_logs 是唯一在线真源（双写已下线）；operation_logs 转为只读遗留表，
-        // 存量由 30 天归档自然消化
+        // activity_logs 是唯一在线真源（双写已下线）；operation_logs 已于 2026-10-25 删除。
         $this->writeActivityLog(
             userId: $userId,
             userType: $userType,

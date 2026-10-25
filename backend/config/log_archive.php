@@ -29,7 +29,6 @@ return [
     'cold_search_max_bytes' => 128 * 1024 * 1024,
 
     'tables' => [
-        'operation_logs' => 'API/后台操作及管理员登录日志（只读遗留表，存量由归档消化）',
         'activity_logs' => '系统与业务活动日志',
         // 管理员登录尝试独立审计表（成功/失败、失败原因、归纳后的客户端环境），
         // 与 activity_logs 同窗口归档；清理页 admin_login 只作用于该表。

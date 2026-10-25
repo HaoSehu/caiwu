@@ -1,6 +1,6 @@
 ---
 status: current
-updated: 2026-07-23
+updated: 2026-10-25
 owner: backend-data
 ---
 
@@ -83,7 +83,7 @@ python backend\scripts\reset_init_and_migrate_idc_dump.py --dump C:\path\to\idc_
 
 ## 迁移后检查
 
-- 核心表行数符合预期：`users`、`products`、`invoices`、`services`、`payments`、`operation_logs`。
+- 核心表行数符合预期：`users`、`products`、`invoices`、`services`、`payments`。
 - 运行态表保持清空：`jobs`、`sessions`、`password_reset_tokens`、`personal_access_tokens`。
 - 当前结构与 `docs/DATABASE.md` 一致。
 - 前后端能使用迁移后的管理员、用户、商品和服务数据完成最小冒烟。

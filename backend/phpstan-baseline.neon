@@ -1044,35 +1044,6 @@ parameters:
 			count: 1
 			path: app/Models/ReferralWithdrawal.php
 
-		-
-			message: '#^Unsafe usage of new static\(\)\.$#'
-			identifier: new.static
-			count: 1
-			path: app/Models/Service.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\ServiceInstance\:\:\$billing_cycle\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Models/ServiceInstance.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\ServiceInstance\:\:\$pricing_snapshot_json\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Models/ServiceInstance.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\ServiceInstance\:\:\$provision_snapshot_json\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Models/ServiceInstance.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\ServiceInstance\:\:\$renewal_price\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Models/ServiceInstance.php
 
 		-
 			message: '#^Call to function is_array\(\) with array\<string, mixed\> will always evaluate to true\.$#'

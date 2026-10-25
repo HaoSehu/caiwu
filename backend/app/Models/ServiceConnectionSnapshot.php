@@ -25,7 +25,6 @@ class ServiceConnectionSnapshot extends Model
         'secret_json',
         'has_secret_json',
         'checked_at',
-        'backfill_batch_id',
     ];
 
     protected function casts(): array

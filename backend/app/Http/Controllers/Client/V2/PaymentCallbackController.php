@@ -4,11 +4,9 @@ namespace App\Http\Controllers\Client\V2;
 
 use App\Constants\PaymentGatewayCode;
 use App\Http\Controllers\Controller;
-use App\Services\Finance\FinanceCutoverInboxService;
 use App\Services\Finance\GatewayInvoicePaymentService;
 use App\Services\Integrations\Payments\PaymentGatewayManager;
 use Illuminate\Http\Request;
-use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Log;
 
 class PaymentCallbackController extends Controller
@@ -16,7 +14,6 @@ class PaymentCallbackController extends Controller
     public function __construct(
         private GatewayInvoicePaymentService $paymentService,
         private PaymentGatewayManager $paymentGatewayManager,
-        private FinanceCutoverInboxService $cutoverInbox,
     ) {}
 
     /**
@@ -28,11 +25,6 @@ class PaymentCallbackController extends Controller
         // 与验签中间件同口径归一化网关别名（ali_pay/alipay_f2f → alipay、yi_pay → yipay），
         // 避免处理失败后再用未注册的别名解析网关，异常逃出控制器变成 500。
         $gateway = PaymentGatewayCode::normalize($gateway);
-
-        $captured = $this->captureDuringCutover($gateway, $request);
-        if ($captured instanceof Response) {
-            return $captured;
-        }
 
         Log::info("[{$gateway}回调] 收到通知", [
             'gateway' => $gateway,
@@ -70,11 +62,6 @@ class PaymentCallbackController extends Controller
      */
     public function alipayNotify(Request $request)
     {
-        $captured = $this->captureDuringCutover(PaymentGatewayCode::ALIPAY, $request);
-        if ($captured instanceof Response) {
-            return $captured;
-        }
-
         Log::info('[支付宝回调] 收到通知', [
             'payment_no' => (string) $request->input('out_trade_no', ''),
             'trade_no' => (string) $request->input('trade_no', ''),
@@ -96,30 +83,5 @@ class PaymentCallbackController extends Controller
         // 支付宝要求返回纯文本 success / fail
         return response($success ? 'success' : 'fail', 200)
             ->header('Content-Type', 'text/plain');
-    }
-
-    /**
-     * 切换窗口收件箱：窗口开启期间只落库并 ack 成功，业务判定延迟到重放。
-     *
-     * 收件箱的存储与并发策略已下沉到 FinanceCutoverInboxService（P1-8）：
-     * 控制器只保留「是否已接管」的协议判断。
-     */
-    private function captureDuringCutover(string $gateway, Request $request): ?Response
-    {
-        if (! $this->cutoverInbox->capture($gateway, $request)) {
-            return null;
-        }
-
-        try {
-            return $this->paymentGatewayManager->gateway($gateway)->buildNotifyResponse(true);
-        } catch (\Throwable $exception) {
-            // 未注册网关等异常时按网关约定返回成功文本，保证公开端点不产生 500
-            Log::warning('[切换窗口] 构建回调响应失败，已按成功文本应答', [
-                'gateway' => $gateway,
-                'message' => $exception->getMessage(),
-            ]);
-
-            return response('success', 200)->header('Content-Type', 'text/plain');
-        }
     }
 }

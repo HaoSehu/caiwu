@@ -318,31 +318,6 @@ class ContentSystemMigrationService
     }
 
     /**
-     * @param  array<string, mixed>  $log
-     * @return array<string, mixed>
-     */
-    public function buildOperationLogPayload(array $log): array
-    {
-        $contextJson = $this->normalizeJsonString($log['context'] ?? null);
-        $contextArray = $this->decodeJsonArray($contextJson);
-
-        return [
-            'id' => (int) ($log['id'] ?? 0),
-            'user_id' => $this->normalizeNullablePositiveInt($log['user_id'] ?? null),
-            'user_type' => $this->normalizeNullableString($log['user_type'] ?? null),
-            'action' => $this->normalizeRequiredString($log['action'] ?? null, 'legacy.action'),
-            'module' => $this->normalizeNullableString($log['module'] ?? null),
-            'subject_type' => $this->deriveOperationSubjectType((string) ($log['module'] ?? ''), $contextArray),
-            'subject_id' => $this->normalizeNullablePositiveInt($log['subject_id'] ?? null),
-            'context_json' => $contextJson,
-            'ip_address' => $this->normalizeNullableString($log['ip_address'] ?? null),
-            'trace_id' => $this->extractTraceIdFromJson($contextJson),
-            'created_at' => $this->normalizeDateTimeString($log['created_at'] ?? null),
-            'updated_at' => $this->normalizeDateTimeString($log['created_at'] ?? null),
-        ];
-    }
-
-    /**
      * @param  array<string, mixed>  $legacyTicket
      * @return array<string, mixed>
      */
@@ -428,17 +403,6 @@ class ContentSystemMigrationService
         return array_map(
             fn (array $row) => $this->buildAutomationLogPayload($row),
             $this->sourceTableRows('automation_logs')
-        );
-    }
-
-    /**
-     * @return array<int, array<string, mixed>>
-     */
-    public function deriveOperationLogPayloads(): array
-    {
-        return array_map(
-            fn (array $row) => $this->buildOperationLogPayload($row),
-            $this->sourceTableRows('operation_logs')
         );
     }
 
@@ -565,24 +529,6 @@ class ContentSystemMigrationService
         }
 
         return trim($status);
-    }
-
-    /**
-     * @param  array<string, mixed>  $context
-     */
-    private function deriveOperationSubjectType(string $module, array $context): ?string
-    {
-        $normalizedModule = trim($module);
-
-        return match ($normalizedModule) {
-            'auth' => 'user',
-            'referral' => 'referral_reward',
-            'services' => 'service_instance',
-            'invoices', 'finance', 'recharge' => 'invoice',
-            default => isset($context['subject_type']) && is_string($context['subject_type'])
-                ? trim($context['subject_type']) ?: null
-                : null,
-        };
     }
 
     private function extractTraceIdFromJson(?string $json): ?string

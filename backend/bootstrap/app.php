@@ -83,9 +83,8 @@ return Application::configure(basePath: dirname(__DIR__))
             );
         }
 
-        // 维护模式豁免支付回调：切换窗口 php artisan down 期间，网关回调必须仍能到达控制器，
-        // 由 FinanceCutoverInboxService 落库并 ack 成功（否则网关重试耗尽、回调永久丢失）。
-        // 与 Runbook「回调会进收件箱」承诺对齐；业务端点仍按维护模式返回 503。
+        // 维护模式豁免支付回调：窗口期 php artisan down 期间，网关回调必须仍能到达控制器，
+        // 按正常链路落库并向网关 ack（否则网关重试耗尽、回调永久丢失）；业务端点仍返回 503。
         $middleware->preventRequestsDuringMaintenance(except: [
             'api/v2/client/payment/notify/*',
             'api/v2/client/payment/alipay/notify',
@@ -149,9 +148,9 @@ return Application::configure(basePath: dirname(__DIR__))
             return null;
         });
 
-        // 维护模式必须原样保留 503：切换窗口用 php artisan down 时，业务端点要返回可识别的
-        // 503（而不是被兜底渲染成 500）；支付回调则显式豁免维护模式（见 withMiddleware 的
-        // preventRequestsDuringMaintenance），由 FinanceCutoverInboxService 落库并 ack 成功。
+        // 维护模式必须原样保留 503：用 php artisan down 时，业务端点要返回可识别的 503
+        // （而不是被兜底渲染成 500）；支付回调则显式豁免维护模式（见 withMiddleware 的
+        // preventRequestsDuringMaintenance），由 PaymentCallbackController 正常落库并 ack。
         $exceptions->render(function (Throwable $exception, Request $request) {
             if (! $exception instanceof HttpExceptionInterface || $exception->getStatusCode() !== 503) {
                 return null;

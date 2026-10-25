@@ -22,7 +22,6 @@ class ServiceProvisionAttempt extends Model
         'error_code',
         'error_message',
         'attempted_at',
-        'backfill_batch_id',
     ];
 
     protected function casts(): array

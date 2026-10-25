@@ -242,8 +242,7 @@ trait HandlesAdminLogCleanup
 
     private function activityLogCount(): int
     {
-        // operation_logs 已停写并转只读遗留表，业务审计清理只作用于唯一真源 activity_logs；
-        // operation_logs 存量由 30 天归档统一消化，不通过管理端清理删除
+        // 业务审计清理只作用于唯一真源 activity_logs；operation_logs 已于 2026-10-25 删除。
         return Schema::hasTable('activity_logs') ? (int) DB::table('activity_logs')->count() : 0;
     }
 

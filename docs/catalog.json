@@ -247,7 +247,7 @@
         {
             "path": "执行计划/进行中/财务核心重构-2026-10-20.md",
             "status": "active",
-            "summary": "财务核心破坏性重构：9 张新表接管现金账本（账户/台账/资金批次/消费映射/退款），内核四服务收敛余额与幂等写口，删除 manual_mark，重建+一次性切换（G1–G7 闸门、外键重指、T+7 归档），三端接线。",
+            "summary": "财务核心破坏性重构：9 张新表接管现金账本（账户/台账/资金批次/消费映射/退款），内核四服务收敛余额与幂等写口，删除 manual_mark，重建+一次性切换（G1–G7 闸门、外键重指、T+7 归档），三端接线。2026-10-25 已删除切换脚手架（finance_migration_runs/finance_cutover_inbox 两表与三个 cutover 命令），Runbook 仅存历史留档，维护模式回调豁免改由 MaintenanceModeCallbackTest 锁定。",
             "review_by": "2026-11-20"
         },
         {
@@ -457,6 +457,12 @@
             "status": "current",
             "summary": "数据库升级唯一真源：三个账本职责、db:upgrade/db:upgrade-status/db:migration-lint 三条命令、发布 Runbook、首次采纳、失败恢复矩阵、迁移开发规则、baseline 与孤儿白名单说明。",
             "review_by": "2026-11-26"
+        },
+        {
+            "path": "执行计划/进行中/数据库表结构审查与优化方案-2026-10-25.md",
+            "status": "active",
+            "summary": "数据库全量只读审查（基线 82 表/1151 字段/405 索引/114 外键、82 迁移、70 模型）与破坏性重构落地：骨架健康；高风险 1（财务域新旧双轨，H1 受控切换未收尾），中风险 8、低风险 7。已执行 A1 SystemSetting 合并、A3/A4 规范章节、B1 冗余索引删除、B8 双库收口，第三轮 B2/B9/B3/B4 破坏性改造（删 operation_logs、finance_cutover_inbox、finance_migration_runs 三表与 deleted_at×4、backfill_batch_id×7、legacy_activity_log_id×1 共 10 列，退役 11 个代码文件），第四轮 B5/B6 收敛（68 张表补中文表注释至 79/79，status 归档/调度/消息三域统一 varchar(24)、券域 trace_id 100→64、refund_no 统一 40、trade_no 统一 128），结构收敛为 79 表/1108 字段/383 索引/114 外键；余 B7 T+7 退役随财务批次执行。",
+            "review_by": "2026-11-24"
         }
     ]
 }

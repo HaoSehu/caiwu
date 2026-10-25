@@ -13,7 +13,6 @@ use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -27,7 +26,7 @@ use Illuminate\Support\Facades\DB;
  */
 class Invoice extends Model
 {
-    use EnsuresTraceId, HandlesProductSnapshot, NormalizesTraceId, SoftDeletes;
+    use EnsuresTraceId, HandlesProductSnapshot, NormalizesTraceId;
 
     protected $fillable = [
         'invoice_no', 'user_id', 'order_id', 'origin_invoice_id', 'type', 'currency',
@@ -63,19 +62,6 @@ class Invoice extends Model
             'coupon_snapshot' => 'array',
             'member_discount_snapshot' => 'array',
         ];
-    }
-
-    protected static function booted(): void
-    {
-        static::deleting(function (self $invoice): void {
-            if ($invoice->isForceDeleting()) {
-                return;
-            }
-
-            DB::transaction(function () use ($invoice): void {
-                $invoice->items()->each(fn ($item) => $item->delete());
-            });
-        });
     }
 
     public function user(): BelongsTo

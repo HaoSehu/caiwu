@@ -15,8 +15,6 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
 /**
@@ -25,7 +23,7 @@ use InvalidArgumentException;
  */
 class Payment extends Model
 {
-    use EnsuresTraceId, NormalizesTraceId, SoftDeletes;
+    use EnsuresTraceId, NormalizesTraceId;
 
     /**
      * 允许创建非第三方网关的 Payment 审计记录（管理端手动入账专用，保留 trade_no 等凭证）。
@@ -75,21 +73,6 @@ class Payment extends Model
                     $payment->gateway_key = $gateway;
                 }
             }
-        });
-
-        // 软删支付单不得销毁回调审计（P1-7）：payment_callbacks 是资金链路的取证依据，
-        // 物理删除等于销毁证据。保留行并标记归档来源，按 payment_id 仍可追溯原始回调。
-        static::deleting(function (self $payment): void {
-            if ($payment->isForceDeleting()) {
-                return;
-            }
-
-            DB::transaction(function () use ($payment): void {
-                $payment->callbacks()->update([
-                    'remark' => 'payment_soft_deleted',
-                    'updated_at' => now(),
-                ]);
-            });
         });
     }
 

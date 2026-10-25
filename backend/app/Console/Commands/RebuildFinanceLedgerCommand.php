@@ -9,7 +9,6 @@ use App\Models\FinanceAccount;
 use App\Models\FinanceConsumption;
 use App\Models\FinanceFundingLot;
 use App\Models\FinanceLedgerEntry;
-use App\Models\FinanceMigrationRun;
 use App\Models\FinanceOperation;
 use App\Models\FinanceReconciliationDiff;
 use App\Services\Finance\Core\FinanceLedgerService;
@@ -42,19 +41,6 @@ final class RebuildFinanceLedgerCommand extends Command
         {--chunk=500 : 分批大小}';
 
     protected $description = '把旧财务台账/退款/余额迁移到新账本（默认 dry-run）';
-
-    /**
-     * 阶段文案：校准阶段不在此维护，统一取 FinanceLedgerEventType::label('calibration')，
-     * 避免命令自建映射与台账事件标签两套文案漂移。
-     */
-    private const PHASE_LABELS = [
-        'snapshot' => '基线快照',
-        'accounts' => '账户复制',
-        'ledger' => '台账复制',
-        'lots' => '批次回放',
-        'refunds' => '退款迁移',
-        'verify' => '闸门校验',
-    ];
 
     public function handle(
         FinanceLedgerService $ledger,
@@ -106,30 +92,20 @@ final class RebuildFinanceLedgerCommand extends Command
             return self::FAILURE;
         }
 
-        $runNo = 'MR'.date('YmdHis').strtoupper(bin2hex(random_bytes(4)));
-
         try {
-            DB::transaction(function () use ($runNo, $snapshot, $chunk, $ledger, $allocator): void {
+            DB::transaction(function () use ($snapshot, $chunk, $ledger, $allocator): void {
                 if ($this->option('fresh')) {
                     $this->truncateNewTables();
                 }
 
-                $this->phase($runNo, 'snapshot', FinanceMigrationRun::STATUS_PASSED, $snapshot);
-
-                $accountMap = $this->copyAccounts($runNo);
-                $this->copyLedger($runNo, $chunk, $accountMap);
-                $this->replayLots($runNo, $allocator);
-                $this->calibrate($runNo, $ledger, $allocator);
-                $this->copyRefunds($runNo, $chunk);
-                $this->syncHotStandbyAfterRebuild($runNo);
+                $accountMap = $this->copyAccounts();
+                $this->copyLedger($chunk, $accountMap);
+                $this->replayLots($allocator);
+                $this->calibrate($ledger, $allocator);
+                $this->copyRefunds($chunk);
+                $this->syncHotStandbyAfterRebuild();
 
                 $gates = $this->verifyGates($snapshot);
-                $this->phase(
-                    $runNo,
-                    'verify',
-                    $this->allPassed($gates) ? FinanceMigrationRun::STATUS_PASSED : FinanceMigrationRun::STATUS_FAILED,
-                    $gates,
-                );
 
                 if (! $this->allPassed($gates)) {
                     $this->renderGates($gates);
@@ -137,23 +113,12 @@ final class RebuildFinanceLedgerCommand extends Command
                 }
             });
         } catch (Throwable $error) {
-            // 事务已回滚，阶段记录一并消失；单独补一条失败记录用于事后排查。
-            FinanceMigrationRun::query()->create([
-                'run_no' => $runNo,
-                'phase' => 'aborted',
-                'status' => FinanceMigrationRun::STATUS_FAILED,
-                'stats' => ['error' => $error::class],
-                'message' => mb_substr($error->getMessage(), 0, 500),
-                'started_at' => date('Y-m-d H:i:s'),
-                'finished_at' => date('Y-m-d H:i:s'),
-            ]);
-
             $this->error($error->getMessage());
 
             return self::FAILURE;
         }
 
-        $this->info("重建完成：{$runNo}");
+        $this->info('重建完成');
 
         return $this->printGates($snapshot);
     }
@@ -246,9 +211,8 @@ final class RebuildFinanceLedgerCommand extends Command
     /**
      * @return array<int, int> user_id => account_id
      */
-    private function copyAccounts(string $runNo): array
+    private function copyAccounts(): array
     {
-        $started = microtime(true);
         $now = date('Y-m-d H:i:s');
 
         $balances = [];
@@ -289,23 +253,15 @@ final class RebuildFinanceLedgerCommand extends Command
         $map = DB::table('finance_accounts')->pluck('id', 'user_id')->all();
         $map = array_map(static fn ($id): int => (int) $id, $map);
 
-        $this->phase($runNo, 'accounts', FinanceMigrationRun::STATUS_PASSED, [
-            'accounts' => count($map),
-            'duration_ms' => (int) ((microtime(true) - $started) * 1000),
-        ]);
-
         return $map;
     }
 
     /**
      * @param  array<int, int>  $accountMap
      */
-    private function copyLedger(string $runNo, int $chunk, array $accountMap): void
+    private function copyLedger(int $chunk, array $accountMap): void
     {
-        $started = microtime(true);
-        $copied = 0;
-
-        DB::table('account_transactions')->orderBy('id')->chunkById($chunk, function ($rows) use ($accountMap, &$copied): void {
+        DB::table('account_transactions')->orderBy('id')->chunkById($chunk, function ($rows) use ($accountMap): void {
             $insert = [];
             foreach ($rows as $row) {
                 $userId = (int) $row->user_id;
@@ -336,25 +292,14 @@ final class RebuildFinanceLedgerCommand extends Command
                     'trace_id' => $row->trace_id,
                     'created_at' => $row->created_at,
                 ];
-                $copied++;
             }
 
             DB::table('finance_ledger_entries')->insert($insert);
         });
-
-        $this->phase($runNo, 'ledger', FinanceMigrationRun::STATUS_PASSED, [
-            'copied' => $copied,
-            'duration_ms' => (int) ((microtime(true) - $started) * 1000),
-        ]);
     }
 
-    private function replayLots(string $runNo, FundingLotAllocator $allocator): void
+    private function replayLots(FundingLotAllocator $allocator): void
     {
-        $started = microtime(true);
-        $lots = 0;
-        $consumptions = 0;
-        $shortfalls = 0;
-
         $userIds = DB::table('finance_ledger_entries')
             ->where('account_type', 'cash')
             ->distinct()
@@ -386,7 +331,6 @@ final class RebuildFinanceLedgerCommand extends Command
                         $entry->origin_id !== null ? (int) $entry->origin_id : null,
                         $this->entryTime($entry),
                     );
-                    $lots++;
 
                     continue;
                 }
@@ -403,7 +347,6 @@ final class RebuildFinanceLedgerCommand extends Command
                         $this->entryTime($entry),
                         false,
                     );
-                    $consumptions += count($result['allocations']);
                     if ($result['shortfall_cents'] > 0) {
                         // 历史支出找不到来源：建一个负值缺口批次并消费掉，
                         // 使「批次剩余合计」与「台账合计」同时对齐真实余额；
@@ -432,7 +375,6 @@ final class RebuildFinanceLedgerCommand extends Command
                             'created_at' => $this->entryTime($entry),
                         ]);
 
-                        $shortfalls++;
                         FinanceReconciliationDiff::query()->updateOrCreate(
                             [
                                 'check_type' => 'unallocated_debit',
@@ -451,21 +393,10 @@ final class RebuildFinanceLedgerCommand extends Command
                 }
             }
         }
-
-        $this->phase($runNo, 'lots', FinanceMigrationRun::STATUS_PASSED, [
-            'lots' => $lots,
-            'consumptions' => $consumptions,
-            'shortfall_entries' => $shortfalls,
-            'duration_ms' => (int) ((microtime(true) - $started) * 1000),
-        ]);
     }
 
-    private function calibrate(string $runNo, FinanceLedgerService $ledger, FundingLotAllocator $allocator): void
+    private function calibrate(FinanceLedgerService $ledger, FundingLotAllocator $allocator): void
     {
-        $started = microtime(true);
-        $users = 0;
-        $total = 0;
-
         $accounts = FinanceAccount::query()->where('currency', 'CNY')->get();
 
         foreach ($accounts as $account) {
@@ -500,16 +431,7 @@ final class RebuildFinanceLedgerCommand extends Command
                 null,
                 date('Y-m-d H:i:s'),
             );
-
-            $users++;
-            $total += $diff;
         }
-
-        $this->phase($runNo, 'calibration', FinanceMigrationRun::STATUS_PASSED, [
-            'users' => $users,
-            'total_amount' => Money::formatCents($total),
-            'duration_ms' => (int) ((microtime(true) - $started) * 1000),
-        ]);
     }
 
     /**
@@ -519,11 +441,9 @@ final class RebuildFinanceLedgerCommand extends Command
      * 漏掉这步会让 user_accounts.cash_balance 停留在旧值——
      * 代码回滚场景下旧内核将读到未校准的余额（资金口径错误）。
      */
-    private function syncHotStandbyAfterRebuild(string $runNo): void
+    private function syncHotStandbyAfterRebuild(): void
     {
         if (! (bool) config('finance.hot_standby', true)) {
-            $this->phase($runNo, 'hot_standby_sync', FinanceMigrationRun::STATUS_SKIPPED, ['reason' => 'hot_standby=false']);
-
             return;
         }
 
@@ -545,18 +465,11 @@ final class RebuildFinanceLedgerCommand extends Command
             'UPDATE user_accounts ua JOIN finance_accounts fa ON fa.user_id = ua.user_id '
             ."SET ua.cash_balance = fa.available_amount, ua.updated_at = '{$now}'"
         );
-
-        $this->phase($runNo, 'hot_standby_sync', FinanceMigrationRun::STATUS_PASSED, [
-            'users' => DB::table('finance_accounts')->count(),
-        ]);
     }
 
-    private function copyRefunds(string $runNo, int $chunk): void
+    private function copyRefunds(int $chunk): void
     {
-        $started = microtime(true);
-        $copied = 0;
-
-        DB::table('refunds')->orderBy('id')->chunkById($chunk, function ($rows) use (&$copied): void {
+        DB::table('refunds')->orderBy('id')->chunkById($chunk, function ($rows): void {
             $insert = [];
             foreach ($rows as $row) {
                 $isMark = (string) ($row->refund_method ?? '') === 'manual_mark';
@@ -582,16 +495,10 @@ final class RebuildFinanceLedgerCommand extends Command
                     'created_at' => $row->created_at,
                     'updated_at' => $row->updated_at,
                 ];
-                $copied++;
             }
 
             DB::table('finance_refunds')->insert($insert);
         });
-
-        $this->phase($runNo, 'refunds', FinanceMigrationRun::STATUS_PASSED, [
-            'copied' => $copied,
-            'duration_ms' => (int) ((microtime(true) - $started) * 1000),
-        ]);
     }
 
     /**
@@ -781,26 +688,5 @@ final class RebuildFinanceLedgerCommand extends Command
         DB::table('finance_refunds')->delete();
         DB::table('finance_accounts')->delete();
         FinanceOperation::query()->where('scope', 'like', 'rebuild%')->delete();
-    }
-
-    /**
-     * @param  array<string, mixed>  $stats
-     */
-    private function phase(string $runNo, string $phase, string $status, array $stats): void
-    {
-        // 校准阶段与台账事件类型同名，文案直接复用常量类，保证与流水页标签一致
-        $phaseMessage = $phase === FinanceLedgerEventType::CALIBRATION
-            ? FinanceLedgerEventType::label($phase)
-            : (self::PHASE_LABELS[$phase] ?? $phase);
-
-        FinanceMigrationRun::query()->create([
-            'run_no' => $runNo,
-            'phase' => $phase,
-            'status' => $status,
-            'stats' => $stats,
-            'message' => $phaseMessage,
-            'started_at' => date('Y-m-d H:i:s'),
-            'finished_at' => date('Y-m-d H:i:s'),
-        ]);
     }
 }

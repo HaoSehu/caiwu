@@ -29,7 +29,6 @@ class SupplierPluginBinding extends Model
         'last_check_error',
         'created_by',
         'updated_by',
-        'backfill_batch_id',
     ];
 
     protected function casts(): array

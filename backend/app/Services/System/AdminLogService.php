@@ -2019,8 +2019,8 @@ class AdminLogService
 
     public function getActivityLogs(array $filters, int $page, int $perPage, bool $withSummary = true): array
     {
-        // activity_logs 是唯一在线真源：表不存在或无数据时直接返回空页，
-        // 不再回退 operation_logs（隐式切源会让同一页面混用两套数据）。
+        // activity_logs 是唯一在线真源：表不存在或无数据时直接返回空页。
+        // operation_logs 已于 2026-10-25 删除，不存在可回退的旧表。
         if (! SchemaMetadataCache::hasTable('activity_logs')) {
             return $this->buildPaginatorPayload($this->emptyPaginator($perPage));
         }

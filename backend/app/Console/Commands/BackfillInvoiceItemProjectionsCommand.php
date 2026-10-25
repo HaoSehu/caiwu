@@ -102,7 +102,6 @@ class BackfillInvoiceItemProjectionsCommand extends Command
                     try {
                         $outcome = DB::transaction(function () use ($invoiceId, $invoiceService): string {
                             $lockedInvoice = Invoice::query()
-                                ->withTrashed()
                                 ->lockForUpdate()
                                 ->find($invoiceId);
 
@@ -158,7 +157,6 @@ class BackfillInvoiceItemProjectionsCommand extends Command
     private function candidateQuery(array $invoiceIds): Builder
     {
         return Invoice::query()
-            ->withTrashed()
             ->when($invoiceIds !== [], static fn (Builder $query): Builder => $query->whereIn('id', $invoiceIds))
             ->whereDoesntHave('items');
     }

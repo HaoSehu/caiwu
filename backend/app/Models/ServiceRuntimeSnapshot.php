@@ -20,7 +20,6 @@ class ServiceRuntimeSnapshot extends Model
         'metrics_json',
         'snapshot_json',
         'synced_at',
-        'backfill_batch_id',
     ];
 
     protected function casts(): array

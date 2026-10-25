@@ -148,7 +148,6 @@ class AdminFinanceListQueryTest extends TestCase
             '--ignore-table=idc_test.activity_logs',
             '--ignore-table=idc_test.integration_plugin_runtime_logs',
             '--ignore-table=idc_test.gateway_logs',
-            '--ignore-table=idc_test.operation_logs',
             '--ignore-table=idc_test.schedule_run_logs',
             '--ignore-table=idc_test.schedule_task_runs',
         ], $options);

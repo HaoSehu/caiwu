@@ -24,7 +24,6 @@ class ServiceUpstreamBinding extends Model
         'status_snapshot',
         'last_synced_at',
         'last_sync_error',
-        'backfill_batch_id',
     ];
 
     protected function casts(): array

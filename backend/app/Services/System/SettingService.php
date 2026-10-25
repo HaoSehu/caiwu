@@ -4,7 +4,6 @@ namespace App\Services\System;
 
 use App\Exceptions\BusinessException;
 use App\Models\Setting;
-use App\Models\SystemSetting;
 use App\Models\ThirdProductGroup;
 use App\Support\AutomationScheduleExpression;
 use App\Support\SiteHomeCacheVersion;
@@ -150,7 +149,7 @@ class SettingService
             ->reject(fn ($setting, string $key) => $this->isPluginSettingKey($group, $key))
             ->reject(fn ($setting, string $key) => $this->isNotificationTemplateSettingKey($group, $key))
             ->reject(fn ($setting, string $key) => $this->isUnsupportedLogArchiveSettingKey($group, $key))
-            ->map(function (SystemSetting $setting) use ($group, $automationConfig): array {
+            ->map(function (Setting $setting) use ($group, $automationConfig): array {
                 $key = (string) ($setting->item_key ?? '');
                 $shouldNormalizeScheduleValue = str_ends_with($key, '_schedule_mode')
                     || str_ends_with($key, '_schedule_time');
@@ -433,14 +432,14 @@ class SettingService
     }
 
     /**
-     * @return Collection<string, SystemSetting>
+     * @return Collection<string, Setting>
      */
     private function getStoredSettings(string $group): Collection
     {
-        return SystemSetting::query()
+        return Setting::query()
             ->where('group_key', $group)
             ->get()
-            ->keyBy(fn (SystemSetting $setting) => (string) $setting->item_key);
+            ->keyBy(fn (Setting $setting) => (string) $setting->item_key);
     }
 
     /**
@@ -470,7 +469,7 @@ class SettingService
      * 将配置文件中的默认值首次写入数据库，后续统一走数据库配置。
      *
      * @param  array<string, mixed>  $fallbackSettingMap
-     * @param  Collection<string, SystemSetting>  $storedSettings
+     * @param  Collection<string, Setting>  $storedSettings
      */
     private function syncFallbackSettingsToDatabase(string $group, array $fallbackSettingMap, Collection $storedSettings): void
     {
@@ -608,7 +607,7 @@ class SettingService
             return;
         }
 
-        SystemSetting::query()
+        Setting::query()
             ->where('group_key', trim($group))
             ->whereIn('item_key', $keys)
             ->delete();

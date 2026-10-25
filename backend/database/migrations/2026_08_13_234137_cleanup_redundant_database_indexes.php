@@ -52,9 +52,13 @@ return new class extends Migration
     {
         // 结构批回滚：恢复被删除的索引。删除语句在 up 中按需执行，
         // 这里用存在性检查避免重建已存在的索引。
-        Schema::table('operation_logs', function (Blueprint $table): void {
-            $table->index(['user_id', 'user_type'], 'operation_logs_user_id_user_type_index');
-        });
+        // operation_logs 已于 2026_10_25_110000 删除且 down() 不重建表，
+        // 故此处必须守卫：回滚跨过该批次时不能因表不存在而中断整条回滚链。
+        if (Schema::hasTable('operation_logs')) {
+            Schema::table('operation_logs', function (Blueprint $table): void {
+                $table->index(['user_id', 'user_type'], 'operation_logs_user_id_user_type_index');
+            });
+        }
         Schema::table('schedule_run_logs', function (Blueprint $table): void {
             $table->index('task_name', 'schedule_run_logs_task_name_index');
         });

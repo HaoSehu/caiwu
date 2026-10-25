@@ -12,7 +12,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
-use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
  * @property Service|null $service 关联服务（hasOne service）
@@ -22,7 +21,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  */
 class Order extends Model
 {
-    use HandlesProductSnapshot, SoftDeletes;
+    use HandlesProductSnapshot;
 
     public const PROJECTION_TYPE_PROVISIONING = 'provisioning';
 

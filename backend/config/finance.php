@@ -68,12 +68,4 @@ return [
          */
         'allow_fresh' => (bool) env('FINANCE_REBUILD_ALLOW_FRESH', false),
     ],
-
-    'cutover' => [
-        /*
-         * 切换窗口收件箱：窗口内为 true 时，支付回调只落 finance_cutover_inbox，
-         * 解除维护后由 finance:replay-cutover-inbox 重放。平时保持 false。
-         */
-        'inbox_enabled' => (bool) env('FINANCE_CUTOVER_INBOX', false),
-    ],
 ];

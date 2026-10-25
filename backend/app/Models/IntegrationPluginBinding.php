@@ -25,7 +25,6 @@ class IntegrationPluginBinding extends Model
         'runtime_policy_json',
         'created_by',
         'updated_by',
-        'backfill_batch_id',
     ];
 
     protected function casts(): array

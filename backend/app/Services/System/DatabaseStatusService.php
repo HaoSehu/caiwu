@@ -48,7 +48,6 @@ class DatabaseStatusService
         'activity_logs',
         'integration_plugin_runtime_logs',
         'gateway_logs',
-        'operation_logs',
         'schedule_run_logs',
         'schedule_task_runs',
     ];

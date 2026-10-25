@@ -389,7 +389,6 @@ class DatabaseEngineeringService
             'gateway_logs.invoice_id' => $candidate('invoices', 'SET NULL', '网关审计日志保留，账单删除后清空引用'),
             'gateway_logs.trace_id' => $snapshot('trace_id 是链路追踪标识，不是关系字段'),
             'integration_plugin_bindings.bindable_id' => $snapshot('bindable_type/bindable_id 是多态插件绑定对象'),
-            'integration_plugin_bindings.backfill_batch_id' => $snapshot('回填批次号是迁移追踪标识，不对应表主键'),
             'integration_plugin_runtime_logs.trace_id' => $snapshot('trace_id 是链路追踪标识，不是关系字段'),
             'integration_plugin_runtime_logs.binding_id' => $snapshot('运行日志里的绑定 ID 是历史执行快照，允许绑定已删除'),
             'integration_plugin_runtime_logs.bindable_id' => $snapshot('bindable_type/bindable_id 是多态插件绑定对象快照'),
@@ -405,8 +404,6 @@ class DatabaseEngineeringService
             'notice_reads.user_id' => $candidate('users', 'CASCADE', '阅读记录随用户删除清理'),
             'notice_reads.article_id' => $candidate('content_articles', 'CASCADE', '阅读记录随文章删除清理'),
             'notification_templates.provider_template_id' => $snapshot('供应商模板 ID 是外部平台标识'),
-            'operation_logs.user_id' => $snapshot('user_type/user_id 是用户、管理员、系统等混合操作者'),
-            'operation_logs.subject_id' => $snapshot('subject_type/subject_id 是多业务对象类型'),
             'orders.user_id' => $candidate('users', 'RESTRICT', '订单作为交易审计记录必须保留用户归属'),
             'orders.product_id' => $candidate('products', 'RESTRICT', '订单快照可保留，但产品引用不应脏写'),
             'orders.service_id' => $candidate('services', 'SET NULL', '订单保留，服务删除后清空引用'),
@@ -418,7 +415,6 @@ class DatabaseEngineeringService
             'payments.trace_id' => $snapshot('trace_id 是链路追踪标识，不是关系字段'),
             'personal_access_tokens.tokenable_id' => $snapshot('tokenable_type/tokenable_id 是 Sanctum 多态令牌关系'),
             'product_upstream_bindings.upstream_product_id' => $snapshot('上游商品 ID 是外部供应商标识'),
-            'product_upstream_bindings.backfill_batch_id' => $snapshot('回填批次号是迁移追踪标识，不对应表主键'),
             'recharge_records.operator_id' => $snapshot('operator_type/operator_id 是多操作者类型快照'),
             'recharge_records.trace_id' => $snapshot('trace_id 是链路追踪标识，不是关系字段'),
             'second_product_groups.first_product_group_id' => $candidate('first_product_groups', 'RESTRICT', '二级分组必须归属一个一级分组'),
@@ -436,17 +432,12 @@ class DatabaseEngineeringService
             'referral_withdrawals.trace_id' => $snapshot('trace_id 是链路追踪标识，不是关系字段'),
             'refunds.operator_id' => $snapshot('operator_type/operator_id 是多操作者类型快照'),
             'refunds.trace_id' => $snapshot('trace_id 是链路追踪标识，不是关系字段'),
-            'service_connection_snapshots.backfill_batch_id' => $snapshot('回填批次号是迁移追踪标识，不对应表主键'),
             'service_provision_attempts.trace_id' => $snapshot('trace_id 是链路追踪标识，不是关系字段'),
-            'service_provision_attempts.backfill_batch_id' => $snapshot('回填批次号是迁移追踪标识，不对应表主键'),
-            'service_runtime_snapshots.backfill_batch_id' => $snapshot('回填批次号是迁移追踪标识，不对应表主键'),
             'service_upstream_bindings.upstream_service_id' => $snapshot('上游服务 ID 是外部供应商标识'),
             'service_upstream_bindings.upstream_account_id' => $snapshot('上游账号 ID 是外部供应商标识'),
-            'service_upstream_bindings.backfill_batch_id' => $snapshot('回填批次号是迁移追踪标识，不对应表主键'),
             'services.order_id' => $candidate('orders', 'SET NULL', '服务保留，内部订单删除后清空引用'),
             'services.trace_id' => $snapshot('trace_id 是链路追踪标识，不是关系字段'),
             'sessions.user_id' => $candidate('users', 'CASCADE', '会话随用户删除清理'),
-            'supplier_plugin_bindings.backfill_batch_id' => $snapshot('回填批次号是迁移追踪标识，不对应表主键'),
             'third_product_groups.second_product_group_id' => $candidate('second_product_groups', 'RESTRICT', '三级分组必须归属一个二级分组'),
             'tickets.service_id' => $candidate('services', 'SET NULL', '工单可在服务删除后保留历史记录'),
             'tickets.assignee_id' => $candidate('admin_users', 'SET NULL', '负责人删除后保留工单并清空负责人'),
@@ -550,7 +541,6 @@ class DatabaseEngineeringService
             'payment_callbacks',
             'user_accounts',
             'ticket_replies',
-            'operation_logs',
             'message_logs',
         ];
 
@@ -560,7 +550,7 @@ class DatabaseEngineeringService
                 index_name AS index_name
             FROM information_schema.statistics
             WHERE table_schema = DATABASE()
-              AND table_name IN ('services','invoices','payments','invoice_items','payment_callbacks','user_accounts','ticket_replies','operation_logs','message_logs')
+              AND table_name IN ('services','invoices','payments','invoice_items','payment_callbacks','user_accounts','ticket_replies','message_logs')
             ORDER BY table_name, index_name
         "));
 

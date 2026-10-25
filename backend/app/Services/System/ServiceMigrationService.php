@@ -669,49 +669,6 @@ class ServiceMigrationService
     /**
      * @return array<int, array<string, mixed>>
      */
-    public function deriveServiceOperationLogPayloads(): array
-    {
-        $serviceMap = $this->targetServiceInstanceMapByLegacyServiceId();
-        $payloads = [];
-
-        foreach ($this->sourceTableRows('operation_logs') as $log) {
-            $serviceInstanceId = $this->resolveTargetServiceInstanceIdForOperationLog($log, $serviceMap);
-            if ($serviceInstanceId === null) {
-                continue;
-            }
-
-            $operationType = $this->normalizeOperationType($log['action'] ?? null);
-            if ($operationType === null) {
-                continue;
-            }
-
-            $context = $this->decodeJsonArray($log['context'] ?? null);
-            $executedAt = $this->normalizeDateTimeString($log['created_at'] ?? null);
-            $payloads[] = [
-                'service_instance_id' => $serviceInstanceId,
-                'operation_type' => $operationType,
-                'request_payload_json' => $this->encodeJson($context),
-                'response_payload_json' => null,
-                'result_status' => $this->resolveOperationResultStatus($context),
-                'provider_request_id' => $this->normalizeNullableString(
-                    $context['request_id'] ?? $context['provider_request_id'] ?? null
-                ),
-                'error_message' => $this->normalizeNullableString($context['error'] ?? $context['error_message'] ?? null),
-                'operator_type' => $this->normalizeOperatorType($log['user_type'] ?? null),
-                'operator_id' => isset($log['user_id']) && (int) $log['user_id'] > 0 ? (int) $log['user_id'] : null,
-                'trace_id' => $this->extractTraceId($context),
-                'executed_at' => $executedAt,
-                'created_at' => $executedAt,
-                'updated_at' => $executedAt,
-            ];
-        }
-
-        return $payloads;
-    }
-
-    /**
-     * @return array<int, array<string, mixed>>
-     */
     public function deriveServiceRemoteSnapshotPayloads(): array
     {
         $serviceMap = $this->targetServiceInstanceMapByLegacyServiceId();
@@ -951,45 +908,6 @@ class ServiceMigrationService
             'close', 'closed' => 'close',
             default => null,
         };
-    }
-
-    private function normalizeOperationType(mixed $value): ?string
-    {
-        $normalized = trim(strtolower((string) ($value ?? '')));
-        if ($normalized === '') {
-            return null;
-        }
-
-        return match (true) {
-            str_contains($normalized, 'provision') => 'provision',
-            str_contains($normalized, 'suspend') => 'suspend',
-            str_contains($normalized, 'terminate') => 'terminate',
-            str_contains($normalized, 'renew') => 'renew',
-            str_contains($normalized, 'vnc') => 'vnc',
-            str_contains($normalized, 'reboot') => 'reboot',
-            str_contains($normalized, 'reinstall') => 'reinstall',
-            str_contains($normalized, 'bandwidth') => 'bandwidth',
-            str_contains($normalized, 'service') => 'service_action',
-            default => null,
-        };
-    }
-
-    /**
-     * @param  array<string, mixed>  $context
-     */
-    private function resolveOperationResultStatus(array $context): string
-    {
-        $status = $context['status'] ?? null;
-        if (is_numeric($status)) {
-            return (int) $status >= 400 ? 'failed' : 'success';
-        }
-
-        $normalized = trim(strtolower((string) $status));
-        if ($normalized === '') {
-            return 'success';
-        }
-
-        return in_array($normalized, ['fail', 'failed', 'error'], true) ? 'failed' : 'success';
     }
 
     private function normalizeOperatorType(mixed $value): ?string
