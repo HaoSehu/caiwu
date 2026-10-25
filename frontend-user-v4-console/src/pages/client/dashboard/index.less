@@ -117,6 +117,17 @@
   margin-top: var(--td-comp-margin-xs);
 }
 
+// 分区骨架：首屏先渲染页面壳层与占位，数据到达后逐块替换（见 index.vue 的 *Ready 标记）。
+.metric-card__skeleton {
+  margin-top: var(--td-comp-margin-xs);
+}
+
+.product-tile-skeleton {
+  padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-m);
+  border: thin solid var(--td-component-stroke);
+  border-radius: var(--td-radius-medium);
+}
+
 .product-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

@@ -268,10 +268,6 @@ function resolveManualChunk(id: string) {
     return 'vendor-vue';
   }
 
-  if (normalized.includes('/tdesign-vue-next/') || normalized.includes('/tdesign-icons-vue-next/')) {
-    return 'vendor-tdesign';
-  }
-
   if (normalized.includes('/qrcode.vue/')) {
     return 'vendor-qrcode';
   }

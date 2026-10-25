@@ -1,10 +1,21 @@
 <template>
   <section class="client-dashboard">
-    <data-state v-if="loadError && !loading" error error-text="控制台数据加载失败，请重试" @retry="loadDashboard" />
-    <loading-state v-else :loading="loading" text="数据加载中…">
+    <data-state v-if="loadError" error error-text="控制台数据加载失败，请重试" @retry="loadDashboard" />
+    <template v-else>
       <div class="summary-grid">
         <t-card class="account-card dashboard-card" :bordered="false">
-          <div class="account-card__user">
+          <div v-if="!profileReady" class="account-card__user" aria-busy="true">
+            <t-skeleton theme="avatar" />
+            <div class="account-card__main">
+              <t-skeleton
+                :row-col="[
+                  { width: '9rem', height: '1.5rem' },
+                  { width: '12rem', height: '1rem' },
+                ]"
+              />
+            </div>
+          </div>
+          <div v-else class="account-card__user">
             <t-avatar :image="avatarUrl || undefined" size="large">{{ avatarText }}</t-avatar>
             <div class="account-card__main">
               <h2>{{ greetingText }}，{{ displayName }}</h2>
@@ -43,10 +54,20 @@
           :aria-label="`${item.label}：${item.value}，${item.note}`"
         >
           <div class="metric-card__label">{{ item.label }}</div>
-          <div class="metric-card__value" :class="{ 'is-warning': item.warning }">
-            {{ item.value }}
-          </div>
-          <div class="metric-card__note">{{ item.note }}</div>
+          <t-skeleton
+            v-if="!summaryReady"
+            class="metric-card__skeleton"
+            :row-col="[
+              { width: '60%', height: '1.75rem' },
+              { width: '85%', height: '1rem' },
+            ]"
+          />
+          <template v-else>
+            <div class="metric-card__value" :class="{ 'is-warning': item.warning }">
+              {{ item.value }}
+            </div>
+            <div class="metric-card__note">{{ item.note }}</div>
+          </template>
         </t-card>
       </div>
 
@@ -58,7 +79,10 @@
               <t-button theme="primary" variant="text" @click="router.push('/client/services')">管理全部</t-button>
             </template>
 
-            <div class="product-grid">
+            <div v-if="!productsReady" class="product-grid" aria-busy="true">
+              <t-skeleton v-for="placeholder in 6" :key="placeholder" class="product-tile-skeleton" theme="paragraph" />
+            </div>
+            <div v-else class="product-grid">
               <router-link
                 v-for="item in productCards"
                 :key="item.key"
@@ -165,7 +189,10 @@
               </t-button>
             </template>
 
-            <t-tabs v-model="activeNoticeTab" class="message-tabs">
+            <div v-if="!messagesReady" class="message-list" aria-busy="true">
+              <t-skeleton v-for="placeholder in 3" :key="placeholder" theme="text" />
+            </div>
+            <t-tabs v-else v-model="activeNoticeTab" class="message-tabs">
               <t-tab-panel value="notice" label="新闻公告">
                 <div v-if="recentNotices.length" class="message-list">
                   <router-link
@@ -201,7 +228,10 @@
         <aside class="dashboard-aside">
           <t-card class="dashboard-card" :bordered="false">
             <template #title>待办事项</template>
-            <div class="todo-list">
+            <div v-if="!todosReady" class="todo-list" aria-busy="true">
+              <t-skeleton v-for="placeholder in 4" :key="placeholder" theme="text" />
+            </div>
+            <div v-else class="todo-list">
               <router-link
                 v-for="item in todoItems"
                 :key="item.key"
@@ -261,12 +291,11 @@
           </t-card>
         </aside>
       </div>
-    </loading-state>
+    </template>
   </section>
 </template>
 <script setup lang="ts">
 import DataState from '@caiwu/shared/user-v3/components/DataState.vue';
-import LoadingState from '@caiwu/shared/user-v3/components/LoadingState.vue';
 import {
   CouponIcon,
   DashboardIcon,
@@ -333,8 +362,13 @@ const {
   loadSecondaryData,
 } = useDashboardSecondary(fetchUnreadCount);
 
-const loading = ref(false);
 const loadError = ref(false);
+// 分区就绪标记：首屏不再等最慢接口，各块拿到数据即可独立渲染。
+const profileReady = ref(false);
+const summaryReady = ref(false);
+const productsReady = ref(false);
+const messagesReady = ref(false);
+const todosReady = ref(false);
 const activeNoticeTab = ref<'notice' | 'help'>('notice');
 const recentNotices = ref<ContentArticleRecord[]>([]);
 const recentTickets = ref<TicketRecord[]>([]);
@@ -672,12 +706,22 @@ const quickLinks = [
   { label: '推广大使', path: '/client/referral', icon: GiftIcon },
 ];
 
+function resetSectionReady() {
+  profileReady.value = false;
+  summaryReady.value = false;
+  productsReady.value = false;
+  messagesReady.value = false;
+  todosReady.value = false;
+}
+
 async function loadDashboard() {
-  loading.value = true;
   loadError.value = false;
+  resetSectionReady();
 
   try {
-    await userStore.getUserInfo().catch(() => {});
+    // 守卫已完成水合时直接复用，避免同一会话重复请求 /v2/client/auth/info（首屏串行阻塞点之一）。
+    await userStore.ensureUserInfo().catch(() => {});
+    profileReady.value = true;
 
     if (!siteBranding.siteName) {
       void siteBranding.fetchSiteConfig().catch(() => {});
@@ -703,13 +747,15 @@ async function loadDashboard() {
       throw firstError instanceof Error ? firstError : new Error('控制台数据加载失败');
     }
 
-    // 处理首屏数据
+    // 处理首屏数据：各分区拿到结果立即渲染，不再等整批结束。
     if (noticesRes.status === 'fulfilled') {
       recentNotices.value = resolvePagedList(noticesRes.value.data);
     }
+    messagesReady.value = true;
     if (ticketsRes.status === 'fulfilled') {
       recentTickets.value = resolvePagedList(ticketsRes.value.data);
     }
+    todosReady.value = true;
     if (financeRes.status === 'fulfilled') {
       financeSummary.value = {
         ...financeSummary.value,
@@ -722,6 +768,7 @@ async function loadDashboard() {
         ...(couponsRes.value.data || {}),
       };
     }
+    summaryReady.value = true;
     if (serviceOverviewRes.status === 'fulfilled') {
       serviceOverview.value = serviceOverviewRes.value.data || {
         total: 0,
@@ -730,6 +777,7 @@ async function loadDashboard() {
         catalog_types: [],
       };
     }
+    productsReady.value = true;
     if (referralRes.status === 'fulfilled') {
       const data: ReferralOverviewPayload = referralRes.value.data || {};
       const availableCoupons = Number(data.available_coupons || 0);
@@ -739,12 +787,11 @@ async function loadDashboard() {
     }
 
     // 首屏核心数据加载完成（总览卡片 + 产品概览 + 待办项）
-    loading.value = false;
-
     void loadSecondaryData();
   } catch (error: unknown) {
-    loading.value = false;
     loadError.value = true;
+    // 失败态接管整页；重试时由 loadDashboard 开头的 resetSectionReady 恢复骨架，这里先复原避免闪回旧数据。
+    resetSectionReady();
     if (!isHandledError(error)) {
       MessagePlugin.error(getErrorMessage(error, '控制台数据加载失败'));
     }

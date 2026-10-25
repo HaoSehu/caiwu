@@ -21,6 +21,9 @@ function normalizeUserInfo(raw: Record<string, unknown> = {}): ClientUserInfo {
   };
 }
 
+// 在途的资料请求：并发调用 ensureUserInfo 时复用它，避免重复打 /v2/client/auth/info。
+let pendingUserInfoRequest: Promise<ClientUserInfo> | null = null;
+
 export const useUserStore = defineStore('user', {
   state: () => ({
     token: getClientToken() || '',
@@ -44,6 +47,7 @@ export const useUserStore = defineStore('user', {
       this.token = '';
       this.profileHydrated = false;
       this.userInfo = { ...initUserInfo };
+      pendingUserInfoRequest = null;
     },
     async clientLogin(loginData: Record<string, unknown>) {
       const res = await clientAuthApi.login(loginData);
@@ -100,6 +104,21 @@ export const useUserStore = defineStore('user', {
       this.syncTokenFromSession();
       this.profileHydrated = true;
       return this.userInfo;
+    },
+    // 页面级复用入口：守卫已完成水合时直接返回本地资料，未水合时复用同一个在途请求。
+    // 与 getUserInfo 的区别是「不强制刷新」，需要最新资料的场景仍应调用 getUserInfo。
+    async ensureUserInfo() {
+      if (this.profileHydrated) {
+        return this.userInfo;
+      }
+
+      if (!pendingUserInfoRequest) {
+        pendingUserInfoRequest = this.getUserInfo().finally(() => {
+          pendingUserInfoRequest = null;
+        });
+      }
+
+      return pendingUserInfoRequest;
     },
     async logout() {
       try {
