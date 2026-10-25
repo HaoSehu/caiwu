@@ -668,6 +668,7 @@ CREATE TABLE `gateway_logs` (
   KEY `gateway_logs_plugin_created_idx` (`plugin_id`,`created_at`),
   KEY `gateway_logs_gateway_key_idx` (`gateway_key`,`created_at`),
   KEY `gateway_logs_trace_idx` (`trace_id`),
+  KEY `gateway_logs_plugin_key_created_idx` (`plugin_key`,`created_at`),
   CONSTRAINT `fk_stage2_gateway_logs_invoice_id` FOREIGN KEY (`invoice_id`) REFERENCES `invoices` (`id`) ON DELETE SET NULL,
   CONSTRAINT `gateway_logs_plugin_fk` FOREIGN KEY (`plugin_id`) REFERENCES `integration_plugins` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB AUTO_INCREMENT=1000148 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='支付网关日志表，记录每次网关请求响应的交易号、处理结果与错误信息';
@@ -1046,7 +1047,7 @@ CREATE TABLE `migrations` (
   `migration` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `batch` int NOT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=287 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='框架迁移账本表，记录已执行迁移文件名与批次';
+) ENGINE=InnoDB AUTO_INCREMENT=291 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='框架迁移账本表，记录已执行迁移文件名与批次';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `notice_reads`;
@@ -2443,7 +2444,7 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (282,'2026_10_25_11
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (283,'2026_10_25_110300_drop_backfill_trace_columns',147);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (284,'2026_10_25_120000_add_missing_table_comments',148);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (285,'2026_10_25_120100_converge_same_domain_column_types',148);
-INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (286,'2026_10_26_100000_add_plugin_snapshot_columns',149);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (290,'2026_10_26_100000_add_plugin_snapshot_columns',149);
 
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;

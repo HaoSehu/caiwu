@@ -46,6 +46,12 @@ class Payment extends Model
         'order_id',
         'invoice_id', 'gateway',
         'plugin_id', 'gateway_key',
+        /**
+         * 插件身份与通道快照（P-01 / P-02）：插件卸载会置空 plugin_id 并硬删绑定，
+         * 文本快照保证历史支付仍能还原「哪个插件、哪条通道」。
+         */
+        'plugin_key', 'plugin_name',
+        'payment_type', 'option_key', 'option_name',
         'trade_no', 'amount', 'currency', 'status', 'callback_raw', 'paid_at',
         'remark', 'operator', 'trace_id',
     ];
@@ -228,6 +234,13 @@ class Payment extends Model
 
         if (static::paymentColumnExists('gateway_key')) {
             $result[] = 'gateway_key';
+        }
+
+        // 插件与通道快照必须随投影取出，否则调用方只能回退到通用网关名（P-02 / P-05）。
+        foreach (['plugin_id', 'plugin_key', 'plugin_name', 'payment_type', 'option_key', 'option_name'] as $column) {
+            if (SchemaMetadataCache::hasColumn('payments', $column)) {
+                $result[] = $column;
+            }
         }
 
         return array_values(array_unique($result));

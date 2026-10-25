@@ -37,6 +37,8 @@ class FinanceRefund extends Model
         'invoice_id',
         'refund_invoice_id',
         'payment_id',
+        // 原支付单的插件与通道快照（P-08）：退款链路不再回查 payments 也能定位具体插件。
+        'plugin_id', 'plugin_key', 'plugin_name', 'gateway_key', 'payment_type',
         'amount',
         'currency',
         'status',
@@ -58,6 +60,7 @@ class FinanceRefund extends Model
             'invoice_id' => 'integer',
             'refund_invoice_id' => 'integer',
             'payment_id' => 'integer',
+            'plugin_id' => 'integer',
             'amount' => 'decimal:2',
             'status' => 'integer',
             'funds_moved' => 'boolean',

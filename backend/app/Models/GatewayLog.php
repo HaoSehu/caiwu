@@ -13,6 +13,8 @@ class GatewayLog extends Model
     protected $fillable = [
         'gateway',
         'plugin_id',
+        // 插件标识快照（P-10）：plugin_id 会随插件卸载置空，文本快照保留排障依据。
+        'plugin_key',
         'gateway_key',
         'action',
         'out_trade_no',
