@@ -79,7 +79,8 @@ test("390 视口移动轮播圆点可点击切换", async ({ page }) => {
   await expect(dots.first()).not.toHaveClass(/is-active/);
 });
 
-test("小视口(等效高缩放)下结算条作为覆盖层钉在费用栏底部保持可点", async ({
+// @needs-backend：结算条金额与可购买状态来自真实商品/价格接口。
+test("小视口(等效高缩放)下结算条作为覆盖层钉在费用栏底部保持可点 @needs-backend", async ({
   page,
 }) => {
   // 等价于浏览器 120% 缩放后的 CSS 视口：费用栏高度被 100dvh 钳制，

@@ -7,6 +7,8 @@ import {
   gzipSync,
 } from "node:zlib";
 import { defineConfig, loadEnv } from "vite";
+
+import { createApiConnectSrcPlugin } from "../shared/vite/apiConnectSrcPlugin.mjs";
 import vue from "@vitejs/plugin-vue";
 import AutoImport from "unplugin-auto-import/vite";
 import Components from "unplugin-vue-components/vite";
@@ -179,6 +181,7 @@ export default defineConfig(({ mode }) => {
         ],
       }),
       createPrecompressedAssetsPlugin(),
+      createApiConnectSrcPlugin(env),
       {
         // element-plus use-locale 用相对路径静态 import en 语言包作默认 fallback，
         // 站点始终提供 zh-cn locale，用最小 stub 替代完整 en 语言包，消除入口 chunk 死代码。

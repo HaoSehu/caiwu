@@ -2,6 +2,17 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
+  <!-- CSP 放在 head 最前，确保后续资源请求都受约束。meta 方式不支持 frame-ancestors/report-uri/sandbox，
+       点击劫持防护仍需在 nginx 加 X-Frame-Options 与响应头 CSP（见 docs/参考资料/运维/前端Nginx伪静态配置.md）。
+       script-src 必须含 'unsafe-inline'：首屏 LCP 预热脚本（本文件 26-44 行）与 nomodule 老内核提示脚本（本文件 108-116 行）
+       都是内联脚本，静态托管无法用 nonce/hash 替代；这是本页 CSP 的已知弱点，后续若要收紧需先把预热逻辑外移到 /assets 下的独立文件。
+       style-src 必须含 'unsafe-inline'：首屏 splash 样式与 Element Plus 运行时注入样式均为内联。
+       img-src/media-src/connect-src 用 https: 兜底：API 源站由 VITE_API_BASE_URL 配置（值在构建时注入，无法在静态 HTML 里写死），
+       且首页 hero 视频与产品图走该跨域源。 -->
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data: https:; connect-src 'self' https:; media-src 'self' https: blob:; frame-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self'"
+  />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="format-detection" content="telephone=no,email=no,address=no" />
   <meta name="theme-color" content="#165dff" />

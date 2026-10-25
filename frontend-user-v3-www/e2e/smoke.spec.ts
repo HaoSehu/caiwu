@@ -17,14 +17,16 @@ function collectConsoleErrors(page: import("@playwright/test").Page) {
   return errors;
 }
 
-test("首页渲染且无 console error", async ({ page }) => {
+// @needs-backend：首页数据来自真实 /api/v2/site/home，无 mock 时本地未启动后端会 ECONNREFUSED。
+test("首页渲染且无 console error @needs-backend", async ({ page }) => {
   const errors = collectConsoleErrors(page);
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await expect(page.locator(".home-page")).toBeVisible();
   expect(errors).toEqual([]);
 });
 
-test("1024 视口机型规格表可横向滚动且价格列可达", async ({ page }) => {
+// @needs-backend：机型规格表与价格来自真实商品接口。
+test("1024 视口机型规格表可横向滚动且价格列可达 @needs-backend", async ({ page }) => {
   await page.setViewportSize({ width: 1024, height: 800 });
   await page.goto("/products", { waitUntil: "domcontentloaded" });
 
@@ -46,7 +48,8 @@ test("1024 视口机型规格表可横向滚动且价格列可达", async ({ pag
   await expect(price).toBeInViewport();
 });
 
-test("≤768 视口商品页移动抽屉弹出行选", async ({ page }) => {
+// @needs-backend：抽屉行选依赖真实商品规格数据。
+test("≤768 视口商品页移动抽屉弹出行选 @needs-backend", async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 });
   await page.goto("/products", { waitUntil: "domcontentloaded" });
 

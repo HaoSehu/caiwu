@@ -2,6 +2,20 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
+    <!-- CSP 放在 head 最前，确保后续资源请求都受约束。meta 方式不支持 frame-ancestors/report-uri/sandbox，
+         点击劫持防护仍需在 nginx 加 X-Frame-Options 与响应头 CSP（见 docs/参考资料/运维/前端Nginx伪静态配置.md）。
+         script-src 不放 'unsafe-inline'：构建产物只有外链 /assets/*.js，无内联脚本。
+         script-src 必须含 'unsafe-eval'：vue-i18n 9 未做构建期预编译，语言包在运行时用 new Function 编译
+         （src/locales/index.ts 的 createI18n 未配 jit/messageCompiler），去掉后详情页等会抛
+         EvalError 并整页异常；要移除需先引入 @intlify/unplugin-vue-i18n 预编译，属后续优化。
+         script-src 需含 https://tdesign.gtimg.com：TDesign Icon 组件默认 loadDefaultIcons=true 会动态
+         插入 https://tdesign.gtimg.com/icon/0.4.5/fonts/index.js 的 SVG 雪碧图。
+         style-src 必须含 'unsafe-inline'：TDesign 运行时注入样式。
+         img-src/media-src/connect-src 用 https: 兜底：API 源站由 VITE_API_BASE_URL 配置（生产如 https://api.coyjs.cn/api），无法在静态 HTML 里写死。 -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'unsafe-eval' https://tdesign.gtimg.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https:; media-src 'self' https: blob:; frame-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self'"
+    />
     <link rel="icon" href="/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="color-scheme" content="light" />

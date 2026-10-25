@@ -68,17 +68,25 @@ const RECHARGE_RECORDS_RESPONSE = {
   page_size: 20,
 };
 
-const USER_DETAIL_PATH = '**/v2/admin/users/1';
+// 末尾必须带通配：请求层会给 GET 追加 `?_t=` 时间戳防缓存，精确路径匹配不到
+const USER_DETAIL_PATH = '**/v2/admin/users/1*';
 // 选项列表用空数组：裸 [] 在 tsconfig noImplicitAny 下会被推断成 any[]（TS7018）
 const EMPTY_OPTIONS = envelope({ list: [] as Record<string, unknown>[] });
 const RECHARGE_RECORDS_PATH = '**/v2/admin/users/1/recharge-records*';
 
-/** 详情页挂载即拉会员等级与推广大使选项，漏 mock 会落 console error。 */
+/**
+ * 详情页挂载即拉会员等级、推广大使选项与商品树，漏 mock 会落 console error。
+ *
+ * 商品树（coupon-product-groups）来自「新建实例」弹窗里的商品选择器：该组件在 setup 阶段
+ * 就调用 loadTree()，弹窗还没打开请求已经发出（见 components/product-binding-tree-select/index.vue
+ * 与 hooks/useProductBindingTree.ts 的 loadTree）。
+ */
 async function mockUserDetailPage(page: Page) {
   await mockAuthenticatedSession(page);
   await page.route(USER_DETAIL_PATH, (route) => route.fulfill(jsonResponse(envelope(USER_DETAIL_RESPONSE))));
   await page.route('**/v2/admin/member-levels*', (route) => route.fulfill(jsonResponse(EMPTY_OPTIONS)));
   await page.route('**/v2/admin/promotion-ambassadors*', (route) => route.fulfill(jsonResponse(EMPTY_OPTIONS)));
+  await page.route('**/v2/admin/coupon-product-groups**', (route) => route.fulfill(jsonResponse(EMPTY_OPTIONS)));
   await page.route(RECHARGE_RECORDS_PATH, (route) => route.fulfill(jsonResponse(envelope(RECHARGE_RECORDS_RESPONSE))));
 }
 

@@ -10,6 +10,8 @@ import type { ConfigEnv, UserConfig } from 'vite';
 import { loadEnv } from 'vite';
 import svgLoader from 'vite-svg-loader';
 
+import { createApiConnectSrcPlugin } from '../shared/vite/apiConnectSrcPlugin.mjs';
+
 const CWD = process.cwd();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const compressionExtensions = new Set(['.css', '.html', '.js', '.json', '.map', '.mjs', '.svg', '.txt', '.xml']);
@@ -429,6 +431,7 @@ export default ({ mode }: ConfigEnv): UserConfig => {
         resolvers: [createTDesignResolver()],
       }),
       svgLoader(),
+      createApiConnectSrcPlugin(env),
       createIndexNetworkHintsPlugin(assetBase),
       createPrecompressedAssetsPlugin(),
     ],

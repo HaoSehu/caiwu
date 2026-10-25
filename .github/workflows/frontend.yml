@@ -1,6 +1,6 @@
 name: Frontend
 
-# 前端门禁：lint、类型检查、三端构建。只跑 push 到 main 与 pull_request，不自动部署。
+# 前端门禁：lint、类型检查、三端构建；管理端/官网/控制台 e2e 串行执行（均非阻断）。只跑 push 到 main 与 pull_request，不自动部署。
 on:
   push:
     branches: [main]
@@ -34,6 +34,13 @@ jobs:
           npm run test:shared
           npm run test:build-config
 
+      - name: 依赖安全扫描
+        # 与后端 composer audit --no-dev 对齐：只扫会被打进产物的生产依赖，跳过 lint/e2e 等开发工具链。
+        # 阻断：发现漏洞时 npm audit 退出码为 1，流水线直接失败。
+        # 修复方式：npm audit fix（非 --force）后跑三端构建与 e2e。确实无法升级时用 --ignore 并注明原因与复核日期。
+        # 注意：不带 --omit=dev 时会把 eslint/stylus 等开发依赖的告警也算进来，那不是本步骤要守的边界。
+        run: npm audit --omit=dev --audit-level=high
+
       - name: Lint
         run: npm run lint:frontends
 
@@ -42,3 +49,124 @@ jobs:
 
       - name: 构建三端
         run: npm run build:frontends
+
+  # 三端 e2e（Playwright + Chromium）：管理端 → 官网 → 控制台，串行执行。
+  # - 必须串行：三端 e2e 固定占用 127.0.0.1:4173（backend/scripts/e2e_runner.mjs 里 PORT = 4173，
+  #   vite preview 带 --strictPort），同一时间只能跑一端，并发会互抢端口直接失败。
+  #   故用 `needs` 串成单链而非 matrix：matrix + max-parallel 只能限并发数，job 之间的启动顺序
+  #   仍不保证严格排队，端口竞争窗口依然存在；单个 job 内顺序 step 则会让不同端的失败互相掩盖、
+  #   且无法分别重跑。needs 链语义最直白：前一轮结束（成功或失败）才启动下一轮。
+  # - 三端步骤口径一致：checkout → setup-node(22, cache npm) → npm ci → 安装 chromium →
+  #   在对应工作目录跑 npm run test:e2e。
+  # - 非阻断机制：job 级 `continue-on-error: true`。它只保证「该 job 失败不会让整次 Frontend 工作流
+  #   运行判为失败」，不会把这个 job 的 check 结论改写成成功：PR 的 checks 列表里它仍显示为失败。
+  #   因此**不能**据它推断合并一定不被拦截 —— 若分支保护把该 check 设为 required，合并在语义上
+  #   仍会被卡住。真实效果是「仅记录，不阻断工作流」，是否阻断合并取决于仓库分支保护配置（需人工确认）。
+  #   要让它真正阻断合并，就在分支保护里设为 required；要确保不阻断，就不要设为 required，
+  #   而不是依赖 continue-on-error。
+  # - 后端依赖分两种，不要一概而论：
+  #   · 管理端与控制台：接口全部由 page.route() 拦截（见 frontend-admin-v3/e2e/fixtures.ts、
+  #     frontend-user-v4-console/e2e/fixtures.ts），不依赖 Laravel。
+  #   · 官网：frontend-user-v3-www/vite.config.js 的 preview.proxy 把 /api 代理到 127.0.0.1:8000，
+  #     smoke.spec.ts 的首屏/机型表/商品抽屉与 ux-fixes.spec.ts 的结算条用例走真实接口（未 mock），
+  #     本工作流没有起后端，这些用例会因 500 失败。因此官网 e2e 首轮就是红的，这也是它保留
+  #     continue-on-error 的原因之一。要转绿需二选一：补一个后端 service 步骤，或把这些用例改为
+  #     page.route() mock —— 两者都属**需人工确认**项，不要在此臆造服务步骤。
+  admin-e2e:
+    name: 管理端 e2e（非阻断）
+    needs: verify
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    # 兜底超时：e2e-run.mjs 会等 4173 端口就绪（上限 60s），但仍给出 job 级上限避免长时间占用 runner。
+    timeout-minutes: 20
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 安装 Playwright 浏览器
+        # 管理端 playwright.config.ts 只声明 chromium 一个 project，无需装全部内核。
+        run: npx playwright install --with-deps chromium
+
+      - name: 运行管理端 e2e
+        # 该脚本内部：vite build --mode e2e → vite preview(4173) → playwright test → 清理进程。
+        working-directory: frontend-admin-v3
+        run: npm run test:e2e
+
+  www-e2e:
+    name: 官网 e2e（非阻断）
+    # 串行链：verify → admin-e2e → www-e2e → console-e2e，前一个 e2e 结束后才启动下一个，
+    # 保证任何时刻只有一个 vite preview 占用 4173。
+    needs: [verify, admin-e2e]
+    # 显式条件：上游 e2e 失败时 job 结论是 failure，needs 默认会让下游直接 skipped，
+    # 三端 e2e 就会在第一次失败处「断链」，失去「仅记录、不阻断」的意义。
+    # !cancelled() 让官网 e2e 在前序失败后仍继续跑；但仍要求 verify 成功 —— 构建门禁没过时跑 e2e 无意义。
+    if: ${{ !cancelled() && needs.verify.result == 'success' }}
+    runs-on: ubuntu-latest
+    # 首次接入，待稳定后转阻断。与 admin-e2e 口径一致：仅记录，不阻断工作流；
+    # 是否阻断合并取决于分支保护是否把该 check 设为 required（详见上方 continue-on-error 说明）。
+    continue-on-error: true
+    timeout-minutes: 20
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 安装 Playwright 浏览器
+        # 官网 playwright.config.ts 只声明 chromium 一个 project，无需装全部内核。
+        run: npx playwright install --with-deps chromium
+
+      - name: 运行官网 e2e
+        # 该脚本内部：vite build --mode e2e --outDir dist-e2e → vite preview(4173) → playwright test → 清理进程。
+        # CI 无后端服务，排除 @needs-backend 用例（首页/商品详情/结算条等依赖真实接口的用例）；
+        # 本地起后端后可用 npm run test:e2e 全量跑。
+        working-directory: frontend-user-v3-www
+        run: npm run test:e2e -- --grep-invert @needs-backend
+
+  console-e2e:
+    name: 控制台 e2e（非阻断）
+    # 串行链末端：等 www-e2e 结束再启动，避免与官网 e2e 抢 4173。
+    needs: [verify, www-e2e]
+    # 同上：前序 e2e 失败不应中断后续端；verify 未通过则跳过。
+    if: ${{ !cancelled() && needs.verify.result == 'success' }}
+    runs-on: ubuntu-latest
+    # 首次接入，待稳定后转阻断。与 admin-e2e 口径一致：仅记录，不阻断工作流。
+    continue-on-error: true
+    timeout-minutes: 20
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 安装 Playwright 浏览器
+        # 控制台 playwright.config.ts 只声明 chromium 一个 project，无需装全部内核。
+        run: npx playwright install --with-deps chromium
+
+      - name: 运行控制台 e2e
+        # 该脚本内部：vite build --mode e2e --outDir dist-e2e → vite preview(4173) → playwright test → 清理进程。
+        working-directory: frontend-user-v4-console
+        run: npm run test:e2e
