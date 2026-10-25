@@ -29,10 +29,15 @@ router.beforeEach(async (to, from, next) => {
       return;
     }
     try {
-      // 仅在菜单未构建时拉取用户信息，避免每次导航都请求接口
+      // 仅在菜单未构建时准备用户信息，避免每次导航都请求接口
       // （刷新或首次登录后 menuBuilt=false；后续跳转 menuBuilt=true 直接复用缓存）
       if (!permissionStore.menuBuilt || !userStore.userInfo?.name) {
-        await userStore.getUserInfo();
+        // 刷新后 userInfo 已由 pinia 持久化恢复（profileHydrated=true），可直接用缓存权限重建菜单；
+        // 只有资料尚未水合（首次登录、清缓存、换账号）时才补一次 /v2/admin/auth/info。
+        // 这样刷新不再串行等待该接口，同时又保留了「无有效资料必须回源」的兜底。
+        if (!userStore.profileHydrated || !userStore.userInfo?.name) {
+          await userStore.ensureUserInfo();
+        }
         // 管理端路由为静态注册，此处只按权限重建菜单；页面级鉴权由下方 meta.permission 校验承担
         await permissionStore.setupMenus(userStore.userInfo?.permissions || []);
 

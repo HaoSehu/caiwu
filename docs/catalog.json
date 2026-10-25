@@ -2,6 +2,12 @@
     "version": 1,
     "records": [
         {
+            "path": "执行计划/进行中/管理端刷新首屏守卫优化-2026-10-25.md",
+            "status": "active",
+            "summary": "管理端刷新必发 /v2/admin/auth/info 并串行阻塞首屏：user store 增 profileHydrated/profileSyncedAt 与 ensureUserInfo 复用在途请求、persist 用 afterHydrate 标记水合并按 5 分钟 TTL 有界过期，permission.ts 守卫已水合时直接用本地权限同步重建菜单，补 e2e 覆盖刷新不重复请求与过期回源。",
+            "review_by": "2026-11-25"
+        },
+        {
             "path": "执行计划/进行中/管理端服务控制台首屏两段式加载-2026-10-25.md",
             "status": "active",
             "summary": "服务控制台独立页首屏被 ServiceDetailService 的上游四段串行同步（login→getHostDetail→fetchModuleStatusPayload→fetchNatRemoteConnection，实测 3–7.9 秒）阻塞：新增 sync_remote 可选参数，管理端首屏传 0 只读本地快照并在渲染后异步拉 /remote-status 补丁，显式「刷新远程」保留；sync_remote 缺省 true 保持既有调用方行为，补 feature 四例与 e2e 两段式断言。",
