@@ -27,6 +27,12 @@ owner: frontend-platform
 - **列表/详情加载必须做请求竞态防护（requestSeq 模式）**：自增序号 + 响应返回时比对，旧响应不得覆盖新数据（参照 `domains/finance/useRecords.ts`、`domains/services/console/useConsoleTabs.ts`）；懒加载标签以“加载成功”作为已加载置位条件，失败后允许重拉。
 - 用户可见文案使用简体中文，错误提示优先读取后端 `message` 和 `data.errors`，不要展示英文异常或第三方原始错误。
 - 状态展示先复用 `@caiwu/shared`。
+- **状态管理按端独立，不跨端合并同名 store**：`frontend-admin-v3/src/store/modules/` 与 `frontend-user-v4-console/src/store/modules/` 下的同名模块（`permission`、`setting`、`tabs-router`、`user`）分别服务管理端与控制台两种产品形态，**不是重复代码，不做合并**：
+  - `permission.ts`：管理端（419 行）持有 `ADMIN_MENU_GROUPS` 静态菜单组配置，并按权限码（`hasPermissionInList`）过滤路由，因为管理端菜单由权限动态生成；控制台（59 行）只把静态路由表 `homepageRouterList`/`fixedRouterList` 转成菜单，用户端无按钮级权限码，登录态由 `user` store 与路由守卫控制。
+  - `setting.ts`：管理端含品牌色阶生成（`tvision-color`）与设置面板 UI 态；控制台按 `docs/DESIGN.md` §2 只提供浅色模式。
+  - `tabs-router.ts`：管理端带标签数上限（`MAX_TAB_COUNT = 20`）与显式序列化字段；控制台直接 `persist: true`。
+  - `user.ts`：管理端含双因素登录（`mfaRequired` / `challengeToken`）；控制台含验证码登录与资料归一。
+  - 真正需要共享的会话、路由加载与请求能力走 `shared/runtime`（`session`、`routeLoading`、`http/*`），不复制到任一端的 store。
 
 ## 3. `frontend-admin-v3`
 

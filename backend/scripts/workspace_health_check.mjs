@@ -34,6 +34,24 @@ function existingTrackedPaths(pathspec) {
     .filter((trackedPath) => existsSync(path.join(root, trackedPath)));
 }
 
+/**
+ * 判断某路径是否被 .gitignore 忽略。
+ * 被忽略的本地杂物不可能被提交，不属于「误入库」风险，不应让健康检查红灯
+ * （例如根目录 MEMORY.md 由 .gitignore:/MEMORY.md 显式忽略）。
+ */
+function isGitIgnored(relativePath) {
+  try {
+    execFileSync('git', ['check-ignore', '-q', '--', relativePath], {
+      cwd: root,
+      stdio: ['ignore', 'ignore', 'ignore'],
+    });
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 const trackedForbiddenPathspecs = [
   'backend/storage/framework/testing/*.sqlite',
   'frontend-admin-v3/dist/*',
@@ -67,10 +85,15 @@ for (const forbiddenDirectory of [
   }
 }
 
+// 根目录允许的 markdown：项目治理入口 + 社区标准文件。
+// COMMERCIAL_LICENSE.md 被 README.md 相对链接引用，SECURITY.md 是 GitHub 约定位置，
+// 二者均已入库，移动会断链，故此放行。
 const rootAllowedMarkdown = new Set([
   'AGENTS.md',
   'CLAUDE.md',
   'README.md',
+  'COMMERCIAL_LICENSE.md',
+  'SECURITY.md',
 ]);
 
 for (const entry of readdirSync(root)) {
@@ -82,15 +105,15 @@ for (const entry of readdirSync(root)) {
     continue;
   }
 
-  if (stat.isFile() && /\.md$/i.test(entry) && !rootAllowedMarkdown.has(entry)) {
+  if (stat.isFile() && /\.md$/i.test(entry) && !rootAllowedMarkdown.has(entry) && !isGitIgnored(entry)) {
     errors.push(`misplaced root markdown: ${entry}`);
   }
 
-  if (stat.isFile() && /\.sql(\.gz)?$/i.test(entry)) {
+  if (stat.isFile() && /\.sql(\.gz)?$/i.test(entry) && !isGitIgnored(entry)) {
     errors.push(`root sql dump: ${entry}`);
   }
 
-  if (stat.isFile() && /\.log$/i.test(entry)) {
+  if (stat.isFile() && /\.log$/i.test(entry) && !isGitIgnored(entry)) {
     errors.push(`root log file: ${entry}`);
   }
 }
