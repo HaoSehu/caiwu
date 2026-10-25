@@ -1,5 +1,4 @@
 import type { ProviderTypeRecord } from '@/api/supplier';
-import { toUserMessage } from '@/utils/userMessage';
 
 /**
  * Shared utilities for product management pages
@@ -162,12 +161,10 @@ export function formatCount(value: unknown): string {
 }
 
 /**
- * Extract error message from error object
+ * Extract error message from error object.
+ * 复用全局统一实现（含 Laravel 字段级校验错误提取），不要本地重写。
  */
-export function errorMessage(error: unknown, fallback: string): string {
-  if (error instanceof Error && error.message) return toUserMessage(error.message, fallback);
-  return fallback;
-}
+export { errorMessage } from '@/utils/userMessage';
 
 /**
  * Convert unknown value to plain record object

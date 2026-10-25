@@ -696,14 +696,6 @@
               <t-button theme="default" size="small" @click="openServiceUpstreamDialog">上游绑定</t-button>
               <t-button theme="default" size="small" @click="openServicePricingDialog">调价</t-button>
               <t-button theme="default" size="small" @click="openServiceNameDialog">改名称</t-button>
-              <t-button
-                theme="default"
-                size="small"
-                :disabled="!serviceActions.manual_provision"
-                :loading="serviceDrawer.actionLoading === 'manual-provision'"
-                @click="openManualProvisionDialog"
-                >绑定服务</t-button
-              >
               <t-tag v-if="isServiceRefunded" theme="danger" variant="light">已退款</t-tag>
             </div>
           </section>
@@ -780,17 +772,6 @@
           <t-input v-model="resetPasswordForm.password" type="password" placeholder="至少 8 位" />
         </t-form-item>
       </t-form>
-    </t-dialog>
-
-    <t-dialog
-      v-model:visible="manualProvisionVisible"
-      header="绑定服务"
-      width="420px"
-      :confirm-btn="{ content: '确定', loading: serviceDrawer.actionLoading === 'manual-provision' }"
-      @cancel="manualProvisionVisible = false"
-      @confirm="handleManualProvision"
-    >
-      <t-alert theme="info" message="将按当前上游绑定重新提交上游开通，指令下发后可稍后点击「刷新远程」查看结果。" />
     </t-dialog>
 
     <t-dialog
@@ -924,16 +905,14 @@ import {
   INVOICE_STATUS_MAP,
   MANUAL_PAYMENT_METHOD_MAP,
   SERVICE_STATUS_MAP,
-  toLabelMap,
   toSelectOptions,
-  toTagTypeMap,
 } from '@caiwu/shared/statusConfig';
 import dayjs from 'dayjs';
 import { ChevronLeftIcon, FileCopyIcon, SearchIcon } from 'tdesign-icons-vue-next';
 import type { FormInstanceFunctions, FormRule, PageInfo, PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
 import { DialogPlugin } from 'tdesign-vue-next/es/dialog/plugin';
 import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import type { ProductBindingRecord } from '@/api/admin';
@@ -952,6 +931,26 @@ import { errorMessage } from '@/utils/userMessage';
 
 import OrdersTab from './components/OrdersTab.vue';
 import RechargesTab from './components/RechargesTab.vue';
+import { useLoginAs } from './composables/useLoginAs';
+import {
+  buildServiceListItem,
+  createLockedPricingForm,
+  mergeServiceDetail,
+  normalizeServiceDetail,
+} from './serviceDetailModel';
+import {
+  invoiceStatusLabel,
+  invoiceStatusTheme,
+  invoiceTypeLabel,
+  noticeLabel,
+  noticeTheme,
+  priorityLabel,
+  priorityTheme,
+  serviceStatusLabel,
+  serviceStatusTheme,
+  ticketStatusLabel,
+  ticketStatusTheme,
+} from './statusDisplay';
 
 type TabName = 'basic' | 'referral' | 'services' | 'invoices' | 'orders' | 'recharges' | 'tickets' | 'logs' | 'notices';
 type Row = Record<string, any>;
@@ -978,7 +977,6 @@ const pageStateRequestSeq: Record<string, number> = {};
 const detailLoading = ref(false);
 const saveLoading = ref(false);
 const rechargeLoading = ref(false);
-const loginAsLoading = ref(false);
 const VALID_DETAIL_TABS: TabName[] = [
   'basic',
   'referral',
@@ -1017,7 +1015,6 @@ const servicePricingSubmitting = ref(false);
 const serviceNameVisible = ref(false);
 const serviceNameSubmitting = ref(false);
 const resetPasswordVisible = ref(false);
-const manualProvisionVisible = ref(false);
 const editFormRef = ref<FormInstanceFunctions>();
 const rechargeFormRef = ref<FormInstanceFunctions>();
 const addServiceFormRef = ref<FormInstanceFunctions>();
@@ -1100,9 +1097,6 @@ const canLoginAs = computed(() => hasAdminPermission(AdminPermissions.USER_LOGIN
 const canManualInvoice = computed(() => hasAdminPermission(AdminPermissions.INVOICE_MANUAL_ENTRY));
 const ordersTabRef = ref<InstanceType<typeof OrdersTab>>();
 const rechargesTabRef = ref<InstanceType<typeof RechargesTab>>();
-const LOGIN_AS_READY_EVENT = 'caiwu:login-as-ready';
-const LOGIN_AS_CODE_EVENT = 'caiwu:login-as-code';
-const LOGIN_AS_READY_TIMEOUT_MS = 10000;
 const addServiceProductId = ref<number | undefined>();
 const addServiceProductIdArray = computed<(string | number)[]>({
   get: () => (addServiceProductId.value ? [addServiceProductId.value] : []),
@@ -1188,10 +1182,6 @@ const resetPasswordRules: Record<string, FormRule[]> = {
   password: [{ validator: (val) => String(val || '').length >= 8, message: '密码长度至少 8 位', type: 'error' }],
 };
 
-const serviceStatusLabelMap = toLabelMap(SERVICE_STATUS_MAP);
-const serviceStatusTypeMap = toTagTypeMap(SERVICE_STATUS_MAP);
-const invoiceStatusLabelMap = toLabelMap(INVOICE_STATUS_MAP);
-const invoiceStatusTypeMap = toTagTypeMap(INVOICE_STATUS_MAP);
 const serviceStatusOptions = toSelectOptions(SERVICE_STATUS_MAP, false);
 const invoiceStatusOptions = toSelectOptions(INVOICE_STATUS_MAP, false);
 const invoiceTypeOptions = [
@@ -1253,6 +1243,7 @@ const noticeColumns: PrimaryTableCol<TableRowData>[] = [
 ];
 
 const userId = computed(() => String(route.params.id || ''));
+const { loginAsLoading, handleLoginAs } = useLoginAs({ userId, canLoginAs });
 const isVerified = computed(
   () => Number(user.value.is_verified || 0) === 1 || Number(user.value.verification_status || 0) === 2,
 );
@@ -1844,113 +1835,6 @@ function handleDeleteServiceRow(row: Row) {
   });
 }
 
-async function handleLoginAs() {
-  if (!canLoginAs.value) {
-    MessagePlugin.error('当前账号没有代登录权限');
-    return;
-  }
-
-  const popup = window.open('about:blank', '_blank');
-  if (!popup) {
-    MessagePlugin.error('浏览器拦截了代登录窗口，请允许弹窗后重试');
-    return;
-  }
-
-  loginAsLoading.value = true;
-  try {
-    const response = await userApi.loginAs(userId.value);
-    const code = String(response.login_code || '').trim();
-    if (!code) {
-      closeLoginAsPopup(popup);
-      MessagePlugin.error('未获取到代登录凭证');
-      return;
-    }
-
-    const target = resolveLoginAsTarget(response.target_url);
-    if (!target) {
-      closeLoginAsPopup(popup);
-      MessagePlugin.error('客户端代登录地址无效，请检查客户端控制台配置');
-      return;
-    }
-
-    popup.location.replace(target);
-    await waitForLoginAsReady(popup, target);
-    popup.postMessage({ type: LOGIN_AS_CODE_EVENT, code }, new URL(target, window.location.origin).origin);
-    MessagePlugin.success('已打开客户端登录页');
-  } catch (error) {
-    closeLoginAsPopup(popup);
-    MessagePlugin.error(errorMessage(error, '代登录失败'));
-  } finally {
-    loginAsLoading.value = false;
-  }
-}
-
-function closeLoginAsPopup(popup: Window) {
-  if (!popup.closed) {
-    popup.close();
-  }
-}
-
-function resolveLoginAsTarget(targetUrl: string | undefined) {
-  const rawTarget = String(targetUrl || '').trim();
-  if (!rawTarget) return '';
-
-  try {
-    const target = new URL(rawTarget, window.location.origin);
-    if (!['http:', 'https:'].includes(target.protocol)) {
-      return '';
-    }
-    target.pathname = '/client/login-as';
-    target.search = '';
-    target.hash = '';
-    return target.toString();
-  } catch {
-    return '';
-  }
-}
-
-function waitForLoginAsReady(targetWindow: Window, targetUrl: string) {
-  const targetOrigin = new URL(targetUrl, window.location.origin).origin;
-
-  return new Promise<void>((resolve, reject) => {
-    let settled = false;
-    const cleanup = () => {
-      window.clearTimeout(timer);
-      window.removeEventListener('message', handleMessage);
-    };
-    const settle = (fn: () => void) => {
-      if (settled) return;
-      settled = true;
-      cleanup();
-      fn();
-    };
-
-    const timer = window.setTimeout(() => {
-      settle(() => reject(new Error('客户端代登录窗口未完成初始化')));
-    }, LOGIN_AS_READY_TIMEOUT_MS);
-
-    function handleMessage(event: MessageEvent) {
-      if (event.source !== targetWindow || event.origin !== targetOrigin) {
-        return;
-      }
-
-      if (event.data?.type !== LOGIN_AS_READY_EVENT) {
-        return;
-      }
-
-      settle(resolve);
-    }
-
-    window.addEventListener('message', handleMessage);
-
-    // 组件在等待期间卸载时立即摘除监听与定时器，避免悬挂监听；
-    // 同时 reject 让调用方走既有的失败分支，不会对已关闭的窗口继续投递消息。
-    onBeforeUnmount(() => {
-      settle(() => reject(new Error('页面已离开，代登录流程已取消')));
-    });
-  });
-}
-
 async function openServiceDrawer(row: Row) {
   serviceDrawer.visible = true;
   serviceDrawer.loading = true;
@@ -2047,25 +1931,6 @@ async function handleResetServicePassword() {
     await reloadServiceDrawer();
   } catch (error) {
     MessagePlugin.error(errorMessage(error, '密码重置失败'));
-  } finally {
-    serviceDrawer.actionLoading = '';
-  }
-}
-
-function openManualProvisionDialog() {
-  manualProvisionVisible.value = true;
-}
-
-async function handleManualProvision() {
-  if (!serviceDrawer.serviceId) return;
-  serviceDrawer.actionLoading = 'manual-provision';
-  try {
-    await userApi.manualProvisionService(userId.value, serviceDrawer.serviceId);
-    MessagePlugin.success('绑定服务指令已下发');
-    manualProvisionVisible.value = false;
-    await Promise.all([reloadServiceDrawer(), loadServices()]);
-  } catch (error) {
-    MessagePlugin.error(errorMessage(error, '绑定服务失败'));
   } finally {
     serviceDrawer.actionLoading = '';
   }
@@ -2253,99 +2118,12 @@ function serviceName(row: Row) {
     (row.product_id ? `未配置规格 #${row.product_id}` : '-')
   );
 }
-function normalizeServiceDetail(payload: Row = {}) {
-  const empty = {
-    id: 0,
-    name: '',
-    domain: '',
-    status: 0,
-    status_tone: 'default',
-    billing_cycle: '',
-    billing_cycle_label: '',
-    amount: 0,
-    expires_at: '',
-    created_at: '',
-    product: {},
-    order: {},
-    invoice: {},
-    upstream: {},
-    runtime: {},
-    connection: {},
-    actions: { refresh: true, password_reset: false, manual_provision: false, available: [] as string[] },
-    specs: [] as Row[],
-    custom_service_name: '',
-  };
-  return {
-    ...empty,
-    ...payload,
-    product: { ...empty.product, ...(payload.product || {}) },
-    order: { ...empty.order, ...(payload.order || {}) },
-    invoice: { ...empty.invoice, ...(payload.invoice || {}) },
-    upstream: { ...empty.upstream, ...(payload.upstream || {}) },
-    runtime: { ...empty.runtime, ...(payload.runtime || {}) },
-    connection: { ...empty.connection, ...(payload.connection || {}) },
-    actions: { ...empty.actions, ...(payload.actions || {}) },
-    specs: Array.isArray(payload.specs) ? payload.specs : [],
-  };
-}
-function mergeServiceDetail(current: Row = {}, patch: Row = {}) {
-  return normalizeServiceDetail({
-    ...current,
-    ...patch,
-    product: { ...(current.product || {}), ...(patch.product || {}) },
-    order: { ...(current.order || {}), ...(patch.order || {}) },
-    invoice: { ...(current.invoice || {}), ...(patch.invoice || {}) },
-    upstream: { ...(current.upstream || {}), ...(patch.upstream || {}) },
-    runtime: { ...(current.runtime || {}), ...(patch.runtime || {}) },
-    connection: { ...(current.connection || {}), ...(patch.connection || {}) },
-    actions: { ...(current.actions || {}), ...(patch.actions || {}) },
-  });
-}
 function patchServiceListItem(detail: Row = {}) {
-  const normalized = normalizeServiceDetail(detail);
-  const index = services.list.findIndex((item) => Number(item.id) === Number(normalized.id));
-  if (index < 0) return;
-  services.list.splice(index, 1, {
-    ...services.list[index],
-    name: normalized.name,
-    domain: normalized.domain,
-    status: normalized.status,
-    status_tone: normalized.status_tone,
-    amount: normalized.amount,
-    created_at: normalized.created_at,
-    expires_at: normalized.expires_at,
-    billing_cycle_label: normalized.billing_cycle_label,
-    upstream: {
-      ...(services.list[index].upstream || {}),
-      ...(normalized.upstream || {}),
-      dedicated_ip: normalized.connection?.dedicated_ip || normalized.upstream?.dedicated_ip || '',
-    },
-    product: {
-      ...(services.list[index].product || {}),
-      ...(normalized.product || {}),
-    },
-    custom_service_name: normalized.custom_service_name || '',
-  });
+  const target = buildServiceListItem(services.list, detail);
+  if (!target) return;
+  services.list.splice(target.index, 1, target.item);
 }
-function createLockedPricingForm(detail: Row = {}) {
-  const cycles = Array.isArray(detail.renew_pricing_cycles) ? detail.renew_pricing_cycles : [];
-  return cycles.reduce(
-    (result, item) => {
-      const cycle = String(item?.billing_cycle || '').trim();
-      if (!cycle) return result;
-      result[cycle] = {
-        enabled: Boolean(item?.enabled),
-        base_amount: item?.base_amount || null,
-        manual_amount: item?.manual_amount || '',
-      };
-      return result;
-    },
-    {} as Record<
-      string,
-      { enabled: boolean; base_amount?: number | string | null; manual_amount?: number | null | '' }
-    >,
-  );
-}
+
 function productLabel(product: ProductRecord | null | undefined) {
   if (!product) return '';
   return String(
@@ -2404,85 +2182,11 @@ function validateUpstreamPair() {
 function isValidationPass(result: unknown) {
   return result === true || result === undefined;
 }
-function serviceTone(tone: unknown): 'default' | 'success' | 'primary' | 'warning' | 'danger' {
-  const normalized = String(tone || '').toLowerCase();
-  if (['success', 'primary', 'warning', 'danger'].includes(normalized))
-    return normalized as 'success' | 'primary' | 'warning' | 'danger';
-  return 'default';
-}
-function serviceStatusLabel(status: unknown) {
-  return serviceStatusLabelMap[String(status ?? '')] || '-';
-}
-function serviceStatusTheme(status: unknown): 'default' | 'success' | 'primary' | 'warning' | 'danger' {
-  const value = serviceStatusTypeMap[String(status ?? '')] || 'default';
-  return value === 'info' || value === 'purple' ? 'default' : serviceTone(value);
-}
 function verificationText() {
   if (isVerified.value) return user.value.real_name ? `已实名认证 / ${user.value.real_name}` : '已实名认证';
   if (Number(user.value.verification_status) === 3) return '实名认证失败';
   if ([1, 4].includes(Number(user.value.verification_status))) return '待实名认证';
   return '未实名认证';
-}
-function invoiceStatusLabel(status: unknown) {
-  return invoiceStatusLabelMap[String(status ?? '')] || '-';
-}
-function invoiceTypeLabel(type: unknown) {
-  return (
-    (
-      {
-        new: '新购',
-        renew: '续费',
-        recharge: '充值',
-        deduction: '扣款',
-        referral_credit: '推荐奖励',
-        refund: '退款',
-        manual: '手工',
-        upgrade: '附加配置',
-      } as Record<string, string>
-    )[String(type)] || '-'
-  );
-}
-function invoiceStatusTheme(status: unknown): 'default' | 'success' | 'warning' | 'danger' {
-  const value = invoiceStatusTypeMap[String(status ?? '')] || 'default';
-  if (value === 'success' || value === 'warning' || value === 'danger') return value;
-  return 'default';
-}
-function priorityLabel(priority: unknown) {
-  return (
-    (
-      { 1: '低', 2: '中', 3: '高', 4: '紧急', low: '低', medium: '中', high: '高', urgent: '紧急' } as Record<
-        string,
-        string
-      >
-    )[String(priority)] || '-'
-  );
-}
-function priorityTheme(priority: unknown): 'default' | 'warning' | 'danger' {
-  const value = String(priority).toLowerCase();
-  if (['3', 'high', '4', 'urgent'].includes(value)) return 'danger';
-  if (['2', 'medium'].includes(value)) return 'warning';
-  return 'default';
-}
-function ticketStatusLabel(status: unknown) {
-  return ({ 0: '待处理', 1: '用户回复', 2: '客服回复', 3: '已关闭' } as Record<number, string>)[Number(status)] || '-';
-}
-function ticketStatusTheme(status: unknown): 'default' | 'success' | 'warning' {
-  const value = Number(status);
-  if (value === 3) return 'success';
-  if ([0, 1, 2].includes(value)) return 'warning';
-  return 'default';
-}
-function noticeLabel(status: unknown) {
-  return (
-    ({ success: '成功', failed: '失败', pending: '待发送' } as Record<string, string>)[String(status)] ||
-    fieldValue(status)
-  );
-}
-function noticeTheme(status: unknown): 'default' | 'success' | 'warning' | 'danger' {
-  if (status === 'success') return 'success';
-  if (status === 'failed') return 'danger';
-  if (status === 'pending') return 'warning';
-  return 'default';
 }
 function toNumber(value: unknown) {
   const number = Number.parseFloat(String(value ?? 0));

@@ -870,208 +870,45 @@
       </t-form>
     </t-dialog>
 
-    <t-dialog
+    <type-manager-dialog
       v-model:visible="typeManagerDialogVisible"
-      class="type-manager-dialog"
-      header="管理一级分类"
-      width="880px"
-      :footer="false"
-    >
-      <div class="type-manager">
-        <section class="type-manager-editor" :class="{ 'is-editing': editingTypeValue }">
-          <div class="type-manager-editor__head">
-            <div>
-              <strong>{{ editingTypeValue ? '编辑一级分类' : '新建一级分类' }}</strong>
-              <span v-if="editingTypeValue">{{ normalizeBusinessProductType(typeForm.product_type) }}</span>
-            </div>
-          </div>
-
-          <t-form :data="typeForm" label-align="top" class="type-form">
-            <div class="type-form-grid">
-              <t-form-item label="一级分类名称" name="label" required-mark>
-                <t-input v-model="typeForm.label" maxlength="40" placeholder="如 云服务器" />
-              </t-form-item>
-              <t-form-item label="产品类型" name="product_type" required-mark>
-                <t-select v-model="typeForm.product_type" :options="businessProductTypeOptions" />
-              </t-form-item>
-              <t-form-item label="图标" name="icon" class="type-icon-form-item">
-                <div class="type-icon-picker" role="radiogroup" aria-label="选择一级分类图标">
-                  <button
-                    v-for="item in productTypeIconOptions"
-                    :key="item.value"
-                    type="button"
-                    class="type-icon-option"
-                    :class="{ active: normalizedTypeFormIcon === item.value }"
-                    role="radio"
-                    :aria-checked="normalizedTypeFormIcon === item.value"
-                    @click="selectTypeIcon(item.value)"
-                  >
-                    <t-icon :name="item.value" />
-                    <span>{{ item.label }}</span>
-                  </button>
-                </div>
-              </t-form-item>
-              <t-form-item class="type-form-actions">
-                <t-button theme="primary" :loading="typeSubmitting" @click="submitType">
-                  <template #icon><add-icon v-if="!editingTypeValue" /><edit-icon v-else /></template>
-                  {{ editingTypeValue ? '保存' : '新建' }}
-                </t-button>
-                <t-button variant="outline" @click="resetTypeForm">{{
-                  editingTypeValue ? '取消编辑' : '重置'
-                }}</t-button>
-              </t-form-item>
-            </div>
-          </t-form>
-        </section>
-
-        <div class="type-manager-list">
-          <div class="type-manager-list-head">
-            <div>
-              <strong>分类列表</strong>
-              <span
-                >{{ productTypes.length }} 个分类 · {{ typeManagerProductCount }} 个商品 ·
-                {{ typeManagerHiddenCount }} 个隐藏</span
-              >
-            </div>
-            <t-button size="small" variant="outline" :loading="typeLoading" @click="loadProductTypes">
-              <template #icon><refresh-icon /></template>
-              刷新
-            </t-button>
-          </div>
-
-          <div class="type-manager-items">
-            <article
-              v-for="(item, index) in productTypes"
-              :key="item.value"
-              class="type-manager-item"
-              :class="{ 'is-hidden': item.is_hidden, 'is-editing': editingTypeValue === item.value }"
-            >
-              <span class="type-manager-item__order">{{ index + 1 }}</span>
-              <div class="type-manager-item__main">
-                <div class="type-manager-item__title">
-                  <strong>{{ item.label }}</strong>
-                  <t-tag v-if="item.is_hidden" theme="warning" variant="light">隐藏</t-tag>
-                  <t-tag v-if="editingTypeValue === item.value" theme="primary" variant="light">编辑中</t-tag>
-                </div>
-                <div class="type-manager-item__meta">
-                  <span>{{ normalizeBusinessProductType(item.product_type) }}</span>
-                  <span v-if="item.icon" class="type-manager-item__icon-meta">
-                    <t-icon :name="resolveProductTypeIconName(item.icon)" />
-                    {{ productTypeIconDisplayLabel(item.icon) }}
-                  </span>
-                </div>
-              </div>
-              <dl class="type-manager-item__stats">
-                <div>
-                  <dt>商品</dt>
-                  <dd>{{ item.usage_count || 0 }}</dd>
-                </div>
-                <div>
-                  <dt>分组</dt>
-                  <dd>{{ item.group_count || 0 }}</dd>
-                </div>
-              </dl>
-              <div class="type-manager-actions">
-                <div class="type-manager-order-actions">
-                  <t-tooltip content="上移">
-                    <t-button
-                      size="small"
-                      shape="square"
-                      variant="outline"
-                      aria-label="上移一级分类"
-                      :disabled="index === 0 || typeSubmitting"
-                      @click="moveType(item.value, -1)"
-                    >
-                      <template #icon><arrow-up-icon /></template>
-                    </t-button>
-                  </t-tooltip>
-                  <t-tooltip content="下移">
-                    <t-button
-                      size="small"
-                      shape="square"
-                      variant="outline"
-                      aria-label="下移一级分类"
-                      :disabled="index === productTypes.length - 1 || typeSubmitting"
-                      @click="moveType(item.value, 1)"
-                    >
-                      <template #icon><arrow-down-icon /></template>
-                    </t-button>
-                  </t-tooltip>
-                </div>
-                <t-tooltip content="编辑">
-                  <t-button
-                    size="small"
-                    shape="square"
-                    variant="text"
-                    theme="primary"
-                    aria-label="编辑一级分类"
-                    :disabled="typeSubmitting"
-                    @click="editType(item)"
-                  >
-                    <template #icon><edit-icon /></template>
-                  </t-button>
-                </t-tooltip>
-                <t-tooltip :content="item.is_hidden ? '显示' : '隐藏'">
-                  <t-button
-                    size="small"
-                    shape="square"
-                    variant="text"
-                    aria-label="切换一级分类显示状态"
-                    :disabled="typeSubmitting"
-                    @click="toggleTypeHidden(item)"
-                  >
-                    <template #icon><browse-icon v-if="item.is_hidden" /><browse-off-icon v-else /></template>
-                  </t-button>
-                </t-tooltip>
-                <t-tooltip content="删除">
-                  <t-button
-                    size="small"
-                    shape="square"
-                    variant="text"
-                    theme="danger"
-                    aria-label="删除一级分类"
-                    :disabled="typeSubmitting"
-                    @click="deleteType(item)"
-                  >
-                    <template #icon><delete-icon /></template>
-                  </t-button>
-                </t-tooltip>
-              </div>
-            </article>
-          </div>
-          <t-empty v-if="productTypes.length === 0" description="暂无一级分类" />
-        </div>
-        <div class="type-manager-footer">
-          <t-button variant="outline" @click="typeManagerDialogVisible = false">关闭</t-button>
-        </div>
-      </div>
-    </t-dialog>
+      :product-types="productTypes"
+      :loading="typeLoading"
+      :submitting="typeSubmitting"
+      :product-count="typeManagerProductCount"
+      :hidden-count="typeManagerHiddenCount"
+      :submit-type="submitType"
+      :toggle-type-hidden="toggleTypeHidden"
+      :move-type="moveType"
+      :delete-type="deleteType"
+      @refresh="loadProductTypes"
+    />
   </div>
 </template>
 <script setup lang="ts">
-import {
-  AddIcon,
-  ArrowDownIcon,
-  ArrowUpIcon,
-  BrowseIcon,
-  BrowseOffIcon,
-  DeleteIcon,
-  EditIcon,
-  RefreshIcon,
-  SearchIcon,
-  SettingIcon,
-} from 'tdesign-icons-vue-next';
+import { AddIcon, DeleteIcon, RefreshIcon, SearchIcon, SettingIcon } from 'tdesign-icons-vue-next';
 import type { DropdownOption, PageInfo, PrimaryTableCol } from 'tdesign-vue-next';
 import { DialogPlugin } from 'tdesign-vue-next/es/dialog/plugin';
 import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
-import type { ProductCategoryRecord, ProductRecord, ProductTypeRecord } from '@/api/product';
+import type { ProductCategoryRecord, ProductRecord } from '@/api/product';
 import { productApi } from '@/api/product';
-import type { ProviderTypeRecord, SupplierFormField, SupplierRecord } from '@/api/supplier';
-import { supplierApi } from '@/api/supplier';
 
+import {
+  categoryActiveProductCount,
+  categoryDisplayName,
+  categoryParentOptionLabel,
+  categoryTotalProductCount,
+  isProductVisible,
+  normalizeCategoryScopeValue,
+  productSpecDisplayName,
+  productVisibilityLabel,
+  productVisibilityTheme,
+} from '../composables/catalogDisplay';
+import type { ProductConfigOptionRecord } from '../composables/useProductConfigOptions';
+import { serializeConfigOptions, useProductConfigOptions } from '../composables/useProductConfigOptions';
 import {
   errorMessage,
   findProductGroupByKey,
@@ -1080,17 +917,16 @@ import {
   formatMonthlyPrice,
   formatStock,
   isSelectableProductGroup,
-  mergeProviderTypeOptions,
-  normalizeProviderTypeOptions,
   productGroupEffectiveId,
   productGroupLevel,
   productGroupOptionKey,
   productGroupOptionLabel,
   productGroupPayload,
-  providerTypeFallbackLabels,
-  providerTypeLabel,
   toPlainRecord,
 } from '../composables/useProductShared';
+import { normalizeBusinessProductType, useProductTypeManager } from '../composables/useProductTypeManager';
+import { useSupplierBinding } from '../composables/useSupplierBinding';
+import TypeManagerDialog from './TypeManagerDialog.vue';
 
 type ProvisionHostnameMode = 'system' | 'fixed' | 'prefix';
 
@@ -1103,56 +939,20 @@ interface SplitProductPreviewRow {
   action: string;
 }
 
-interface SupplierBatchProduct {
-  id: number;
-  name: string;
-  type_label: string;
-  remote_group_name: string;
-  is_connected: boolean;
-  connected_display_name: string;
-  [key: string]: unknown;
-}
-
 interface CategoryTreeNode {
   item: ProductCategoryRecord;
   children: CategoryTreeNode[];
-}
-
-interface ProductConfigOptionRecord {
-  uid?: string;
-  field: string;
-  name: string;
-  option_name?: string;
-  option_mode: string;
-  parameter?: string;
-  sub?: Array<Record<string, unknown>>;
-  sub_items?: Array<Record<string, unknown>>;
-  required?: boolean;
-  hidden?: boolean;
-  sort_order?: number;
-  [key: string]: unknown;
-}
-
-interface ConfigOptionSubItemFormRow {
-  uid: string;
-  name: string;
-  value: string;
-  monthly_price: string;
-  sort_order: number;
 }
 
 type ProductLifecycleStatus = 'active' | 'deleted' | 'all';
 
 // --- State ---
 const router = useRouter();
-const typeLoading = ref(false);
-const typeSubmitting = ref(false);
 const categoryLoading = ref(false);
 const productLoading = ref(false);
 const productSubmitting = ref(false);
 const productActionLoading = ref<number | string | null>(null);
 
-const productTypes = ref<ProductTypeRecord[]>([]);
 const categoryOptions = ref<ProductCategoryRecord[]>([]);
 const products = ref<ProductRecord[]>([]);
 const productTotal = ref(0);
@@ -1164,18 +964,7 @@ const categoryKeyword = ref('');
 const activeProductDrawerSection = ref('basic');
 const categoryExpandedKeys = ref<Set<string>>(new Set());
 const mobileCatalogDrawerVisible = ref(false);
-const productSupplierOptions = ref<SupplierRecord[]>([]);
-const productSupplierLoading = ref(false);
-const supplierProductOptions = ref<SupplierBatchProduct[]>([]);
-const supplierProductLoading = ref(false);
-const providerTypes = ref<ProviderTypeRecord[]>([]);
 const typeManagerDialogVisible = ref(false);
-const editingTypeValue = ref('');
-const typeForm = reactive({
-  label: '',
-  product_type: 'cloud_server',
-  icon: '',
-});
 
 const catalogFilters = reactive({
   keyword: '',
@@ -1184,6 +973,25 @@ const catalogFilters = reactive({
   status: '' as number | string,
   lifecycle_status: 'active' as ProductLifecycleStatus,
 });
+const {
+  productTypes,
+  typeLoading,
+  typeSubmitting,
+  typeManagerProductCount,
+  typeManagerHiddenCount,
+  loadProductTypes,
+  submitType,
+  toggleTypeHidden,
+  moveType,
+  deleteType,
+} = useProductTypeManager({
+  catalogFilters,
+  reloadCatalogData,
+});
+
+function openTypeManagerDialog() {
+  typeManagerDialogVisible.value = true;
+}
 
 const productDialogVisible = ref(false);
 const editingProduct = ref<ProductRecord | null>(null);
@@ -1224,24 +1032,31 @@ const productForm = reactive({
   upstream_product_id: '' as number | string,
   config_options: [] as ProductConfigOptionRecord[],
 });
-const configOptionDialogVisible = ref(false);
-const configOptionSubmitting = ref(false);
-const configOptionEditingIndex = ref(-1);
-const configTemplateLoading = ref(false);
-const configOptionForm = reactive({
-  name: '',
-  field: '',
-  option_mode: 'select',
-  parameter: '',
-  sub_items_text: '',
-  description: '',
-  suffix_text: '',
-  advanced: true,
-  required: true,
-  hidden: false,
-  sort_order: 0,
-});
-const configOptionSubItemRows = ref<ConfigOptionSubItemFormRow[]>([]);
+const {
+  configOptionDialogVisible,
+  configOptionSubmitting,
+  configOptionEditingIndex,
+  configTemplateLoading,
+  configOptionForm,
+  configOptionSubItemRows,
+  addConfigSubItemRow,
+  removeConfigSubItemRow,
+  handleConfigOptionModeChange,
+  openConfigOptionDialog,
+  submitConfigOption,
+  removeConfigOption,
+  pullProductConfigTemplate,
+} = useProductConfigOptions(productForm);
+const {
+  productSupplierOptions,
+  productSupplierLoading,
+  supplierProductLoading,
+  supplierProductCascaderOptions,
+  supplierOptionLabel,
+  supplierInterfaceTypeLabel,
+  handleProductSupplierChange,
+  loadProductSupplierProducts,
+} = useSupplierBinding(productForm);
 const categoryDialogVisible = ref(false);
 const editingCategory = ref<ProductCategoryRecord | null>(null);
 const creatingThirdCategoryParent = ref<ProductCategoryRecord | null>(null);
@@ -1250,8 +1065,6 @@ const categorySubmitting = ref(false);
 const categorySortLoadingId = ref('');
 let categoryRequestVersion = 0;
 let productRequestVersion = 0;
-/** 一级分类下拉请求序号，用于丢弃过期响应 */
-let productTypeRequestVersion = 0;
 const categoryForm = reactive({
   name: '',
   product_type: '' as string,
@@ -1274,22 +1087,6 @@ const lifecycleStatusOptions = [
   { value: 'deleted', label: '已删除商品' },
   { value: 'all', label: '全部商品' },
 ] satisfies Array<{ value: ProductLifecycleStatus; label: string }>;
-const productTypeIconOptions = [
-  { value: 'server', label: '服务器', aliases: ['vps', 'Server'] },
-  { value: 'cloud', label: '云服务', aliases: ['cloud'] },
-  { value: 'control-platform', label: '平台', aliases: ['Platform'] },
-  { value: 'building', label: '机房', aliases: ['dedicated', 'OfficeBuilding'] },
-  { value: 'desktop', label: '主机', aliases: ['hosting', 'Monitor'] },
-  { value: 'internet', label: '网络', aliases: ['cdn'] },
-  { value: 'hard-disk-storage', label: '存储', aliases: ['storage'] },
-  { value: 'data-base', label: '数据库', aliases: ['database', 'db'] },
-  { value: 'link', label: '域名', aliases: ['domain', 'Link'] },
-  { value: 'lock-on', label: '安全', aliases: ['ssl'] },
-  { value: 'component-grid', label: '应用', aliases: ['Grid', 'other'] },
-  { value: 'tools', label: '工具', aliases: ['tool'] },
-  { value: 'shop', label: '商品', aliases: ['product'] },
-] satisfies Array<{ value: string; label: string; aliases?: string[] }>;
-
 const productDrawerSections = [
   { key: 'basic', label: '详情', description: '名称、分类、状态' },
   { key: 'pricing', label: '定价', description: '多周期价格' },
@@ -1323,22 +1120,6 @@ const productTypeOptions = computed(() => {
   if (productTypes.value.length) return productTypes.value;
   return [{ value: '', label: '全部商品', usage_count: productTotal.value }];
 });
-const businessProductTypeOptions = [
-  { value: 'cloud_server', label: '云服务器 (cloud_server)' },
-  { value: 'game_cloud', label: '游戏云 (game_cloud)' },
-  { value: 'cloud_desktop', label: '云电脑 (cloud_desktop)' },
-  { value: 'bare_metal', label: '裸金属 (bare_metal)' },
-  { value: 'cdn', label: 'CDN' },
-  { value: 'other', label: '其他 (other)' },
-  { value: 'physical_machine', label: '物理机 (physical_machine)' },
-  { value: 'web_hosting', label: '虚拟主机 (web_hosting)' },
-];
-const businessProductTypeValueSet = new Set(businessProductTypeOptions.map((item) => item.value));
-const typeManagerProductCount = computed(() =>
-  productTypes.value.reduce((total, item) => total + (Number(item.usage_count || 0) || 0), 0),
-);
-const typeManagerHiddenCount = computed(() => productTypes.value.filter((item) => item.is_hidden).length);
-const normalizedTypeFormIcon = computed(() => resolveProductTypeIconName(typeForm.icon));
 const productDrawerSectionValid = (key: string) => {
   switch (key) {
     case 'basic':
@@ -1471,35 +1252,9 @@ const provisionHostnamePreviewText = computed(() => {
 
   return '默认优先按上游商品规则生成；若上游未返回规则，则回退到系统默认规则或账单快照。';
 });
-const providerTypeOptions = computed(() => {
-  return mergeProviderTypeOptions(providerTypes.value);
-});
-const supplierProductCascaderOptions = computed(() => {
-  const groups = new Map<string, SupplierBatchProduct[]>();
-  supplierProductOptions.value.forEach((item) => {
-    const groupName = String(item.remote_group_name || item.type_label || '默认分组');
-    const list = groups.get(groupName) || [];
-    list.push(item);
-    groups.set(groupName, list);
-  });
-
-  return Array.from(groups.entries()).map(([groupName, items], index) => ({
-    label: groupName,
-    value: `supplier-product-group-${index}`,
-    children: items.map((item) => ({
-      label: supplierProductOptionLabel(item),
-      value: item.id,
-    })),
-  }));
-});
-
 // --- Category tree helpers ---
 function categoryIdKey(row: ProductCategoryRecord) {
   return productGroupOptionKey(row);
-}
-
-function categoryDisplayName(row: ProductCategoryRecord) {
-  return String(row.name || row.label || `分类 #${row.id}`).trim();
 }
 
 function isCategoryVisible(row: ProductCategoryRecord) {
@@ -1507,33 +1262,6 @@ function isCategoryVisible(row: ProductCategoryRecord) {
   return !(value === false || value === 0 || value === '0');
 }
 
-function countValue(value: unknown) {
-  const count = Number(value);
-  return Number.isFinite(count) && count > 0 ? count : 0;
-}
-
-function categoryActiveProductCount(row: ProductCategoryRecord) {
-  return countValue(row.products_count ?? row.product_count);
-}
-
-function categoryTotalProductCount(row: ProductCategoryRecord) {
-  const total = countValue(row.products_with_trashed_count);
-  return total > 0 ? total : categoryActiveProductCount(row);
-}
-
-function productVisibilityLabel(row: ProductRecord) {
-  if (row.is_deleted) return '已删除';
-  return isProductVisible(row) ? '显示中' : '已隐藏';
-}
-
-function productVisibilityTheme(row: ProductRecord): 'success' | 'default' | 'danger' {
-  if (row.is_deleted) return 'danger';
-  return isProductVisible(row) ? 'success' : 'default';
-}
-
-function isProductVisible(row: ProductRecord) {
-  return Number(row.status) === 1;
-}
 function buildCategoryTree(list: ProductCategoryRecord[]): CategoryTreeNode[] {
   const nodeMap = new Map<string, CategoryTreeNode>();
   const roots: CategoryTreeNode[] = [];
@@ -1736,30 +1464,6 @@ function toggleCategoryExpanded(row: ProductCategoryRecord) {
   categoryExpandedKeys.value = next;
 }
 
-function textValue(value: unknown) {
-  return String(value ?? '').trim();
-}
-
-function productSpecDisplayName(row: ProductRecord) {
-  return (
-    [
-      row.product_display_name,
-      row.display_name,
-      row.name,
-      row.combined_display_name,
-      row.custom_display_name,
-      row.product_spec_display,
-      row.cpu_memory_display,
-    ]
-      .map(textValue)
-      .find(Boolean) || '-'
-  );
-}
-
-function normalizeCategoryScopeValue(value: unknown) {
-  return value === undefined || value === null || value === '' ? '' : String(value);
-}
-
 function categoryScopeKey(row: ProductCategoryRecord) {
   return [
     normalizeCategoryScopeValue(row.first_product_group_code || catalogFilters.product_type),
@@ -1842,180 +1546,7 @@ function resolveSelectedParentCategory() {
   );
 }
 
-function categoryParentOptionLabel(item: ProductCategoryRecord) {
-  return String(
-    item.second_product_group_name || item.name || item.label || `二级分类 #${productGroupEffectiveId(item)}`,
-  ).trim();
-}
-
 // --- Data loading ---
-async function loadProductTypes() {
-  // 请求竞态防护：刷新分类期间只允许最后一次请求回写结果（docs/FRONTEND.md）
-  const requestVersion = ++productTypeRequestVersion;
-  typeLoading.value = true;
-  try {
-    const response = await productApi.types();
-    if (requestVersion !== productTypeRequestVersion) return;
-    productTypes.value = Array.isArray(response) ? response : response.list || [];
-    if (!catalogFilters.product_type && productTypes.value[0]?.value) {
-      catalogFilters.product_type = productTypes.value[0].value;
-    }
-  } catch (error) {
-    if (requestVersion !== productTypeRequestVersion) return;
-    MessagePlugin.error(errorMessage(error, '加载一级分类失败'));
-  } finally {
-    if (requestVersion === productTypeRequestVersion) typeLoading.value = false;
-  }
-}
-
-async function refreshTypeCatalog() {
-  await loadProductTypes();
-  await reloadCatalogData();
-}
-
-function resolveProductTypeIconName(value: unknown) {
-  const rawValue = String(value || '').trim();
-  if (!rawValue) return '';
-
-  const normalizedRawValue = rawValue.toLowerCase();
-  const matched = productTypeIconOptions.find((item) => {
-    if (item.value.toLowerCase() === normalizedRawValue) return true;
-    return item.aliases?.some((alias) => alias.toLowerCase() === normalizedRawValue);
-  });
-
-  return matched?.value || rawValue;
-}
-
-function productTypeIconDisplayLabel(value: unknown) {
-  const iconName = resolveProductTypeIconName(value);
-  const matched = productTypeIconOptions.find((item) => item.value === iconName);
-  return matched?.label || iconName;
-}
-
-function normalizeBusinessProductType(value?: string) {
-  const normalized = String(value || '').trim();
-  return businessProductTypeValueSet.has(normalized) ? normalized : 'other';
-}
-
-function selectTypeIcon(value: string) {
-  typeForm.icon = value;
-}
-
-function resetTypeForm() {
-  editingTypeValue.value = '';
-  typeForm.label = '';
-  typeForm.product_type = 'cloud_server';
-  typeForm.icon = '';
-}
-
-function openTypeManagerDialog() {
-  resetTypeForm();
-  typeManagerDialogVisible.value = true;
-}
-
-function editType(type: ProductTypeRecord) {
-  editingTypeValue.value = type.value;
-  typeForm.label = type.label;
-  typeForm.product_type = normalizeBusinessProductType(type.product_type);
-  typeForm.icon = resolveProductTypeIconName(type.icon);
-}
-
-async function submitType() {
-  const label = typeForm.label.trim();
-  if (!label) {
-    MessagePlugin.warning('请输入一级分类名称');
-    return;
-  }
-
-  typeSubmitting.value = true;
-  try {
-    const icon = resolveProductTypeIconName(typeForm.icon);
-    const productType = normalizeBusinessProductType(typeForm.product_type);
-    if (editingTypeValue.value) {
-      await productApi.updateType(editingTypeValue.value, { label, product_type: productType, icon });
-      MessagePlugin.success('一级分类已更新');
-    } else {
-      await productApi.createType({ label, product_type: productType, icon });
-      MessagePlugin.success('一级分类已创建');
-    }
-    resetTypeForm();
-    await refreshTypeCatalog();
-  } catch (error) {
-    MessagePlugin.error(errorMessage(error, '保存一级分类失败'));
-  } finally {
-    typeSubmitting.value = false;
-  }
-}
-
-async function toggleTypeHidden(type: ProductTypeRecord) {
-  typeSubmitting.value = true;
-  try {
-    await productApi.updateType(type.value, {
-      label: type.label,
-      product_type: normalizeBusinessProductType(type.product_type),
-      icon: type.icon || '',
-      is_hidden: !type.is_hidden,
-    });
-    MessagePlugin.success(type.is_hidden ? '一级分类已显示' : '一级分类已隐藏');
-    await refreshTypeCatalog();
-  } catch (error) {
-    MessagePlugin.error(errorMessage(error, '更新一级分类失败'));
-  } finally {
-    typeSubmitting.value = false;
-  }
-}
-
-async function moveType(value: string, direction: -1 | 1) {
-  const index = productTypes.value.findIndex((item) => item.value === value);
-  const targetIndex = index + direction;
-  if (index < 0 || targetIndex < 0 || targetIndex >= productTypes.value.length) return;
-  const nextTypes = [...productTypes.value];
-  const [current] = nextTypes.splice(index, 1);
-  nextTypes.splice(targetIndex, 0, current);
-
-  typeSubmitting.value = true;
-  try {
-    await productApi.reorderTypes({ values: nextTypes.map((item) => item.value) });
-    productTypes.value = nextTypes;
-    MessagePlugin.success('一级分类排序已更新');
-  } catch (error) {
-    MessagePlugin.error(errorMessage(error, '更新一级分类排序失败'));
-    await loadProductTypes();
-  } finally {
-    typeSubmitting.value = false;
-  }
-}
-
-function deleteType(type: ProductTypeRecord) {
-  const dialog = DialogPlugin.confirm({
-    header: '删除一级分类',
-    body: `确认删除「${type.label || type.value}」吗？`,
-    theme: 'warning',
-    confirmBtn: { content: '确定', theme: 'danger' },
-    cancelBtn: '取消',
-    async onConfirm() {
-      typeSubmitting.value = true;
-      try {
-        await productApi.deleteType(type.value);
-        MessagePlugin.success('一级分类已删除');
-        if (false && catalogFilters.lifecycle_status === 'all') {
-          MessagePlugin.info('当前筛选为“全部商品”，已删除商品仍会显示在列表中');
-        }
-        dialog.hide();
-        if (catalogFilters.product_type === type.value) {
-          catalogFilters.product_type = '';
-          catalogFilters.product_group_key = '';
-        }
-        resetTypeForm();
-        await refreshTypeCatalog();
-      } catch (error) {
-        MessagePlugin.error(errorMessage(error, '删除一级分类失败'));
-      } finally {
-        typeSubmitting.value = false;
-      }
-    },
-  });
-}
 
 async function loadCategories() {
   const requestVersion = ++categoryRequestVersion;
@@ -2123,21 +1654,6 @@ async function reloadCatalogData() {
   await loadCategories();
   await loadProducts();
 }
-
-async function loadProviderTypes() {
-  try {
-    const response = await supplierApi.providerTypes();
-    providerTypes.value = normalizeProviderTypeOptions(response);
-  } catch {
-    providerTypes.value = [];
-  }
-}
-
-async function ensureProviderTypes() {
-  if (providerTypes.value.length) return;
-  await loadProviderTypes();
-}
-
 // --- Event handlers ---
 function handleProductTypeChange(value: string) {
   catalogFilters.product_type = value;
@@ -2496,293 +2012,6 @@ async function submitProduct() {
   }
 }
 
-// --- Config option helpers ---
-function normalizeConfigOptions(value: unknown): ProductConfigOptionRecord[] {
-  const items = Array.isArray(value) ? value : [];
-  return items.map((itemValue, index) => {
-    const item = toPlainRecord(itemValue);
-    const field = String(item.field || item.spec_key || `option_${index + 1}`).trim();
-    const name = String(item.name || item.option_name || field).trim();
-    return {
-      ...item,
-      uid: String(item.uid || `${field}-${index}`),
-      field,
-      name,
-      option_name: name,
-      option_mode: String(item.option_mode || (item.option_type === 'quantity' ? 'range' : 'select')),
-      parameter: String(item.parameter || ''),
-      sub: Array.isArray(item.sub) ? (item.sub as Array<Record<string, unknown>>) : [],
-      sub_items: Array.isArray(item.sub_items)
-        ? (item.sub_items as Array<Record<string, unknown>>)
-        : Array.isArray(item.sub)
-          ? (item.sub as Array<Record<string, unknown>>)
-          : [],
-      required: Boolean(item.required ?? true),
-      hidden: Boolean(item.hidden ?? false),
-      sort_order: Number(item.sort_order || index + 1),
-    };
-  });
-}
-
-function serializeConfigOptions(options: ProductConfigOptionRecord[]) {
-  return options.map((item, index) => ({
-    ...item,
-    name: String(item.name || item.option_name || item.field || '').trim(),
-    option_name: String(item.option_name || item.name || item.field || '').trim(),
-    field: String(item.field || '').trim(),
-    option_mode: String(item.option_mode || 'select'),
-    parameter: String(item.parameter || '').trim(),
-    required: Boolean(item.required),
-    hidden: Boolean(item.hidden),
-    sort_order: Number(item.sort_order || index + 1),
-  }));
-}
-
-function resetConfigOptionForm() {
-  Object.assign(configOptionForm, {
-    name: '',
-    field: '',
-    option_mode: 'select',
-    parameter: '',
-    sub_items_text: '',
-    description: '',
-    suffix_text: '',
-    advanced: true,
-    required: true,
-    hidden: false,
-    sort_order: productForm.config_options.length + 1,
-  });
-  configOptionSubItemRows.value = [createConfigSubItemRow({}, 0)];
-}
-
-function formatConfigSubItems(items: Array<Record<string, unknown>> = []) {
-  return items
-    .map(
-      (item) =>
-        `${item.value || item.option_name_first || item.label || item.option_name || ''}|${item.label || item.option_name || item.value || ''}`,
-    )
-    .join(',');
-}
-
-function createConfigSubItemRow(item: Record<string, unknown> = {}, index = 0): ConfigOptionSubItemFormRow {
-  const pricing = toPlainRecord(item.pricing);
-  const monthlyPrice = item.monthly_price ?? item.monthly ?? item.month ?? pricing.monthly ?? pricing.month ?? '';
-  return {
-    uid: String(item.uid || `config-subitem-${Date.now()}-${index}-${Math.random().toString(36).slice(2)}`),
-    name: String(item.label || item.option_name || item.name || '').trim(),
-    value: String(item.value || item.option_name_first || '').trim(),
-    monthly_price:
-      monthlyPrice === '' || monthlyPrice === undefined || monthlyPrice === null ? '0.00' : String(monthlyPrice),
-    sort_order: Number(item.sort_order || index + 1),
-  };
-}
-
-function configSubItemRecordsFromParameter(rawValue: string): Array<Record<string, unknown>> {
-  return parseConfigSubItems(rawValue);
-}
-
-function addConfigSubItemRow() {
-  configOptionSubItemRows.value.push(createConfigSubItemRow({}, configOptionSubItemRows.value.length));
-}
-
-function removeConfigSubItemRow(index: number) {
-  if (configOptionSubItemRows.value.length <= 1) return;
-  configOptionSubItemRows.value.splice(index, 1);
-}
-
-function handleConfigOptionModeChange(value: string | number) {
-  configOptionForm.option_mode = String(value || 'select');
-  if (configOptionForm.option_mode === 'select' && configOptionSubItemRows.value.length === 0) {
-    configOptionSubItemRows.value = [createConfigSubItemRow({}, 0)];
-  }
-}
-
-function openConfigOptionDialog(row?: ProductConfigOptionRecord, index = -1) {
-  configOptionEditingIndex.value = index;
-  if (row) {
-    Object.assign(configOptionForm, {
-      name: row.name || row.option_name || '',
-      field: row.field || '',
-      option_mode: row.option_mode || 'select',
-      parameter: row.parameter || '',
-      sub_items_text: formatConfigSubItems(row.sub_items || row.sub || []),
-      description: String(row.description || row.option_description || '').trim(),
-      suffix_text: String(row.suffix_text || row.suffix || '').trim(),
-      advanced: Boolean(row.advanced ?? true),
-      required: Boolean(row.required ?? true),
-      hidden: Boolean(row.hidden ?? false),
-      sort_order: Number(row.sort_order || index + 1),
-    });
-    const sourceSubItems =
-      Array.isArray(row.sub_items) && row.sub_items.length ? row.sub_items : Array.isArray(row.sub) ? row.sub : [];
-    const rowSubItems = sourceSubItems.length
-      ? sourceSubItems.map((item) => toPlainRecord(item))
-      : configSubItemRecordsFromParameter(String(row.parameter || ''));
-    configOptionSubItemRows.value = rowSubItems.length
-      ? rowSubItems.map((item, itemIndex) => createConfigSubItemRow(item, itemIndex))
-      : [createConfigSubItemRow({}, 0)];
-  } else {
-    resetConfigOptionForm();
-  }
-  configOptionDialogVisible.value = true;
-}
-
-function splitConfigSubItemText(rawValue: string) {
-  const tokens = rawValue
-    .split(',')
-    .map((item) => item.trim())
-    .filter(Boolean);
-  const items: string[] = [];
-  let buffer: string[] = [];
-
-  tokens.forEach((token) => {
-    buffer.push(token);
-    if (token.includes('|')) {
-      items.push(buffer.join(','));
-      buffer = [];
-    }
-  });
-
-  if (buffer.length) {
-    if (items.length === 0) return tokens;
-    items.push(buffer.join(','));
-  }
-
-  return items;
-}
-
-function parseConfigSubItems(rawValue: string) {
-  return splitConfigSubItemText(rawValue).map((item, index) => {
-    const separatorIndex = item.indexOf('|');
-    const rawValue = separatorIndex >= 0 ? item.slice(0, separatorIndex).trim() : item.trim();
-    const rawLabel = separatorIndex >= 0 ? item.slice(separatorIndex + 1).trim() : '';
-    const value = rawValue || rawLabel || '';
-    const label = rawLabel || rawValue || '';
-    return {
-      id: value || index,
-      value: value || label,
-      label: label || value,
-      option_name: label || value,
-      option_name_first: value || label,
-      pricing: {},
-      sort_order: index + 1,
-      hidden: 0,
-    };
-  });
-}
-
-function buildConfigSubItemsFromRows() {
-  const rows = configOptionSubItemRows.value
-    .map((row, index) => ({
-      ...row,
-      name: row.name.trim(),
-      value: row.value.trim(),
-      sort_order: Number(row.sort_order || index + 1),
-      monthly_price: String(row.monthly_price ?? '').trim(),
-    }))
-    .filter((row) => row.name || row.value);
-
-  const invalidRow = rows.find((row) => !row.name || !row.value);
-  if (invalidRow) {
-    throw new Error('请完整填写子项名称和传参值');
-  }
-
-  return rows.map((row, index) => {
-    const monthlyPrice = Number(row.monthly_price || 0);
-    const monthlyAmount = Number.isFinite(monthlyPrice) ? monthlyPrice.toFixed(2) : '0.00';
-    return {
-      id: row.value || index,
-      value: row.value,
-      label: row.name,
-      option_name: row.name,
-      option_name_first: row.value,
-      monthly: monthlyAmount,
-      monthly_price: monthlyAmount,
-      pricing: {
-        monthly: monthlyAmount,
-      },
-      sort_order: row.sort_order || index + 1,
-      hidden: 0,
-    };
-  });
-}
-
-function submitConfigOption() {
-  const name = configOptionForm.name.trim();
-  const field = configOptionForm.field.trim();
-  if (!name || !field) {
-    MessagePlugin.warning('请填写配置名称和字段名');
-    return;
-  }
-  let subItems: ReturnType<typeof parseConfigSubItems> = [];
-  try {
-    subItems = configOptionForm.option_mode === 'select' ? buildConfigSubItemsFromRows() : [];
-  } catch (error) {
-    MessagePlugin.warning(errorMessage(error, '请检查子项配置'));
-    return;
-  }
-  const parameter = subItems.length
-    ? subItems.map((item) => `${item.value}|${item.label}`).join(',')
-    : configOptionForm.parameter.trim();
-  if (configOptionForm.option_mode === 'select' && !parameter) {
-    MessagePlugin.warning('请填写参数值或子项');
-    return;
-  }
-
-  configOptionSubmitting.value = true;
-  const payload: ProductConfigOptionRecord = {
-    uid: `${field}-${Date.now()}`,
-    source: 'manual',
-    field,
-    name,
-    option_name: name,
-    option_mode: configOptionForm.option_mode,
-    option_type: configOptionForm.option_mode === 'range' ? 'quantity' : 'select',
-    parameter,
-    sub: subItems,
-    sub_items: subItems,
-    range_pricing: [],
-    description: configOptionForm.description.trim(),
-    suffix_text: configOptionForm.suffix_text.trim(),
-    advanced: Boolean(configOptionForm.advanced),
-    required: Boolean(configOptionForm.required),
-    hidden: Boolean(configOptionForm.hidden),
-    sort_order: Number(configOptionForm.sort_order || productForm.config_options.length + 1),
-  };
-  if (configOptionEditingIndex.value >= 0) {
-    productForm.config_options.splice(configOptionEditingIndex.value, 1, payload);
-  } else {
-    productForm.config_options.push(payload);
-  }
-  configOptionDialogVisible.value = false;
-  configOptionSubmitting.value = false;
-}
-
-function removeConfigOption(index: number) {
-  productForm.config_options.splice(index, 1);
-}
-
-async function pullProductConfigTemplate() {
-  const supplierId = productForm.supplier_id;
-  const upstreamProductId = productForm.upstream_product_id;
-  if (!supplierId || !upstreamProductId) {
-    MessagePlugin.warning('请先绑定提供商和提供商商品 ID');
-    return;
-  }
-
-  configTemplateLoading.value = true;
-  try {
-    const response = await supplierApi.productConfigTemplate(supplierId, upstreamProductId);
-    const options = Array.isArray(response.config_options) ? response.config_options : [];
-    productForm.config_options = normalizeConfigOptions(options);
-    MessagePlugin.success('配置项模板已拉取');
-  } catch (error) {
-    MessagePlugin.error(errorMessage(error, '拉取配置项模板失败'));
-  } finally {
-    configTemplateLoading.value = false;
-  }
-}
-
 async function handleToggleProduct(row: ProductRecord) {
   const newStatus = Number(row.status) !== 1;
   const actionLabel = newStatus ? '显示' : '隐藏';
@@ -2992,172 +2221,6 @@ function handleDeleteCategory(row: ProductCategoryRecord) {
       }
     },
   });
-}
-
-// --- Supplier helpers (used within catalog for product editing) ---
-function supplierOptionLabel(row: SupplierRecord) {
-  const typeLabel = supplierInterfaceTypeLabel(row);
-  return typeLabel ? `${row.name || row.id} / ${typeLabel}` : String(row.name || row.id || '-');
-}
-
-function supplierInterfaceTypeLabel(row: SupplierRecord) {
-  const upstreamBinding = toPlainRecord(row.upstream_binding);
-  const rawType = String(upstreamBinding.provider_key || row.provider_key || '').trim();
-  if (rawType && providerTypeFallbackLabels[rawType]) return providerTypeFallbackLabels[rawType];
-  return row.provider_label || providerTypeLabel(rawType, providerTypeOptions.value);
-}
-
-function supplierProductOptionLabel(row: SupplierBatchProduct) {
-  const typeLabel = row.type_label || row.remote_group_name || '';
-  return typeLabel ? `${row.name || row.id} · ${typeLabel}` : String(row.name || row.id || '-');
-}
-
-function canSupplierBatchConnect(row: SupplierRecord) {
-  const upstreamBinding = toPlainRecord(row.upstream_binding);
-  const providerKey = String(upstreamBinding.provider_key || row.provider_key || '').trim();
-  const schema = providerTypeOptions.value.find((item) => item.value === providerKey)?.supplier_form;
-  const fields = normalizeSupplierCredentialFields(toPlainRecord(schema).fields);
-  if (!fields.length) {
-    return Boolean(
-      (upstreamBinding.has_base_url || row.has_api_url || row.api_url) &&
-      (upstreamBinding.account_name || row.api_username) &&
-      (row.has_api_key || row.api_key),
-    );
-  }
-
-  return fields.every((field) => {
-    if (!field.required) return true;
-    if (field.key === 'api_url') return Boolean(upstreamBinding.has_base_url || row.has_api_url || row.api_url);
-    if (field.key === 'api_username') return Boolean(upstreamBinding.account_name || row.api_username);
-    if (field.key === 'api_key')
-      return Boolean(toPlainRecord(upstreamBinding.has_secret_values).api_key || row.has_api_key || row.api_key);
-    if (field.secret) {
-      return Boolean(
-        toPlainRecord(upstreamBinding.has_secret_values)[field.key] || row.has_provider_secret_values?.[field.key],
-      );
-    }
-
-    return hasSupplierCredentialValue(toPlainRecord(row.provider_config)[field.key]);
-  });
-}
-
-function normalizeSupplierCredentialFields(value: unknown): SupplierFormField[] {
-  if (!Array.isArray(value)) return [];
-
-  return value
-    .map((item) => {
-      const record = toPlainRecord(item);
-      const key = String(record.key || '').trim();
-      if (!key) return null;
-
-      const type = normalizeSupplierCredentialFieldType(record.type);
-      const field: SupplierFormField = {
-        key,
-        label: String(record.label || record.title || key).trim(),
-        type,
-        required: Boolean(record.required),
-        secret: Boolean(record.secret),
-      };
-
-      return field;
-    })
-    .filter((item): item is SupplierFormField => Boolean(item));
-}
-
-function normalizeSupplierCredentialFieldType(value: unknown): SupplierFormField['type'] {
-  const type = String(value || 'text').trim();
-  if (['text', 'url', 'password', 'select', 'switch', 'boolean', 'number', 'textarea'].includes(type)) {
-    return type as SupplierFormField['type'];
-  }
-
-  return 'text';
-}
-
-function hasSupplierCredentialValue(value: unknown) {
-  if (typeof value === 'boolean') return true;
-  if (typeof value === 'number') return Number.isFinite(value);
-  return String(value ?? '').trim() !== '';
-}
-
-function handleProductSupplierChange(value: string | number) {
-  productForm.supplier_id = value || '';
-  productForm.upstream_product_id = '';
-  supplierProductOptions.value = [];
-  if (value) {
-    void loadProductSupplierProducts(value, true);
-  }
-}
-
-async function loadProductSupplierProducts(supplierId: string | number, notify = false) {
-  if (!supplierId) return;
-  await ensureProviderTypes();
-
-  const supplier = productSupplierOptions.value.find((item) => String(item.id) === String(supplierId));
-  if (supplier && !canSupplierBatchConnect(supplier)) {
-    supplierProductOptions.value = [];
-    MessagePlugin.warning('接口配置不完整，暂时无法同步上游商品');
-    return;
-  }
-
-  supplierProductLoading.value = true;
-  try {
-    const response = await supplierApi.products(supplierId, { silent: true });
-    supplierProductOptions.value = buildSupplierBatchProducts(response);
-    if (productForm.upstream_product_id) {
-      const hasCurrent = supplierProductOptions.value.some(
-        (item) => String(item.id) === String(productForm.upstream_product_id),
-      );
-      if (!hasCurrent) {
-        supplierProductOptions.value.unshift({
-          id: Number(productForm.upstream_product_id),
-          name: `已绑定商品 #${productForm.upstream_product_id}`,
-          type_label: '当前绑定',
-          remote_group_name: '',
-          is_connected: true,
-          connected_display_name: '',
-        });
-      }
-    }
-    if (notify) MessagePlugin.success('上游商品已同步');
-  } catch (error) {
-    supplierProductOptions.value = [];
-    MessagePlugin.error(errorMessage(error, '同步上游商品失败'));
-  } finally {
-    supplierProductLoading.value = false;
-  }
-}
-
-function normalizeSupplierBatchProduct(itemValue: unknown): SupplierBatchProduct {
-  const item = toPlainRecord(itemValue);
-  return {
-    ...item,
-    id: Number(item.id || item.product_id || 0),
-    name: String(item.name || item.product_name || '').trim(),
-    type_label: String(item.type_label || item.type_name || item.type || item.billingcycle || '').trim(),
-    remote_group_name: String(
-      item.remote_group_name || item.group_name || item.second_group_name || item._group_label || '',
-    ).trim(),
-    is_connected: Boolean(item.is_connected),
-    connected_display_name: String(item.connected_display_name || '').trim(),
-  };
-}
-
-function buildSupplierBatchProducts(payloadValue: unknown) {
-  const payload = toPlainRecord(payloadValue);
-  const directProducts = Array.isArray(payload.products) ? payload.products : Array.isArray(payload) ? payload : [];
-  if (directProducts.length) {
-    return directProducts.map(normalizeSupplierBatchProduct).filter((item) => item.id > 0);
-  }
-
-  const groups = Array.isArray(payload.groups) ? payload.groups : [];
-  return groups
-    .flatMap((groupValue) => {
-      const group = toPlainRecord(groupValue);
-      const groupLabel = String(group.label || group.name || '').trim();
-      const items = Array.isArray(group.items) ? group.items : [];
-      return items.map((item) => normalizeSupplierBatchProduct({ ...toPlainRecord(item), _group_label: groupLabel }));
-    })
-    .filter((item) => item.id > 0);
 }
 
 function formatSplitAction(action: string) {
