@@ -5,6 +5,10 @@ declare(strict_types=1);
 $backendDir = dirname(__DIR__);
 $rootDir = dirname($backendDir);
 
+// --check：只校验前端接口清单生成物是否与当前路由一致，不写文件。
+// 供 CI 使用（backend.yml「接口清单一致性」步骤），路由变更后忘记重新生成时会失败。
+$checkMode = in_array('--check', $argv ?? [], true);
+
 chdir($backendDir);
 
 $routeJson = shell_exec('php artisan route:list --json');
@@ -125,10 +129,41 @@ $payload = [
 ];
 
 $target = $rootDir.'/frontend-admin-v3/src/data/apiCatalog.generated.json';
-file_put_contents(
-    $target,
-    json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES).PHP_EOL
-);
+$encoded = json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES).PHP_EOL;
+
+if ($checkMode) {
+    // 只比对内容，忽略 meta.generatedAt（每次运行必然不同）。
+    $existing = is_file($target) ? json_decode((string) file_get_contents($target), true) : null;
+    $actual = is_array($existing) ? $existing : [];
+    $expected = $payload;
+
+    unset($actual['meta']['generatedAt'], $expected['meta']['generatedAt']);
+
+    if ($actual !== $expected) {
+        fwrite(STDERR, '接口清单生成物已过期：'.$target.PHP_EOL);
+        fwrite(STDERR, '请运行 php backend/scripts/generate_frontend_api_catalog.php 重新生成并提交。'.PHP_EOL);
+
+        $existingIds = array_column(is_array($actual['items'] ?? null) ? $actual['items'] : [], 'id');
+        $expectedIds = array_column($expected['items'], 'id');
+        $added = array_values(array_diff($expectedIds, $existingIds));
+        $removed = array_values(array_diff($existingIds, $expectedIds));
+
+        fwrite(STDERR, '新增 '.count($added).' 条，移除 '.count($removed).' 条。'.PHP_EOL);
+        foreach (array_slice($added, 0, 10) as $id) {
+            fwrite(STDERR, '  + '.$id.PHP_EOL);
+        }
+        foreach (array_slice($removed, 0, 10) as $id) {
+            fwrite(STDERR, '  - '.$id.PHP_EOL);
+        }
+
+        exit(1);
+    }
+
+    echo '接口清单生成物与当前路由一致（'.count($items).' 条）。'.PHP_EOL;
+    exit(0);
+}
+
+file_put_contents($target, $encoded);
 
 echo 'Generated '.count($items).' API catalog entries at '.$target.PHP_EOL;
 
@@ -196,18 +231,59 @@ function moduleLabel(string $module): string
 }
 
 /**
+ * 归一化中间件条目：拆出「类名 basename」与「: 之后的参数」。
+ *
+ * `artisan route:list --json` 输出的是 FQCN 形态（如
+ * App\Http\Middleware\CheckPermission:product.manage、
+ * Illuminate\Routing\Middleware\ThrottleRequests:10,1），而路由文件与内核也允许短别名
+ * （permission:xxx、throttle:10,1）。只保留 basename 与参数，两种形态即可统一比较。
+ *
+ * @return array{name: string, params: string}
+ */
+function normalizeMiddleware(string $middleware): array
+{
+    $name = trim($middleware);
+    $params = '';
+
+    if (($separator = strpos($name, ':')) !== false) {
+        $params = substr($name, $separator + 1);
+        $name = substr($name, 0, $separator);
+    }
+
+    if (($namespaceSeparator = strrpos($name, '\\')) !== false) {
+        $name = substr($name, $namespaceSeparator + 1);
+    }
+
+    return ['name' => $name, 'params' => $params];
+}
+
+/**
+ * 查找第一个命中的中间件（类名 basename 或路由短别名均可）。
+ *
+ * @param  list<string>  $middleware
+ * @param  list<string>  $names
+ * @return array{name: string, params: string}|null
+ */
+function findMiddleware(array $middleware, array $names): ?array
+{
+    foreach ($middleware as $item) {
+        $normalized = normalizeMiddleware((string) $item);
+        if (in_array($normalized['name'], $names, true)) {
+            return $normalized;
+        }
+    }
+
+    return null;
+}
+
+/**
  * @param  list<string>  $middleware
  */
 function resolvePermission(array $middleware): string
 {
-    foreach ($middleware as $item) {
-        $middlewareName = (string) $item;
-        if (str_starts_with($middlewareName, 'permission:')) {
-            return substr($middlewareName, strlen('permission:'));
-        }
-    }
+    $matched = findMiddleware($middleware, ['CheckPermission', 'permission']);
 
-    return '';
+    return $matched !== null ? $matched['params'] : '';
 }
 
 /**
@@ -215,18 +291,16 @@ function resolvePermission(array $middleware): string
  */
 function isAuthenticatedRoute(array $middleware): bool
 {
-    foreach ($middleware as $item) {
-        $middlewareName = (string) $item;
-        if (
-            $middlewareName === 'auth:sanctum'
-            || $middlewareName === 'admin.auth'
-            || $middlewareName === 'client.auth'
-        ) {
-            return true;
-        }
-    }
-
-    return false;
+    return findMiddleware($middleware, [
+        'Authenticate',
+        'auth',
+        'EnsureAdminAuthenticated',
+        'ensure.admin',
+        'admin.auth',
+        'EnsureClientAuthenticated',
+        'ensure.client',
+        'client.auth',
+    ]) !== null;
 }
 
 /**
@@ -234,14 +308,9 @@ function isAuthenticatedRoute(array $middleware): bool
  */
 function resolveThrottle(array $middleware): string
 {
-    foreach ($middleware as $item) {
-        $middlewareName = (string) $item;
-        if (str_starts_with($middlewareName, 'throttle:')) {
-            return substr($middlewareName, strlen('throttle:'));
-        }
-    }
+    $matched = findMiddleware($middleware, ['ThrottleRequests', 'throttle']);
 
-    return '';
+    return $matched !== null ? $matched['params'] : '';
 }
 
 /**
@@ -252,11 +321,11 @@ function resolveGuards(array $middleware): array
 {
     $guards = [];
     foreach ($middleware as $item) {
-        $middlewareName = (string) $item;
-        if (str_starts_with($middlewareName, 'throttle:')) {
-            $guards[] = '限流 '.substr($middlewareName, strlen('throttle:'));
+        $normalized = normalizeMiddleware((string) $item);
+        if (in_array($normalized['name'], ['ThrottleRequests', 'throttle'], true)) {
+            $guards[] = '限流 '.$normalized['params'];
         }
-        if ($middlewareName === 'verify.callback') {
+        if (in_array($normalized['name'], ['VerifyCallbackSignature', 'verify.callback', 'VerifyAlipayCallbackSignature', 'verify.alipay.callback', 'VerifyPaymentCallbackSignature', 'verify.payment.callback'], true)) {
             $guards[] = '签名校验';
         }
     }

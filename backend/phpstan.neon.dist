@@ -4,9 +4,14 @@ includes:
 
 parameters:
 
+    # B-04：paths 从只 app 扩展为 app + config + database/migrations。
+    # config、database/migrations 此前被 excludePaths 显式排除，本次一并纳入并移除排除项。
     paths:
         - app
+        - config
+        - database/migrations
 
+    # level 5：升 6 需先处理约 2989 个历史告警
     # The level 9 is the highest level
     level: 5
 
@@ -14,13 +19,21 @@ parameters:
         - bootstrap/cache
         - storage
         - vendor
-        - tests (?)
+        # scripts 实测纳入后新增 35 个错误（集中在 upload_apifox_openapi.php 等一次性运维脚本，
+        # 多为 nullCoalesce.offset / isset.offset 历史写法），本次不清理，保持排除。
         - scripts
-        - config
-        - database/migrations
 
     checkModelProperties: true
 
     ignoreErrors:
         # Add specific ignores here if needed
         # - '#some regex pattern#'
+
+        # 两个历史迁移用 env('FINANCE_ALLOW_RETIRE') 做退役开关，触发 larastan
+        # noEnvCallsOutsideOfConfig。按文件精确忽略，不放开整条规则；改法（env→config）
+        # 涉及发版口径，留待迁移作者处理，处理完删除本段即可。
+        # PHPStan 默认 reportUnmatchedIgnoredErrors，迁移改好后本段会因未命中而报错，不会被静默遗留。
+        - identifier: larastan.noEnvCallsOutsideOfConfig
+          path: database/migrations/2026_10_21_000015_drop_user_accounts_cash_balance_column.php
+        - identifier: larastan.noEnvCallsOutsideOfConfig
+          path: database/migrations/2026_10_21_000016_archive_legacy_finance_tables.php

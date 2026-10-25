@@ -2619,7 +2619,7 @@ parameters:
 		-
 			message: '#^Cannot call method format\(\) on string\.$#'
 			identifier: method.nonObject
-			count: 14
+			count: 12
 			path: app/Services/Finance/CouponService.php
 
 		-
@@ -2922,11 +2922,6 @@ parameters:
 			count: 1
 			path: app/Services/Finance/InvoicePaidOrchestrator.php
 
-		-
-			message: '#^Using nullsafe property access "\?\-\>display_name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Services/Finance/InvoicePaidOrchestrator.php
 
 		-
 			message: '#^Using nullsafe property access "\?\-\>display_product_name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
@@ -2934,11 +2929,6 @@ parameters:
 			count: 1
 			path: app/Services/Finance/InvoicePaidOrchestrator.php
 
-		-
-			message: '#^Using nullsafe property access "\?\-\>email" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Services/Finance/InvoicePaidOrchestrator.php
 
 		-
 			message: '#^Using nullsafe property access "\?\-\>id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
@@ -2946,11 +2936,6 @@ parameters:
 			count: 3
 			path: app/Services/Finance/InvoicePaidOrchestrator.php
 
-		-
-			message: '#^Using nullsafe property access "\?\-\>order_no" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Services/Finance/InvoicePaidOrchestrator.php
 
 		-
 			message: '#^Using nullsafe property access "\?\-\>service_id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
@@ -2958,11 +2943,6 @@ parameters:
 			count: 1
 			path: app/Services/Finance/InvoicePaidOrchestrator.php
 
-		-
-			message: '#^Using nullsafe property access "\?\-\>trade_no" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Services/Finance/InvoicePaidOrchestrator.php
 
 		-
 			message: '#^Using nullsafe property access "\?\-\>type" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
@@ -3990,11 +3970,6 @@ parameters:
 			count: 1
 			path: app/Services/ProductCatalog/ProductSyncService.php
 
-		-
-			message: '#^Method App\\Services\\ProductCatalog\\ProductSyncService\:\:resolveImportedChildGroupName\(\) is unused\.$#'
-			identifier: method.unused
-			count: 1
-			path: app/Services/ProductCatalog/ProductSyncService.php
 
 		-
 			message: '#^Offset ''product_display_name'' on array\{product_display_name\: string, product_spec_display\: string, custom_display_name\: string, cpu_memory_display\: string, cpu_memory_slug_display\: string, combined_display_name\: string, instance_spec_text\: string, cpu_display\: string, \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'

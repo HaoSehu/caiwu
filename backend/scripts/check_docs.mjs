@@ -1,5 +1,13 @@
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+} from "node:fs";
 import { spawnSync } from "node:child_process";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -112,11 +120,77 @@ function isDirectory(filePath) {
 /**
  * 是否被 .gitignore 忽略（例如 docs/AGENTS.md 是本机 agent 入口，不入库）。
  * 被忽略的文件不是文档真源的一部分，既不登记 catalog 也不该被 frontmatter 校验卡住。
+ *
+ * 干净检出（如 `git archive HEAD` 解出的目录）没有 .git，`git check-ignore` 会直接
+ * 返回 128，此时按原逻辑会把“被忽略”误判成“未忽略”。回退方案是在系统临时目录里
+ * 建一个裸仓库，用 `--work-tree` 指向检出目录重新判定：check-ignore 只依赖工作区
+ * 内的 .gitignore 文件，不需要 index 或提交历史。
  */
-function isGitIgnored(filePath) {
-  const result = spawnSync("git", ["check-ignore", "-q", filePath], { cwd: root });
+const ignoreProbeCache = new Map();
+let ignoreProbeGitDir;
 
-  return result.status === 0;
+function runCheckIgnore(gitDir, filePath) {
+  const args = gitDir
+    ? ["--git-dir", gitDir, "--work-tree", root, "check-ignore", "-q", filePath]
+    : ["check-ignore", "-q", filePath];
+  const result = spawnSync("git", args, {
+    cwd: root,
+    encoding: "utf8",
+  });
+
+  return result.status;
+}
+
+function getIgnoreProbeGitDir() {
+  if (ignoreProbeGitDir !== undefined) {
+    return ignoreProbeGitDir;
+  }
+
+  try {
+    const probeDirectory = mkdtempSync(
+      path.join(tmpdir(), "check-docs-ignore-probe-"),
+    );
+    const initialised = spawnSync("git", ["init", "-q", "--bare", probeDirectory], {
+      encoding: "utf8",
+    });
+    if (initialised.status !== 0) {
+      ignoreProbeGitDir = null;
+      return ignoreProbeGitDir;
+    }
+
+    ignoreProbeGitDir = probeDirectory;
+    process.once("exit", () => {
+      try {
+        rmSync(probeDirectory, { recursive: true, force: true });
+      } catch {
+        // 临时目录清理失败不影响校验结果
+      }
+    });
+  } catch {
+    ignoreProbeGitDir = null;
+  }
+
+  return ignoreProbeGitDir;
+}
+
+function isGitIgnored(filePath) {
+  if (ignoreProbeCache.has(filePath)) {
+    return ignoreProbeCache.get(filePath);
+  }
+
+  let status = runCheckIgnore(null, filePath);
+  if (status !== 0 && status !== 1) {
+    // 不在 Git 仓库内（典型状态码 128）：改用临时裸仓库 + 当前工作区目录重新判定
+    const probeGitDir = getIgnoreProbeGitDir();
+    if (probeGitDir) {
+      status = runCheckIgnore(probeGitDir, filePath);
+    }
+  }
+
+  const ignored = status === 0;
+  ignoreProbeCache.set(filePath, ignored);
+
+  return ignored;
 }
 
 function walkMarkdown(directoryPath) {
@@ -297,9 +371,12 @@ function validateLocalLink(sourceFile, destination, lineNumber) {
   }
 
   if (!existsSync(targetPath)) {
-    errors.push(
-      `${toRepoPath(sourceFile)}:${lineNumber} broken local link: ${destination}`,
-    );
+    // 被忽略的目标不是文档真源的一部分，干净检出里本就不存在，不算断链
+    if (!isGitIgnored(targetPath)) {
+      errors.push(
+        `${toRepoPath(sourceFile)}:${lineNumber} broken local link: ${destination}`,
+      );
+    }
     return;
   }
 
@@ -644,6 +721,9 @@ function checkCatalog(markdownFiles) {
     }
 
     const targetPath = resolveCatalogPath(record.path, recordLabel);
+    // 被 .gitignore 忽略的目标不属于文档真源：干净检出里本就不存在，既不报缺失，
+    // 也不进 validRecords，避免连带触发 frontmatter 状态比对与 generated 记录校验
+    const targetIgnored = targetPath ? isGitIgnored(targetPath) : false;
     if (targetPath) {
       const normalizedPath = toDocsPath(targetPath);
       if (catalogPaths.has(normalizedPath)) {
@@ -657,7 +737,7 @@ function checkCatalog(markdownFiles) {
         errors.push(
           `${recordLabel} path must point to a Markdown record: ${record.path}`,
         );
-      } else if (!isFile(targetPath)) {
+      } else if (!isFile(targetPath) && !targetIgnored) {
         errors.push(`${recordLabel} points to a missing file: ${record.path}`);
       }
     }
@@ -677,6 +757,7 @@ function checkCatalog(markdownFiles) {
 
     if (
       targetPath &&
+      !targetIgnored &&
       typeof record.status === "string" &&
       catalogStatuses.has(record.status)
     ) {
@@ -696,13 +777,23 @@ function checkCatalog(markdownFiles) {
   }
 
   for (const generatedPath of requiredGeneratedCatalogPaths) {
-    const record = validRecords.find(({ path: recordPath }) => recordPath === generatedPath);
+    // 生成物本身是否入库不影响登记要求：catalog.json 已入库，登记是版本库内的事实。
+    // （只校验「文件存在性」时才需要考虑 .gitignore；这里校验的是记录是否存在。）
+    // 生成物在 catalog 中被登记后，即使文件本身被 .gitignore 忽略（不进 validRecords），
+    // 也必须保留并保持 status=generated，否则同类生成物会因“未入库”而失去登记约束。
+    const record = catalog.records.find(
+      (entry) =>
+        entry &&
+        typeof entry === "object" &&
+        !Array.isArray(entry) &&
+        entry.path === generatedPath,
+    );
     if (!record) {
       errors.push(`docs/catalog.json is missing generated record for ${generatedPath}`);
       continue;
     }
 
-    if (record.record.status !== "generated") {
+    if (record.status !== "generated") {
       errors.push(
         `docs/catalog.json record for ${generatedPath} must use status generated`,
       );
@@ -750,13 +841,17 @@ if (!isDirectory(docsRoot)) {
   errors.push("required docs/ directory is missing");
 } else {
   for (const directory of requiredDirectories) {
-    if (!isDirectory(path.join(docsRoot, directory))) {
+    const directoryPath = path.join(docsRoot, directory);
+    // 被忽略的目录不在版本库里，干净检出本来就没有，不构成“目录缺失”
+    if (!isDirectory(directoryPath) && !isGitIgnored(directoryPath)) {
       errors.push(`required docs directory is missing: docs/${directory}`);
     }
   }
 
   for (const file of requiredFiles) {
-    if (!isFile(path.join(docsRoot, file))) {
+    const filePath = path.join(docsRoot, file);
+    // 同上：被忽略的必需文件不属于文档真源，干净检出里缺失属正常
+    if (!isFile(filePath) && !isGitIgnored(filePath)) {
       errors.push(`required docs file is missing: docs/${file}`);
     }
   }

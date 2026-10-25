@@ -15,6 +15,9 @@ require $basePath.'/vendor/autoload.php';
 $app = require $basePath.'/bootstrap/app.php';
 $app->make(Kernel::class)->bootstrap();
 
+// --check：只校验清单与当前路由是否一致，不写文件，供 CI 门禁使用。
+$checkMode = in_array('--check', $argv ?? [], true);
+
 $routes = collect(RouteFacade::getRoutes()->getRoutes())
     ->filter(fn (Route $route) => str_starts_with($route->uri(), 'api/'))
     ->map(function (Route $route): array {
@@ -43,30 +46,10 @@ $groupCounts = $routes
     ->map(fn (int $count, string $group): string => $group.'='.$count)
     ->implode(', ');
 
-$lines = [
-    '---',
-    'status: generated',
-    'updated: '.date('Y-m-d'),
-    'owner: backend-platform',
-    '---',
-    '',
-    '# 后端 API 清单',
-    '',
-    '- 生成时间: `'.date('Y-m-d H:i:s').'`',
-    '- API 总数: `'.$routes->count().'`',
-    '- 分组统计: `'.$groupCounts.'`',
-    '',
-    '> **自动生成**，由 `backend/scripts/export_api_inventory.php` 扫描 Laravel 路由表导出，**不要手工编辑**。',
-    '>',
-    '> 需要更新本文件时，直接在项目根目录执行：`php backend/scripts/export_api_inventory.php`。',
-    '> 需要看业务分组、核心业务流程映射等人类可读导航，请查看 `docs/参考资料/接口/API清单导航.md`。',
-    '',
-    '| 分组 | 方法 | 路径 | 控制器动作 | 鉴权 | 中间件 |',
-    '| --- | --- | --- | --- | --- | --- |',
-];
-
+$generatedAt = date('Y-m-d H:i:s');
+$tableRows = [];
 foreach ($routes as $route) {
-    $lines[] = sprintf(
+    $tableRows[] = sprintf(
         '| %s | `%s` | `%s` | `%s` | `%s` | `%s` |',
         escapeTableCell($route['group']),
         escapeTableCell($route['methods']),
@@ -83,6 +66,64 @@ $target = dirname($basePath).'/docs/自动生成/接口/后端API清单.md';
 $writeTarget = PHP_OS_FAMILY === 'Windows'
     ? mb_convert_encoding($target, 'GBK', 'UTF-8')
     : $target;
+
+if ($checkMode) {
+    // 只比对接口集合与统计，忽略「生成时间」——它每次运行都不同，
+    // 纳入比较会让门禁永远为红，反而逼人跳过校验。
+    $existing = is_file($writeTarget) ? (string) file_get_contents($writeTarget) : '';
+    $actual = parseInventory($existing);
+    $expected = [
+        'total' => $routes->count(),
+        'groupCounts' => $groupCounts,
+        'rows' => $tableRows,
+    ];
+
+    if ($actual !== $expected) {
+        fwrite(STDERR, '后端 API 清单已过期：'.$target.PHP_EOL);
+        fwrite(STDERR, '请运行 php backend/scripts/export_api_inventory.php 重新生成并提交。'.PHP_EOL);
+        if ($actual['total'] !== $expected['total']) {
+            fwrite(STDERR, '接口数：文件内 '.(string) ($actual['total'] ?? '缺失').'，当前路由 '.$expected['total'].'。'.PHP_EOL);
+        }
+        $added = array_values(array_diff($expected['rows'], $actual['rows'] ?? []));
+        $removed = array_values(array_diff($actual['rows'] ?? [], $expected['rows']));
+        fwrite(STDERR, '新增 '.count($added).' 行，移除 '.count($removed).' 行。'.PHP_EOL);
+        foreach (array_slice($added, 0, 10) as $row) {
+            fwrite(STDERR, '  + '.$row.PHP_EOL);
+        }
+        foreach (array_slice($removed, 0, 10) as $row) {
+            fwrite(STDERR, '  - '.$row.PHP_EOL);
+        }
+
+        exit(1);
+    }
+
+    fwrite(STDOUT, sprintf('后端 API 清单与当前路由一致（%d 条）。%s', $routes->count(), PHP_EOL));
+
+    exit(0);
+}
+
+$lines = array_merge([
+    '---',
+    'status: generated',
+    'updated: '.date('Y-m-d'),
+    'owner: backend-platform',
+    '---',
+    '',
+    '# 后端 API 清单',
+    '',
+    '- 生成时间: `'.$generatedAt.'`',
+    '- API 总数: `'.$routes->count().'`',
+    '- 分组统计: `'.$groupCounts.'`',
+    '',
+    '> **自动生成**，由 `backend/scripts/export_api_inventory.php` 扫描 Laravel 路由表导出，**不要手工编辑**。',
+    '>',
+    '> 需要更新本文件时，直接在项目根目录执行：`php backend/scripts/export_api_inventory.php`。',
+    '> 需要看业务分组、核心业务流程映射等人类可读导航，请查看 `docs/参考资料/接口/API清单导航.md`。',
+    '',
+    '| 分组 | 方法 | 路径 | 控制器动作 | 鉴权 | 中间件 |',
+    '| --- | --- | --- | --- | --- | --- |',
+], $tableRows);
+
 file_put_contents($writeTarget, implode("\n", $lines)."\n");
 
 fwrite(STDOUT, sprintf(
@@ -91,6 +132,39 @@ fwrite(STDOUT, sprintf(
     $routes->count(),
     PHP_EOL
 ));
+
+/**
+ * 把已生成的清单 Markdown 解析回可比对的结构。
+ * 只取计数/分组统计/表格数据行，刻意丢弃「生成时间」，供 --check 使用。
+ *
+ * @return array{total: int|null, groupCounts: string|null, rows: list<string>}
+ */
+function parseInventory(string $markdown): array
+{
+    $total = null;
+    $groupCounts = null;
+    $rows = [];
+
+    foreach (explode("\n", $markdown) as $line) {
+        if (preg_match('/^- API 总数: `(\d+)`$/', $line, $matched) === 1) {
+            $total = (int) $matched[1];
+
+            continue;
+        }
+        if (preg_match('/^- 分组统计: `(.+)`$/', $line, $matched) === 1) {
+            $groupCounts = $matched[1];
+
+            continue;
+        }
+        // 表头与分隔行不是数据行；数据行都以 "| " 开头且含反引号。
+        if (! str_starts_with($line, '| ') || ! str_contains($line, '`')) {
+            continue;
+        }
+        $rows[] = $line;
+    }
+
+    return ['total' => $total, 'groupCounts' => $groupCounts, 'rows' => $rows];
+}
 
 function resolveGroup(string $uri): string
 {

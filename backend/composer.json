@@ -44,14 +44,25 @@
     "audit:plugins": [
       "@php artisan plugins:audit-registrations"
     ],
+    "audit:admin-routes": [
+      "@php artisan audit:admin-routes"
+    ],
     "api:spec": [
       "@php scripts/upload_apifox_openapi.php --dry-run --output=storage/app/openapi.json"
+    ],
+    "api:inventory": [
+      "@php scripts/export_api_inventory.php"
+    ],
+    "api:check": [
+      "@php scripts/check_api_sources_consistency.php"
     ],
     "verify": [
       "@format:check",
       "@analyse",
       "@audit:plugins",
+      "@audit:admin-routes",
       "@api:spec",
+      "@api:check",
       "@php artisan test"
     ],
     "post-autoload-dump": [

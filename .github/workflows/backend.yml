@@ -97,12 +97,36 @@ jobs:
       - name: 静态分析
         run: composer analyse
 
+      - name: 前端接口清单一致性
+        # 生成物 frontend-admin-v3/src/data/apiCatalog.generated.json 由
+        # backend/scripts/generate_frontend_api_catalog.php 依据 route:list 产出，
+        # 管理端「接口清单」页直接消费它。--check 只比对不写文件：改了路由却没重新生成时这里失败。
+        # 修复方式：本地跑 php backend/scripts/generate_frontend_api_catalog.php 后提交生成物。
+        run: php scripts/generate_frontend_api_catalog.php --check
+
       - name: 插件来源审计
         run: composer audit:plugins
+
+      - name: 依赖安全扫描
+        # 走 Packagist 的 CVE 通告库扫描 composer.lock 中的生产依赖（--no-dev 跳过 require-dev）。
+        # 阻断：发现漏洞时 composer audit 退出码为 1，流水线直接失败。
+        # 修复方式：composer update <包名> --with-dependencies 后跑 php artisan test 与 composer analyse。
+        # 确实无法升级时（上游无修复版本），在下方显式 --ignore 并注明原因与到期复核日期，不要改成非阻断。
+        run: composer audit --no-dev
 
       - name: OpenAPI 规格生成
         # 只生成到 storage/app/openapi.json，不上传 Apifox：生成失败即失败。
         run: composer api:spec
+
+      - name: 后端 API 清单生成
+        # 生成到 docs/自动生成/接口/后端API清单.md（构建产物，不入库）。
+        # 两份产物都由路由表派生，下面统一做一致性校验，防止真源漂移。
+        run: composer api:inventory
+
+      - name: 接口真源一致性校验
+        # 三条真源（路由表 / openapi.json / 后端API清单）必须一致：
+        # 路由改了却漏改生成器、或生成器漏掉某类中间件时，这里失败。
+        run: composer api:check
 
       - name: 全量测试
         run: php artisan test
