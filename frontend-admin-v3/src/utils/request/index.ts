@@ -1,15 +1,11 @@
-// axios配置  可自行根据项目进行更改，只需更改该文件即可，其他文件可以不动
-import type { AxiosInstance, AxiosRequestConfig } from 'axios';
-import { isString, merge } from 'lodash-es';
+// 管理端请求入口：传输、重试、信封校验统一由 @caiwu/shared 的 createHttpClient 提供，
+// 本文件只保留管理端历史调用约定（对象式参数、GET 防缓存时间戳、非 GET 的 params 兜底、错误静默）。
+import type { ClientConfigExtras } from '@caiwu/shared/runtime';
+import { createHttpClient } from '@caiwu/shared/runtime';
+import type { AxiosRequestConfig } from 'axios';
 
 import { getAdminToken, removeAdminToken } from '@/app/runtime/session';
-import { ContentTypeEnum } from '@/constants';
 import router from '@/router';
-import { toUserMessage } from '@/utils/userMessage';
-
-import { VAxios } from './Axios';
-import type { AxiosTransform, CreateAxiosOptions } from './AxiosTransform';
-import { formatRequestDate, joinTimestamp, setObjToUrlParams } from './utils';
 
 const host = String(import.meta.env.VITE_API_BASE_URL || '')
   .trim()
@@ -33,220 +29,88 @@ function redirectToLoginOnAuthFailure() {
   });
 }
 
-// 数据处理，方便区分多种处理方式
-const transform: AxiosTransform = {
-  // 处理请求数据。如果数据不是预期格式，可直接抛出错误
-  transformRequestHook: (res, options) => {
-    const { isTransformResponse, isReturnNativeResponse } = options;
+const httpClient = createHttpClient({
+  baseURL: host,
+  // 管理端错误提示由各页面 catch 后调用 errorMessage() 自行完成，
+  // 拦截器保持静默，避免与页面提示重复弹窗。
+  showError: () => {},
+  onUnauthorized: () => redirectToLoginOnAuthFailure(),
+  resolveToken: () => getAdminToken(),
+  // 历史实现按解包后的业务数据使用，保持返回 data 而非完整信封。
+  unwrapEnvelope: true,
+  // 管理端页面兜底文案依赖「原始错误文案不是中文」这条判断：
+  // 传输层错误保留 axios 原始文案（如 Network Error），errorMessage() 才会回退到页面场景文案
+  // （如「导出数据库备份失败」）；否则会被统一中文提示覆盖成「网络异常」。
+  preserveErrorMessage: true,
+});
 
-    // 如果204无内容直接返回
-    const method = res.config.method?.toLowerCase();
-    if (res.status === 204 && method && ['put', 'patch', 'delete'].includes(method)) {
-      return res;
-    }
-
-    // 是否返回原生响应头 比如：需要获取响应头时使用该属性
-    if (isReturnNativeResponse) {
-      return res;
-    }
-    // 不进行任何处理，直接返回
-    // 用于页面代码可能需要直接获取code，data，message这些信息时开启
-    if (!isTransformResponse) {
-      return res.data;
-    }
-
-    // 错误的时候返回
-    const { data } = res;
-    if (!data) {
-      throw new Error('请求接口错误');
-    }
-
-    //  这里 code为 后台统一的字段，需要在 types.ts内修改为项目自己的接口返回格式
-    const { code } = data;
-
-    // 这里逻辑可以根据项目进行修改
-    const hasSuccess = data && code === 0;
-    if (hasSuccess) {
-      return data.data;
-    }
-
-    const message = toUserMessage(data.message, `请求接口错误，错误码：${code}`);
-    if (code === 40100) {
-      redirectToLoginOnAuthFailure();
-    }
-    const apiError = new Error(message) as Error & {
-      code?: unknown;
-      data?: unknown;
-      errors?: unknown;
-      response?: { data: unknown };
-    };
-    apiError.code = code;
-    apiError.data = data.data;
-    apiError.errors = data.data?.errors;
-    apiError.response = { data };
-    throw apiError;
-  },
-
-  // 请求前处理配置
-  beforeRequestHook: (config, options) => {
-    const { apiUrl, isJoinPrefix, urlPrefix, joinParamsToUrl, formatDate, joinTime = true } = options;
-
-    // 添加接口前缀
-    if (isJoinPrefix && urlPrefix && isString(urlPrefix)) {
-      config.url = `${urlPrefix}${config.url}`;
-    }
-
-    // 将baseUrl拼接
-    if (apiUrl && isString(apiUrl)) {
-      config.url = `${apiUrl}${config.url}`;
-    }
-    const params = config.params || {};
-    const data = config.data || false;
-
-    if (formatDate && data && !isString(data)) {
-      formatRequestDate(data);
-    }
-    if (config.method?.toUpperCase() === 'GET') {
-      if (!isString(params)) {
-        // 给 get 请求加上时间戳参数，避免从缓存中拿数据。
-        config.params = Object.assign(params || {}, joinTimestamp(joinTime, false));
-      } else {
-        // RESTful 路径片段参数。
-        config.url = `${config.url + params}${joinTimestamp(joinTime, true)}`;
-        config.params = undefined;
-      }
-    } else if (!isString(params)) {
-      if (formatDate) {
-        formatRequestDate(params);
-      }
-      if (
-        Reflect.has(config, 'data') &&
-        config.data &&
-        (Object.keys(config.data).length > 0 || data instanceof FormData)
-      ) {
-        config.data = data;
-        config.params = params;
-      } else {
-        // 非GET请求如果没有提供data，则将params视为data
-        config.data = params;
-        config.params = undefined;
-      }
-      if (joinParamsToUrl) {
-        config.url = setObjToUrlParams(config.url as string, { ...config.params, ...config.data });
-      }
-    } else {
-      // RESTful 路径片段参数。
-      config.url += params;
-      config.params = undefined;
-    }
-    return config;
-  },
-
-  // 请求拦截器处理
-  requestInterceptors: async (config, options) => {
-    // 请求之前处理config
-    const token = getAdminToken();
-
-    if (token && (config as Recordable)?.requestOptions?.withToken !== false) {
-      (config as Recordable).headers.Authorization = `${options.authenticationScheme || 'Bearer'} ${token}`;
-    }
-    return config;
-  },
-
-  // 响应拦截器处理
-  responseInterceptors: (res) => {
-    return res;
-  },
-
-  // 响应错误处理
-  responseInterceptorsCatch: (error: any, instance: AxiosInstance) => {
-    const { config, response } = error;
-    const status = response?.status;
-    const responseCode = response?.data?.code;
-    const responseMessage = error?.response?.data?.message;
-    if (responseMessage) {
-      error.message = toUserMessage(responseMessage, error.message || '请求接口错误');
-    }
-
-    if (status === 401 || responseCode === 40100) {
-      redirectToLoginOnAuthFailure();
-      return Promise.reject(error);
-    }
-
-    if (!config || !config.requestOptions?.retry) return Promise.reject(error);
-
-    const method = String(config.method || 'get').toLowerCase();
-    const isIdempotent = method === 'get' || method === 'head';
-    if (!isIdempotent) return Promise.reject(error);
-
-    // 与 shared RETRYABLE_STATUS_CODES 保持一致；无响应错误（CORS/断网/超时）属确定性失败，重试无收益，立即报错。
-    const retryableStatuses = [408, 425, 429, 500, 502, 503, 504];
-    const isRetryableStatus = typeof status === 'number' && retryableStatuses.includes(status);
-    if (!isRetryableStatus) return Promise.reject(error);
-
-    config.retryCount = config.retryCount || 0;
-
-    if (config.retryCount >= config.requestOptions.retry.count) return Promise.reject(error);
-
-    config.retryCount += 1;
-
-    const backoff = new Promise<AxiosRequestConfig>((resolve) => {
-      setTimeout(() => {
-        resolve(config);
-      }, config.requestOptions.retry.delay || 1);
-    });
-    // 仅重试幂等的 GET/HEAD，原请求头直接复用，不在此改写 Content-Type
-    // （旧实现会强制覆盖为 JSON，破坏 form-urlencoded 等非 JSON 请求）。
-    return backoff.then((config) => instance.request(config));
-  },
-};
-
-function createAxios(opt?: Partial<CreateAxiosOptions>) {
-  return new VAxios(
-    merge(
-      <CreateAxiosOptions>{
-        // https://developer.mozilla.org/en-US/docs/Web/HTTP/Authentication#authentication_schemes
-        // 例如: authenticationScheme: 'Bearer'
-        authenticationScheme: '',
-        // 超时
-        timeout: 10 * 1000,
-        // 头信息
-        headers: { 'Content-Type': ContentTypeEnum.Json },
-        // 数据处理方式
-        transform,
-        // 配置项，下面的选项都可以在独立的接口请求中覆盖
-        requestOptions: {
-          // 接口地址
-          apiUrl: host,
-          // 是否自动添加接口前缀
-          isJoinPrefix: true,
-          // VITE_API_BASE_URL 已包含完整 /api 前缀。
-          urlPrefix: '',
-          // 是否返回原生响应头 比如：需要获取响应头时使用该属性
-          isReturnNativeResponse: false,
-          // 需要对返回数据进行处理
-          isTransformResponse: true,
-          // post请求的时候添加参数到url
-          joinParamsToUrl: false,
-          // 格式化提交参数时间
-          formatDate: true,
-          // 是否加入时间戳
-          joinTime: true,
-          // 是否忽略请求取消令牌
-          // 如果启用，则重复请求时不进行处理
-          // 如果禁用，则重复请求时会取消当前请求
-          ignoreCancelToken: true,
-          // 是否携带token
-          withToken: true,
-          // 重试
-          retry: {
-            count: 3,
-            delay: 1000,
-          },
-        },
-      },
-      opt || {},
-    ),
-  );
+/** 管理端请求配置：axios 配置 + 共享客户端扩展项 + 本项目的时间戳开关。 */
+export interface AdminRequestConfig extends AxiosRequestConfig, ClientConfigExtras {
+  /** 是否给 GET 追加防缓存时间戳，默认 true */
+  joinTime?: boolean;
 }
-export const request = createAxios();
+
+/** GET 追加 _t 时间戳防缓存，沿用历史行为（e2e 的通配符匹配依赖它）。 */
+function withCacheBuster(config: AdminRequestConfig): AdminRequestConfig {
+  if (config.joinTime === false) return config;
+
+  const params = config.params;
+  return {
+    ...config,
+    params: { ...(params && typeof params === 'object' ? params : {}), _t: Date.now() },
+  };
+}
+
+function isNonEmptyBody(data: unknown): boolean {
+  if (!data) return false;
+  if (data instanceof FormData) return true;
+  return typeof data === 'object' && Object.keys(data as Record<string, unknown>).length > 0;
+}
+
+/**
+ * 非 GET 请求沿用历史兜底：调用方只传 params 时，把 params 当作请求体，
+ * 避免 body 为空导致后端 FormRequest 校验失败。已有请求体时两者并存。
+ */
+function withBodyFallback(config: AdminRequestConfig): AdminRequestConfig {
+  const params = config.params;
+  if (isNonEmptyBody(config.data) || !params || typeof params !== 'object') {
+    return config;
+  }
+
+  return { ...config, data: params, params: undefined };
+}
+
+/** FormData 上传必须显式声明 multipart，共享客户端不会猜测文件体。 */
+function withFormDataHeaders(config: AdminRequestConfig): AdminRequestConfig {
+  if (!(config.data instanceof FormData)) return config;
+
+  return {
+    ...config,
+    headers: { ...config.headers, 'Content-Type': 'multipart/form-data' },
+  };
+}
+
+const DEFAULT_SAFE_RETRY_COUNT = 3;
+
+function send<T>(method: 'get' | 'post' | 'put' | 'patch' | 'delete', config: AdminRequestConfig): Promise<T> {
+  const normalized = method === 'get' ? withCacheBuster(config) : withFormDataHeaders(withBodyFallback(config));
+
+  const payload: AdminRequestConfig = {
+    ...normalized,
+    method,
+    // 历史默认 GET 失败重试 3 次；非幂等请求由 shared 客户端自动跳过。
+    safeRetryCount: normalized.safeRetryCount ?? DEFAULT_SAFE_RETRY_COUNT,
+  };
+
+  // shared 客户端已按 unwrapEnvelope 解包，运行时返回的就是业务数据；
+  // axios 的泛型推导无法表达这一点，这里在入口处收敛为一个断言。
+  return httpClient.request<unknown, T>(payload) as Promise<T>;
+}
+
+export const request = {
+  get: <T = unknown>(config: AdminRequestConfig) => send<T>('get', config),
+  post: <T = unknown>(config: AdminRequestConfig) => send<T>('post', config),
+  put: <T = unknown>(config: AdminRequestConfig) => send<T>('put', config),
+  patch: <T = unknown>(config: AdminRequestConfig) => send<T>('patch', config),
+  delete: <T = unknown>(config: AdminRequestConfig) => send<T>('delete', config),
+};

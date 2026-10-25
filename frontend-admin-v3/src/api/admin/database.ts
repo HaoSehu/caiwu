@@ -180,24 +180,22 @@ async function downloadBackupFile(taskId: string): Promise<void> {
 export const databaseApi = {
   status: () => request.get<DatabaseStatus>({ url: '/v2/admin/database/status' }),
   optimize: (data?: { tables?: string[] }) =>
-    request.post<DatabaseOptimizeResult>(
-      {
-        url: '/v2/admin/database/optimizations',
-        data: data || {},
-        timeout: DATABASE_OPTIMIZE_TIMEOUT,
-      },
-      {
-        retry: { count: 0, delay: 0 },
-      },
-    ),
+    request.post<DatabaseOptimizeResult>({
+      url: '/v2/admin/database/optimizations',
+      data: data || {},
+      timeout: DATABASE_OPTIMIZE_TIMEOUT,
+      retrySafeRequest: false,
+      safeRetryCount: 0,
+    }),
   /**
    * 提交备份任务（立即返回，不阻塞请求），返回任务 ID。
    */
   createBackupTask: () =>
-    request.post<DatabaseBackupDispatchResult>(
-      { url: '/v2/admin/database/backups' },
-      { retry: { count: 0, delay: 0 } },
-    ),
+    request.post<DatabaseBackupDispatchResult>({
+      url: '/v2/admin/database/backups',
+      retrySafeRequest: false,
+      safeRetryCount: 0,
+    }),
   /** 查询备份任务进度。 */
   backupTask: (taskId: string) =>
     request.get<DatabaseBackupTask>({

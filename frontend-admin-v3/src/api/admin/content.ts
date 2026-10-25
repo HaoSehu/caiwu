@@ -70,6 +70,7 @@ export const mediaApi = {
     request.post<MediaFileRecord>({
       url: '/v2/admin/media-files',
       data,
+      headers: { 'Content-Type': 'multipart/form-data' },
     }),
   reindex: () =>
     request

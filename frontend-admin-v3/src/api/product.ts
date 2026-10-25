@@ -456,7 +456,7 @@ export const productApi = {
   createCategory: (data: Record<string, unknown>) => request.post({ url: '/v2/admin/product-groups', data }),
   updateCategory: (id: number | string, data: Record<string, unknown>) =>
     request.put({ url: `/v2/admin/product-groups/${id}`, data }),
-  deleteCategory: (id: number | string, params?: Record<string, unknown>) =>
-    request.delete({ url: `/v2/admin/product-groups/${id}`, params }),
+  deleteCategory: (id: number | string, data?: Record<string, unknown>) =>
+    request.delete({ url: `/v2/admin/product-groups/${id}`, data }),
   reorderCategory: (data: Record<string, unknown>) => request.post({ url: '/v2/admin/product-groups/reorders', data }),
 };
