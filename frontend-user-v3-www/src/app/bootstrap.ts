@@ -13,7 +13,7 @@ import {
   primeClientConnectionHints,
 } from "@/app/runtime/network";
 import { initSessionActivityTracking } from "@/utils/auth";
-import { useAppStore } from "@/stores/app";
+import { useAppStore } from "@/app/stores/app";
 import "@/assets/styles/global.scss";
 
 const SITE_CONFIG_PREFETCH_TIMEOUT = 1200;

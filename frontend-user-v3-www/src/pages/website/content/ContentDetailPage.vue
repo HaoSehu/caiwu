@@ -114,7 +114,7 @@ import siteApi from "@/api/site";
 import { renderMarkdown } from "@/utils/markdown";
 import { rewriteApiAssetUrlsInHtml } from "@/utils/apiAssetUrl";
 import { applyDetailPageMeta, buildDetailCanonical } from "@/composables/usePageMeta";
-import { useAppStore } from "@/stores/app";
+import { useAppStore } from "@/app/stores/app";
 import { getContentConfig } from "./contentConfig";
 
 // ---- 模块级分类缓存 ----

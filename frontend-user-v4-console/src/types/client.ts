@@ -1,15 +1,8 @@
-export interface ApiEnvelope<T> {
-  code: number;
-  message?: string;
-  data: T;
-}
+// 统一响应包裹与分页信封已收拢到 @caiwu/shared/types，这里用 import type 引入供本文件内部
+// 的领域类型 extends 使用；同时 re-export，保证既有 `import type { PagedList } from '@/types/client'` 不失效。
+import type { ApiEnvelope, PagedList, PagedListParams } from '@caiwu/shared/types';
 
-export interface PagedList<T> {
-  list: T[];
-  total: number;
-  page?: number;
-  page_size?: number;
-}
+export type { ApiEnvelope, PagedList, PagedListParams };
 
 export interface ClientFinanceListParams {
   page?: number;

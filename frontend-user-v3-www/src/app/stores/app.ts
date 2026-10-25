@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { computed } from 'vue'
 import { useSiteBrandingStore } from '@/app/stores/siteBranding'
 
+// 应用级 store：聚合站点品牌信息，保持对既有调用方（appStore.xxx）的只读快照语义。
 export const useAppStore = defineStore('app', () => {
   const siteBrandingStore = useSiteBrandingStore()
 

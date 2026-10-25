@@ -43,22 +43,22 @@ import {
   ref,
 } from "vue";
 import siteApi from "@/api/site";
-import { useAppStore } from "@/stores/app";
-import HomeHeroCarousel from "@/views/website/Home/components/HomeHeroCarousel.vue";
-import HomeProductTabs from "@/views/website/Home/components/HomeProductTabs.vue";
-import HomeSectionSkeleton from "@/views/website/Home/components/HomeSectionSkeleton.vue";
+import { useAppStore } from "@/app/stores/app";
+import HomeHeroCarousel from "@/pages/website/home/components/HomeHeroCarousel.vue";
+import HomeProductTabs from "@/pages/website/home/components/HomeProductTabs.vue";
+import HomeSectionSkeleton from "@/pages/website/home/components/HomeSectionSkeleton.vue";
 
 const HomeSolutionSection = defineAsyncComponent(
-  () => import("@/views/website/Home/components/HomeSolutionSection.vue"),
+  () => import("@/pages/website/home/components/HomeSolutionSection.vue"),
 );
 const HomePartnerSection = defineAsyncComponent(
-  () => import("@/views/website/Home/components/HomePartnerSection.vue"),
+  () => import("@/pages/website/home/components/HomePartnerSection.vue"),
 );
 const HomeNewsSection = defineAsyncComponent(
-  () => import("@/views/website/Home/components/HomeNewsSection.vue"),
+  () => import("@/pages/website/home/components/HomeNewsSection.vue"),
 );
 const HomeRegisterBar = defineAsyncComponent(
-  () => import("@/views/website/Home/components/HomeRegisterBar.vue"),
+  () => import("@/pages/website/home/components/HomeRegisterBar.vue"),
 );
 
 interface ProductTypeItem {

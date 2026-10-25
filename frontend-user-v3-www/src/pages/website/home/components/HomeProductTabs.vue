@@ -61,7 +61,7 @@ import { computed, shallowRef, watch } from "vue";
 import { useRouter } from "vue-router";
 import { ElIcon } from "element-plus/es/components/icon/index.mjs";
 import { ArrowRight } from "@element-plus/icons-vue";
-import { useAppStore } from "@/stores/app";
+import { useAppStore } from "@/app/stores/app";
 import { buildWebsiteProductPath } from "@/utils/productRoute";
 import { resolveProductDisplayName } from "@/utils/websiteProductConfig";
 

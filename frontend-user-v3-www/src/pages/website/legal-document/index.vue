@@ -24,7 +24,7 @@
 import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ElMessage } from "element-plus/es/components/message/index.mjs";
-import { useAppStore } from "@/stores/app";
+import { useAppStore } from "@/app/stores/app";
 
 const route = useRoute();
 const router = useRouter();

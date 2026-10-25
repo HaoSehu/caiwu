@@ -1,4 +1,4 @@
-import { useAppStore } from '@/stores/app'
+import { useAppStore } from '@/app/stores/app'
 import { applyRouteMeta } from '@/utils/pageMeta'
 
 const DEFAULT_PUBLIC_SITE_URL = 'https://www.coyjs.cn'
