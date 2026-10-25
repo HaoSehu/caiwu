@@ -70,9 +70,23 @@ const URI_ATTRS = new Set(["href", "src"]);
 const URL_PROTOCOLS = new Set(["http:", "https:", "mailto:", "tel:"]);
 const IMAGE_PROTOCOLS = new Set(["http:", "https:"]);
 
+export interface SanitizeRenderedHtmlOptions {
+  imageAltFallback?: string;
+  /**
+   * 受控放行 style 属性（逐条清洗脚本/绑定/固定定位向量，url() 仅 http(s)/data:image）。
+   * 默认 false（style 属性一律移除）。用于日志邮件正文预览等需要保留排版的半可信内容。
+   */
+  allowStyleAttr?: boolean;
+  /**
+   * 受控放行 img src 的 data:image 内嵌图（默认 false）。用于日志邮件预览路径，
+   * 与预览壳 CSP 的 img-src data: 对齐。
+   */
+  allowDataImage?: boolean;
+}
+
 // 站内链接判定：锚点、以 / 开头（排除 // 协议相对）、./、../、无协议相对路径。
 // 站内链接保留权重（不加 nofollow、不强制新开标签），外链才收紧 rel。
-function isInternalHref(value) {
+function isInternalHref(value: unknown): boolean {
   const url = String(value || "")
     .trim()
     .replace(/[\u0000-\u001F\u007F\s]+/g, "");
@@ -84,13 +98,13 @@ function isInternalHref(value) {
   return true;
 }
 
-function normalizedUrl(value) {
+function normalizedUrl(value: unknown): string {
   return String(value || "")
     .trim()
     .replace(/[\u0000-\u001F\u007F\s]+/g, "");
 }
 
-function isSafeUrl(value, tagName, attrName) {
+function isSafeUrl(value: unknown, tagName: string, attrName: string): boolean {
   const url = normalizedUrl(value);
 
   if (!url) return false;
@@ -125,16 +139,16 @@ function isSafeUrl(value, tagName, attrName) {
 // CSS 允许用反斜杠转义书写 at-规则与属性名（如 @\69 mport、position:\66 ixed），
 // 字面量正则会被这类写法绕过。这里把转义序列解码成等价文本后再做检测，
 // 返回值仍是原始样式串，不改变邮件排版。
-function decodeCssEscapes(value) {
+function decodeCssEscapes(value: unknown): string {
   return String(value || "")
-    .replace(/\\([0-9a-fA-F]{1,6})[ \t\r\n\f]?/g, (_match, hex) => {
+    .replace(/\\([0-9a-fA-F]{1,6})[ \t\r\n\f]?/g, (_match, hex: string) => {
       const code = parseInt(hex, 16);
       return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : "";
     })
     .replace(/\\(.)/g, "$1");
 }
 
-function sanitizeStyleValue(value) {
+function sanitizeStyleValue(value: unknown): string {
   // 浏览器把 CSS 注释当空白，先剥离再检测，防 expression/*x*/( 等拼接变体绕过
   const raw = String(value || "").replace(/\/\*[\s\S]*?\*\//g, "");
   // 检测基于解码后的等价文本，返回仍用原始串
@@ -157,7 +171,11 @@ function sanitizeStyleValue(value) {
   return raw.trim();
 }
 
-function cleanAttribute(element, attr, options) {
+function cleanAttribute(
+  element: Element,
+  attr: Attr,
+  options: SanitizeRenderedHtmlOptions,
+): void {
   const tagName = element.tagName.toLowerCase();
   const attrName = attr.name.toLowerCase();
 
@@ -231,7 +249,11 @@ function cleanAttribute(element, attr, options) {
   }
 }
 
-function sanitizeElement(element, imageAltFallback, options) {
+function sanitizeElement(
+  element: Element,
+  imageAltFallback: string,
+  options: SanitizeRenderedHtmlOptions,
+): void {
   const tagName = element.tagName.toLowerCase();
 
   if (DROP_TAGS.has(tagName)) {
@@ -271,10 +293,14 @@ function sanitizeElement(element, imageAltFallback, options) {
   }
 }
 
-function walk(node, imageAltFallback, options) {
+function walk(
+  node: Node,
+  imageAltFallback: string,
+  options: SanitizeRenderedHtmlOptions,
+): void {
   for (const child of Array.from(node.childNodes)) {
     if (child.nodeType === Node.ELEMENT_NODE) {
-      sanitizeElement(child, imageAltFallback, options);
+      sanitizeElement(child as Element, imageAltFallback, options);
       if (child.parentNode) {
         walk(child, imageAltFallback, options);
       }
@@ -284,7 +310,23 @@ function walk(node, imageAltFallback, options) {
   }
 }
 
-export function sanitizeRenderedHtml(html, options = {}) {
+/**
+ * HTML 文本转义：用于把不可信文本拼进 HTML 字符串（导出、预览壳等）。
+ * 与 sanitizeRenderedHtml 的无 DOM 兜底路径保持同一套替换规则。
+ */
+export function escapeHtml(value: unknown): string {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+export function sanitizeRenderedHtml(
+  html?: unknown,
+  options: SanitizeRenderedHtmlOptions = {},
+): string {
   const source = String(html || "");
 
   if (
@@ -292,12 +334,7 @@ export function sanitizeRenderedHtml(html, options = {}) {
     typeof DOMParser === "undefined" ||
     typeof Node === "undefined"
   ) {
-    return source
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#39;");
+    return escapeHtml(source);
   }
 
   const imageAltFallback =

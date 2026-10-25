@@ -1,1 +1,1 @@
-export * from '../htmlSanitizer.js'
+export * from '../htmlSanitizer'

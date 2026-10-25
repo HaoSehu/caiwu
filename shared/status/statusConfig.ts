@@ -1,1 +1,1 @@
-export * from '../statusConfig.js'
+export * from '../statusConfig'

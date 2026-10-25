@@ -1,5 +1,5 @@
 <template>
-  <t-tag :theme="theme" :variant="variant">{{ label }}</t-tag>
+  <t-tag :theme="theme" :variant="variant" :size="size">{{ label }}</t-tag>
 </template>
 
 <script setup lang="ts">
@@ -17,9 +17,11 @@ const props = withDefaults(
     statusMap: Record<string, unknown>;
     status: unknown;
     variant?: 'light' | 'dark' | 'outline' | 'light-outline';
+    size?: 'small' | 'medium' | 'large';
   }>(),
   {
     variant: 'light',
+    size: 'small',
   },
 );
 

@@ -8,5 +8,5 @@
     "allowImportingTsExtensions": true
   },
   "include": ["./**/*.ts", "./**/*.d.ts", "./**/*.vue"],
-  "exclude": ["./**/*.js"]
+  "exclude": ["./eslint.config.js", "./extraStatusMaps.js"]
 }

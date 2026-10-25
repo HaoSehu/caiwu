@@ -11,7 +11,7 @@ globalThis.DOMParser = dom.window.DOMParser
 globalThis.Node = dom.window.Node
 
 // 动态导入 sanitizer（依赖 DOMParser 全局变量）
-const { sanitizeRenderedHtml } = await import('../htmlSanitizer.js')
+const { sanitizeRenderedHtml } = await import('../htmlSanitizer.ts')
 
 // 1. script 标签应被移除
 {

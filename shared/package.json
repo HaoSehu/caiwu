@@ -9,12 +9,16 @@
     "./runtime": "./runtime/index.ts",
     "./content": "./content/index.ts",
     "./finance": "./finance/index.ts",
+    "./user-v3": "./user-v3/index.ts",
+    "./user-v3/*": "./user-v3/*",
+    "./types": "./types/index.ts",
+    "./types/*": "./types/*",
     "./content/contentNormalizer": "./content/contentNormalizer.ts",
     "./content/createMarkdownRenderer": "./content/createMarkdownRenderer.ts",
     "./content/htmlSanitizer": "./content/htmlSanitizer.ts",
-    "./statusConfig": "./statusConfig.js",
+    "./statusConfig": "./statusConfig.ts",
     "./extraStatusMaps": "./extraStatusMaps.js",
-    "./htmlSanitizer": "./htmlSanitizer.js"
+    "./htmlSanitizer": "./htmlSanitizer.ts"
   },
   "types": "./index.d.ts",
   "dependencies": {

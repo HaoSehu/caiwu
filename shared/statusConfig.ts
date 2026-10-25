@@ -24,9 +24,27 @@
  * ============================================================
  */
 
+export interface StatusConfig {
+  label: string;
+  color?: string;
+  tagType?: string;
+  icon?: string;
+  pulse?: boolean;
+  direction?: string;
+  [key: string]: unknown;
+}
+
+export type StatusMap = Record<string | number, StatusConfig>;
+
+/**
+ * 访问器参数类型。调用方常持有来自 props、接口或局部字面量的宽松映射，
+ * 而这些函数只做运行时查表并对缺失项返回兜底配置，因此入参保持宽松。
+ */
+export type StatusMapInput = Record<string | number, unknown>;
+
 // ===================== 颜色常量 =====================
 
-export const STATUS_COLORS = {
+export const STATUS_COLORS: Record<string, string> = {
   warning: "#E6A23C", // 待支付
   blue: "#409EFF", // 已支付 / 开通中
   success: "#67C23A", // 运行中 / 已完成
@@ -37,7 +55,7 @@ export const STATUS_COLORS = {
 
 // tagType 语义值（UI 框架无关）
 // 各前端按需映射到组件属性
-export const STATUS_TAG_TYPES = {
+export const STATUS_TAG_TYPES: Record<string, string> = {
   warning: "warning",
   blue: "", // 默认/primary
   success: "success",
@@ -49,14 +67,14 @@ export const STATUS_TAG_TYPES = {
 // ===================== 购买状态（历史订单状态） =====================
 // 4 态：待支付 / 已支付 / 已取消 / 已退款。
 
-export const ORDER_STATUS = {
+export const ORDER_STATUS: Record<string, number> = {
   PENDING: 0, // 待支付
   PAID: 1, // 已支付
   CANCELLED: 4, // 已取消
   REFUNDED: 5, // 已退款
 };
 
-export const ORDER_STATUS_MAP = {
+export const ORDER_STATUS_MAP: StatusMap = {
   [ORDER_STATUS.PENDING]: {
     label: "待支付",
     color: STATUS_COLORS.warning,
@@ -84,7 +102,10 @@ export const ORDER_STATUS_MAP = {
 };
 
 // 订单状态筛选选项（4 态）
-export const ORDER_STATUS_FILTER_OPTIONS = [
+export const ORDER_STATUS_FILTER_OPTIONS: Array<{
+  value: string | number;
+  label: string;
+}> = [
   { value: ORDER_STATUS.PENDING, label: "待支付" },
   { value: ORDER_STATUS.PAID, label: "已支付" },
   { value: ORDER_STATUS.CANCELLED, label: "已取消" },
@@ -92,14 +113,14 @@ export const ORDER_STATUS_FILTER_OPTIONS = [
 ];
 
 // 购买类型（历史订单类型）
-export const ORDER_TYPE_MAP = {
+export const ORDER_TYPE_MAP: Record<string, string> = {
   new: "新购",
   renew: "续费",
   upgrade: "附加配置",
 };
 
 // 账单类型
-export const INVOICE_TYPE_MAP = {
+export const INVOICE_TYPE_MAP: Record<string, string> = {
   new: "新购",
   normal: "新购",
   renew: "续费",
@@ -115,7 +136,7 @@ export const INVOICE_TYPE_MAP = {
 // 库内 4 态：待支付 / 已支付 / 已取消 / 已退款，与订单同构；
 // PARTIAL_PAID(2) 为后端派生展示态（0 < paid_amount < amount），不落库。
 
-export const INVOICE_STATUS = {
+export const INVOICE_STATUS: Record<string, number> = {
   UNPAID: 0, // 待支付
   PAID: 1, // 已支付
   PARTIAL_PAID: 2, // 部分已付（派生展示态，不落库）
@@ -123,7 +144,7 @@ export const INVOICE_STATUS = {
   REFUNDED: 5, // 已退款
 };
 
-export const INVOICE_STATUS_MAP = {
+export const INVOICE_STATUS_MAP: StatusMap = {
   [INVOICE_STATUS.UNPAID]: {
     label: "待支付",
     color: STATUS_COLORS.warning,
@@ -160,13 +181,13 @@ export const INVOICE_STATUS_MAP = {
 // 后端 RefundStatus 派生：NONE/PARTIAL/FULL。部分退款时账单/订单仍 PAID，
 // 前端用独立 danger 标签展示，不占用 status 槽位（值域铁律 0/1/4/5）。
 
-export const REFUND_STATUS = {
+export const REFUND_STATUS: Record<string, number> = {
   NONE: 0, // 未退款
   PARTIAL: 1, // 部分退款
   FULL: 2, // 已全额退款
 };
 
-export const REFUND_STATUS_MAP = {
+export const REFUND_STATUS_MAP: StatusMap = {
   [REFUND_STATUS.NONE]: {
     label: "未退款",
     color: STATUS_COLORS.info,
@@ -190,14 +211,14 @@ export const REFUND_STATUS_MAP = {
 // ===================== 第三方支付状态 =====================
 // 4 态：待支付 / 已支付 / 已取消 / 已退款，与订单同构。
 
-export const PAYMENT_STATUS = {
+export const PAYMENT_STATUS: Record<string, number> = {
   PENDING: 0, // 待支付
   SUCCESS: 1, // 已支付
   CANCELLED: 4, // 已取消
   REFUNDED: 5, // 已退款
 };
 
-export const PAYMENT_STATUS_MAP = {
+export const PAYMENT_STATUS_MAP: StatusMap = {
   [PAYMENT_STATUS.PENDING]: {
     label: "待支付",
     color: STATUS_COLORS.warning,
@@ -228,7 +249,7 @@ export const PAYMENT_STATUS_MAP = {
 // 管理员补录账单/订单时登记系统外收款渠道；仅作审计记录：
 // Payment.gateway 固定为 manual，此值写入 Payment.callback_raw.payment_gateway，不影响对账口径。
 
-export const MANUAL_PAYMENT_METHOD_MAP = {
+export const MANUAL_PAYMENT_METHOD_MAP: StatusMap = {
   bank_transfer: { label: "银行转账" },
   cash: { label: "现金" },
   alipay: { label: "支付宝" },
@@ -241,7 +262,7 @@ export const MANUAL_PAYMENT_METHOD_MAP = {
 // 生命周期：到期不再单独成态——到期暂停归"已暂停"(suspended_reason=expired)，
 // 宽限期后归"已删除"；上游 fraud/未知非空状态归"异常"。
 
-export const SERVICE_STATUS = {
+export const SERVICE_STATUS: Record<string, number> = {
   PENDING: 0, // 开通中
   ACTIVE: 1, // 运行中
   SUSPENDED: 2, // 已暂停
@@ -249,7 +270,7 @@ export const SERVICE_STATUS = {
   ABNORMAL: 4, // 异常
 };
 
-export const SERVICE_STATUS_MAP = {
+export const SERVICE_STATUS_MAP: StatusMap = {
   [SERVICE_STATUS.PENDING]: {
     label: "开通中",
     color: STATUS_COLORS.warning,
@@ -284,14 +305,14 @@ export const SERVICE_STATUS_MAP = {
 
 // ===================== 工单状态 =====================
 
-export const TICKET_STATUS = {
+export const TICKET_STATUS: Record<string, number> = {
   OPEN: 0, // 开启（待处理）
   USER_REPLY: 1, // 客户回复
   STAFF_REPLY: 2, // 员工回复
   CLOSED: 3, // 已关闭
 };
 
-export const TICKET_STATUS_MAP = {
+export const TICKET_STATUS_MAP: StatusMap = {
   [TICKET_STATUS.OPEN]: {
     label: "开启",
     color: STATUS_COLORS.warning,
@@ -320,13 +341,13 @@ export const TICKET_STATUS_MAP = {
 
 // ===================== 邮件/通知状态 =====================
 
-export const NOTIFY_STATUS = {
+export const NOTIFY_STATUS: Record<string, string> = {
   PENDING: "pending",
   SUCCESS: "success",
   FAILED: "failed",
 };
 
-export const NOTIFY_STATUS_MAP = {
+export const NOTIFY_STATUS_MAP: StatusMap = {
   [NOTIFY_STATUS.PENDING]: {
     label: "待发送",
     color: STATUS_COLORS.warning,
@@ -349,13 +370,13 @@ export const NOTIFY_STATUS_MAP = {
 
 // ===================== 佣金奖励状态 =====================
 
-export const REWARD_STATUS = {
+export const REWARD_STATUS: Record<string, number> = {
   FROZEN: 0, // 冻结中
   RELEASED: 1, // 已释放
   REVOKED: 2, // 已撤销
 };
 
-export const REWARD_STATUS_MAP = {
+export const REWARD_STATUS_MAP: StatusMap = {
   [REWARD_STATUS.FROZEN]: {
     label: "冻结中",
     color: STATUS_COLORS.purple,
@@ -378,7 +399,7 @@ export const REWARD_STATUS_MAP = {
 
 // ===================== 交易流水类型 =====================
 
-export const TRANSACTION_TYPE_MAP = {
+export const TRANSACTION_TYPE_MAP: Record<string, string> = {
   recharge: "充值",
   consume: "消费",
   refund: "退款",
@@ -387,7 +408,7 @@ export const TRANSACTION_TYPE_MAP = {
   adjust: "调账",
 };
 
-export const FINANCE_LEDGER_EVENT_MAP = {
+export const FINANCE_LEDGER_EVENT_MAP: StatusMap = {
   invoice_payment: { label: "账单支付", tagType: "danger", direction: "out" },
   invoice_refund: { label: "账单退款", tagType: "success", direction: "in" },
   recharge: { label: "充值到账", tagType: "success", direction: "in" },
@@ -399,14 +420,18 @@ export const FINANCE_LEDGER_EVENT_MAP = {
     direction: "in",
   },
   system_adjustment: { label: "系统调账", tagType: "info", direction: "in" },
-  verification_fee: { label: "实名认证费", tagType: "danger", direction: "out" },
+  verification_fee: {
+    label: "实名认证费",
+    tagType: "danger",
+    direction: "out",
+  },
   // 财务核心重构的切换校准行（实库 25 行 / 99,742.91）：不映射会在流水页裸露英文。
   calibration: { label: "存量校准", tagType: "warning", direction: "in" },
   // 管理员创建用户时写入的初始余额。
   initial_balance: { label: "初始余额", tagType: "info", direction: "in" },
 };
 
-export const ACCOUNT_TRANSACTION_EVENT_MAP = {
+export const ACCOUNT_TRANSACTION_EVENT_MAP: StatusMap = {
   ...FINANCE_LEDGER_EVENT_MAP,
   consume: { label: "消费", tagType: "danger", direction: "out" },
   refund: { label: "退款", tagType: "success", direction: "in" },
@@ -436,9 +461,12 @@ export const ACCOUNT_TRANSACTION_EVENT_MAP = {
  * @param {number|string} status - 状态值
  * @returns {{ label: string, color: string, tagType: string, icon: string, pulse?: boolean }}
  */
-export function getStatusConfig(statusMap, status) {
+export function getStatusConfig(
+  statusMap: StatusMapInput,
+  status: string | number,
+): StatusConfig {
   return (
-    statusMap[status] || {
+    (statusMap[status] as StatusConfig | undefined) || {
       label: "未知",
       color: STATUS_COLORS.info,
       tagType: "info",
@@ -450,22 +478,31 @@ export function getStatusConfig(statusMap, status) {
 /**
  * 获取状态标签文本
  */
-export function getStatusLabel(statusMap, status) {
+export function getStatusLabel(
+  statusMap: StatusMapInput,
+  status: string | number,
+): string {
   return getStatusConfig(statusMap, status).label;
 }
 
 /**
  * 获取 tagType 语义值
  */
-export function getStatusTagType(statusMap, status) {
-  return getStatusConfig(statusMap, status).tagType;
+export function getStatusTagType(
+  statusMap: StatusMapInput,
+  status: string | number,
+): string {
+  return getStatusConfig(statusMap, status).tagType as string;
 }
 
 /**
  * 获取状态颜色
  */
-export function getStatusColor(statusMap, status) {
-  return getStatusConfig(statusMap, status).color;
+export function getStatusColor(
+  statusMap: StatusMapInput,
+  status: string | number,
+): string {
+  return getStatusConfig(statusMap, status).color as string;
 }
 
 // ===================== TDesign 适配函数 =====================
@@ -485,7 +522,7 @@ const VALID_TD_THEMES = new Set([
  * - primary/success/warning/danger/default 原样返回
  * 管理端与本仓库的 shared StatusTag 都通过本函数映射，避免各自维护一份表。
  */
-export function resolveTdTagTheme(tagType) {
+export function resolveTdTagTheme(tagType: string): string {
   if (!tagType) {
     return "default";
   }
@@ -510,7 +547,7 @@ const VALID_TAG_TYPES = new Set([
  * - 'purple' → 'info'（配合 resolveElTagClass 附加自定义样式）
  * - 其余值若在 Element Plus 合法范围内则原样返回，否则降级为 'info'
  */
-export function resolveElTagType(tagType) {
+export function resolveElTagType(tagType: string): string {
   if (tagType === "") {
     return "primary";
   }
@@ -525,7 +562,7 @@ export function resolveElTagType(tagType) {
 /**
  * 返回 Element Plus el-tag 需要附加的自定义 class（仅 purple 需要）
  */
-export function resolveElTagClass(tagType) {
+export function resolveElTagClass(tagType: string): string {
   return tagType === "purple" ? "el-tag--purple" : "";
 }
 
@@ -537,11 +574,15 @@ export function resolveElTagClass(tagType) {
  * @param {boolean} includeAll - 是否包含"全部"选项
  * @returns {Array<{ label: string, value: number|string }>}
  */
-export function toSelectOptions(statusMap, includeAll = true) {
-  const options = Object.entries(statusMap).map(([value, config]) => ({
-    label: config.label,
-    value: isNaN(Number(value)) ? value : Number(value),
-  }));
+export function toSelectOptions(
+  statusMap: StatusMapInput,
+  includeAll = true,
+): Array<{ label: string; value: string | number }> {
+  const options: Array<{ label: string; value: string | number }> =
+    Object.entries(statusMap).map(([value, config]) => ({
+      label: (config as StatusConfig).label,
+      value: isNaN(Number(value)) ? value : Number(value),
+    }));
   if (includeAll) {
     options.unshift({ label: "全部", value: "" });
   }
@@ -551,10 +592,10 @@ export function toSelectOptions(statusMap, includeAll = true) {
 /**
  * 生成 { 0: '待付款', 1: '已付款', ... } 扁平映射
  */
-export function toLabelMap(statusMap) {
-  const map = {};
+export function toLabelMap(statusMap: StatusMapInput): Record<string, string> {
+  const map: Record<string, string> = {};
   for (const [key, config] of Object.entries(statusMap)) {
-    map[key] = config.label;
+    map[key] = (config as StatusConfig).label;
   }
   return map;
 }
@@ -562,15 +603,17 @@ export function toLabelMap(statusMap) {
 /**
  * 生成 { 0: 'warning', 1: 'success', ... } 的 tagType 映射
  */
-export function toTagTypeMap(statusMap) {
-  const map = {};
+export function toTagTypeMap(
+  statusMap: StatusMapInput,
+): Record<string, string> {
+  const map: Record<string, string> = {};
   for (const [key, config] of Object.entries(statusMap)) {
-    map[key] = config.tagType;
+    map[key] = (config as StatusConfig).tagType as string;
   }
   return map;
 }
 
-export const VERIFICATION_STATUS_MAP = {
+export const VERIFICATION_STATUS_MAP: StatusMap = {
   0: {
     label: "未提交",
     color: STATUS_COLORS.info,
