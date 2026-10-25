@@ -1,7 +1,7 @@
 {
     "meta": {
-        "generatedAt": "2026-10-24 17:11:27",
-        "total": 387,
+        "generatedAt": "2026-10-25 14:57:12",
+        "total": 386,
         "baseURL": "/api/v2",
         "dataSource": "php artisan route:list --json v2-only",
         "scopeLabels": {
@@ -21,14 +21,14 @@
             "permission": "登录 + 权限"
         },
         "scopeCounts": {
-            "admin": 240,
+            "admin": 239,
             "client": 128,
             "site": 18,
             "system": 1
         },
         "accessCounts": {
             "auth": 121,
-            "permission": 231,
+            "permission": 230,
             "public": 35
         },
         "moduleCount": 78
@@ -5305,29 +5305,6 @@
             "throttle": "",
             "guards": [],
             "handler": "App\\Http\\Controllers\\Admin\\V2\\UserServiceController@connection",
-            "sourceApps": [],
-            "sourceAppLabels": [],
-            "sourceFiles": []
-        },
-        {
-            "id": "PUT:/api/v2/admin/users/{user}/services/{service}/manual-provision",
-            "scope": "admin",
-            "scopeLabel": "管理端",
-            "module": "users",
-            "moduleLabel": "用户",
-            "method": "PUT",
-            "methods": [
-                "PUT"
-            ],
-            "callPath": "/admin/users/{user}/services/{service}/manual-provision",
-            "backendPath": "/api/v2/admin/users/{user}/services/{service}/manual-provision",
-            "normalizedPath": "/admin/users/{param}/services/{param}/manual-provision",
-            "access": "permission",
-            "accessLabel": "登录 + 权限",
-            "permission": "user.manage",
-            "throttle": "",
-            "guards": [],
-            "handler": "App\\Http\\Controllers\\Admin\\V2\\UserServiceController@manualProvision",
             "sourceApps": [],
             "sourceAppLabels": [],
             "sourceFiles": []
