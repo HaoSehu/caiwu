@@ -48,6 +48,18 @@ export interface CreateHttpClientOptions {
   /** 错误提示回调，由各端注入自己的 UI 实现（含去重） */
   showError: (message: string) => void;
   /**
+   * 业务成功时是否直接返回信封中的 data。
+   * 默认 false，返回完整信封 { code, message, data }；管理端历史实现按解包后使用，置 true 保持兼容。
+   */
+  unwrapEnvelope?: boolean;
+  /**
+   * 传输层错误是否保留原始错误文案。
+   * 默认 false：抛出的 Error.message 使用面向用户的统一中文文案（网络异常/请求超时等）。
+   * 管理端页面统一在 catch 里调 errorMessage(error, 具体场景兜底文案)，只有当 message 不是
+   * 可信中文时才会回退到场景文案；保留原始文案（如 Network Error）才能继续走这段兜底逻辑。
+   */
+  preserveErrorMessage?: boolean;
+  /**
    * 业务 40100 或 HTTP 401 时的统一处理（清 token、跳登录）；未提供则仅抛错。
    * requestToken 为触发 401 的请求发出时携带的凭证：与当前凭证不一致说明期间已重新登录，处理方应忽略该次失效。
    */
@@ -135,7 +147,10 @@ export function createHttpClient(
       }
 
       if (writeRequest) {
-        runtimeConfig.headers["X-Request-Id"] = createRequestId();
+        // 调用方显式传入的 X-Request-Id（如退款幂等键）优先，不被随机值覆盖。
+        if (!runtimeConfig.headers["X-Request-Id"]) {
+          runtimeConfig.headers["X-Request-Id"] = createRequestId();
+        }
       }
 
       if (canDedupeSafeRequest(runtimeConfig, safeRequest)) {
@@ -176,6 +191,10 @@ export function createHttpClient(
         err.response = { ...response, data: res };
         err.config = response.config;
         return Promise.reject(err);
+      }
+
+      if (options.unwrapEnvelope) {
+        return res.data;
       }
 
       return res;
@@ -236,6 +255,9 @@ export function createHttpClient(
 
       if (error.response?.status === 401) {
         const requestToken = (error.config || {})?.__requestToken;
+        // 401 会把原始 axios 错误直接抛给调用方，这里必须把后端中文文案写回 error.message，
+        // 否则调用方拿到的就是 "Request failed with status code 401" 这类英文原文。
+        error.message = msg;
         options.onUnauthorized?.(msg, requestToken);
         return Promise.reject(error);
       }
@@ -246,7 +268,14 @@ export function createHttpClient(
         options.showError(msg);
       }
 
-      const err = new Error(msg) as RuntimeHandledError;
+      // 保留原始文案只在「没有响应」时才有意义（断网/超时）：此时 axios 的英文文案不含中文，
+      // 调用方的 errorMessage(error, 场景兜底) 才会回退到场景文案；一旦服务端给了消息，
+      // 就必须用拦截器算好的 msg，否则 404/422 这类业务提示会被英文原文挤掉。
+      const err = new Error(
+        options.preserveErrorMessage && !error.response
+          ? String(error?.message || msg)
+          : msg,
+      ) as RuntimeHandledError;
       // silentError 的请求由调用方自行提示，这里不能谎报已处理，否则错误会被静默吞掉。
       err.__handled = shownByInterceptor;
       err.response = error.response;
