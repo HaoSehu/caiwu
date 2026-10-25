@@ -160,6 +160,7 @@
 <script setup lang="ts">
 import './index.less';
 
+import { escapeHtml } from '@caiwu/shared/htmlSanitizer';
 import { ChevronLeftIcon } from 'tdesign-icons-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, onMounted, ref } from 'vue';
@@ -540,15 +541,6 @@ function resolvePreviewLogo(value: unknown) {
   const resolved = resolveApiAssetUrl(logo, import.meta.env.VITE_API_BASE_URL);
   if (/^(?:https?:)?\/\//i.test(resolved) || resolved.startsWith('data:') || resolved.startsWith('/')) return resolved;
   return `/${resolved}`;
-}
-
-function escapeHtml(value: unknown) {
-  return String(value ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }
 
 function errorMessage(error: unknown, fallback: string) {

@@ -29,7 +29,7 @@
   </t-drawer>
 </template>
 <script setup lang="ts">
-import { sanitizeRenderedHtml } from '@caiwu/shared/htmlSanitizer';
+import { escapeHtml, sanitizeRenderedHtml } from '@caiwu/shared/htmlSanitizer';
 import { ChevronLeftIcon } from 'tdesign-icons-vue-next';
 import { computed } from 'vue';
 
@@ -356,14 +356,5 @@ function sanitizeHtmlDoc(doc: string): string {
       })
     : '';
   return `<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8">${csp}</head><body style="margin:0;">${bodyHtml}</body></html>`;
-}
-
-function escapeHtml(value: string) {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }
 </script>

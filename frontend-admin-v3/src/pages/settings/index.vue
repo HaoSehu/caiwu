@@ -707,23 +707,7 @@ const configs: Record<Exclude<SettingsTab, 'site_hero'>, SettingsConfig> = {
             max: 720,
           },
           { key: 'pending_order_cleanup_enabled', label: '启用未支付账单清理', type: 'switch', default: true },
-          {
-            key: 'pending_order_cleanup_after_hours',
-            label: '未支付账单保留时长（小时）',
-            type: 'number',
-            default: 1,
-            min: 1,
-            max: 720,
-          },
           { key: 'pending_recharge_cleanup_enabled', label: '启用未支付充值单清理', type: 'switch', default: true },
-          {
-            key: 'pending_recharge_cleanup_after_days',
-            label: '未支付充值单保留天数',
-            type: 'number',
-            default: 3,
-            min: 0,
-            max: 365,
-          },
           {
             key: 'ticket_auto_close_schedule_mode',
             label: '工单任务执行周期',
