@@ -183,6 +183,7 @@
 import './index.less';
 
 import { SERVICE_STATUS_MAP, toSelectOptions } from '@caiwu/shared/statusConfig';
+import StatusTag from '@caiwu/shared/user-v3/components/StatusTag.vue';
 import { SearchIcon } from 'tdesign-icons-vue-next';
 import type { PrimaryTableCol } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
@@ -192,7 +193,6 @@ import { useRouter } from 'vue-router';
 import type { ServiceListParams, ServiceRecord } from '@/api/service';
 import { serviceApi } from '@/api/service';
 import MobileRecordCard from '@/components/mobile-record-card/index.vue';
-import StatusTag from '@/components/status-tag/index.vue';
 import { useListPage } from '@/hooks/useListPage';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { fieldValue, formatMoney } from '@/utils/format';

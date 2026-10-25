@@ -147,6 +147,7 @@
 import './index.less';
 
 import { ORDER_STATUS_FILTER_OPTIONS, ORDER_STATUS_MAP, ORDER_TYPE_MAP } from '@caiwu/shared/statusConfig';
+import StatusTag from '@caiwu/shared/user-v3/components/StatusTag.vue';
 import { SearchIcon } from 'tdesign-icons-vue-next';
 import type { PrimaryTableCol } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
@@ -157,7 +158,6 @@ import type { OrderRecord } from '@/api/admin';
 import { adminApi } from '@/api/admin';
 import MobileRecordCard from '@/components/mobile-record-card/index.vue';
 import QuickFilterTags from '@/components/quick-filter-tags/index.vue';
-import StatusTag from '@/components/status-tag/index.vue';
 import { useListPage } from '@/hooks/useListPage';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { fieldValue, formatDateTime, formatMoney } from '@/utils/format';

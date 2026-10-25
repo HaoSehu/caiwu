@@ -140,6 +140,7 @@
 import './index.less';
 
 import { INVOICE_STATUS_MAP, INVOICE_TYPE_MAP, toLabelMap } from '@caiwu/shared/statusConfig';
+import StatusTag from '@caiwu/shared/user-v3/components/StatusTag.vue';
 import { SearchIcon } from 'tdesign-icons-vue-next';
 import type { DropdownOption, PrimaryTableCol } from 'tdesign-vue-next';
 import { DialogPlugin } from 'tdesign-vue-next/es/dialog/plugin';
@@ -151,7 +152,6 @@ import type { InvoiceRecord } from '@/api/admin';
 import { adminApi } from '@/api/admin';
 import MobileRecordCard from '@/components/mobile-record-card/index.vue';
 import QuickFilterTags from '@/components/quick-filter-tags/index.vue';
-import StatusTag from '@/components/status-tag/index.vue';
 import { AdminPermissions, hasPermissionInList } from '@/constants/permissions';
 import { useListPage } from '@/hooks/useListPage';
 import { useMediaQuery } from '@/hooks/useMediaQuery';

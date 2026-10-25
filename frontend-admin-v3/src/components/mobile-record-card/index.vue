@@ -34,10 +34,9 @@
   </article>
 </template>
 <script setup lang="ts">
+import StatusTag from '@caiwu/shared/user-v3/components/StatusTag.vue';
 import type { DropdownOption } from 'tdesign-vue-next';
 import { computed } from 'vue';
-
-import StatusTag from '@/components/status-tag/index.vue';
 
 export interface MobileRecordCardRow {
   label: string;

@@ -129,6 +129,7 @@
 import './index.less';
 
 import { PAYMENT_STATUS_MAP, toLabelMap, toTagTypeMap } from '@caiwu/shared/statusConfig';
+import StatusTag from '@caiwu/shared/user-v3/components/StatusTag.vue';
 import { SearchIcon } from 'tdesign-icons-vue-next';
 import type { PrimaryTableCol } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
@@ -140,7 +141,6 @@ import { adminApi } from '@/api/admin';
 import InvoiceDetailDrawer from '@/components/finance-record-detail/InvoiceDetailDrawer.vue';
 import MobileRecordCard from '@/components/mobile-record-card/index.vue';
 import QuickFilterTags from '@/components/quick-filter-tags/index.vue';
-import StatusTag from '@/components/status-tag/index.vue';
 import type { InvoiceDetailPayload } from '@/hooks/useFinanceDetailDrawer';
 import { useFinanceDetailDrawer } from '@/hooks/useFinanceDetailDrawer';
 import { useListPage } from '@/hooks/useListPage';
