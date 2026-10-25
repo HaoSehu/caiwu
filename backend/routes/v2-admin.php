@@ -155,7 +155,6 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
         Route::post('/users/{user}/services', [UserServiceController::class, 'store']);
         Route::post('/users/{user}/services/refresh-statuses', [UserServiceController::class, 'refreshStatuses']);
         Route::put('/users/{user}/services/{service}/meta', [UserServiceController::class, 'updateMeta']);
-        Route::put('/users/{user}/services/{service}/manual-provision', [UserServiceController::class, 'manualProvision']);
         Route::delete('/users/{user}/services/{service}', [UserServiceController::class, 'destroy']);
         Route::post('/users/{user}/services/{service}/power-actions', [UserController::class, 'servicePower']);
         Route::post('/users/{user}/services/{service}/password-resets', [UserController::class, 'resetServicePassword']);

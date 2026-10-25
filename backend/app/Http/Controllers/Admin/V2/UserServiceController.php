@@ -7,7 +7,6 @@ namespace App\Http\Controllers\Admin\V2;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\V2\UserService\DeleteUserServiceRequest;
 use App\Http\Requests\Admin\V2\UserService\ListUserServicesRequest;
-use App\Http\Requests\Admin\V2\UserService\ManualProvisionUserServiceRequest;
 use App\Http\Requests\Admin\V2\UserService\RefreshUserServiceStatusesRequest;
 use App\Http\Requests\Admin\V2\UserService\ShowUserServiceConnectionRequest;
 use App\Http\Requests\Admin\V2\UserService\ShowUserServiceRemoteStatusRequest;
@@ -108,15 +107,6 @@ class UserServiceController extends Controller
         return $this->success([
             'service' => ServiceDetailResource::make($detail)->resolve(),
         ], '服务信息已更新');
-    }
-
-    public function manualProvision(ManualProvisionUserServiceRequest $request, User $user, int $service): JsonResponse
-    {
-        $detail = $this->users->manualProvisionService($user, $service, $request->payload(), $this->adminContext($request));
-
-        return $this->success([
-            'service' => ServiceDetailResource::make($detail)->resolve(),
-        ], '已重新提交上游开通');
     }
 
     public function destroy(DeleteUserServiceRequest $request, User $user, int $service): JsonResponse

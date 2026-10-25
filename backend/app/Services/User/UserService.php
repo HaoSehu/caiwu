@@ -34,7 +34,6 @@ use App\Services\Finance\FinanceLedgerQueryService;
 use App\Services\Finance\InvoiceService;
 use App\Services\Finance\TradeLifecycleService;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
-use App\Services\Provisioning\ProvisionService;
 use App\Services\Referral\ReferralService;
 use App\Services\System\OperationLogService;
 use App\Services\System\SettingService;
@@ -59,7 +58,6 @@ class UserService
         private InvoiceService $invoiceService,
         private FinanceLedgerQueryService $financeLedgerQueryService,
         private OperationLogService $operationLogService,
-        private ProvisionService $provisionService,
         private ServiceStatusSyncService $serviceStatusSyncService,
         private SettingService $settingService,
         private TradeLifecycleService $tradeLifecycleService,

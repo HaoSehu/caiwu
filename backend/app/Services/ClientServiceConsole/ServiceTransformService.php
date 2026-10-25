@@ -319,7 +319,6 @@ class ServiceTransformService
                 'power' => $canExecuteConsoleActions,
                 'module_status' => $this->canManageService($service),
                 'power_status' => $this->canManageService($service),
-                'manual_provision' => $this->canManualProvisionService($service),
                 'password_reset' => $this->canResetPassword($service, $serviceStatus),
                 'reinstall' => $canExecuteConsoleActions,
                 'traffic_package' => $this->canManageService($service) && $trafficPackageEnabled,
@@ -455,15 +454,6 @@ class ServiceTransformService
         return ! in_array($normalizedRuntimeStatus, [
             'process', 'task', 'starting', 'booting', 'stopping', 'shutting_down', 'reboot', 'rebooting',
         ], true);
-    }
-
-    public function canManualProvisionService(Service $service): bool
-    {
-        $provisionData = $this->bindingResolver()->serviceProvisionData($service);
-        $provisionError = trim((string) ($provisionData['provision_error'] ?? ''));
-
-        return $provisionError !== ''
-            && (int) $service->status === ServiceStatus::PENDING;
     }
 
     /**

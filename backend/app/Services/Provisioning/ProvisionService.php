@@ -487,7 +487,7 @@ class ProvisionService
     /**
      * 产品开通成功客户通知（模板 100005）。
      * retryFailedProvision 与队列重试可能多次进入成功分支，以 AutomationLog 幂等；
-     * 发送失败仅告警，不影响开通结果。管理员手工开通（manualProvisionService）不走本方法。
+     * 发送失败仅告警，不影响开通结果。管理员手工开通实例不走本方法。
      */
     private function notifyClientServiceActivated(Order $order, Service $service, array $hostDetail): void
     {

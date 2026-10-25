@@ -285,9 +285,5 @@ export const userApi = {
     request
       .put<UserServiceV2DetailPayload>({ url: `/v2/admin/users/${id}/services/${serviceId}/meta`, data })
       .then(normalizeV2ServicePayload),
-  manualProvisionService: (id: number | string, serviceId: number | string) =>
-    request
-      .put<UserServiceV2DetailPayload>({ url: `/v2/admin/users/${id}/services/${serviceId}/manual-provision` })
-      .then(normalizeV2ServicePayload),
   osOptions: () => request.get<{ groups?: Record<string, unknown>[] }>({ url: '/v2/admin/os-options' }),
 };
