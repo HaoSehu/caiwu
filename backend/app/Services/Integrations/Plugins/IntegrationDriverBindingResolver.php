@@ -173,13 +173,12 @@ class IntegrationDriverBindingResolver
             return null;
         }
 
+        // A-03：plugin_key 与 slug 是两套标识，(domain,plugin_key) 才是插件自报键，
+        // 目录名不参与业务反查，避免 slug 与 plugin_key 撞名时把身份指错。
         $plugin = DB::table('integration_plugins')
             ->where('domain', $domain)
             ->where('status', IntegrationPlugin::STATUS_ENABLED)
-            ->where(static function ($query) use ($driverKey): void {
-                $query->where('plugin_key', $driverKey)
-                    ->orWhere('slug', $driverKey);
-            })
+            ->where('plugin_key', $driverKey)
             ->orderByDesc('status')
             ->orderBy('id')
             ->first(['id']);
@@ -197,13 +196,13 @@ class IntegrationDriverBindingResolver
             ->where('domain', $domain)
             ->where('status', IntegrationPlugin::STATUS_ENABLED)
             ->orderBy('id')
-            ->first(['plugin_key', 'slug']);
+            ->first(['plugin_key']);
 
         if ($plugin === null) {
             return '';
         }
 
-        return trim((string) ($plugin->plugin_key ?? '')) ?: trim((string) ($plugin->slug ?? ''));
+        return trim((string) ($plugin->plugin_key ?? ''));
     }
 
     /**

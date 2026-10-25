@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Integrations\Plugins\Adapters;
 
+use App\Contracts\Integrations\PluginIdentity;
 use App\Services\Integrations\Plugins\PluginManifest;
 use App\Services\Integrations\Plugins\PluginRuntimeRegistry;
 use App\Services\Verification\Contracts\ProvidesVerificationFeeConfig;
@@ -17,11 +18,12 @@ use App\Services\Verification\Data\VerificationInitializeResult;
 use App\Services\Verification\Data\VerificationScanUrlResult;
 use App\Services\Verification\Data\VerificationStatusResult;
 
-final readonly class PluginVerificationDriver implements ProvidesVerificationFeeConfig, VerificationDriver, VerifiesVerificationCallbacks
+final readonly class PluginVerificationDriver implements PluginIdentity, ProvidesVerificationFeeConfig, VerificationDriver, VerifiesVerificationCallbacks
 {
     public function __construct(
         private PluginRuntimeRegistry $runtime,
         private PluginManifest $manifest,
+        private ?int $pluginId = null,
     ) {}
 
     public function key(): string
@@ -30,6 +32,26 @@ final readonly class PluginVerificationDriver implements ProvidesVerificationFee
     }
 
     public function label(): string
+    {
+        return $this->manifest->name;
+    }
+
+    public function pluginId(): ?int
+    {
+        return $this->pluginId;
+    }
+
+    public function pluginKey(): string
+    {
+        return $this->manifest->key;
+    }
+
+    public function pluginSlug(): string
+    {
+        return $this->manifest->slug;
+    }
+
+    public function pluginName(): string
     {
         return $this->manifest->name;
     }

@@ -498,7 +498,7 @@ class PluginRuntimeRegistry
                 continue;
             }
 
-            $instance = $this->makeAdapter($manifest, $contract);
+            $instance = $this->makeAdapter($manifest, $contract, (int) $plugin->id);
             if ($instance !== null) {
                 $entryKey = $this->resolveEntryKey($instance);
                 if ($entryKey !== null && isset($resolvedKeys[$entryKey])) {
@@ -713,11 +713,11 @@ class PluginRuntimeRegistry
         return (bool) $entry->supportsAction($resolvedAction);
     }
 
-    private function makeAdapter(PluginManifest $manifest, string $contract): ?object
+    private function makeAdapter(PluginManifest $manifest, string $contract, ?int $pluginId = null): ?object
     {
         return match ($contract) {
-            PaymentGatewayInterface::class => new PluginPaymentGateway($this, $manifest),
-            VerificationDriver::class => new PluginVerificationDriver($this, $manifest),
+            PaymentGatewayInterface::class => new PluginPaymentGateway($this, $manifest, $pluginId),
+            VerificationDriver::class => new PluginVerificationDriver($this, $manifest, $pluginId),
             SmsDriver::class => new PluginSmsDriver($this, $manifest),
             MailDriver::class => new PluginMailDriver($this, $manifest),
             UpstreamDriver::class => new PluginUpstreamDriver($this, $manifest),

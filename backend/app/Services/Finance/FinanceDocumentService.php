@@ -127,6 +127,12 @@ class FinanceDocumentService
             'user_id' => (int) $invoice->user_id,
             'invoice_id' => (int) $invoice->id,
             'payment_id' => $payment?->id,
+            // P-08：退款单自带原支付插件与通道快照，退款/对账/排查不必回查 payments。
+            'plugin_id' => $payment?->plugin_id,
+            'plugin_key' => $payment?->plugin_key,
+            'plugin_name' => $payment?->plugin_name,
+            'gateway_key' => $payment?->gateway_key,
+            'payment_type' => $payment?->payment_type,
             'amount' => Money::format($refundAmount),
             'status' => FinanceRefund::STATUS_COMPLETED,
             'funds_moved' => 1,

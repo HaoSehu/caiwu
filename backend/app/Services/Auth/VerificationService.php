@@ -56,6 +56,9 @@ class VerificationService
 
     private ?array $verificationPluginConfigCache = null;
 
+    /** @var array{plugin_id: int|null, plugin_key: string|null, plugin_name: string|null, driver_key: string|null}|null */
+    private ?array $verificationChannelCache = null;
+
     private ?FinanceAccountService $financeAccounts = null;
 
     public function __construct(
@@ -317,7 +320,7 @@ class VerificationService
             }
 
             try {
-                VerificationHistory::create([
+                VerificationHistory::create(array_merge([
                     'user_id' => $user->id,
                     'real_name' => $realName,
                     'id_card' => $idCard,
@@ -328,7 +331,7 @@ class VerificationService
                     'verification_type' => self::VERIFICATION_TYPE_PERSONAL,
                     'submitted_at' => now(),
                     'completed_at' => now(),
-                ]);
+                ], $this->resolveVerificationChannel()));
             } catch (\Throwable $exception) {
                 $this->handleHistoryPersistenceFailure('unbind', $exception, [
                     'user_id' => $user->id,
@@ -408,7 +411,7 @@ class VerificationService
         }
 
         try {
-            VerificationHistory::create([
+            VerificationHistory::create(array_merge([
                 'user_id' => $user->id,
                 'real_name' => (string) $user->real_name,
                 'id_card' => (string) $user->id_card,
@@ -418,7 +421,7 @@ class VerificationService
                 'verification_biz_code' => $this->resolvedBizCode(),
                 'verification_type' => self::VERIFICATION_TYPE_PERSONAL,
                 'submitted_at' => now(),
-            ]);
+            ], $this->resolveVerificationChannel()));
         } catch (\Throwable $exception) {
             $this->handleHistoryPersistenceFailure('create', $exception, [
                 'user_id' => $user->id,
@@ -447,7 +450,7 @@ class VerificationService
                 ->first();
 
             if (! $history) {
-                $history = VerificationHistory::create([
+                $history = VerificationHistory::create(array_merge([
                     'user_id' => $user->id,
                     'real_name' => (string) $user->real_name,
                     'id_card' => (string) $user->id_card,
@@ -457,12 +460,12 @@ class VerificationService
                     'verification_biz_code' => $this->resolvedBizCode(),
                     'verification_type' => self::VERIFICATION_TYPE_PERSONAL,
                     'submitted_at' => now(),
-                ]);
+                ], $this->resolveVerificationChannel()));
             }
 
             $status = (int) $user->verification_status;
 
-            $history->forceFill([
+            $history->forceFill(array_merge([
                 'real_name' => (string) $user->real_name,
                 'id_card' => (string) $user->id_card,
                 'verification_status' => $status,
@@ -471,7 +474,7 @@ class VerificationService
                 'verification_biz_code' => $this->resolvedBizCode(),
                 'verification_type' => self::VERIFICATION_TYPE_PERSONAL,
                 'completed_at' => in_array($status, [2, 3, self::RESULT_STATUS_UNBOUND], true) ? ($user->verified_at ?? now()) : null,
-            ])->save();
+            ], $this->resolveVerificationChannel()))->save();
         } catch (\Throwable $exception) {
             $this->handleHistoryPersistenceFailure('sync', $exception, [
                 'user_id' => $user->id,
@@ -542,6 +545,75 @@ class VerificationService
     }
 
     /**
+     * 本次实名认证所使用的插件与通道快照（V-02）：提交、同步、解绑三处写入统一取这份结果，
+     * 记录自身即可回答「用的哪个实名插件、哪条驱动」，不必回查 integration_plugins。
+     *
+     * @return array<string, mixed>
+     */
+    private function resolveVerificationChannel(): array
+    {
+        if ($this->verificationChannelCache !== null) {
+            return $this->verificationChannelCache;
+        }
+
+        $driverKey = '';
+
+        // 先取本次实际使用的驱动，再用它反查绑定上下文；两者必须指向同一通道，
+        // 否则切换插件后历史记录会写错插件快照。
+        try {
+            $driverKey = trim((string) $this->driver()->key());
+        } catch (\Throwable) {
+            $driverKey = '';
+        }
+
+        $pluginId = 0;
+
+        try {
+            $context = $this->driverBindingResolver()->verificationContext($driverKey !== '' ? $driverKey : null);
+            $pluginId = (int) ($context['plugin_id'] ?? 0);
+            if ($driverKey === '') {
+                $driverKey = trim((string) $context['driver_key']);
+            }
+        } catch (\Throwable) {
+            $pluginId = 0;
+        }
+
+        $plugin = null;
+        if ($pluginId > 0) {
+            $plugin = IntegrationPlugin::query()->whereKey($pluginId)->first();
+        }
+
+        if (! $plugin instanceof IntegrationPlugin && $driverKey !== '') {
+            try {
+                $plugin = $this->activeVerificationPlugin();
+            } catch (\Throwable) {
+                $plugin = null;
+            }
+        }
+
+        $channel = [
+            'plugin_id' => $plugin instanceof IntegrationPlugin ? (int) $plugin->id : ($pluginId > 0 ? $pluginId : null),
+            'plugin_key' => $plugin instanceof IntegrationPlugin ? (string) $plugin->plugin_key : null,
+            'plugin_name' => $plugin instanceof IntegrationPlugin ? (string) $plugin->name : null,
+            'driver_key' => $driverKey !== '' ? $driverKey : null,
+        ];
+
+        foreach (array_keys($channel) as $column) {
+            if ($channel[$column] === null || $channel[$column] === '') {
+                unset($channel[$column]);
+
+                continue;
+            }
+
+            if (! SchemaMetadataCache::hasColumn('verification_histories', $column)) {
+                unset($channel[$column]);
+            }
+        }
+
+        return $this->verificationChannelCache = $channel;
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function activeVerificationPluginConfig(): array
@@ -578,13 +650,11 @@ class VerificationService
             return null;
         }
 
+        // A-03：plugin_key 与 slug 是两套标识，反查只认 plugin_key，不再用目录名兜底。
         return IntegrationPlugin::query()
             ->where('domain', PluginDomain::VERIFICATION)
             ->where('status', IntegrationPlugin::STATUS_ENABLED)
-            ->where(static function ($query) use ($driverKey): void {
-                $query->where('plugin_key', $driverKey)
-                    ->orWhere('slug', $driverKey);
-            })
+            ->where('plugin_key', $driverKey)
             ->orderByDesc('id')
             ->first();
     }

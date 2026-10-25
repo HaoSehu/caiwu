@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Integrations\Plugins\Adapters;
 
 use App\Contracts\Integrations\Payments\PaymentGatewayInterface;
+use App\Contracts\Integrations\PluginIdentity;
 use App\Exceptions\BusinessException;
 use App\Services\Integrations\Payments\Data\PaymentPrecreateRequest;
 use App\Services\Integrations\Payments\Data\PaymentPrecreateResult;
@@ -13,11 +14,12 @@ use App\Services\Integrations\Plugins\PluginManifest;
 use App\Services\Integrations\Plugins\PluginRuntimeRegistry;
 use Illuminate\Http\Response;
 
-final readonly class PluginPaymentGateway implements PaymentGatewayInterface
+final readonly class PluginPaymentGateway implements PaymentGatewayInterface, PluginIdentity
 {
     public function __construct(
         private PluginRuntimeRegistry $runtime,
         private PluginManifest $manifest,
+        private ?int $pluginId = null,
     ) {}
 
     public function key(): string
@@ -26,6 +28,26 @@ final readonly class PluginPaymentGateway implements PaymentGatewayInterface
     }
 
     public function name(): string
+    {
+        return $this->manifest->name;
+    }
+
+    public function pluginId(): ?int
+    {
+        return $this->pluginId;
+    }
+
+    public function pluginKey(): string
+    {
+        return $this->manifest->key;
+    }
+
+    public function pluginSlug(): string
+    {
+        return $this->manifest->slug;
+    }
+
+    public function pluginName(): string
     {
         return $this->manifest->name;
     }

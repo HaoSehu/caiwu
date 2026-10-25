@@ -55,10 +55,11 @@ class GatewayInvoicePaymentService
         ));
 
         $traceId = $this->resolveTraceId($context, "{$gateway}:invoice:{$invoice->id}");
+        $paymentType = trim((string) ($context['payment_type'] ?? ''));
         $lockKey = "lock:pay:{$gateway}:invoice:{$invoice->id}";
 
-        $payload = $this->withLock($lockKey, 20, function () use ($invoice, $user, $traceId, $gateway) {
-            return DB::transaction(function () use ($invoice, $user, $traceId, $gateway) {
+        $payload = $this->withLock($lockKey, 20, function () use ($invoice, $user, $traceId, $gateway, $paymentType) {
+            return DB::transaction(function () use ($invoice, $user, $traceId, $gateway, $paymentType) {
                 $lockedInvoice = Invoice::query()
                     ->lockForUpdate()
                     ->with('order')
@@ -87,6 +88,7 @@ class GatewayInvoicePaymentService
                         'order_id' => (int) ($lockedInvoice->order?->id ?? 0) ?: null,
                         'invoice_id' => $lockedInvoice->id,
                         'gateway' => $gateway,
+                        'payment_type' => $paymentType,
                         'amount' => $amount,
                         'status' => PaymentStatus::PENDING,
                         'trace_id' => $traceId,

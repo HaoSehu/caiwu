@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace App\Http\Middleware;
 
 use App\Exceptions\BusinessException;
+use App\Models\VerificationHistory;
+use App\Services\Verification\Contracts\VerificationDriver;
 use App\Services\Verification\Contracts\VerifiesVerificationCallbacks;
 use App\Services\Verification\Data\VerificationCallbackRequest;
 use App\Services\Verification\VerificationDriverManager;
 use App\Support\ApiResponseBuilder;
+use App\Support\SchemaMetadataCache;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -26,7 +29,7 @@ class VerifyCallbackSignature
     public function handle(Request $request, Closure $next): Response
     {
         try {
-            $driver = $this->verificationDriverManager->resolve();
+            $driver = $this->resolveCallbackDriver($request);
         } catch (BusinessException $exception) {
             $this->auditFailure('driver_unavailable', $request);
 
@@ -64,6 +67,46 @@ class VerifyCallbackSignature
         }
 
         return $next($request);
+    }
+
+    /**
+     * V-06：先按记录自身的通道解析驱动；记录不存在或该驱动已不可用时回落当前驱动。
+     */
+    private function resolveCallbackDriver(Request $request): VerificationDriver
+    {
+        $driverKey = $this->callbackDriverKey($request);
+        if ($driverKey === null) {
+            return $this->verificationDriverManager->resolve();
+        }
+
+        try {
+            return $this->verificationDriverManager->resolve($driverKey);
+        } catch (BusinessException) {
+            return $this->verificationDriverManager->resolve();
+        }
+    }
+
+    /**
+     * V-06：回调先按 certify_id 找到当初提交认证的那条记录，用记录自己的 driver_key 解析驱动；
+     * 这样切换实名插件后，旧插件在途的认证回调仍能按原通道验签。查不到时返回 null 走当前驱动。
+     */
+    private function callbackDriverKey(Request $request): ?string
+    {
+        $payload = $request->all();
+        $certifyId = trim((string) ($payload['certify_id'] ?? $payload['order_no'] ?? ''));
+        if ($certifyId === '' || ! SchemaMetadataCache::hasColumn('verification_histories', 'driver_key')) {
+            return null;
+        }
+
+        $driverKey = VerificationHistory::query()
+            ->where('verification_certify_id', $certifyId)
+            ->orderByDesc('submitted_at')
+            ->orderByDesc('id')
+            ->value('driver_key');
+
+        $driverKey = trim((string) $driverKey);
+
+        return $driverKey !== '' ? $driverKey : null;
     }
 
     /**

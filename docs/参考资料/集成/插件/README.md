@@ -83,6 +83,29 @@ return [
 - `info.name`：后台展示名。
 - `info.entry`：入口类，必须存在，并提供 `execute(array $request): array`。
 
+### 标识语义：slug、plugin_key、gateway_key / driver_key
+
+同一个插件在系统里有三套标识，用途不同，不能互相替代（A-03）：
+
+| 标识                          | 取值来源                                     | 唯一范围                | 用途                                                                                     |
+| ----------------------------- | -------------------------------------------- | ----------------------- | ---------------------------------------------------------------------------------------- |
+| `slug`                      | `info.slug`，等于插件目录名                | `(domain, slug)`      | 定位磁盘文件、扫描/安装/卸载、运行日志里的人类可读定位符；**不参与业务反查**              |
+| `plugin_key`                | `info.key`，插件自报的业务键               | `(domain, plugin_key)` | 平台侧识别的插件身份；写进 `integration_plugins.plugin_key`，也是支付/实名快照列取值来源 |
+| `gateway_key` / `driver_key` | 平台适配器 `key()`，即适配器返回的 `info.key` | 各自契约内唯一          | 宿主侧业务标识：支付网关 key（`alipay`/`yipay`）、实名驱动 key（`baidu_face`/`stay33`） |
+
+三者关系与示例：
+
+- `ali_pay` 插件：`slug = ali_pay`、`plugin_key = alipay`、`gateway_key = alipay`。
+- `yi_pay` 插件：`slug = yi_pay`、`plugin_key = yipay`、`gateway_key = yipay`。
+- `baidu_face` 插件：`slug = baidu_face`、`plugin_key = baidu_face`、`driver_key = baidu_face`。
+
+约束：
+
+- `slug` 与 `plugin_key` 可以相同，也可以不同；两者分别有唯一键，**允许一个插件的 slug 与另一个插件的 plugin_key 撞名**。
+- 平台按业务键反查插件时只认 `plugin_key`（例如 `PaymentGatewayBindingResolver`、`IntegrationDriverBindingResolver`），不再用 `slug` 兜底；撞名时不做猜测。
+- 支付创建、退款、对账、实名记录落库时，快照列 `plugin_key`/`plugin_name` 取插件自报的 `info.key`/`info.name`，不取目录名。
+- 插件需要在运行期获知自身身份时，平台适配器 `PluginPaymentGateway`、`PluginVerificationDriver` 实现了 `App\Contracts\Integrations\PluginIdentity`（`pluginId()`、`pluginKey()`、`pluginSlug()`、`pluginName()`），插件入口类本身不需要感知这些字段。
+
 配置字段支持：
 
 | 字段                | 说明                                                     |

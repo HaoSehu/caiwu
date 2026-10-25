@@ -78,6 +78,18 @@ class GatewayLogService
             $payload['gateway_key'] = $context['gateway_key'];
         }
 
+        // P-10：除 plugin_id 外单独留 plugin_key 快照，便于按插件聚合网关日志；
+        // gateway 仍是插件上报原文，不做归一化。
+        if (SchemaMetadataCache::hasColumn('gateway_logs', 'plugin_key')) {
+            $pluginKey = trim((string) ($payment->plugin_key ?? ''));
+            if ($pluginKey === '') {
+                $snapshot = $this->paymentGatewayBindingResolver->pluginSnapshotForGateway($gateway);
+                $pluginKey = trim((string) ($snapshot['plugin_key'] ?? ''));
+            }
+
+            $payload['plugin_key'] = $pluginKey !== '' ? $pluginKey : null;
+        }
+
         if (SchemaMetadataCache::hasColumn('gateway_logs', 'trace_id')) {
             $payload['trace_id'] = $resolvedTraceId !== '' ? $resolvedTraceId : null;
         }

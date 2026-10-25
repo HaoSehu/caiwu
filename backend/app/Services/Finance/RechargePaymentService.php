@@ -279,6 +279,7 @@ class RechargePaymentService
                     'user_id' => $user->id,
                     'invoice_id' => null,
                     'gateway' => $gateway,
+                    'payment_type' => trim((string) ($gatewayContext['payment_type'] ?? '')),
                     'amount' => $normalizedAmount,
                     'status' => PaymentStatus::PENDING,
                     'callback_raw' => $this->rechargeGatewayCallbackRaw($gatewayContext),
@@ -582,7 +583,7 @@ class RechargePaymentService
     {
         $callbackRaw = (array) ($payment->callback_raw ?? []);
         $storedContext = $callbackRaw['payment_context'] ?? null;
-        $storedContext = is_array($storedContext) ? $storedContext : $callbackRaw;
+        $storedContext = is_array($storedContext) ? $storedContext : [];
 
         return $this->rechargeGatewayContext($storedContext) === $gatewayContext;
     }
@@ -597,9 +598,11 @@ class RechargePaymentService
             return [];
         }
 
-        return array_merge($gatewayContext, [
+        // P-09：通道类型已落在 payments.payment_type 独立列，callback_raw 只保留流程标记；
+        // payment_context 仅用于同一网关下「同通道复用旧单」的匹配，不再是通道类型的唯一来源。
+        return [
             'payment_context' => $gatewayContext,
-        ]);
+        ];
     }
 
     private function assertVerifiedUser(User $user): void

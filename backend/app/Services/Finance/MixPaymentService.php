@@ -61,6 +61,7 @@ class MixPaymentService
         ));
 
         $traceId = $this->resolveTraceId($context, "mix:invoice:{$invoice->id}");
+        $paymentType = trim((string) ($context['payment_type'] ?? ''));
         $lockKey = "lock:pay:mix:invoice:{$invoice->id}";
         $normalizedBalanceAmount = round(max($balanceAmount, 0), 2);
 
@@ -120,7 +121,7 @@ class MixPaymentService
 
         throw_if($remainingAmount <= 0, new BusinessException('当前账单无需继续发起'.PaymentGatewayCode::label($gateway).'支付'));
 
-        $gatewayPayment = DB::transaction(function () use ($lockedInvoice, $user, $remainingAmount, $traceId, $normalizedBalanceAmount, $gateway) {
+        $gatewayPayment = DB::transaction(function () use ($lockedInvoice, $user, $remainingAmount, $traceId, $normalizedBalanceAmount, $gateway, $paymentType) {
             $existingPayment = Payment::query()
                 ->where('invoice_id', $lockedInvoice->id)
                 ->whereGatewayKey($gateway)
@@ -152,6 +153,7 @@ class MixPaymentService
                 'order_id' => (int) ($lockedInvoice->order?->id ?? 0) ?: null,
                 'invoice_id' => $lockedInvoice->id,
                 'gateway' => $gateway,
+                'payment_type' => $paymentType,
                 'amount' => $remainingAmount,
                 'status' => PaymentStatus::PENDING,
                 'trace_id' => $traceId,
