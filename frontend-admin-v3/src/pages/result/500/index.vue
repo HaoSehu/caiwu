@@ -1,6 +1,9 @@
 <template>
-  <result title="服务器异常" type="500" :tip="t('pages.result.500.subtitle')">
-    <t-button @click="() => router.push('/')">{{ t('pages.result.500.back') }}</t-button>
+  <result :title="t('pages.result.500.title')" :tip="t('pages.result.500.subtitle')" type="500">
+    <div class="result-actions">
+      <t-button @click="goHome">{{ t('pages.result.500.back') }}</t-button>
+      <t-button theme="default" variant="outline" @click="goBack">{{ t('pages.result.500.backPrev') }}</t-button>
+    </div>
   </result>
 </template>
 <script setup lang="ts">
@@ -14,4 +17,7 @@ defineOptions({
 });
 
 const router = useRouter();
+
+const goHome = () => router.push('/admin/dashboard');
+const goBack = () => router.back();
 </script>

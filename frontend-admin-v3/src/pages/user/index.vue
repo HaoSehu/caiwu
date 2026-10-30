@@ -120,12 +120,17 @@
 </template>
 <script setup lang="ts">
 import type { FormInstanceFunctions, FormRule } from 'tdesign-vue-next';
+import { DialogPlugin } from 'tdesign-vue-next/es/dialog/plugin';
 import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { onMounted, reactive, ref } from 'vue';
 
 import { adminAuthApi } from '@/api/auth';
 import { useUserStore } from '@/store';
 import { errorMessage } from '@/utils/userMessage';
+
+// 路由 name 是 UserIndex（src/router/modules/user.ts:14），KeepAlive 的 include 按组件 name 匹配；
+// 不显式声明时会退化为文件名推断的 index，导致该页缓存静默失效（审查 L2）。
+defineOptions({ name: 'UserIndex' });
 
 interface MfaSetupResult {
   secret: string;
@@ -267,9 +272,33 @@ const handleEnableMfa = async () => {
   }
 };
 
+/** 解绑双重验证不可逆，提交前二次确认。 */
+function confirmDisableMfa() {
+  return new Promise<boolean>((resolve) => {
+    const dialog = DialogPlugin.confirm({
+      header: '确认解绑双重验证',
+      theme: 'warning',
+      body: '解绑后该账号登录将不再校验动态口令，且恢复码全部失效。确认继续？',
+      confirmBtn: { content: '确认解绑', theme: 'danger' },
+      cancelBtn: '取消',
+      onConfirm() {
+        dialog.hide();
+        resolve(true);
+      },
+      onCancel() {
+        resolve(false);
+      },
+      onClose() {
+        resolve(false);
+      },
+    });
+  });
+}
+
 const handleDisableMfa = async () => {
   const result = await mfaDisableFormRef.value?.validate?.();
   if (result !== true) return;
+  if (!(await confirmDisableMfa())) return;
 
   mfaSubmitting.value = true;
   try {
@@ -294,45 +323,45 @@ const handleDisableMfa = async () => {
 }
 
 .mfa-card {
-  margin-top: 16px;
+  margin-top: var(--td-comp-margin-l);
 }
 
 .mfa-status {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: var(--td-comp-margin-s);
+  margin-bottom: var(--td-comp-margin-s);
 }
 
 .mfa-status-label {
-  font-size: 14px;
+  font-size: var(--td-font-size-size-3, 14px);
   color: var(--td-text-color-secondary, #5b6b82);
 }
 
 .mfa-tip {
-  margin-bottom: 16px;
-  font-size: 13px;
+  margin-bottom: var(--td-comp-margin-l);
+  font-size: var(--td-font-size-size-3, 14px);
   line-height: 1.7;
   color: var(--td-text-color-secondary, #5b6b82);
 }
 
 .mfa-secret-item {
-  margin-top: 12px;
+  margin-top: var(--td-comp-margin-m);
 }
 
 .mfa-recovery-codes {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 8px;
+  gap: var(--td-comp-margin-s);
   margin: 12px 0 16px;
 
   code {
     padding: 8px 10px;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    font-size: 13px;
+    font-size: var(--td-font-size-size-3, 14px);
     letter-spacing: 0.06em;
     background: var(--td-bg-color-secondarycontainer, #f3f5f9);
-    border-radius: var(--td-radius-default, 6px);
+    border-radius: var(--td-radius-default);
     text-align: center;
   }
 }

@@ -1,6 +1,9 @@
 <template>
-  <result title="页面不存在" :tip="t('pages.result.404.subtitle')" type="404">
-    <t-button @click="() => router.push('/admin/dashboard')">{{ t('pages.result.404.back') }}</t-button>
+  <result :title="t('pages.result.404.title')" :tip="t('pages.result.404.subtitle')" type="404">
+    <div class="result-actions">
+      <t-button @click="goHome">{{ t('pages.result.404.back') }}</t-button>
+      <t-button theme="default" variant="outline" @click="goBack">{{ t('pages.result.404.backPrev') }}</t-button>
+    </div>
   </result>
 </template>
 <script setup lang="ts">
@@ -14,4 +17,7 @@ defineOptions({
 });
 
 const router = useRouter();
+
+const goHome = () => router.push('/admin/dashboard');
+const goBack = () => router.back();
 </script>
