@@ -63,6 +63,39 @@ test("商品详情页运行时注入 title/description/canonical 与 Product JSO
   expect(productLd).toContain("E2E 云服务器");
 });
 
+// 5 条 SEO 落地页此前零自动化验收：薄壳组件与 slug 的对应关系一旦错位，
+// 线上只会表现成「页面能开但内容是别家的」。这里逐条校验标题、h1 与页面专属标签。
+const SEO_LANDING_PAGES = [
+  { path: "/cloud-server", keyword: "云服务器", heading: "稳定易用的云服务器" },
+  { path: "/hong-kong-server", keyword: "香港服务器", heading: "面向亚太业务的香港服务器" },
+  { path: "/us-server", keyword: "美国服务器", heading: "适合海外部署的美国服务器" },
+  { path: "/high-defense-server", keyword: "高防服务器", heading: "面向防护需求的高防服务器" },
+  { path: "/cloud-pc", keyword: "云电脑", heading: "灵活可用的云电脑" },
+];
+
+test("5 条 SEO 落地页各自渲染对应内容且互不串页", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (err) => errors.push(String(err)));
+
+  for (const target of SEO_LANDING_PAGES) {
+    await page.goto(target.path, { waitUntil: "domcontentloaded" });
+
+    // h1 必须存在且含该页关键词，且页面主体是落地页而非 404
+    const heading = page.locator(".seo-hero__content h1");
+    await expect(heading).toBeVisible();
+    await expect(heading).toHaveText(target.heading);
+
+    // 页面标题（构建期预渲染写入 + 运行时 applyRouteMeta 覆盖）也要带关键词
+    expect(await page.title()).toContain(target.keyword);
+
+    // 落地页特有区块存在，说明挂的是 SeoLandingView 而不是兜底 404
+    await expect(page.locator(".seo-landing-page")).toHaveCount(1);
+    await expect(page.locator(".not-found-code")).toHaveCount(0);
+  }
+
+  expect(errors).toEqual([]);
+});
+
 test("404 路由带 description 且保持 noindex", async ({ page }) => {
   await page.goto("/e2e-not-exist-page", { waitUntil: "domcontentloaded" });
 
