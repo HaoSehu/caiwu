@@ -158,6 +158,13 @@ howstack-bos-main/
 
 # 会话遗留产物（根目录误生成，不得入库）
 /MEMORY.md
+# 会话遗留的临时探针脚本与审查摘要（根目录误生成，含本机绝对路径，不得入库）
+/tmp_scan_tpl*.py
+/tmp_css*.mjs
+/.tmp_css.mjs
+/.tmp-visual-summary-*.md
+/%TEMP%*
+
 # 唯一基线是 backend/phpstan-baseline.neon（随仓库入库）；曾误生成的根基线含 E:\ 绝对路径，已删除
 /phpstan-baseline.neon
 
