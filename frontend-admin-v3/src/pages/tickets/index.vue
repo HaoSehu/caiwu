@@ -93,7 +93,7 @@
           :current="pagination.page"
           :page-size="pagination.page_size"
           :total="total"
-          :page-size-options="[20, 50, 100]"
+          :page-size-options="pagination.pageSizeOptions"
           show-jumper
           @change="handlePaginationChange"
         />
@@ -104,6 +104,7 @@
 <script setup lang="ts">
 import './index.less';
 
+import { getStatusLabel, getStatusTagType, resolveTdTagTheme, TICKET_STATUS_MAP } from '@caiwu/shared/statusConfig';
 import { SearchIcon } from 'tdesign-icons-vue-next';
 import type { PrimaryTableCol } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
@@ -114,6 +115,8 @@ import { adminApi } from '@/api/admin';
 import { useListPage } from '@/hooks/useListPage';
 import { formatDateTime } from '@/utils/format';
 import { errorMessage } from '@/utils/userMessage';
+
+defineOptions({ name: 'AdminTickets' });
 
 const DEFAULT_STATUS_FILTER = 'ongoing';
 
@@ -215,24 +218,13 @@ function priorityTheme(value: unknown): 'default' | 'success' | 'warning' | 'dan
   return 'default';
 }
 
+// 工单状态标签与配色统一取 @caiwu/shared/statusConfig，避免与管理端/控制台各写一份（此前 1 号状态一端红一端黄）
 function statusLabel(value: unknown) {
-  return (
-    (
-      {
-        0: '开启',
-        1: '客户回复',
-        2: '员工回复',
-        3: '已关闭',
-      } as Record<number, string>
-    )[Number(value)] || '--'
-  );
+  return getStatusLabel(TICKET_STATUS_MAP, Number(value));
 }
 
 function statusTheme(value: unknown): 'default' | 'success' | 'warning' | 'danger' {
-  const number = Number(value);
-  if (number === 0) return 'warning';
-  if (number === 1) return 'danger';
-  if (number === 2) return 'success';
-  return 'default';
+  const tagType = getStatusTagType(TICKET_STATUS_MAP, Number(value));
+  return resolveTdTagTheme(tagType) as 'default' | 'success' | 'warning' | 'danger';
 }
 </script>

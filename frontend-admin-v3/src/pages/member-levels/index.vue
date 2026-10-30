@@ -2,9 +2,9 @@
   <div class="member-levels-page">
     <t-card :bordered="false" :loading="loading">
       <template #title>等级列表</template>
-      <template #subtitle>共 {{ levels.length }} 个档位</template>
+      <template #subtitle>共 {{ total }} 个档位</template>
       <template #actions>
-        <t-space>
+        <t-space v-if="canManage">
           <t-button theme="primary" @click="openCreateDialog">
             <template #icon><add-icon /></template>
             新建等级
@@ -13,7 +13,10 @@
       </template>
 
       <div v-if="!isMobile" class="table-scroll">
-        <t-table row-key="id" :data="levels" :columns="columns" hover table-layout="fixed">
+        <t-table row-key="id" :data="levels" :columns="columns" hover table-layout="fixed" aria-label="会员等级列表">
+          <template #empty>
+            <t-empty :description="loading ? '加载中…' : '暂无等级'" />
+          </template>
           <template #level="{ row }">
             <div class="stack-cell">
               <strong>{{ fieldValue(row.name) }}</strong>
@@ -27,10 +30,11 @@
           <template #updatedAt="{ row }">{{ formatDateTime(row.updated_at) }}</template>
           <template #remark="{ row }">{{ fieldValue(row.remark) }}</template>
           <template #actions="{ row }">
-            <t-space size="small">
+            <t-space v-if="canManage" size="small">
               <t-button theme="primary" variant="text" @click="openEditDialog(row)">编辑</t-button>
               <t-button theme="danger" variant="text" @click="handleDelete(row)">删除</t-button>
             </t-space>
+            <span v-else class="muted-text">只读</span>
           </template>
         </t-table>
       </div>
@@ -42,14 +46,15 @@
               <strong>{{ fieldValue(row.name) }}</strong>
             </div>
             <t-dropdown
+              v-if="canManage"
               trigger="click"
               placement="bottom-right"
               :options="mobileActionOptions"
               @click="handleMobileAction(row, $event)"
             >
-              <t-button class="member-mobile-card__more" variant="text" shape="square" aria-label="更多操作"
-                >...</t-button
-              >
+              <t-button class="member-mobile-card__more" variant="text" shape="square" aria-label="更多操作">
+                <template #icon><more-icon /></template>
+              </t-button>
             </t-dropdown>
           </div>
           <dl>
@@ -69,12 +74,12 @@
     <t-dialog
       v-model:visible="dialogVisible"
       :header="form.id ? '编辑会员等级' : '新建会员等级'"
-      width="720px"
+      width="min(720px, calc(100vw - 32px))"
       :confirm-btn="{ content: '保存', theme: 'primary' }"
       :confirm-loading="saving"
       @confirm="submitForm"
     >
-      <t-form ref="formRef" :data="form" :rules="rules" label-align="top">
+      <t-form ref="formRef" :data="form" :rules="rules" label-align="right">
         <div class="member-form-grid">
           <t-form-item label="等级名称" name="name">
             <t-input v-model="form.name" placeholder="例如：黄金会员" />
@@ -147,18 +152,23 @@
 <script setup lang="ts">
 import './index.less';
 
-import { AddIcon } from 'tdesign-icons-vue-next';
+import { AddIcon, MoreIcon } from 'tdesign-icons-vue-next';
 import type { DropdownOption, FormInstanceFunctions, FormRule, PrimaryTableCol } from 'tdesign-vue-next';
 import { DialogPlugin } from 'tdesign-vue-next/es/dialog/plugin';
 import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
-import { onMounted, reactive, ref } from 'vue';
+import { computed, reactive, ref } from 'vue';
 
 import type { MemberLevelPayload, MemberLevelRecord } from '@/api/admin';
 import { adminApi } from '@/api/admin';
+import { AdminPermissions } from '@/constants/permissions';
+import { useListPage } from '@/hooks/useListPage';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { fieldValue, formatDateTime } from '@/utils/format';
 import { required } from '@/utils/formRules';
+import { hasAdminPermission } from '@/utils/permission';
 import { errorMessage } from '@/utils/userMessage';
+
+defineOptions({ name: 'AdminMemberLevels' });
 
 interface MemberLevelForm {
   id: number | string | null;
@@ -176,14 +186,31 @@ interface MatrixGroupRow {
   discountValue: number;
 }
 
-const loading = ref(false);
+// 会员等级写入口与后端 level.manage 同权限码，只读岗不显示新建/编辑/删除
+const canManage = computed(() => hasAdminPermission(AdminPermissions.MEMBER_LEVEL_MANAGE));
+
 const saving = ref(false);
 const matrixLoaded = ref(false);
 const dialogVisible = ref(false);
 const formRef = ref<FormInstanceFunctions>();
-const levels = ref<MemberLevelRecord[]>([]);
 const matrixGroups = ref<MatrixGroupRow[]>([]);
 const isMobile = useMediaQuery('(max-width: 767.98px)');
+
+// 会员等级是后端一次性返回的全量档位（MemberLevelController::index 固定 page=1、page_size=条数），
+// 接入统一列表引擎只为拿到请求竞态防护、统一错误提示与三态空文案，不渲染分页器。
+const {
+  list: levels,
+  total,
+  loading,
+  loadList,
+} = useListPage<Record<string, never>, MemberLevelRecord>({
+  defaultFilters: {},
+  onError: (error) => MessagePlugin.error(errorMessage(error, '加载会员等级失败')),
+  fetch: async () => {
+    const list = await adminApi.memberLevels.list();
+    return { list, total: list.length };
+  },
+});
 
 const discountTypeOptions = [
   { label: '百分比（折后保留，90=九折）', value: 1 },
@@ -215,18 +242,6 @@ function createDefaultForm(): MemberLevelForm {
     status: 1,
     remark: '',
   };
-}
-
-async function loadLevels() {
-  loading.value = true;
-  try {
-    const response = await adminApi.memberLevels.list();
-    levels.value = response || [];
-  } catch (error) {
-    MessagePlugin.error(errorMessage(error, '加载会员等级失败'));
-  } finally {
-    loading.value = false;
-  }
 }
 
 function openCreateDialog() {
@@ -272,7 +287,7 @@ async function submitForm() {
 
     MessagePlugin.success(form.id ? '会员等级已更新' : '会员等级已创建');
     dialogVisible.value = false;
-    await loadLevels();
+    await loadList();
   } catch (error) {
     MessagePlugin.error(errorMessage(error, '保存会员等级失败'));
   } finally {
@@ -330,13 +345,16 @@ function handleDelete(row: MemberLevelRecord) {
     body: `确认删除等级“${fieldValue(row.name)}”吗？`,
     confirmBtn: { content: '确定', theme: 'danger' },
     async onConfirm() {
+      dialog.setConfirmLoading(true);
       try {
         await adminApi.memberLevels.delete(row.id);
         MessagePlugin.success('会员等级已删除');
         dialog.destroy();
-        await loadLevels();
+        await loadList();
       } catch (error) {
         MessagePlugin.error(errorMessage(error, '删除会员等级失败'));
+      } finally {
+        dialog.setConfirmLoading(false);
       }
     },
   });
@@ -350,6 +368,4 @@ function handleMobileAction(row: MemberLevelRecord, option: DropdownOption) {
   }
   if (action === 'delete') handleDelete(row);
 }
-
-onMounted(loadLevels);
 </script>

@@ -44,8 +44,12 @@
           :selected-row-keys="selectedRowKeys"
           hover
           table-layout="fixed"
+          aria-label="服务列表"
           @select-change="handleSelectChange"
         >
+          <template #empty>
+            <t-empty :description="loading ? '加载中…' : hasActiveFilters ? '未找到匹配结果' : '暂无服务'" />
+          </template>
           <template #service="{ row }">
             <div class="service-cell">
               <div class="service-primary">
@@ -135,7 +139,7 @@
           :current="pagination.page"
           :page-size="pagination.page_size"
           :total="total"
-          :page-size-options="[20, 50, 100]"
+          :page-size-options="pagination.pageSizeOptions"
           show-jumper
           @change="handlePaginationChange"
         />
@@ -145,7 +149,7 @@
     <t-dialog
       v-model:visible="hostnameDialogVisible"
       :header="hostnameRows.length > 1 ? '批量设置自定义主机名' : '设置自定义主机名'"
-      width="920px"
+      width="min(920px, calc(100vw - 32px))"
       :confirm-btn="{ content: '确定', loading: hostnameSubmitting }"
       @confirm="submitHostnames"
     >
@@ -157,7 +161,11 @@
           :columns="hostnameColumns"
           table-layout="fixed"
           max-height="420"
+          aria-label="主机名列表"
         >
+          <template #empty>
+            <t-empty description="暂无待设置的主机名" />
+          </template>
           <template #service="{ row }">
             <div class="hostname-service">
               <strong>{{ fieldValue(row.service_name) }}</strong>
@@ -186,6 +194,7 @@ import { SERVICE_STATUS_MAP, toSelectOptions } from '@caiwu/shared/statusConfig'
 import StatusTag from '@caiwu/shared/user-v3/components/StatusTag.vue';
 import { SearchIcon } from 'tdesign-icons-vue-next';
 import type { PrimaryTableCol } from 'tdesign-vue-next';
+import { DialogPlugin } from 'tdesign-vue-next/es/dialog/plugin';
 import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
@@ -195,8 +204,10 @@ import { serviceApi } from '@/api/service';
 import MobileRecordCard from '@/components/mobile-record-card/index.vue';
 import { useListPage } from '@/hooks/useListPage';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { fieldValue, formatMoney } from '@/utils/format';
+import { fieldValue, formatMoney, toRecord } from '@/utils/format';
 import { errorMessage } from '@/utils/userMessage';
+
+defineOptions({ name: 'AdminServices' });
 
 interface HostnameRow {
   service_id: number;
@@ -230,6 +241,7 @@ const {
   handleSearch,
   resetFilters,
   handlePaginationChange,
+  hasActiveFilters,
 } = useListPage<ServiceFilter, ServiceRecord>({
   defaultFilters: { keyword: '', status: '' },
   defaultPageSize: 20,
@@ -294,8 +306,36 @@ function openHostnameDialog() {
   hostnameDialogVisible.value = true;
 }
 
+/** 主机名留空等于清空该服务的自定义主机名，提交前必须列出影响面并确认。 */
+function confirmHostnameChanges() {
+  const cleared = hostnameRows.value.filter((row) => !String(row.hostname || '').trim()).length;
+  return new Promise<boolean>((resolve) => {
+    const dialog = DialogPlugin.confirm({
+      header: '确认批量设置主机名',
+      theme: 'warning',
+      body:
+        cleared > 0
+          ? `将更新 ${hostnameRows.value.length} 个服务，其中 ${cleared} 个主机名留空会被清空。`
+          : `将更新 ${hostnameRows.value.length} 个服务的自定义主机名。`,
+      confirmBtn: { content: '确认提交', theme: cleared > 0 ? 'danger' : 'primary' },
+      cancelBtn: '取消',
+      onConfirm() {
+        dialog.hide();
+        resolve(true);
+      },
+      onCancel() {
+        resolve(false);
+      },
+      onClose() {
+        resolve(false);
+      },
+    });
+  });
+}
+
 async function submitHostnames() {
   if (!hostnameRows.value.length) return;
+  if (!(await confirmHostnameChanges())) return;
   hostnameSubmitting.value = true;
   try {
     const response = await serviceApi.batchUpdateCustomHostnames({
@@ -401,9 +441,5 @@ function isExpiringSoon(value: unknown) {
 function shortDate(value: unknown) {
   if (!value) return '-';
   return String(value).slice(0, 10);
-}
-
-function toRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 }
 </script>

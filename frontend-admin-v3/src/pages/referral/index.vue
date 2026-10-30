@@ -11,7 +11,14 @@
       <t-card :bordered="false" :loading="overviewLoading">
         <template #title>推广达人排行</template>
         <div class="table-scroll">
-          <t-table row-key="id" :data="overview.top_referrers" :columns="overviewColumns" hover table-layout="fixed">
+          <t-table
+            row-key="id"
+            :data="overview.top_referrers"
+            :columns="overviewColumns"
+            hover
+            table-layout="fixed"
+            aria-label="推荐概览列表"
+          >
             <template #empty>
               <t-empty :description="overviewLoading ? '加载中…' : '暂无数据'" />
             </template>
@@ -76,7 +83,14 @@
       <t-card :bordered="false" :loading="rewardsLoading">
         <template #title>奖励记录</template>
         <div v-if="!isMobile" class="table-scroll">
-          <t-table row-key="id" :data="rewardList" :columns="rewardColumns" hover table-layout="fixed">
+          <t-table
+            row-key="id"
+            :data="rewardList"
+            :columns="rewardColumns"
+            hover
+            table-layout="fixed"
+            aria-label="推荐奖励记录列表"
+          >
             <template #empty>
               <t-empty
                 :description="rewardsLoading ? '加载中…' : hasActiveRewardFilters ? '未找到匹配结果' : '暂无数据'"
@@ -144,7 +158,7 @@
             :current="rewardPagination.page"
             :page-size="rewardPagination.page_size"
             :total="rewardTotal"
-            :page-size-options="[20, 50, 100]"
+            :page-size-options="rewardPagination.pageSizeOptions"
             show-jumper
             @change="handleRewardPageChange"
           />
@@ -189,7 +203,14 @@
       <t-card :bordered="false" :loading="withdrawalsLoading">
         <template #title>提现记录</template>
         <div v-if="!isMobile" class="table-scroll">
-          <t-table row-key="id" :data="withdrawalList" :columns="withdrawalColumns" hover table-layout="fixed">
+          <t-table
+            row-key="id"
+            :data="withdrawalList"
+            :columns="withdrawalColumns"
+            hover
+            table-layout="fixed"
+            aria-label="提现记录列表"
+          >
             <template #empty>
               <t-empty
                 :description="
@@ -228,7 +249,7 @@
               </div>
             </template>
             <template #actions="{ row }">
-              <t-space v-if="Number(row.status) === 0" size="small">
+              <t-space v-if="Number(row.status) === 0 && canReviewWithdrawal" size="small">
                 <t-button theme="primary" variant="text" @click="openWithdrawalDialog('approve', row)">通过</t-button>
                 <t-button theme="danger" variant="text" @click="openWithdrawalDialog('reject', row)">拒绝</t-button>
               </t-space>
@@ -263,7 +284,7 @@
                 <dd>{{ formatDateTime(row.created_at) }}</dd>
               </div>
             </dl>
-            <div v-if="Number(row.status) === 0" class="referral-mobile-card__actions">
+            <div v-if="Number(row.status) === 0 && canReviewWithdrawal" class="referral-mobile-card__actions">
               <t-button theme="primary" variant="outline" @click="openWithdrawalDialog('approve', row)">通过</t-button>
               <t-button theme="danger" variant="outline" @click="openWithdrawalDialog('reject', row)">拒绝</t-button>
             </div>
@@ -275,7 +296,7 @@
             :current="withdrawalPagination.page"
             :page-size="withdrawalPagination.page_size"
             :total="withdrawalTotal"
-            :page-size-options="[20, 50, 100]"
+            :page-size-options="withdrawalPagination.pageSizeOptions"
             show-jumper
             @change="handleWithdrawalPageChange"
           />
@@ -286,7 +307,7 @@
     <t-dialog
       v-model:visible="withdrawalDialog.visible"
       :header="withdrawalDialog.mode === 'approve' ? '通过提现申请' : '拒绝提现申请'"
-      width="520px"
+      width="min(520px, calc(100vw - 32px))"
       :confirm-btn="{
         content: '确定',
         theme: withdrawalDialog.mode === 'approve' ? 'primary' : 'danger',
@@ -312,16 +333,21 @@ import './index.less';
 import { REWARD_STATUS_MAP, toLabelMap, toSelectOptions, toTagTypeMap } from '@caiwu/shared/statusConfig';
 import { SearchIcon } from 'tdesign-icons-vue-next';
 import type { PrimaryTableCol } from 'tdesign-vue-next';
+import { DialogPlugin } from 'tdesign-vue-next/es/dialog/plugin';
 import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 
 import type { ReferralListParams, ReferralOverview, ReferralRewardRecord, ReferralWithdrawalRecord } from '@/api/admin';
 import { adminApi } from '@/api/admin';
+import { AdminPermissions } from '@/constants/permissions';
 import { useListPage } from '@/hooks/useListPage';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { fieldValue, formatDateTime, formatMoney } from '@/utils/format';
+import { fieldValue, formatDateTime, formatMoney, toRecord } from '@/utils/format';
+import { hasAdminPermission } from '@/utils/permission';
 import { errorMessage } from '@/utils/userMessage';
+
+defineOptions({ name: 'AdminReferral' });
 
 type ReferralTab = 'overview' | 'rewards' | 'withdrawals';
 type WithdrawalMode = 'approve' | 'reject';
@@ -351,6 +377,9 @@ watch(
 const overviewLoading = ref(false);
 const withdrawalSubmitting = ref(false);
 // 空态文案区分「未筛选但无数据」与「筛选后无匹配」（docs/DESIGN.md 术语表）
+// 提现审核按钮必须在前后端同时按 finance.withdraw 收口：仅按 status 渲染等于把资金写入入口暴露给只读角色。
+const canReviewWithdrawal = computed(() => hasAdminPermission(AdminPermissions.FINANCE_WITHDRAW));
+
 const hasActiveRewardFilters = computed(() => Boolean(rewardFilters.keyword.trim()) || rewardFilters.status !== '');
 const hasActiveWithdrawalFilters = computed(
   () => Boolean(withdrawalFilters.keyword.trim()) || withdrawalFilters.status !== '',
@@ -505,6 +534,33 @@ function openWithdrawalDialog(mode: WithdrawalMode, row: ReferralWithdrawalRecor
   withdrawalDialog.visible = true;
 }
 
+/** 提现「通过」会把资金打给用户且无法撤回，二次确认需明确金额与账号 */
+function confirmApproveWithdrawal(remark: string) {
+  const row = withdrawalDialog.row;
+  return new Promise<boolean>((resolve) => {
+    const dialog = DialogPlugin.confirm({
+      header: '确认通过提现',
+      body: `即将通过申请 #${row?.id || '-'}，金额 ${formatMoney(row?.amount)}，收款账号 ${
+        fieldValue(row?.account_no) || '-'
+      }。通过后资金即进入打款流程，无法撤销。${remark ? `备注：${remark}` : ''}`,
+      theme: 'warning',
+      confirmBtn: { content: '确认通过', theme: 'danger' },
+      cancelBtn: '取消',
+      onConfirm() {
+        dialog.hide();
+        resolve(true);
+      },
+      onCancel() {
+        dialog.hide();
+        resolve(false);
+      },
+      onClose() {
+        resolve(false);
+      },
+    });
+  });
+}
+
 async function submitWithdrawalAction() {
   if (!withdrawalDialog.row) return;
   const remark = withdrawalDialog.remark.trim();
@@ -512,6 +568,9 @@ async function submitWithdrawalAction() {
     MessagePlugin.warning('请输入拒绝原因');
     return;
   }
+
+  // 通过提现是不可逆的资金操作，必须在真正提交前再做一次强化确认（docs/DESIGN.md §4.4）
+  if (withdrawalDialog.mode === 'approve' && !(await confirmApproveWithdrawal(remark))) return;
 
   withdrawalSubmitting.value = true;
   try {
@@ -579,10 +638,6 @@ function userName(user: unknown) {
 
 function formatPercent(value: unknown) {
   return `${Number(value || 0).toFixed(2)}%`;
-}
-
-function toRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 }
 
 onMounted(() => {

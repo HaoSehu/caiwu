@@ -1,39 +1,13 @@
 .referral-page {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-}
-
-.referral-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.referral-head h1 {
-  margin: 4px 0 6px;
-  color: var(--td-text-color-primary);
-  font-size: var(--td-font-size-size-7, 22px);
-  line-height: 1.35;
-}
-
-.referral-head p {
-  margin: 0;
-  color: var(--td-text-color-secondary);
-  line-height: 1.7;
-}
-
-.referral-kicker {
-  color: var(--td-brand-color);
-  font-size: var(--td-font-size-size-2, 13px);
-  font-weight: 600;
+  gap: var(--td-comp-margin-l);
 }
 
 .referral-metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 16px;
+  gap: var(--td-comp-margin-l);
 }
 
 .referral-metrics .t-card {
@@ -42,21 +16,21 @@
 
 .referral-metrics span {
   color: var(--td-text-color-secondary);
-  font-size: var(--td-font-size-size-2, 13px);
+  font-size: var(--td-font-size-size-3, 14px);
 }
 
 .referral-metrics strong {
   display: block;
-  margin-top: 8px;
+  margin-top: var(--td-comp-margin-s);
   color: var(--td-text-color-primary);
-  font-size: var(--td-font-size-size-7, 22px);
+  font-size: var(--td-font-size-size-6, 20px);
   line-height: 1.35;
 }
 
 .referral-filter {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: var(--td-comp-margin-m);
   align-items: center;
 
   .referral-filter-keyword {
@@ -71,7 +45,7 @@
   .referral-filter-actions {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--td-comp-margin-s);
     margin-left: auto;
   }
 }
@@ -82,17 +56,6 @@
 
 .referral-filter .t-button {
   min-width: 88px;
-}
-
-.table-scroll {
-  overflow-x: auto;
-}
-
-.stack-cell {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 3px;
 }
 
 .stack-cell strong {
@@ -111,28 +74,11 @@
   white-space: nowrap;
 }
 
-.muted-text {
-  color: var(--td-text-color-placeholder);
-  font-size: var(--td-font-size-size-2, 13px);
-}
-
-.pagination-row {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 16px;
-}
-
-.mobile-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
 .referral-mobile-card {
   overflow: hidden;
   padding: 0;
   border: 1px solid var(--td-component-border);
-  border-radius: var(--td-radius-default, 4px);
+  border-radius: var(--td-radius-default);
   background: var(--td-bg-color-container);
 }
 
@@ -140,7 +86,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 8px;
+  gap: var(--td-comp-margin-s);
   min-height: 42px;
   border-bottom: 1px solid var(--td-component-border);
   padding: var(--td-comp-margin-s) var(--td-comp-margin-m);
@@ -187,7 +133,7 @@
   margin: 0;
   overflow: hidden;
   color: var(--td-text-color-primary);
-  font-size: var(--td-font-size-size-2, 13px);
+  font-size: var(--td-font-size-size-3, 14px);
   line-height: 20px;
   text-align: right;
   text-overflow: ellipsis;
@@ -197,7 +143,7 @@
 .referral-mobile-card__actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--td-comp-margin-s);
   border-top: 1px solid var(--td-component-border);
   padding: var(--td-comp-margin-s) var(--td-comp-margin-m);
 }
@@ -220,7 +166,7 @@
 .withdrawal-dialog {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--td-comp-margin-m);
 }
 
 .withdrawal-dialog p {
@@ -229,10 +175,6 @@
 }
 
 @media (max-width: 767.98px) {
-  .referral-head {
-    flex-direction: column;
-  }
-
   .referral-head .t-button {
     width: 100%;
   }
@@ -259,11 +201,6 @@
   .referral-metrics,
   .referral-mobile-card dl {
     grid-template-columns: 1fr;
-  }
-
-  .pagination-row {
-    justify-content: flex-start;
-    overflow-x: auto;
   }
 }
 

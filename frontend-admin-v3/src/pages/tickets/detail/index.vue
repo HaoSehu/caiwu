@@ -17,9 +17,7 @@
           关闭工单
         </t-button>
       </div>
-    </t-loading>
-
-    <t-loading :loading="detailLoading" size="small">
+      <!-- 工具栏与正文共用同一个 t-loading：拆成两个会让「返回/关闭工单」和正文分别压一层遮罩，加载中看到双层 spinner -->
       <div v-if="detail" class="conversation-layout">
         <t-card :bordered="false" class="conversation-card">
           <template #header>
@@ -221,7 +219,7 @@
       </t-empty>
     </t-loading>
 
-    <t-dialog v-model:visible="previewVisible" header="图片预览" width="720px" :footer="false">
+    <t-dialog v-model:visible="previewVisible" header="图片预览" width="min(720px, calc(100vw - 32px))" :footer="false">
       <img v-if="previewUrl" class="preview-image" :src="previewUrl" alt="图片预览" loading="lazy" decoding="async" />
       <div class="preview-dialog-actions">
         <t-button variant="outline" @click="previewVisible = false">
@@ -243,8 +241,10 @@ import { useRoute, useRouter } from 'vue-router';
 
 import type { TicketAdminUser, TicketAttachment, TicketDetail, TicketReply } from '@/api/admin';
 import { adminApi } from '@/api/admin';
-import { formatDateTime } from '@/utils/format';
+import { copyToClipboard, formatDateTime } from '@/utils/format';
 import { errorMessage } from '@/utils/userMessage';
+
+defineOptions({ name: 'AdminTicketConversation' });
 
 const MAX_TICKET_IMAGES = 9;
 const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
@@ -253,8 +253,8 @@ interface UploadFileLike {
   name?: string;
   size?: number;
   type?: string;
-  rawFile?: File;
-  file?: File;
+  /** t-upload 把上传中的文件包成普通对象，原始 File 只挂在 raw 上。 */
+  raw?: File;
   response?: TicketAttachment;
   url?: string;
   path?: string;
@@ -428,6 +428,9 @@ async function loadAdmins() {
   }
 }
 
+// 竞态防护：切换工单或重试时只认最后一次请求的结果（docs/FRONTEND.md:27）
+let detailRequestSeq = 0;
+
 async function loadDetail() {
   const id = resolveTicketId();
   if (!id) {
@@ -435,28 +438,36 @@ async function loadDetail() {
     return;
   }
 
+  const currentSeq = ++detailRequestSeq;
   detailLoading.value = true;
   detail.value = null;
   linkedServicePasswordVisible.value = false;
   resetReplyDraft();
   try {
     const response = await adminApi.tickets.detail(id);
+    if (currentSeq !== detailRequestSeq) return;
     detail.value = response;
     assignForm.assignee_id = response.assignee_id || null;
   } catch (error) {
+    if (currentSeq !== detailRequestSeq) return;
     detail.value = null;
     MessagePlugin.error(errorMessage(error, '加载工单详情失败'));
   } finally {
-    detailLoading.value = false;
+    if (currentSeq === detailRequestSeq) detailLoading.value = false;
   }
 }
 
 async function reloadCurrentDetail() {
   if (!detail.value?.id) return;
-  const response = await adminApi.tickets.detail(detail.value.id);
-  detail.value = response;
-  linkedServicePasswordVisible.value = false;
-  assignForm.assignee_id = response.assignee_id || null;
+  try {
+    const response = await adminApi.tickets.detail(detail.value.id);
+    detail.value = response;
+    linkedServicePasswordVisible.value = false;
+    assignForm.assignee_id = response.assignee_id || null;
+  } catch (error) {
+    // 操作已提交成功，仅刷新失败；不能复用调用方的「操作失败」文案，否则用户会重复提交
+    MessagePlugin.error(errorMessage(error, '操作已成功，但刷新工单详情失败，请手动刷新页面'));
+  }
 }
 
 function toggleLinkedServicePassword() {
@@ -473,11 +484,11 @@ function goUserDetail(userId: unknown) {
   router.push(`/admin/users/${userId}`);
 }
 
-async function copyText(text: unknown) {
+function copyText(text: unknown) {
   const value = String(text || '').trim();
-  if (!value || value === '--' || !navigator?.clipboard) return;
-  await navigator.clipboard.writeText(value);
-  MessagePlugin.success('已复制');
+  if (!value || value === '--') return;
+  // 统一走 utils/format 的复制实现：失败时提示，不让异常冒泡成 unhandledrejection
+  void copyToClipboard(value, '已复制');
 }
 
 async function handleAssign() {
@@ -606,7 +617,10 @@ function beforeUpload(file: UploadFileLike) {
 
 async function handleUpload(files: UploadFileLike | UploadFileLike[]) {
   const file = Array.isArray(files) ? files[0] : files;
-  const rawFile = file.rawFile || file.file || (file as unknown as File);
+  // 只能取 raw：UploadFile 本身是普通对象，直接塞进 FormData 会变成 "[object Object]"，
+  // 后端 image 规则随即判为「文件必须是图片」。
+  const rawFile = file?.raw;
+  if (!rawFile) return { status: 'fail', error: '图片读取失败，请重新选择文件', response: {} };
   const formData = new FormData();
   formData.append('file', rawFile);
 

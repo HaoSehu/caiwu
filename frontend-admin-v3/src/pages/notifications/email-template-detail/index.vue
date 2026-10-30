@@ -38,7 +38,7 @@
       </t-card>
 
       <t-card :bordered="false" :loading="loading">
-        <t-form :data="templateDefinition" label-align="top">
+        <t-form ref="templateFormRef" :data="templateDefinition" :rules="templateRules" label-align="top">
           <t-form-item label="发送状态" name="isEnabled">
             <div class="status-control">
               <t-switch
@@ -48,10 +48,15 @@
               />
             </div>
           </t-form-item>
-          <t-form-item v-if="templateDefinition.channel === 'email'" label="邮件主题" name="subject">
+          <t-form-item v-if="templateDefinition.channel === 'email'" label="邮件主题" name="subject" required-mark>
             <t-input v-model="templateDefinition.subject" placeholder="请输入邮件主题" />
           </t-form-item>
-          <t-form-item v-if="templateDefinition.channel === 'sms'" label="供应商模板 ID" name="providerTemplateId">
+          <t-form-item
+            v-if="templateDefinition.channel === 'sms'"
+            label="供应商模板 ID"
+            name="providerTemplateId"
+            required-mark
+          >
             <t-input v-model="templateDefinition.providerTemplateId" placeholder="请输入运营商审核通过的模板 ID" />
           </t-form-item>
           <div v-if="templateDefinition.channel === 'email'" class="subject-preview">
@@ -84,11 +89,12 @@
                 <strong>实时预览</strong>
                 <span>{{ templateDefinition.channel === 'sms' ? '短信内容' : '按真实发送结构渲染' }}</span>
               </div>
+              <!-- 脚本执行防线：sandbox 不开放 allow-scripts/allow-same-origin，正文脚本无法运行也触达不到父域 -->
               <iframe
                 v-if="templateDefinition.channel === 'email'"
                 class="preview-frame"
                 :srcdoc="buildPreviewDocument(templateDefinition)"
-                sandbox="allow-same-origin"
+                sandbox=""
                 title="邮件模板预览"
               />
               <div v-else class="sms-preview">
@@ -109,7 +115,7 @@
     <t-dialog
       v-model:visible="testSendVisible"
       :header="testSendDialogTitle"
-      width="560px"
+      width="min(560px, calc(100vw - 32px))"
       :confirm-btn="{ content: '确定', loading: testSending }"
       @confirm="submitTestSend"
     >
@@ -120,7 +126,7 @@
             >{{ templateDefinition.channel === 'sms' ? '短信模板' : '邮件模板' }} · {{ templateDefinition.code }}</span
           >
         </div>
-        <t-form label-align="top">
+        <t-form label-align="right">
           <t-form-item :label="templateChannel === 'sms' ? '接收手机号' : '接收邮箱地址'">
             <t-input
               v-model="testSendRecipient"
@@ -160,14 +166,18 @@
 <script setup lang="ts">
 import './index.less';
 
-import { escapeHtml } from '@caiwu/shared/htmlSanitizer';
+import { escapeHtml, sanitizeRenderedHtml } from '@caiwu/shared/htmlSanitizer';
 import { ChevronLeftIcon } from 'tdesign-icons-vue-next';
+import type { FormInstanceFunctions, FormRule } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { adminApi } from '@/api/admin';
 import { resolveApiAssetUrl } from '@/utils/apiAssetUrl';
+import { errorMessage } from '@/utils/userMessage';
+
+defineOptions({ name: 'AdminNotificationTemplateDetail' });
 
 interface NotificationTemplateSource {
   code: string;
@@ -207,6 +217,12 @@ const route = useRoute();
 const router = useRouter();
 const loading = ref(false);
 const saving = ref(false);
+const templateFormRef = ref<FormInstanceFunctions>();
+// 必填由校验规则驱动（docs/DESIGN.md §4.4），空主题/空模板 ID 不再等后端拒绝
+const templateRules: Record<string, FormRule[]> = {
+  subject: [{ required: true, message: '请输入邮件主题', type: 'error' }],
+  providerTemplateId: [{ required: true, message: '请输入供应商模板 ID', type: 'error' }],
+};
 const testSendVisible = ref(false);
 const testSending = ref(false);
 const testSendRecipient = ref('');
@@ -361,6 +377,8 @@ async function loadSettings() {
 
 async function saveCurrentTemplate() {
   if (!templateDefinition.value) return;
+  const validateResult = await templateFormRef.value?.validate?.();
+  if (validateResult !== true) return;
   saving.value = true;
   try {
     const settingKeys = templateDefinition.value.setting_keys || {};
@@ -470,12 +488,36 @@ function renderPreviewSmsContent(template: NotificationTemplate) {
   return renderTemplateText(template.content, getPreviewParams(template)) || '未设置短信正文';
 }
 
+/**
+ * 预览壳统一走 shared/htmlSanitizer 节点级清洗并固定 CSP：
+ * 模板正文由管理员手写、变量值来自业务数据，二者都可能带脚本或外链资源，
+ * 不能直接拼进 srcdoc（sandbox 是第二道防线，不是唯一防线）。
+ */
 function buildPreviewDocument(template: NotificationTemplate) {
   const params = getPreviewParams(template);
   const subject = renderPreviewSubject(template);
   const content = renderTemplateContent(template.content, params);
-  if (looksLikeFullHtmlDocument(content)) return content;
-  return `<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${escapeHtml(subject)}</title></head><body>${content}</body></html>`;
+  const bodyHtml = looksLikeFullHtmlDocument(content)
+    ? sanitizePreviewBody(content)
+    : sanitizeRenderedHtml(content, {
+        imageAltFallback: '图片',
+        allowStyleAttr: true,
+        allowDataImage: true,
+      });
+  const csp =
+    '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; img-src data: https: http:;">';
+  return `<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8">${csp}<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${escapeHtml(subject)}</title></head><body>${bodyHtml}</body></html>`;
+}
+
+/** 完整 HTML 文档只保留 body 内容，head 内的脚本/外链样式一律丢弃 */
+function sanitizePreviewBody(doc: string) {
+  const parsed = new DOMParser().parseFromString(doc, 'text/html');
+  const inner = parsed.body ? parsed.body.innerHTML : '';
+  return sanitizeRenderedHtml(inner, {
+    imageAltFallback: '图片',
+    allowStyleAttr: true,
+    allowDataImage: true,
+  });
 }
 
 function renderTemplateContent(template: string, params: PreviewParams) {
@@ -522,7 +564,8 @@ function hasValue(value: unknown) {
 }
 
 function settingValue<T>(settings: SettingsMap, key: string, fallback: T): T {
-  return Object.hasOwn(settings, key) ? ((settings[key] ?? '') as T) : fallback;
+  // 用 hasOwnProperty.call 而非 Object.hasOwn：后者要 Chrome 93 / Safari 15.4，超出仓库声明的浏览器基线
+  return Object.prototype.hasOwnProperty.call(settings, key) ? ((settings[key] ?? '') as T) : fallback;
 }
 
 function normalizeRecipient(value: unknown) {
@@ -541,11 +584,6 @@ function resolvePreviewLogo(value: unknown) {
   const resolved = resolveApiAssetUrl(logo, import.meta.env.VITE_API_BASE_URL);
   if (/^(?:https?:)?\/\//i.test(resolved) || resolved.startsWith('data:') || resolved.startsWith('/')) return resolved;
   return `/${resolved}`;
-}
-
-function errorMessage(error: unknown, fallback: string) {
-  const payload = error as { response?: { data?: { message?: string } }; message?: string } | null;
-  return String(payload?.response?.data?.message || payload?.message || fallback);
 }
 
 onMounted(loadSettings);

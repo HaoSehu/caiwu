@@ -6,7 +6,7 @@
         >共 {{ ambassadors.length }} 个档位 · 新购/续费返利按用户所属档位分别生效，未指派走全局设置</template
       >
       <template #actions>
-        <t-space>
+        <t-space v-if="canManage">
           <t-button theme="primary" @click="openCreateDialog">
             <template #icon><add-icon /></template>
             新建大使档位
@@ -15,7 +15,15 @@
       </template>
 
       <div v-if="!isMobile" class="table-scroll">
-        <t-table row-key="id" :data="ambassadors" :columns="columns" :loading="loading" hover table-layout="fixed">
+        <t-table
+          row-key="id"
+          :data="ambassadors"
+          :columns="columns"
+          :loading="loading"
+          hover
+          table-layout="fixed"
+          aria-label="推广大使列表"
+        >
           <template #empty>
             <t-empty :description="loading ? '加载中…' : '暂无数据'" />
           </template>
@@ -38,10 +46,11 @@
           <template #updatedAt="{ row }">{{ formatDateTime(row.updated_at) }}</template>
           <template #remark="{ row }">{{ fieldValue(row.remark) }}</template>
           <template #actions="{ row }">
-            <t-space size="small">
+            <t-space v-if="canManage" size="small">
               <t-button theme="primary" variant="text" @click="openEditDialog(row)">编辑</t-button>
               <t-button theme="danger" variant="text" @click="handleDelete(row)">删除</t-button>
             </t-space>
+            <span v-else class="muted-text">只读</span>
           </template>
         </t-table>
       </div>
@@ -55,14 +64,15 @@
               <t-tag theme="warning" variant="light">续费 {{ formatPercent(row.renewal_reward_rate) }}</t-tag>
             </div>
             <t-dropdown
+              v-if="canManage"
               trigger="click"
               placement="bottom-right"
               :options="mobileActionOptions"
               @click="handleMobileAction(row, $event)"
             >
-              <t-button class="ambassador-mobile-card__more" variant="text" shape="square" aria-label="更多操作"
-                >...</t-button
-              >
+              <t-button class="ambassador-mobile-card__more" variant="text" shape="square" aria-label="更多操作">
+                <template #icon><more-icon /></template>
+              </t-button>
             </t-dropdown>
           </div>
           <dl>
@@ -82,12 +92,12 @@
     <t-dialog
       v-model:visible="dialogVisible"
       :header="form.id ? '编辑大使档位' : '新建大使档位'"
-      width="720px"
+      width="min(720px, calc(100vw - 32px))"
       :confirm-btn="{ content: '保存', theme: 'primary' }"
       :confirm-loading="saving"
       @confirm="submitForm"
     >
-      <t-form ref="formRef" :data="form" :rules="rules" label-align="top">
+      <t-form ref="formRef" :data="form" :rules="rules" label-align="right">
         <div class="ambassador-form-grid">
           <t-form-item label="大使名称" name="name">
             <t-input v-model="form.name" placeholder="例如：推广大使" />
@@ -112,18 +122,22 @@
 <script setup lang="ts">
 import './index.less';
 
-import { AddIcon } from 'tdesign-icons-vue-next';
+import { AddIcon, MoreIcon } from 'tdesign-icons-vue-next';
 import type { DropdownOption, FormInstanceFunctions, FormRule, PrimaryTableCol } from 'tdesign-vue-next';
 import { DialogPlugin } from 'tdesign-vue-next/es/dialog/plugin';
 import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
-import { onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 
 import type { PromotionAmbassadorPayload, PromotionAmbassadorRecord } from '@/api/admin';
 import { adminApi } from '@/api/admin';
+import { AdminPermissions } from '@/constants/permissions';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { fieldValue, formatDateTime } from '@/utils/format';
 import { required } from '@/utils/formRules';
+import { hasAdminPermission } from '@/utils/permission';
 import { errorMessage } from '@/utils/userMessage';
+
+defineOptions({ name: 'AdminPromotionAmbassadors' });
 
 interface AmbassadorForm {
   id: number | string | null;
@@ -133,6 +147,9 @@ interface AmbassadorForm {
   status: number;
   remark: string;
 }
+
+// 推广大使档位写入口与后端 promotion.ambassador.manage 同权限码，只读岗不显示新建/编辑/删除
+const canManage = computed(() => hasAdminPermission(AdminPermissions.PROMOTION_AMBASSADOR_MANAGE));
 
 const loading = ref(false);
 const saving = ref(false);
@@ -239,6 +256,7 @@ function handleDelete(row: PromotionAmbassadorRecord) {
     body: `确认删除大使档位“${fieldValue(row.name)}”吗？`,
     confirmBtn: { content: '确定', theme: 'danger' },
     async onConfirm() {
+      dialog.setConfirmLoading(true);
       try {
         await adminApi.promotionAmbassadors.delete(row.id);
         MessagePlugin.success('大使档位已删除');
@@ -246,6 +264,8 @@ function handleDelete(row: PromotionAmbassadorRecord) {
         await loadAmbassadors();
       } catch (error) {
         MessagePlugin.error(errorMessage(error, '删除大使档位失败'));
+      } finally {
+        dialog.setConfirmLoading(false);
       }
     },
   });

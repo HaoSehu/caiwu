@@ -1,5 +1,17 @@
 <template>
   <div class="settings-page">
+    <t-card :bordered="false">
+      <div class="page-tabs-toolbar">
+        <t-tabs :value="activeTab" @change="handleTabChange">
+          <t-tab-panel v-for="tab in tabOptions" :key="tab.value" :value="tab.value">
+            <template #label>
+              <span :class="{ 'tab-group-first': tab.groupStart }">{{ tab.label }}</span>
+            </template>
+          </t-tab-panel>
+        </t-tabs>
+      </div>
+    </t-card>
+
     <template v-if="activeTab !== 'site_hero'">
       <t-card v-if="sections.length > 1" :bordered="false">
         <div class="section-nav">
@@ -119,217 +131,20 @@
       </t-card>
 
       <div v-if="allFields.length > 0" class="settings-bottom-actions">
-        <t-button theme="primary" :loading="currentSaving" :disabled="!canManageCurrentTab" @click="saveCurrentTab">
+        <t-button theme="primary" :loading="settingsSaving" :disabled="!canManageCurrentTab" @click="saveSettings">
           <template #icon><check-icon /></template>
           保存设置
         </t-button>
       </div>
     </template>
 
-    <template v-else>
-      <t-card :bordered="false" :loading="heroLoading" class="slides-config-card">
-        <t-alert v-if="heroDirty" theme="warning" message="当前存在未保存修改。保存后官网首页最长约 2 分钟同步。" />
-
-        <section class="slides-section">
-          <div class="slides-section-head">
-            <div>
-              <h2>轮播项（{{ heroForm.slides.length }} / {{ maxSlides }}）</h2>
-              <p>每个轮播项包含导航名称、主标题、描述和两个按钮。</p>
-            </div>
-            <t-space>
-              <t-button variant="outline" @click="resetSlidesToDefault">恢复默认</t-button>
-              <t-button theme="primary" :disabled="heroForm.slides.length >= maxSlides" @click="addSlide">
-                <template #icon><add-icon /></template>
-                新增轮播
-              </t-button>
-            </t-space>
-          </div>
-
-          <article v-for="(slide, index) in heroForm.slides" :key="`slide-${index}`" class="slide-card">
-            <div class="slide-card-head">
-              <span class="slide-card-head__index">{{ index + 1 }}</span>
-              <strong class="slide-card-head__name">{{ slide.rail_title || '未命名轮播' }}</strong>
-              <div class="slide-card-head__actions">
-                <t-button
-                  variant="text"
-                  size="small"
-                  :aria-label="`上移第 ${index + 1} 个轮播`"
-                  :disabled="index === 0"
-                  @click="moveSlide(index, -1)"
-                >
-                  <template #icon><arrow-up-icon /></template>
-                </t-button>
-                <t-button
-                  variant="text"
-                  size="small"
-                  :aria-label="`下移第 ${index + 1} 个轮播`"
-                  :disabled="index === heroForm.slides.length - 1"
-                  @click="moveSlide(index, 1)"
-                >
-                  <template #icon><arrow-down-icon /></template>
-                </t-button>
-                <t-button
-                  theme="danger"
-                  variant="text"
-                  size="small"
-                  :aria-label="`删除第 ${index + 1} 个轮播`"
-                  :disabled="heroForm.slides.length <= 1"
-                  @click="removeSlide(index)"
-                >
-                  <template #icon><delete-icon /></template>
-                </t-button>
-              </div>
-            </div>
-
-            <div class="slide-body">
-              <div class="slide-row">
-                <label class="slide-label">标题</label>
-                <t-input
-                  v-model="slide.rail_title"
-                  maxlength="20"
-                  aria-label="导航名称"
-                  placeholder="导航名"
-                  class="slide-field--sm"
-                />
-                <t-input
-                  v-model="slide.title"
-                  maxlength="80"
-                  aria-label="主标题"
-                  placeholder="主标题，例如：官网焕新 · 云上新体验"
-                  class="slide-field--lg"
-                />
-              </div>
-
-              <div class="slide-row">
-                <label class="slide-label">按钮</label>
-                <div class="slide-btn-group">
-                  <span class="slide-btn-group__tag">主</span>
-                  <t-input
-                    v-model="slide.primary_text"
-                    maxlength="20"
-                    aria-label="主按钮文案"
-                    placeholder="按钮文案"
-                    class="slide-field--sm"
-                  />
-                  <t-input
-                    v-model="slide.primary_path"
-                    maxlength="255"
-                    aria-label="主按钮跳转路径"
-                    placeholder="跳转路径"
-                    class="slide-field--lg"
-                  />
-                </div>
-                <div class="slide-btn-group">
-                  <span class="slide-btn-group__tag">次</span>
-                  <t-input
-                    v-model="slide.secondary_text"
-                    maxlength="20"
-                    aria-label="次按钮文案"
-                    placeholder="按钮文案"
-                    class="slide-field--sm"
-                  />
-                  <t-input
-                    v-model="slide.secondary_path"
-                    maxlength="255"
-                    aria-label="次按钮跳转路径"
-                    placeholder="跳转路径"
-                    class="slide-field--lg"
-                  />
-                </div>
-              </div>
-
-              <div class="slide-row">
-                <label class="slide-label">描述</label>
-                <t-textarea
-                  v-model="slide.desc"
-                  :autosize="{ minRows: 2, maxRows: 4 }"
-                  maxlength="300"
-                  aria-label="轮播描述"
-                  placeholder="轮播描述文案"
-                  class="slide-field--full"
-                />
-              </div>
-
-              <div class="slide-row">
-                <label class="slide-label">视频</label>
-                <div
-                  class="slide-video-selector"
-                  role="button"
-                  tabindex="0"
-                  :aria-label="`选择第 ${index + 1} 个轮播的背景视频`"
-                  @click="openVideoDrawer(index)"
-                  @keydown.enter.prevent="openVideoDrawer(index)"
-                  @keydown.space.prevent="openVideoDrawer(index)"
-                >
-                  <video-icon />
-                  <span v-if="slide.video" class="slide-video-selector__name">{{ videoDisplayName(slide.video) }}</span>
-                  <span v-else class="slide-video-selector__placeholder">点击选择背景视频</span>
-                  <chevron-right-icon />
-                </div>
-              </div>
-            </div>
-          </article>
-        </section>
-
-        <section class="slides-section">
-          <div class="slides-section-head">
-            <div>
-              <h2>底部特色卡片（{{ heroForm.features.length }} / {{ maxFeatures }}）</h2>
-              <p>用于官网首页轮播下方的横向卡片组。</p>
-            </div>
-            <t-space>
-              <t-button variant="outline" @click="resetFeaturesToDefault">恢复默认</t-button>
-              <t-button theme="primary" :disabled="heroForm.features.length >= maxFeatures" @click="addFeature">
-                <template #icon><add-icon /></template>
-                新增卡片
-              </t-button>
-            </t-space>
-          </div>
-
-          <div class="feature-list">
-            <article v-for="(feature, index) in heroForm.features" :key="`feature-${index}`" class="feature-card">
-              <div class="feature-card-sort">
-                <t-button variant="text" :disabled="index === 0" @click="moveFeature(index, -1)">
-                  <template #icon><arrow-up-icon /></template>
-                </t-button>
-                <t-button
-                  variant="text"
-                  :disabled="index === heroForm.features.length - 1"
-                  @click="moveFeature(index, 1)"
-                >
-                  <template #icon><arrow-down-icon /></template>
-                </t-button>
-              </div>
-              <t-input v-model="feature.kicker" maxlength="20" placeholder="标签 kicker" />
-              <t-input v-model="feature.title" maxlength="50" placeholder="标题" />
-              <t-textarea
-                v-model="feature.desc"
-                :autosize="{ minRows: 2, maxRows: 3 }"
-                maxlength="120"
-                placeholder="描述"
-              />
-              <t-input v-model="feature.path" maxlength="255" placeholder="跳转路径，可选" />
-              <t-button
-                theme="danger"
-                variant="text"
-                :disabled="heroForm.features.length <= 1"
-                @click="removeFeature(index)"
-              >
-                <template #icon><delete-icon /></template>
-                删除
-              </t-button>
-            </article>
-          </div>
-        </section>
-      </t-card>
-
-      <div class="settings-bottom-actions">
-        <t-button theme="primary" :loading="currentSaving" :disabled="!canManageCurrentTab" @click="saveCurrentTab">
-          <template #icon><check-icon /></template>
-          保存设置
-        </t-button>
-      </div>
-    </template>
+    <!-- 首页装修已抽成独立组件：通用设置与站点装修各自一套模板，本页不再用 v-if/v-else 切成两半。 -->
+    <site-hero-config
+      v-else
+      :can-manage-site="canManageSite"
+      :reload-token="heroReloadToken"
+      @dirty-change="heroDirty = $event"
+    />
 
     <input ref="fileInputRef" class="hidden-file-input" type="file" accept="image/*" @change="handleImageFileChange" />
     <input
@@ -343,7 +158,7 @@
     <t-drawer
       :visible="mediaDrawerVisible"
       header="选择媒体"
-      size="520px"
+      size="min(520px, calc(100vw - 32px))"
       placement="right"
       :footer="null"
       @close="closeMediaDrawer"
@@ -392,100 +207,28 @@
         </div>
       </div>
     </t-drawer>
-
-    <t-drawer
-      :visible="videoDrawerVisible"
-      :header="videoDrawerTitle"
-      size="560px"
-      placement="right"
-      :footer="null"
-      @close="closeVideoDrawer"
-    >
-      <t-radio-group v-model="videoDrawerMode" variant="default-filled" class="video-drawer-tabs">
-        <t-radio-button value="select">选择已有视频</t-radio-button>
-        <t-radio-button value="url">输入视频 URL</t-radio-button>
-      </t-radio-group>
-
-      <div v-if="videoDrawerMode === 'select'" class="video-drawer-grid">
-        <div
-          v-for="opt in heroVideoOptions"
-          :key="opt.value"
-          class="video-drawer-card"
-          :class="{ 'is-selected': videoDrawerCurrentSrc === opt.value }"
-          role="button"
-          tabindex="0"
-          :aria-pressed="videoDrawerCurrentSrc === opt.value"
-          @click="selectVideoFromDrawer(opt.value)"
-          @keydown.enter.prevent="selectVideoFromDrawer(opt.value)"
-          @keydown.space.prevent="selectVideoFromDrawer(opt.value)"
-          @mouseenter="onVideoCardEnter($event)"
-          @mouseleave="onVideoCardLeave($event)"
-        >
-          <video
-            class="video-drawer-card__video"
-            :src="resolveHeroVideoSrc(opt.value)"
-            muted
-            loop
-            playsinline
-            preload="metadata"
-          ></video>
-          <div class="video-drawer-card__overlay">
-            <check-circle-filled-icon v-if="videoDrawerCurrentSrc === opt.value" class="video-drawer-card__check" />
-            <span class="video-drawer-card__name">{{ opt.filename || opt.value.split('/').pop() }}</span>
-            <span v-if="opt.size" class="video-drawer-card__size">{{ formatFileSize(opt.size) }}</span>
-          </div>
-        </div>
-        <div v-if="!heroVideoOptions.length" class="video-drawer-empty">后端 uploads/hero-videos 目录暂无视频</div>
-      </div>
-
-      <div v-else class="video-drawer-url-mode">
-        <p class="video-drawer-url-mode__hint">输入第三方视频 URL，支持 mp4/webm 格式。</p>
-        <t-input
-          v-model="videoUrlInput"
-          placeholder="https://example.com/videos/bg.mp4"
-          clearable
-          @keyup.enter="confirmVideoUrl"
-        />
-        <div v-if="videoUrlPreview" class="video-drawer-url-mode__preview">
-          <video :src="videoUrlPreview" muted loop playsinline preload="metadata" controls></video>
-        </div>
-        <t-space class="video-drawer-url-mode__actions">
-          <t-button theme="primary" @click="confirmVideoUrl">
-            <template #icon><check-icon /></template>
-            确认使用该 URL
-          </t-button>
-        </t-space>
-      </div>
-    </t-drawer>
   </div>
 </template>
 <script setup lang="ts">
 import './index.less';
 
-import {
-  AddIcon,
-  ArrowDownIcon,
-  ArrowUpIcon,
-  CheckCircleFilledIcon,
-  CheckIcon,
-  ChevronRightIcon,
-  DeleteIcon,
-  ImageIcon,
-  UploadIcon,
-  VideoIcon,
-} from 'tdesign-icons-vue-next';
-import { DialogPlugin } from 'tdesign-vue-next/es/dialog/plugin';
+import { CheckCircleFilledIcon, CheckIcon, ChevronRightIcon, ImageIcon, UploadIcon } from 'tdesign-icons-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 
-import type { HomeHeroFeature, HomeHeroPayload, HomeHeroSlide, MediaFileRecord, SettingItem } from '@/api/admin';
+import type { MediaFileRecord, SettingItem } from '@/api/admin';
 import { adminApi } from '@/api/admin';
 import SecretInput from '@/components/secret-input/index.vue';
 import { AdminPermissions } from '@/constants/permissions';
-import { resolveApiAssetUrl } from '@/utils/apiAssetUrl';
+import { useUnsavedGuard } from '@/hooks/useUnsavedGuard';
+import { toRecord } from '@/utils/format';
 import { hasAdminPermission } from '@/utils/permission';
 import { errorMessage } from '@/utils/userMessage';
+
+import SiteHeroConfig from './components/SiteHeroConfig.vue';
+
+defineOptions({ name: 'AdminSettings' });
 
 type SettingsTab = 'referral' | 'automation' | 'log_archive' | 'site_basic' | 'site_hero';
 type FieldType = 'input' | 'password' | 'textarea' | 'switch' | 'select' | 'number' | 'image' | 'time';
@@ -532,10 +275,9 @@ interface SettingsConfig {
 }
 
 const route = useRoute();
+const router = useRouter();
 const settingsLoading = ref(false);
 const settingsSaving = ref(false);
-const heroLoading = ref(false);
-const heroSaving = ref(false);
 const activeSection = ref('');
 const form = reactive<Record<string, FieldValue>>({});
 const settingsGroupCache = reactive<Record<string, Record<string, unknown>>>({});
@@ -554,25 +296,19 @@ const mediaDrawerTypeOptions = [
 ];
 const mediaDrawerUploadRef = ref<HTMLInputElement>();
 
-const maxSlides = 5;
-const maxFeatures = 5;
-const heroDefaults = reactive<{ slides: HomeHeroSlide[]; features: HomeHeroFeature[] }>({ slides: [], features: [] });
-const heroForm = reactive<{ slides: HomeHeroSlide[]; features: HomeHeroFeature[] }>({ slides: [], features: [] });
-const heroVideoOptions = ref<Array<{ label: string; value: string; filename?: string; size?: number }>>([]);
-const heroSnapshot = ref('');
-const videoDrawerVisible = ref(false);
-const videoDrawerSlideIndex = ref(-1);
-const videoDrawerCurrentSrc = ref('');
-const videoDrawerMode = ref<'select' | 'url'>('select');
-const videoUrlInput = ref('');
-const videoUrlPreview = ref('');
-
 const automationScheduleModeOptions: FieldOption[] = [
   { label: '每 15 分钟', value: 'every_fifteen_minutes' },
   { label: '每 30 分钟', value: 'every_thirty_minutes' },
   { label: '每小时', value: 'hourly' },
   { label: '每天', value: 'daily' },
 ];
+
+interface SettingsTabOption {
+  label: string;
+  value: SettingsTab;
+  /** 是否为分组首项：模板据此加 .tab-group-first 画竖分隔线（样式见 index.less） */
+  groupStart: boolean;
+}
 
 const tabGroups: Array<{ group: string; label: string; tabs: Array<{ label: string; value: SettingsTab }> }> = [
   {
@@ -593,7 +329,44 @@ const tabGroups: Array<{ group: string; label: string; tabs: Array<{ label: stri
     ],
   },
 ];
-const tabOptions = tabGroups.flatMap((g) => g.tabs);
+// 5 条路由共用本组件（content.ts 的 site-info/site-hero、system.ts 的 automation/log-archive/referral-settings），
+// 原先页内没有任何 tab 入口（tabGroups 在模板里零引用），只能靠左侧菜单切换。
+// 这里把 tabGroups 摊平成一行 tab，每个分组的首项标记 groupStart 用于画竖分隔线。
+const tabPaths: Record<SettingsTab, string> = {
+  referral: '/admin/referral-settings',
+  automation: '/admin/automation',
+  log_archive: '/admin/log-archive',
+  site_basic: '/admin/site-info',
+  site_hero: '/admin/site-hero',
+};
+// 各 tab 对应路由的 meta.permission，与 router/modules 保持一致：
+// 无权限的 tab 不该出现（点了只会被 permission.ts 踢到 403）。
+const tabPermissions: Record<SettingsTab, string> = {
+  referral: AdminPermissions.SETTINGS_VIEW,
+  automation: AdminPermissions.SCHEDULE_VIEW,
+  log_archive: AdminPermissions.SETTINGS_VIEW,
+  site_basic: AdminPermissions.SITE_VIEW,
+  site_hero: AdminPermissions.SITE_VIEW,
+};
+// allTabOptions 是「路由表里实际存在的 5 个 tab」，只用于校验 URL 上的 tab 值是否合法；
+// tabOptions 才是渲染用的一行 tab，按权限过滤——无权限的 tab 不渲染（点了只会被
+// permission.ts 的 meta.permission 校验踢到 403，比直接不显示更差）。
+const allTabOptions: SettingsTabOption[] = tabGroups.flatMap((group) =>
+  group.tabs.map((tab, index) => ({ ...tab, groupStart: index === 0 })),
+);
+// hasAdminPermission 内部读 useUserStore()，在 computed 里调用即为响应式：
+// 权限在登录后一次性填充时这里会自动重算。
+const tabOptions = computed<SettingsTabOption[]>(() =>
+  allTabOptions.filter((tab) => hasAdminPermission(tabPermissions[tab.value])),
+);
+
+function handleTabChange(value: unknown) {
+  const tab = normalizeTab(value);
+  if (tab === activeTab.value) return;
+  // 切 tab 走 replace：页内换视图不该新增浏览器历史。
+  // 五个 tab 各有独立路由，落地后由上面 watch(route.meta.settingsTab) 同步 activeTab 并重新加载。
+  void router.replace({ path: tabPaths[tab] });
+}
 
 const configs: Record<Exclude<SettingsTab, 'site_hero'>, SettingsConfig> = {
   referral: {
@@ -855,24 +628,29 @@ const allFields = computed(() => sections.value.flatMap((section) => section.fie
 const activeGroups = computed(() =>
   Array.from(new Set(allFields.value.map((field) => field.group || pageConfig.value?.group || 'system'))),
 );
-const currentSaving = computed(() => (activeTab.value === 'site_hero' ? heroSaving.value : settingsSaving.value));
-const heroDirty = computed(() => JSON.stringify(heroForm) !== heroSnapshot.value);
-
-const videoDrawerTitle = computed(() => {
-  if (videoDrawerSlideIndex.value < 0) return '选择背景视频';
-  const slide = heroForm.slides[videoDrawerSlideIndex.value];
-  return `背景视频 · 第 ${videoDrawerSlideIndex.value + 1} 项${slide?.rail_title ? `（${slide.rail_title}）` : ''}`;
+const heroDirty = ref(false);
+const heroReloadToken = ref(0);
+// 普通设置页同样需要脏判定：字段回填与保存成功后重新取快照
+const settingsSnapshot = ref('');
+const settingsDirty = computed(() => JSON.stringify(form) !== settingsSnapshot.value);
+// 加载期间表单处于中间态，此时不算未保存修改，避免误拦离开。
+// 首页装修的脏状态由 SiteHeroConfig 通过 dirty-change 回传，其「加载中不算脏」的守卫在子组件内部。
+const pageDirty = computed(() => !settingsLoading.value && (settingsDirty.value || heroDirty.value));
+useUnsavedGuard(() => pageDirty.value, {
+  message: '设置页存在未保存的修改，离开后这些修改会丢失。',
 });
 
 function normalizeTab(value: unknown): SettingsTab {
   const tab = Array.isArray(value) ? value[0] : value;
   if (tab === 'site') return 'site_basic';
-  return tabOptions.some((item) => item.value === tab) ? (tab as SettingsTab) : 'automation';
+  // 用 allTabOptions 而非 tabOptions 校验：URL 上的 tab 合法与否与当前账号权限无关，
+  // 无权限的路由由 permission.ts 的 meta.permission 兜底。
+  return allTabOptions.some((item) => item.value === tab) ? (tab as SettingsTab) : 'automation';
 }
 
 function resolveInitialTab(): SettingsTab {
   const metaTab = route.meta.settingsTab;
-  if (typeof metaTab === 'string' && tabOptions.some((item) => item.value === metaTab)) {
+  if (typeof metaTab === 'string' && allTabOptions.some((item) => item.value === metaTab)) {
     return metaTab as SettingsTab;
   }
   return normalizeTab(route.query.tab);
@@ -887,7 +665,11 @@ const canManageCurrentTab = computed(() =>
 );
 
 function refreshCurrentTab() {
-  if (activeTab.value === 'site_hero') return loadHero();
+  // 切到首页装修时通知子组件重新拉取；通用设置仍由父级自己加载。
+  if (activeTab.value === 'site_hero') {
+    heroReloadToken.value += 1;
+    return;
+  }
   return loadSettings();
 }
 
@@ -895,22 +677,12 @@ function refreshCurrentTab() {
 watch(
   () => route.meta.settingsTab,
   (newTab) => {
-    if (typeof newTab === 'string' && tabOptions.some((item) => item.value === newTab)) {
+    if (typeof newTab === 'string' && allTabOptions.some((item) => item.value === newTab)) {
       activeTab.value = newTab as SettingsTab;
       refreshCurrentTab();
     }
   },
 );
-
-function saveCurrentTab() {
-  if (!canManageCurrentTab.value) {
-    MessagePlugin.warning('当前账号无保存权限');
-    return undefined;
-  }
-
-  if (activeTab.value === 'site_hero') return saveHero();
-  return saveSettings();
-}
 
 function resetFormDefaults() {
   Object.keys(form).forEach((key) => delete form[key]);
@@ -920,8 +692,12 @@ function resetFormDefaults() {
   });
 }
 
+// 竞态防护：切 tab 会连续触发加载，只认最后一次请求的结果（docs/FRONTEND.md:27）
+let settingsRequestSeq = 0;
+
 async function loadSettings() {
   if (!pageConfig.value) return;
+  const currentSeq = ++settingsRequestSeq;
   settingsLoading.value = true;
   resetFormDefaults();
   try {
@@ -933,14 +709,20 @@ async function loadSettings() {
         ]),
       ),
     );
+    if (currentSeq !== settingsRequestSeq) return;
     allFields.value.forEach((field) => {
       const group = field.group || pageConfig.value?.group || 'system';
       form[field.key] = parseFieldValue(field, maps[group]?.[field.key]);
     });
   } catch (error) {
+    if (currentSeq !== settingsRequestSeq) return;
     MessagePlugin.error(errorMessage(error, '加载设置失败'));
   } finally {
-    settingsLoading.value = false;
+    if (currentSeq === settingsRequestSeq) {
+      settingsLoading.value = false;
+      // 加载完成后重置快照，之后的用户编辑才算未保存修改
+      settingsSnapshot.value = JSON.stringify(form);
+    }
   }
 }
 
@@ -952,15 +734,37 @@ async function saveSettings() {
 
   if (!validateSettings()) return;
   settingsSaving.value = true;
+  // 按 group 串行提交：并发时某个 group 失败会被 Promise.all 吞成一句笼统报错，
+  // 已经生效的 group 与失败的 group 无法区分，用户也无从知道该重试哪一块。
+  const entries = Object.entries(buildSettingsPayload());
+  const savedGroups: string[] = [];
+  // 失败分组直接记在循环变量上：早前用 entries[savedGroups.length] 反查下标，
+  // 一旦 buildSettingsPayload 的字段顺序与 entries 顺序错位，就会清错缓存、
+  // 重拉错分组，真正失败的那组继续显示未落库的值。
+  let currentGroup = '';
   try {
-    const payload = buildSettingsPayload();
-    await Promise.all(Object.entries(payload).map(([group, settings]) => adminApi.settings.save({ group, settings })));
-    Object.entries(payload).forEach(([group, settings]) => {
+    for (const [group, settings] of entries) {
+      currentGroup = group;
+      await adminApi.settings.save({ group, settings });
       settingsGroupCache[group] = { ...(settingsGroupCache[group] || {}), ...settings };
-    });
+      savedGroups.push(group);
+    }
+    settingsSnapshot.value = JSON.stringify(form);
     MessagePlugin.success(`${pageConfig.value?.title || '设置'}已保存`);
   } catch (error) {
-    MessagePlugin.error(errorMessage(error, '保存设置失败'));
+    // 失败时清掉对应 group 的本地缓存并重新拉取，避免界面继续展示未落库的值
+    const failedGroup = currentGroup;
+    if (failedGroup) {
+      delete settingsGroupCache[failedGroup];
+      delete settingsMetaCache[failedGroup];
+      try {
+        await loadSettingsGroup(failedGroup);
+      } catch {
+        // 重新拉取失败不覆盖原始保存错误
+      }
+    }
+    const suffix = savedGroups.length ? `；已保存分组：${savedGroups.join('、')}` : '';
+    MessagePlugin.error(`${errorMessage(error, '保存设置失败')}${suffix}`);
   } finally {
     settingsSaving.value = false;
   }
@@ -1098,13 +902,18 @@ function closeMediaDrawer() {
   mediaDrawerVisible.value = false;
 }
 
+// 竞态防护：切换媒体类型时只保留最后一次请求的结果（docs/FRONTEND.md:27）
+let mediaDrawerRequestSeq = 0;
+
 async function loadMediaDrawerList() {
+  const currentSeq = ++mediaDrawerRequestSeq;
   mediaDrawerLoading.value = true;
   try {
     const res = await adminApi.media.list({
       type: mediaDrawerType.value || undefined,
       page_size: 100,
     });
+    if (currentSeq !== mediaDrawerRequestSeq) return;
     mediaDrawerList.value = (res.list || [])
       .map(function (item) {
         return {
@@ -1119,10 +928,12 @@ async function loadMediaDrawerList() {
       .filter(function (item) {
         return item.url;
       });
-  } catch {
+  } catch (error) {
+    if (currentSeq !== mediaDrawerRequestSeq) return;
     mediaDrawerList.value = [];
+    MessagePlugin.error(errorMessage(error, '加载媒体库失败，请稍后重试'));
   } finally {
-    mediaDrawerLoading.value = false;
+    if (currentSeq === mediaDrawerRequestSeq) mediaDrawerLoading.value = false;
   }
 }
 
@@ -1164,7 +975,7 @@ async function handleMediaDrawerUpload(event: Event) {
         isVideo: isMediaDrawerVideo(response),
       });
     }
-    // Also set as the selected image
+    // 同时设为当前选中的图片
     const field = pendingImageField.value;
     if (field) form[field.key] = url;
     MessagePlugin.success('上传成功');
@@ -1189,297 +1000,6 @@ async function handleImageFileChange(event: Event) {
     MessagePlugin.error(errorMessage(error, '图片上传失败'));
   }
 }
-
-async function loadHero() {
-  heroLoading.value = true;
-  try {
-    const data = await adminApi.siteHero.get();
-    applyHeroPayload(data);
-  } catch (error) {
-    MessagePlugin.error(errorMessage(error, '加载首页 Banner 失败'));
-  } finally {
-    heroLoading.value = false;
-  }
-}
-
-function applyHeroPayload(payload: HomeHeroPayload = {}) {
-  heroDefaults.slides = cloneList(payload.defaults?.slides);
-  heroDefaults.features = cloneList(payload.defaults?.features);
-  heroVideoOptions.value = normalizeHeroVideoOptions(payload.options?.videos);
-  heroForm.slides = cloneList(payload.slides).length ? cloneList(payload.slides) : cloneList(heroDefaults.slides);
-  heroForm.features = cloneList(payload.features).length
-    ? cloneList(payload.features)
-    : cloneList(heroDefaults.features);
-  heroSnapshot.value = JSON.stringify(heroForm);
-}
-
-async function saveHero() {
-  if (!canManageSite.value) {
-    MessagePlugin.warning('当前账号无站点管理权限');
-    return;
-  }
-
-  if (!validateHero()) return;
-  heroSaving.value = true;
-  try {
-    const payload = {
-      slides: heroForm.slides.map((item) => ({ ...item })),
-      features: heroForm.features.map((item) => ({ ...item })),
-    };
-    const response = await adminApi.siteHero.save(payload);
-    applyHeroPayload({
-      ...response,
-      slides: response.slides || payload.slides,
-      features: response.features || payload.features,
-    });
-    MessagePlugin.success('首页 Banner 已保存');
-  } catch (error) {
-    MessagePlugin.error(errorMessage(error, '保存首页 Banner 失败'));
-  } finally {
-    heroSaving.value = false;
-  }
-}
-
-function validateHero() {
-  for (const [index, slide] of heroForm.slides.entries()) {
-    for (const [key, label] of [
-      ['rail_title', '导航名称'],
-      ['title', '主标题'],
-      ['desc', '描述'],
-      ['primary_text', '主按钮文案'],
-      ['primary_path', '主按钮跳转'],
-      ['secondary_text', '次按钮文案'],
-      ['secondary_path', '次按钮跳转'],
-    ] as Array<[keyof HomeHeroSlide, string]>) {
-      if (!String(slide[key] ?? '').trim()) {
-        MessagePlugin.warning(`第 ${index + 1} 个轮播项的${label}不能为空`);
-        return false;
-      }
-    }
-  }
-  for (const [index, feature] of heroForm.features.entries()) {
-    for (const [key, label] of [
-      ['kicker', '标签'],
-      ['title', '标题'],
-      ['desc', '描述'],
-    ] as Array<[keyof HomeHeroFeature, string]>) {
-      if (!String(feature[key] ?? '').trim()) {
-        MessagePlugin.warning(`第 ${index + 1} 张卡片的${label}不能为空`);
-        return false;
-      }
-    }
-  }
-  return true;
-}
-
-function buildBlankSlide(): HomeHeroSlide {
-  return {
-    rail_title: '新轮播项',
-    title: '',
-    desc: '',
-    primary_text: '立即体验',
-    primary_path: '/products',
-    secondary_text: '查看详情',
-    secondary_path: '/about',
-    video: heroVideoOptions.value[0]?.value || '',
-  };
-}
-
-function buildBlankFeature(): HomeHeroFeature {
-  return { kicker: '新卡片', title: '', desc: '', path: '' };
-}
-
-function addSlide() {
-  if (heroForm.slides.length < maxSlides) heroForm.slides.push(buildBlankSlide());
-}
-
-function removeSlide(index: number) {
-  if (heroForm.slides.length > 1) heroForm.slides.splice(index, 1);
-}
-
-function moveSlide(index: number, offset: number) {
-  moveItem(heroForm.slides, index, offset);
-}
-
-function addFeature() {
-  if (heroForm.features.length < maxFeatures) heroForm.features.push(buildBlankFeature());
-}
-
-function removeFeature(index: number) {
-  if (heroForm.features.length > 1) heroForm.features.splice(index, 1);
-}
-
-function moveFeature(index: number, offset: number) {
-  moveItem(heroForm.features, index, offset);
-}
-
-function resetSlidesToDefault() {
-  const dialog = DialogPlugin.confirm({
-    header: '恢复默认轮播',
-    body: '恢复默认会覆盖当前轮播项，下次保存才会写入数据库。',
-    confirmBtn: { content: '确定', theme: 'primary' },
-    cancelBtn: '取消',
-    onConfirm: () => {
-      heroForm.slides = cloneList(heroDefaults.slides);
-      dialog.destroy();
-    },
-  });
-}
-
-function resetFeaturesToDefault() {
-  const dialog = DialogPlugin.confirm({
-    header: '恢复默认卡片',
-    body: '恢复默认会覆盖当前特色卡片，下次保存才会写入数据库。',
-    confirmBtn: { content: '确定', theme: 'primary' },
-    cancelBtn: '取消',
-    onConfirm: () => {
-      heroForm.features = cloneList(heroDefaults.features);
-      dialog.destroy();
-    },
-  });
-}
-
-function normalizeHeroVideoOptions(list: unknown) {
-  if (!Array.isArray(list)) return [];
-  return list
-    .map((item) => {
-      const record = toRecord(item);
-      const value = toManagedRelativePath(String(record.path || record.url || '').trim());
-      if (!value) return null;
-      const filename = String(record.filename || value.split('/').pop() || value);
-      const size = Number(record.size || 0);
-      return {
-        label: size > 0 ? `${filename} · ${formatFileSize(size)}` : filename,
-        value,
-        filename,
-        size,
-      };
-    })
-    .filter(Boolean) as Array<{ label: string; value: string; filename?: string; size?: number }>;
-}
-
-// 后端可能仅返回完整 URL：托管资源还原为相对路径，与后端归一化的存储格式保持一致
-function toManagedRelativePath(value: string) {
-  const managed = value.match(/^(?:https?:\/\/[^/]+)?\/((?:uploads|media)\/.*)$/i);
-  return managed ? `/${managed[1]}` : value;
-}
-
-function formatFileSize(size: number) {
-  if (!Number.isFinite(size) || size <= 0) return '';
-  if (size >= 1024 * 1024) return `${(size / 1024 / 1024).toFixed(1)} MB`;
-  if (size >= 1024) return `${Math.round(size / 1024)} KB`;
-  return `${size} B`;
-}
-
-function resolveHeroVideoSrc(src: string) {
-  return resolveApiAssetUrl(src, import.meta.env.VITE_API_BASE_URL);
-}
-
-function onVideoCardEnter(event: MouseEvent) {
-  const el = event.currentTarget as HTMLElement;
-  const video = el.querySelector('video') as HTMLVideoElement | null;
-  if (video) {
-    video.currentTime = 0;
-    video.play().catch(() => {});
-  }
-}
-
-function onVideoCardLeave(event: MouseEvent) {
-  const el = event.currentTarget as HTMLElement;
-  const video = el.querySelector('video') as HTMLVideoElement | null;
-  if (video) {
-    video.pause();
-    video.currentTime = 0;
-  }
-}
-
-function openVideoDrawer(slideIndex: number) {
-  videoDrawerSlideIndex.value = slideIndex;
-  const current = String(heroForm.slides[slideIndex]?.video || '');
-  videoDrawerCurrentSrc.value = current;
-  const isPredefined = heroVideoOptions.value.some((opt) => opt.value === current);
-  if (current && !isPredefined) {
-    videoDrawerMode.value = 'url';
-    videoUrlInput.value = current;
-    videoUrlPreview.value = current;
-  } else {
-    videoDrawerMode.value = 'select';
-    videoUrlInput.value = '';
-    videoUrlPreview.value = '';
-  }
-  videoDrawerVisible.value = true;
-}
-
-function closeVideoDrawer() {
-  videoDrawerVisible.value = false;
-  videoDrawerSlideIndex.value = -1;
-  videoUrlInput.value = '';
-  videoUrlPreview.value = '';
-}
-
-function selectVideoFromDrawer(value: string) {
-  const idx = videoDrawerSlideIndex.value;
-  if (idx >= 0 && idx < heroForm.slides.length) {
-    heroForm.slides[idx].video = heroForm.slides[idx].video === value ? '' : value;
-  }
-  closeVideoDrawer();
-}
-
-function confirmVideoUrl() {
-  const url = videoUrlInput.value.trim();
-  if (!url) {
-    MessagePlugin.warning('请输入视频 URL');
-    return;
-  }
-  if (!/^https?:\/\/.+/.test(url)) {
-    MessagePlugin.warning('请输入以 http:// 或 https:// 开头的有效 URL');
-    return;
-  }
-  const idx = videoDrawerSlideIndex.value;
-  if (idx >= 0 && idx < heroForm.slides.length) {
-    heroForm.slides[idx].video = url;
-  }
-  MessagePlugin.success('已设置第三方视频 URL');
-  closeVideoDrawer();
-}
-
-function videoDisplayName(src: string) {
-  if (!src) return '';
-  const opt = heroVideoOptions.value.find((item) => item.value === src);
-  if (opt?.size) return `${opt.filename || src.split('/').pop()} · ${formatFileSize(opt.size)}`;
-  if (opt) return opt.filename || src.split('/').pop() || src;
-  // External URL — show shortened domain path
-  try {
-    const url = new URL(src);
-    const path = url.pathname.split('/').filter(Boolean).pop() || url.hostname;
-    return `外部 · ${path}`;
-  } catch {
-    return src.split('/').pop() || src;
-  }
-}
-
-function moveItem<T>(list: T[], index: number, offset: number) {
-  const target = index + offset;
-  if (target < 0 || target >= list.length) return;
-  const [item] = list.splice(index, 1);
-  list.splice(target, 0, item);
-}
-
-function cloneList<T extends Record<string, unknown>>(list?: T[]) {
-  return Array.isArray(list) ? list.map((item) => ({ ...item })) : [];
-}
-
-function toRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
-}
-
-watch(videoUrlInput, (value) => {
-  if (/^https?:\/\/.+/.test(value)) {
-    videoUrlPreview.value = value;
-  } else {
-    videoUrlPreview.value = '';
-  }
-});
 
 watch(
   () => route.query.tab,

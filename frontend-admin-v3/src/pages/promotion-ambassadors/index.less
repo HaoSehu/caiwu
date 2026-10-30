@@ -1,18 +1,7 @@
 .promotion-ambassadors-page {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-}
-
-.table-scroll {
-  overflow-x: auto;
-}
-
-.stack-cell {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 3px;
+  gap: var(--td-comp-margin-l);
 }
 
 .stack-cell strong {
@@ -37,17 +26,11 @@
   width: 100%;
 }
 
-.mobile-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
 .ambassador-mobile-card {
   display: block;
   overflow: hidden;
   border: 1px solid var(--td-component-border);
-  border-radius: var(--td-radius-default, 4px);
+  border-radius: var(--td-radius-default);
   background: var(--td-bg-color-container);
 }
 
@@ -55,7 +38,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) 28px;
   align-items: center;
-  gap: 8px;
+  gap: var(--td-comp-margin-s);
   min-height: 42px;
   border-bottom: 1px solid var(--td-component-border);
   padding: 9px 10px;
@@ -65,7 +48,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--td-comp-margin-s);
   min-width: 0;
 }
 
@@ -85,7 +68,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--td-comp-margin-s);
 }
 
 .ambassador-mobile-card dt {

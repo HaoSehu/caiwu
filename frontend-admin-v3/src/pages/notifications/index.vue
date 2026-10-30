@@ -21,6 +21,7 @@
             :columns="templateColumns"
             hover
             table-layout="fixed"
+            aria-label="邮件模板列表"
             @row-click="openTemplate"
           >
             <template #empty>
@@ -61,16 +62,18 @@
                   v-model="row.is_enabled"
                   :custom-value="[true, false]"
                   :label="['启用', '停用']"
+                  :disabled="!canManage"
                   :loading="statusSavingKey === templateRowKey(row)"
                   @change="(value: unknown) => updateTemplateEnabled(row, value)"
                 />
               </span>
             </template>
             <template #actions="{ row }">
-              <t-space size="small">
+              <t-space v-if="canManage" size="small">
                 <t-button variant="text" @click.stop="openTestSend(row)">测试发送</t-button>
                 <t-button theme="primary" variant="text" @click.stop="openTemplate(row)">编辑</t-button>
               </t-space>
+              <span v-else class="muted-text">只读</span>
             </template>
           </t-table>
         </div>
@@ -106,6 +109,7 @@
                     v-model="row.is_enabled"
                     :custom-value="[true, false]"
                     :label="['启用', '停用']"
+                    :disabled="!canManage"
                     :loading="statusSavingKey === templateRowKey(row)"
                     @change="(value: unknown) => updateTemplateEnabled(row, value)"
                   />
@@ -116,7 +120,7 @@
                 <dd>{{ row.audience === 'admin' ? '管理员' : '用户' }}</dd>
               </div>
             </dl>
-            <div class="template-mobile-card__actions">
+            <div v-if="canManage" class="template-mobile-card__actions">
               <t-button variant="outline" @click="openTestSend(row)">测试发送</t-button>
               <t-button theme="primary" variant="outline" @click="openTemplate(row)">编辑</t-button>
             </div>
@@ -175,7 +179,7 @@
               <t-button theme="default" variant="base" @click="resetApiFilters">重置</t-button>
             </div>
             <div class="api-filter-grid">
-              <t-input v-model="apiFilters.keyword" clearable placeholder="搜索路径、权限码、控制器或源码文件">
+              <t-input v-model="keywordInput" clearable placeholder="搜索路径、权限码、控制器或源码文件">
                 <template #suffix-icon><search-icon /></template>
               </t-input>
               <t-select v-model="apiFilters.access" placeholder="访问级别">
@@ -200,9 +204,16 @@
 
           <t-card :bordered="false">
             <template #title>接口明细</template>
-            <template #subtitle>Showing {{ filteredApiItems.length }} / {{ apiItems.length }}</template>
+            <template #subtitle> 共 {{ apiItems.length }} 条，当前筛选 {{ filteredApiItems.length }} 条 </template>
             <div class="table-scroll">
-              <t-table row-key="id" :data="filteredApiItems" :columns="apiColumns" hover table-layout="fixed">
+              <t-table
+                row-key="id"
+                :data="pagedApiItems"
+                :columns="apiColumns"
+                hover
+                table-layout="fixed"
+                aria-label="接口目录列表"
+              >
                 <template #empty>
                   <t-empty :description="hasActiveApiFilters ? '未找到匹配结果' : '暂无数据'" />
                 </template>
@@ -245,6 +256,16 @@
                 </template>
               </t-table>
             </div>
+            <div v-if="filteredApiTotal > 0" class="pagination-row">
+              <t-pagination
+                :current="apiPager.page"
+                :page-size="apiPager.page_size"
+                :total="filteredApiTotal"
+                :page-size-options="apiPager.pageSizeOptions"
+                show-jumper
+                @change="handleApiPageChange"
+              />
+            </div>
           </t-card>
         </div>
       </section>
@@ -253,7 +274,7 @@
     <t-dialog
       v-model:visible="testSendVisible"
       :header="testSendDialogTitle"
-      width="560px"
+      width="min(560px, calc(100vw - 32px))"
       :confirm-btn="{ content: '确定', loading: testSending }"
       @confirm="submitTestSend"
     >
@@ -262,7 +283,7 @@
           <strong>{{ testSendTemplate.name }}</strong>
           <span>{{ testSendTemplate.channel === 'sms' ? '短信模板' : '邮件模板' }} · {{ testSendTemplate.code }}</span>
         </div>
-        <t-form label-align="top">
+        <t-form label-align="right">
           <t-form-item :label="testSendTemplate?.channel === 'sms' ? '接收手机号' : '接收邮箱地址'">
             <t-input
               v-model="testSendRecipient"
@@ -302,6 +323,7 @@
 <script setup lang="ts">
 import './index.less';
 
+import { debounce } from 'lodash-es';
 import { SearchIcon } from 'tdesign-icons-vue-next';
 import type { PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
@@ -310,9 +332,16 @@ import { useRoute, useRouter } from 'vue-router';
 
 import type { NotificationTemplateItem, NotificationTemplateTestSendResponse, SettingItem } from '@/api/admin';
 import { adminApi } from '@/api/admin';
+import { PAGE_SIZE_OPTIONS } from '@/constants/pagination';
+import { AdminPermissions } from '@/constants/permissions';
 import apiCatalogData from '@/data/apiCatalog.generated.json';
+import { useListPage } from '@/hooks/useListPage';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { copyToClipboard, toRecord } from '@/utils/format';
+import { hasAdminPermission } from '@/utils/permission';
 import { errorMessage } from '@/utils/userMessage';
+
+defineOptions({ name: 'AdminNotificationList' });
 
 type NotificationTab = 'email-templates' | 'sms-templates' | 'api-directory';
 type TemplateChannel = 'email' | 'sms';
@@ -355,9 +384,10 @@ interface ApiCatalogMeta {
 
 const route = useRoute();
 const router = useRouter();
+// 模板启停/测试发送/编辑与后端设置写路由同权限码，只读岗只保留浏览
+const canManage = computed(() => hasAdminPermission(AdminPermissions.SETTINGS_MANAGE));
 const templateAudience = ref<TemplateAudience>(normalizeTemplateAudience(route.query.tab) || 'user');
 const activeTab = ref<NotificationTab>(resolveRouteTab());
-const templatesLoading = ref(false);
 const statusSavingKey = ref('');
 const testSendVisible = ref(false);
 const testSending = ref(false);
@@ -365,13 +395,45 @@ const testSendRecipient = ref('');
 const testSendTemplate = ref<TemplateRow | null>(null);
 const testSendResult = ref<NotificationTemplateTestSendResponse | null>(null);
 const settingsMap = ref<Record<string, unknown>>({});
-const templateSummaries = ref<NotificationTemplateItem[]>([]);
+// 模板列表按渠道一次拉全量（后端无分页），接列表引擎只为请求竞态、统一错误提示与三态空文案；
+// 目录 tab 用的是构建期静态 JSON，走下方本地分页，与这里无关。
+const {
+  list: templateSummaries,
+  loading: templatesLoading,
+  loadList,
+} = useListPage<Record<string, never>, NotificationTemplateItem>({
+  defaultFilters: {},
+  immediate: false,
+  onError: (error) => MessagePlugin.error(errorMessage(error, `加载${templateTitle.value}列表失败`)),
+  fetch: async () => {
+    const [templateResponse, response] = await Promise.all([
+      adminApi.settings.notificationTemplates({ channel: templateChannel.value }),
+      adminApi.settings.list({ group: 'notification' }),
+    ]);
+    const list = templateResponse.list || [];
+    settingsMap.value = normalizeSettings(response);
+    return { list, total: list.length };
+  },
+});
+
 const selectedApiModule = ref('all');
 const apiFilters = reactive({
   keyword: '',
   access: 'all',
   method: 'all',
   source: 'all',
+});
+// 搜索框单独接管输入，debounce 后再写回筛选条件，避免逐字符 filter 392 条目录数据
+const keywordInput = ref('');
+const syncKeyword = debounce((value: string) => {
+  apiFilters.keyword = value;
+}, 250);
+watch(keywordInput, (value) => syncKeyword(value));
+// 目录为构建期静态数据，前端分页即可，避免一次渲染全部行
+const apiPager = reactive({
+  page: 1,
+  page_size: PAGE_SIZE_OPTIONS[0],
+  pageSizeOptions: PAGE_SIZE_OPTIONS,
 });
 
 const apiCatalog = apiCatalogData as { meta?: ApiCatalogMeta; items?: ApiCatalogItem[] };
@@ -423,7 +485,7 @@ const templateRows = computed<TemplateRow[]>(() =>
     return {
       ...template,
       subject,
-      preview: preview ? (preview.length > 88 ? `${preview.slice(0, 88)}...` : preview) : '-',
+      preview: preview ? (preview.length > 88 ? `${preview.slice(0, 88)}…` : preview) : '-',
       isHtml: /<[a-z][a-z0-9]*(?:\s|>)/i.test(content.trim()),
       is_enabled: toBooleanValue(template.is_enabled ?? true),
     };
@@ -486,6 +548,29 @@ const filteredApiItems = computed(() => {
       .includes(keyword);
   });
 });
+const filteredApiTotal = computed(() => filteredApiItems.value.length);
+const pagedApiItems = computed(() => {
+  const start = (apiPager.page - 1) * apiPager.page_size;
+  return filteredApiItems.value.slice(start, start + apiPager.page_size);
+});
+// 筛选条件变化后回到第一页，否则会停在越界页看到空表
+watch(
+  () => [apiFilters.keyword, apiFilters.access, apiFilters.method, apiFilters.source, selectedApiModule.value],
+  () => {
+    apiPager.page = 1;
+  },
+);
+
+function handleApiPageChange(pageInfo: { current?: number; pageSize?: number }) {
+  const current = Number(pageInfo.current ?? 1);
+  const pageSize = Number(pageInfo.pageSize ?? apiPager.page_size);
+  if (pageSize !== apiPager.page_size) {
+    apiPager.page_size = pageSize;
+    apiPager.page = 1;
+    return;
+  }
+  apiPager.page = current;
+}
 
 const templateColumns: PrimaryTableCol<TemplateRow>[] = [
   { colKey: 'name', title: '模板信息', minWidth: 260 },
@@ -532,20 +617,9 @@ function refreshCurrentTab() {
   return undefined;
 }
 
-async function loadTemplates() {
-  templatesLoading.value = true;
-  try {
-    const [templateResponse, response] = await Promise.all([
-      adminApi.settings.notificationTemplates({ channel: templateChannel.value }),
-      adminApi.settings.list({ group: 'notification' }),
-    ]);
-    templateSummaries.value = templateResponse.list || [];
-    settingsMap.value = normalizeSettings(response);
-  } catch (error) {
-    MessagePlugin.error(errorMessage(error, `加载${templateTitle.value}列表失败`));
-  } finally {
-    templatesLoading.value = false;
-  }
+/** 拉取当前渠道模板；错误提示与 loading 由列表引擎统一处理 */
+function loadTemplates() {
+  return loadList();
 }
 
 function openTemplate(row: TemplateRow | TableRowData) {
@@ -599,19 +673,17 @@ async function submitTestSend() {
 
 function resetApiFilters() {
   selectedApiModule.value = 'all';
+  syncKeyword.cancel();
+  keywordInput.value = '';
   apiFilters.keyword = '';
   apiFilters.access = 'all';
   apiFilters.method = 'all';
   apiFilters.source = 'all';
+  apiPager.page = 1;
 }
 
-async function copyApiPath(path: string) {
-  try {
-    await navigator.clipboard?.writeText(path);
-    MessagePlugin.success('接口路径已复制');
-  } catch {
-    MessagePlugin.error('复制失败，请手动复制');
-  }
+function copyApiPath(path: string) {
+  void copyToClipboard(path, '接口路径已复制');
 }
 
 async function updateTemplateEnabled(row: TemplateRow | TableRowData, value: unknown) {
@@ -713,10 +785,6 @@ function toBooleanValue(value: unknown) {
 function fieldValue(value: unknown) {
   const normalized = stringValue(value);
   return normalized || '-';
-}
-
-function toRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 }
 
 watch(

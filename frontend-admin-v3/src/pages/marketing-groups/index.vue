@@ -4,7 +4,7 @@
       <template #title>产品营销组</template>
       <template #subtitle>共 {{ groups.length }} 个营销组，按「等级 × 营销组」配置会员价格折扣</template>
       <template #actions>
-        <t-space>
+        <t-space v-if="canManage">
           <t-button theme="primary" @click="openCreateDialog">
             <template #icon><add-icon /></template>
             新建营销组
@@ -13,7 +13,10 @@
       </template>
 
       <div v-if="!isMobile" class="table-scroll">
-        <t-table row-key="id" :data="groups" :columns="columns" hover table-layout="fixed">
+        <t-table row-key="id" :data="groups" :columns="columns" hover table-layout="fixed" aria-label="营销分组列表">
+          <template #empty>
+            <t-empty description="暂无营销组" />
+          </template>
           <template #name="{ row }">
             <div class="stack-cell">
               <strong>{{ row.name }}</strong>
@@ -24,11 +27,12 @@
             <t-tag theme="primary" variant="light">{{ Number(row.product_count || 0) }} 个商品</t-tag>
           </template>
           <template #actions="{ row }">
-            <t-space size="small">
+            <t-space v-if="canManage" size="small">
               <t-button theme="primary" variant="text" @click="openEditDialog(row)">编辑</t-button>
               <t-button theme="primary" variant="text" @click="openPickDialog(row)">圈选商品</t-button>
               <t-button theme="danger" variant="text" @click="handleDelete(row)">删除</t-button>
             </t-space>
+            <span v-else class="muted-text">只读</span>
           </template>
         </t-table>
       </div>
@@ -41,12 +45,15 @@
               <t-tag theme="primary" variant="light">{{ Number(row.product_count || 0) }} 个商品</t-tag>
             </div>
             <t-dropdown
+              v-if="canManage"
               trigger="click"
               placement="bottom-right"
               :options="mobileActionOptions"
               @click="handleMobileAction(row, $event)"
             >
-              <t-button class="mg-mobile-card__more" variant="text" shape="square" aria-label="更多操作">...</t-button>
+              <t-button class="mg-mobile-card__more" variant="text" shape="square" aria-label="更多操作">
+                <template #icon><more-icon /></template>
+              </t-button>
             </t-dropdown>
           </div>
           <dl>
@@ -64,12 +71,12 @@
     <t-dialog
       v-model:visible="dialogVisible"
       :header="form.id ? '编辑营销组' : '新建营销组'"
-      width="560px"
+      width="min(560px, calc(100vw - 32px))"
       :confirm-btn="{ content: '保存', theme: 'primary' }"
       :confirm-loading="saving"
       @confirm="submitForm"
     >
-      <t-form ref="formRef" :data="form" :rules="rules" label-align="top">
+      <t-form ref="formRef" :data="form" :rules="rules" label-align="right">
         <t-form-item label="营销组名称" name="name">
           <t-input v-model="form.name" placeholder="例如：新用户专享组" maxlength="50" />
         </t-form-item>
@@ -82,7 +89,7 @@
     <t-dialog
       v-model:visible="pickVisible"
       header="圈选商品"
-      width="760px"
+      width="min(760px, calc(100vw - 32px))"
       :confirm-btn="{ content: '保存圈选', theme: 'primary' }"
       :confirm-loading="picking"
       @confirm="submitPick"
@@ -99,18 +106,22 @@
 <script setup lang="ts">
 import './index.less';
 
-import { AddIcon } from 'tdesign-icons-vue-next';
+import { AddIcon, MoreIcon } from 'tdesign-icons-vue-next';
 import type { DropdownOption, FormInstanceFunctions, FormRule, PrimaryTableCol } from 'tdesign-vue-next';
 import { DialogPlugin } from 'tdesign-vue-next/es/dialog/plugin';
 import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
-import { onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 
 import type { MarketingProductGroupPayload, MarketingProductGroupRecord } from '@/api/admin';
 import { adminApi } from '@/api/admin';
 import ProductBindingTreeSelect from '@/components/product-binding-tree-select/index.vue';
+import { AdminPermissions } from '@/constants/permissions';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { required } from '@/utils/formRules';
+import { hasAdminPermission } from '@/utils/permission';
 import { errorMessage } from '@/utils/userMessage';
+
+defineOptions({ name: 'AdminMarketingGroups' });
 
 interface GroupForm {
   id: number | string | null;
@@ -128,6 +139,8 @@ const groups = ref<MarketingProductGroupRecord[]>([]);
 const pickTarget = ref<MarketingProductGroupRecord | null>(null);
 const pickProductIds = ref<Array<number | string>>([]);
 const isMobile = useMediaQuery('(max-width: 767.98px)');
+// 路由只要求 PRODUCT_LIST，写操作必须另判 PRODUCT_MANAGE，否则只读岗能看到并点到写入口
+const canManage = computed(() => hasAdminPermission(AdminPermissions.PRODUCT_MANAGE));
 
 const form = reactive<GroupForm>(createDefaultForm());
 
@@ -239,6 +252,7 @@ function handleDelete(row: MarketingProductGroupRecord) {
     body: `确认删除营销组“${row.name}”吗？组内仍有商品或已配置折扣时无法删除。`,
     confirmBtn: { content: '确定', theme: 'danger' },
     async onConfirm() {
+      dialog.setConfirmLoading(true);
       try {
         await adminApi.marketingProductGroups.delete(row.id);
         MessagePlugin.success('营销组已删除');
@@ -246,6 +260,8 @@ function handleDelete(row: MarketingProductGroupRecord) {
         await loadGroups();
       } catch (error) {
         MessagePlugin.error(errorMessage(error, '删除营销组失败'));
+      } finally {
+        dialog.setConfirmLoading(false);
       }
     },
   });

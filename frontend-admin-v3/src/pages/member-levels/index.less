@@ -1,44 +1,7 @@
 .member-levels-page {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-}
-
-.member-levels-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.member-levels-head h1 {
-  margin: 4px 0 6px;
-  color: var(--td-text-color-primary);
-  font-size: var(--td-font-size-size-7, 22px);
-  line-height: 1.35;
-}
-
-.member-levels-head p {
-  margin: 0;
-  color: var(--td-text-color-secondary);
-  line-height: 1.7;
-}
-
-.member-levels-kicker {
-  color: var(--td-brand-color);
-  font-size: var(--td-font-size-size-2, 13px);
-  font-weight: 600;
-}
-
-.table-scroll {
-  overflow-x: auto;
-}
-
-.stack-cell {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 3px;
+  gap: var(--td-comp-margin-l);
 }
 
 .stack-cell strong {
@@ -75,17 +38,11 @@
   width: 100%;
 }
 
-.mobile-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
 .member-mobile-card {
   display: block;
   overflow: hidden;
   border: 1px solid var(--td-component-border);
-  border-radius: var(--td-radius-default, 4px);
+  border-radius: var(--td-radius-default);
   background: var(--td-bg-color-container);
 }
 
@@ -93,7 +50,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) 28px;
   align-items: center;
-  gap: 8px;
+  gap: var(--td-comp-margin-s);
   min-height: 42px;
   border-bottom: 1px solid var(--td-component-border);
   padding: var(--td-comp-margin-s) var(--td-comp-margin-m);
@@ -127,7 +84,7 @@
   min-height: 28px;
   padding: 0;
   color: var(--td-text-color-placeholder);
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 1px;
 }
 
@@ -168,7 +125,7 @@
   margin: 0;
   overflow: hidden;
   color: var(--td-text-color-primary);
-  font-size: var(--td-font-size-size-2, 13px);
+  font-size: var(--td-font-size-size-3, 14px);
   font-weight: 600;
   line-height: 20px;
   text-align: right;
@@ -187,10 +144,6 @@
 }
 
 @media (max-width: 1024px) {
-  .member-levels-head {
-    flex-direction: column;
-  }
-
   .member-levels-head .t-space,
   .member-levels-head .t-button {
     width: 100%;
@@ -206,10 +159,6 @@
 }
 
 @media (max-width: 480px) {
-  .mobile-list {
-    gap: 10px;
-  }
-
   .member-mobile-card__head {
     padding-right: 9px;
     padding-left: 9px;
@@ -222,7 +171,7 @@
 }
 
 .discount-matrix-section {
-  margin-top: 16px;
+  margin-top: var(--td-comp-margin-l);
   padding-top: 14px;
   border-top: 1px solid var(--td-component-border);
 }
@@ -230,8 +179,8 @@
 .discount-matrix-head {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-bottom: 12px;
+  gap: var(--td-comp-margin-xs);
+  margin-bottom: var(--td-comp-margin-m);
 
   strong {
     color: var(--td-text-color-primary);
@@ -239,14 +188,14 @@
 
   span {
     color: var(--td-text-color-secondary);
-    font-size: var(--td-font-size-body-small, 12px);
+    font-size: var(--td-font-size-body-small);
     line-height: 1.6;
   }
 }
 
 .discount-matrix-table {
   border: 1px solid var(--td-component-border);
-  border-radius: var(--td-radius-medium, 8px);
+  border-radius: var(--td-radius-medium);
   overflow: hidden;
 }
 
@@ -254,7 +203,7 @@
 .matrix-row {
   display: grid;
   grid-template-columns: 1.1fr 1.5fr 1fr;
-  gap: 16px;
+  gap: var(--td-comp-margin-l);
   padding: 10px 12px;
   align-items: center;
 }
@@ -262,7 +211,7 @@
 .matrix-head {
   background: var(--td-bg-color-component);
   color: var(--td-text-color-secondary);
-  font-size: var(--td-font-size-body-small, 12px);
+  font-size: var(--td-font-size-body-small);
   font-weight: 500;
 }
 
@@ -274,7 +223,7 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 2px;
+  gap: var(--td-comp-margin-xxs);
 
   strong {
     color: var(--td-text-color-primary);
@@ -282,7 +231,7 @@
 
   em {
     color: var(--td-text-color-secondary);
-    font-size: var(--td-font-size-body-small, 12px);
+    font-size: var(--td-font-size-body-small);
     font-style: normal;
   }
 }
@@ -293,7 +242,7 @@
   min-height: 32px;
   padding: 0 12px;
   border: 1px solid var(--td-component-border);
-  border-radius: var(--td-radius-default, 4px);
+  border-radius: var(--td-radius-default);
   background: var(--td-bg-color-component);
   color: var(--td-text-color-disabled);
 }
