@@ -1,5 +1,7 @@
 import type { RouteRecordRaw } from 'vue-router';
 
+import { AdminPermissions } from '@/constants/permissions';
+
 export const ticketsRoutes: RouteRecordRaw[] = [
   {
     path: 'tickets',
@@ -10,7 +12,7 @@ export const ticketsRoutes: RouteRecordRaw[] = [
         zh_CN: '工单列表',
         en_US: 'Tickets',
       },
-      permission: 'ticket.list',
+      permission: AdminPermissions.TICKET_LIST,
     },
   },
   {
@@ -22,7 +24,7 @@ export const ticketsRoutes: RouteRecordRaw[] = [
         zh_CN: '工单交流',
         en_US: 'Ticket Conversation',
       },
-      permission: 'ticket.list',
+      permission: AdminPermissions.TICKET_LIST,
       hidden: true,
     },
   },

@@ -4,6 +4,9 @@ import { adminAuthApi } from '@/api/auth';
 import { getAdminToken, removeAdminToken, setAdminToken } from '@/app/runtime/session';
 import type { UserInfo } from '@/types/interface';
 
+import { getPermissionStore } from './permission';
+import { getTabsRouterStore } from './tabs-router';
+
 /** 登录结果：要么直接拿到令牌，要么停在双因素第二步。 */
 export interface AdminLoginResult {
   mfaRequired: boolean;
@@ -163,6 +166,14 @@ export const useUserStore = defineStore('user', {
         pendingUserInfoRequest = null;
         removeAdminToken();
       }
+    },
+    // 完整的管理端退出：清会话 + 清多标签页 + 清动态菜单，三件事必须同进同退。
+    // 只清 token 会留下上一账号的标签与菜单，重新登录后点旧标签会打到无权限的路由。
+    // 页面跳转不放在这里：由调用方决定去登录页还是留在当前页提示。
+    async logoutAdmin() {
+      await this.logout();
+      getTabsRouterStore().removeTabRouterList();
+      getPermissionStore().resetMenus();
     },
     // 仅清理本地会话（token + userInfo），不调用后端 logout 接口。
     // 用于落地登录页时清理已失效的残留会话，避免误触发后端调用。

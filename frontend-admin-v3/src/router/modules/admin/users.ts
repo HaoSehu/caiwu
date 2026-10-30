@@ -1,5 +1,7 @@
 import type { RouteRecordRaw } from 'vue-router';
 
+import { AdminPermissions } from '@/constants/permissions';
+
 export const usersRoutes: RouteRecordRaw[] = [
   {
     path: 'users',
@@ -10,7 +12,7 @@ export const usersRoutes: RouteRecordRaw[] = [
         zh_CN: '用户列表',
         en_US: 'User List',
       },
-      permission: 'user.list',
+      permission: AdminPermissions.USER_LIST,
     },
   },
   {
@@ -22,7 +24,7 @@ export const usersRoutes: RouteRecordRaw[] = [
         zh_CN: '实名列表',
         en_US: 'Verification List',
       },
-      permission: 'verification.list',
+      permission: AdminPermissions.VERIFICATION_LIST,
       verificationPane: 'list',
     },
   },
@@ -35,8 +37,9 @@ export const usersRoutes: RouteRecordRaw[] = [
         zh_CN: '实名管理',
         en_US: 'Verification Settings',
       },
-      permission: 'verification.list',
+      permission: AdminPermissions.VERIFICATION_LIST,
       verificationPane: 'manage',
+      keepAliveName: 'AdminUserVerification',
     },
   },
   {
@@ -48,7 +51,7 @@ export const usersRoutes: RouteRecordRaw[] = [
         zh_CN: '用户详情',
         en_US: 'User Detail',
       },
-      permission: 'user.detail',
+      permission: AdminPermissions.USER_DETAIL,
       hidden: true,
     },
   },
@@ -61,7 +64,7 @@ export const usersRoutes: RouteRecordRaw[] = [
         zh_CN: '服务控制台',
         en_US: 'Service Console',
       },
-      permission: 'user.detail',
+      permission: AdminPermissions.USER_DETAIL,
       hidden: true,
     },
   },

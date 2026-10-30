@@ -1,5 +1,7 @@
 import type { RouteRecordRaw } from 'vue-router';
 
+import { AdminPermissions } from '@/constants/permissions';
+
 export const marketingRoutes: RouteRecordRaw[] = [
   {
     path: 'member-levels',
@@ -10,7 +12,7 @@ export const marketingRoutes: RouteRecordRaw[] = [
         zh_CN: '会员等级',
         en_US: 'Member Levels',
       },
-      permission: 'member_level.list',
+      permission: AdminPermissions.MEMBER_LEVEL_LIST,
     },
   },
   {
@@ -22,7 +24,7 @@ export const marketingRoutes: RouteRecordRaw[] = [
         zh_CN: '推广大使',
         en_US: 'Promotion Ambassadors',
       },
-      permission: 'promotion_ambassador.list',
+      permission: AdminPermissions.PROMOTION_AMBASSADOR_LIST,
     },
   },
   {
@@ -34,7 +36,7 @@ export const marketingRoutes: RouteRecordRaw[] = [
         zh_CN: '产品营销组',
         en_US: 'Marketing Product Groups',
       },
-      permission: 'product.list',
+      permission: AdminPermissions.PRODUCT_LIST,
     },
   },
   {
@@ -46,8 +48,9 @@ export const marketingRoutes: RouteRecordRaw[] = [
         zh_CN: '优惠券列表',
         en_US: 'Coupons',
       },
-      permission: 'coupon.list',
+      permission: AdminPermissions.COUPON_LIST,
       couponTab: 'coupons',
+      keepAliveName: 'AdminCouponList',
     },
   },
   {
@@ -59,8 +62,9 @@ export const marketingRoutes: RouteRecordRaw[] = [
         zh_CN: '活动券管理',
         en_US: 'Coupon Campaigns',
       },
-      permission: 'coupon.list',
+      permission: AdminPermissions.COUPON_LIST,
       couponTab: 'campaigns',
+      keepAliveName: 'AdminCouponList',
     },
   },
   {
@@ -72,8 +76,9 @@ export const marketingRoutes: RouteRecordRaw[] = [
         zh_CN: '推广概览',
         en_US: 'Referral Overview',
       },
-      permission: 'referral.list',
+      permission: AdminPermissions.REFERRAL_LIST,
       referralTab: 'overview',
+      keepAliveName: 'AdminReferral',
     },
   },
   {
@@ -85,8 +90,9 @@ export const marketingRoutes: RouteRecordRaw[] = [
         zh_CN: '奖励记录',
         en_US: 'Referral Rewards',
       },
-      permission: 'referral.list',
+      permission: AdminPermissions.REFERRAL_LIST,
       referralTab: 'rewards',
+      keepAliveName: 'AdminReferral',
     },
   },
   {
@@ -98,8 +104,9 @@ export const marketingRoutes: RouteRecordRaw[] = [
         zh_CN: '提现审核',
         en_US: 'Referral Withdrawals',
       },
-      permission: 'referral_withdrawal.list',
+      permission: AdminPermissions.REFERRAL_WITHDRAWAL_LIST,
       referralTab: 'withdrawals',
+      keepAliveName: 'AdminReferral',
     },
   },
 ];

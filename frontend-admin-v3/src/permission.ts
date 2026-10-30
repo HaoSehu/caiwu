@@ -6,7 +6,6 @@ import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { hasPermissionInList } from '@/constants/permissions';
 import router from '@/router';
 import { getPermissionStore, useUserStore } from '@/store';
-import { PAGE_NOT_FOUND_ROUTE } from '@/utils/route/constant';
 import { toUserMessage } from '@/utils/userMessage';
 
 NProgress.configure({ showSpinner: false });
@@ -41,22 +40,19 @@ router.beforeEach(async (to, from, next) => {
         // 管理端路由为静态注册，此处只按权限重建菜单；页面级鉴权由下方 meta.permission 校验承担
         await permissionStore.setupMenus(userStore.userInfo?.permissions || []);
 
-        if (to.name === PAGE_NOT_FOUND_ROUTE.name) {
-          // 动态添加路由后，此处应当重定向到fullPath，否则会加载404页面内容
-          next({ path: to.fullPath, replace: true, query: to.query });
-        } else {
-          let redirect = to.path;
-          try {
-            redirect = decodeURIComponent((from.query.redirect || to.path) as string);
-          } catch {
-            redirect = to.path;
-          }
-          // 仅接受站内绝对路径，拒绝 //evil.com 协议相对形态
-          if (!redirect.startsWith('/') || redirect.startsWith('//')) {
-            redirect = to.path;
-          }
-          next(to.path === redirect ? { ...to, replace: true } : { path: redirect, query: to.query });
+        // 管理端路由全部静态注册，不存在「动态添加路由后需按 fullPath 重导航」的场景，
+        // 这里只需把落地 URL 补全（含 query.redirect 回跳），二次导航后 menuBuilt 即为 true。
+        let redirect = to.path;
+        try {
+          redirect = decodeURIComponent((from.query.redirect || to.path) as string);
+        } catch {
+          redirect = to.path;
         }
+        // 仅接受站内绝对路径，拒绝 //evil.com 协议相对形态
+        if (!redirect.startsWith('/') || redirect.startsWith('//')) {
+          redirect = to.path;
+        }
+        next(to.path === redirect ? { ...to, replace: true } : { path: redirect, query: to.query });
         return;
       }
 

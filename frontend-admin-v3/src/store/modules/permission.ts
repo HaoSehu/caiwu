@@ -284,7 +284,11 @@ export const usePermissionStore = defineStore('permission', {
         this.menuBuilt = true;
       } catch (error) {
         this.menuBuilt = false;
-        throw new Error("Can't build menus", { cause: error });
+        // 不用 new Error(msg, { cause })：Error 的 cause 选项要 ES2022 运行时（Chrome 93 / Safari 15.4），
+        // 超出仓库声明的浏览器基线，这里是 tsc 的唯一挡点（lib 钉在 ES2020）。语义等价。
+        const wrapped = new Error("Can't build menus") as Error & { cause?: unknown };
+        wrapped.cause = error;
+        throw wrapped;
       }
     },
     /** 清理菜单与标记（登出、或落地登录页时调用）。路由为静态注册，此处无需也无法撤销。 */
@@ -413,7 +417,8 @@ function resolveAdminChildPath(path: RouteRecordRaw['path']) {
 
 function canAccessMenuRoute(route: RouteRecordRaw, permissions: string[]) {
   const permission = route.meta?.permission;
-  if (typeof permission !== 'string' || permission === '') return true;
+  // 未声明权限的路由视为公开；meta.permission 的类型已在 RouteMeta 中收窄为 AdminPermissionCode
+  if (!permission) return true;
 
   return hasPermissionInList(permissions, permission);
 }

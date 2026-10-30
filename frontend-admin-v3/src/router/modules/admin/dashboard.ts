@@ -1,5 +1,7 @@
 import type { RouteRecordRaw } from 'vue-router';
 
+import { AdminPermissions } from '@/constants/permissions';
+
 export const dashboardRoutes: RouteRecordRaw[] = [
   {
     path: 'dashboard',
@@ -10,7 +12,7 @@ export const dashboardRoutes: RouteRecordRaw[] = [
         zh_CN: '仪表盘',
         en_US: 'Dashboard',
       },
-      permission: 'dashboard.view',
+      permission: AdminPermissions.DASHBOARD_VIEW,
       keepAlive: false,
     },
   },

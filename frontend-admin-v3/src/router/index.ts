@@ -28,6 +28,12 @@ const defaultRouterList: Array<RouteRecordRaw> = [
     component: () => import('@/pages/result/403/index.vue'),
   },
   {
+    path: '/admin/500',
+    name: 'AdminServerError',
+    component: () => import('@/pages/result/500/index.vue'),
+  },
+  {
+    // 通配路由必须留在最后，否则会吞掉上面所有静态路由
     path: '/:pathMatch(.*)*',
     name: 'NotFound',
     component: () => import('@/pages/result/404/index.vue'),

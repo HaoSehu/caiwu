@@ -1,5 +1,7 @@
 import type { RouteRecordRaw } from 'vue-router';
 
+import { AdminPermissions } from '@/constants/permissions';
+
 export const contentRoutes: RouteRecordRaw[] = [
   {
     path: 'content/notices',
@@ -11,7 +13,8 @@ export const contentRoutes: RouteRecordRaw[] = [
         en_US: 'Notices',
       },
       contentType: 'notice',
-      permission: 'content.list',
+      permission: AdminPermissions.CONTENT_LIST,
+      keepAliveName: 'AdminContentList',
     },
   },
   {
@@ -24,8 +27,9 @@ export const contentRoutes: RouteRecordRaw[] = [
         en_US: 'Create Notice',
       },
       contentType: 'notice',
-      permission: 'content.manage',
+      permission: AdminPermissions.CONTENT_MANAGE,
       hidden: true,
+      keepAliveName: 'AdminContentEditor',
     },
   },
   {
@@ -38,8 +42,9 @@ export const contentRoutes: RouteRecordRaw[] = [
         en_US: 'Edit Notice',
       },
       contentType: 'notice',
-      permission: 'content.manage',
+      permission: AdminPermissions.CONTENT_MANAGE,
       hidden: true,
+      keepAliveName: 'AdminContentEditor',
     },
   },
   {
@@ -52,7 +57,8 @@ export const contentRoutes: RouteRecordRaw[] = [
         en_US: 'Help Center',
       },
       contentType: 'help',
-      permission: 'content.list',
+      permission: AdminPermissions.CONTENT_LIST,
+      keepAliveName: 'AdminContentList',
     },
   },
   {
@@ -65,8 +71,9 @@ export const contentRoutes: RouteRecordRaw[] = [
         en_US: 'Create Help Article',
       },
       contentType: 'help',
-      permission: 'content.manage',
+      permission: AdminPermissions.CONTENT_MANAGE,
       hidden: true,
+      keepAliveName: 'AdminContentEditor',
     },
   },
   {
@@ -79,8 +86,9 @@ export const contentRoutes: RouteRecordRaw[] = [
         en_US: 'Edit Help Article',
       },
       contentType: 'help',
-      permission: 'content.manage',
+      permission: AdminPermissions.CONTENT_MANAGE,
       hidden: true,
+      keepAliveName: 'AdminContentEditor',
     },
   },
   {
@@ -92,7 +100,7 @@ export const contentRoutes: RouteRecordRaw[] = [
         zh_CN: '媒体库',
         en_US: 'Media Library',
       },
-      permission: 'content.list',
+      permission: AdminPermissions.CONTENT_LIST,
     },
   },
   {
@@ -104,8 +112,9 @@ export const contentRoutes: RouteRecordRaw[] = [
         zh_CN: '站点信息',
         en_US: 'Site Info',
       },
-      permission: 'site.view',
+      permission: AdminPermissions.SITE_VIEW,
       settingsTab: 'site_basic',
+      keepAliveName: 'AdminSettings',
     },
   },
   {
@@ -117,8 +126,9 @@ export const contentRoutes: RouteRecordRaw[] = [
         zh_CN: '首页装修',
         en_US: 'Site Hero',
       },
-      permission: 'site.view',
+      permission: AdminPermissions.SITE_VIEW,
       settingsTab: 'site_hero',
+      keepAliveName: 'AdminSettings',
     },
   },
   {
@@ -130,8 +140,9 @@ export const contentRoutes: RouteRecordRaw[] = [
         zh_CN: '邮件模板',
         en_US: 'Email Templates',
       },
-      permission: 'settings.view',
+      permission: AdminPermissions.SETTINGS_VIEW,
       notificationTab: 'email-templates',
+      keepAliveName: 'AdminNotificationList',
     },
   },
   {
@@ -143,8 +154,9 @@ export const contentRoutes: RouteRecordRaw[] = [
         zh_CN: '短信模板',
         en_US: 'SMS Templates',
       },
-      permission: 'settings.view',
+      permission: AdminPermissions.SETTINGS_VIEW,
       notificationTab: 'sms-templates',
+      keepAliveName: 'AdminNotificationList',
     },
   },
   {
@@ -156,8 +168,9 @@ export const contentRoutes: RouteRecordRaw[] = [
         zh_CN: 'API 接口',
         en_US: 'API Directory',
       },
-      permission: 'settings.view',
+      permission: AdminPermissions.SETTINGS_VIEW,
       notificationTab: 'api-directory',
+      keepAliveName: 'AdminNotificationList',
     },
   },
   {
@@ -169,8 +182,9 @@ export const contentRoutes: RouteRecordRaw[] = [
         zh_CN: '邮件模板详情',
         en_US: 'Email Template Detail',
       },
-      permission: 'settings.view',
+      permission: AdminPermissions.SETTINGS_VIEW,
       hidden: true,
+      keepAliveName: 'AdminNotificationTemplateDetail',
     },
   },
   {
@@ -182,8 +196,9 @@ export const contentRoutes: RouteRecordRaw[] = [
         zh_CN: '短信模板详情',
         en_US: 'SMS Template Detail',
       },
-      permission: 'settings.view',
+      permission: AdminPermissions.SETTINGS_VIEW,
       hidden: true,
+      keepAliveName: 'AdminNotificationTemplateDetail',
     },
   },
 ];

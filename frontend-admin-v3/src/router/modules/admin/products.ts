@@ -1,5 +1,7 @@
 import type { RouteRecordRaw } from 'vue-router';
 
+import { AdminPermissions } from '@/constants/permissions';
+
 export const productsRoutes: RouteRecordRaw[] = [
   {
     path: 'products',
@@ -11,7 +13,8 @@ export const productsRoutes: RouteRecordRaw[] = [
         en_US: 'Product Catalog',
       },
       productTab: 'catalog',
-      permission: 'product.list',
+      permission: AdminPermissions.PRODUCT_LIST,
+      keepAliveName: 'AdminProducts',
     },
   },
   {
@@ -23,7 +26,7 @@ export const productsRoutes: RouteRecordRaw[] = [
         zh_CN: '规格管理',
         en_US: 'Specs',
       },
-      permission: 'product.list',
+      permission: AdminPermissions.PRODUCT_LIST,
     },
   },
   {
@@ -35,7 +38,7 @@ export const productsRoutes: RouteRecordRaw[] = [
         zh_CN: 'CPU型号管理',
         en_US: 'CPU Models',
       },
-      permission: 'product.list',
+      permission: AdminPermissions.PRODUCT_LIST,
     },
   },
   {
@@ -47,8 +50,9 @@ export const productsRoutes: RouteRecordRaw[] = [
         zh_CN: '新增商品',
         en_US: 'Create Product',
       },
-      permission: 'product.list',
+      permission: AdminPermissions.PRODUCT_LIST,
       hidden: true,
+      keepAliveName: 'AdminProductForm',
     },
   },
   {
@@ -60,8 +64,9 @@ export const productsRoutes: RouteRecordRaw[] = [
         zh_CN: '编辑商品',
         en_US: 'Edit Product',
       },
-      permission: 'product.list',
+      permission: AdminPermissions.PRODUCT_LIST,
       hidden: true,
+      keepAliveName: 'AdminProductForm',
     },
   },
   {
@@ -74,7 +79,8 @@ export const productsRoutes: RouteRecordRaw[] = [
         en_US: 'Traffic Packages',
       },
       productTab: 'traffic-packages',
-      permission: 'product.list',
+      permission: AdminPermissions.PRODUCT_LIST,
+      keepAliveName: 'AdminProducts',
     },
   },
   {
@@ -87,7 +93,8 @@ export const productsRoutes: RouteRecordRaw[] = [
         en_US: 'Suppliers',
       },
       productTab: 'suppliers',
-      permission: 'supplier.list',
+      permission: AdminPermissions.SUPPLIER_LIST,
+      keepAliveName: 'AdminProducts',
     },
   },
 ];
