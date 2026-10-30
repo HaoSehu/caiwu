@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { listSeoLandingSitemapRoutes } from '../src/data/seoLandingMeta.js'
 import { loadBuildEnv } from './build-env.mjs'
+import { precompressAssets } from './precompress-assets.mjs'
 
 const distDir = path.resolve(process.cwd(), 'dist')
 const indexPath = path.join(distDir, 'index.html')
@@ -76,6 +77,13 @@ function replaceTag(html, pattern, replacement) {
   return html.replace('</head>', `  ${replacement}\n</head>`)
 }
 
+// vite.config.js 的 client-first-screen-hints 会把首屏依赖拆成 layout / home 两组，
+// 分别打 data-first-screen 标记。首页路由 chunk 只有在 / 才用得上，
+// 其余预渲染路由（含 5 条 SEO 落地页）带着它等于多下约 17 KB gzip。
+function stripHomeFirstScreenHints(html) {
+  return html.replace(/[ \t]*<link[^>]*data-first-screen="home"[^>]*>\r?\n/g, '')
+}
+
 function renderStructuredData(route) {
   if (typeof route.structuredData !== 'function') return ''
   const payload = route.structuredData(siteUrl)
@@ -124,6 +132,13 @@ function renderRouteHtml(template, route) {
     )
   }
 
+  if (route.path !== '/') {
+    html = stripHomeFirstScreenHints(html)
+  }
+
+  // 分组标记只服务于上面这步裁剪，产物里不该留下非标准属性。
+  html = html.replace(/ data-first-screen="[a-z]+"/g, '')
+
   return html
 }
 
@@ -157,4 +172,11 @@ await writeFile(
   'utf8',
 )
 
+// 预渲染会重写根 index.html，并新增 staticRoutes + SEO 落地页 + 404.html 十余个 HTML。
+// vite 插件的 closeBundle 早于本脚本执行，那时这些文件还不存在（或内容仍是旧的），
+// 所以必须在写完所有路由后重新跑一遍预压缩，否则线上永远拿到落后一版的 .gz/.br。
+const precompression = await precompressAssets(distDir)
+console.log(
+  `Precompressed ${precompression.processed} files (${precompression.gzipCount} .gz / ${precompression.brotliCount} .br) for ${siteUrl}`,
+)
 console.log(`Prerendered ${routes.length} public routes for ${siteUrl}`)

@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 const ROOT = process.cwd()
 const TARGETS = [
@@ -111,7 +112,9 @@ async function main() {
   }
 }
 
-const isDirectRun = process.argv[1] && import.meta.url === new URL(process.argv[1], 'file:').href
+// 必须用 pathToFileURL 归一化：Windows 下 new URL('E:\\a\\b', 'file:') 得到的是
+// file:///E:/a/b 之外的畸形结果，直接比较会让脚本静默空跑（EXIT=0 无输出）。
+const isDirectRun = process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href
 
 if (isDirectRun) {
   main().catch((error) => {
