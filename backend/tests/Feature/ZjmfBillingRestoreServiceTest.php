@@ -92,7 +92,11 @@ class ZjmfBillingRestoreServiceTest extends TestCase
             // 工具声明要求在「空库或隔离库」执行；本机测试库可能带被 payments(RESTRICT)
             // 引用的历史账单，全表删除不可行。此时只需验证恢复事务回滚后既有数据无损，
             // force 成功路径留给干净隔离库（CI 迁移库）覆盖。
-            $this->assertStringContainsString('Integrity constraint violation', $exception->getMessage());
+            // 注意：只接受引用完整性冲突；列缺失（42S22 Unknown column）属于代码缺陷，
+            // 必须让用例失败而不是被 skip 掩盖（曾因此漏掉 finance_accounts.cash_balance）。
+            $message = $exception->getMessage();
+            $this->assertStringContainsString('Integrity constraint violation', $message);
+            $this->assertDoesNotMatchRegularExpression('/Unknown column|42S22/', $message);
             $this->assertNotNull($existing->fresh(), '恢复事务回滚后既有账单必须无损');
 
             $this->markTestSkipped('测试库非隔离库（历史账单被 payments 引用），跳过 force 成功路径断言');

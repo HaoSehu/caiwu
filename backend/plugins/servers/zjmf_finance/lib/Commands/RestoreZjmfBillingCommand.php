@@ -13,6 +13,7 @@ class RestoreZjmfBillingCommand extends Command
         {dump : 原始 ZJMF 账单 SQL 文件绝对路径}
         {--confirm= : 危险确认短语，默认必须为 RESTORE_ZJMF_BILLING}
         {--force : 目标 invoices/balance_logs 表存在既有数据时，允许物理删除后覆盖重插}
+        {--allow-production : 允许在非 local/testing 环境执行；必须同时传入 --force}
         {--dry-run : 仅解析并输出统计，不写入数据库}';
 
     protected $description = '从历史 ZJMF SQL 备份恢复账单、支付流水与余额记录';
@@ -30,6 +31,22 @@ class RestoreZjmfBillingCommand extends Command
             $this->error('危险确认未通过，请追加 --confirm='.$profile->defaultConfirmationPhrase());
 
             return self::INVALID;
+        }
+
+        // 该命令会物理删除现有账单并把全部用户余额写回 dump 中的历史值，属于停机式
+        // 破坏性运维操作：非本地/测试环境必须显式追加 --allow-production 与 --force。
+        if (! app()->environment(['local', 'testing'])) {
+            if (! $this->option('allow-production')) {
+                $this->error('当前环境为 '.app()->environment().'，账单恢复会物理删除现有账单并覆盖余额；如确需执行请追加 --allow-production。');
+
+                return self::FAILURE;
+            }
+
+            if (! $forceOverwrite) {
+                $this->error('非 local/testing 环境执行恢复必须同时追加 --force 以确认覆盖现有数据。');
+
+                return self::FAILURE;
+            }
         }
 
         try {

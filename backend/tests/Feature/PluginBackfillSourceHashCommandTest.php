@@ -70,7 +70,7 @@ class PluginBackfillSourceHashCommandTest extends TestCase
     private function installPluginWithEmptySourceHash(): IntegrationPlugin
     {
         $installer = app(PluginInstaller::class);
-        $plugin = $installer->install('payment', 'demo_pay');
+        $plugin = $installer->install('payment', 'demo_pay', allowDemo: true);
         $plugin->forceFill(['source_hash' => null])->save();
 
         return $plugin->fresh() ?? $plugin;

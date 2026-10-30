@@ -35,7 +35,7 @@ class PluginRuntimeRegistryIntegrityTest extends TestCase
         $installer = app(PluginInstaller::class);
         $hasher = app(PluginPackageHasher::class);
 
-        $plugin = $installer->install('payment', 'demo_pay');
+        $plugin = $installer->install('payment', 'demo_pay', allowDemo: true);
         $recorded = (string) ($plugin->fresh() ?? $plugin)->source_hash;
 
         $this->assertNotSame('', $recorded);
@@ -45,7 +45,7 @@ class PluginRuntimeRegistryIntegrityTest extends TestCase
         );
 
         $plugin->forceFill(['source_hash' => 'stale-source-hash'])->save();
-        $upgraded = $installer->upgrade($plugin->fresh() ?? $plugin);
+        $upgraded = $installer->upgrade($plugin->fresh() ?? $plugin, allowDemo: true);
         $upgradedPlugin = $upgraded['plugin'] instanceof IntegrationPlugin ? $upgraded['plugin'] : $plugin;
 
         $this->assertSame($recorded, (string) $upgradedPlugin->source_hash);
@@ -115,11 +115,11 @@ class PluginRuntimeRegistryIntegrityTest extends TestCase
         $scanner = app(PluginScanner::class);
         $repository = app(PluginConfigRepository::class);
 
-        $plugin = $installer->install('payment', 'demo_pay');
+        $plugin = $installer->install('payment', 'demo_pay', allowDemo: true);
         $manifest = $scanner->requireManifest('payment', 'demo_pay');
         $repository->save($plugin, $manifest, ['merchant_id' => 'm-001', 'secret_key' => 's3cret']);
 
-        return $installer->enable($plugin->fresh() ?? $plugin);
+        return $installer->enable($plugin->fresh() ?? $plugin, allowDemo: true);
     }
 
     /**

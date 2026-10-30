@@ -105,6 +105,8 @@ final class ZjmfRenewService
         try {
             $paymentResponse = $this->payAndCheckInvoice($supplier, $upstreamInvoiceId, $payment, $jwt);
         } catch (\Throwable $exception) {
+            $this->logPendingPaymentFailure($supplier, $upstreamInvoiceId, $exception, '提交余额支付后续费账单转为待支付');
+
             return $this->pendingRenewalInvoice(
                 $upstreamInvoiceId,
                 $renewResponse,
@@ -144,10 +146,6 @@ final class ZjmfRenewService
     private function extractUpstreamAmount(array $response, array $payload): string
     {
         foreach ([$payload, $response, $this->extractPayload($response)] as $candidate) {
-            if (! is_array($candidate)) {
-                continue;
-            }
-
             foreach (['total', 'total_fee', 'amount', 'money', 'subtotal', 'order_amount'] as $key) {
                 if (isset($candidate[$key]) && is_numeric($candidate[$key])) {
                     return number_format((float) $candidate[$key], 2, '.', '');
@@ -185,6 +183,8 @@ final class ZjmfRenewService
             try {
                 $paymentResponse = $this->payAndCheckInvoice($supplier, $upstreamInvoiceId, $payment, $jwt);
             } catch (\Throwable $exception) {
+                $this->logPendingPaymentFailure($supplier, $upstreamInvoiceId, $exception, '恢复续费账单余额支付失败，账单保持待支付');
+
                 return $this->recoveredPendingInvoice(
                     $upstreamInvoiceId,
                     [],
@@ -261,6 +261,29 @@ final class ZjmfRenewService
         }
 
         return $response;
+    }
+
+    /**
+     * 余额支付失败被降级成「待支付」时必然要落日志：这条分支把上游异常吞成了业务态，
+     * 若不记录，网络失败、上游 5xx 与真正的余额不足在运维眼里完全一样。
+     */
+    private function logPendingPaymentFailure(
+        Supplier $supplier,
+        int $upstreamInvoiceId,
+        \Throwable $exception,
+        string $message,
+    ): void {
+        Log::warning('[ZJMF 财务续费] '.$message, [
+            'supplier_id' => (int) $supplier->id,
+            'upstream_invoice_id' => $upstreamInvoiceId,
+            'message' => $exception->getMessage(),
+            'exception' => $exception::class,
+        ]);
+
+        // 业务异常（如余额不足、付款方式缺失）本就是预期分支，不重复上报；其余视为需要排查的错误
+        if (! $exception instanceof BusinessException) {
+            report($exception);
+        }
     }
 
     private function pendingRenewalInvoice(

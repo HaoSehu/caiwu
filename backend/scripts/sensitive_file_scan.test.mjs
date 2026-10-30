@@ -62,6 +62,25 @@ test("finds credential pairs in operational documentation", () => {
   ]);
 });
 
+test("ignores prose that only looks like a credential pair", () => {
+  const cases = [
+    ["docs/api.md", "参与签名数据 = {id, token, rand_str}   // token = 下游 host.stream_info.token"],
+    ["docs/report.md", "    $quoted->loadMissing('ticket.user:id,nickname,email');"],
+    ["docs/plan.md", "单条原子 CAS `UPDATE services SET provision_lease_token=?, provision_lease_until=?`"],
+    ["docs/plan.md", "submitUpstreamProvision(..., ?string $leaseToken = null)"],
+    ["docs/release.md", '`php artisan down --secret=finance-cutover`'],
+  ];
+
+  for (const [file, content] of cases) {
+    assert.deepEqual(scanText(content, file), [], content);
+  }
+
+  assert.equal(
+    scanText("poll_token: 'e2e-inv-poll-token',", "frontend/e2e/pay.spec.ts").length,
+    0,
+  );
+});
+
 test("finds private keys and credential-bearing URLs", () => {
   const keyHeader = ["-----BEGIN ", "PRIVATE KEY-----"].join("");
   const password = ["url", "password", "246!"].join("-");

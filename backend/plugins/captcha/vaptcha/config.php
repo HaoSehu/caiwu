@@ -35,6 +35,14 @@ return [
             'placeholder' => '请输入 VAPTCHA VID',
             'description' => '来自 VAPTCHA 控制台的验证单元 VID，用于前端初始化。',
         ],
+        'replay_ttl_seconds' => [
+            'title' => '防重放窗口（秒）',
+            'type' => 'number',
+            'value' => 600,
+            'required' => false,
+            'placeholder' => '600',
+            'description' => '同一次行为验证结果在多少秒内禁止重复提交，默认 600，允许范围 60-1800。',
+        ],
         'vkey' => [
             'title' => 'VKEY',
             'type' => 'password',

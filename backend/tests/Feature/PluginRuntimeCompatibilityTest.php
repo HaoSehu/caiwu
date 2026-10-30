@@ -66,10 +66,10 @@ class PluginRuntimeCompatibilityTest extends TestCase
         $repository = app(PluginConfigRepository::class);
         $scanner = app(PluginScanner::class);
 
-        $plugin = $installer->install('payment', 'demo_pay');
+        $plugin = $installer->install('payment', 'demo_pay', allowDemo: true);
         $manifest = $scanner->requireManifest('payment', 'demo_pay');
         $repository->save($plugin, $manifest, ['merchant_id' => 'm-001', 'secret_key' => 's3cret']);
-        $installer->enable($plugin->fresh() ?? $plugin);
+        $installer->enable($plugin->fresh() ?? $plugin, allowDemo: true);
 
         $entries = app(PluginRuntimeRegistry::class)
             ->resolveEntries('payment', PaymentGatewayInterface::class);

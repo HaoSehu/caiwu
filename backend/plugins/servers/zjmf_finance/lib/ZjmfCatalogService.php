@@ -58,7 +58,7 @@ final class ZjmfCatalogService
         }
 
         $missingPricingIds = collect($products)
-            ->filter(fn ($product): bool => is_array($product) && $selectedIdSet->has((int) ($product['id'] ?? 0)))
+            ->filter(fn (array $product): bool => $selectedIdSet->has((int) ($product['id'] ?? 0)))
             ->filter(fn (array $product): bool => ! $this->hasImportablePricing($product))
             ->map(fn (array $product): int => (int) ($product['id'] ?? 0))
             ->filter(fn (int $productId): bool => $productId > 0)
@@ -77,11 +77,7 @@ final class ZjmfCatalogService
         }
 
         return collect($products)
-            ->map(function ($product) use ($pricingMap) {
-                if (! is_array($product)) {
-                    return $product;
-                }
-
+            ->map(function (array $product) use ($pricingMap) {
                 $pricing = $pricingMap[(int) ($product['id'] ?? 0)] ?? null;
                 if (! is_array($pricing) || $pricing === []) {
                     return $product;
@@ -140,7 +136,7 @@ final class ZjmfCatalogService
                 continue;
             }
 
-            $pricing = is_array($response) ? $this->extractProductPricingFromResponse($response) : [];
+            $pricing = $this->extractProductPricingFromResponse($response);
             if ($pricing !== []) {
                 $results[$productId] = $pricing;
             }

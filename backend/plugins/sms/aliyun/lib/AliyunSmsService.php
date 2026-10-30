@@ -39,11 +39,14 @@ class AliyunSmsService
         if ($action === 'sms.templates.pull') {
             $result = $this->client($config)->querySmsTemplates();
 
+            $succeeded = (bool) $result['success'];
+            $message = (string) ($result['message'] ?? '拉取失败');
+
             return [
-                'success' => (bool) ($result['success'] ?? false),
+                'success' => $succeeded,
                 'action' => $action,
-                'message' => ($result['success'] ?? false) ? '' : (string) ($result['message'] ?? '拉取失败'),
-                'data' => $result['success'] ?? false
+                'message' => $succeeded ? '' : $message,
+                'data' => $succeeded
                     ? ['templates' => $result['templates'] ?? [], 'synced_at' => date('Y-m-d H:i:s')]
                     : [],
             ];
@@ -56,10 +59,13 @@ class AliyunSmsService
                 (string) ($payload['remark'] ?? '')
             );
 
+            $succeeded = (bool) $result['success'];
+            $message = (string) ($result['message'] ?? '提交失败');
+
             return [
-                'success' => (bool) ($result['success'] ?? false),
+                'success' => $succeeded,
                 'action' => $action,
-                'message' => ($result['success'] ?? false) ? '已提交运营商审核' : (string) ($result['message'] ?? '提交失败'),
+                'message' => $succeeded ? '已提交运营商审核' : $message,
                 'data' => $result,
             ];
         }
@@ -70,10 +76,13 @@ class AliyunSmsService
                 (string) ($payload['content'] ?? '')
             );
 
+            $succeeded = (bool) $result['success'];
+            $message = (string) ($result['message'] ?? '修改失败');
+
             return [
-                'success' => (bool) ($result['success'] ?? false),
+                'success' => $succeeded,
                 'action' => $action,
-                'message' => ($result['success'] ?? false) ? '已重新提交审核' : (string) ($result['message'] ?? '修改失败'),
+                'message' => $succeeded ? '已重新提交审核' : $message,
                 'data' => $result,
             ];
         }
@@ -81,10 +90,13 @@ class AliyunSmsService
         if ($action === 'sms.templates.delete') {
             $result = $this->client($config)->removeSmsTemplate((string) ($payload['provider_template_id'] ?? ''));
 
+            $succeeded = (bool) $result['success'];
+            $message = (string) ($result['message'] ?? '删除失败');
+
             return [
-                'success' => (bool) ($result['success'] ?? false),
+                'success' => $succeeded,
                 'action' => $action,
-                'message' => ($result['success'] ?? false) ? '运营商侧模板已删除' : (string) ($result['message'] ?? '删除失败'),
+                'message' => $succeeded ? '运营商侧模板已删除' : $message,
                 'data' => $result,
             ];
         }
@@ -100,10 +112,13 @@ class AliyunSmsService
         if ($action === 'sms.templates.status') {
             $result = $this->client($config)->queryTemplateStatus((string) ($payload['provider_template_id'] ?? ''));
 
+            $succeeded = (bool) $result['success'];
+            $message = (string) ($result['message'] ?? '回查失败');
+
             return [
-                'success' => (bool) ($result['success'] ?? false),
+                'success' => $succeeded,
                 'action' => $action,
-                'message' => ($result['success'] ?? false) ? '' : (string) ($result['message'] ?? '回查失败'),
+                'message' => $succeeded ? '' : $message,
                 'data' => $result,
             ];
         }
@@ -164,9 +179,9 @@ class AliyunSmsService
         );
 
         return [
-            'success' => $result['success'] ?? false,
+            'success' => $result['success'],
             'action' => $action,
-            'message' => ($result['success'] ?? false) ? '测试短信发送成功' : ($result['message'] ?? '发送失败'),
+            'message' => ($result['success']) ? '测试短信发送成功' : ($result['message'] ?? '发送失败'),
             'data' => $result,
         ];
     }
@@ -187,7 +202,7 @@ class AliyunSmsService
         );
 
         return [
-            'success' => $result['success'] ?? false,
+            'success' => $result['success'],
             'action' => $action,
             'message' => $result['message'] ?? '',
             'data' => $result,
@@ -222,7 +237,7 @@ class AliyunSmsService
         );
 
         return [
-            'success' => $result['success'] ?? false,
+            'success' => $result['success'],
             'action' => $action,
             'message' => $result['message'] ?? '',
             'data' => $result,

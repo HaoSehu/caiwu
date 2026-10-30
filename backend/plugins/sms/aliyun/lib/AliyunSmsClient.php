@@ -78,7 +78,7 @@ class AliyunSmsClient
     private ?array $lastCurlError = null;
 
     /**
-     * @return array{success: bool, request_id?: string, raw?: array}
+     * @return array{success: bool, message?: string, request_id?: string|null, biz_id?: string|null, template_code?: string, template_params?: array<string, string>, raw?: array<string, mixed>}
      */
     public function sendVerifyCode(string $phone, string $code, array $options = []): array
     {
@@ -142,7 +142,7 @@ class AliyunSmsClient
 
     /**
      * @param  array<string, mixed>  $options
-     * @return array{success: bool, request_id?: string, raw?: array}
+     * @return array{success: bool, message?: string}
      */
     public function sendMessage(string $phone, string $templateCode, string $content, array $options = []): array
     {
@@ -394,7 +394,7 @@ class AliyunSmsClient
 
         return (string) preg_replace_callback(
             '/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}|(?<!\$)\{([a-zA-Z0-9_]+)\}/u',
-            static fn (array $matches): string => '${'.($matches[1] !== '' && $matches[1] !== null ? $matches[1] : (string) $matches[2]).'}',
+            static fn (array $matches): string => '${'.($matches[1] !== '' ? $matches[1] : (string) $matches[2]).'}',
             $withoutSections
         );
     }
@@ -421,7 +421,7 @@ class AliyunSmsClient
     {
         preg_match_all('/\$\{([a-zA-Z0-9_]+)\}/u', $content, $matches);
 
-        return array_values(array_unique((array) ($matches[1] ?? [])));
+        return array_values(array_unique($matches[1]));
     }
 
     private function request(string $url, array $params, string $accessKeyId, string $accessKeySecret, string $phone = ''): array|false
@@ -463,12 +463,12 @@ class AliyunSmsClient
         Log::info('[短信] 请求阿里云短信接口', $logContext);
 
         $ch = curl_init();
-        curl_setopt($ch, CURLOPT_POST, 1);
+        curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
         curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_TIMEOUT, 10);
         curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 3);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_HTTPHEADER, ['x-sdk-client: php/2.0.0']);
         $this->configureCurlSsl($ch);
 

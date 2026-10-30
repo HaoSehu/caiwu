@@ -8,6 +8,7 @@ use App\Constants\FinanceLedgerEventType;
 use App\Constants\InvoiceStatus;
 use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
+use App\Constants\UserNotificationType;
 use App\Contracts\Integrations\Payments\PaymentGatewayInterface;
 use App\Models\FinanceLedgerEntry;
 use App\Models\IntegrationPlugin;
@@ -16,6 +17,7 @@ use App\Models\Payment;
 use App\Models\PaymentCallback;
 use App\Models\RechargeRecord;
 use App\Models\User;
+use App\Models\UserNotification;
 use App\Services\Finance\CheckoutService;
 use App\Services\Finance\Core\FinanceAccountService;
 use App\Services\Finance\GatewayInvoicePaymentService;
@@ -29,6 +31,7 @@ use App\Services\User\AccountService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Schema;
+use PHPUnit\Framework\Attributes\DataProvider;
 use ReflectionMethod;
 use ReflectionProperty;
 use Tests\Support\SeedsFinanceBalance;
@@ -116,6 +119,84 @@ class MixPaymentBalanceRestoreTest extends TestCase
         $this->assertEqualsWithDelta(170.00, $this->financeBalance($user), 0.001);
         $this->assertSame(1, $this->countBalanceLogs($user, FinanceLedgerEventType::INVOICE_REFUND, '组合支付取消退回余额'));
         $this->assertSame(1, $this->countBalanceLogs($user, FinanceLedgerEventType::RECHARGE, '异常支付转入余额'));
+    }
+
+    /**
+     * 站内信正文要说明"为什么这笔钱进了余额"：重复支付已付清账单、
+     * 支付窗口已关闭、金额与应付不一致，三种原因的值班口径不同，文案不能混用。
+     *
+     * @return array<string, array{0: string, 1: string}>
+     */
+    public static function balanceCreditReasonProvider(): array
+    {
+        return [
+            '重复支付已付清账单' => ['invoice_already_paid', '该账单此前已支付完成，本次重复支付的'],
+            '支付窗口已关闭' => ['payment_window_expired', '对应账单支付窗口已关闭，本次支付的'],
+            '金额与应付不一致' => ['payable_amount_mismatch', '本次支付金额与账单应付金额不一致'],
+        ];
+    }
+
+    #[DataProvider('balanceCreditReasonProvider')]
+    public function test_credited_to_balance_notification_explains_reason(string $reason, string $expectedFragment): void
+    {
+        $user = $this->makeUser();
+        $this->seedFinanceBalance($user, 100.00);
+
+        $invoice = $this->makeMixInvoice($user, 30.00, 70.00);
+        $payment = $this->makeMixPayment($user, $invoice, 70.00, 30.00);
+
+        $this->creditCapturedPaymentToBalance(app(MixPaymentService::class), $payment->fresh(), $invoice->fresh(), $reason);
+
+        $notification = UserNotification::query()
+            ->where('user_id', (int) $user->id)
+            ->latest('id')
+            ->first();
+        $this->assertNotNull($notification);
+        $this->assertSame(UserNotificationType::PAYMENT_CREDITED_TO_BALANCE, (string) $notification->type);
+        $this->assertStringContainsString($expectedFragment, (string) $notification->content);
+        $this->assertSame('支付款项已转入账户余额', (string) $notification->title);
+        $this->assertSame('/client/payments', (string) $notification->link);
+
+        $data = (array) $notification->data;
+        $this->assertSame($reason, (string) ($data['credit_reason'] ?? ''));
+        $this->assertSame((int) $payment->id, (int) ($data['payment_id'] ?? 0));
+        $this->assertSame((int) $invoice->id, (int) ($data['invoice_id'] ?? 0));
+    }
+
+    public function test_credited_to_balance_writes_user_visible_notification(): void
+    {
+        $user = $this->makeUser();
+        $this->seedFinanceBalance($user, 100.00);
+
+        $invoice = $this->makeMixInvoice($user, 30.00, 70.00);
+        $payment = $this->makeMixPayment($user, $invoice, 70.00, 30.00);
+        app(FinanceAccountService::class)->debit((int) $user->id, 3000, FinanceLedgerEventType::INVOICE_PAYMENT, [
+            'source_type' => 'invoice',
+            'source_id' => (int) $invoice->id,
+            'remark' => '组合支付预扣余额',
+            'operator_type' => 'member',
+        ]);
+        $invoice->forceFill(['paid_amount' => 30.00])->save();
+        app(CheckoutService::class)->cancel($invoice);
+
+        $this->creditCapturedPaymentToBalance(app(MixPaymentService::class), $payment->fresh(), $invoice->fresh(), 'cancelled_invoice');
+
+        // 账单已关闭但网关款已到账：钱进余额，同时必须给用户一条可见告知，
+        // 否则用户只看到"账单仍未支付"，容易重复支付或以为扣款丢失。
+        $notification = UserNotification::query()
+            ->where('user_id', (int) $user->id)
+            ->latest('id')
+            ->first();
+        $this->assertNotNull($notification, '异常入账必须写入站内信告知');
+        $this->assertSame(UserNotificationType::PAYMENT_CREDITED_TO_BALANCE, (string) $notification->type);
+        $this->assertStringContainsString('余额', (string) $notification->title);
+        $this->assertStringContainsString('余额', (string) $notification->content);
+
+        $data = (array) $notification->data;
+        $this->assertSame((int) $payment->id, (int) ($data['payment_id'] ?? 0));
+        $this->assertSame((int) $invoice->id, (int) ($data['invoice_id'] ?? 0));
+        $this->assertSame('cancelled_invoice', (string) ($data['credit_reason'] ?? ''));
+        $this->assertSame('/client/payments', (string) $notification->link);
     }
 
     public function test_pending_mix_payment_does_not_restore_twice_when_mark_payment_failed_false(): void

@@ -180,10 +180,23 @@ class ZjmfBillingRestoreService
                 'updated_at' => $now,
             ]);
 
-            DB::table('user_accounts')->update([
-                'cash_balance' => '0.00',
-                'updated_at' => $now,
-            ]);
+            // 余额真源是 finance_accounts.available_amount（user_accounts.cash_balance 仅为
+            // 切换期热备列，T+7 归档后会被删除）。恢复前先把所有账户余额清零，再按历史值
+            // 写回，避免残留差额。旧热备列必须做 hasColumn 判断：T+7 删列后仍无条件写会直接
+            // SQLSTATE 42S22 让整个恢复事务回滚。
+            if (Schema::hasTable('finance_accounts')) {
+                DB::table('finance_accounts')->update([
+                    'available_amount' => '0.00',
+                    'updated_at' => $now,
+                ]);
+            }
+
+            if (Schema::hasTable('user_accounts') && Schema::hasColumn('user_accounts', 'cash_balance')) {
+                DB::table('user_accounts')->update([
+                    'cash_balance' => '0.00',
+                    'updated_at' => $now,
+                ]);
+            }
 
             foreach (array_chunk($invoicePayload, 500) as $chunk) {
                 DB::table('invoices')->insert($chunk);
@@ -196,12 +209,19 @@ class ZjmfBillingRestoreService
             }
 
             foreach ($clientBalances as $userId => $balance) {
-                DB::table('user_accounts')
-                    ->where('user_id', $userId)
-                    ->update([
-                        'cash_balance' => $balance,
-                        'updated_at' => $now,
-                    ]);
+                // 先写余额真源；旧热备列只在列仍存在时同步，供代码回滚使用。
+                if (Schema::hasTable('finance_accounts')) {
+                    $this->writeFinanceAccountBalance($userId, $balance, $now);
+                }
+
+                if (Schema::hasTable('user_accounts') && Schema::hasColumn('user_accounts', 'cash_balance')) {
+                    DB::table('user_accounts')
+                        ->where('user_id', $userId)
+                        ->update([
+                            'cash_balance' => $balance,
+                            'updated_at' => $now,
+                        ]);
+                }
             }
         }, 3);
 
@@ -577,6 +597,37 @@ class ZjmfBillingRestoreService
     private function decimalNegate(string $value): string
     {
         return $this->fromCents(-$this->toCents($value));
+    }
+
+    /**
+     * 写回余额真源 finance_accounts：按 (user_id, currency) 唯一键更新可用余额；
+     * 账户行不存在时补建（上游 dump 里的客户在切换后可能还没有财务账户）。
+     */
+    private function writeFinanceAccountBalance(int $userId, string $balance, string $now): void
+    {
+        $affected = DB::table('finance_accounts')
+            ->where('user_id', $userId)
+            ->where('currency', 'CNY')
+            ->update([
+                'available_amount' => $balance,
+                // 余额变更必须同时推进乐观锁版本号，保持表注释声明的「每次余额变更 +1」
+                'version' => DB::raw('version + 1'),
+                'updated_at' => $now,
+            ]);
+
+        if ($affected > 0) {
+            return;
+        }
+
+        DB::table('finance_accounts')->insertOrIgnore([
+            'user_id' => $userId,
+            'currency' => 'CNY',
+            'available_amount' => $balance,
+            'frozen_amount' => '0.00',
+            'version' => 0,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
     }
 
     private function toCents(string $decimal): int

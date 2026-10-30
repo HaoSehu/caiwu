@@ -38,10 +38,6 @@ final class ZjmfScheduledAuthRefreshHook implements ScheduleHook
             ->orderBy('id')
             ->chunkById(self::BATCH_SIZE, function ($suppliers) use (&$summary): void {
                 foreach ($suppliers as $supplier) {
-                    if (! $supplier instanceof Supplier) {
-                        continue;
-                    }
-
                     $provider = $this->providerResolver->resolveForSupplier($supplier);
                     $providerKey = trim((string) ($provider->key() ?? $provider->rawKey() ?? ''));
                     if ($providerKey !== ProviderKey::ZJMF_FINANCE_API) {

@@ -26,12 +26,11 @@ use App\Services\Upstream\Contracts\UpstreamDriver;
 use App\Services\Upstream\ProviderRegistry;
 use App\Services\Upstream\ProviderResolver;
 use App\Support\CacheKey;
-use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfProvisionService;
+use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfUpstreamResponse;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use ReflectionClass;
 use ReflectionMethod;
 use Tests\TestCase;
 
@@ -113,7 +112,16 @@ class StockGateTest extends TestCase
 
         app(ProductSyncService::class)->assertSnapshotStockAvailable($product, 1);
 
-        $this->assertTrue(true);
+        // 只断言「没抛异常」无法区分「负库存被正确放行」和「闸门被整段删掉」，
+        // 因此同一用例内用快照库存 0 的同构商品证明闸门确实在拦截。
+        $exhausted = $this->makeProduct(stock: 0);
+
+        try {
+            app(ProductSyncService::class)->assertSnapshotStockAvailable($exhausted, 1);
+            $this->fail('快照库存为 0 且无预留时应当拦截');
+        } catch (BusinessException $exception) {
+            $this->assertSame('库存不足', $exception->getMessage());
+        }
     }
 
     public function test_checkout_allows_successive_orders_within_snapshot_stock(): void
@@ -187,16 +195,35 @@ class StockGateTest extends TestCase
 
         $syncService->assertUpstreamStockForProvision($product, 0, 1);
 
-        $this->assertTrue(true);
+        // 同构的「上游返回 0 库存」必须拦截，证明放行来自 catch 降级分支而非闸门被删。
+        [$exhausted, $exhaustedSync] = $this->makeBoundProduct(remoteStock: 0);
+
+        try {
+            $exhaustedSync->assertUpstreamStockForProvision($exhausted, 0, 1);
+            $this->fail('上游库存为 0 时应当拦截');
+        } catch (BusinessException $exception) {
+            $this->assertSame('库存不足', $exception->getMessage());
+        }
     }
 
     public function test_upstream_gate_allows_product_without_upstream_binding(): void
     {
         $product = $this->makeProduct(stock: 0);
 
+        // 无上游绑定即跳过上游复核（快照库存为 0 也不拦）。
+        $this->assertFalse($product->upstreamBindings()->exists());
         app(ProductSyncService::class)->assertUpstreamStockForProvision($product, 0, 1);
 
-        $this->assertTrue(true);
+        // 对照组：一旦绑定上游且上游库存为 0，同一闸门必须拦截，
+        // 证明上面的放行来自「无绑定」这一前置返回，而不是方法空实现。
+        [$exhausted, $exhaustedSync] = $this->makeBoundProduct(remoteStock: 0);
+
+        try {
+            $exhaustedSync->assertUpstreamStockForProvision($exhausted, 0, 1);
+            $this->fail('绑定上游且上游库存为 0 时应当拦截');
+        } catch (BusinessException $exception) {
+            $this->assertSame('库存不足', $exception->getMessage());
+        }
     }
 
     public function test_upstream_gate_blocks_when_remote_stock_exhausted(): void
@@ -218,9 +245,15 @@ class StockGateTest extends TestCase
 
         // 上游库存 2，在途预留含本单共 2：排除本单后 2-1=1 ≥ 1 应放行；
         // 未排除本单时 2-2=0 会把自己误拦，此用例即该回归的守卫。
-        $syncService->assertUpstreamStockForProvision($product, (int) $ownOrder->id, 1);
+        // 先跑「不排除本单」的对照组，确保拦截确实发生，再断言排除后放行。
+        try {
+            $syncService->assertUpstreamStockForProvision($product, 0, 1);
+            $this->fail('不排除本单时应被自己占用的预留挡下');
+        } catch (BusinessException $exception) {
+            $this->assertSame('库存不足', $exception->getMessage());
+        }
 
-        $this->assertTrue(true);
+        $syncService->assertUpstreamStockForProvision($product, (int) $ownOrder->id, 1);
     }
 
     public function test_browse_overlay_persists_upstream_snapshot_to_product_stock(): void
@@ -317,23 +350,18 @@ class StockGateTest extends TestCase
         // 上游「库存不足」文案分类回归：命中售罄词抛 UpstreamStockShortageException
         // （供开通编排层校准库存），其他失败仍为普通 BusinessException。
         // 插件类由运行时的 PluginFileLoader 装载，测试中手动引入（与 ZjmfProvisionServiceTest 同款）。
-        require_once __DIR__.'/../../plugins/servers/zjmf_finance/lib/ZjmfFinanceTransport.php';
-        require_once __DIR__.'/../../plugins/servers/zjmf_finance/lib/ZjmfProvisionService.php';
+        require_once __DIR__.'/../../plugins/servers/zjmf_finance/lib/ZjmfUpstreamResponse.php';
 
-        $provisionClass = ZjmfProvisionService::class;
-        $service = (new ReflectionClass($provisionClass))->newInstanceWithoutConstructor();
-        $method = new ReflectionMethod($provisionClass, 'throwUpstreamFailure');
-        $method->setAccessible(true);
-
+        // 失败分类已随开通服务拆分下沉到 ZjmfUpstreamResponse，断言目标同步改到静态方法
         try {
-            $method->invoke($service, ['status' => 400, 'msg' => '产品美国轻量云 2H2G库存不足'], '加入上游购物车');
+            ZjmfUpstreamResponse::throwFailure(['status' => 400, 'msg' => '产品美国轻量云 2H2G库存不足'], '加入上游购物车');
             $this->fail('库存不足文案应抛售罄分类异常');
         } catch (UpstreamStockShortageException $exception) {
             $this->assertSame('加入上游购物车失败，请稍后重试', $exception->getMessage());
         }
 
         try {
-            $method->invoke($service, ['status' => 400, 'msg' => '登录信息错误'], '加入上游购物车');
+            ZjmfUpstreamResponse::throwFailure(['status' => 400, 'msg' => '登录信息错误'], '加入上游购物车');
             $this->fail('非库存文案应抛普通业务异常');
         } catch (BusinessException $exception) {
             $this->assertNotInstanceOf(UpstreamStockShortageException::class, $exception);

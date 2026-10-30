@@ -350,7 +350,7 @@ class YiPayClient
     private function resolveClientIp(): string
     {
         try {
-            $ip = request()?->ip();
+            $ip = request()->ip();
         } catch (\Throwable) {
             $ip = null;
         }

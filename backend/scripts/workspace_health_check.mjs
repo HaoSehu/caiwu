@@ -147,12 +147,16 @@ for (const appRoot of ['frontend-admin-v3', 'frontend-user-v3-www', 'frontend-us
   }
 }
 
+// 废弃目录清单以 AGENTS.md「项目地图」为唯一真源：这些目录名已不再使用，
+// 若本地还留着同名目录，说明是旧结构残留，需人工确认后清理。
 for (const staleDir of [
   'frontend-admin',
   'frontend-client',
   'frontend-user-v3-console',
   'frontend-www-v2',
   'frontend-console-v2',
+  'scripts',
+  '.kiro',
 ]) {
   if (existsSync(path.join(root, staleDir))) {
     warnings.push(`stale local directory still exists: ${staleDir}`);

@@ -773,7 +773,9 @@ class KangHostx extends AbstractUpstreamServerPlugin implements ProvidesConsoleC
 
     private function resolveHostId(Order $order, ?Service $existingService): int
     {
-        $serviceId = (int) ($existingService?->id ?? $order->service?->id ?? 0);
+        $existingServiceId = $existingService instanceof Service ? $existingService->id : 0;
+        $orderService = $order->service;
+        $serviceId = (int) ($existingServiceId ?: ($orderService instanceof Service ? $orderService->id : 0));
         if ($serviceId > 0) {
             return $serviceId;
         }
@@ -1021,10 +1023,6 @@ class KangHostx extends AbstractUpstreamServerPlugin implements ProvidesConsoleC
     {
         if ($order->relationLoaded('product')) {
             return $order->product instanceof Product ? $order->product : null;
-        }
-
-        if (! method_exists($order, 'product')) {
-            return null;
         }
 
         $product = $order->product()->first();

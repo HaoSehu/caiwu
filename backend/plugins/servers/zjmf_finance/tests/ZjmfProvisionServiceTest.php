@@ -9,8 +9,10 @@ use App\Models\Product;
 use App\Models\Supplier;
 use App\Services\Upstream\Drivers\HostingPanelApi\HostingPanelApiTransport;
 use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfAuthManager;
+use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfCartPayloadBuilder;
 use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfFinanceTransport;
 use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfProvisionService;
+use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfUpstreamResponse;
 use Mockery;
 use Mockery\MockInterface;
 use PHPUnit\Framework\TestCase;
@@ -21,6 +23,8 @@ use ReflectionMethod;
 require_once __DIR__.'/../lib/ZjmfFinanceTransport.php';
 require_once __DIR__.'/../lib/ZjmfProvisionService.php';
 require_once __DIR__.'/../lib/ZjmfAuthManager.php';
+require_once __DIR__.'/../lib/ZjmfUpstreamResponse.php';
+require_once __DIR__.'/../lib/ZjmfCartPayloadBuilder.php';
 
 class ZjmfProvisionServiceTest extends TestCase
 {
@@ -46,10 +50,6 @@ class ZjmfProvisionServiceTest extends TestCase
 
     public function test_extract_host_ids_filters_invalid_values(): void
     {
-        $service = $this->service();
-        $method = new ReflectionMethod(ZjmfProvisionService::class, 'extractHostIds');
-        $method->setAccessible(true);
-
         $response = [
             'data' => [
                 'hostids' => ['101', 0, -3, 'abc', 102],
@@ -57,38 +57,26 @@ class ZjmfProvisionServiceTest extends TestCase
         ];
 
         /** @var array<int, string> $hostIds */
-        $hostIds = $method->invoke($service, $response, $response['data']);
+        $hostIds = ZjmfUpstreamResponse::hostIds($response, (array) $response['data']);
 
         $this->assertSame([101, 102], array_map('intval', $hostIds));
     }
 
     public function test_extract_invoice_id_prefers_payload_then_response(): void
     {
-        $service = $this->service();
-        $method = new ReflectionMethod(ZjmfProvisionService::class, 'extractInvoiceId');
-        $method->setAccessible(true);
-
-        $this->assertSame(88, $method->invoke($service, [], ['invoiceid' => 88]));
-        $this->assertSame(88, $method->invoke($service, ['invoice_id' => 88], []));
-        $this->assertSame(0, $method->invoke($service, [], []));
+        $this->assertSame(88, ZjmfUpstreamResponse::invoiceId([], ['invoiceid' => 88]));
+        $this->assertSame(88, ZjmfUpstreamResponse::invoiceId(['invoice_id' => 88], []));
+        $this->assertSame(0, ZjmfUpstreamResponse::invoiceId([], []));
     }
 
     public function test_extract_cart_position_supports_zero_fallback(): void
     {
-        $service = $this->service();
-        $method = new ReflectionMethod(ZjmfProvisionService::class, 'extractCartPosition');
-        $method->setAccessible(true);
-
-        $this->assertSame(2, $method->invoke($service, ['data' => 2], []));
-        $this->assertSame(0, $method->invoke($service, [], []));
+        $this->assertSame(2, ZjmfUpstreamResponse::cartPosition(['data' => 2], []));
+        $this->assertSame(0, ZjmfUpstreamResponse::cartPosition([], []));
     }
 
     public function test_build_config_option_map_skips_empty_values(): void
     {
-        $service = $this->service();
-        $method = new ReflectionMethod(ZjmfProvisionService::class, 'buildConfigOptionMap');
-        $method->setAccessible(true);
-
         // Product 模型仅作数据容器使用，不触数据库。
         $product = new Product;
         $product->config_options = [
@@ -118,7 +106,7 @@ class ZjmfProvisionServiceTest extends TestCase
         ];
 
         /** @var array<int, int> $result */
-        $result = $method->invoke($service, $product, $snapshot);
+        $result = ZjmfCartPayloadBuilder::buildConfigOptionMap($product, $snapshot);
 
         // cpu 空值被跳过，os 命中子项 111。
         $this->assertSame([11 => 111], $result);
@@ -126,13 +114,9 @@ class ZjmfProvisionServiceTest extends TestCase
 
     public function test_resolve_option_id_falls_back_to_sub_config_id(): void
     {
-        $service = $this->service();
-        $method = new ReflectionMethod(ZjmfProvisionService::class, 'resolveOptionId');
-        $method->setAccessible(true);
-
-        $this->assertSame(0, $method->invoke($service, ['sub' => []]));
-        $this->assertSame(7, $method->invoke($service, ['sub' => [['config_id' => 7]]]));
-        $this->assertSame(3, $method->invoke($service, ['id' => 3]));
+        $this->assertSame(0, ZjmfCartPayloadBuilder::resolveOptionId(['sub' => []]));
+        $this->assertSame(7, ZjmfCartPayloadBuilder::resolveOptionId(['sub' => [['config_id' => 7]]]));
+        $this->assertSame(3, ZjmfCartPayloadBuilder::resolveOptionId(['id' => 3]));
     }
 
     public function test_stock_shortage_message_detection(): void
@@ -144,18 +128,16 @@ class ZjmfProvisionServiceTest extends TestCase
         // 「产品不存在」是上游商品被删除时 get_product_config 的拒绝（CART_PRO_CONF_NOTFOUND）；
         // 「超出库存」是升级换品目标商品库存 0 的拒绝（PRODUCT_OUT_OF_STOCK）。
         // 词表真源在 UpstreamStockShortageException::matches，此处回归开通出口的代理。
-        $service = $this->service();
-
-        $this->assertTrue($this->invoke($service, 'isStockShortageMessage', ['产品美国轻量云 2H2G库存不足']));
-        $this->assertTrue($this->invoke($service, 'isStockShortageMessage', ['商品已售罄']));
-        $this->assertTrue($this->invoke($service, 'isStockShortageMessage', ['该套餐已售完']));
-        $this->assertTrue($this->invoke($service, 'isStockShortageMessage', ['商品不存在']));
-        $this->assertTrue($this->invoke($service, 'isStockShortageMessage', ['产品不存在']));
-        $this->assertTrue($this->invoke($service, 'isStockShortageMessage', ['超出库存']));
-        $this->assertTrue($this->invoke($service, 'isStockShortageMessage', ['Out of Stock']));
-        $this->assertFalse($this->invoke($service, 'isStockShortageMessage', ['参数错误']));
-        $this->assertFalse($this->invoke($service, 'isStockShortageMessage', ['鉴权失败']));
-        $this->assertFalse($this->invoke($service, 'isStockShortageMessage', ['']));
+        $this->assertTrue(ZjmfUpstreamResponse::isStockShortageMessage('产品美国轻量云 2H2G库存不足'));
+        $this->assertTrue(ZjmfUpstreamResponse::isStockShortageMessage('商品已售罄'));
+        $this->assertTrue(ZjmfUpstreamResponse::isStockShortageMessage('该套餐已售完'));
+        $this->assertTrue(ZjmfUpstreamResponse::isStockShortageMessage('商品不存在'));
+        $this->assertTrue(ZjmfUpstreamResponse::isStockShortageMessage('产品不存在'));
+        $this->assertTrue(ZjmfUpstreamResponse::isStockShortageMessage('超出库存'));
+        $this->assertTrue(ZjmfUpstreamResponse::isStockShortageMessage('Out of Stock'));
+        $this->assertFalse(ZjmfUpstreamResponse::isStockShortageMessage('参数错误'));
+        $this->assertFalse(ZjmfUpstreamResponse::isStockShortageMessage('鉴权失败'));
+        $this->assertFalse(ZjmfUpstreamResponse::isStockShortageMessage(''));
     }
 
     /**
@@ -225,12 +207,38 @@ class ZjmfProvisionServiceTest extends TestCase
         $this->invoke($service, 'adoptExistingUpstreamHost', [null, new Supplier, new Product, 0, 'unit-test-jwt']);
     }
 
+    public function test_adopt_existing_host_tolerates_null_local_service(): void
+    {
+        // 覆盖「防重门收编时本地还没有服务记录」的分支：adoptExistingUpstreamHost 的
+        // $service 形参声明为 ?Service，此前只有 hostId<=0 的早退分支有用例覆盖，
+        // 一旦有人在 null 路径上加未加 ?? / instanceof 守卫的读取，这里会立刻红。
+        /** @var HostingPanelApiTransport&MockInterface $hosting */
+        $hosting = Mockery::mock(HostingPanelApiTransport::class);
+        $hosting->shouldReceive('requestWithMeta')->andReturn([
+            'response' => ['status' => 200, 'data' => ['host' => ['id' => 501, 'domainstatus' => 'Active']]],
+            'headers' => [],
+            'http_code' => 200,
+            'content_type' => 'application/json',
+        ]);
+
+        $service = new ZjmfProvisionService(
+            new ZjmfFinanceTransport($hosting, new ZjmfAuthManager($hosting)),
+        );
+
+        // 走到商品绑定校验即证明空安全成立；此处裸 Product 没有上游绑定，必然在校验处失败。
+        $this->expectException(BusinessException::class);
+        $this->expectExceptionMessage('商品上游绑定不存在');
+
+        $this->invoke($service, 'adoptExistingUpstreamHost', [null, new Supplier, new Product, 501, 'unit-test-jwt']);
+    }
+
     /**
      * @param  array<string, mixed>  $response  上游 /cart/clear 响应体
      * @param  array<string, int|string>  $downstream  downstream_* 注册参数
      */
     private function clearCartWithResponse(array $response, array $downstream): array
     {
+        /** @var HostingPanelApiTransport&MockInterface $hosting */
         $hosting = $this->hostingTransportMock($response);
 
         $service = new ZjmfProvisionService(
@@ -256,11 +264,13 @@ class ZjmfProvisionServiceTest extends TestCase
 
     /**
      * @param  array<string, mixed>  $response
+     * @return HostingPanelApiTransport&MockInterface
      */
     private function hostingTransportMock(array $response): MockInterface
     {
+        /** @var HostingPanelApiTransport&MockInterface $hosting */
         $hosting = Mockery::mock(HostingPanelApiTransport::class);
-        $hosting->shouldReceive('requestWithMeta')->andReturnUsing(fn (): array => [
+        $hosting->shouldReceive('requestWithMeta')->andReturn([
             'response' => $response,
             'headers' => [],
             'http_code' => 200,

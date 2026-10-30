@@ -62,7 +62,8 @@ class PublicVncTokenSecurityTest extends TestCase
         $this->assertSame('host-42', $first['target']);
         $this->assertGreaterThan(0, (int) $first['expires_in']);
         $this->assertMatchesRegularExpression('/^[0-9a-f]{48}$/', (string) $first['token']);
-        $this->assertNotSame($first['token'], $second['token'], '每次兑换应生成独立 relay token');
+        // 刷新/重连/多页签会重复兑换同一公开 token：必须复用同一 relay token，否则首个请求之后的兑换全部失效。
+        $this->assertSame($first['token'], $second['token'], '同一公开 token 重复兑换应复用 relay token');
 
         // relay 缓存参数同样不落明文密码，仅以 hash 维系统计与溯源
         $relayParams = Cache::store('redis_volatile')->get(CacheKey::vncToken((string) $first['token']));
@@ -98,6 +99,34 @@ class PublicVncTokenSecurityTest extends TestCase
             $this->fail('relay 作用域 token 不得经公开兑换入口消费');
         } catch (BusinessException $exception) {
             $this->assertSame(40400, $exception->getErrorCode());
+        }
+    }
+
+    public function test_public_token_exchange_is_capped_per_token(): void
+    {
+        $token = 'pub-cap-'.uniqid();
+        $this->putToken($token, [
+            'token_scope' => 'public',
+            'service_id' => 42,
+            'username' => 'root',
+            'target' => 'host-42',
+            'host' => '10.0.0.5',
+            'port' => 5901,
+        ]);
+
+        $service = app(ServiceVncService::class);
+
+        // 30 次以内允许（含首次），超出后必须拒绝，防止公开链接被脚本化无限兑换。
+        for ($i = 0; $i < 30; $i++) {
+            $service->resolvePublicVncTokenPayload($token);
+        }
+
+        try {
+            $service->resolvePublicVncTokenPayload($token);
+            $this->fail('超过兑换次数上限后必须拒绝');
+        } catch (BusinessException $exception) {
+            $this->assertSame(42900, $exception->getErrorCode());
+            $this->assertSame(429, $exception->getCode());
         }
     }
 

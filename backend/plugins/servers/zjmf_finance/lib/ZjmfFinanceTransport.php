@@ -138,7 +138,7 @@ final class ZjmfFinanceTransport
                 'source' => 'API',
             ]
         );
-        $meta['response'] = $this->normalizeHostDetailResponse((array) ($meta['response'] ?? []));
+        $meta['response'] = $this->normalizeHostDetailResponse($meta['response']);
 
         return $meta;
     }
@@ -425,10 +425,10 @@ final class ZjmfFinanceTransport
             $this->withBearerAuthorization($resolvedJwt, $headers),
             $query
         );
-        $response = is_array($meta['response'] ?? null) ? $meta['response'] : [];
+        $response = $meta['response'];
         $this->authManager->forgetIfUnauthorizedResponse(
             $supplier,
-            (int) ($meta['http_code'] ?? 0),
+            (int) $meta['http_code'],
             $response,
             $resolvedJwt
         );

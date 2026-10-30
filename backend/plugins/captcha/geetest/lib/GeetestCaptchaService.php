@@ -17,6 +17,8 @@ class GeetestCaptchaService
 
     private const SCRIPT_CACHE_TTL_SECONDS = 43200;
 
+    private const REPLAY_TTL_SECONDS = 600;
+
     public function key(): string
     {
         return 'geetest';
@@ -84,6 +86,14 @@ class GeetestCaptchaService
             return $this->failure($action, '行为验证参数不完整');
         }
 
+        // 同一 lot_number 在一次验证通过后只允许消费一次：GeeTest v4 的 lot_number
+        // 是本次验证的唯一批次号，服务端 validate 接口本身不去重，若不在此拦截，
+        // 攻击者可拿一次性通过的 lot_number 反复调用本接口刷单/刷券。
+        $replayKey = CacheKey::geetestVerifiedLot(hash('sha256', $this->captchaId($config).'|'.$lotNumber));
+        if (Cache::has($replayKey)) {
+            return $this->failure($action, '行为验证已使用，请重新验证', ['verified' => false]);
+        }
+
         $endpoint = self::API_SERVER.'/validate';
         $signToken = hash_hmac('sha256', $lotNumber, $this->captchaKey($config));
 
@@ -111,6 +121,10 @@ class GeetestCaptchaService
             $data = $response->json();
             if (($data['result'] ?? '') !== 'success') {
                 return $this->failure($action, '行为验证未通过，请重试', ['verified' => false]);
+            }
+
+            if (! Cache::add($replayKey, true, now()->addSeconds(self::REPLAY_TTL_SECONDS))) {
+                return $this->failure($action, '行为验证已使用，请重新验证', ['verified' => false]);
             }
 
             return [

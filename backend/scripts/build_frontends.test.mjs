@@ -56,6 +56,17 @@ for (const target of ['admin', 'www', 'console']) {
     budgetModule.CHUNK_BUDGETS.console > 972583,
     'console 单分片预算必须高于当前实测 972,583 B，否则门禁会在健康构建上直接误报',
   );
+  // 单分片预算：三端都要有。历史上 www 缺这一条，chunkChecks 被 .filter((check) => check.budget)
+  // 静默过滤，单分片膨胀只能靠首屏汇总吸收，等于没有闸。
+  assert.deepEqual(
+    Object.keys(budgetModule.CHUNK_BUDGETS).sort(),
+    ['admin', 'console', 'www'],
+    '三端都必须配置单分片预算，否则该项检查会被 filter 静默跳过',
+  );
+  assert.ok(
+    budgetModule.CHUNK_BUDGETS.www > 153833,
+    'www 单分片预算必须高于当前实测最大分片 vendor-vue 153,833 B，否则门禁会在健康构建上误报',
+  );
   assert.deepEqual(Object.keys(budgetModule.FIRST_SCREEN_BUDGETS).sort(), ['admin', 'console', 'www']);
   // CSS 分片预算：三端都要有，且必须高于当前实测最大单文件，否则健康构建会误报（审查条目 P3-4）。
   assert.deepEqual(Object.keys(budgetModule.CSS_CHUNK_BUDGETS).sort(), ['admin', 'console', 'www']);

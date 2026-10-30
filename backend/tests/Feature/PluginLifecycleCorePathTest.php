@@ -28,7 +28,7 @@ class PluginLifecycleCorePathTest extends TestCase
         $scanner = app(PluginScanner::class);
         $repository = app(PluginConfigRepository::class);
 
-        $plugin = $installer->install('payment', 'demo_pay');
+        $plugin = $installer->install('payment', 'demo_pay', allowDemo: true);
         $manifest = $scanner->requireManifest('payment', 'demo_pay');
 
         $repository->save($plugin, $manifest, ['merchant_id' => 'm-001', 'secret_key' => 's3cret']);
@@ -59,12 +59,12 @@ class PluginLifecycleCorePathTest extends TestCase
         $smtp = $installer->install('mail', 'smtp');
         $installer->enable($smtp);
 
-        $demo = $installer->install('mail', 'demo_mail');
+        $demo = $installer->install('mail', 'demo_mail', allowDemo: true);
         $demoManifest = $scanner->requireManifest('mail', 'demo_mail');
         $repository->save($demo, $demoManifest, ['from_address' => 'demo@example.test', 'from_name' => 'Demo']);
 
         try {
-            $installer->enable($demo);
+            $installer->enable($demo, allowDemo: true);
             $this->fail('单启用域的第二个插件应被拒绝启用');
         } catch (BusinessException $exception) {
             $this->assertStringContainsString('请先停用', $exception->getMessage());
@@ -79,7 +79,7 @@ class PluginLifecycleCorePathTest extends TestCase
         $installer = app(PluginInstaller::class);
         $service = app(IntegrationPluginService::class);
 
-        $plugin = $installer->install('payment', 'demo_pay');
+        $plugin = $installer->install('payment', 'demo_pay', allowDemo: true);
         $pluginId = (int) $plugin->id;
 
         DB::table('integration_plugin_bindings')->insert([
@@ -185,10 +185,10 @@ class PluginLifecycleCorePathTest extends TestCase
         $scanner = app(PluginScanner::class);
         $repository = app(PluginConfigRepository::class);
 
-        $plugin = $installer->install('payment', 'demo_pay');
+        $plugin = $installer->install('payment', 'demo_pay', allowDemo: true);
         $manifest = $scanner->requireManifest('payment', 'demo_pay');
         $repository->save($plugin, $manifest, ['merchant_id' => 'm-001']);
-        $installer->enable($plugin->fresh() ?? $plugin);
+        $installer->enable($plugin->fresh() ?? $plugin, allowDemo: true);
 
         $registry = app(PluginRuntimeRegistry::class);
         $pluginId = (int) $plugin->id;

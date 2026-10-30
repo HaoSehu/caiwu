@@ -71,6 +71,7 @@ const SAFE_LITERAL_VALUES = new Set([
   "passwd",
   "placeholder",
   "redacted",
+  "root",
   "sample",
   "secret",
   "test",
@@ -119,6 +120,9 @@ export function isPlaceholder(rawValue) {
     SAFE_LITERAL_VALUES.has(lowered) ||
     /^x{3,}$/i.test(value) ||
     /^\*{3,}$/.test(value) ||
+    /^\?$/.test(value) ||
+    /^null[),;]*$/.test(value) ||
+    /^\(.+\)$/.test(value) ||
     /^<[^>]+>$/.test(value) ||
     /^your[-_]/i.test(value) ||
     /^(?:你的|请填写|请设置|替换为|示例)/.test(value) ||
@@ -214,7 +218,7 @@ function looksLikeHighEntropyCredential(value) {
 function isObviousFixtureCredential(value) {
   const normalized = String(value ?? "").trim();
   return (
-    /^(?:demo|dummy|example|fake|sample|test)(?:[-_.]|[A-Z0-9])/i.test(
+    /^(?:demo|dummy|e2e|example|fake|sample|test)(?:[-_.]|[A-Z0-9])/i.test(
       normalized,
     ) ||
     /^temp@.+-wrong$/i.test(normalized) ||
@@ -383,12 +387,12 @@ function scanGenericAssignments(text, relativePath, findings) {
       }
 
       const prosePair = lineText.match(
-        /(?:管理员|用户|账号|administrator|account|user(?:name)?)\s*[:：]\s*[`]?[^`/\s]+[`]?\s*\/\s*[`]?([^`\s]+)/i,
+        /(?:管理员|用户|账号|administrator|account|user(?:name)?)\s*[:：]\s*[`]?([A-Za-z0-9_.@-]{2,})[`]?\s*\/\s*[`]?([^`\s]+)/i,
       );
       if (prosePair) {
         candidates.push([
           "password",
-          prosePair[1],
+          prosePair[2],
           "credential-pair-in-prose",
           false,
         ]);
@@ -401,6 +405,14 @@ function scanGenericAssignments(text, relativePath, findings) {
         isCredentialKey(key) &&
         inspectedValue !== null &&
         !isPlaceholder(inspectedValue) &&
+        !(
+          rule === "credential-in-prose" &&
+          /^[\p{Script=Han}\s]+$/u.test(String(inspectedValue).trim())
+        ) &&
+        !(
+          rule === "credential-in-prose" &&
+          /artisan down --secret=/.test(lineText)
+        ) &&
         !(literalOnly && isSourceMetadataLiteral(inspectedValue)) &&
         !(
           literalOnly &&

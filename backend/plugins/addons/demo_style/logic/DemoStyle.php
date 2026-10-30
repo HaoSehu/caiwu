@@ -17,9 +17,6 @@ class DemoStyle
 
         return match ($action) {
             'addon.metadata' => $this->metadata($action, $config),
-            'addon.admin.index' => $this->adminIndex($action, $config),
-            'addon.client.index' => $this->clientIndex($action, $config),
-            'addon.public.assets' => $this->publicAssets($action, $config),
             'addon.health_check' => [
                 'success' => true,
                 'action' => $action,
@@ -56,11 +53,6 @@ class DemoStyle
             'success' => true,
             'action' => $action,
             'data' => array_merge($this->healthPayload($config), [
-                'entries' => [
-                    'admin' => 'addon.admin.index',
-                    'client' => 'addon.client.index',
-                    'public' => 'addon.public.assets',
-                ],
                 'zjmf_shape' => [
                     'config',
                     'controller',
@@ -72,71 +64,6 @@ class DemoStyle
                     'validate',
                 ],
             ]),
-        ];
-    }
-
-    /**
-     * @param  array<string, mixed>  $config
-     * @return array<string, mixed>
-     */
-    private function adminIndex(string $action, array $config): array
-    {
-        return [
-            'success' => true,
-            'action' => $action,
-            'data' => [
-                'title' => '样式演示后台页',
-                'cards' => [
-                    [
-                        'label' => '主题',
-                        'value' => $this->themeName($config),
-                    ],
-                    [
-                        'label' => '强调色',
-                        'value' => $this->accentColor($config),
-                    ],
-                ],
-            ],
-        ];
-    }
-
-    /**
-     * @param  array<string, mixed>  $config
-     * @return array<string, mixed>
-     */
-    private function clientIndex(string $action, array $config): array
-    {
-        return [
-            'success' => true,
-            'action' => $action,
-            'data' => [
-                'title' => '样式演示用户页',
-                'theme_name' => $this->themeName($config),
-                'accent_color' => $this->accentColor($config),
-                'widgets' => [
-                    ['type' => 'banner', 'text' => 'Demo Style Addon'],
-                    ['type' => 'link', 'text' => '返回控制台', 'target' => '/client'],
-                ],
-            ],
-        ];
-    }
-
-    /**
-     * @param  array<string, mixed>  $config
-     * @return array<string, mixed>
-     */
-    private function publicAssets(string $action, array $config): array
-    {
-        return [
-            'success' => true,
-            'action' => $action,
-            'data' => [
-                'css_variables' => [
-                    '--addon-demo-style-accent' => $this->accentColor($config),
-                    '--addon-demo-style-name' => $this->themeName($config),
-                ],
-                'assets' => [],
-            ],
         ];
     }
 

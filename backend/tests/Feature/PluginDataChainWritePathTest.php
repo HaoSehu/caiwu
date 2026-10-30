@@ -383,7 +383,7 @@ class PluginDataChainWritePathTest extends TestCase
     }
 
     #[Test]
-    public function verification_callback_resolves_driver_from_history_record(): void
+    public function verification_callback_only_acknowledges_and_does_not_sync_status(): void
     {
         $user = $this->makeUser('plugin-callback');
 
@@ -392,14 +392,19 @@ class PluginDataChainWritePathTest extends TestCase
         app(VerificationDriverManager::class)->register(new FakeVerificationDriver('stay33'));
         app(VerificationDriverManager::class)->register($this->makeCallbackVerifyingDriver('baidu_face', $spy));
 
-        $matchedCertifyId = 'cert-v06-'.uniqid();
-        $this->makeVerificationHistory($user, $matchedCertifyId, 'baidu_face');
+        $certifyId = 'cert-v06-'.uniqid();
+        $history = $this->makeVerificationHistory($user, $certifyId, 'baidu_face');
 
-        $response = $this->postJson('/api/v2/client/verification/callback', ['certify_id' => $matchedCertifyId]);
-        $response->assertStatus(404);
-        $this->assertSame(1, $spy->calls);
-        $response->assertJsonPath('code', 40400);
+        // 回跳端点不携带可信凭证：验签中间件照常执行（有签名能力的驱动仍会被调用），
+        // 但控制器只回执、不查上游、不写状态；状态同步交给已鉴权的 GET /verification/status。
+        $response = $this->postJson('/api/v2/client/verification/callback', ['certify_id' => $certifyId]);
+        $response->assertOk();
+        $response->assertJsonPath('data.status', 4);
+        $this->assertSame(1, $spy->calls, '验签中间件仍应被执行');
+        $this->assertSame(4, (int) $history->fresh()->verification_status);
+        $this->assertSame(0, (int) $user->fresh()->toArray()['is_verified']);
 
+        // 驱动不具备签名校验能力时，中间件依旧拒绝请求，回调不能成为绕过验签的旁路。
         $unverifiedCertifyId = 'cert-v06-stay33-'.uniqid();
         $this->makeVerificationHistory($user, $unverifiedCertifyId, 'stay33');
 

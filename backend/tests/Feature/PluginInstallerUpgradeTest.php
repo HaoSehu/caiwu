@@ -20,14 +20,14 @@ class PluginInstallerUpgradeTest extends TestCase
         $installer = app(PluginInstaller::class);
         $scanner = app(PluginScanner::class);
 
-        $plugin = $installer->install('payment', 'demo_pay');
+        $plugin = $installer->install('payment', 'demo_pay', allowDemo: true);
         $this->assertSame('demo_pay', (string) $plugin->plugin_key);
         $this->assertNotNull($plugin->manifest_hash);
 
         // 模拟磁盘文件比登记记录新（插件文件被替换/升级）。
         $plugin->forceFill(['manifest_hash' => 'stale-hash'])->save();
 
-        $result = $installer->upgrade($plugin->fresh() ?? $plugin);
+        $result = $installer->upgrade($plugin->fresh() ?? $plugin, allowDemo: true);
 
         $fresh = $result['plugin']->fresh();
         $this->assertInstanceOf(IntegrationPlugin::class, $fresh);

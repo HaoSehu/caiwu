@@ -75,6 +75,17 @@ const localOnlyDirectories = new Set(["_local"]);
 const frontMatterExemptTopLevel = new Set(["模板"]);
 // 这些旧式头部标签已由 frontmatter 承载，正文里不得再出现，否则会形成第二个元数据来源
 const reservedHeaderLabels = ["文档性质", "对齐时间", "状态", "日期", "更新时间"];
+// owner 的合法取值，与 docs/治理/DOCUMENTATION_POLICY.md 的白名单共用同一份口径。
+// 历史已完成计划按策略「保留当时的署名不改写」，故归档目录只校验非空、不校验枚举。
+const documentOwners = new Set([
+  "backend-platform",
+  "backend-data",
+  "frontend-platform",
+  "ops",
+  "product",
+  "docs-governance",
+]);
+const ownerEnumerationExemptPrefixes = ["执行计划/已完成/"];
 
 for (const flag of flags) {
   if (!knownFlags.has(flag)) {
@@ -533,6 +544,16 @@ function checkDocumentFrontMatter(markdownFiles, catalogStatusByPath) {
 
     if (frontMatter.updated && !isValidDate(frontMatter.updated)) {
       errors.push(`${displayPath} updated must use YYYY-MM-DD`);
+    }
+
+    if (
+      frontMatter.owner &&
+      !ownerEnumerationExemptPrefixes.some((prefix) => docsPath.startsWith(prefix)) &&
+      !documentOwners.has(frontMatter.owner)
+    ) {
+      errors.push(
+        `${displayPath} has unsupported owner: ${frontMatter.owner}（合法取值见 docs/治理/DOCUMENTATION_POLICY.md）`,
+      );
     }
 
     if (!frontMatter.status) {

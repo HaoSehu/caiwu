@@ -54,8 +54,7 @@ final class ZjmfFinanceDriver implements ProvidesSupplierFormSchema, UpstreamDri
 
     public function supports(string $capability): bool
     {
-        return in_array($capability, self::CAPABILITIES, true)
-            && $this->adapter instanceof $capability;
+        return in_array($capability, self::CAPABILITIES, true);
     }
 
     public function resolve(string $capability): ?object

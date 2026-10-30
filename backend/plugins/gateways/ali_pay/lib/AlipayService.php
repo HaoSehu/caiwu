@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Caiwu\Plugins\Gateways\AliPay\Lib;
 
 use App\Services\Integrations\Payments\Concerns\InteractsWithStandardPaymentActions;
+use Illuminate\Http\Response;
 
 class AlipayService
 {
@@ -78,7 +79,7 @@ class AlipayService
 
     /**
      * 每次调用都新建客户端，确保长进程（queue worker）中配置更新后立即生效。
-     * 性能开销由 AlipayClient 构造时的 Redis 配置缓存（60s）抵消。
+     * 支付宝配置只有插件配置这一处真源，构造客户端不再读 settings 表，故无需额外缓存。
      *
      * @param  array<string, mixed>  $config
      */

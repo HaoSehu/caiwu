@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Caiwu\Plugins\Gateways\DemoPay\Lib;
 
-// PaymentGatewayInterface contract is handled by PluginPaymentGateway adapter
+// PaymentGatewayInterface 契约由 PluginPaymentGateway 适配器实现
 use App\Services\Integrations\Payments\Concerns\InteractsWithStandardPaymentActions;
 use App\Services\Integrations\Payments\Data\PaymentPrecreateRequest;
 use App\Services\Integrations\Payments\Data\PaymentPrecreateResult;

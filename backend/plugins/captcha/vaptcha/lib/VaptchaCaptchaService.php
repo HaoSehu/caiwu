@@ -15,6 +15,10 @@ class VaptchaCaptchaService
 
     private const DEFAULT_SDK_URL = 'https://cdn4.vaptcha.com/src/v4.js';
 
+    private const DEFAULT_REPLAY_TTL_SECONDS = 600;
+
+    private const MAX_REPLAY_TTL_SECONDS = 1800;
+
     public function key(): string
     {
         return 'vaptcha';
@@ -237,9 +241,12 @@ class VaptchaCaptchaService
      */
     private function replayTtlSeconds(array $config): int
     {
-        $seconds = (int) ($config['replay_ttl_seconds'] ?? 3);
+        // 防重放窗口必须覆盖「一次验证结果被复用」的全部生命周期。原先默认 3 秒
+        // 短于前端从取到 token 到真正提交订单的耗时，攻击者可在 3 秒后重放同一
+        // token 再次通过校验；VAPTCHA token 本身有效期为分钟级，故默认取 600 秒。
+        $seconds = (int) ($config['replay_ttl_seconds'] ?? self::DEFAULT_REPLAY_TTL_SECONDS);
 
-        return max(1, min(30, $seconds));
+        return max(60, min(self::MAX_REPLAY_TTL_SECONDS, $seconds));
     }
 
     private function isHttpUrl(string $url): bool
@@ -356,7 +363,7 @@ class VaptchaCaptchaService
             var url = original.call(this, mode, display);
             try {
                 var parsed = new URL(url, window.location.href);
-                // Force popup display to prevent full-page redirect on mobile
+                // 强制使用弹窗展示，避免移动端整页跳转
                 parsed.searchParams.set('display', 'popup');
                 if (parsed.searchParams.get('mode') === 'mobile') {
                     parsed.searchParams.set('mode', 'pc');
@@ -536,7 +543,7 @@ class VaptchaCaptchaService
                     throw new Error('VAPTCHA VID 不能为空');
                 }
 
-                // Patch verify page URL before creating instance
+                // 创建实例前先修正校验页地址
                 patchVerifyPageUrl();
 
                 container = ensureContainer(options);

@@ -121,7 +121,6 @@ class ZjmfFinanceTransportTest extends TestCase
         ]);
 
         $this->assertSame(['status' => 200], $result);
-        $this->assertNotNull($platform);
     }
 
     public function test_parallel_post_rejects_uri_outside_whitelist(): void

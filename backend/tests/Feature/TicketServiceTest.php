@@ -122,6 +122,56 @@ class TicketServiceTest extends TestCase
         }
     }
 
+    /**
+     * D-11 回归：控制台「待处理工单数」依赖 status=ongoing 的聚合总数。
+     * 修复前客户端列表只认单值 status，前端只能拉 5 条本地数，超过 5 张就永远显示 5。
+     */
+    public function test_client_list_ongoing_aggregates_unclosed_tickets(): void
+    {
+        $user = $this->makeUser();
+        $other = $this->makeUser();
+        $service = app(TicketService::class);
+
+        // 六张未关闭 + 一张已关闭。数量取 6 是为了超过前端原先的 page_size=5；
+        // 且必须跨「开启 / 客户回复 / 员工回复」三种状态，否则旧实现
+        // where('status','ongoing') 被 MySQL 隐式转成 0 后也能碰巧数全，用例就抓不到缺陷。
+        for ($i = 0; $i < 6; $i++) {
+            $ticket = $service->create($user->id, [
+                'department' => 'support',
+                'subject' => '待处理工单 '.$i,
+                'content' => '内容 '.$i,
+            ]);
+            if ($i % 3 === 1) {
+                $service->clientReply($ticket->refresh(), $user->id, '客户补充 '.$i);
+            } elseif ($i % 3 === 2) {
+                $service->clientReply($ticket->refresh(), $user->id, '客户补充 '.$i);
+                $service->staffReply($ticket->refresh(), 999999, '员工回复 '.$i);
+            }
+        }
+        $closed = $service->create($user->id, [
+            'department' => 'support',
+            'subject' => '已关闭工单',
+            'content' => '关闭',
+        ]);
+        $service->clientClose($closed->refresh(), $user->id);
+        // 他人的未关闭工单不得计入
+        $service->create($other->id, [
+            'department' => 'support',
+            'subject' => '他人工单',
+            'content' => '内容',
+        ]);
+
+        $ongoing = $service->clientList($user->id, ['status' => 'ongoing'], 1);
+        $this->assertSame(6, $ongoing->total(), 'ongoing 聚合数必须是本人未关闭工单总数');
+
+        // 单值 status 过滤行为不得改变：i%3===0 的两张仍停留在「开启」
+        $openOnly = $service->clientList($user->id, ['status' => (string) TicketService::STATUS_OPEN], 100);
+        $this->assertSame(2, $openOnly->total(), '单值 status 过滤行为不得改变');
+
+        $closedOnly = $service->clientList($user->id, ['status' => (string) TicketService::STATUS_CLOSED], 100);
+        $this->assertSame(1, $closedOnly->total(), '单值 status 过滤行为不得改变');
+    }
+
     private function makeUser(): User
     {
         return User::query()->create([

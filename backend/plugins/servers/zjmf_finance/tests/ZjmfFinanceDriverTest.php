@@ -94,7 +94,6 @@ class ZjmfFinanceDriverTest extends TestCase
     {
         $schema = $this->driver()->supplierFormSchema();
 
-        $this->assertIsArray($schema);
         $this->assertNotSame('', (string) json_encode($schema));
         $this->assertArrayHasKey('fields', $schema);
         $this->assertNotEmpty($schema['fields']);

@@ -65,19 +65,28 @@ class PaidOrderBusinessFlowDispatchIsolationTest extends TestCase
 
         [$order, $invoice] = $this->makePaidOrderStack();
 
-        $this->mock(InvoicePaidOrchestrator::class, function ($mock): void {
+        // 记录真实调用顺序：返佣先跑并抛异常，履约必须仍然被调用。
+        // 只断言"没抛异常"无法区分「返佣失败被正确隔离」和「履约那条分支被整段删掉」。
+        $calls = [];
+
+        $this->mock(InvoicePaidOrchestrator::class, function ($mock) use (&$calls): void {
             $mock->shouldReceive('processPaidOrderReferralRewardById')
                 ->once()
-                ->andThrow(new \RuntimeException('返佣入账失败模拟'));
+                ->andReturnUsing(function () use (&$calls): void {
+                    $calls[] = 'referral';
+
+                    throw new \RuntimeException('返佣入账失败模拟');
+                });
             $mock->shouldReceive('processPaidOrderFulfillmentById')
                 ->once()
-                ->andReturnNull();
+                ->andReturnUsing(function () use (&$calls): void {
+                    $calls[] = 'fulfillment';
+                });
         });
 
         app(PaidOrderBusinessFlowDispatcher::class)->dispatchPaidInvoice($invoice, 'trace-isolation-2');
 
-        // 无异常抛出即代表返佣失败被隔离、履约正常执行（mock once 已验证调用）
-        $this->assertTrue(true);
+        $this->assertSame(['referral', 'fulfillment'], $calls);
     }
 
     public function test_console_normal_path_runs_both_flows_in_order(): void

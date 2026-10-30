@@ -9,6 +9,7 @@ use App\Constants\InvoiceType;
 use App\Constants\OrderStatus;
 use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
+use App\Constants\RefundStatus;
 use App\Models\AdminUser;
 use App\Models\FinanceRefund;
 use App\Models\Invoice;
@@ -175,6 +176,55 @@ class InvoiceRefundToBalanceApiTest extends TestCase
         $this->assertSame(1, FinanceRefund::query()->where('invoice_id', (int) $invoice->id)->count());
     }
 
+    public function test_manual_order_invoice_cannot_be_refunded_to_balance(): void
+    {
+        Sanctum::actingAs($this->makeAdmin([AdminPermissions::FINANCE_REFUND]));
+        $invoice = $this->makePaidInvoiceWithOrder(PaymentGatewayCode::MANUAL);
+        $user = $invoice->user;
+        $this->assertInstanceOf(User::class, $user);
+        $balanceBefore = (float) $this->financeBalance($user, true);
+
+        // 补录订单是系统外收款（gateway=manual），退款到余额等于凭空创造余额。
+        $this->postJson("/api/v2/admin/invoices/{$invoice->id}/refunds", [
+            'amount' => '50.00',
+            'remark' => '补录订单退款到余额测试',
+            'idempotency_key' => 'idem-manual-'.uniqid(),
+        ], ['X-Request-Id' => 'manual-refund-'.uniqid()])
+            ->assertStatus(422)
+            ->assertJsonPath('code', 42200);
+
+        $this->assertEqualsWithDelta($balanceBefore, (float) $this->financeBalance($user, true), 0.001);
+        $this->assertSame(0, FinanceRefund::query()->where('invoice_id', (int) $invoice->id)->count());
+    }
+
+    public function test_partial_refund_projection_matches_on_invoice_and_order(): void
+    {
+        Sanctum::actingAs($this->makeAdmin([AdminPermissions::FINANCE_REFUND, AdminPermissions::ORDER_DETAIL]));
+        $invoice = $this->makePaidInvoiceWithOrder();
+        $order = $invoice->order;
+        $this->assertInstanceOf(Order::class, $order);
+
+        $this->postJson("/api/v2/admin/invoices/{$invoice->id}/refunds", [
+            'amount' => '30.00',
+            'remark' => '部分退款投影一致性测试',
+            'idempotency_key' => 'idem-partial-'.uniqid(),
+        ], ['X-Request-Id' => 'partial-refund-'.uniqid()])
+            ->assertStatus(200)
+            ->assertJsonPath('code', 0);
+
+        $invoice->refresh();
+        $order->refresh();
+
+        // 部分退款后账单保持 PAID，账单与订单两侧投影必须一致，退款状态由 RefundStatus 派生。
+        $this->assertSame(InvoiceStatus::PAID, (int) $invoice->status);
+        $this->assertEqualsWithDelta((float) $invoice->refund_amount, (float) $order->refund_amount, 0.001);
+
+        $this->getJson("/api/v2/admin/orders/{$order->id}")
+            ->assertStatus(200)
+            ->assertJsonPath('data.order.financial.refund_amount', '30.00')
+            ->assertJsonPath('data.order.financial.refund_status', RefundStatus::PARTIAL);
+    }
+
     public function test_invoice_detail_exposes_balance_refund_capability(): void
     {
         Sanctum::actingAs($this->makeAdmin([AdminPermissions::FINANCE_REFUND, AdminPermissions::INVOICE_DETAIL]));
@@ -188,7 +238,7 @@ class InvoiceRefundToBalanceApiTest extends TestCase
 
     }
 
-    private function makePaidInvoiceWithOrder(): Invoice
+    private function makePaidInvoiceWithOrder(string $gateway = PaymentGatewayCode::ALIPAY): Invoice
     {
         $user = User::query()->create([
             'email' => 'refund-balance-'.uniqid().'@example.test',
@@ -212,17 +262,20 @@ class InvoiceRefundToBalanceApiTest extends TestCase
             'status' => InvoiceStatus::UNPAID,
             'order_id' => $order->id,
         ]);
-        Payment::query()->create([
+        $payment = new Payment([
             'payment_no' => 'PY'.date('YmdHis').mt_rand(100000, 999999),
             'user_id' => $user->id,
             'invoice_id' => $invoice->id,
-            'gateway' => PaymentGatewayCode::ALIPAY,
+            'gateway' => $gateway,
             'amount' => 100.00,
             'status' => PaymentStatus::SUCCESS,
             'trade_no' => 'TRADE'.date('YmdHis').mt_rand(100000, 999999),
             'paid_at' => now(),
             'callback_raw' => ['source' => 'alipay_precreate'],
         ]);
+        // 补录订单（manual）不是第三方资金流入，需显式放行 Payment 的模型守卫。
+        $payment->allowNonThirdPartyGateway = $gateway === PaymentGatewayCode::MANUAL;
+        $payment->save();
         $order->forceFill(['status' => OrderStatus::PAID, 'paid_amount' => 100.00, 'paid_at' => now()])->save();
         $invoice->forceFill(['status' => InvoiceStatus::PAID, 'paid_amount' => 100.00, 'paid_at' => now()])->save();
 

@@ -4,12 +4,10 @@ namespace Caiwu\Plugins\Gateways\AliPay\Lib;
 
 use App\Constants\PaymentGatewayCode;
 use App\Exceptions\BusinessException;
-use App\Models\Setting;
 use App\Services\Integrations\Payments\Concerns\BuildsGatewayHttpClient;
 use App\Services\Integrations\Payments\Concerns\WrapsPemKeys;
 use App\Services\System\GatewayLogService;
 use Illuminate\Http\Client\ConnectionException;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 class AlipayClient
@@ -43,17 +41,18 @@ class AlipayClient
      */
     public function __construct(private readonly array $config = [])
     {
-        $this->appId = $this->configString('app_id', 'alipay_app_id', config('alipay.app_id', ''));
-        $this->privateKey = $this->configString('private_key', 'alipay_private_key', config('alipay.private_key', ''));
-        $this->alipayPublicKey = $this->configString('alipay_public_key', 'alipay_public_key', config('alipay.alipay_public_key', ''));
+        // 配置唯一真源是插件配置（integration_plugin_configs），这里只做「插件配置为空时用 env 默认值」的兜底
+        $this->appId = $this->configString('app_id', config('alipay.app_id', ''));
+        $this->privateKey = $this->configString('private_key', config('alipay.private_key', ''));
+        $this->alipayPublicKey = $this->configString('alipay_public_key', config('alipay.alipay_public_key', ''));
         $this->gateway = trim((string) config('alipay.gateway', 'https://openapi.alipay.com/gateway.do'));
         $this->notifyUrl = $this->resolveNotifyUrl();
         $this->timeout = config('alipay.timeout', '30m');
         $this->signType = 'RSA2';
         $this->charset = 'utf-8';
-        $this->enabled = $this->configBool('alipay_enabled', 'alipay_enabled', false);
-        $this->sslVerify = $this->configBool('ssl_verify', null, (bool) config('alipay.ssl_verify', true));
-        $this->caBundle = $this->configString('ca_bundle', null, config('alipay.ca_bundle', ''));
+        $this->enabled = $this->configBool('alipay_enabled', false);
+        $this->sslVerify = $this->configBool('ssl_verify', (bool) config('alipay.ssl_verify', true));
+        $this->caBundle = $this->configString('ca_bundle', config('alipay.ca_bundle', ''));
     }
 
     /**
@@ -91,52 +90,18 @@ class AlipayClient
         return $actual !== '' && hash_equals($expected, $actual);
     }
 
-    /**
-     * 从 settings 表读取，带 60 秒 Redis 缓存。
-     * 管理员更新支付宝配置后，可通过 Cache::forget('payment.alipay.settings') 立即生效。
-     */
-    private function setting(string $key, string $default = ''): string
-    {
-        $settings = Cache::remember('payment.alipay.settings', 60, function () {
-            return [
-                'alipay_app_id' => Setting::getValue('payment', 'alipay_app_id') ?? '',
-                'alipay_private_key' => Setting::getValue('payment', 'alipay_private_key') ?? '',
-                'alipay_public_key' => Setting::getValue('payment', 'alipay_public_key') ?? '',
-                'alipay_enabled' => Setting::getValue('payment', 'alipay_enabled') ?? '',
-            ];
-        });
-
-        $value = $settings[$key] ?? null;
-
-        return ($value !== null && $value !== '') ? (string) $value : $default;
-    }
-
-    private function configString(string $configKey, ?string $settingKey, mixed $default = ''): string
+    private function configString(string $configKey, mixed $default = ''): string
     {
         $value = $this->config[$configKey] ?? null;
-        if ($value !== null && $value !== '') {
-            return trim((string) $value);
-        }
 
-        if ($settingKey !== null) {
-            return $this->setting($settingKey, (string) $default);
-        }
-
-        return trim((string) $default);
+        return trim((string) (($value !== null && $value !== '') ? $value : $default));
     }
 
-    private function configBool(string $configKey, ?string $settingKey, bool $default): bool
+    private function configBool(string $configKey, bool $default): bool
     {
         $value = $this->config[$configKey] ?? null;
         if ($value !== null && $value !== '') {
             return filter_var($value, FILTER_VALIDATE_BOOL);
-        }
-
-        if ($settingKey !== null) {
-            $settingValue = Setting::getValue('payment', $settingKey);
-            if ($settingValue !== null && $settingValue !== '') {
-                return filter_var($settingValue, FILTER_VALIDATE_BOOL);
-            }
         }
 
         return $default;

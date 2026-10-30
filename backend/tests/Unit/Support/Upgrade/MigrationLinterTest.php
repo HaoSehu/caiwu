@@ -87,6 +87,37 @@ class MigrationLinterTest extends TestCase
     }
 
     #[Test]
+    public function flags_duplicate_timestamp_prefix(): void
+    {
+        file_put_contents($this->root.'/2026_10_21_000001_add_alpha.php', "<?php\n");
+        file_put_contents($this->root.'/2026_10_21_000001_add_beta.php', "<?php\n");
+        file_put_contents($this->root.'/2026_10_21_000002_add_gamma.php', "<?php\n");
+
+        $violations = (new MigrationLinter)->lint($this->root, $this->root.'/exempt.json');
+
+        $files = array_column($violations, 'file');
+        sort($files);
+        $this->assertSame(['2026_10_21_000001_add_alpha.php', '2026_10_21_000001_add_beta.php'], $files);
+        $this->assertStringContainsString('时间戳前缀 2026_10_21_000001', $violations[0]['violations'][0]);
+    }
+
+    #[Test]
+    public function duplicate_prefix_exemption_silences_violation(): void
+    {
+        file_put_contents($this->root.'/2026_10_21_000001_add_alpha.php', "<?php\n");
+        file_put_contents($this->root.'/2026_10_21_000001_add_beta.php', "<?php\n");
+        $exempt = $this->root.'/exempt.json';
+        file_put_contents($exempt, json_encode([
+            'exemptions' => [
+                ['file' => '2026_10_21_000001_add_alpha.php', 'reason' => '已执行', 'recorded_at' => '2026-10-26'],
+                ['file' => '2026_10_21_000001_add_beta.php', 'reason' => '已执行', 'recorded_at' => '2026-10-26'],
+            ],
+        ], JSON_UNESCAPED_UNICODE));
+
+        $this->assertSame([], (new MigrationLinter)->lint($this->root, $exempt));
+    }
+
+    #[Test]
     public function real_repository_migration_lint_passes(): void
     {
         $violations = (new MigrationLinter)->lint(

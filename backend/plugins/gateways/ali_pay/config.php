@@ -13,17 +13,6 @@ return [
         'version' => '1.0.0',
         'entry' => AliPayPlugin::class,
         'capabilities' => ['precreate', 'query', 'notify_verify'],
-        'extra' => [
-            'legacy_settings' => [
-                'group' => 'payment',
-                'map' => [
-                    'alipay_enabled' => 'alipay_enabled',
-                    'app_id' => 'alipay_app_id',
-                    'private_key' => 'alipay_private_key',
-                    'alipay_public_key' => 'alipay_public_key',
-                ],
-            ],
-        ],
     ],
     'config' => [
         'alipay_notice' => [

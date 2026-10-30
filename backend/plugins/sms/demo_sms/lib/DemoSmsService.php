@@ -166,7 +166,7 @@ class DemoSmsService
 
         $translated = $this->translateLocalSyntax($content);
         preg_match_all('/\$\{([a-zA-Z0-9_]+)\}/u', $translated, $matches);
-        $variables = array_values(array_unique((array) ($matches[1] ?? [])));
+        $variables = array_values(array_unique($matches[1]));
 
         $providerTemplateId = 'DEMO_'.strtoupper(dechex((int) (microtime(true) * 1000) % 0xFFFFFFF)).'_'.random_int(100, 999);
 
@@ -224,7 +224,7 @@ class DemoSmsService
             'content' => $translated,
             'status' => $status,
             'reject_reason' => '',
-            'variables' => array_values(array_unique((array) ($matches[1] ?? []))),
+            'variables' => array_values(array_unique($matches[1])),
             'pushed_at' => date('Y-m-d H:i:s'),
         ]);
         cache()->put('demo_sms.provider_templates', $store, $this->storeTtl($config));
@@ -302,7 +302,7 @@ class DemoSmsService
 
         return (string) preg_replace_callback(
             '/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}|(?<!\$)\{([a-zA-Z0-9_]+)\}/u',
-            static fn (array $matches): string => '${'.($matches[1] !== '' && $matches[1] !== null ? $matches[1] : (string) $matches[2]).'}',
+            static fn (array $matches): string => '${'.($matches[1] !== '' ? $matches[1] : (string) $matches[2]).'}',
             $withoutSections
         );
     }
@@ -345,10 +345,7 @@ class DemoSmsService
         ];
     }
 
-    /**
-     * @return \DateInterval|int
-     */
-    private function storeTtl(array $config)
+    private function storeTtl(array $config): \DateTimeInterface
     {
         $hours = max(1, (int) ($config['simulate_store_hours'] ?? 24));
 
