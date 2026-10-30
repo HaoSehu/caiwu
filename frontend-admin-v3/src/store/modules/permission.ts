@@ -285,7 +285,8 @@ export const usePermissionStore = defineStore('permission', {
       } catch (error) {
         this.menuBuilt = false;
         // 不用 new Error(msg, { cause })：Error 的 cause 选项要 ES2022 运行时（Chrome 93 / Safari 15.4），
-        // 超出仓库声明的浏览器基线，这里是 tsc 的唯一挡点（lib 钉在 ES2020）。语义等价。
+        // 超出仓库声明的浏览器基线。改成挂属性语义等价；一旦把 tsconfig 的 lib 按基线降到 ES2020，
+        // 原写法就是这里的 tsc 挡点（TS2554），这样写才编得过。
         const wrapped = new Error("Can't build menus") as Error & { cause?: unknown };
         wrapped.cause = error;
         throw wrapped;
