@@ -48,8 +48,12 @@
                     placeholder="请选择所属分类"
                   />
                 </t-form-item>
-                <t-form-item label="状态" name="status">
-                  <t-switch v-model="form.status" :custom-value="[1, 0]" />
+                <t-form-item label="上架状态" name="status">
+                  <div class="product-edit-switch-line">
+                    <span>下架</span>
+                    <t-switch v-model="form.status" :custom-value="[1, 0]" />
+                    <span>上架</span>
+                  </div>
                 </t-form-item>
                 <t-form-item label="控制台面板" name="console_template">
                   <div class="product-edit-console-template-field">
@@ -80,16 +84,16 @@
               </div>
               <div class="product-edit-grid">
                 <t-form-item label="月付价格" name="monthly_price">
-                  <t-input-number v-model="form.monthly_price" :min="0" style="width: 100%" />
+                  <t-input-number v-model="form.monthly_price" :min="0" :decimal-places="2" style="width: 100%" />
                 </t-form-item>
                 <t-form-item label="季付价格" name="quarterly_price">
-                  <t-input-number v-model="form.quarterly_price" :min="0" style="width: 100%" />
+                  <t-input-number v-model="form.quarterly_price" :min="0" :decimal-places="2" style="width: 100%" />
                 </t-form-item>
                 <t-form-item label="半年付价格" name="semiannually_price">
-                  <t-input-number v-model="form.semiannually_price" :min="0" style="width: 100%" />
+                  <t-input-number v-model="form.semiannually_price" :min="0" :decimal-places="2" style="width: 100%" />
                 </t-form-item>
                 <t-form-item label="年付价格" name="annually_price">
-                  <t-input-number v-model="form.annually_price" :min="0" style="width: 100%" />
+                  <t-input-number v-model="form.annually_price" :min="0" :decimal-places="2" style="width: 100%" />
                 </t-form-item>
               </div>
             </section>
@@ -153,13 +157,6 @@
                       <span>自动</span>
                     </div>
                   </t-form-item>
-                  <t-form-item label="上架状态" name="interface_status">
-                    <div class="product-edit-switch-line">
-                      <span>下架</span>
-                      <t-switch v-model="form.status" :custom-value="[1, 0]" />
-                      <span>上架</span>
-                    </div>
-                  </t-form-item>
                 </div>
               </div>
             </section>
@@ -168,7 +165,7 @@
             <section v-show="activeSection === 'config'" class="product-edit-section">
               <div class="product-edit-section-head">
                 <h3 class="product-edit-section-title">产品配置</h3>
-                <div class="product-edit-section-actions">
+                <div v-if="canManage" class="product-edit-section-actions">
                   <t-button size="small" variant="outline" :loading="configTemplateLoading" @click="pullConfigTemplate">
                     拉取模板
                   </t-button>
@@ -185,7 +182,7 @@
                       <strong>{{ item.name || item.option_name || item.field }}</strong>
                       <span>{{ item.field || '-' }} · {{ item.option_mode || 'select' }}</span>
                     </div>
-                    <t-space size="small">
+                    <t-space v-if="canManage" size="small">
                       <t-button size="small" variant="text" theme="primary" @click="openConfigOptionDialog(item, index)"
                         >编辑</t-button
                       >
@@ -202,9 +199,18 @@
         </div>
       </div>
 
+      <t-alert
+        v-if="loadFailed"
+        class="product-edit-load-error"
+        theme="error"
+        message="商品详情加载失败，为避免覆盖线上数据已禁用保存。请返回列表重试。"
+      />
       <div class="product-edit-footer">
         <t-button variant="outline" @click="goBack">取消</t-button>
-        <t-button theme="primary" :loading="submitting" @click="submit">保存更改</t-button>
+        <t-button theme="primary" :loading="submitting" :disabled="loadFailed || !canManage" @click="submit">
+          保存更改
+        </t-button>
+        <span v-if="!canManage" class="product-edit-readonly-hint">当前账号为只读权限，无法保存修改</span>
       </div>
     </div>
 
@@ -213,11 +219,17 @@
       v-model:visible="configOptionDialogVisible"
       class="config-option-edit-dialog"
       :header="configOptionEditingIndex >= 0 ? '编辑配置项' : '新增配置项'"
-      width="760px"
+      width="min(760px, calc(100vw - 32px))"
       :confirm-btn="{ content: '保存配置', loading: configOptionSubmitting }"
       @confirm="submitConfigOption"
     >
-      <t-form class="config-option-edit-form" :data="configOptionForm" label-align="top">
+      <t-form
+        ref="configOptionFormRef"
+        class="config-option-edit-form"
+        :data="configOptionForm"
+        :rules="configOptionRules"
+        label-align="right"
+      >
         <div class="config-option-basic-grid">
           <t-form-item label="配置项名称" name="name" required-mark>
             <t-input v-model="configOptionForm.name" placeholder="例如 CPU、内存" />
@@ -297,6 +309,9 @@ import type { ProductCategoryRecord } from '@/api/product';
 import { productApi } from '@/api/product';
 import type { SupplierRecord } from '@/api/supplier';
 import { supplierApi } from '@/api/supplier';
+import { AdminPermissions } from '@/constants/permissions';
+import { useUnsavedGuard } from '@/hooks/useUnsavedGuard';
+import { hasAdminPermission } from '@/utils/permission';
 
 import {
   errorMessage,
@@ -305,6 +320,8 @@ import {
   providerTypeFallbackLabels,
   toPlainRecord,
 } from './composables/useProductShared';
+
+defineOptions({ name: 'AdminProductForm' });
 
 // --- Router ---
 const route = useRoute();
@@ -325,9 +342,14 @@ const sections = [
   { key: 'config', label: '产品配置', description: '规格与可选项' },
 ];
 
+// 路由只要求 PRODUCT_LIST，写操作必须另判 PRODUCT_MANAGE，否则只读岗能提交覆盖商品
+const canManage = computed(() => hasAdminPermission(AdminPermissions.PRODUCT_MANAGE));
+
 // --- Form ---
 const formRef = ref();
 const submitting = ref(false);
+// 详情拉取失败时禁止保存，避免空表单把线上商品配置整体覆盖（docs/DESIGN.md §4.4）
+const loadFailed = ref(false);
 const form = reactive({
   display_name: '',
   product_spec_display: '',
@@ -348,6 +370,21 @@ const rules = {
   display_name: [{ required: true, message: '请输入商品名称', trigger: 'blur' }],
   selected_product_group_key: [{ required: true, message: '请选择所属分类', trigger: 'change' }],
 };
+
+// 配置项弹窗必填由校验规则驱动（docs/DESIGN.md §4.4），取代只靠 required-mark 的视觉必填
+const configOptionFormRef = ref();
+const configOptionRules = {
+  name: [{ required: true, message: '请输入配置项名称', trigger: 'blur' }],
+  field: [{ required: true, message: '请输入配置标识', trigger: 'blur' }],
+  option_mode: [{ required: true, message: '请选择配置项类型', trigger: 'change' }],
+};
+
+// 未保存离开保护：以表单快照判定脏状态，保存成功或详情回填后重新取快照
+const formSnapshot = ref(JSON.stringify(form));
+const formDirty = computed(() => JSON.stringify(form) !== formSnapshot.value);
+useUnsavedGuard(() => formDirty.value, {
+  message: '商品编辑页存在未保存的修改，离开后这些修改会丢失。',
+});
 
 // --- Categories ---
 const categoryTree = ref<ProductCategoryRecord[]>([]);
@@ -455,8 +492,10 @@ async function loadCategories() {
     const tree = response.tree;
     categoryTree.value = tree;
     categoryOptions.value = flattenCategories(tree);
-  } catch {
-    // ignore
+  } catch (error) {
+    categoryTree.value = [];
+    categoryOptions.value = [];
+    MessagePlugin.error(errorMessage(error, '加载商品分类失败，无法选择分类'));
   }
 }
 
@@ -465,16 +504,22 @@ async function loadSuppliers() {
   try {
     const response = await supplierApi.list({ status: 1, page: 1, page_size: 100 });
     supplierOptions.value = Array.isArray(response.list) ? response.list : [];
-  } catch {
+  } catch (error) {
     supplierOptions.value = [];
+    MessagePlugin.error(errorMessage(error, '加载供应商列表失败，无法绑定上游'));
   } finally {
     supplierLoading.value = false;
   }
 }
 
+// 竞态防护：并发或重入时只认最后一次请求的结果（docs/FRONTEND.md:27）
+let detailRequestSeq = 0;
+
 async function loadProductDetail() {
+  const currentSeq = ++detailRequestSeq;
   try {
     const detail = await productApi.detail(productId.value);
+    if (currentSeq !== detailRequestSeq) return;
     const upstreamBinding = toPlainRecord(detail.upstream_binding);
     Object.assign(form, {
       display_name: resolveDisplayName(detail),
@@ -494,11 +539,14 @@ async function loadProductDetail() {
       console_template: normalizeConsoleTemplate(detail.console_template),
       config_options: normalizeConfigOptions(detail.config_options),
     });
+    formSnapshot.value = JSON.stringify(form);
     if (form.supplier_id) {
       loadSupplierProducts(form.supplier_id);
     }
-  } catch {
-    MessagePlugin.error('加载商品详情失败');
+  } catch (error) {
+    if (currentSeq !== detailRequestSeq) return;
+    loadFailed.value = true;
+    MessagePlugin.error(errorMessage(error, '加载商品详情失败，暂不可保存'));
   }
 }
 
@@ -530,11 +578,16 @@ function handleSupplierChange(value: string | number) {
   }
 }
 
+// 竞态防护：快速切换供应商时只保留最后一次同步的结果（docs/FRONTEND.md:27）
+let supplierProductRequestSeq = 0;
+
 async function loadSupplierProducts(supplierId: string | number, notify = false) {
   if (!supplierId) return;
+  const currentSeq = ++supplierProductRequestSeq;
   supplierProductLoading.value = true;
   try {
     const response = await supplierApi.products(supplierId, { silent: true });
+    if (currentSeq !== supplierProductRequestSeq) return;
     supplierProductOptions.value = buildSupplierBatchProducts(response);
     // 如果已绑定的上游商品不在同步列表中，补一个占位条目确保 cascader 能展示
     if (form.upstream_product_id) {
@@ -551,9 +604,10 @@ async function loadSupplierProducts(supplierId: string | number, notify = false)
       }
     }
   } catch (error) {
+    if (currentSeq !== supplierProductRequestSeq) return;
     if (notify) MessagePlugin.error(errorMessage(error, '同步上游商品失败'));
   } finally {
-    supplierProductLoading.value = false;
+    if (currentSeq === supplierProductRequestSeq) supplierProductLoading.value = false;
   }
 }
 
@@ -776,7 +830,9 @@ function buildConfigSubItemsFromRows() {
   });
 }
 
-function submitConfigOption() {
+async function submitConfigOption() {
+  const validateResult = await configOptionFormRef.value?.validate?.();
+  if (validateResult !== true) return;
   const name = configOptionForm.name.trim();
   const field = configOptionForm.field.trim();
   if (!name || !field) {
@@ -853,6 +909,14 @@ async function pullConfigTemplate() {
 
 // --- Submit ---
 async function submit() {
+  if (!canManage.value) {
+    MessagePlugin.warning('当前账号没有商品管理权限，无法保存修改');
+    return;
+  }
+  if (loadFailed.value) {
+    MessagePlugin.warning('商品详情加载失败，请返回列表重新进入后再保存');
+    return;
+  }
   const validateResult = await formRef.value?.validate?.();
   if (validateResult !== true) return;
   if (!hasPositivePrice()) {
@@ -888,6 +952,7 @@ async function submit() {
       await productApi.create(payload);
       MessagePlugin.success('商品已创建');
     }
+    formSnapshot.value = JSON.stringify(form);
     goBack();
   } catch (error) {
     MessagePlugin.error(errorMessage(error, '保存商品失败'));
@@ -935,478 +1000,5 @@ function goBack() {
 }
 </script>
 <style lang="less" scoped>
-// 页面边距由布局层统一提供（docs/DESIGN.md §3.3），根元素只负责布局
-.product-edit-page {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  gap: var(--td-comp-margin-m);
-}
-
-.product-edit-toolbar {
-  display: flex;
-  align-items: center;
-  gap: var(--td-comp-margin-s);
-  min-height: 32px;
-
-  h2 {
-    margin: 0;
-    color: var(--td-text-color-primary);
-    font-size: var(--td-font-size-size-5, 18px);
-    font-weight: 600;
-    line-height: 26px;
-  }
-}
-
-.product-edit-card {
-  overflow: hidden;
-  border: 1px solid var(--td-component-border);
-  border-radius: var(--td-radius-medium);
-  background: var(--td-bg-color-container);
-}
-
-.product-edit-layout {
-  display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
-  min-height: min(640px, calc(100vh - 220px));
-}
-
-.product-edit-nav {
-  display: flex;
-  flex-direction: column;
-  gap: var(--td-comp-margin-xs);
-  border-right: 1px solid var(--td-component-border);
-  padding: var(--td-comp-paddingTB-l) var(--td-comp-paddingLR-m);
-  background: var(--td-bg-color-page);
-}
-
-.product-edit-nav-item {
-  display: grid;
-  grid-template-columns: 28px minmax(0, 1fr);
-  align-items: center;
-  gap: var(--td-comp-margin-s);
-  width: 100%;
-  min-height: 58px;
-  border: 1px solid transparent;
-  border-radius: var(--td-radius-default, 4px);
-  padding: 8px 10px;
-  background: transparent;
-  color: var(--td-text-color-primary);
-  cursor: pointer;
-  text-align: left;
-  transition:
-    border-color 0.16s cubic-bezier(0.2, 0, 0, 1),
-    background 0.16s cubic-bezier(0.2, 0, 0, 1),
-    color 0.16s cubic-bezier(0.2, 0, 0, 1);
-
-  &:hover {
-    border-color: var(--td-component-border);
-    background: var(--td-bg-color-container);
-  }
-
-  &.is-active {
-    border-color: var(--td-brand-color-light);
-    background: var(--td-brand-color-light);
-    color: var(--td-brand-color);
-    box-shadow: inset 3px 0 0 var(--td-brand-color);
-  }
-}
-
-.product-edit-nav-index {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: var(--td-radius-small);
-  background: var(--td-bg-color-container);
-  color: var(--td-text-color-secondary);
-  font-size: var(--td-font-size-size-1, 12px);
-  font-weight: 600;
-}
-
-.product-edit-nav-item.is-active .product-edit-nav-index {
-  background: var(--td-brand-color);
-  color: var(--td-text-color-anti);
-}
-
-.product-edit-nav-copy {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  gap: 2px;
-
-  strong,
-  span {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  strong {
-    font-size: var(--td-font-size-size-3, 14px);
-    font-weight: 600;
-    line-height: 22px;
-  }
-
-  span {
-    color: var(--td-text-color-secondary);
-    font-size: var(--td-font-size-size-1, 12px);
-    line-height: 18px;
-  }
-}
-
-.product-edit-main {
-  min-width: 0;
-  padding: 28px 32px;
-}
-
-.product-edit-form {
-  width: 100%;
-  max-width: 1120px;
-}
-
-.product-edit-section {
-  min-width: 0;
-}
-
-.product-edit-section-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--td-comp-margin-m);
-  margin-bottom: var(--td-comp-margin-l);
-}
-
-.product-edit-section-title {
-  margin: 0 0 var(--td-comp-margin-l);
-  color: var(--td-text-color-primary);
-  font-size: var(--td-font-size-size-4, 16px);
-  font-weight: 600;
-  line-height: 24px;
-}
-
-.product-edit-section-head .product-edit-section-title {
-  margin-bottom: 0;
-}
-
-.product-edit-section-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--td-comp-margin-s);
-  justify-content: flex-end;
-}
-
-.product-edit-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(260px, 1fr));
-  gap: 2px 32px;
-}
-
-.product-edit-tip {
-  margin: -8px 0 var(--td-comp-margin-l);
-  color: var(--td-text-color-secondary);
-  font-size: var(--td-font-size-size-2, 13px);
-  line-height: 20px;
-}
-
-.product-edit-interface-panel {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.product-edit-supplier-product-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--td-comp-margin-s);
-  width: 100%;
-
-  > .t-cascader {
-    min-width: 0;
-  }
-}
-
-:global(.product-edit-supplier-product-popup .t-popup__content) {
-  width: min(760px, calc(100vw - 32px));
-  max-width: calc(100vw - 32px);
-}
-
-:global(.product-edit-supplier-product-popup .t-cascader__panel) {
-  width: 100%;
-}
-
-:global(.product-edit-supplier-product-popup .t-cascader__menu) {
-  box-sizing: border-box;
-  flex: 0 0 36%;
-  min-width: 0;
-  width: 36%;
-}
-
-:global(.product-edit-supplier-product-popup .t-cascader__menu:last-child) {
-  flex-basis: 64%;
-  width: 64%;
-}
-
-:global(.product-edit-supplier-product-popup .t-cascader__menu:only-child) {
-  flex-basis: 100%;
-  width: 100%;
-}
-
-.product-edit-interface-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(220px, 1fr));
-  gap: 2px 32px;
-}
-
-.product-edit-switch-line {
-  display: inline-flex;
-  align-items: center;
-  min-height: 32px;
-  gap: var(--td-comp-margin-s);
-  color: var(--td-text-color-primary);
-  font-size: var(--td-font-size-size-2, 13px);
-}
-
-.product-edit-config-panel {
-  min-width: 0;
-  border: 1px solid var(--td-component-border);
-  border-radius: var(--td-radius-default, 4px);
-  padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-m);
-  background: var(--td-bg-color-container);
-}
-
-.product-edit-config-count {
-  margin-bottom: var(--td-comp-margin-m);
-  color: var(--td-text-color-secondary);
-  font-size: var(--td-font-size-size-2, 13px);
-  line-height: 20px;
-}
-
-.product-edit-config-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--td-comp-margin-s);
-}
-
-.product-edit-config-list article {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--td-comp-margin-m);
-  align-items: center;
-  border: 1px solid var(--td-component-border);
-  border-radius: var(--td-radius-default, 4px);
-  padding: var(--td-comp-paddingTB-s) var(--td-comp-paddingLR-m);
-  background: var(--td-bg-color-container);
-
-  &:hover {
-    border-color: var(--td-brand-color-light);
-    background: var(--td-bg-color-container-hover);
-  }
-
-  > div:first-child {
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-    gap: 3px;
-  }
-
-  strong,
-  span {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  strong {
-    color: var(--td-text-color-primary);
-    font-weight: 600;
-  }
-
-  span {
-    color: var(--td-text-color-secondary);
-    font-size: var(--td-font-size-size-1, 12px);
-  }
-}
-
-.product-edit-supplier-option {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--td-comp-margin-m);
-  align-items: center;
-  width: 100%;
-
-  span:first-child {
-    overflow: hidden;
-    color: var(--td-text-color-primary);
-    font-weight: 500;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  span:last-child {
-    color: var(--td-text-color-secondary);
-    font-size: var(--td-font-size-size-1, 12px);
-  }
-}
-
-.product-edit-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--td-comp-margin-s);
-  border-top: 1px solid var(--td-component-border);
-  padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-xl);
-  background: var(--td-bg-color-container);
-}
-
-.product-edit-form :deep(.t-form__item) {
-  margin-bottom: var(--td-comp-margin-l);
-}
-
-.product-edit-form :deep(.t-form__label) {
-  color: var(--td-text-color-primary);
-}
-
-// Config option dialog styles
-.config-option-basic-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0 24px;
-}
-
-.config-subitem-table {
-  margin-top: 16px;
-}
-
-.config-subitem-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
-}
-
-.config-subitem-grid {
-  display: grid;
-  grid-template-columns: 1.2fr 0.8fr 0.8fr 80px 40px;
-  gap: 8px;
-  align-items: center;
-  margin-bottom: 8px;
-
-  &--header {
-    font-size: var(--td-font-size-body-small);
-    color: var(--td-text-color-placeholder);
-    padding-bottom: 4px;
-    border-bottom: 1px solid var(--td-component-border);
-  }
-}
-
-.config-option-footer-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0 24px;
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid var(--td-component-border);
-}
-
-@media (max-width: 1024px) {
-  .product-edit-layout {
-    grid-template-columns: 1fr;
-    min-height: 0;
-  }
-
-  .product-edit-nav {
-    flex-direction: row;
-    overflow-x: auto;
-    border-right: 0;
-    border-bottom: 1px solid var(--td-component-border);
-    padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-m);
-  }
-
-  .product-edit-console-template-field {
-    display: grid;
-    gap: var(--td-comp-margin-s);
-    width: 100%;
-  }
-
-  .product-edit-console-template-field .t-select {
-    max-width: 28rem;
-  }
-
-  .product-edit-console-template-field span {
-    color: var(--td-text-color-secondary);
-    font-size: var(--td-font-size-size-2, 13px);
-    line-height: 20px;
-  }
-
-  .product-edit-nav-item {
-    min-width: 160px;
-  }
-
-  .product-edit-main {
-    padding: var(--td-comp-paddingTB-l) var(--td-comp-paddingLR-l);
-  }
-
-  .product-edit-form {
-    max-width: none;
-  }
-}
-
-@media (max-width: 767.98px) {
-  :global(.product-edit-supplier-product-popup .t-popup__content) {
-    width: calc(100vw - 24px);
-    max-width: calc(100vw - 24px);
-  }
-
-  .product-edit-toolbar {
-    flex-wrap: wrap;
-  }
-
-  .product-edit-main {
-    padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-m);
-  }
-
-  .product-edit-grid,
-  .product-edit-interface-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .product-edit-section-head {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .product-edit-section-actions {
-    justify-content: flex-start;
-  }
-
-  .product-edit-supplier-product-row {
-    grid-template-columns: 1fr;
-  }
-
-  .product-edit-config-list article {
-    grid-template-columns: 1fr;
-  }
-
-  .product-edit-footer {
-    padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-m);
-  }
-
-  .product-edit-footer .t-button {
-    flex: 1;
-  }
-
-  .config-option-basic-grid,
-  .config-option-footer-row {
-    grid-template-columns: 1fr;
-  }
-
-  .config-subitem-table {
-    overflow-x: auto;
-  }
-
-  .config-subitem-grid {
-    min-width: 640px;
-  }
-}
+@import './edit.less';
 </style>

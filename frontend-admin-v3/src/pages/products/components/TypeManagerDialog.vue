@@ -3,7 +3,7 @@
     :visible="visible"
     class="type-manager-dialog"
     header="管理一级分类"
-    width="880px"
+    width="min(880px, calc(100vw - 32px))"
     :footer="false"
     @update:visible="emit('update:visible', $event)"
   >
@@ -16,7 +16,7 @@
           </div>
         </div>
 
-        <t-form :data="typeForm" label-align="top" class="type-form">
+        <t-form ref="typeFormRef" :data="typeForm" :rules="typeRules" label-align="right" class="type-form">
           <div class="type-form-grid">
             <t-form-item label="一级分类名称" name="label" required-mark>
               <t-input v-model="typeForm.label" maxlength="40" placeholder="如 云服务器" />
@@ -183,6 +183,7 @@ import {
   EditIcon,
   RefreshIcon,
 } from 'tdesign-icons-vue-next';
+import type { FormInstanceFunctions, FormRule } from 'tdesign-vue-next';
 import { computed, reactive, ref, watch } from 'vue';
 
 import type { ProductTypeRecord } from '@/api/product';
@@ -218,11 +219,17 @@ const emit = defineEmits<{
 }>();
 
 const editingTypeValue = ref('');
+const typeFormRef = ref<FormInstanceFunctions>();
 const typeForm = reactive({
   label: '',
   product_type: 'cloud_server',
   icon: '',
 });
+// 必填由校验规则驱动（docs/DESIGN.md §4.4），不再只靠 required-mark 视觉必填
+const typeRules: Record<string, FormRule[]> = {
+  label: [{ required: true, message: '请输入一级分类名称', type: 'error' }],
+  product_type: [{ required: true, message: '请选择产品类型', type: 'error' }],
+};
 const normalizedTypeFormIcon = computed(() => resolveProductTypeIconName(typeForm.icon));
 
 function selectTypeIcon(value: string) {
@@ -230,6 +237,7 @@ function selectTypeIcon(value: string) {
 }
 
 function resetTypeForm() {
+  typeFormRef.value?.clearValidate?.();
   editingTypeValue.value = '';
   typeForm.label = '';
   typeForm.product_type = 'cloud_server';
@@ -244,6 +252,8 @@ function editType(type: ProductTypeRecord) {
 }
 
 async function handleSubmit() {
+  const validateResult = await typeFormRef.value?.validate?.();
+  if (validateResult !== true) return;
   const saved = await props.submitType({
     value: editingTypeValue.value,
     label: typeForm.label,

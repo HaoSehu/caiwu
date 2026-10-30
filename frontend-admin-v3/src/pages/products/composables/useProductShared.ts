@@ -117,17 +117,6 @@ export function productGroupPayload(
 }
 
 /**
- * Format date/time string
- */
-export function formatDateTime(value: unknown): string {
-  if (!value) return '-';
-  const date = new Date(String(value).replace(/-/g, '/'));
-  if (Number.isNaN(date.getTime())) return String(value);
-  const pad = (item: number) => String(item).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
-/**
  * Format monthly price for display
  */
 export function formatMonthlyPrice(row: {

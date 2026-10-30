@@ -1,29 +1,44 @@
 <template>
   <div class="specs-page">
+    <div class="page-inline-actions">
+      <t-button v-if="canManage" theme="primary" :loading="saving" @click="handleSave">保存目录</t-button>
+    </div>
+
+    <t-alert v-if="dirty" theme="warning" message="规格目录有未保存的修改，请点「保存目录」后生效。" />
+
     <t-card :bordered="false">
       <div class="specs-filter">
         <t-input
           v-model="filters.keyword"
           clearable
           placeholder="搜索规格文本 / 别名 / 说明 / 绑定配置"
-          @enter="loadCatalog"
-          @clear="loadCatalog"
+          @enter="requestReload"
+          @clear="requestReload"
         >
           <template #suffix-icon><search-icon /></template>
         </t-input>
-        <t-select v-model="filters.binding_status" clearable placeholder="绑定状态" @change="loadCatalog">
+        <t-select v-model="filters.binding_status" clearable placeholder="绑定状态" @change="requestReload">
           <t-option value="bound" label="已绑定" />
           <t-option value="unbound" label="未绑定" />
         </t-select>
-        <t-button theme="primary" variant="outline" @click="openSpecDialog()">
+        <t-button theme="primary" @click="requestReload">查询</t-button>
+        <t-button theme="default" variant="base" @click="resetFilters">重置</t-button>
+        <t-button v-if="canManage" theme="primary" variant="outline" @click="openSpecDialog()">
           <template #icon><add-icon /></template>
           新增规格
         </t-button>
-        <t-button theme="primary" :loading="saving" @click="handleSave">保存目录</t-button>
       </div>
 
       <div class="table-scroll">
-        <t-table row-key="id" :data="specs" :columns="columns" :loading="loading" hover table-layout="fixed">
+        <t-table
+          row-key="id"
+          :data="specs"
+          :columns="columns"
+          :loading="loading"
+          hover
+          table-layout="fixed"
+          aria-label="实例规格列表"
+        >
           <template #empty>
             <t-empty :description="loading ? '加载中…' : hasActiveFilters ? '未找到匹配结果' : '暂无数据'" />
           </template>
@@ -43,17 +58,20 @@
           </template>
           <template #bindings="{ row }">
             <product-binding-tree-select
+              v-if="canManage"
               v-model="row.binding_ids"
               mode="batch"
               :existing-bindings="row.bindings"
               @change="handleBindingSelectionChange(row, $event)"
             />
+            <span v-else class="muted">{{ row.bindings.length ? `已绑定 ${row.bindings.length} 项` : '未绑定' }}</span>
           </template>
           <template #operation="{ row }">
-            <t-space size="small">
+            <t-space v-if="canManage" size="small">
               <t-button size="small" variant="text" theme="primary" @click="openSpecDialog(row)">编辑</t-button>
               <t-button size="small" variant="text" theme="danger" @click="handleDeleteSpec(row)">删除</t-button>
             </t-space>
+            <span v-else class="muted">只读</span>
           </template>
         </t-table>
       </div>
@@ -64,12 +82,12 @@
     <t-dialog
       v-model:visible="specDialogVisible"
       :header="editingSpecId ? '编辑实例规格' : '新建实例规格'"
-      width="540px"
+      width="min(540px, calc(100vw - 32px))"
       :confirm-btn="{ content: '确定', loading: dialogSubmitting }"
       @confirm="handleSubmitSpec"
       @closed="handleDialogClosed"
     >
-      <t-form ref="specFormRef" :data="specForm" :rules="specRules" label-align="top">
+      <t-form ref="specFormRef" :data="specForm" :rules="specRules" label-align="right">
         <t-form-item label="实例规格文本" name="text">
           <t-input v-model="specForm.text" maxlength="80" placeholder="例如：ecs.g9i.2c2g" />
         </t-form-item>
@@ -106,8 +124,14 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import type { InstanceSpecRecord, ProductBindingRecord } from '@/api/admin';
 import { adminApi } from '@/api/admin';
 import ProductBindingTreeSelect from '@/components/product-binding-tree-select/index.vue';
+import { AdminPermissions } from '@/constants/permissions';
+import { useListPage } from '@/hooks/useListPage';
 import { normalizeProductBindings } from '@/hooks/useProductBindingTree';
+import { useUnsavedGuard } from '@/hooks/useUnsavedGuard';
+import { hasAdminPermission } from '@/utils/permission';
 import { errorMessage } from '@/utils/userMessage';
+
+defineOptions({ name: 'AdminSpecs' });
 
 type SpecRecord = Omit<
   InstanceSpecRecord,
@@ -124,21 +148,50 @@ type SpecRecord = Omit<
   binding_ids: string[];
 };
 
-const loading = ref(false);
+// 规格目录写入后再保存，缺少按钮级门禁等于让只读角色改商品绑定
+const canManage = computed(() => hasAdminPermission(AdminPermissions.PRODUCT_MANAGE));
+
 const saving = ref(false);
 const dialogSubmitting = ref(false);
-const specs = ref<SpecRecord[]>([]);
+// 新增/编辑/删除只改本地数组，必须显式「保存目录」才落库
+const dirty = ref(false);
+useUnsavedGuard(() => dirty.value, {
+  message: '实例规格目录有未保存的修改，离开后这些改动会丢失。',
+});
 const specDialogVisible = ref(false);
 const editingSpecId = ref('');
 const specFormRef = ref<FormInstanceFunctions>();
 
-const filters = reactive({
-  keyword: '',
-  binding_status: '',
-});
+interface SpecFilter {
+  keyword: string;
+  binding_status: string;
+}
 
-// 空态文案区分「未筛选但无数据」与「筛选后无匹配」（docs/DESIGN.md 术语表）
-const hasActiveFilters = computed(() => Boolean(filters.keyword.trim()) || Boolean(filters.binding_status));
+// 规格目录是「拉取一次 + 本地编辑 + 显式保存」的编辑器，接列表引擎只取请求竞态、
+// 统一错误提示与三态空文案；分页器不渲染（后端 InstanceSpecCatalogController 恒返回 page=1）。
+// immediate: false —— 首屏加载走下方 loadCatalog，与「有未保存修改时先确认」的入口保持一致。
+const {
+  filters,
+  list: specs,
+  loading,
+  loadList,
+  hasActiveFilters,
+} = useListPage<SpecFilter, SpecRecord>({
+  defaultFilters: { keyword: '', binding_status: '' },
+  immediate: false,
+  onError: (error) => MessagePlugin.error(errorMessage(error, '加载实例规格失败')),
+  fetch: async (params) => {
+    const response = await adminApi.instanceSpecCatalog.list({
+      keyword: String(params.keyword || '').trim() || undefined,
+      binding_status: params.binding_status || undefined,
+    });
+    const list = (response.list || []).map((item, index) => normalizeSpec(item, index));
+    return { list, total: list.length };
+  },
+  afterLoad: () => {
+    dirty.value = false;
+  },
+});
 
 const specForm = reactive({
   text: '',
@@ -193,23 +246,35 @@ function normalizeSpec(itemValue: unknown, index = 0): SpecRecord {
   };
 }
 
-function rebuildCatalogState(list: unknown[]) {
-  specs.value = list.map((item, index) => normalizeSpec(item, index));
+/** 重置筛选并重新拉取；提交式筛选必须成对提供「查询/重置」（docs/DESIGN.md §5.1） */
+function resetFilters() {
+  filters.keyword = '';
+  filters.binding_status = '';
+  requestReload();
 }
 
-async function loadCatalog() {
-  loading.value = true;
-  try {
-    const response = await adminApi.instanceSpecCatalog.list({
-      keyword: String(filters.keyword || '').trim() || undefined,
-      binding_status: filters.binding_status || undefined,
-    });
-    rebuildCatalogState(response.list || []);
-  } catch (error) {
-    MessagePlugin.error(errorMessage(error, '加载实例规格失败'));
-  } finally {
-    loading.value = false;
+/** 筛选会重拉服务端数据并丢弃本地改动，未保存时先确认（docs/DESIGN.md §4.4 长表单离开保护） */
+function requestReload() {
+  if (!dirty.value) {
+    void loadCatalog();
+    return;
   }
+  const dialog = DialogPlugin.confirm({
+    header: '放弃未保存的修改',
+    body: '规格目录有未保存的修改，继续会重新从服务端加载并丢弃这些修改。',
+    theme: 'warning',
+    confirmBtn: { content: '丢弃并继续', theme: 'danger' },
+    cancelBtn: '取消',
+    onConfirm() {
+      dialog.hide();
+      void loadCatalog();
+    },
+  });
+}
+
+/** 拉取服务端目录；错误提示与 loading 由列表引擎统一处理 */
+function loadCatalog() {
+  return loadList();
 }
 
 function openSpecDialog(spec?: SpecRecord) {
@@ -273,7 +338,10 @@ async function handleSubmitSpec() {
         ),
       ];
     }
-    MessagePlugin.success(editingSpecId.value ? '实例规格已更新' : '实例规格已新建');
+    dirty.value = true;
+    MessagePlugin.success(
+      editingSpecId.value ? '实例规格已修改，请点「保存目录」生效' : '实例规格已添加，请点「保存目录」生效',
+    );
     specDialogVisible.value = false;
   } finally {
     dialogSubmitting.value = false;
@@ -289,7 +357,8 @@ function handleDeleteSpec(row: SpecRecord) {
     cancelBtn: '取消',
     onConfirm() {
       specs.value = specs.value.filter((item) => item.id !== row.id);
-      MessagePlugin.success('实例规格已删除');
+      dirty.value = true;
+      MessagePlugin.success('实例规格已移除，请点「保存目录」生效');
       dialog.hide();
     },
   });
@@ -301,6 +370,7 @@ function handleBindingSelectionChange(
 ) {
   row.bindings = payload.bindings;
   row.binding_ids = payload.binding_ids;
+  dirty.value = true;
 }
 
 function buildPayload(): InstanceSpecRecord[] {
@@ -324,7 +394,8 @@ async function handleSave() {
   saving.value = true;
   try {
     const response = await adminApi.instanceSpecCatalog.save({ list: buildPayload() });
-    rebuildCatalogState(response.list || []);
+    specs.value = (response.list || []).map((item, index) => normalizeSpec(item, index));
+    dirty.value = false;
     MessagePlugin.success('实例规格目录已保存');
   } catch (error) {
     MessagePlugin.error(errorMessage(error, '保存实例规格失败'));

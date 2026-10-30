@@ -1,33 +1,23 @@
 .cpu-models-page {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--td-comp-margin-l);
 }
 
-.cpu-head,
 .model-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
+  gap: var(--td-comp-margin-l);
 }
 
-.cpu-head h1,
 .model-head h2 {
   margin: 4px 0 6px;
   color: var(--td-text-color-primary);
+  font-size: var(--td-font-size-size-6, 20px);
   line-height: 1.35;
 }
 
-.cpu-head h1 {
-  font-size: var(--td-font-size-size-7, 22px);
-}
-
-.model-head h2 {
-  font-size: var(--td-font-size-size-5, 18px);
-}
-
-.cpu-head p,
 .model-head p,
 .cpu-footer {
   margin: 0;
@@ -35,16 +25,10 @@
   line-height: 1.7;
 }
 
-.cpu-kicker {
-  color: var(--td-brand-color);
-  font-size: var(--td-font-size-size-2, 13px);
-  font-weight: 600;
-}
-
 .cpu-layout {
   display: grid;
   grid-template-columns: 320px minmax(0, 1fr);
-  gap: 16px;
+  gap: var(--td-comp-margin-l);
   align-items: start;
 }
 
@@ -58,7 +42,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--td-comp-margin-m);
   margin-bottom: 14px;
 }
 
@@ -74,7 +58,7 @@
   gap: 10px;
   padding: 12px;
   border: 1px solid var(--td-border-level-1-color);
-  border-radius: var(--td-radius-large, 8px);
+  border-radius: var(--td-radius-large);
   background: var(--td-bg-color-container);
 }
 
@@ -108,27 +92,26 @@
 }
 
 .cpu-group-item span {
-  margin-top: 4px;
+  margin-top: var(--td-comp-margin-xs);
   color: var(--td-text-color-secondary);
   font-size: var(--td-font-size-size-1, 12px);
 }
 
 .table-scroll {
-  margin-top: 16px;
-  overflow-x: auto;
+  margin-top: var(--td-comp-margin-l);
 }
 
 .frequency-summary {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--td-comp-margin-xs);
   color: var(--td-text-color-primary);
-  font-size: var(--td-font-size-size-2, 13px);
+  font-size: var(--td-font-size-size-3, 14px);
 }
 
 .cpu-footer {
   margin-top: 14px;
-  font-size: var(--td-font-size-size-2, 13px);
+  font-size: var(--td-font-size-size-3, 14px);
 }
 
 @media (max-width: 1024px) {
@@ -138,13 +121,10 @@
 }
 
 @media (max-width: 767.98px) {
-  .cpu-head,
   .model-head {
     flex-direction: column;
   }
 
-  .cpu-actions,
-  .cpu-actions .t-button,
   .model-head .t-button {
     width: 100%;
   }

@@ -25,7 +25,7 @@
         <div class="campaigns-filter-actions">
           <t-button theme="primary" @click="handleSearch">查询</t-button>
           <t-button theme="default" variant="base" @click="resetFilters">重置</t-button>
-          <t-button theme="primary" :disabled="!canManage" @click="openCampaignDialog()">
+          <t-button theme="primary" variant="outline" :disabled="!canManage" @click="openCampaignDialog()">
             <template #icon><add-icon /></template>
             新建活动
           </t-button>
@@ -33,7 +33,18 @@
       </div>
 
       <div v-if="!isMobile" class="table-scroll">
-        <t-table row-key="id" :data="campaigns" :columns="columns" :loading="loading" hover table-layout="fixed">
+        <t-table
+          row-key="id"
+          :data="campaigns"
+          :columns="columns"
+          :loading="loading"
+          hover
+          table-layout="fixed"
+          aria-label="优惠券活动列表"
+        >
+          <template #empty>
+            <t-empty :description="loading ? '加载中…' : hasActiveFilters ? '未找到匹配结果' : '暂无优惠券活动'" />
+          </template>
           <template #campaign="{ row }">
             <div class="campaign-main">
               <div class="campaign-title-row">
@@ -167,7 +178,7 @@
           :current="pagination.page"
           :page-size="pagination.page_size"
           :total="total"
-          :page-size-options="[20, 50, 100]"
+          :page-size-options="pagination.pageSizeOptions"
           show-jumper
           @change="handlePaginationChange"
         />
@@ -177,14 +188,14 @@
     <t-drawer
       v-model:visible="dialogVisible"
       :header="form.id ? '编辑优惠券活动' : '新建优惠券活动'"
-      size="820px"
+      size="min(820px, calc(100vw - 32px))"
       class="campaign-edit-drawer"
       :close-on-overlay-click="false"
       :footer="false"
       @close="handleDialogClosed"
     >
       <div class="campaign-drawer-shell">
-        <t-form ref="formRef" class="campaign-drawer-form" :data="form" :rules="formRules" label-align="top">
+        <t-form ref="formRef" class="campaign-drawer-form" :data="form" :rules="formRules" label-align="right">
           <section class="campaign-drawer-section" data-title="基础信息">
             <div class="campaign-form-grid">
               <t-form-item label="活动名称" name="name">
@@ -399,6 +410,7 @@ const {
   handleSearch,
   resetFilters,
   handlePaginationChange,
+  hasActiveFilters,
 } = useListPage<CampaignFilter, CouponCampaignRecord>({
   defaultFilters: { keyword: '', status: '' },
   defaultPageSize: 20,

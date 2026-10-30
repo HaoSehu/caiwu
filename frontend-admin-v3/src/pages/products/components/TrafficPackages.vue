@@ -5,7 +5,7 @@
         <h2>流量包分组</h2>
         <p>按旧端 `traffic_package_catalog` 设置项维护分组和档位，支持保存当前分组与从上游拉取后回填。</p>
       </div>
-      <div class="traffic-actions">
+      <div v-if="canManage" class="traffic-actions">
         <t-button theme="primary" variant="outline" @click="openTrafficGroupDialog()">新增分组</t-button>
         <t-button
           variant="outline"
@@ -41,7 +41,7 @@
               >已绑定 {{ group.product_ids.length }} 个配置 · {{ trafficGroupPackageCount(group.id) }} 个档位</small
             >
           </button>
-          <t-space size="small">
+          <t-space v-if="canManage" size="small">
             <t-button size="small" variant="text" theme="primary" @click.stop="openTrafficGroupDialog(group)"
               >编辑</t-button
             >
@@ -61,7 +61,7 @@
               }}</span>
               <small>绑定配置：{{ trafficBoundProductSummary(selectedTrafficGroup) }}</small>
             </div>
-            <t-space size="small">
+            <t-space v-if="canManage" size="small">
               <t-button variant="outline" @click="openTrafficGroupDialog(selectedTrafficGroup)">调整绑定</t-button>
               <t-button theme="primary" variant="outline" @click="addTrafficRow">新增流量包</t-button>
             </t-space>
@@ -73,7 +73,7 @@
               <t-input-number v-model="row.target_value" :min="1" placeholder="目标 GB" />
               <t-input-number v-model="row.price" :min="0" :decimal-places="2" placeholder="售价" />
               <t-switch v-model="row.enabled" />
-              <t-button variant="text" theme="danger" @click="removeTrafficRow(index)">删除</t-button>
+              <t-button v-if="canManage" variant="text" theme="danger" @click="removeTrafficRow(index)">删除</t-button>
             </div>
             <t-empty v-if="trafficRows.length === 0" description="暂无档位，请新增或从上游拉取" />
           </div>
@@ -86,15 +86,15 @@
   <t-dialog
     v-model:visible="trafficGroupDialogVisible"
     :header="trafficGroupEditingId ? '编辑流量包分组' : '新增流量包分组'"
-    width="560px"
+    width="min(560px, calc(100vw - 32px))"
     :confirm-btn="{ content: '保存分组', loading: trafficGroupSubmitting }"
     @confirm="submitTrafficGroup"
   >
-    <t-form :data="trafficGroupForm" label-width="110px">
+    <t-form ref="trafficGroupFormRef" :data="trafficGroupForm" :rules="trafficGroupRules" label-width="110px">
       <t-form-item label="分组名称" name="name">
         <t-input v-model="trafficGroupForm.name" placeholder="例如 基础流量包" maxlength="30" />
       </t-form-item>
-      <t-form-item label="绑定配置" name="product_ids">
+      <t-form-item label="绑定配置" name="product_ids" required-mark>
         <product-binding-tree-select
           v-model="trafficGroupForm.product_ids"
           mode="batch"
@@ -108,6 +108,7 @@
   </t-dialog>
 </template>
 <script setup lang="ts">
+import type { FormInstanceFunctions, FormRule } from 'tdesign-vue-next';
 import { DialogPlugin } from 'tdesign-vue-next/es/dialog/plugin';
 import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, reactive, ref } from 'vue';
@@ -116,6 +117,9 @@ import type { ProductBindingRecord } from '@/api/admin';
 import { adminApi } from '@/api/admin';
 import { productApi } from '@/api/product';
 import ProductBindingTreeSelect from '@/components/product-binding-tree-select/index.vue';
+import { AdminPermissions } from '@/constants/permissions';
+import { useUnsavedGuard } from '@/hooks/useUnsavedGuard';
+import { hasAdminPermission } from '@/utils/permission';
 
 import { errorMessage, normalizeProductIds } from '../composables/useProductShared';
 
@@ -151,6 +155,9 @@ interface TrafficPackageItem {
   sort_order: number;
 }
 
+// 路由只要求 PRODUCT_LIST，写操作必须另判 PRODUCT_MANAGE，否则只读岗能改流量包
+const canManage = computed(() => hasAdminPermission(AdminPermissions.PRODUCT_MANAGE));
+
 // --- State ---
 const trafficLoading = ref(false);
 const trafficSaving = ref(false);
@@ -158,6 +165,7 @@ const trafficPulling = ref(false);
 const trafficGroupDialogVisible = ref(false);
 const trafficGroupSubmitting = ref(false);
 const trafficGroupEditingId = ref('');
+const trafficGroupFormRef = ref<FormInstanceFunctions>();
 const trafficGroupForm = reactive({
   name: '',
   product_type: '',
@@ -175,6 +183,28 @@ const trafficPackageItems = ref<TrafficPackageItem[]>([]);
 const selectedTrafficGroupId = ref('');
 const trafficRows = ref<TrafficPackageItem[]>([]);
 
+// 未保存离开保护：只比对语义字段，忽略每次重建都会变的 _rowKey
+function trafficRowsSignature(rows: TrafficPackageItem[]) {
+  return JSON.stringify(
+    rows.map((row) => [
+      String(row.label || ''),
+      Number(row.target_value || 0),
+      Number(row.price || 0),
+      row.enabled ? 1 : 0,
+      Number(row.sort_order || 0),
+    ]),
+  );
+}
+const trafficRowsSnapshot = ref(trafficRowsSignature([]));
+const trafficRowsDirty = computed(() => trafficRowsSignature(trafficRows.value) !== trafficRowsSnapshot.value);
+/** 重新取快照：数据回填完成或已成功落库后调用，避免把加载结果算成未保存修改 */
+function markTrafficRowsSaved() {
+  trafficRowsSnapshot.value = trafficRowsSignature(trafficRows.value);
+}
+useUnsavedGuard(() => trafficRowsDirty.value, {
+  message: '流量包配置存在未保存的修改，离开后这些新增与编辑会丢失。',
+});
+
 // --- Computeds ---
 const selectedTrafficGroup = computed(
   () => trafficGroupItems.value.find((group) => String(group.id) === String(selectedTrafficGroupId.value)) || null,
@@ -182,8 +212,28 @@ const selectedTrafficGroup = computed(
 
 // --- Methods ---
 function handleTrafficGroupChange(groupId: string) {
+  if (String(groupId) === String(selectedTrafficGroupId.value)) return;
+  if (!trafficRowsDirty.value) {
+    applyTrafficGroupChange(groupId);
+    return;
+  }
+  const dialog = DialogPlugin.confirm({
+    header: '切换分组会丢弃未保存的档位',
+    body: '当前分组的档位有未保存的修改，切换分组后会回到已保存的配置。',
+    theme: 'warning',
+    confirmBtn: { content: '丢弃并切换', theme: 'danger' },
+    cancelBtn: '继续编辑',
+    onConfirm() {
+      dialog.hide();
+      applyTrafficGroupChange(groupId);
+    },
+  });
+}
+
+function applyTrafficGroupChange(groupId: string) {
   selectedTrafficGroupId.value = groupId;
   syncTrafficRowsFromSelection();
+  markTrafficRowsSaved();
 }
 
 function resetTrafficGroupForm() {
@@ -265,7 +315,14 @@ function resolveTrafficGroupCategory(bindings: ProductBindingRecord[]): ProductB
   return bindings;
 }
 
+// 必填由校验规则驱动（docs/DESIGN.md §4.4），字段级红字取代提交时 flash warning
+const trafficGroupRules: Record<string, FormRule[]> = {
+  name: [{ required: true, message: '请输入分组名称', type: 'error' }],
+};
+
 async function submitTrafficGroup() {
+  const validateResult = await trafficGroupFormRef.value?.validate?.();
+  if (validateResult !== true) return;
   const name = trafficGroupForm.name.trim();
   const productType = String(trafficGroupForm.product_type || '').trim();
   const categoryId = Number(trafficGroupForm.effective_product_group_id || 0);
@@ -364,6 +421,7 @@ function removeTrafficGroup(group: TrafficPackageGroup) {
           selectedTrafficGroupId.value = trafficGroupItems.value[0]?.id || '';
         }
         syncTrafficRowsFromSelection();
+        markTrafficRowsSaved();
         MessagePlugin.success('分组已删除');
       } catch (error) {
         MessagePlugin.error(errorMessage(error, '删除分组失败'));
@@ -425,6 +483,7 @@ async function saveTrafficPackages() {
     await saveTrafficPackageSettings(nextItems, trafficGroupItems.value);
     trafficPackageItems.value = normalizeTrafficPackageItems(nextItems);
     syncTrafficRowsFromSelection();
+    markTrafficRowsSaved();
     MessagePlugin.success('当前分组流量包已保存');
   } catch (error) {
     MessagePlugin.error(errorMessage(error, '保存流量包配置失败'));
@@ -433,7 +492,31 @@ async function saveTrafficPackages() {
   }
 }
 
-async function pullTrafficPackages() {
+/** 上游拉取会整体覆盖当前分组的档位，已有档位时先确认（docs/DESIGN.md §4.4 覆盖型操作需二次确认） */
+function pullTrafficPackages() {
+  const group = selectedTrafficGroup.value;
+  if (!group) {
+    MessagePlugin.warning('请先选择流量包分组');
+    return;
+  }
+  if (!trafficRows.value.length) {
+    void runPullTrafficPackages();
+    return;
+  }
+  const dialog = DialogPlugin.confirm({
+    header: '覆盖当前分组档位',
+    body: `拉取会用上游结果整体替换「${group.name || group.id}」现有 ${trafficRows.value.length} 个档位，未保存的新增与编辑会丢失。`,
+    theme: 'warning',
+    confirmBtn: { content: '覆盖并拉取', theme: 'danger' },
+    cancelBtn: '取消',
+    onConfirm() {
+      dialog.hide();
+      void runPullTrafficPackages();
+    },
+  });
+}
+
+async function runPullTrafficPackages() {
   const group = selectedTrafficGroup.value;
   if (!group) {
     MessagePlugin.warning('请先选择流量包分组');
@@ -456,7 +539,8 @@ async function pullTrafficPackages() {
     trafficRows.value = packages.map((item, index) =>
       createTrafficRow({ ...(item as Record<string, unknown>), sort_order: index + 1 }, group),
     );
-    MessagePlugin.success('流量包配置已从上游拉取');
+    // 上游拉取只是覆盖本地草稿，仍需「保存当前分组」才落库，因此不打快照
+    MessagePlugin.success('流量包配置已从上游拉取，请点「保存当前分组」生效');
   } catch (error) {
     MessagePlugin.error(errorMessage(error, '拉取流量包配置失败'));
   } finally {
@@ -478,10 +562,12 @@ async function loadTrafficPackages() {
       selectedTrafficGroupId.value = trafficGroupItems.value[0]?.id || '';
     }
     syncTrafficRowsFromSelection();
+    markTrafficRowsSaved();
   } catch (error) {
     trafficGroupItems.value = [];
     trafficPackageItems.value = [];
     trafficRows.value = [];
+    markTrafficRowsSaved();
     MessagePlugin.error(errorMessage(error, '加载流量包配置失败'));
   } finally {
     trafficLoading.value = false;

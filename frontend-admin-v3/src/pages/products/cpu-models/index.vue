@@ -1,14 +1,16 @@
 <template>
   <div class="cpu-models-page">
     <div class="page-inline-actions">
-      <t-button theme="primary" :loading="saving" @click="handleSave">保存目录</t-button>
+      <t-button v-if="canManage" theme="primary" :loading="saving" @click="handleSave">保存目录</t-button>
     </div>
+
+    <t-alert v-if="dirty" theme="warning" message="目录有未保存的修改，请点「保存目录」后生效。" />
 
     <div class="cpu-layout">
       <t-card :bordered="false">
         <div class="group-head">
           <strong>CPU 分组</strong>
-          <t-button theme="primary" variant="outline" @click="openGroupDialog()">
+          <t-button v-if="canManage" theme="primary" variant="outline" @click="openGroupDialog()">
             <template #icon><add-icon /></template>
             新增分组
           </t-button>
@@ -25,7 +27,7 @@
               <strong>{{ group.name || '-' }}</strong>
               <span>{{ group.model_count || group.models.length }} 个型号</span>
             </button>
-            <t-space size="small">
+            <t-space v-if="canManage" size="small">
               <t-button size="small" variant="text" theme="primary" @click="openGroupDialog(group)">编辑</t-button>
               <t-button size="small" variant="text" theme="danger" @click="handleDeleteGroup(group)">删除</t-button>
             </t-space>
@@ -33,7 +35,7 @@
         </div>
         <t-empty v-else description="还没有 CPU 分组">
           <template #action>
-            <t-button theme="primary" @click="openGroupDialog()">新增第一个分组</t-button>
+            <t-button v-if="canManage" theme="primary" @click="openGroupDialog()">新增第一个分组</t-button>
           </template>
         </t-empty>
       </t-card>
@@ -44,7 +46,13 @@
             <h2>CPU 型号</h2>
             <p>{{ currentGroup ? `当前分组：${currentGroup.name}` : '请先选择左侧 CPU 分组' }}</p>
           </div>
-          <t-button theme="primary" variant="outline" :disabled="!currentGroup" @click="openModelDialog()">
+          <t-button
+            v-if="canManage"
+            theme="primary"
+            variant="outline"
+            :disabled="!currentGroup"
+            @click="openModelDialog()"
+          >
             <template #icon><add-icon /></template>
             新增型号
           </t-button>
@@ -59,7 +67,11 @@
               :loading="loading"
               hover
               table-layout="fixed"
+              aria-label="CPU 型号列表"
             >
+              <template #empty>
+                <t-empty :description="loading ? '加载中…' : '暂无 CPU 型号'" />
+              </template>
               <template #frequency="{ row }">
                 <div class="frequency-summary">
                   <span>主频 {{ displayFrequency(row.base_frequency) }}</span>
@@ -68,14 +80,18 @@
               </template>
               <template #bindings="{ row }">
                 <product-binding-tree-select
+                  v-if="canManage"
                   v-model="row.binding_ids"
                   mode="batch"
                   :existing-bindings="row.bindings"
                   @change="handleBindingSelectionChange(row, $event)"
                 />
+                <span v-else class="muted">{{
+                  row.bindings.length ? `已绑定 ${row.bindings.length} 项` : '未绑定'
+                }}</span>
               </template>
               <template #operation="{ row }">
-                <t-space size="small">
+                <t-space v-if="canManage" size="small">
                   <t-button size="small" variant="text" theme="primary" @click="openModelDialog(row)">编辑</t-button>
                   <t-button size="small" variant="text" theme="danger" @click="handleDeleteModel(row)">删除</t-button>
                 </t-space>
@@ -93,11 +109,11 @@
     <t-dialog
       v-model:visible="groupDialogVisible"
       :header="editingGroupId ? '编辑 CPU 分组' : '新建 CPU 分组'"
-      width="520px"
+      width="min(520px, calc(100vw - 32px))"
       :confirm-btn="{ content: '确定', loading: groupSubmitting }"
       @confirm="handleSubmitGroup"
     >
-      <t-form ref="groupFormRef" :data="groupForm" :rules="groupRules" label-align="top">
+      <t-form ref="groupFormRef" :data="groupForm" :rules="groupRules" label-align="right">
         <t-form-item label="分组名称" name="name">
           <t-input v-model="groupForm.name" maxlength="80" placeholder="例如：Intel Xeon E5 / AMD EPYC" />
         </t-form-item>
@@ -110,11 +126,11 @@
     <t-dialog
       v-model:visible="modelDialogVisible"
       :header="editingModelId ? '编辑 CPU 型号' : '新建 CPU 型号'"
-      width="520px"
+      width="min(520px, calc(100vw - 32px))"
       :confirm-btn="{ content: '确定', loading: modelSubmitting }"
       @confirm="handleSubmitModel"
     >
-      <t-form ref="modelFormRef" :data="modelForm" :rules="modelRules" label-align="top">
+      <t-form ref="modelFormRef" :data="modelForm" :rules="modelRules" label-align="right">
         <t-form-item label="型号名称" name="name">
           <t-input v-model="modelForm.name" maxlength="80" placeholder="例如：Intel Xeon Gold 6133" />
         </t-form-item>
@@ -147,8 +163,17 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import type { CpuModelGroupRecord, CpuModelRecord, ProductBindingRecord } from '@/api/admin';
 import { adminApi } from '@/api/admin';
 import ProductBindingTreeSelect from '@/components/product-binding-tree-select/index.vue';
+import { AdminPermissions } from '@/constants/permissions';
+import { useListPage } from '@/hooks/useListPage';
 import { normalizeProductBindings as normalizeBindings } from '@/hooks/useProductBindingTree';
+import { useUnsavedGuard } from '@/hooks/useUnsavedGuard';
+import { hasAdminPermission } from '@/utils/permission';
 import { errorMessage } from '@/utils/userMessage';
+
+defineOptions({ name: 'AdminCpuModels' });
+
+// CPU 目录与实例规格一样走 PRODUCT_MANAGE 写权限，只读岗看不到写入口
+const canManage = computed(() => hasAdminPermission(AdminPermissions.PRODUCT_MANAGE));
 
 const FREQUENCY_UNIT = 'GHz';
 
@@ -175,12 +200,38 @@ type CpuGroup = Omit<CpuModelGroupRecord, 'id' | 'value' | 'name' | 'sort_order'
   models: CpuModel[];
 };
 
-const loading = ref(false);
 const saving = ref(false);
+// 分组/型号的增删改只落在本地数组，必须显式「保存目录」才落库，
+// 因此用 dirty 标记把「已生效」与「待保存」区分开（docs/DESIGN.md §4.4 状态可感知）。
+const dirty = ref(false);
+useUnsavedGuard(() => dirty.value, {
+  message: 'CPU 型号目录有未保存的修改，离开后这些改动会丢失。',
+});
 const groupSubmitting = ref(false);
 const modelSubmitting = ref(false);
-const groups = ref<CpuGroup[]>([]);
 const activeGroupId = ref('');
+
+// CPU 目录是「拉取一次 + 本地编辑 + 显式保存」的双栏编辑器，接列表引擎只取请求竞态、
+// 统一错误提示与三态空文案；无筛选、无分页器（后端 CpuModelCatalogController 恒返回 page=1）。
+// immediate: false —— 首屏加载统一走 loadCatalog，避免与下方 onMounted 双发。
+const {
+  list: groups,
+  loading,
+  loadList,
+} = useListPage<Record<string, never>, CpuGroup>({
+  defaultFilters: {},
+  immediate: false,
+  onError: (error) => MessagePlugin.error(errorMessage(error, '加载 CPU 型号目录失败')),
+  fetch: async () => {
+    const response = await adminApi.cpuModelCatalog.list();
+    const list = (response.list || []).map((item, index) => normalizeGroup(item, index));
+    return { list, total: list.length };
+  },
+  afterLoad: (list) => {
+    syncActiveGroup(list);
+    dirty.value = false;
+  },
+});
 const groupDialogVisible = ref(false);
 const modelDialogVisible = ref(false);
 const editingGroupId = ref('');
@@ -275,27 +326,26 @@ function normalizeGroup(groupValue: unknown, index = 0): CpuGroup {
   };
 }
 
-function rebuildCatalogState(list: unknown[]) {
-  groups.value = list.map((item, index) => normalizeGroup(item, index));
-  if (!groups.value.length) {
+/** 选中分组失效时回落到第一个分组，保证右栏始终有内容或明确的空态 */
+function syncActiveGroup(list: CpuGroup[]) {
+  if (!list.length) {
     activeGroupId.value = '';
     return;
   }
-  if (!groups.value.some((item) => item.id === activeGroupId.value)) {
-    activeGroupId.value = groups.value[0].id;
+  if (!list.some((item) => item.id === activeGroupId.value)) {
+    activeGroupId.value = list[0].id;
   }
 }
 
-async function loadCatalog() {
-  loading.value = true;
-  try {
-    const response = await adminApi.cpuModelCatalog.list();
-    rebuildCatalogState(response.list || []);
-  } catch (error) {
-    MessagePlugin.error(errorMessage(error, '加载 CPU 型号目录失败'));
-  } finally {
-    loading.value = false;
-  }
+/** 只在删除分组等本地变更后重建左栏，不走服务端 */
+function rebuildCatalogState(list: unknown[]) {
+  groups.value = list.map((item, index) => normalizeGroup(item, index));
+  syncActiveGroup(groups.value);
+}
+
+/** 拉取服务端目录；错误提示与 loading 由列表引擎统一处理 */
+function loadCatalog() {
+  return loadList();
 }
 
 function openGroupDialog(group?: CpuGroup) {
@@ -359,7 +409,10 @@ async function handleSubmitGroup() {
       activeGroupId.value = nextGroup.id;
     }
     groupDialogVisible.value = false;
-    MessagePlugin.success(editingGroupId.value ? 'CPU 分组已更新' : 'CPU 分组已新建');
+    dirty.value = true;
+    MessagePlugin.success(
+      editingGroupId.value ? 'CPU 分组已修改，请点「保存目录」生效' : 'CPU 分组已添加，请点「保存目录」生效',
+    );
   } finally {
     groupSubmitting.value = false;
   }
@@ -404,7 +457,10 @@ async function handleSubmitModel() {
       };
     });
     modelDialogVisible.value = false;
-    MessagePlugin.success(editingModelId.value ? 'CPU 型号已更新' : 'CPU 型号已新建');
+    dirty.value = true;
+    MessagePlugin.success(
+      editingModelId.value ? 'CPU 型号已修改，请点「保存目录」生效' : 'CPU 型号已添加，请点「保存目录」生效',
+    );
   } finally {
     modelSubmitting.value = false;
   }
@@ -419,7 +475,8 @@ function handleDeleteGroup(group: CpuGroup) {
     cancelBtn: '取消',
     onConfirm() {
       rebuildCatalogState(groups.value.filter((item) => item.id !== group.id));
-      MessagePlugin.success('CPU 分组已删除');
+      dirty.value = true;
+      MessagePlugin.success('CPU 分组已移除，请点「保存目录」生效');
       dialog.hide();
     },
   });
@@ -446,7 +503,8 @@ function handleDeleteModel(model: CpuModel) {
           models,
         };
       });
-      MessagePlugin.success('CPU 型号已删除');
+      dirty.value = true;
+      MessagePlugin.success('CPU 型号已移除，请点「保存目录」生效');
       dialog.hide();
     },
   });
@@ -458,6 +516,7 @@ function handleBindingSelectionChange(
 ) {
   row.binding_ids = payload.binding_ids;
   row.bindings = payload.bindings;
+  dirty.value = true;
 }
 
 function buildPayload(): CpuModelGroupRecord[] {
@@ -487,6 +546,7 @@ async function handleSave() {
   try {
     const response = await adminApi.cpuModelCatalog.save({ list: buildPayload() });
     rebuildCatalogState(response.list || []);
+    dirty.value = false;
     MessagePlugin.success('CPU 型号目录已保存');
   } catch (error) {
     MessagePlugin.error(errorMessage(error, '保存 CPU 型号目录失败'));

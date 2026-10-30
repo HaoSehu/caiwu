@@ -16,12 +16,19 @@
             >
               <template #icon><refresh-icon /></template>
             </t-button>
-            <t-tooltip content="管理一级分类">
+            <t-tooltip v-if="canManage" content="管理一级分类">
               <t-button shape="square" variant="text" aria-label="管理一级分类" @click="openTypeManagerDialog()">
                 <template #icon><setting-icon /></template>
               </t-button>
             </t-tooltip>
-            <t-button theme="primary" size="small" aria-label="新建二级分类" @click="openSecondCategoryDialog()">
+            <t-button
+              v-if="canManage"
+              theme="primary"
+              variant="outline"
+              size="small"
+              aria-label="新建二级分类"
+              @click="openSecondCategoryDialog()"
+            >
               <template #icon><add-icon /></template>
               新建二级
             </t-button>
@@ -68,7 +75,7 @@
               </span>
             </button>
             <t-dropdown
-              v-if="productGroupLevel(item) > 1"
+              v-if="canManage && productGroupLevel(item) > 1"
               class="category-menu"
               trigger="click"
               placement="bottom-right"
@@ -81,8 +88,9 @@
                 shape="square"
                 variant="text"
                 :aria-label="`更多操作：${categoryDisplayName(item)}`"
-                >...</t-button
               >
+                <template #icon><more-icon /></template>
+              </t-button>
             </t-dropdown>
           </div>
         </div>
@@ -140,7 +148,12 @@
           <div class="catalog-filter-actions">
             <t-button theme="primary" @click="handleCatalogSearch">查询</t-button>
             <t-button theme="default" variant="base" @click="handleCatalogReset">重置</t-button>
-            <t-button theme="primary" @click="router.push({ name: 'AdminProductCreate' })">
+            <t-button
+              v-if="canManage"
+              theme="primary"
+              variant="outline"
+              @click="router.push({ name: 'AdminProductCreate' })"
+            >
               <template #icon><add-icon /></template>
               新建商品
             </t-button>
@@ -160,17 +173,19 @@
             <template v-else>共 {{ productTotal }} 个商品</template>
           </div>
           <div class="table-toolbar-actions">
-            <template v-if="selectedProductKeys.length">
+            <template v-if="selectedProductKeys.length && canManage">
               <t-button size="small" variant="outline" @click="openBatchCategoryDialog">批量归类</t-button>
+              <t-button size="small" variant="outline" :loading="splitPreviewLoading" @click="openSplitProductDialog">
+                拆分商品
+              </t-button>
               <t-button
                 size="small"
                 variant="outline"
-                :loading="splitProductPreviewLoading"
-                @click="openSplitProductDialog"
+                :loading="provisionHostnameLoading"
+                @click="openProvisionHostnameDialog"
               >
-                拆分商品
+                批量主机名
               </t-button>
-              <t-button size="small" variant="outline" @click="openProvisionHostnameDialog">批量主机名</t-button>
               <t-button size="small" variant="text" @click="clearProductSelection">清空选择</t-button>
             </template>
           </div>
@@ -225,7 +240,7 @@
             </template>
             <template #operation="{ row }">
               <div class="product-row-actions">
-                <template v-if="row.is_deleted">
+                <template v-if="canManage && row.is_deleted">
                   <t-button
                     size="small"
                     variant="text"
@@ -243,7 +258,7 @@
                     >彻底删除</t-button
                   >
                 </template>
-                <template v-else>
+                <template v-else-if="canManage">
                   <t-button
                     size="small"
                     variant="text"
@@ -270,7 +285,7 @@
             :current="productPage"
             :page-size="productPageSize"
             :total="productTotal"
-            :page-size-options="[20, 50, 100]"
+            :page-size-options="PAGE_SIZE_OPTIONS"
             show-jumper
             @change="handleProductPageChange"
           />
@@ -309,6 +324,7 @@
             <span>{{ item.usage_count || 0 }}</span>
           </button>
           <button
+            v-if="canManage"
             type="button"
             class="mobile-type-tool mobile-type-tool--icon"
             aria-label="管理一级分类"
@@ -325,10 +341,22 @@
               <strong>商品分类</strong>
             </div>
             <t-space size="small">
-              <t-button shape="square" variant="text" :loading="categoryLoading" @click="loadCategories">
+              <t-button
+                shape="square"
+                variant="text"
+                aria-label="刷新商品分类"
+                :loading="categoryLoading"
+                @click="loadCategories"
+              >
                 <template #icon><refresh-icon /></template>
               </t-button>
-              <t-button theme="primary" size="small" @click="openSecondCategoryDialog()">
+              <t-button
+                v-if="canManage"
+                theme="primary"
+                variant="outline"
+                size="small"
+                @click="openSecondCategoryDialog()"
+              >
                 <template #icon><add-icon /></template>
                 新建二级
               </t-button>
@@ -380,6 +408,7 @@
                 </span>
               </button>
               <t-dropdown
+                v-if="canManage"
                 class="category-menu"
                 trigger="click"
                 placement="bottom-right"
@@ -392,8 +421,9 @@
                   shape="square"
                   variant="text"
                   :aria-label="`更多操作：${categoryDisplayName(item)}`"
-                  >...</t-button
                 >
+                  <template #icon><more-icon /></template>
+                </t-button>
               </t-dropdown>
             </div>
           </div>
@@ -406,7 +436,7 @@
     <t-drawer
       v-model:visible="productDialogVisible"
       :header="editingProduct ? '编辑商品' : '新建商品'"
-      size="860px"
+      size="min(860px, calc(100vw - 32px))"
       class="product-edit-drawer"
       :close-on-overlay-click="false"
       :footer="false"
@@ -489,16 +519,36 @@
                 </div>
                 <div class="product-drawer-grid">
                   <t-form-item label="月付价格" name="monthly_price">
-                    <t-input-number v-model="productForm.monthly_price" :min="0" style="width: 100%" />
+                    <t-input-number
+                      v-model="productForm.monthly_price"
+                      :min="0"
+                      :decimal-places="2"
+                      style="width: 100%"
+                    />
                   </t-form-item>
                   <t-form-item label="季付价格" name="quarterly_price">
-                    <t-input-number v-model="productForm.quarterly_price" :min="0" style="width: 100%" />
+                    <t-input-number
+                      v-model="productForm.quarterly_price"
+                      :min="0"
+                      :decimal-places="2"
+                      style="width: 100%"
+                    />
                   </t-form-item>
                   <t-form-item label="半年付价格" name="semiannually_price">
-                    <t-input-number v-model="productForm.semiannually_price" :min="0" style="width: 100%" />
+                    <t-input-number
+                      v-model="productForm.semiannually_price"
+                      :min="0"
+                      :decimal-places="2"
+                      style="width: 100%"
+                    />
                   </t-form-item>
                   <t-form-item label="年付价格" name="annually_price">
-                    <t-input-number v-model="productForm.annually_price" :min="0" style="width: 100%" />
+                    <t-input-number
+                      v-model="productForm.annually_price"
+                      :min="0"
+                      :decimal-places="2"
+                      style="width: 100%"
+                    />
                   </t-form-item>
                 </div>
               </section>
@@ -627,11 +677,11 @@
       v-model:visible="configOptionDialogVisible"
       class="config-option-edit-dialog"
       :header="configOptionEditingIndex >= 0 ? '编辑配置项' : '新增配置项'"
-      width="760px"
+      width="min(760px, calc(100vw - 32px))"
       :confirm-btn="{ content: '保存配置', loading: configOptionSubmitting }"
       @confirm="submitConfigOption"
     >
-      <t-form class="config-option-edit-form" :data="configOptionForm" label-align="top">
+      <t-form class="config-option-edit-form" :data="configOptionForm" label-align="right">
         <div class="config-option-basic-grid">
           <t-form-item label="配置项名称" name="name" required-mark>
             <t-input v-model="configOptionForm.name" placeholder="例如 CPU、内存" />
@@ -681,6 +731,7 @@
             <t-button
               shape="square"
               variant="outline"
+              aria-label="删除子项"
               :disabled="configOptionSubItemRows.length <= 1"
               @click="removeConfigSubItemRow(index)"
             >
@@ -703,126 +754,23 @@
       </t-form>
     </t-dialog>
 
-    <t-dialog
-      v-model:visible="batchCategoryDialogVisible"
-      header="批量归类"
-      width="520px"
-      :confirm-btn="{ content: '确定', loading: batchCategorySubmitting }"
-      @confirm="submitBatchCategory"
-    >
-      <div class="batch-dialog-summary">将 {{ batchCategoryTargetKeys.length }} 个商品移动到目标分类。</div>
-      <t-form :data="batchCategoryForm" label-width="110px">
-        <t-form-item label="目标分类" name="target_product_group_key">
-          <t-select
-            v-model="batchCategoryForm.target_product_group_key"
-            filterable
-            clearable
-            placeholder="请选择目标分类"
-          >
-            <t-option
-              v-for="item in selectableProductGroupOptions"
-              :key="productGroupOptionKey(item)"
-              :label="productGroupOptionLabel(item)"
-              :value="productGroupOptionKey(item)"
-            />
-          </t-select>
-        </t-form-item>
-      </t-form>
-    </t-dialog>
+    <batch-category-dialog
+      ref="batchCategoryDialogRef"
+      :options="selectableProductGroupOptions"
+      @done="handleBatchCategoryDone"
+      @loading-change="batchCategoryLoading = $event"
+    />
 
-    <t-dialog
-      v-model:visible="splitProductDialogVisible"
-      header="拆分商品"
-      width="680px"
-      :confirm-btn="{
-        content: '确定',
-        loading: splitProductSubmitting,
-        disabled: splitProductPreviewLoading || !splitProductPreviewRows.length,
-      }"
-      @confirm="submitSplitProducts"
-    >
-      <div class="split-dialog-intro">
-        <strong>按 CPU 与内存子选项生成独立商品</strong>
-        <p>系统会读取已选商品的 CPU、内存配置子项，基础规格更新原商品，其余规格生成独立商品。</p>
-      </div>
-
-      <div class="split-product-meta">
-        <span>已选商品 {{ splitProductTargetKeys.length }} 个</span>
-        <span v-if="splitProductPreviewCount">预计处理 {{ splitProductPreviewCount }} 个规格</span>
-        <span v-if="splitProductSkippedCount">跳过 {{ splitProductSkippedCount }} 个</span>
-      </div>
-
-      <t-loading :loading="splitProductPreviewLoading">
-        <div class="split-product-preview">
-          <template v-if="splitProductPreviewRows.length">
-            <article v-for="row in splitProductPreviewRows" :key="row.key" class="split-product-item">
-              <div>
-                <strong>{{ row.display_name || '-' }}</strong>
-                <span>{{ row.source_display_name || '-' }}</span>
-              </div>
-              <t-tag :theme="row.action === 'update' ? 'warning' : 'success'" variant="light">
-                {{ formatSplitAction(row.action) }}
-              </t-tag>
-            </article>
-          </template>
-          <t-empty v-else description="未找到可拆分的 CPU 或内存子选项" />
-        </div>
-      </t-loading>
-
-      <t-alert theme="warning" message="基础规格沿用原商品；同名拆分商品会更新，不会重复创建。" />
-    </t-dialog>
-
-    <t-dialog
-      v-model:visible="provisionHostnameDialogVisible"
-      header="批量主机名规则"
-      width="620px"
-      :confirm-btn="{ content: '保存规则', loading: provisionHostnameSubmitting }"
-      @confirm="submitProvisionHostname"
-    >
-      <div class="split-dialog-intro">
-        <strong>设置商品开通主机名</strong>
-        <p>该配置会在自动开通时优先用于上游 host 参数，保存后会覆盖所选商品的现有规则。</p>
-      </div>
-
-      <div class="split-product-meta">
-        <span>已选商品 {{ provisionHostnameTargetKeys.length }} 个</span>
-        <span v-if="provisionHostnameHasMixedRules">当前包含多种主机名规则</span>
-      </div>
-
-      <t-alert
-        v-if="provisionHostnameHasMixedRules"
-        theme="warning"
-        message="当前选中的商品存在不同规则，保存后会统一覆盖为当前设置。"
-      />
-
-      <t-form class="hostname-rule-form" :data="provisionHostnameForm" label-width="120px">
-        <t-form-item label="开通策略" name="mode">
-          <t-radio-group v-model="provisionHostnameForm.mode" variant="default-filled">
-            <t-radio-button value="system">跟随上游</t-radio-button>
-            <t-radio-button value="fixed">固定主机名</t-radio-button>
-            <t-radio-button value="prefix">指定前缀</t-radio-button>
-          </t-radio-group>
-        </t-form-item>
-        <t-form-item v-if="provisionHostnameForm.mode === 'fixed'" label="固定主机名" name="value">
-          <t-input v-model="provisionHostnameForm.value" maxlength="200" placeholder="例如 hk-vps-core" />
-        </t-form-item>
-        <template v-if="provisionHostnameForm.mode === 'prefix'">
-          <t-form-item label="主机名前缀" name="value">
-            <t-input v-model="provisionHostnameForm.value" maxlength="20" placeholder="例如 hk / sg / us" />
-          </t-form-item>
-          <t-form-item label="主机名总长度" name="length">
-            <t-input-number v-model="provisionHostnameForm.length" :min="4" :max="63" />
-          </t-form-item>
-        </template>
-      </t-form>
-
-      <t-alert theme="info" :message="provisionHostnamePreviewText" />
-    </t-dialog>
+    <provision-hostname-dialog
+      ref="provisionHostnameDialogRef"
+      @done="handleProvisionHostnameDone"
+      @loading-change="provisionHostnameLoading = $event"
+    />
 
     <t-dialog
       v-model:visible="categoryDialogVisible"
       :header="categoryDialogHeader"
-      width="560px"
+      width="min(560px, calc(100vw - 32px))"
       :confirm-btn="{ content: '保存', loading: categorySubmitting }"
       @confirm="submitCategory"
     >
@@ -870,6 +818,12 @@
       </t-form>
     </t-dialog>
 
+    <split-product-dialog
+      ref="splitDialogRef"
+      @done="handleSplitProductsDone"
+      @loading-change="splitPreviewLoading = $event"
+    />
+
     <type-manager-dialog
       v-model:visible="typeManagerDialogVisible"
       :product-types="productTypes"
@@ -886,7 +840,7 @@
   </div>
 </template>
 <script setup lang="ts">
-import { AddIcon, DeleteIcon, RefreshIcon, SearchIcon, SettingIcon } from 'tdesign-icons-vue-next';
+import { AddIcon, DeleteIcon, MoreIcon, RefreshIcon, SearchIcon, SettingIcon } from 'tdesign-icons-vue-next';
 import type { DropdownOption, PageInfo, PrimaryTableCol } from 'tdesign-vue-next';
 import { DialogPlugin } from 'tdesign-vue-next/es/dialog/plugin';
 import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
@@ -895,6 +849,9 @@ import { useRouter } from 'vue-router';
 
 import type { ProductCategoryRecord, ProductRecord } from '@/api/product';
 import { productApi } from '@/api/product';
+import { PAGE_SIZE_OPTIONS } from '@/constants/pagination';
+import { AdminPermissions } from '@/constants/permissions';
+import { hasAdminPermission } from '@/utils/permission';
 
 import {
   categoryActiveProductCount,
@@ -902,11 +859,22 @@ import {
   categoryParentOptionLabel,
   categoryTotalProductCount,
   isProductVisible,
-  normalizeCategoryScopeValue,
   productSpecDisplayName,
   productVisibilityLabel,
   productVisibilityTheme,
 } from '../composables/catalogDisplay';
+import type { CategoryTreeNode } from '../composables/catalogTree';
+import {
+  buildCategoryTree,
+  categoryIdKey,
+  categoryScopeKey,
+  filterCategoryTree,
+  findCategoryTreeNode,
+  firstDisplayCategoryNode,
+  flattenCategoryTreeRows,
+  isCategoryVisible,
+  toDisplayCategoryTree,
+} from '../composables/catalogTree';
 import type { ProductConfigOptionRecord } from '../composables/useProductConfigOptions';
 import { serializeConfigOptions, useProductConfigOptions } from '../composables/useProductConfigOptions';
 import {
@@ -922,29 +890,19 @@ import {
   productGroupOptionKey,
   productGroupOptionLabel,
   productGroupPayload,
-  toPlainRecord,
 } from '../composables/useProductShared';
 import { normalizeBusinessProductType, useProductTypeManager } from '../composables/useProductTypeManager';
 import { useSupplierBinding } from '../composables/useSupplierBinding';
+import BatchCategoryDialog from './BatchCategoryDialog.vue';
+import ProvisionHostnameDialog from './ProvisionHostnameDialog.vue';
+import SplitProductDialog from './SplitProductDialog.vue';
 import TypeManagerDialog from './TypeManagerDialog.vue';
 
-type ProvisionHostnameMode = 'system' | 'fixed' | 'prefix';
-
-interface SplitProductPreviewRow {
-  key: string;
-  product_id: number;
-  display_name: string;
-  source_product_id: number;
-  source_display_name: string;
-  action: string;
-}
-
-interface CategoryTreeNode {
-  item: ProductCategoryRecord;
-  children: CategoryTreeNode[];
-}
-
 type ProductLifecycleStatus = 'active' | 'deleted' | 'all';
+
+// 商品目录所有写入口（分类、商品、批量操作）统一走 PRODUCT_MANAGE；只读岗隐藏按钮，
+// 后端路由同样以 permission:product.manage 兜底。
+const canManage = computed(() => hasAdminPermission(AdminPermissions.PRODUCT_MANAGE));
 
 // --- State ---
 const router = useRouter();
@@ -997,26 +955,12 @@ const productDialogVisible = ref(false);
 const editingProduct = ref<ProductRecord | null>(null);
 const productFormRef = ref();
 const selectedProductKeys = ref<Array<string | number>>([]);
-const batchCategoryDialogVisible = ref(false);
-const batchCategorySubmitting = ref(false);
-const batchCategoryTargetKeys = ref<Array<string | number>>([]);
-const batchCategoryForm = reactive({
-  target_product_group_key: '' as string,
-});
-const splitProductDialogVisible = ref(false);
-const splitProductPreviewLoading = ref(false);
-const splitProductSubmitting = ref(false);
-const splitProductTargetKeys = ref<Array<string | number>>([]);
-const splitProductPreview = ref<Record<string, unknown> | null>(null);
-const provisionHostnameDialogVisible = ref(false);
-const provisionHostnameSubmitting = ref(false);
-const provisionHostnameTargetKeys = ref<Array<string | number>>([]);
-const provisionHostnameHasMixedRules = ref(false);
-const provisionHostnameForm = reactive({
-  mode: 'system' as ProvisionHostnameMode,
-  value: '',
-  length: 12,
-});
+const splitDialogRef = ref<InstanceType<typeof SplitProductDialog>>();
+const splitPreviewLoading = ref(false);
+const provisionHostnameDialogRef = ref<InstanceType<typeof ProvisionHostnameDialog>>();
+const provisionHostnameLoading = ref(false);
+const batchCategoryDialogRef = ref<InstanceType<typeof BatchCategoryDialog>>();
+const batchCategoryLoading = ref(false);
 const productForm = reactive({
   display_name: '',
   custom_display_name: '',
@@ -1151,7 +1095,12 @@ const displayCategoryTree = computed(() => categoryTree.value);
 const filteredCategoryTree = computed(() =>
   filterCategoryTree(displayCategoryTree.value, categoryKeyword.value.trim().toLowerCase()),
 );
-const categoryTreeRows = computed(() => flattenCategoryTreeRows(filteredCategoryTree.value));
+const categoryTreeRows = computed(() =>
+  flattenCategoryTreeRows(filteredCategoryTree.value, {
+    expandedKeys: categoryExpandedKeys.value,
+    keyword: categoryKeyword.value.trim(),
+  }),
+);
 // 移动端抽屉保留 类型侧栏 + 该类型下二级树 的两段式形态
 const scopedDisplayCategoryTree = computed(() => {
   const typeCode = String(catalogFilters.product_type || '').trim();
@@ -1162,6 +1111,7 @@ const scopedDisplayCategoryTree = computed(() => {
 const mobileCategoryTreeRows = computed(() =>
   flattenCategoryTreeRows(
     filterCategoryTree(scopedDisplayCategoryTree.value, categoryKeyword.value.trim().toLowerCase()),
+    { expandedKeys: categoryExpandedKeys.value, keyword: categoryKeyword.value.trim() },
   ),
 );
 const scopedCategoryOptions = computed(() => {
@@ -1214,161 +1164,6 @@ const selectedCategoryLabel = computed(() => {
   const category = findProductGroupByKey(categoryOptions.value, selectedKey);
   return category ? categoryDisplayName(category) : '全部分类';
 });
-const splitProductPreviewItems = computed(() => {
-  const items = splitProductPreview.value?.items;
-  return Array.isArray(items) ? items : [];
-});
-const splitProductPreviewRows = computed<SplitProductPreviewRow[]>(() =>
-  splitProductPreviewItems.value.flatMap((itemValue) => {
-    const item = toPlainRecord(itemValue);
-    const variants = Array.isArray(item.variants) ? item.variants : [];
-    return variants.map((variantValue) => {
-      const variant = toPlainRecord(variantValue);
-      return {
-        key: `${item.source_product_id || 'source'}-${variant.variant_key || variant.display_name || variant.product_id || 'row'}`,
-        product_id: Number(variant.product_id || variant.id || 0),
-        display_name: String(variant.display_name || '-'),
-        source_product_id: Number(item.source_product_id || item.product_id || 0),
-        source_display_name: String(variant.source_display_name || item.source_display_name || '-'),
-        action: String(variant.action || 'create'),
-      };
-    });
-  }),
-);
-const splitProductPreviewCount = computed(() => Number(splitProductPreview.value?.preview_count || 0));
-const splitProductSkippedCount = computed(() => Number(splitProductPreview.value?.skipped_count || 0));
-const provisionHostnamePreviewText = computed(() => {
-  if (provisionHostnameForm.mode === 'fixed') {
-    const value = provisionHostnameForm.value.trim();
-    return value
-      ? `开通时将固定提交主机名：${value}。若上游不允许重复主机名，可能会被拒绝。`
-      : '固定主机名模式需要填写一个上游允许的 host 值。';
-  }
-
-  if (provisionHostnameForm.mode === 'prefix') {
-    const prefix = provisionHostnameForm.value.trim() || 'prefix';
-    return `开通时将按"${prefix} + 随机后缀"生成主机名，总长度 ${Number(provisionHostnameForm.length || 12)}。`;
-  }
-
-  return '默认优先按上游商品规则生成；若上游未返回规则，则回退到系统默认规则或账单快照。';
-});
-// --- Category tree helpers ---
-function categoryIdKey(row: ProductCategoryRecord) {
-  return productGroupOptionKey(row);
-}
-
-function isCategoryVisible(row: ProductCategoryRecord) {
-  const value = row.is_visible;
-  return !(value === false || value === 0 || value === '0');
-}
-
-function buildCategoryTree(list: ProductCategoryRecord[]): CategoryTreeNode[] {
-  const nodeMap = new Map<string, CategoryTreeNode>();
-  const roots: CategoryTreeNode[] = [];
-
-  // First pass: create all nodes
-  list.forEach((item) => {
-    const key = categoryIdKey(item);
-    const existingNode = nodeMap.get(key);
-    if (existingNode) {
-      // Merge children from backend response if node already exists
-      const backendChildren = Array.isArray(item.children) ? item.children : [];
-      if (backendChildren.length > 0 && existingNode.children.length === 0) {
-        existingNode.children = backendChildren.map((child) => ({ item: child, children: [] }));
-      }
-    } else {
-      nodeMap.set(key, { item, children: [] });
-    }
-  });
-
-  // Second pass: build parent-child relationships using parent_id
-  // We need to find parent by trying different level prefixes since parent_id is just a number
-  list.forEach((item) => {
-    const node = nodeMap.get(categoryIdKey(item));
-    if (!node) return;
-
-    const parentId =
-      item.parent_id === undefined || item.parent_id === null || item.parent_id === '' ? '' : String(item.parent_id);
-    if (!parentId) {
-      roots.push(node);
-      return;
-    }
-
-    // Try to find parent by trying level prefixes (parent level = current level - 1)
-    const currentLevel = productGroupLevel(item);
-    const parentLevel = currentLevel - 1;
-    if (parentLevel < 1) {
-      roots.push(node);
-      return;
-    }
-
-    const parentKey = `${parentLevel}:${parentId}`;
-    const parent = nodeMap.get(parentKey);
-    if (parent) {
-      // Check if node is already in parent's children
-      if (!parent.children.some((child) => categoryIdKey(child.item) === categoryIdKey(item))) {
-        parent.children.push(node);
-      }
-    } else {
-      roots.push(node);
-    }
-  });
-
-  return roots;
-}
-
-function filterCategoryTree(nodes: CategoryTreeNode[], keyword: string): CategoryTreeNode[] {
-  if (!keyword) return nodes;
-
-  return nodes
-    .map((node) => {
-      const children = filterCategoryTree(node.children, keyword);
-      const matched = [node.item.name, node.item.label].some((value) =>
-        String(value || '')
-          .toLowerCase()
-          .includes(keyword),
-      );
-      if (matched) return { ...node, children: node.children };
-      if (children.length) return { ...node, children };
-      return null;
-    })
-    .filter((node): node is CategoryTreeNode => Boolean(node));
-}
-
-function toDisplayCategoryTree(nodes: CategoryTreeNode[]): CategoryTreeNode[] {
-  const lifted: CategoryTreeNode[] = [];
-
-  nodes.forEach((root) => {
-    if (productGroupLevel(root.item) === 1) {
-      lifted.push(...root.children);
-      return;
-    }
-
-    lifted.push(root);
-  });
-
-  return lifted;
-}
-
-function flattenCategoryTreeRows(
-  nodes: CategoryTreeNode[],
-  level = 0,
-): Array<{ node: ProductCategoryRecord; level: number; childCount: number }> {
-  const rows: Array<{ node: ProductCategoryRecord; level: number; childCount: number }> = [];
-  const keyword = categoryKeyword.value.trim();
-
-  nodes.forEach((treeNode) => {
-    const childCount = treeNode.children.length;
-    rows.push({ node: treeNode.item, level, childCount });
-
-    if (childCount > 0 && (keyword || categoryExpandedKeys.value.has(categoryIdKey(treeNode.item)))) {
-      rows.push(...flattenCategoryTreeRows(treeNode.children, level + 1));
-    }
-  });
-
-  return rows;
-}
-
 function syncCategoryExpandedKeys(nodes: CategoryTreeNode[]) {
   const validKeys = new Set<string>();
   const defaultKeys = new Set<string>();
@@ -1392,25 +1187,6 @@ function syncCategoryExpandedKeys(nodes: CategoryTreeNode[]) {
 
   const preserved = Array.from(categoryExpandedKeys.value).filter((key) => validKeys.has(key));
   categoryExpandedKeys.value = new Set([...defaultKeys, ...preserved]);
-}
-
-function findCategoryTreeNode(nodes: CategoryTreeNode[], key: number | string): CategoryTreeNode | null {
-  const targetKey = String(key);
-  for (const node of nodes) {
-    if (categoryIdKey(node.item) === targetKey) return node;
-    const matchedChild = findCategoryTreeNode(node.children, targetKey);
-    if (matchedChild) return matchedChild;
-  }
-  return null;
-}
-
-function firstDisplayCategoryNode(node: CategoryTreeNode): ProductCategoryRecord {
-  if (isSelectableProductGroup(node.item)) return node.item;
-  for (const child of node.children) {
-    const matched = firstDisplayCategoryNode(child);
-    if (isSelectableProductGroup(matched)) return matched;
-  }
-  return node.item;
 }
 
 // 全量树下的默认选中：定位当前一级类型根节点，选中其首个可挂筛选的子分类；已选分类仍在该类型下时保留
@@ -1464,16 +1240,10 @@ function toggleCategoryExpanded(row: ProductCategoryRecord) {
   categoryExpandedKeys.value = next;
 }
 
-function categoryScopeKey(row: ProductCategoryRecord) {
-  return [
-    normalizeCategoryScopeValue(row.first_product_group_code || catalogFilters.product_type),
-    normalizeCategoryScopeValue(row.parent_id),
-  ].join(':');
-}
-
 function getCategorySiblings(row: ProductCategoryRecord) {
-  const scopeKey = categoryScopeKey(row);
-  return categoryOptions.value.filter((item) => categoryScopeKey(item) === scopeKey);
+  const typeCode = catalogFilters.product_type;
+  const scopeKey = categoryScopeKey(row, typeCode);
+  return categoryOptions.value.filter((item) => categoryScopeKey(item, typeCode) === scopeKey);
 }
 
 function getCategorySiblingIndex(row: ProductCategoryRecord) {
@@ -1713,8 +1483,14 @@ function selectedProductRows() {
   return products.value.filter((row) => selectedProductKeys.value.some((key) => String(key) === String(row.id)));
 }
 
-function selectedProductIdsFromKeys(keys: Array<string | number>) {
-  return keys.map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0);
+function openSplitProductDialog() {
+  const targetRows = selectedProductRows();
+  if (!targetRows.length) {
+    MessagePlugin.warning('请先选择需要拆分的商品');
+    return;
+  }
+
+  splitDialogRef.value?.open(targetRows.map((row) => row.id));
 }
 
 function openBatchCategoryDialog() {
@@ -1724,55 +1500,12 @@ function openBatchCategoryDialog() {
     return;
   }
 
-  batchCategoryTargetKeys.value = targetRows.map((row) => row.id);
-  batchCategoryForm.target_product_group_key = '';
-  batchCategoryDialogVisible.value = true;
+  batchCategoryDialogRef.value?.open(targetRows.map((row) => row.id));
 }
 
-async function openSplitProductDialog() {
-  const targetRows = selectedProductRows();
-  if (!targetRows.length) {
-    MessagePlugin.warning('请先选择需要拆分的商品');
-    return;
-  }
-
-  splitProductTargetKeys.value = targetRows.map((row) => row.id);
-  splitProductPreview.value = null;
-  splitProductDialogVisible.value = true;
-  splitProductPreviewLoading.value = true;
-  try {
-    const response = await productApi.splitPreview({
-      product_ids: selectedProductIdsFromKeys(splitProductTargetKeys.value),
-    });
-    splitProductPreview.value = toPlainRecord(response);
-  } catch (error) {
-    MessagePlugin.error(errorMessage(error, '加载拆分预览失败'));
-  } finally {
-    splitProductPreviewLoading.value = false;
-  }
-}
-
-function normalizeProvisionHostnameRule(ruleValue: unknown) {
-  const rule = toPlainRecord(ruleValue);
-  const modeValue = String(rule.mode || 'system');
-  const mode: ProvisionHostnameMode = ['system', 'fixed', 'prefix'].includes(modeValue)
-    ? (modeValue as ProvisionHostnameMode)
-    : 'system';
-  const rawLength = Number(rule.length || 12);
-
-  return {
-    mode,
-    value: String(rule.value || '').trim(),
-    length: Number.isFinite(rawLength) ? Math.min(63, Math.max(4, rawLength)) : 12,
-  };
-}
-
-function isSameProvisionHostnameRule(left: unknown, right: unknown) {
-  const current = normalizeProvisionHostnameRule(left);
-  const target = normalizeProvisionHostnameRule(right);
-  return (
-    current.mode === target.mode && current.value === target.value && Number(current.length) === Number(target.length)
-  );
+async function handleBatchCategoryDone() {
+  selectedProductKeys.value = [];
+  await reloadCatalogData();
 }
 
 function openProvisionHostnameDialog() {
@@ -1782,129 +1515,17 @@ function openProvisionHostnameDialog() {
     return;
   }
 
-  const currentRule = normalizeProvisionHostnameRule(targetRows[0]?.provision_hostname);
-  provisionHostnameTargetKeys.value = targetRows.map((row) => row.id);
-  provisionHostnameHasMixedRules.value = targetRows.some(
-    (row) => !isSameProvisionHostnameRule(row.provision_hostname, currentRule),
-  );
-  provisionHostnameForm.mode = currentRule.mode;
-  provisionHostnameForm.value = currentRule.value;
-  provisionHostnameForm.length = currentRule.length;
-  provisionHostnameDialogVisible.value = true;
+  provisionHostnameDialogRef.value?.open(targetRows);
 }
 
-function resolveProductGroupLabel(key: string) {
-  const group = findProductGroupByKey(categoryOptions.value, key);
-  return group ? productGroupOptionLabel(group) : '目标分类';
+async function handleProvisionHostnameDone() {
+  selectedProductKeys.value = [];
+  await loadProducts();
 }
 
-async function submitBatchCategory() {
-  const productIds = selectedProductIdsFromKeys(batchCategoryTargetKeys.value);
-  const targetGroup = findProductGroupByKey(categoryOptions.value, batchCategoryForm.target_product_group_key);
-
-  if (!productIds.length) {
-    MessagePlugin.warning('请先选择商品');
-    return;
-  }
-  if (!targetGroup) {
-    MessagePlugin.warning('请选择目标分类');
-    return;
-  }
-
-  batchCategorySubmitting.value = true;
-  try {
-    const response = await productApi.batchUpdateCategory({
-      product_ids: productIds,
-      ...productGroupPayload(targetGroup, 'target_'),
-    });
-    const responseRecord = response && typeof response === 'object' ? (response as Record<string, unknown>) : {};
-    const updatedCount = Number(responseRecord.updated_count ?? productIds.length);
-    const targetLabel = String(
-      responseRecord.target_effective_product_group_full_name ||
-        responseRecord.target_effective_product_group_name ||
-        resolveProductGroupLabel(batchCategoryForm.target_product_group_key),
-    );
-
-    if (updatedCount > 0) {
-      MessagePlugin.success(`已将 ${updatedCount} 个商品移入「${targetLabel}」`);
-    } else {
-      MessagePlugin.success(`所选商品已在「${targetLabel}」下`);
-    }
-
-    batchCategoryDialogVisible.value = false;
-    batchCategoryTargetKeys.value = [];
-    await reloadCatalogData();
-  } catch (error) {
-    MessagePlugin.error(errorMessage(error, '批量归类失败'));
-  } finally {
-    batchCategorySubmitting.value = false;
-  }
-}
-
-async function submitSplitProducts() {
-  const productIds = selectedProductIdsFromKeys(splitProductTargetKeys.value);
-  if (!productIds.length) {
-    MessagePlugin.warning('请先选择需要拆分的商品');
-    return;
-  }
-
-  splitProductSubmitting.value = true;
-  try {
-    const response = await productApi.splitProducts({ product_ids: productIds });
-    const responseRecord = toPlainRecord(response);
-    const createdCount = Number(responseRecord.created_count || 0);
-    const updatedCount = Number(responseRecord.updated_count || 0);
-    const skippedCount = Number(responseRecord.skipped_count || 0);
-    const changedCount = createdCount + updatedCount;
-
-    if (changedCount > 0) {
-      MessagePlugin.success(`已生成 ${createdCount} 个商品，更新 ${updatedCount} 个，跳过 ${skippedCount} 个`);
-    } else {
-      MessagePlugin.warning(skippedCount > 0 ? `未生成新商品，跳过 ${skippedCount} 个` : '未找到可拆分商品');
-    }
-
-    splitProductDialogVisible.value = false;
-    splitProductTargetKeys.value = [];
-    selectedProductKeys.value = [];
-    await reloadCatalogData();
-  } catch (error) {
-    MessagePlugin.error(errorMessage(error, '拆分商品失败'));
-  } finally {
-    splitProductSubmitting.value = false;
-  }
-}
-
-async function submitProvisionHostname() {
-  const productIds = selectedProductIdsFromKeys(provisionHostnameTargetKeys.value);
-  if (!productIds.length) {
-    MessagePlugin.warning('请先选择商品');
-    return;
-  }
-  if (provisionHostnameForm.mode !== 'system' && !provisionHostnameForm.value.trim()) {
-    MessagePlugin.warning(provisionHostnameForm.mode === 'fixed' ? '请输入固定主机名' : '请输入主机名前缀');
-    return;
-  }
-
-  provisionHostnameSubmitting.value = true;
-  try {
-    await productApi.batchUpdateProvisionHostname({
-      product_ids: productIds,
-      provision_hostname: {
-        mode: provisionHostnameForm.mode,
-        value: provisionHostnameForm.value.trim(),
-        length: Number(provisionHostnameForm.length || 12),
-      },
-    });
-    MessagePlugin.success('商品开通主机名规则已更新');
-    provisionHostnameDialogVisible.value = false;
-    provisionHostnameTargetKeys.value = [];
-    selectedProductKeys.value = [];
-    await loadProducts();
-  } catch (error) {
-    MessagePlugin.error(errorMessage(error, '更新主机名规则失败'));
-  } finally {
-    provisionHostnameSubmitting.value = false;
-  }
+async function handleSplitProductsDone() {
+  selectedProductKeys.value = [];
+  await reloadCatalogData();
 }
 
 function handleProductPageChange(pageInfo: PageInfo) {
@@ -2221,10 +1842,6 @@ function handleDeleteCategory(row: ProductCategoryRecord) {
       }
     },
   });
-}
-
-function formatSplitAction(action: string) {
-  return action === 'update' ? '更新' : '新建';
 }
 
 // --- Init ---

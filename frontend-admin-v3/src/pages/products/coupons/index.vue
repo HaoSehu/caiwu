@@ -40,7 +40,12 @@
           <div class="coupons-filter-actions">
             <t-button theme="primary" @click="handleSearch">查询</t-button>
             <t-button theme="default" variant="base" @click="resetFilters">重置</t-button>
-            <t-button theme="primary" :disabled="!couponFeatureEnabled || !canManage" @click="openCouponDialog()">
+            <t-button
+              theme="primary"
+              variant="outline"
+              :disabled="!couponFeatureEnabled || !canManage"
+              @click="openCouponDialog()"
+            >
               <template #icon><add-icon /></template>
               新建优惠券
             </t-button>
@@ -48,7 +53,18 @@
         </div>
 
         <div v-if="!isMobile" class="table-scroll">
-          <t-table row-key="id" :data="coupons" :columns="columns" :loading="loading" hover table-layout="fixed">
+          <t-table
+            row-key="id"
+            :data="coupons"
+            :columns="columns"
+            :loading="loading"
+            hover
+            table-layout="fixed"
+            aria-label="优惠券列表"
+          >
+            <template #empty>
+              <t-empty :description="loading ? '加载中…' : hasActiveFilters ? '未找到匹配结果' : '暂无优惠券'" />
+            </template>
             <template #coupon="{ row }">
               <div class="coupon-main">
                 <div class="coupon-title-row">
@@ -166,7 +182,7 @@
             :current="pagination.page"
             :page-size="pagination.page_size"
             :total="total"
-            :page-size-options="[20, 50, 100]"
+            :page-size-options="pagination.pageSizeOptions"
             show-jumper
             @change="handlePaginationChange"
           />
@@ -176,7 +192,7 @@
       <t-drawer
         v-model:visible="dialogVisible"
         :header="form.id ? '编辑优惠券' : '新建优惠券'"
-        size="820px"
+        size="min(820px, calc(100vw - 32px))"
         class="coupon-edit-drawer"
         :close-on-overlay-click="false"
         :footer="false"
@@ -189,7 +205,7 @@
             :message="`${lockReason}，部分关键字段不允许修改`"
             style="margin-bottom: 16px"
           />
-          <t-form ref="formRef" class="coupon-drawer-form" :data="form" :rules="formRules" label-align="top">
+          <t-form ref="formRef" class="coupon-drawer-form" :data="form" :rules="formRules" label-align="right">
             <section class="coupon-drawer-section" data-title="基础信息">
               <div class="coupon-form-grid">
                 <t-form-item label="优惠券名称" name="name">
@@ -444,6 +460,8 @@ import { formatDateTime } from '@/utils/format';
 import { hasAdminPermission } from '@/utils/permission';
 import { errorMessage } from '@/utils/userMessage';
 
+defineOptions({ name: 'AdminCouponList' });
+
 const CouponCampaigns = defineAsyncComponent(() => import('@/pages/products/coupon-campaigns/index.vue'));
 
 import './index.less';
@@ -533,6 +551,7 @@ const {
   handleSearch: engineHandleSearch,
   resetFilters,
   handlePaginationChange,
+  hasActiveFilters,
 } = useListPage<CouponFilter, CouponRecord>({
   defaultFilters: { keyword: '', status: '', discount_type: '', discount_scope: '', distribution_type: '' },
   defaultPageSize: 20,
