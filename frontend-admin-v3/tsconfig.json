@@ -1,23 +1,25 @@
 {
+  "extends": "../tsconfig.base.json",
   "compilerOptions": {
-    "target": "esnext",
-    "module": "esnext",
-    "moduleResolution": "bundler",
     "jsx": "preserve",
     "jsxImportSource": "vue",
     "sourceMap": true,
-    "resolveJsonModule": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
     "allowSyntheticDefaultImports": true,
-    "lib": ["esnext", "dom"],
-    "types": ["vite/client"],
+    "types": [
+      "vite/client"
+    ],
     "noEmit": true,
     "allowImportingTsExtensions": true,
     "paths": {
-      "@/*": ["./src/*"],
-      "@caiwu/shared": ["../shared/index.ts"],
-      "@caiwu/shared/*": ["../shared/*"]
+      "@/*": [
+        "./src/*"
+      ],
+      "@caiwu/shared": [
+        "../shared/index.ts"
+      ],
+      "@caiwu/shared/*": [
+        "../shared/*"
+      ]
     },
     "noImplicitAny": true,
     "strictFunctionTypes": true,

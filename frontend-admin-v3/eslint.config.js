@@ -59,6 +59,13 @@ export default antfu(
         'antfu/top-level-function': 'off',
         'antfu/if-newline': 'off',
         'e18e/prefer-static-regex': 'off',
+        /* 这两条 e18e 规则要求用 Array.prototype.at / Object.hasOwn，
+         * 但要 Chrome 92~93 / Safari 15.4，超出仓库声明的浏览器基线
+         * （frontend-user-v3-www/package.json 的 browserslist = chrome 84 / safari 13.4）。
+         * esbuild 只降语法不 polyfill 内置方法，故关闭规则、代码走基线内等价写法；
+         * 若把 tsconfig 的 lib 按基线降到 ES2020，这类写法同样无法通过类型检查。 */
+        'e18e/prefer-array-at': 'off',
+        'e18e/prefer-object-has-own': 'off',
         'n/prefer-global/process': 'off',
 
         /* If you need control the imports sequence, must be off

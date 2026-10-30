@@ -487,7 +487,10 @@ export default ({ mode }: ConfigEnv): UserConfig => {
     },
 
     build: {
-      target: 'es2018',
+      // 三端统一 es2020：仓库唯一有书面记录的浏览器基线是官网 browserslist
+      // （chrome>=84 / edge>=88 / firefox>=89 / safari>=13.4 / ios_saf>=13.4，docs/DESIGN.md:240 同），
+      // 完整覆盖 ?? 与 ?.（Chrome 80+ / Safari 13.1+），es2018 只会多降级出一批无意义的 void 0。
+      target: 'es2020',
       sourcemap: false,
       minify: 'esbuild',
       cssMinify: 'esbuild',
