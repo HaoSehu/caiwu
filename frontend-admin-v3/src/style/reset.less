@@ -58,28 +58,17 @@ p {
   z-index: 10000;
   padding: 8px 16px;
   background: var(--td-brand-color);
-  color: #fff;
+  color: var(--td-font-white-1);
   font-weight: 600;
   text-decoration: none;
-  border-radius: var(--td-radius-default, 4px);
+  border-radius: var(--td-radius-default);
 
   &:focus {
     top: 12px;
   }
 }
 
-// 无障碍：屏幕阅读器专用
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border-width: 0;
-}
+// 无障碍：屏幕阅读器专用 .sr-only 已归并到 src/style/utilities.less
 
 button,
 [role='button'],

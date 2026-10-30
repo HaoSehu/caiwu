@@ -1,0 +1,63 @@
+// 跨页共享工具类唯一真源（docs/DESIGN.md §3）：
+// 各页 .less 只保留本页特有的增量属性，禁止再重复定义下列类的基础声明。
+
+// 表格横向滚动容器：外层负责滚动（含分页），内部 TDesign 表格不再独立滚动
+.table-scroll {
+  width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+// 分页行：右对齐，与筛选区保持 16px 节奏
+.pagination-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--td-comp-margin-l);
+}
+
+// 移动端分页项可能超出单行宽度，允许整行横向滚动（docs/DESIGN.md:149 仍要求右对齐）
+@media (max-width: 767.98px) {
+  .pagination-row {
+    overflow-x: auto;
+  }
+}
+
+// 两行文本堆叠单元格：主值 + 次要说明
+.stack-cell {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--td-comp-margin-xs);
+}
+
+// 次要说明文字
+.muted-text {
+  color: var(--td-text-color-secondary);
+  font-size: var(--td-font-size-body-small);
+}
+
+// 移动端卡片列表容器
+.mobile-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--td-comp-margin-m);
+}
+
+// 弹窗/抽屉内表单与上方内容的间距
+.dialog-form {
+  margin-top: var(--td-comp-margin-l);
+}
+
+// 无障碍：仅供屏幕阅读器读取的隐藏文本
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

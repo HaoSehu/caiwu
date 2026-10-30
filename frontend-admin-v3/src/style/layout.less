@@ -25,16 +25,9 @@
 .@{starter-prefix}-link {
   color: var(--td-brand-color);
   text-decoration: none;
-  margin-right: 24px;
+  margin-right: var(--td-comp-margin-xxl);
   cursor: pointer;
   transition: color 0.2s cubic-bezier(0.38, 0, 0.24, 1);
-}
-
-.left-operation-container,
-.operation-container {
-  .t-button + .t-button {
-    margin-left: var(--td-comp-margin-s);
-  }
 }
 
 .t-layout.t-layout--with-sider {
@@ -87,14 +80,14 @@
     }
   }
 
-  // 移动端折叠面包屑与多标签 tabs，释放纵向空间
+  // 移动端折叠面包屑与多标签 tabs，释放纵向空间（审查 M1）。
+  // 移动端导航由侧边抽屉承担：Header.vue:24 的「切换侧边栏」按钮
+  // → settingStore.isMobileSidebarVisible → SideNav.vue:4 的遮罩 + :147 的 -sidebar-mobile-open。
+  // 故此处隐藏标签栏不构成导航断路；代价是移动端暂时无法用标签切换已打开页面，
+  // 若产品要求补齐，需改为横向滚动容器而非直接放开 display（面板宽度会挤压内容区）。
   .tdesign-breadcrumb,
   .@{starter-prefix}-layout-tabs-nav {
     display: none;
-  }
-
-  .@{starter-prefix}-layout-tabs-nav + .@{starter-prefix}-content-layout {
-    padding-top: 12px;
   }
 
   .t-button + .t-button {
@@ -110,7 +103,7 @@
     position: fixed;
     inset: 0;
     z-index: 1998;
-    background: rgb(0 0 0 / 42%);
+    background: var(--caiwu-mask-nav);
   }
 
   .@{starter-prefix}-sidebar-mobile {
@@ -165,11 +158,11 @@
   }
 
   .operations-container .t-button {
-    margin-left: 4px;
+    margin-left: var(--td-comp-margin-xs);
   }
 
   .t-card {
-    border-radius: var(--td-radius-default, 4px);
+    border-radius: var(--td-radius-default);
   }
 
   .t-card__body {
@@ -202,19 +195,11 @@
     max-width: 100%;
   }
 
-  .table-scroll {
-    width: 100%;
-    min-width: 0;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-
   .table-scroll .t-table {
     min-width: 680px;
   }
 
   .pagination-row {
-    justify-content: flex-start;
     padding-bottom: 2px;
   }
 
@@ -223,26 +208,14 @@
     display: none;
   }
 
-  .filter-row,
-  .search-row,
-  .toolbar-row,
-  .page-toolbar,
-  .page-actions,
-  .batch-toolbar,
-  .operation-toolbar {
+  .filter-row {
     display: grid;
     grid-template-columns: 1fr;
     gap: 10px;
     align-items: stretch;
   }
 
-  .filter-row .t-button,
-  .search-row .t-button,
-  .toolbar-row .t-button,
-  .page-toolbar .t-button,
-  .page-actions .t-button,
-  .batch-toolbar .t-button,
-  .operation-toolbar .t-button {
+  .filter-row .t-button {
     width: 100%;
     min-width: 0;
   }
@@ -251,15 +224,6 @@
 @media (max-width: 480px) {
   .@{starter-prefix}-sidebar-mobile {
     width: min(88vw, 280px);
-  }
-
-  .t-dialog {
-    width: calc(100vw - 16px) !important;
-    max-width: calc(100vw - 16px);
-  }
-
-  .t-dialog__position {
-    padding: 8px;
   }
 
   .t-drawer__footer {
@@ -276,7 +240,7 @@
 }
 
 .t-menu--dark .t-menu__operations .t-icon {
-  color: rgb(255 255 255 / 55%);
+  color: var(--td-font-white-2);
 
   &:hover {
     cursor: pointer;
@@ -492,6 +456,7 @@
   // 布局元素调整
   &-wrapper {
     height: 100vh;
+    height: 100dvh;
     display: flex;
     flex-direction: column;
   }
@@ -502,23 +467,25 @@
     }
   }
 
-  // 页面边距唯一来源：桌面 20px 24px，≤991px 12px（docs/DESIGN.md §3.3）
+  // 页面边距唯一来源：桌面 20px 24px，≤991px 12px（docs/DESIGN.md §3.3）。
+  // 多标签栏（LayoutContent.vue）用 position: sticky 参与文档流，不再需要给内容区补 padding-top；
+  // 曾有的 `-layout-tabs-nav + -content-layout { padding-top: ... }` 会以更高特异性压过本规则，
+  // 让开启标签栏的页面在桌面变 24px、在 ≤991px 变 24px 而不是 12px，故一并移除。
   &-content-layout {
     padding: 20px 24px;
   }
 
   &-layout {
     height: calc(100vh - var(--td-comp-size-xxxl));
+    height: calc(100dvh - var(--td-comp-size-xxxl));
     overflow-y: scroll;
 
+    // 定位由 LayoutContent.vue 的内联 style(position: sticky; top: 0) 决定，
+    // 此处不再声明 position，避免与内联值冲突留下死声明（审查 R2）。
     &-tabs-nav {
       max-width: 100%;
-      position: fixed;
       overflow: visible;
       z-index: 100;
-    }
-    &-tabs-nav + .@{starter-prefix}-content-layout {
-      padding-top: var(--td-comp-paddingTB-xxl);
     }
 
     &::-webkit-scrollbar {
@@ -527,7 +494,7 @@
     }
 
     &::-webkit-scrollbar-thumb {
-      border-radius: var(--td-radius-medium, 6px);
+      border-radius: var(--td-radius-medium);
       border: 2px solid transparent;
       background-clip: content-box;
       background-color: var(--td-scrollbar-color);
@@ -627,22 +594,12 @@
 
 .route-tabs-dropdown {
   .t-icon {
-    margin-right: 8px;
+    margin-right: var(--td-comp-margin-s);
   }
-}
-
-.logo-container {
-  cursor: pointer;
-  display: inline-flex;
-  margin-left: 24px;
 }
 
 .t-menu__popup {
   z-index: 1000;
-}
-
-.container-base-margin-top {
-  margin-top: 16px;
 }
 
 // 页面边距 ≤991px 统一 12px（docs/DESIGN.md §3.3）。放在文件末尾，确保覆盖上方 &-content-layout 的桌面值

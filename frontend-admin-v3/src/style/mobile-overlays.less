@@ -1,15 +1,10 @@
-/* 平板端大弹窗/抽屉宽度兜底：768-1024px 区间限制最大宽度（768 属 sm，与 docs/DESIGN.md §7 一致） */
-@media (min-width: 768px) and (max-width: 1024px) {
-  .t-dialog {
-    max-width: calc(100vw - 32px) !important;
-  }
-
-  .t-drawer--right,
-  .t-drawer--left {
-    max-width: calc(100vw - 32px) !important;
-  }
-}
-
+/*
+ * 弹层宽度已由调用处的 min(设计宽度, calc(100vw - 32px)) 自带上下限（P2-11）：
+ * t-dialog 的 width 走内联 style，t-drawer 的 size 写进 .t-drawer__content-wrapper 内联 style，
+ * 两者都是内联样式，只有 !important 能覆盖 —— 所以这里不再重复兜宽，只保留无法由调用处表达的结构性覆写。
+ * 例外：DialogPlugin.confirm 生成的对话框没有 width 传参，走 TDesign 默认 480px，
+ * 移动端仍必须由下面的 .t-dialog 宽度规则兜底，否则 375px 视口会横向溢出。
+ */
 @media (max-width: 767.98px) {
   .t-dialog__position {
     align-items: center !important;
@@ -94,20 +89,4 @@
     min-width: 0;
   }
 
-  .drawer-actions {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
-  }
-
-  .drawer-actions .t-button {
-    min-width: 0;
-    width: 100%;
-  }
-}
-
-@media (max-width: 420px) {
-  .drawer-actions {
-    grid-template-columns: 1fr;
-  }
 }

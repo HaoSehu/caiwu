@@ -1,25 +1,20 @@
-// 字号工具类与字号梯度 token，统一全站字号。
-// 说明：当前 TDesign 版本未内置 --td-font-size-size-* CSS 变量，
-// 这里集中定义一套自定义字号梯度变量，业务代码统一通过
-// var(--td-font-size-size-N, <px>) 引用，fallback 保证 token 缺失时不变。
+// 字号梯度 token 与字号工具类，统一全站字号。
+// 说明：当前 TDesign 版本未内置 --td-font-size-size-* CSS 变量，这里集中定义；
+// 业务代码统一通过 var(--td-font-size-size-N, <px>) 引用，fallback 保证 token 缺失时不变。
+// 档位严格对齐 docs/DESIGN.md §3.2 四档字阶：12（辅助）/ 14（正文）/ 16（卡片标题）/ 20（页面主标题）；
+// 指标数字用 TDesign headline 系列 24–32px + tabular-nums。
+// 编号刻意不连续：size-2 / size-5 / size-7（13 / 18 / 22px）已按 §3.2 收敛删除，
+// 保留空号为避免全量引用重新编号；新增字号前先确认 §3.2 是否已覆盖，禁止再引入中间档。
 :root {
   --td-font-size-size-1: 12px;
-  --td-font-size-size-2: 13px;
   --td-font-size-size-3: 14px;
   --td-font-size-size-4: 16px;
-  --td-font-size-size-5: 18px;
   --td-font-size-size-6: 20px;
-  --td-font-size-size-7: 22px;
 }
 
 // 字号工具类，优先使用 var(--td-font-size-size-*)。
 .t-text-xs {
   font-size: var(--td-font-size-size-1, 12px);
-  line-height: 20px;
-}
-
-.t-text-sm {
-  font-size: var(--td-font-size-size-2, 13px);
   line-height: 20px;
 }
 
@@ -34,18 +29,8 @@
 }
 
 .t-text-xl {
-  font-size: var(--td-font-size-size-5, 18px);
-  line-height: 26px;
-}
-
-.t-text-2xl {
   font-size: var(--td-font-size-size-6, 20px);
   line-height: 28px;
-}
-
-.t-text-3xl {
-  font-size: var(--td-font-size-size-7, 22px);
-  line-height: 30px;
 }
 
 // 数字/金额强调
@@ -54,13 +39,10 @@
   font-weight: 600;
 }
 
-// 状态文本深色变体：高饱和状态色（--td-success/warning/error-color）直接作正文时
-// 对白底对比度仅 2.15~3.76，不满足 WCAG AA；正文/图标改用以下深色同族色（均 ≥4.5:1）。
-:root {
-  --caiwu-text-success: #067647;
-  --caiwu-text-warning: #b54708;
-  --caiwu-text-danger: #b42318;
-}
+// 状态正文色统一取 TDesign 深色阶（--td-success-color-9 / --td-warning-color-10 /
+// --td-error-color-8）：高饱和状态色（--td-success/warning/error-color）直接作正文时对白底
+// 对比度仅 2.15~3.76，不满足 WCAG AA；改用同族深色阶与 theme.css 中浅底 t-tag 的文字色同源，
+// 不再维护第二套 --caiwu-text-* 真源（docs/DESIGN.md §3）。
 
 // 响应式字号（随视口平滑缩放）
 .t-text-responsive-title {
