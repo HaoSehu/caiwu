@@ -23,6 +23,7 @@ export interface AdminUser {
   qq?: string;
   admin_note?: string;
   real_name?: string;
+  id_card?: string;
   id_card_masked?: string;
   member_level?: Record<string, unknown> | null;
   member_level_id?: number | string | null;

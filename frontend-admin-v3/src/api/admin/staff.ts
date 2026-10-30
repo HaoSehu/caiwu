@@ -1,6 +1,6 @@
 import { request } from '@/utils/request';
 
-import type { PagedListParams } from './types';
+import type { PagedListParams } from '../types';
 
 export interface StaffListParams extends PagedListParams {
   status?: number | string;

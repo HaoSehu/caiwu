@@ -157,7 +157,7 @@ async function downloadBackupFile(taskId: string): Promise<void> {
         message = String(payload.message);
       }
     } catch {
-      // ignore parse errors
+      // 忽略解析错误
     }
     throw new Error(message);
   }

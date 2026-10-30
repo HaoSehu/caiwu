@@ -155,7 +155,7 @@ function normalizeV2PluginRecord(
 }
 
 export const pluginsApi = {
-  list: (params?: { domain?: IntegrationPluginDomain | '' }) =>
+  list: (params?: { domain?: IntegrationPluginDomain | ''; page?: number; page_size?: number }) =>
     request.get<IntegrationPluginListResponse>({ url: '/v2/admin/integration-plugins', params }),
   scan: async (params?: { domain?: IntegrationPluginDomain | '' }) => {
     await request.post<IntegrationPluginActionResult>({

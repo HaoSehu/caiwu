@@ -1,3 +1,7 @@
+// 管理端 API 有两种取用方式，属于历史形成的双轨现状：
+//   1) 按域直取：import { xxxApi } from '@/api/admin/xxx'（推荐，类型与实现同一文件，便于按域拆分）
+//   2) 聚合对象：import { adminApi } from '@/api/admin'（下方 adminApi 摊平映射，仍有既有页面在用）
+// 约定：新代码一律走第 1 种；不要往 adminApi 里新增字段，聚合对象只保持既有结构，不再扩张。
 import { contentApi, mediaApi, siteHeroApi } from './content';
 import { couponCampaignsApi, couponsApi } from './coupon';
 import { dashboardApi } from './dashboard';
@@ -14,75 +18,75 @@ import { cpuModelCatalogApi, instanceSpecCatalogApi } from './spec';
 import { ticketsApi } from './ticket';
 import { verificationsApi } from './verification';
 
-// Shared admin API types.
+// 管理端 API 共享类型。
 export * from './types';
 
-// Combine all domain APIs into a single adminApi object (matching original structure)
+// 汇总各域 API 为单一 adminApi 对象（保持原有结构）
 export const adminApi = {
-  // Dashboard
+  // 仪表盘
   dashboardStats: dashboardApi.stats,
   dashboardMonthlyRevenue: dashboardApi.monthlyRevenue,
 
-  // Invoices
+  // 发票
   invoices: invoiceApi,
 
-  // Orders
+  // 订单
   orders: orderApi,
 
-  // Finance Menu
+  // 财务菜单
   financeMenu: financeMenuApi,
 
-  // Settings
+  // 系统设置
   settings: settingsApi,
 
-  // Database
+  // 数据库
   database: databaseApi,
 
-  // Logs
+  // 日志
   logs: logsApi,
 
-  // Schedules
+  // 计划任务
   schedules: schedulesApi,
 
-  // Member Levels
+  // 会员等级
   memberLevels: memberLevelsApi,
 
-  // Promotion Ambassadors
+  // 推广大使
   promotionAmbassadors: promotionAmbassadorsApi,
 
-  // Marketing Product Groups
+  // 营销商品分组
   marketingProductGroups: marketingProductGroupApi,
 
-  // Content
+  // 内容
   content: contentApi,
 
-  // Media
+  // 媒体
   media: mediaApi,
 
-  // Site Hero
+  // 站点首屏
   siteHero: siteHeroApi,
 
-  // Instance Spec Catalog
+  // 实例规格目录
   instanceSpecCatalog: instanceSpecCatalogApi,
 
-  // CPU Model Catalog
+  // CPU 型号目录
   cpuModelCatalog: cpuModelCatalogApi,
 
-  // Coupons
+  // 优惠券
   coupons: couponsApi,
 
-  // Coupon Campaigns
+  // 优惠券活动
   couponCampaigns: couponCampaignsApi,
 
-  // Referral
+  // 推荐
   referral: referralApi,
 
-  // Tickets
+  // 工单
   tickets: ticketsApi,
 
-  // Verifications
+  // 实名认证
   verifications: verificationsApi,
 
-  // Integration Plugins
+  // 集成插件
   plugins: pluginsApi,
 };

@@ -219,6 +219,9 @@ export const orderApi = {
       },
       headers: { 'X-Request-Id': payload.request_id || payload.idempotency_key },
     }),
+  // 取消订单：挂账订单被豁免支付窗口清理后的唯一人工终态收敛出口
+  // （关联账单若已取消，订单会一直停在待支付）。权限 order.manage，服务端固定写取消原因。
+  cancel: (id: number | string) => request.post({ url: `/v2/admin/orders/${id}/cancellations` }),
 };
 
 export const financeMenuApi = {
