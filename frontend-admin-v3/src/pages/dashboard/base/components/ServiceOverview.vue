@@ -3,13 +3,29 @@
     <div class="service-metrics">
       <div class="service-metric">
         <span class="service-metric__label">累计服务</span>
-        <span class="service-metric__value">{{ metrics.total }}</span>
-        <span class="service-metric__unit">个</span>
+        <t-skeleton
+          v-if="loading"
+          :row-col="valueSkeletonRowCol"
+          animation="gradient"
+          class="service-metric__skeleton"
+        />
+        <template v-else>
+          <span class="service-metric__value">{{ metrics.total }}</span>
+          <span class="service-metric__unit">个</span>
+        </template>
       </div>
       <div class="service-metric">
         <span class="service-metric__label">活跃服务</span>
-        <span class="service-metric__value">{{ metrics.active }}</span>
-        <span class="service-metric__unit">个</span>
+        <t-skeleton
+          v-if="loading"
+          :row-col="valueSkeletonRowCol"
+          animation="gradient"
+          class="service-metric__skeleton"
+        />
+        <template v-else>
+          <span class="service-metric__value">{{ metrics.active }}</span>
+          <span class="service-metric__unit">个</span>
+        </template>
       </div>
       <button
         type="button"
@@ -19,8 +35,16 @@
         @click="go('/admin/services')"
       >
         <span class="service-metric__label">7 天内到期</span>
-        <span class="service-metric__value">{{ metrics.expiringSoon }}</span>
-        <span class="service-metric__unit">个</span>
+        <t-skeleton
+          v-if="loading"
+          :row-col="valueSkeletonRowCol"
+          animation="gradient"
+          class="service-metric__skeleton"
+        />
+        <template v-else>
+          <span class="service-metric__value">{{ metrics.expiringSoon }}</span>
+          <span class="service-metric__unit">个</span>
+        </template>
       </button>
     </div>
 
@@ -50,6 +74,7 @@
   </t-card>
 </template>
 <script setup lang="ts">
+import type { SkeletonRowCol } from 'tdesign-vue-next';
 import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 
@@ -60,7 +85,11 @@ defineOptions({ name: 'DashboardServiceOverview' });
 const props = defineProps<{
   counts?: DashboardStats['counts'];
   services?: DashboardStats['services'];
+  loading?: boolean;
 }>();
+
+/** 指标值骨架：与 .service-metric__value 的 24–32px 字号同高，加载完成时不跳动 */
+const valueSkeletonRowCol: SkeletonRowCol = [[{ width: '32px', height: '22px' }]];
 
 const router = useRouter();
 
@@ -96,7 +125,7 @@ function go(to: string) {
 .service-metric {
   display: flex;
   align-items: baseline;
-  gap: 4px;
+  gap: var(--td-comp-margin-xs);
   padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-m);
   border: 1px solid transparent;
   border-radius: var(--td-radius-medium);
@@ -127,10 +156,15 @@ function go(to: string) {
   }
 }
 
+.service-metric__skeleton {
+  display: flex;
+  margin-left: auto;
+}
+
 .service-metric__label {
   flex: none;
   color: var(--td-text-color-secondary);
-  font-size: var(--td-font-size-body-small, 12px);
+  font-size: var(--td-font-size-body-small);
 }
 
 .service-metric__value {
@@ -144,7 +178,7 @@ function go(to: string) {
 
 .service-metric__unit {
   color: var(--td-text-color-placeholder);
-  font-size: var(--td-font-size-body-small, 12px);
+  font-size: var(--td-font-size-body-small);
 }
 
 .service-ratio {
@@ -156,7 +190,7 @@ function go(to: string) {
   align-items: center;
   justify-content: space-between;
   color: var(--td-text-color-secondary);
-  font-size: var(--td-font-size-body-small, 12px);
+  font-size: var(--td-font-size-body-small);
 }
 
 .service-ratio__percent {
@@ -183,11 +217,11 @@ function go(to: string) {
 .service-ratio__tip {
   margin: var(--td-comp-margin-s) 0 0;
   color: var(--td-text-color-placeholder);
-  font-size: var(--td-font-size-body-small, 12px);
+  font-size: var(--td-font-size-body-small);
   line-height: 1.5;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 767.98px) {
   .service-metrics {
     grid-template-columns: minmax(0, 1fr);
   }

@@ -1,61 +1,65 @@
 <template>
-  <t-loading :loading="loading" show-overlay>
-    <div class="dashboard-page">
-      <top-panel :stats="dashboardStats" :loading="loading" />
+  <!-- 首屏加载只保留「骨架」一种表达：原先外层 t-loading show-overlay 与 TopPanel 内部骨架并存，
+       同一屏同时出现整页遮罩和灰条骨架（审查条目 P2-12）。刷新由各区块自己的骨架承担。 -->
+  <div class="dashboard-page">
+    <top-panel :stats="dashboardStats" :loading="loading" />
 
-      <todo-panel :todos="dashboardStats.todos" />
+    <todo-panel :todos="dashboardStats.todos" :loading="loading" />
 
-      <section class="chart-grid">
-        <t-card :bordered="false" title="商品收入占比" :subtitle="monthLabel || '本月'">
-          <div
-            v-if="positiveChartData.length"
-            ref="productChartRef"
-            class="chart-box"
-            role="img"
-            :aria-label="`商品收入占比环形图，${monthLabel || '本月'}共 ${positiveChartData.length} 个商品分类`"
-          />
-          <t-empty
-            v-else
-            class="chart-empty"
-            title="本月暂无正向收入"
-            description="整月退款冲抵或暂无已付收入时不生成占比图。"
-          />
-          <div v-if="positiveChartData.length" class="chart-summary">
-            <span class="chart-summary__item">
-              <em>正向收入合计</em>
-              <strong>{{ formatMoney(positiveTotal) }}</strong>
-            </span>
-            <span v-if="refundAdjustment > 0" class="chart-summary__item">
-              <em>含退款冲抵</em>
-              <strong>{{ formatMoney(refundAdjustment) }}</strong>
-            </span>
-          </div>
-        </t-card>
-        <t-card :bordered="false" title="每日收入与新增用户" :subtitle="monthLabel || '本月'">
-          <div
-            v-if="dailyRevenue.length"
-            ref="dailyChartRef"
-            class="chart-box"
-            role="img"
-            :aria-label="`每日收入与新增用户组合图，${monthLabel || '本月'}共 ${dailyRevenue.length} 天`"
-          />
-          <t-empty
-            v-else
-            class="chart-empty"
-            title="暂无收入趋势"
-            description="本月尚未产生已付账单，或收入数据加载失败。"
-          />
-        </t-card>
-      </section>
+    <section class="chart-grid">
+      <t-card :bordered="false" title="商品收入占比" :subtitle="monthLabel || '本月'">
+        <div
+          v-if="positiveChartData.length"
+          ref="productChartRef"
+          class="chart-box"
+          role="img"
+          :aria-label="`商品收入占比环形图，${monthLabel || '本月'}共 ${positiveChartData.length} 个商品分类`"
+        />
+        <t-skeleton v-else-if="loading" :row-col="chartSkeletonRowCol" animation="gradient" class="chart-skeleton" />
+        <t-empty
+          v-else
+          class="chart-empty"
+          title="本月暂无正向收入"
+          description="整月退款冲抵或暂无已付收入时不生成占比图。"
+        />
+        <div v-if="positiveChartData.length" class="chart-summary">
+          <span class="chart-summary__item">
+            <em>正向收入合计</em>
+            <strong>{{ formatMoney(positiveTotal) }}</strong>
+          </span>
+          <span v-if="refundAdjustment > 0" class="chart-summary__item">
+            <em>含退款冲抵</em>
+            <strong>{{ formatMoney(refundAdjustment) }}</strong>
+          </span>
+        </div>
+      </t-card>
+      <t-card :bordered="false" title="每日收入与新增用户" :subtitle="monthLabel || '本月'">
+        <div
+          v-if="dailyRevenue.length"
+          ref="dailyChartRef"
+          class="chart-box"
+          role="img"
+          :aria-label="`每日收入与新增用户组合图，${monthLabel || '本月'}共 ${dailyRevenue.length} 天`"
+        />
+        <t-skeleton v-else-if="loading" :row-col="chartSkeletonRowCol" animation="gradient" class="chart-skeleton" />
+        <t-empty
+          v-else
+          class="chart-empty"
+          title="暂无收入趋势"
+          description="本月尚未产生已付账单，或收入数据加载失败。"
+        />
+      </t-card>
+    </section>
 
-      <section class="side-grid">
-        <quick-actions />
-        <service-overview :counts="dashboardStats.counts" :services="dashboardStats.services" />
-      </section>
-    </div>
-  </t-loading>
+    <section class="side-grid">
+      <quick-actions />
+      <service-overview :counts="dashboardStats.counts" :services="dashboardStats.services" :loading="loading" />
+    </section>
+  </div>
 </template>
 <script setup lang="ts">
+import type { SkeletonRowCol } from 'tdesign-vue-next';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import {
   computed,
   nextTick,
@@ -73,6 +77,7 @@ import { adminApi } from '@/api/admin';
 import { getChartListColor } from '@/utils/color';
 import echarts from '@/utils/echarts';
 import { formatMoney } from '@/utils/format';
+import { errorMessage } from '@/utils/userMessage';
 
 import QuickActions from './components/QuickActions.vue';
 import ServiceOverview from './components/ServiceOverview.vue';
@@ -83,7 +88,8 @@ defineOptions({
   name: 'DashboardBase',
 });
 
-const loading = ref(false);
+// 初值为 true：首帧直接出骨架，否则 <t-empty> 会先闪一帧「暂无数据」再被骨架替换
+const loading = ref(true);
 const monthlyRevenue = shallowRef<MonthlyRevenue>({});
 const dashboardStats = shallowRef<DashboardStats>({});
 const productChartRef = ref<HTMLDivElement>();
@@ -116,6 +122,25 @@ const refundAdjustment = computed(() =>
   productChartData.value.filter((item) => item.value < 0).reduce((sum, item) => sum - item.value, 0),
 );
 
+/**
+ * 图表布局常量。
+ * ECharts 的 grid / series / legend 只接受数值像素，无法直接消费 CSS 令牌，
+ * 故把图中魔法值集中到本处以单点维护；数值取 8px 网格整数倍（docs/DESIGN.md §3.3）。
+ */
+const CHART_GRID = { left: 64, right: 56, top: 32, bottom: 52 };
+const LEGEND_ITEM_SIZE = { itemWidth: 10, itemHeight: 10 };
+const PIE_RADIUS: string[] = ['45%', '70%'];
+const PIE_CENTER: string[] = ['50%', '42%'];
+const PIE_BORDER_WIDTH = 2;
+const PIE_EMPHASIS_SCALE = 6;
+const DAILY_BAR_MAX_WIDTH = 14;
+const DAILY_BAR_RADIUS: number[] = [3, 3, 0, 0];
+const DAILY_BAR_OPACITY = 0.9;
+const DAILY_AREA_OPACITY = 0.12;
+
+/** 图表首屏骨架：与 .chart-box 同高，避免加载完成时页面跳动 */
+const chartSkeletonRowCol: SkeletonRowCol = [[{ width: '100%', height: '100%' }]];
+
 /** 读取 TDesign 主题令牌，保证图表配色与浅色主题一致 */
 function themeToken(name: string, fallback: string): string {
   const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -147,11 +172,14 @@ function renderProductChart() {
     series: [
       {
         type: 'pie',
-        radius: ['45%', '70%'],
-        center: ['50%', '42%'],
-        itemStyle: { borderColor: themeToken('--td-bg-color-container', '#ffffff'), borderWidth: 2 },
+        radius: PIE_RADIUS,
+        center: PIE_CENTER,
+        itemStyle: {
+          borderColor: themeToken('--td-bg-color-container', '#ffffff'),
+          borderWidth: PIE_BORDER_WIDTH,
+        },
         label: { formatter: '{b}\n{d}%', color: themeToken('--td-text-color-secondary', '#5B6B82') },
-        emphasis: { scale: true, scaleSize: 6 },
+        emphasis: { scale: true, scaleSize: PIE_EMPHASIS_SCALE },
         data: positiveChartData.value,
       },
     ],
@@ -178,8 +206,13 @@ function renderDailyChart() {
     tooltip: {
       trigger: 'axis',
     },
-    legend: { bottom: 0, icon: 'roundRect', itemWidth: 10, itemHeight: 10, textStyle: { color: axisColor } },
-    grid: { left: 64, right: 56, top: 32, bottom: 52 },
+    legend: {
+      bottom: 0,
+      icon: 'roundRect',
+      ...LEGEND_ITEM_SIZE,
+      textStyle: { color: axisColor },
+    },
+    grid: CHART_GRID,
     xAxis: {
       type: 'category',
       boundaryGap: true,
@@ -214,7 +247,7 @@ function renderDailyChart() {
         smooth: true,
         showSymbol: false,
         yAxisIndex: 0,
-        areaStyle: { opacity: 0.12 },
+        areaStyle: { opacity: DAILY_AREA_OPACITY },
         tooltip: { valueFormatter: (value: unknown) => formatMoney(value) },
         data: dailyRevenue.value.map((item) => Number(item.amount ?? item.income ?? 0)),
       },
@@ -222,8 +255,8 @@ function renderDailyChart() {
         name: '新增用户',
         type: 'bar',
         yAxisIndex: 1,
-        barMaxWidth: 14,
-        itemStyle: { borderRadius: [3, 3, 0, 0], opacity: 0.9 },
+        barMaxWidth: DAILY_BAR_MAX_WIDTH,
+        itemStyle: { borderRadius: DAILY_BAR_RADIUS, opacity: DAILY_BAR_OPACITY },
         tooltip: { valueFormatter: (value: unknown) => `${Number(value ?? 0)} 人` },
         data: dailyRevenue.value.map((item) => Number(item.new_users ?? 0)),
       },
@@ -269,9 +302,11 @@ async function loadDashboard(options: { silent?: boolean } = {}) {
     ]);
     monthlyRevenue.value = monthlyRevenueRes || {};
     dashboardStats.value = statsRes || {};
-  } catch {
+  } catch (error) {
     monthlyRevenue.value = {};
     dashboardStats.value = {};
+    // 静默刷新（keep-alive 复访）失败不打断阅读，但首屏失败必须提示，避免空白图表被当成「无数据」
+    if (!silent) MessagePlugin.error(errorMessage(error, '仪表盘数据加载失败'));
   } finally {
     loading.value = false;
     await nextTick();
@@ -308,6 +343,9 @@ onBeforeUnmount(() => {
 });
 </script>
 <style lang="less" scoped>
+// 图表容器高度：与 ECharts grid 常量配套的单一真值，避免散落裸 px
+@chart-height: 320px;
+
 .dashboard-page {
   display: flex;
   flex-direction: column;
@@ -329,11 +367,15 @@ onBeforeUnmount(() => {
 
 .chart-box {
   width: 100%;
-  height: 320px;
+  height: @chart-height;
 }
 
 .chart-empty {
   padding: var(--td-comp-paddingTB-xxl) 0;
+}
+
+.chart-skeleton {
+  height: @chart-height;
 }
 
 .chart-summary {
@@ -349,7 +391,7 @@ onBeforeUnmount(() => {
   align-items: baseline;
   gap: var(--td-comp-margin-xs);
   color: var(--td-text-color-placeholder);
-  font-size: var(--td-font-size-body-small, 12px);
+  font-size: var(--td-font-size-body-small);
 
   em {
     font-style: normal;
@@ -368,8 +410,11 @@ onBeforeUnmount(() => {
   }
 }
 
-@media (max-width: 640px) {
-  .chart-box {
+@media (max-width: 767.98px) {
+  // 骨架必须跟着图表盒一起降：只改 .chart-box 会让加载完成瞬间从 320 塌到 260，
+  // 正是上面 chartSkeletonRowCol 注释要避免的「页面跳动」。
+  .chart-box,
+  .chart-skeleton {
     height: 260px;
   }
 }

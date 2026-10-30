@@ -123,7 +123,7 @@ function go(to: string) {
 
 .quick-item__label {
   overflow: hidden;
-  font-size: var(--td-font-size-body-medium, 14px);
+  font-size: var(--td-font-size-body-medium);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -133,12 +133,6 @@ function go(to: string) {
 }
 
 @media (max-width: 1200px) {
-  .quick-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 640px) {
   .quick-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

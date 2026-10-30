@@ -3,10 +3,13 @@
     <template #title>
       <div class="todo-panel__heading">
         <span class="todo-panel__title">待办中心</span>
-        <t-tag v-if="pendingTotal > 0" theme="warning" variant="light" size="small">
-          {{ pendingTotal }} 项待处理
-        </t-tag>
-        <t-tag v-else theme="success" variant="light" size="small">暂无待处理</t-tag>
+        <t-skeleton v-if="loading" :row-col="tagSkeletonRowCol" animation="gradient" class="todo-panel__tag-skeleton" />
+        <template v-else>
+          <t-tag v-if="pendingTotal > 0" theme="warning" variant="light" size="small">
+            {{ pendingTotal }} 项待处理
+          </t-tag>
+          <t-tag v-else theme="success" variant="light" size="small">暂无待处理</t-tag>
+        </template>
       </div>
     </template>
 
@@ -25,7 +28,8 @@
         </span>
         <span class="todo-item__main">
           <span class="todo-item__label">{{ item.label }}</span>
-          <span class="todo-item__count">
+          <t-skeleton v-if="loading" :row-col="countSkeletonRowCol" animation="gradient" class="todo-item__skeleton" />
+          <span v-else class="todo-item__count">
             <strong>{{ item.count }}</strong>
             <em>{{ item.unit }}</em>
           </span>
@@ -36,6 +40,7 @@
   </t-card>
 </template>
 <script setup lang="ts">
+import type { SkeletonRowCol } from 'tdesign-vue-next';
 import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 
@@ -49,6 +54,10 @@ const props = defineProps<{
 }>();
 
 const router = useRouter();
+
+/** 计数骨架：与 .todo-item__count 同高，加载完成时不跳动 */
+const countSkeletonRowCol: SkeletonRowCol = [[{ width: '56px', height: '22px' }]];
+const tagSkeletonRowCol: SkeletonRowCol = [[{ width: '72px', height: '20px' }]];
 
 function toCount(value: unknown): number {
   const num = Number(value ?? 0);
@@ -107,8 +116,16 @@ function go(to: string) {
   gap: var(--td-comp-margin-s);
 }
 
+.todo-panel__tag-skeleton {
+  display: flex;
+}
+
+.todo-item__skeleton {
+  display: flex;
+}
+
 .todo-panel__title {
-  font-size: var(--td-font-size-title-medium, 16px);
+  font-size: var(--td-font-size-title-medium);
   font-weight: 600;
 }
 
@@ -183,13 +200,13 @@ function go(to: string) {
   min-width: 0;
   flex: 1;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--td-comp-margin-xxs);
 }
 
 .todo-item__label {
   overflow: hidden;
   color: var(--td-text-color-secondary);
-  font-size: var(--td-font-size-body-small, 12px);
+  font-size: var(--td-font-size-body-small);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -197,7 +214,7 @@ function go(to: string) {
 .todo-item__count {
   display: flex;
   align-items: baseline;
-  gap: 4px;
+  gap: var(--td-comp-margin-xs);
 
   strong {
     color: var(--td-text-color-primary);
@@ -209,7 +226,7 @@ function go(to: string) {
 
   em {
     color: var(--td-text-color-placeholder);
-    font-size: var(--td-font-size-body-small, 12px);
+    font-size: var(--td-font-size-body-small);
     font-style: normal;
   }
 }
@@ -230,7 +247,7 @@ function go(to: string) {
   }
 }
 
-@media (max-width: 640px) {
+@media (max-width: 767.98px) {
   .todo-grid {
     grid-template-columns: minmax(0, 1fr);
   }

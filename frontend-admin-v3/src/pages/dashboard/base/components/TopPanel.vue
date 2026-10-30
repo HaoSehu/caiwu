@@ -17,7 +17,7 @@
           <span class="stat-card__label">{{ card.label }}</span>
           <t-skeleton v-if="loading" :row-col="skeletonRowCol" animation="gradient" class="stat-card__skeleton" />
           <template v-else>
-            <span class="stat-card__value">{{ card.value }}</span>
+            <span class="stat-card__value" :title="card.value">{{ card.value }}</span>
             <div class="stat-card__meta">
               <span v-if="card.trend" class="stat-card__trend" :class="`is-${card.trend.direction}`">
                 <t-icon :name="card.trend.icon" />
@@ -40,7 +40,7 @@ import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 
 import type { DashboardStats } from '@/api/admin';
-import { formatCompactMoney } from '@/utils/format';
+import { formatMetricMoney } from '@/utils/format';
 
 defineOptions({ name: 'DashboardTopPanel' });
 
@@ -99,7 +99,7 @@ const cards = computed(() => [
   {
     key: 'today_income',
     label: '今日营业额',
-    value: formatCompactMoney(props.stats?.today?.income),
+    value: formatMetricMoney(props.stats?.today?.income),
     trend: buildTrend(props.stats?.today?.income, props.stats?.yesterday?.income),
     hint: `今日新增账单 ${countText(props.stats?.today?.new_invoices)}`,
     icon: 'money',
@@ -109,7 +109,7 @@ const cards = computed(() => [
   {
     key: 'month_income',
     label: '本月营业额',
-    value: formatCompactMoney(props.stats?.month?.income),
+    value: formatMetricMoney(props.stats?.month?.income),
     trend: null,
     hint: `本月新增账单 ${countText(props.stats?.month?.new_invoices)}`,
     icon: 'chart',
@@ -189,7 +189,7 @@ function go(to?: string) {
 
 .stat-card__label {
   color: var(--td-text-color-secondary);
-  font-size: var(--td-font-size-body-small, 12px);
+  font-size: var(--td-font-size-body-small);
   line-height: 1.4;
 }
 
@@ -200,7 +200,6 @@ function go(to?: string) {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   line-height: 1.2;
-  letter-spacing: -0.02em;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -216,10 +215,10 @@ function go(to?: string) {
   display: inline-flex;
   flex: none;
   align-items: center;
-  gap: 2px;
+  gap: var(--td-comp-margin-xxs);
   padding: 0 6px;
-  border-radius: var(--td-radius-small, 2px);
-  font-size: var(--td-font-size-body-small, 12px);
+  border-radius: var(--td-radius-small);
+  font-size: var(--td-font-size-body-small);
   font-variant-numeric: tabular-nums;
   line-height: 18px;
   white-space: nowrap;
@@ -248,7 +247,7 @@ function go(to?: string) {
 .stat-card__hint {
   overflow: hidden;
   color: var(--td-text-color-placeholder);
-  font-size: var(--td-font-size-body-small, 12px);
+  font-size: var(--td-font-size-body-small);
   font-variant-numeric: tabular-nums;
   line-height: 1.4;
   text-overflow: ellipsis;
@@ -268,7 +267,7 @@ function go(to?: string) {
   justify-content: center;
   width: 48px;
   height: 48px;
-  border-radius: var(--td-radius-extraLarge, 12px);
+  border-radius: var(--td-radius-extraLarge);
 
   .t-icon {
     font-size: var(--td-font-size-headline-small);
@@ -296,7 +295,7 @@ function go(to?: string) {
   }
 }
 
-@media (max-width: 640px) {
+@media (max-width: 767.98px) {
   .top-panel {
     grid-template-columns: minmax(0, 1fr);
   }
