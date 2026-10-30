@@ -19,7 +19,18 @@
     </div>
 
     <div class="table-scroll">
-      <t-table row-key="id" :data="rows" :columns="columns" :loading="loading" hover table-layout="fixed">
+      <t-table
+        row-key="id"
+        :data="rows"
+        :columns="columns"
+        :loading="loading"
+        hover
+        table-layout="fixed"
+        aria-label="队列任务列表"
+      >
+        <template #empty>
+          <t-empty :description="loading ? '加载中…' : '暂无队列任务'" />
+        </template>
         <template #job="{ row }">
           <div class="stack-cell">
             <strong>{{ fieldValue(row.display_name) }}</strong>
@@ -53,10 +64,9 @@
         :current="page"
         :page-size="pageSize"
         :total="total"
-        :page-size-options="[20, 50, 100]"
+        :page-size-options="PAGE_SIZE_OPTIONS"
         show-jumper
         @change="handlePageChange"
-        @page-size-change="handlePageSizeChange"
       />
     </div>
     <t-empty v-else-if="!loading" description="队列为空" />
@@ -68,6 +78,7 @@ import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, ref, watch } from 'vue';
 
 import { adminApi } from '@/api/admin';
+import { PAGE_SIZE_OPTIONS } from '@/constants/pagination';
 import { fieldValue } from '@/utils/format';
 import { errorMessage } from '@/utils/userMessage';
 
@@ -152,14 +163,11 @@ async function load() {
   }
 }
 
+// 只绑 @change：改每页条数时 TDesign 的 change 也携带新的 pageSize，再绑
+// @page-size-change 会让同一次操作触发两次请求（两个事件各 load 一次）。
 function handlePageChange(data: { current: number; pageSize: number }) {
   page.value = Math.max(1, Number(data?.current || 1));
   pageSize.value = Math.max(1, Number(data?.pageSize || pageSize.value));
-  load();
-}
-
-function handlePageSizeChange() {
-  page.value = 1;
   load();
 }
 

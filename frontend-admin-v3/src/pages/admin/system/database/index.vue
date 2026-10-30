@@ -49,7 +49,15 @@
         <span v-else class="candidates-empty">暂无达到优化阈值的数据表</span>
       </div>
 
-      <t-table row-key="name" :data="filteredList" :columns="columns" :loading="loading" hover table-layout="fixed">
+      <t-table
+        row-key="name"
+        :data="filteredList"
+        :columns="columns"
+        :loading="loading"
+        hover
+        table-layout="fixed"
+        aria-label="数据表列表"
+      >
         <template #name="{ row }">
           <strong>{{ row.name }}</strong>
         </template>
@@ -74,6 +82,8 @@ import { databaseApi } from '@/api/admin/database';
 import { AdminPermissions, hasPermissionInList } from '@/constants/permissions';
 import { useUserStore } from '@/store';
 import { errorMessage } from '@/utils/userMessage';
+
+defineOptions({ name: 'AdminDatabaseStatus' });
 
 const userStore = useUserStore();
 
@@ -288,28 +298,28 @@ function hasPermission(permission: string) {
 
   .database-toolbar {
     display: flex;
-    gap: 12px;
+    gap: var(--td-comp-margin-m);
     align-items: center;
-    margin-bottom: 12px;
+    margin-bottom: var(--td-comp-margin-m);
   }
 
   .database-summary {
     display: flex;
     flex-wrap: wrap;
-    gap: 16px;
-    margin-bottom: 16px;
+    gap: var(--td-comp-margin-l);
+    margin-bottom: var(--td-comp-margin-l);
     color: var(--td-text-color-secondary);
-    font-size: 13px;
+    font-size: var(--td-font-size-size-3, 14px);
   }
 
   .database-optimization-candidates {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: var(--td-comp-margin-s);
     align-items: center;
     margin: -4px 0 16px;
     color: var(--td-text-color-secondary);
-    font-size: 13px;
+    font-size: var(--td-font-size-size-3, 14px);
   }
 
   .candidates-label {

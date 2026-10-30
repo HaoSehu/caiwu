@@ -2,6 +2,9 @@
   <div class="integration-plugins-page">
     <t-card :bordered="false">
       <div class="plugins-toolbar">
+        <t-tabs :value="activeDomain" @change="handleDomainChange">
+          <t-tab-panel v-for="tab in domainTabs" :key="tab.value" :value="tab.value" :label="tab.label" />
+        </t-tabs>
         <t-space>
           <t-button v-if="canManagePlugins" theme="primary" :loading="scanning" @click="scanPlugins">
             扫描插件
@@ -14,104 +17,116 @@
       <t-loading text="正在加载插件" />
     </div>
     <t-empty v-else-if="plugins.length === 0" description="当前目录没有可安装插件" />
-    <section v-else class="plugin-grid">
-      <article v-for="plugin in plugins" :key="`${plugin.domain}:${plugin.slug}`" class="plugin-card">
-        <div class="plugin-card__main">
-          <div class="plugin-card__icon">
-            {{ domainLabel(plugin.domain).slice(0, 1) }}
+    <template v-else>
+      <p v-if="pluginTotal > plugins.length" class="plugins-truncated">
+        当前目录共 {{ pluginTotal }} 个插件，本页展示前 {{ plugins.length }} 个；请按域切换查看其余插件。
+      </p>
+      <section class="plugin-grid">
+        <article v-for="plugin in plugins" :key="`${plugin.domain}:${plugin.slug}`" class="plugin-card">
+          <div class="plugin-card__main">
+            <div class="plugin-card__icon">
+              {{ domainLabel(plugin.domain).slice(0, 1) }}
+            </div>
+            <div class="plugin-card__body">
+              <div class="plugin-card__title">
+                <strong>{{ plugin.name }}</strong>
+                <t-tag
+                  :theme="plugin.is_enabled ? 'success' : plugin.is_installed ? 'warning' : 'default'"
+                  variant="light"
+                >
+                  {{ pluginStatusText(plugin) }}
+                </t-tag>
+                <t-tag v-if="plugin.has_update" theme="warning" variant="light">有可用更新</t-tag>
+              </div>
+              <p>{{ plugin.slug }} / {{ plugin.key }}</p>
+              <div class="plugin-meta">
+                <span>{{ domainLabel(plugin.domain) }}</span>
+                <span>v{{ plugin.version || '-' }}</span>
+              </div>
+              <div class="plugin-observability">
+                <t-tag
+                  v-if="plugin.latest_runtime_log"
+                  size="small"
+                  variant="light"
+                  :theme="runtimeStatusTheme(plugin)"
+                >
+                  {{ latestRuntimeText(plugin) }}
+                </t-tag>
+              </div>
+            </div>
           </div>
-          <div class="plugin-card__body">
-            <div class="plugin-card__title">
-              <strong>{{ plugin.name }}</strong>
-              <t-tag
-                :theme="plugin.is_enabled ? 'success' : plugin.is_installed ? 'warning' : 'default'"
-                variant="light"
-              >
-                {{ pluginStatusText(plugin) }}
-              </t-tag>
-              <t-tag v-if="plugin.has_update" theme="warning" variant="light">有可用更新</t-tag>
-            </div>
-            <p>{{ plugin.slug }} / {{ plugin.key }}</p>
-            <div class="plugin-meta">
-              <span>{{ domainLabel(plugin.domain) }}</span>
-              <span>v{{ plugin.version || '-' }}</span>
-            </div>
-            <div class="plugin-observability">
-              <t-tag v-if="plugin.latest_runtime_log" size="small" variant="light" :theme="runtimeStatusTheme(plugin)">
-                {{ latestRuntimeText(plugin) }}
-              </t-tag>
-            </div>
-          </div>
-        </div>
 
-        <div class="plugin-actions">
-          <t-button
-            v-if="!plugin.is_installed && canManagePlugins"
-            theme="primary"
-            :loading="actionLoading === actionKey(plugin, 'install')"
-            @click="installPlugin(plugin)"
-          >
-            安装
-          </t-button>
-          <template v-else>
-            <t-button variant="outline" @click="openConfig(plugin)">{{ canManagePlugins ? '管理' : '查看' }}</t-button>
+          <div class="plugin-actions">
             <t-button
-              v-if="canManagePlugins && plugin.has_update"
+              v-if="!plugin.is_installed && canManagePlugins"
               theme="primary"
-              variant="outline"
-              :loading="actionLoading === actionKey(plugin, 'upgrade')"
-              @click="upgradePlugin(plugin)"
+              :loading="actionLoading === actionKey(plugin, 'install')"
+              @click="installPlugin(plugin)"
             >
-              同步升级
+              安装
             </t-button>
-            <t-button
-              v-if="plugin.is_enabled && canManagePlugins"
-              theme="warning"
-              variant="outline"
-              :loading="actionLoading === actionKey(plugin, 'disable')"
-              @click="disablePlugin(plugin)"
-            >
-              停用
-            </t-button>
-            <t-button
-              v-else-if="canManagePlugins"
-              theme="success"
-              variant="outline"
-              :loading="actionLoading === actionKey(plugin, 'enable')"
-              :disabled="isEnableDisabled(plugin)"
-              :title="enableDisabledReason(plugin)"
-              @click="enablePlugin(plugin)"
-            >
-              启用
-            </t-button>
-            <t-button
-              v-if="canTestPlugins"
-              variant="text"
-              :loading="actionLoading === actionKey(plugin, 'health')"
-              @click="healthCheck(plugin)"
-            >
-              检测
-            </t-button>
-            <t-button v-if="plugin.id && plugin.is_enabled" variant="text" @click="openRuntimeLogs(plugin)">
-              日志
-            </t-button>
-            <t-button
-              v-if="canManagePlugins && !plugin.is_enabled"
-              theme="danger"
-              variant="text"
-              :loading="actionLoading === actionKey(plugin, 'delete')"
-              @click="deletePlugin(plugin)"
-            >
-              删除
-            </t-button>
-          </template>
-        </div>
-      </article>
-    </section>
+            <template v-else>
+              <t-button variant="outline" @click="openConfig(plugin)">{{
+                canManagePlugins ? '管理' : '查看'
+              }}</t-button>
+              <t-button
+                v-if="canManagePlugins && plugin.has_update"
+                theme="primary"
+                variant="outline"
+                :loading="actionLoading === actionKey(plugin, 'upgrade')"
+                @click="upgradePlugin(plugin)"
+              >
+                同步升级
+              </t-button>
+              <t-button
+                v-if="plugin.is_enabled && canManagePlugins"
+                theme="warning"
+                variant="outline"
+                :loading="actionLoading === actionKey(plugin, 'disable')"
+                @click="disablePlugin(plugin)"
+              >
+                停用
+              </t-button>
+              <t-button
+                v-else-if="canManagePlugins"
+                theme="success"
+                variant="outline"
+                :loading="actionLoading === actionKey(plugin, 'enable')"
+                :disabled="isEnableDisabled(plugin)"
+                :title="enableDisabledReason(plugin)"
+                @click="enablePlugin(plugin)"
+              >
+                启用
+              </t-button>
+              <t-button
+                v-if="canTestPlugins"
+                variant="text"
+                :loading="actionLoading === actionKey(plugin, 'health')"
+                @click="healthCheck(plugin)"
+              >
+                检测
+              </t-button>
+              <t-button v-if="plugin.id && plugin.is_enabled" variant="text" @click="openRuntimeLogs(plugin)">
+                日志
+              </t-button>
+              <t-button
+                v-if="canManagePlugins && !plugin.is_enabled"
+                theme="danger"
+                variant="text"
+                :loading="actionLoading === actionKey(plugin, 'delete')"
+                @click="deletePlugin(plugin)"
+              >
+                删除
+              </t-button>
+            </template>
+          </div>
+        </article>
+      </section>
+    </template>
 
     <t-drawer
       v-model:visible="configVisible"
-      size="560px"
+      size="min(560px, calc(100vw - 32px))"
       :header="currentPlugin ? `${currentPlugin.name} 管理` : '插件管理'"
       :confirm-btn="canManagePlugins ? { content: '保存配置', loading: savingConfig } : null"
       cancel-btn="关闭"
@@ -139,7 +154,7 @@
           </dl>
         </div>
 
-        <t-form label-align="top" class="plugin-config-form">
+        <t-form label-align="right" class="plugin-config-form">
           <template v-for="field in visibleSchema" :key="field.key">
             <t-divider v-if="field.type === 'divider'" align="left">{{ fieldLabel(field) }}</t-divider>
             <t-alert
@@ -276,7 +291,15 @@
                 @update:model-value="(value: string) => handleSecretInput(field, value)"
               >
                 <template v-if="fieldHasSecretValue(field) && canRevealPluginSecrets" #suffix-icon>
-                  <span class="plugin-secret-toggle" @click.stop="toggleSecretVisibility(field)">
+                  <span
+                    class="plugin-secret-toggle"
+                    role="button"
+                    tabindex="0"
+                    :aria-label="isSecretVisible(field) ? '隐藏明文' : '显示明文'"
+                    @click.stop="toggleSecretVisibility(field)"
+                    @keydown.enter.prevent.stop="toggleSecretVisibility(field)"
+                    @keydown.space.prevent.stop="toggleSecretVisibility(field)"
+                  >
                     <browse-off-icon v-if="isSecretVisible(field)" />
                     <browse-icon v-else />
                   </span>
@@ -310,11 +333,11 @@
     <t-dialog
       v-model:visible="smtpAccountDialogVisible"
       :header="editingSmtpAccountIndex >= 0 ? '编辑 SMTP 账号' : '新建 SMTP 账号'"
-      width="520px"
+      width="min(520px, calc(100vw - 32px))"
       :confirm-btn="{ content: '保存账号', loading: savingConfig }"
       @confirm="confirmSmtpAccount"
     >
-      <t-form label-align="top" class="smtp-account-form">
+      <t-form label-align="right" class="smtp-account-form">
         <t-form-item label="SMTP 主机">
           <t-input v-model="smtpAccountForm.host" placeholder="请输入 SMTP 主机" />
         </t-form-item>
@@ -362,11 +385,11 @@
     <t-dialog
       v-model:visible="emailTestVisible"
       header="发送测试邮件"
-      width="480px"
+      width="min(480px, calc(100vw - 32px))"
       :confirm-btn="{ content: '发送测试', loading: emailTesting }"
       @confirm="sendTestEmail"
     >
-      <t-form label-align="top" class="email-test-form">
+      <t-form label-align="right" class="email-test-form">
         <t-form-item label="收件人邮箱" :status="emailTestErrors.to ? 'error' : undefined" :help="emailTestErrors.to">
           <t-input v-model="emailTestForm.to" placeholder="请输入收件人邮箱" @change="clearEmailTestError('to')" />
         </t-form-item>
@@ -395,6 +418,8 @@ import SecretInput from '@/components/secret-input/index.vue';
 import { AdminPermissions } from '@/constants/permissions';
 import { hasAdminPermission } from '@/utils/permission';
 import { errorMessage } from '@/utils/userMessage';
+
+defineOptions({ name: 'AdminIntegrationPlugins' });
 
 const router = useRouter();
 const route = useRoute();
@@ -481,6 +506,17 @@ function resolveRouteDomain(): IntegrationPluginDomain {
   return normalizeDomain(route.query.domain) || normalizeDomain(route.meta.pluginDomain) || 'captcha';
 }
 
+// 七个域各有一条独立路由（system.ts 的 integration-plugins/<domain>），切 tab 走
+// router.replace 而不是 push：同一页面换域不该在标签栏新增标签，也不能改 route.path
+// 之外的东西——Content.vue 的 keep-alive key 是 route.path，path 一变组件就重建。
+function handleDomainChange(value: unknown) {
+  const domain = normalizeDomain(value);
+  if (!domain || domain === activeDomain.value) return;
+  const query = { ...route.query };
+  delete query.domain;
+  void router.replace({ path: `/admin/integration-plugins/${domain}`, query });
+}
+
 watch(
   () => [route.path, route.query.domain, route.meta.pluginDomain],
   () => {
@@ -491,11 +527,17 @@ watch(
   },
 );
 
+// 后端列表接口按 page/page_size 内存分页（ListIntegrationPluginsRequest 上限 50），
+// 这里必须显式要满一页并接住 total，否则默认第一页 50 条会把超出部分静默截断。
+const PLUGIN_PAGE_SIZE = 50;
+const pluginTotal = ref(0);
+
 async function loadPlugins() {
   loading.value = true;
   try {
-    const response = await pluginsApi.list({ domain: activeDomain.value });
+    const response = await pluginsApi.list({ domain: activeDomain.value, page: 1, page_size: PLUGIN_PAGE_SIZE });
     plugins.value = response.list || [];
+    pluginTotal.value = Number(response.total ?? plugins.value.length);
   } catch (error) {
     MessagePlugin.error(errorMessage(error, '加载插件列表失败'));
   } finally {

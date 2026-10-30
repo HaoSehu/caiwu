@@ -2,10 +2,18 @@
   <div class="admin-roles-page">
     <t-card class="roles-card" :bordered="false">
       <div class="roles-filter">
-        <t-input v-model="keyword" clearable placeholder="搜索角色编码/名称" @enter="loadRoles" @clear="loadRoles">
+        <t-input
+          v-model="filters.keyword"
+          clearable
+          placeholder="搜索角色编码/名称"
+          @enter="handleSearch"
+          @clear="handleSearch"
+        >
           <template #suffix-icon><search-icon /></template>
         </t-input>
-        <t-button v-if="canManage" theme="primary" @click="openCreateDialog">
+        <t-button theme="primary" @click="handleSearch">查询</t-button>
+        <t-button theme="default" variant="base" @click="resetFilters">重置</t-button>
+        <t-button v-if="canManage" theme="primary" variant="outline" @click="openCreateDialog">
           <template #icon><add-icon /></template>
           新建角色
         </t-button>
@@ -14,12 +22,16 @@
       <t-table
         v-if="!isMobile"
         row-key="id"
-        :data="roles"
+        :data="list"
         :columns="columns"
         :loading="loading"
         hover
         table-layout="fixed"
+        aria-label="角色列表"
       >
+        <template #empty>
+          <t-empty :description="loading ? '加载中…' : hasActiveFilters ? '未找到匹配结果' : '暂无角色'" />
+        </template>
         <template #role="{ row }">
           <div class="role-cell">
             <strong>{{ row.label || row.name || '-' }}</strong>
@@ -52,9 +64,9 @@
 
       <div v-else class="roles-mobile-list">
         <t-loading :loading="loading" size="small">
-          <div v-if="roles.length" class="roles-mobile-stack">
+          <div v-if="list.length" class="roles-mobile-stack">
             <mobile-record-card
-              v-for="row in roles"
+              v-for="row in list"
               :key="row.id"
               :title="row.label || row.name || '-'"
               :subtitle="row.name"
@@ -68,7 +80,7 @@
               @action="(value) => handleRolesMobileAction(value, row)"
             />
           </div>
-          <t-empty v-else :description="keyword ? '未找到匹配结果' : '暂无角色'" />
+          <t-empty v-else :description="hasActiveFilters ? '未找到匹配结果' : '暂无角色'" />
         </t-loading>
       </div>
     </t-card>
@@ -76,12 +88,12 @@
     <t-dialog
       v-model:visible="dialogVisible"
       :header="form.id ? '编辑角色权限' : '新建角色'"
-      width="960px"
+      width="min(960px, calc(100vw - 32px))"
       :confirm-btn="dialogConfirmBtn"
       :confirm-loading="saving"
       @confirm="submitForm"
     >
-      <t-form ref="formRef" :data="form" :rules="rules" label-align="top">
+      <t-form ref="formRef" :data="form" :rules="rules" label-align="right">
         <div class="role-form-grid">
           <t-form-item label="角色编码" name="name">
             <t-input
@@ -180,8 +192,8 @@ import { DialogPlugin } from 'tdesign-vue-next/es/dialog/plugin';
 import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 
-import type { PermissionItem, RolePayload, RoleRecord } from '@/api/admin-roles';
-import { adminRoleApi } from '@/api/admin-roles';
+import type { PermissionItem, RolePayload, RoleRecord } from '@/api/admin/roles';
+import { adminRoleApi } from '@/api/admin/roles';
 import MobileRecordCard from '@/components/mobile-record-card/index.vue';
 import {
   ADMIN_DEFAULT_PERMISSION_CODES,
@@ -190,6 +202,7 @@ import {
   hasPermissionInList,
   VISITOR_PERMISSION_CODES,
 } from '@/constants/permissions';
+import { useListPage } from '@/hooks/useListPage';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useUserStore } from '@/store';
 import { required } from '@/utils/formRules';
@@ -222,15 +235,27 @@ interface RolePermissionPreset {
 }
 
 const userStore = useUserStore();
-const loading = ref(false);
 const saving = ref(false);
 const dialogVisible = ref(false);
 const formRef = ref<FormInstanceFunctions>();
-const keyword = ref('');
 const permissionKeyword = ref('');
 const showDangerousOnly = ref(false);
-const roles = ref<RoleRecord[]>([]);
 const permissions = ref<PermissionItem[]>([]);
+
+interface RoleFilter {
+  keyword: string;
+}
+
+// 角色接口后端无真实分页（RoleController::index 固定 page=1、page_size=条数），
+// 接入列表引擎只为统一请求竞态、错误提示与三态空文案。
+const { filters, list, loading, loadList, handleSearch, resetFilters, hasActiveFilters } = useListPage<
+  RoleFilter,
+  RoleRecord
+>({
+  defaultFilters: { keyword: '' },
+  onError: (error) => MessagePlugin.error(errorMessage(error, '加载角色列表失败')),
+  fetch: (params) => adminRoleApi.list({ keyword: params.keyword }),
+});
 const form = reactive<RoleForm>(createDefaultForm());
 const rolePermissionPresets: RolePermissionPreset[] = [
   {
@@ -257,7 +282,7 @@ const canManage = computed(() => hasPermission(AdminPermissions.ROLE_MANAGE));
 const isMobile = useMediaQuery('(max-width: 767.98px)');
 const hasAllPermissionSelected = computed(() => form.permissions.includes(AdminPermissions.ALL));
 const isReadonlySuperRole = computed(() => hasAllPermissionSelected.value);
-const currentRole = computed(() => roles.value.find((item) => String(item.id) === String(form.id)) || null);
+const currentRole = computed(() => list.value.find((item) => String(item.id) === String(form.id)) || null);
 const currentRoleLocked = computed(() => Boolean(currentRole.value?.is_locked || currentRole.value?.is_builtin));
 const canEditCurrentRole = computed(() => canManage.value && !currentRoleLocked.value);
 const selectedPermissionCount = computed(() =>
@@ -316,7 +341,8 @@ watch(
 );
 
 onMounted(async () => {
-  await Promise.all([loadPermissions(), loadRoles()]);
+  // 角色列表由 useListPage 自动加载，这里只补权限目录（筛选与表单共用）
+  await loadPermissions();
 });
 
 function createDefaultForm(): RoleForm {
@@ -334,19 +360,6 @@ async function loadPermissions() {
     permissions.value = response.list || [];
   } catch (error) {
     MessagePlugin.error(errorMessage(error, '加载权限目录失败'));
-  }
-}
-
-async function loadRoles() {
-  loading.value = true;
-  try {
-    const response = await adminRoleApi.list({ keyword: keyword.value });
-    roles.value = response.list || [];
-  } catch (error) {
-    roles.value = [];
-    MessagePlugin.error(errorMessage(error, '加载角色列表失败'));
-  } finally {
-    loading.value = false;
   }
 }
 
@@ -416,7 +429,7 @@ async function submitForm() {
       MessagePlugin.success('角色已创建');
     }
     dialogVisible.value = false;
-    await loadRoles();
+    await loadList();
   } catch (error) {
     MessagePlugin.error(errorMessage(error, '保存角色失败'));
   } finally {
@@ -434,7 +447,7 @@ function handleCopy(row: RoleRecord) {
       try {
         await adminRoleApi.copy(row.id);
         MessagePlugin.success('角色已复制');
-        await loadRoles();
+        await loadList();
         dialog.destroy();
       } catch (error) {
         MessagePlugin.error(errorMessage(error, '复制角色失败'));
@@ -458,7 +471,7 @@ function handleDelete(row: RoleRecord) {
       try {
         await adminRoleApi.delete(row.id);
         MessagePlugin.success('角色已删除');
-        await loadRoles();
+        await loadList();
         dialog.destroy();
       } catch (error) {
         MessagePlugin.error(errorMessage(error, '删除角色失败'));

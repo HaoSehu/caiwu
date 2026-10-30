@@ -33,7 +33,7 @@ import { escapeHtml, sanitizeRenderedHtml } from '@caiwu/shared/htmlSanitizer';
 import { ChevronLeftIcon } from 'tdesign-icons-vue-next';
 import { computed } from 'vue';
 
-import { fieldValue, formatDateTime } from '@/utils/format';
+import { fieldValue, formatDateTime, formatJson } from '@/utils/format';
 
 type LogTab = 'activity' | 'runtime' | 'admin-logins' | 'api' | 'sms' | 'email' | 'tasks' | 'gateway';
 type RecordRow = Record<string, unknown>;
@@ -305,28 +305,20 @@ function gatewayLabel(value: unknown) {
   );
 }
 
-function formatJson(value: unknown, fallback = '-') {
-  if (value === null || value === undefined || value === '') return fallback;
-  if (typeof value === 'string') {
-    const text = value.trim();
-    if (!text) return fallback;
-    try {
-      return JSON.stringify(JSON.parse(text), null, 2);
-    } catch {
-      return text;
-    }
-  }
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return fallback;
-  }
+/**
+ * iframe 内的 CSS 变量不会继承宿主文档，因此这里显式取宿主主题令牌的解析值再写进 srcdoc，
+ * 保证换品牌色后预览壳同步（theme.css 为准一真源，禁止在 srcdoc 里写死色值/圆角）。
+ */
+function themeToken(name: string, fallback: string): string {
+  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return value || fallback;
 }
 
 function buildContentPreviewDoc(value: unknown) {
   const normalized = String(value ?? '').trim();
+  const placeholderColor = themeToken('--td-text-color-placeholder', '#606d80');
   if (!normalized) {
-    return '<!doctype html><html lang="zh-CN"><body style="margin:0;padding:24px;color:#86909c;">暂无正文内容</body></html>';
+    return `<!doctype html><html lang="zh-CN"><body style="margin:0;padding:24px;color:${placeholderColor};">暂无正文内容</body></html>`;
   }
   if (/<!doctype\s+html|<html\b|<body\b/i.test(normalized)) return sanitizeHtmlDoc(normalized);
   if (/<[a-z][a-z0-9]*(?:\s|>)/i.test(normalized)) {
@@ -335,9 +327,18 @@ function buildContentPreviewDoc(value: unknown) {
       allowStyleAttr: true,
       allowDataImage: true,
     });
-    return `<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:;"><style>body{margin:0;padding:24px;background:#f5f7fa;font-family:Arial,sans-serif;color:#1f2329}.mail-preview{max-width:680px;margin:0 auto;padding:24px;border:1px solid #dce7ff;border-radius: var(--td-radius-extraLarge, 12px);background:#fff}</style></head><body><div class="mail-preview">${sanitized}</div></body></html>`;
+    const pageBg = themeToken('--td-bg-color-page', '#f5f7fb');
+    const containerBg = themeToken('--td-bg-color-container', '#fff');
+    const textColor = themeToken('--td-text-color-primary', '#1f2937');
+    const borderColor = themeToken('--td-border-level-1-color', '#e5eaf3');
+    const radius = themeToken('--td-radius-extraLarge', '12px');
+    const fontFamily = themeToken('--td-font-family', 'PingFang SC, Microsoft YaHei, Arial, sans-serif');
+    return `<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:;"><style>body{margin:0;padding:24px;background:${pageBg};font-family:${fontFamily};color:${textColor}}.mail-preview{max-width:680px;margin:0 auto;padding:24px;border:1px solid ${borderColor};border-radius:${radius};background:${containerBg}}</style></head><body><div class="mail-preview">${sanitized}</div></body></html>`;
   }
-  return `<!doctype html><html lang="zh-CN"><body style="margin:0;padding:24px;font-family:Arial,sans-serif;background:#f8fafc;color:#1f2329;"><pre style="margin:0;white-space:pre-wrap;line-height:1.75;">${escapeHtml(normalized)}</pre></body></html>`;
+  const pageBg = themeToken('--td-bg-color-page', '#f5f7fb');
+  const textColor = themeToken('--td-text-color-primary', '#1f2937');
+  const fontFamily = themeToken('--td-font-family', 'PingFang SC, Microsoft YaHei, Arial, sans-serif');
+  return `<!doctype html><html lang="zh-CN"><body style="margin:0;padding:24px;font-family:${fontFamily};background:${pageBg};color:${textColor};"><pre style="margin:0;white-space:pre-wrap;line-height:1.75;">${escapeHtml(normalized)}</pre></body></html>`;
 }
 
 /**

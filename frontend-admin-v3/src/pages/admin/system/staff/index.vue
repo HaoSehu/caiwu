@@ -21,7 +21,7 @@
         <div class="staff-filter-actions">
           <t-button theme="primary" @click="handleSearch">查询</t-button>
           <t-button theme="default" variant="base" @click="resetFilters">重置</t-button>
-          <t-button v-if="canManage" theme="primary" @click="openCreateDialog">
+          <t-button v-if="canManage" theme="primary" variant="outline" @click="openCreateDialog">
             <template #icon><user-add-icon /></template>
             新建员工
           </t-button>
@@ -41,7 +41,11 @@
         :loading="loading"
         hover
         table-layout="fixed"
+        aria-label="员工列表"
       >
+        <template #empty>
+          <t-empty :description="loading ? '加载中…' : hasActiveFilters ? '未找到匹配结果' : '暂无员工'" />
+        </template>
         <template #account="{ row }">
           <div class="staff-account">
             <strong>{{ fieldValue(row.username) }}</strong>
@@ -92,7 +96,7 @@
           :current="pagination.page"
           :page-size="pagination.page_size"
           :total="total"
-          :page-size-options="[20, 50, 100]"
+          :page-size-options="pagination.pageSizeOptions"
           show-jumper
           @change="handlePaginationChange"
         />
@@ -138,12 +142,12 @@
     <t-dialog
       v-model:visible="formVisible"
       :header="form.id ? '编辑员工' : '新建员工'"
-      width="720px"
+      width="min(720px, calc(100vw - 32px))"
       :confirm-btn="{ content: '保存', theme: 'primary' }"
       :confirm-loading="saving"
       @confirm="submitForm"
     >
-      <t-form ref="formRef" :data="form" :rules="formRules" label-align="top">
+      <t-form ref="formRef" :data="form" :rules="formRules" label-align="right">
         <div class="staff-form-grid">
           <t-form-item label="登录账号" name="username">
             <t-input
@@ -176,12 +180,12 @@
     <t-dialog
       v-model:visible="resetVisible"
       header="重置员工密码"
-      width="520px"
+      width="min(520px, calc(100vw - 32px))"
       :confirm-btn="{ content: '确定', theme: 'danger' }"
       :confirm-loading="resetting"
       @confirm="submitResetPassword"
     >
-      <t-form ref="resetFormRef" :data="resetForm" :rules="resetRules" label-align="top">
+      <t-form ref="resetFormRef" :data="resetForm" :rules="resetRules" label-align="right">
         <t-form-item label="新密码" name="password">
           <t-input v-model="resetForm.password" type="password" />
         </t-form-item>
@@ -201,8 +205,8 @@ import { DialogPlugin } from 'tdesign-vue-next/es/dialog/plugin';
 import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, onMounted, reactive, ref } from 'vue';
 
-import type { CreateStaffPayload, StaffPayload, StaffRecord, StaffRoleOption } from '@/api/admin-staff';
-import { adminStaffApi } from '@/api/admin-staff';
+import type { CreateStaffPayload, StaffPayload, StaffRecord, StaffRoleOption } from '@/api/admin/staff';
+import { adminStaffApi } from '@/api/admin/staff';
 import MobileRecordCard from '@/components/mobile-record-card/index.vue';
 import { AdminPermissions, hasPermissionInList } from '@/constants/permissions';
 import { useListPage } from '@/hooks/useListPage';

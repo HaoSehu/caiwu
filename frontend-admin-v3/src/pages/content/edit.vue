@@ -144,9 +144,17 @@
           </div>
         </section>
 
+        <t-alert
+          v-if="loadFailed"
+          class="content-edit-load-error"
+          theme="error"
+          message="详情加载失败，为避免覆盖线上数据已禁用保存。请返回列表重试。"
+        />
         <div class="content-edit-actions">
           <t-button variant="outline" @click="goBack">取消</t-button>
-          <t-button theme="primary" :loading="saving" @click="submit">保存{{ articleLabel }}</t-button>
+          <t-button theme="primary" :loading="saving" :disabled="loadFailed" @click="submit"
+            >保存{{ articleLabel }}</t-button
+          >
         </div>
       </t-form>
     </t-card>
@@ -154,7 +162,7 @@
     <t-drawer
       :visible="coverImageDrawerVisible"
       header="选择封面媒体"
-      :size="520"
+      size="min(520px, calc(100vw - 32px))"
       placement="right"
       :footer="null"
       @close="closeCoverImageDrawer"
@@ -174,7 +182,13 @@
           :key="item.url"
           class="cover-drawer-card"
           :class="{ 'is-selected': form.cover_image === item.url }"
+          role="button"
+          tabindex="0"
+          :aria-label="`选择封面：${item.filename || item.url}`"
+          :aria-pressed="form.cover_image === item.url"
           @click="selectCoverImage(item.url)"
+          @keydown.enter.prevent="selectCoverImage(item.url)"
+          @keydown.space.prevent="selectCoverImage(item.url)"
         >
           <video
             v-if="item.isVideo"
@@ -223,6 +237,10 @@ import { useRoute, useRouter } from 'vue-router';
 
 import type { ContentArticlePayload, ContentArticleRecord, ContentCategoryRecord, MediaFileRecord } from '@/api/admin';
 import { adminApi } from '@/api/admin';
+import { useUnsavedGuard } from '@/hooks/useUnsavedGuard';
+import { errorMessage } from '@/utils/userMessage';
+
+defineOptions({ name: 'AdminContentEditor' });
 
 interface CoverMediaItem {
   url: string;
@@ -270,6 +288,8 @@ const router = useRouter();
 
 const pageLoading = ref(false);
 const saving = ref(false);
+// 详情拉取失败时必须禁用保存，否则空表单提交会把线上数据整体覆盖（docs/DESIGN.md §4.4）
+const loadFailed = ref(false);
 const formRef = ref<FormInstanceFunctions>();
 const coverImageInputRef = ref<HTMLInputElement>();
 const coverImageDrawerVisible = ref(false);
@@ -323,6 +343,12 @@ function createDefault(): ArticleForm {
 }
 
 const form = reactive<ArticleForm>(createDefault());
+// 未保存离开保护：以表单快照判定脏状态，详情回填与保存成功后重新取快照
+const formSnapshot = ref(JSON.stringify(form));
+const formDirty = computed(() => JSON.stringify(form) !== formSnapshot.value);
+useUnsavedGuard(() => formDirty.value, {
+  message: '内容编辑页存在未保存的修改，离开后这些修改会丢失。',
+});
 const isEditing = computed(() => !!form.id);
 const articleId = computed(() => route.params.id || route.query.id || null);
 
@@ -359,6 +385,7 @@ function fillForm(row: ContentArticleRecord) {
     remark: String(row.remark || ''),
     require_reread: false,
   });
+  formSnapshot.value = JSON.stringify(form);
 }
 
 function buildPayload(): ContentArticlePayload | null {
@@ -387,6 +414,10 @@ function buildPayload(): ContentArticlePayload | null {
 }
 
 async function submit() {
+  if (loadFailed.value) {
+    MessagePlugin.warning('详情加载失败，请返回列表重新进入后再保存');
+    return;
+  }
   const result = await formRef.value?.validate?.();
   if (result !== true) return;
   const payload = buildPayload();
@@ -401,6 +432,7 @@ async function submit() {
       await adminApi.content.articles.create(payload);
       MessagePlugin.success(`${articleLabel.value}已创建`);
     }
+    formSnapshot.value = JSON.stringify(form);
     goBack();
   } catch (error) {
     const record = error as Record<string, unknown>;
@@ -412,7 +444,7 @@ async function submit() {
   }
 }
 
-// Cover media drawer
+// 封面图库抽屉
 async function openCoverImageDrawer() {
   coverImageDrawerVisible.value = true;
   await loadCoverMediaList();
@@ -435,8 +467,10 @@ async function loadCoverMediaList() {
         isVideo: isMediaVideo(item),
       }))
       .filter((item) => item.url);
-  } catch {
+  } catch (error) {
+    // 封面图库是辅助选择器：失败时清空列表并提示，避免用户以为「图库本来就没有图片」
     coverImageList.value = [];
+    MessagePlugin.error(errorMessage(error, '封面图库加载失败'));
   } finally {
     coverImageLoading.value = false;
   }
@@ -500,8 +534,12 @@ onMounted(async () => {
     } else if (categories.value.length) {
       form.category_id = categories.value[0]?.id ?? null;
     }
-  } catch {
-    // ignore
+    // 新建页填入默认分类后也要重置快照，否则一进页面就被判定为脏
+    formSnapshot.value = JSON.stringify(form);
+  } catch (error) {
+    loadFailed.value = true;
+    const record = error as Record<string, unknown>;
+    MessagePlugin.error(String(record.message || `加载${articleLabel.value}详情失败，暂不可保存`));
   } finally {
     pageLoading.value = false;
   }

@@ -1,19 +1,25 @@
 .integration-plugins-page {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--td-comp-margin-l);
 }
 
 .plugins-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: var(--td-comp-margin-l);
 }
 
+/* 域切换 tab 与右侧操作按钮同排：tab 吃掉剩余宽度，超宽时由主题的
+   .page-tabs-toolbar 移动端横滚规则兜底（这里只负责 flex 分配）。 */
 .plugins-toolbar .t-tabs {
   min-width: 0;
   flex: 1;
+}
+
+.plugins-toolbar .t-space {
+  flex-shrink: 0;
 }
 
 .plugins-state {
@@ -21,14 +27,20 @@
   min-height: 220px;
   align-items: center;
   justify-content: center;
-  border-radius: var(--td-radius-default, 4px);
+  border-radius: var(--td-radius-default);
   background: var(--td-bg-color-container);
+}
+
+.plugins-truncated {
+  margin: 0 0 12px;
+  color: var(--td-text-color-secondary);
+  font-size: var(--td-font-size-body-small);
 }
 
 .plugin-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 16px;
+  gap: var(--td-comp-margin-l);
 }
 
 .plugin-card {
@@ -37,7 +49,7 @@
   flex-direction: column;
   gap: 14px;
   border: 1px solid var(--td-component-border);
-  border-radius: var(--td-radius-default, 4px);
+  border-radius: var(--td-radius-default);
   background: var(--td-bg-color-container);
   padding: 16px;
 }
@@ -45,7 +57,7 @@
 .plugin-card__main {
   display: grid;
   grid-template-columns: 44px minmax(0, 1fr);
-  gap: 12px;
+  gap: var(--td-comp-margin-m);
 }
 
 .plugin-card__icon {
@@ -54,10 +66,10 @@
   height: 44px;
   align-items: center;
   justify-content: center;
-  border-radius: var(--td-radius-default, 4px);
+  border-radius: var(--td-radius-default);
   background: var(--td-brand-color-light);
   color: var(--td-brand-color);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .plugin-card__body {
@@ -68,7 +80,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--td-comp-margin-s);
 }
 
 .plugin-card__title strong {
@@ -95,14 +107,14 @@
 .plugin-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--td-comp-margin-s);
 }
 
 .plugin-observability {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-top: 8px;
+  margin-top: var(--td-comp-margin-s);
 }
 
 .plugin-actions {
@@ -113,7 +125,7 @@
 .plugin-detail {
   margin-bottom: 18px;
   border: 1px solid var(--td-component-border);
-  border-radius: var(--td-radius-default, 4px);
+  border-radius: var(--td-radius-default);
   padding: 12px;
 }
 
@@ -146,7 +158,7 @@
 .plugin-config-form {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  column-gap: 16px;
+  column-gap: var(--td-comp-margin-l);
   padding-bottom: 16px;
 }
 
@@ -168,20 +180,6 @@
   margin-bottom: 18px;
 }
 
-.plugin-field-description {
-  margin: 6px 0 0;
-  color: var(--td-text-color-placeholder);
-  font-size: var(--td-font-size-size-1, 12px);
-  line-height: 20px;
-}
-
-.plugin-secret-hint {
-  margin: 6px 0 0;
-  color: var(--td-text-color-placeholder);
-  font-size: var(--td-font-size-size-1, 12px);
-  line-height: 20px;
-}
-
 .plugin-secret-toggle {
   display: inline-flex;
   align-items: center;
@@ -191,40 +189,6 @@
 
 .plugin-secret-toggle:hover {
   color: var(--td-brand-color);
-}
-
-.plugin-secret-preview {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 8px;
-}
-
-.plugin-secret-preview__item {
-  display: grid;
-  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
-  gap: 4px 12px;
-  border: 1px solid var(--td-component-border);
-  border-radius: var(--td-radius-default, 4px);
-  background: var(--td-bg-color-secondarycontainer);
-  padding: 8px 10px;
-  color: var(--td-text-color-secondary);
-  font-size: var(--td-font-size-size-1, 12px);
-  line-height: 20px;
-}
-
-.plugin-secret-preview__item strong {
-  overflow: hidden;
-  color: var(--td-text-color-primary);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.plugin-secret-preview__item span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .smtp-account-manager {
@@ -237,7 +201,7 @@
 .smtp-account-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--td-comp-margin-s);
   width: 100%;
 }
 
@@ -247,7 +211,7 @@
   gap: 10px;
   align-items: center;
   border: 1px solid var(--td-component-border);
-  border-radius: var(--td-radius-default, 4px);
+  border-radius: var(--td-radius-default);
   background: var(--td-bg-color-container);
   padding: 10px 8px 10px 12px;
 }
@@ -260,7 +224,7 @@
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: 8px;
+  gap: var(--td-comp-margin-s);
 }
 
 .smtp-account-item__title strong {
@@ -310,6 +274,27 @@
     flex-direction: column;
   }
 
+  /* 竖排后 tab 独占一行；七个域在窄屏放不下时横向滚动，不换行压扁文字。 */
+  .plugins-toolbar .t-tabs {
+    width: 100%;
+  }
+
+  .plugins-toolbar .t-tabs__nav-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .plugins-toolbar .t-tabs__nav-scroll::-webkit-scrollbar {
+    display: none;
+  }
+
+  .plugins-toolbar .t-tabs__nav-item {
+    padding: 0 12px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
   .plugins-toolbar .t-space,
   .plugins-toolbar .t-button {
     width: 100%;
@@ -325,11 +310,11 @@
 }
 
 .plugin-test-section {
-  margin-top: 4px;
+  margin-top: var(--td-comp-margin-xs);
 }
 
 .plugin-test-section__header {
-  margin-bottom: 12px;
+  margin-bottom: var(--td-comp-margin-m);
 
   strong {
     display: block;
@@ -340,7 +325,7 @@
 
 .plugin-test-section__hint {
   display: block;
-  margin-top: 4px;
+  margin-top: var(--td-comp-margin-xs);
   color: var(--td-text-color-placeholder);
   font-size: var(--td-font-size-size-1, 12px);
 }

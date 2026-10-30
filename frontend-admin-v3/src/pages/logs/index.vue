@@ -1,5 +1,17 @@
 <template>
   <div class="logs-page">
+    <t-card :bordered="false">
+      <div class="page-tabs-toolbar">
+        <t-tabs :value="activeTab" @change="handleTabChange">
+          <t-tab-panel v-for="tab in logTabOptions" :key="tab.value" :value="tab.value">
+            <template #label>
+              <span :class="{ 'tab-group-first': tab.groupStart }">{{ tab.label }}</span>
+            </template>
+          </t-tab-panel>
+        </t-tabs>
+      </div>
+    </t-card>
+
     <template v-if="isLogTab(activeTab)">
       <t-card :bordered="false">
         <div class="log-filter-grid" :class="`log-filter-grid--${activeTab}`">
@@ -194,7 +206,11 @@
             :loading="logLoading"
             hover
             table-layout="fixed"
+            aria-label="系统日志列表"
           >
+            <template #empty>
+              <t-empty :description="logLoading ? '加载中…' : hasLogActiveFilters ? '未找到匹配结果' : '暂无日志'" />
+            </template>
             <template #time="{ row }">{{ formatDate(row.time || row.created_at || row.sent_at) }}</template>
             <template #primary="{ row }">
               <div class="stack-cell">
@@ -313,7 +329,7 @@
             :current="logPagination.page"
             :page-size="logPagination.page_size"
             :total="total"
-            :page-size-options="[20, 50, 100]"
+            :page-size-options="logPagination.pageSizeOptions"
             show-jumper
             @change="handleLogPageChange"
           />
@@ -386,7 +402,17 @@
                 <t-tag :theme="group.theme" variant="light">{{ group.tasks.length }} 个任务</t-tag>
               </div>
               <div v-if="group.tasks.length" class="table-scroll">
-                <t-table row-key="key" :data="group.tasks" :columns="scheduleColumns" hover table-layout="fixed">
+                <t-table
+                  row-key="key"
+                  :data="group.tasks"
+                  :columns="scheduleColumns"
+                  hover
+                  table-layout="fixed"
+                  aria-label="调度任务列表"
+                >
+                  <template #empty>
+                    <t-empty description="暂无任务" />
+                  </template>
                   <template #task="{ row }">
                     <div class="stack-cell schedule-task-cell">
                       <div class="schedule-task-cell__name">
@@ -434,121 +460,7 @@
       </template>
     </template>
 
-    <template v-else>
-      <t-card :bordered="false" :loading="cleanupLoading">
-        <t-alert theme="warning" message="日志清理为不可逆操作，请确认保留天数、清理类型和确认文本。" />
-        <t-alert
-          v-if="!canManageLogCleanup"
-          theme="warning"
-          message="当前账号缺少 log.manage 权限，只能查看清理概览，不能执行清理。"
-        />
-
-        <section class="cleanup-section">
-          <div class="section-title">
-            <h2>数据库日志概览</h2>
-            <p>当前可清理的数据库日志记录总览。</p>
-          </div>
-          <div class="cleanup-card-grid">
-            <article v-for="item in databaseCards" :key="item.key">
-              <span>{{ item.label }}</span>
-              <strong>{{ item.value }}</strong>
-            </article>
-          </div>
-        </section>
-
-        <section class="cleanup-section">
-          <div class="section-title">
-            <h2>文件日志概览</h2>
-            <p>storage/logs 下的日志文件只读展示；文件生命周期由日志轮转自动管理，不提供清理入口。</p>
-          </div>
-          <div class="cleanup-card-grid">
-            <article v-for="item in fileCards" :key="item.key">
-              <span>{{ item.label }}</span>
-              <strong>{{ item.value }}</strong>
-            </article>
-          </div>
-          <div v-if="fileEntries.length" class="file-meta-grid">
-            <article v-for="item in fileEntries" :key="item.name">
-              <span>{{ item.name }}</span>
-              <strong>{{ item.size }} · {{ item.updated_at }}</strong>
-            </article>
-          </div>
-        </section>
-
-        <section class="cleanup-section">
-          <div class="section-title">
-            <h2>执行清理</h2>
-            <p>请输入确认文本后执行清理。</p>
-          </div>
-          <t-form :data="cleanupForm" label-align="top" class="cleanup-form">
-            <t-form-item label="清理类型" name="type">
-              <t-select v-model="cleanupForm.type" placeholder="请选择清理类型">
-                <t-option
-                  v-for="item in cleanupTypes"
-                  :key="String(item.value)"
-                  :label="String(item.label || item.value)"
-                  :value="String(item.value)"
-                />
-              </t-select>
-            </t-form-item>
-            <t-form-item label="保留天数" name="keep_days">
-              <t-input-number v-model="cleanupForm.keep_days" :min="1" :max="3650" theme="normal" />
-            </t-form-item>
-            <t-form-item label="确认文本" name="confirm_text">
-              <t-input v-model="cleanupForm.confirm_text" clearable placeholder="请输入 立即清理" />
-            </t-form-item>
-            <div class="cleanup-actions">
-              <t-button
-                theme="danger"
-                :loading="cleanupSubmitting"
-                :disabled="cleanupSubmitDisabled"
-                @click="handleCleanup"
-                >立即清理</t-button
-              >
-              <t-button
-                theme="primary"
-                variant="outline"
-                :loading="cleanupPreviewing"
-                :disabled="cleanupPreviewDisabled"
-                @click="handlePreviewCleanup"
-                >预览影响范围</t-button
-              >
-              <t-button variant="outline" @click="cleanupForm.confirm_text = ''">清空确认</t-button>
-            </div>
-          </t-form>
-        </section>
-
-        <section v-if="lastCleanupResult" class="cleanup-section">
-          <div class="section-title">
-            <h2>最近一次清理 / 预览结果</h2>
-            <p>显示本次操作范围、截止时间和影响条数；预览不会删除任何数据。</p>
-          </div>
-          <div class="file-meta-grid">
-            <article>
-              <span>操作模式</span>
-              <strong>{{ lastCleanupResult.dry_run ? '预览（未删除）' : '已执行清理' }}</strong>
-            </article>
-            <article>
-              <span>清理类型</span>
-              <strong>{{ fieldValue(lastCleanupResult.type) }}</strong>
-            </article>
-            <article>
-              <span>保留天数</span>
-              <strong>{{ fieldValue(lastCleanupResult.keep_days) }} 天</strong>
-            </article>
-            <article>
-              <span>截止时间</span>
-              <strong>{{ formatDate(lastCleanupResult.cutoff_at) }}</strong>
-            </article>
-            <article>
-              <span>影响条数</span>
-              <strong>{{ affectedCountText }}</strong>
-            </article>
-          </div>
-          <pre class="json-block">{{ formatJson(lastCleanupResult.affected) }}</pre>
-        </section>
-      </t-card>
-    </template>
+    <log-cleanup-panel v-else :can-manage="canManageLogCleanup" :reload-token="cleanupReloadToken" />
 
     <log-detail-drawer
       :visible="detailVisible"
@@ -573,7 +485,7 @@
       :visible="clearQueueDialogVisible"
       :header="clearQueueDialogTitle"
       theme="danger"
-      width="460px"
+      width="min(460px, calc(100vw - 32px))"
       :confirm-btn="{ content: '确定', theme: 'danger', loading: clearingQueue }"
       :close-on-overlay-click="false"
       @close="clearQueueDialogVisible = false"
@@ -590,7 +502,7 @@ import './index.less';
 import { SearchIcon } from 'tdesign-icons-vue-next';
 import type { PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
-import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import type { LogListParams, PaginatedList } from '@/api/admin';
@@ -599,11 +511,14 @@ import { AdminPermissions, hasPermissionInList } from '@/constants/permissions';
 import { useListPage } from '@/hooks/useListPage';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useUserStore } from '@/store';
-import { fieldValue, formatDateTime } from '@/utils/format';
+import { copyToClipboard, fieldValue, formatDateTime, toRecord } from '@/utils/format';
 import { errorMessage } from '@/utils/userMessage';
 
+import LogCleanupPanel from './components/LogCleanupPanel.vue';
 import LogDetailDrawer from './components/LogDetailDrawer.vue';
 import QueueJobsDrawer from './components/QueueJobsDrawer.vue';
+
+defineOptions({ name: 'AdminLogs' });
 
 type LogTab = 'activity' | 'runtime' | 'admin-logins' | 'api' | 'sms' | 'email' | 'tasks' | 'gateway';
 type LogsTab = LogTab | 'schedules' | 'cleanup';
@@ -628,15 +543,12 @@ const validTabs: LogsTab[] = [
 const activeTab = ref<LogsTab>(resolveRouteTab());
 const scheduleLoading = ref(false);
 const scheduleSourceFilter = ref<'all' | 'system' | 'third_party'>('all');
-const cleanupLoading = ref(false);
-const cleanupSubmitting = ref(false);
-const cleanupPreviewing = ref(false);
 const triggeringKey = ref('');
 const detailVisible = ref(false);
 const currentLog = ref<RecordRow | null>(null);
 const scheduleOverview = ref<Record<string, unknown>>({ tasks: [], recent_logs: [] });
-const cleanupOverview = ref<Record<string, unknown>>({ database: {}, file: {}, supported_cleanup_types: [] });
-const lastCleanupResult = ref<Record<string, unknown> | null>(null);
+// 日志清理概览与表单在 LogCleanupPanel 内部自持；父级只在切换 tab 时自增 token 触发它重新拉取
+const cleanupReloadToken = ref(0);
 
 type QueueKind = 'pending' | 'failed';
 const queueDrawerVisible = ref(false);
@@ -727,12 +639,6 @@ const {
     // schedules/cleanup Tab 不经过列表引擎，此处仅对日志 Tab 发请求
     return requestLogList(isLogTab(activeTab.value) ? activeTab.value : 'api', requestParams);
   },
-});
-
-const cleanupForm = reactive({
-  type: '',
-  keep_days: 30,
-  confirm_text: '',
 });
 
 const logLevelOptions = ['DEBUG', 'INFO', 'NOTICE', 'WARNING', 'ERROR', 'CRITICAL', 'ALERT', 'EMERGENCY'];
@@ -1067,6 +973,36 @@ const canViewSchedules = computed(() => hasPermission(AdminPermissions.SCHEDULE_
 const canTriggerSchedules = computed(() => hasPermission(AdminPermissions.SCHEDULE_TRIGGER));
 const canManageQueueJobs = computed(() => hasPermission(AdminPermissions.SCHEDULE_QUEUE_MANAGE));
 const canManageLogCleanup = computed(() => hasPermission(AdminPermissions.LOG_MANAGE));
+
+// 11 条日志路由共用本组件，原先只能靠左侧菜单切换子视图，页内没有任何可见的切换入口
+// （审查报告 P2-7）。这里按菜单的三个分组把 10 个子视图排成一行 tab：
+// 运行访问（业务审计/运行/API/管理员登录/网关）、通知日志（短信/邮件）、任务维护（自动任务/定时任务/日志清理）。
+// 分组之间用 .tab-group-first 画一条竖分隔线（样式早已在 index.less 预留但无消费方）。
+interface LogTabOption {
+  value: LogsTab;
+  label: string;
+  /** 该 tab 是否为分组首项，模板据此加 .tab-group-first 画竖分隔线 */
+  groupStart?: boolean;
+}
+
+const logTabOptions = computed<LogTabOption[]>(() => {
+  const options: LogTabOption[] = [
+    { value: 'activity', label: '业务审计' },
+    { value: 'runtime', label: '运行日志' },
+    { value: 'api', label: 'API 日志' },
+    { value: 'admin-logins', label: '管理员登录' },
+    { value: 'gateway', label: '网关日志' },
+    { value: 'sms', label: '短信日志', groupStart: true },
+    { value: 'email', label: '邮件日志' },
+    { value: 'tasks', label: '自动任务', groupStart: true },
+  ];
+  // 定时任务路由的 meta.permission 是 SCHEDULE_VIEW，无权限时不该出现在 tab 里（点了只会被踢到 403）
+  if (canViewSchedules.value) {
+    options.push({ value: 'schedules', label: '定时任务' });
+  }
+  options.push({ value: 'cleanup', label: '日志清理' });
+  return options;
+});
 const queueDrawerSize = computed(() => (isMobile.value ? '100%' : '960px'));
 const clearQueueDialogTitle = computed(() => (clearQueueKind.value === 'pending' ? '清空待处理队列' : '清空失败队列'));
 const clearQueueDialogHint = computed(() =>
@@ -1074,64 +1010,6 @@ const clearQueueDialogHint = computed(() =>
     ? '将删除 jobs 表中的全部待处理任务，任务不会再次执行，删除后无法恢复。'
     : '将清空 failed_jobs 表中的全部失败记录，删除后无法恢复。',
 );
-const cleanupSubmitDisabled = computed(
-  () =>
-    cleanupSubmitting.value ||
-    cleanupPreviewing.value ||
-    !canManageLogCleanup.value ||
-    !cleanupForm.type ||
-    !Number.isFinite(Number(cleanupForm.keep_days)) ||
-    Number(cleanupForm.keep_days) < 1 ||
-    cleanupForm.confirm_text.trim() !== '立即清理',
-);
-const cleanupPreviewDisabled = computed(
-  () =>
-    cleanupPreviewing.value ||
-    cleanupSubmitting.value ||
-    !canManageLogCleanup.value ||
-    !cleanupForm.type ||
-    !Number.isFinite(Number(cleanupForm.keep_days)) ||
-    Number(cleanupForm.keep_days) < 1,
-);
-const cleanupTypes = computed(() => asArray(cleanupOverview.value.supported_cleanup_types));
-const databaseCards = computed(() => {
-  const database = toRecord(cleanupOverview.value.database);
-  return [
-    { key: 'sms', label: '短信日志', value: numberText(database.sms) },
-    { key: 'email', label: '邮件日志', value: numberText(database.email) },
-    { key: 'api', label: 'API 日志', value: numberText(database.api) },
-    { key: 'admin_login', label: '管理员登录日志', value: numberText(database.admin_login) },
-    { key: 'activity', label: '业务审计日志', value: numberText(database.activity) },
-    { key: 'schedule_run', label: '调度执行日志', value: numberText(database.schedule_run) },
-    { key: 'gateway', label: '支付网关日志', value: numberText(database.gateway) },
-  ];
-});
-const fileCards = computed(() => {
-  const file = toRecord(cleanupOverview.value.file);
-  return [
-    { key: 'directory', label: '日志目录', value: fieldValue(file.directory) },
-    { key: 'file_count', label: '日志文件数', value: numberText(file.file_count) },
-    { key: 'total_size_bytes', label: '总大小', value: formatBytes(file.total_size_bytes) },
-    { key: 'latest_updated_at', label: '最后写入时间', value: formatDate(file.latest_updated_at) },
-  ];
-});
-const fileEntries = computed(() =>
-  asArray(toRecord(cleanupOverview.value.file).files)
-    .slice(0, 10)
-    .map((item) => {
-      const record = toRecord(item);
-      return {
-        name: fieldValue(record.name),
-        size: formatBytes(record.size_bytes),
-        updated_at: fieldValue(record.updated_at),
-      };
-    }),
-);
-const affectedCountText = computed(() => {
-  const affected = Object.values(toRecord(lastCleanupResult.value?.affected));
-  return affected.reduce((total: number, value) => total + Number(value || 0), 0);
-});
-
 function resolveTabValue(value: unknown): LogsTab | null {
   const tab = Array.isArray(value) ? value[0] : value;
   return validTabs.includes(tab as LogsTab) ? (tab as LogsTab) : null;
@@ -1139,6 +1017,29 @@ function resolveTabValue(value: unknown): LogsTab | null {
 
 function resolveRouteTab(): LogsTab {
   return resolveTabValue(route.query.tab) || resolveTabValue(route.meta.logTab) || 'api';
+}
+
+// tab 到路由 path 的映射：每个子视图都有独立路由（system.ts 的 logs/*），
+// 切 tab 走 router.replace 复用既有的 watch（下方 watch 负责重置筛选 + 重新拉取），
+// 不在模板里重复一遍加载逻辑。替换而非 push：页内切换不该新增浏览器历史。
+const logTabPath: Record<LogsTab, string> = {
+  activity: '/admin/logs/activity',
+  runtime: '/admin/logs/runtime',
+  'admin-logins': '/admin/logs/admin-logins',
+  api: '/admin/logs/api',
+  sms: '/admin/logs/sms',
+  email: '/admin/logs/email',
+  tasks: '/admin/logs/tasks',
+  gateway: '/admin/logs/gateway',
+  schedules: '/admin/logs/schedules',
+  cleanup: '/admin/logs/cleanup',
+};
+
+function handleTabChange(value: unknown) {
+  const tab = resolveTabValue(value);
+  if (!tab || tab === activeTab.value) return;
+  // 不带 query：切 tab 等于换筛选上下文，沿用旧 tab 的查询条件会串味
+  void router.replace({ path: logTabPath[tab] });
 }
 
 function isLogTab(value: LogsTab): value is LogTab {
@@ -1152,7 +1053,9 @@ function showFilter(name: string) {
 function refreshCurrentTab() {
   if (isLogTab(activeTab.value)) return logLoadList();
   if (activeTab.value === 'schedules') return loadScheduleOverview();
-  return loadCleanupOverview();
+  // 清理面板自持加载，父级只递增 token 通知它重新拉取
+  cleanupReloadToken.value += 1;
+  return undefined;
 }
 
 function applyRouteFilterQuery() {
@@ -1263,81 +1166,6 @@ async function triggerTask(row: TableRowData) {
     MessagePlugin.error(errorMessage(error, `${fieldValue(row.title || row.key)}执行失败`));
   } finally {
     triggeringKey.value = '';
-  }
-}
-
-async function loadCleanupOverview() {
-  cleanupLoading.value = true;
-  try {
-    cleanupOverview.value = await adminApi.logs.cleanupOverview();
-    if (!cleanupForm.type) cleanupForm.type = String(cleanupTypes.value[0]?.value || 'sms');
-  } catch (error) {
-    cleanupOverview.value = { database: {}, file: {}, supported_cleanup_types: [] };
-    MessagePlugin.error(errorMessage(error, '加载日志清理概览失败'));
-  } finally {
-    cleanupLoading.value = false;
-  }
-}
-
-async function handlePreviewCleanup() {
-  if (!canManageLogCleanup.value) {
-    MessagePlugin.warning('当前账号缺少 log.manage 权限');
-    return;
-  }
-  if (!cleanupForm.type) {
-    MessagePlugin.warning('请选择清理类型');
-    return;
-  }
-  if (!Number.isFinite(Number(cleanupForm.keep_days)) || Number(cleanupForm.keep_days) < 1) {
-    MessagePlugin.warning('保留天数必须大于 0');
-    return;
-  }
-  cleanupPreviewing.value = true;
-  try {
-    lastCleanupResult.value = await adminApi.logs.cleanup({
-      type: cleanupForm.type,
-      keep_days: Number(cleanupForm.keep_days),
-      dry_run: true,
-    });
-    MessagePlugin.success('预览完成，未删除数据');
-  } catch (error) {
-    MessagePlugin.error(errorMessage(error, '日志清理预览失败'));
-  } finally {
-    cleanupPreviewing.value = false;
-  }
-}
-
-async function handleCleanup() {
-  if (!canManageLogCleanup.value) {
-    MessagePlugin.warning('当前账号缺少 log.manage 权限');
-    return;
-  }
-  if (!cleanupForm.type) {
-    MessagePlugin.warning('请选择清理类型');
-    return;
-  }
-  if (!Number.isFinite(Number(cleanupForm.keep_days)) || Number(cleanupForm.keep_days) < 1) {
-    MessagePlugin.warning('保留天数必须大于 0');
-    return;
-  }
-  if (cleanupForm.confirm_text.trim() !== '立即清理') {
-    MessagePlugin.warning('确认文本必须为 立即清理');
-    return;
-  }
-  cleanupSubmitting.value = true;
-  try {
-    lastCleanupResult.value = await adminApi.logs.cleanup({
-      type: cleanupForm.type,
-      keep_days: Number(cleanupForm.keep_days),
-      confirm_text: cleanupForm.confirm_text.trim(),
-    });
-    cleanupForm.confirm_text = '';
-    await loadCleanupOverview();
-    MessagePlugin.success('日志清理完成');
-  } catch (error) {
-    MessagePlugin.error(errorMessage(error, '日志清理失败'));
-  } finally {
-    cleanupSubmitting.value = false;
   }
 }
 
@@ -1473,14 +1301,7 @@ function parseMessageSegments(row: RecordRow): MessageSegment[] {
 
 function copyId(label: string, id: string) {
   const value = `${label}:${id}`;
-  if (navigator.clipboard?.writeText) {
-    navigator.clipboard.writeText(value).then(
-      () => MessagePlugin.success(`已复制 ${value}`),
-      () => MessagePlugin.warning('复制失败，请手动选择'),
-    );
-  } else {
-    MessagePlugin.warning('当前环境不支持自动复制，请手动选择');
-  }
+  void copyToClipboard(value, `已复制 ${value}`);
   const routePath = routeForIdSegment(label, id);
   if (routePath) {
     router.push(routePath);
@@ -1623,32 +1444,6 @@ function scheduleTaskSourceTheme(row: RecordRow) {
   return scheduleTaskSourceType(row) === 'third_party' ? 'warning' : 'primary';
 }
 
-function toRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
-}
-
-function numberText(value: unknown) {
-  return Number(value || 0).toLocaleString('zh-CN');
-}
-
-function formatJson(value: unknown, fallback = '-') {
-  if (value === null || value === undefined || value === '') return fallback;
-  if (typeof value === 'string') {
-    const text = value.trim();
-    if (!text) return fallback;
-    try {
-      return JSON.stringify(JSON.parse(text), null, 2);
-    } catch {
-      return text;
-    }
-  }
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return fallback;
-  }
-}
-
 function contentPreview(value: unknown) {
   const text = String(value ?? '')
     .replace(/<style[\s\S]*?<\/style>/gi, ' ')
@@ -1658,20 +1453,7 @@ function contentPreview(value: unknown) {
     .replace(/\s+/g, ' ')
     .trim();
   if (!text) return '-';
-  return text.length > 96 ? `${text.slice(0, 96)}...` : text;
-}
-
-function formatBytes(value: unknown) {
-  const size = Number(value || 0);
-  if (!Number.isFinite(size) || size <= 0) return '0 B';
-  const units = ['B', 'KB', 'MB', 'GB'];
-  let current = size;
-  let unitIndex = 0;
-  while (current >= 1024 && unitIndex < units.length - 1) {
-    current /= 1024;
-    unitIndex += 1;
-  }
-  return `${current.toFixed(current >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
+  return text.length > 96 ? `${text.slice(0, 96)}…` : text;
 }
 
 function gatewayResultStatusLabel(value: unknown) {

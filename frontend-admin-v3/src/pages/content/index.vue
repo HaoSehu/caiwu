@@ -24,11 +24,11 @@
         <div class="content-filter-actions">
           <t-button theme="primary" @click="handleSearch">查询</t-button>
           <t-button theme="default" variant="base" @click="resetFilters">重置</t-button>
-          <t-button variant="outline" @click="openCategoryDialog">
+          <t-button v-if="canManage" variant="outline" @click="openCategoryDialog">
             <template #icon><folder-icon /></template>
             分类管理
           </t-button>
-          <t-button theme="primary" @click="goCreateArticle">
+          <t-button v-if="canManage" theme="primary" variant="outline" @click="goCreateArticle">
             <template #icon><add-icon /></template>
             新建{{ articleLabel }}
           </t-button>
@@ -63,7 +63,7 @@
       <template #subtitle>共 {{ total }} 条</template>
 
       <div v-if="!isMobile" class="table-scroll">
-        <t-table row-key="id" :data="articles" :columns="columns" hover table-layout="fixed">
+        <t-table row-key="id" :data="articles" :columns="columns" hover table-layout="fixed" aria-label="内容文章列表">
           <template #empty>
             <t-empty :description="loading ? '加载中…' : hasActiveFilters ? '未找到匹配结果' : '暂无数据'" />
           </template>
@@ -106,10 +106,11 @@
             </div>
           </template>
           <template #actions="{ row }">
-            <t-space size="small">
+            <t-space v-if="canManage" size="small">
               <t-button theme="primary" variant="text" @click="goEditArticle(row.id)">编辑</t-button>
               <t-button theme="danger" variant="text" @click="handleDeleteArticle(row)">删除</t-button>
             </t-space>
+            <span v-else class="muted-text">只读</span>
           </template>
         </t-table>
       </div>
@@ -125,14 +126,15 @@
                 row.status_label || contentStatusLabel(row.status)
               }}</t-tag>
               <t-dropdown
+                v-if="canManage"
                 trigger="click"
                 placement="bottom-right"
                 :options="mobileActionOptions()"
                 @click="handleMobileActionHandler(row)"
               >
-                <t-button class="content-mobile-card__more" variant="text" shape="square" aria-label="更多操作"
-                  >...</t-button
-                >
+                <t-button class="content-mobile-card__more" variant="text" shape="square" aria-label="更多操作">
+                  <template #icon><more-icon /></template>
+                </t-button>
               </t-dropdown>
             </div>
           </div>
@@ -162,18 +164,23 @@
           :current="pagination.page"
           :page-size="pagination.page_size"
           :total="total"
-          :page-size-options="[20, 50, 100]"
+          :page-size-options="pagination.pageSizeOptions"
           show-jumper
           @change="handlePaginationChange"
         />
       </div>
     </t-card>
 
-    <t-dialog v-model:visible="categoryDialogVisible" header="分类管理" width="880px" :footer="false">
+    <t-dialog
+      v-model:visible="categoryDialogVisible"
+      header="分类管理"
+      width="min(880px, calc(100vw - 32px))"
+      :footer="false"
+    >
       <div class="category-dialog">
         <t-card :bordered="false">
           <template #title>{{ categoryForm.id ? '编辑分类' : '新建分类' }}</template>
-          <t-form ref="categoryFormRef" :data="categoryForm" :rules="categoryRules" label-align="top">
+          <t-form ref="categoryFormRef" :data="categoryForm" :rules="categoryRules" label-align="right">
             <div class="category-form-grid">
               <t-form-item label="分类名称" name="name">
                 <t-input v-model="categoryForm.name" placeholder="请输入分类名称" />
@@ -196,7 +203,7 @@
               </t-form-item>
             </div>
           </t-form>
-          <div class="category-actions">
+          <div v-if="canManage" class="category-actions">
             <t-button v-if="categoryForm.id" variant="outline" @click="resetCategoryForm">取消编辑</t-button>
             <t-button theme="primary" :loading="categorySaving" @click="submitCategory">
               {{ categoryForm.id ? '保存分类' : '新建分类' }}
@@ -207,7 +214,14 @@
 
         <t-card :bordered="false" :loading="categoryLoading">
           <template #title>分类列表</template>
-          <t-table row-key="id" :data="categories" :columns="categoryColumns" hover table-layout="fixed">
+          <t-table
+            row-key="id"
+            :data="categories"
+            :columns="categoryColumns"
+            hover
+            table-layout="fixed"
+            aria-label="内容分类列表"
+          >
             <template #empty>
               <t-empty :description="categoryLoading ? '加载中…' : '暂无数据'" />
             </template>
@@ -217,10 +231,11 @@
               </t-tag>
             </template>
             <template #actions="{ row }">
-              <t-space size="small">
+              <t-space v-if="canManage" size="small">
                 <t-button theme="primary" variant="text" @click="fillCategoryForm(row)">编辑</t-button>
                 <t-button theme="danger" variant="text" @click="handleDeleteCategory(row)">删除</t-button>
               </t-space>
+              <span v-else class="muted-text">只读</span>
             </template>
           </t-table>
         </t-card>
@@ -231,7 +246,7 @@
 <script setup lang="ts">
 import './index.less';
 
-import { AddIcon, FolderIcon, SearchIcon } from 'tdesign-icons-vue-next';
+import { AddIcon, FolderIcon, MoreIcon, SearchIcon } from 'tdesign-icons-vue-next';
 import type { DropdownOption, FormInstanceFunctions, FormRule, PrimaryTableCol } from 'tdesign-vue-next';
 import { DialogPlugin } from 'tdesign-vue-next/es/dialog/plugin';
 import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
@@ -245,16 +260,22 @@ import type {
   ContentListParams,
 } from '@/api/admin';
 import { adminApi } from '@/api/admin';
+import { AdminPermissions } from '@/constants/permissions';
 import { useListPage } from '@/hooks/useListPage';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { fieldValue, formatDateTime } from '@/utils/format';
 import { required } from '@/utils/formRules';
+import { hasAdminPermission } from '@/utils/permission';
 import { errorMessage } from '@/utils/userMessage';
+
+defineOptions({ name: 'AdminContentList' });
 
 type ContentType = 'notice' | 'help';
 
 const route = useRoute();
 const router = useRouter();
+// 内容写入口与后端内容写路由同权限码：只读岗不显示新建/编辑/删除与分类管理
+const canManage = computed(() => hasAdminPermission(AdminPermissions.CONTENT_MANAGE));
 const categoryLoading = ref(false);
 const categorySaving = ref(false);
 const categoryDialogVisible = ref(false);
@@ -456,6 +477,7 @@ function handleDeleteCategory(row: ContentCategoryRecord) {
     body: `确认删除分类"${fieldValue(row.name)}"吗？`,
     confirmBtn: { content: '确定', theme: 'danger' },
     async onConfirm() {
+      dialog.setConfirmLoading(true);
       try {
         await adminApi.content.categories.delete(row.id);
         MessagePlugin.success('分类已删除');
@@ -464,6 +486,8 @@ function handleDeleteCategory(row: ContentCategoryRecord) {
         await Promise.allSettled([loadCategories(), loadList()]);
       } catch (error) {
         MessagePlugin.error(errorMessage(error, '删除分类失败'));
+      } finally {
+        dialog.setConfirmLoading(false);
       }
     },
   });
@@ -475,6 +499,7 @@ function handleDeleteArticle(row: ContentArticleRecord) {
     body: `确认删除"${fieldValue(row.title)}"吗？`,
     confirmBtn: { content: '确定', theme: 'danger' },
     async onConfirm() {
+      dialog.setConfirmLoading(true);
       try {
         await adminApi.content.articles.delete(row.id);
         MessagePlugin.success(`${articleLabel.value}已删除`);
@@ -482,6 +507,8 @@ function handleDeleteArticle(row: ContentArticleRecord) {
         await loadList();
       } catch (error) {
         MessagePlugin.error(errorMessage(error, '删除内容失败'));
+      } finally {
+        dialog.setConfirmLoading(false);
       }
     },
   });

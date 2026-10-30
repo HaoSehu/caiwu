@@ -14,11 +14,13 @@
         <t-select v-model="filters.type" clearable placeholder="全部类型" @change="handleFilterChange">
           <t-option v-for="item in typeOptions" :key="item.value" :label="item.label" :value="item.value" />
         </t-select>
+        <t-button theme="primary" @click="handleSearch">查询</t-button>
+        <t-button theme="default" variant="base" @click="resetFilters">重置</t-button>
         <t-button variant="outline" :loading="reindexing" @click="handleReindex">
           <template #icon><refresh-icon /></template>
           重新获取
         </t-button>
-        <t-button theme="primary" :loading="uploading" @click="triggerUpload">
+        <t-button theme="primary" variant="outline" :loading="uploading" @click="triggerUpload">
           <template #icon><upload-icon /></template>
           上传媒体
         </t-button>
@@ -35,6 +37,7 @@
         :hover="true"
         size="medium"
         table-layout="auto"
+        aria-label="媒体库文件列表"
         @page-change="handlePageChange"
       >
         <template #empty>
@@ -124,6 +127,10 @@ import { computed, onMounted, reactive, ref } from 'vue';
 
 import type { MediaFileRecord } from '@/api/admin';
 import { adminApi } from '@/api/admin';
+import { copyToClipboard } from '@/utils/format';
+import { errorMessage } from '@/utils/userMessage';
+
+defineOptions({ name: 'AdminMediaLibrary' });
 
 const PAGE_SIZE = 24;
 
@@ -225,6 +232,13 @@ function handleSearch() {
 function handleFilterChange() {
   filters.page = 1;
   loadMediaList();
+}
+
+/** 重置筛选并重新拉取；提交式筛选必须成对提供「查询/重置」（docs/DESIGN.md §5.1） */
+function resetFilters() {
+  filters.keyword = '';
+  filters.type = '';
+  handleSearch();
 }
 
 function handlePageChange(pageInfo: PageInfo) {
@@ -338,25 +352,13 @@ async function removeMedia(row: MediaFileRecord) {
   }
 }
 
-async function copyText(value: string) {
+function copyText(value: string) {
   if (!value) {
     MessagePlugin.warning('没有可复制的内容');
     return;
   }
 
-  try {
-    await navigator.clipboard.writeText(value);
-    MessagePlugin.success('已复制到剪贴板');
-  } catch {
-    MessagePlugin.error('复制失败，请手动复制');
-  }
-}
-
-function errorMessage(error: unknown, fallback: string) {
-  const record = error as Record<string, unknown>;
-  const response = record.response as Record<string, unknown> | undefined;
-  const data = response?.data as Record<string, unknown> | undefined;
-  return String(data?.message || record.message || fallback);
+  void copyToClipboard(value);
 }
 
 onMounted(() => {
