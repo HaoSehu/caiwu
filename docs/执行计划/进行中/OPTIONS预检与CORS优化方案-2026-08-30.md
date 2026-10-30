@@ -1,7 +1,7 @@
 ---
 status: 进行中
 updated: 2026-08-30
-owner: HaoSehu
+owner: backend-platform
 ---
 
 # OPTIONS 预检与 CORS 优化方案

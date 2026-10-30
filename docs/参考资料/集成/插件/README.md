@@ -83,6 +83,18 @@ return [
 - `info.name`：后台展示名。
 - `info.entry`：入口类，必须存在，并提供 `execute(array $request): array`。
 
+### info.capabilities 的生效范围
+
+`info.capabilities` 是自由字符串数组，**当前只有 `upstream` 域在运行时消费**：平台适配器 `PluginUpstreamDriver` 以 `capabilities()` / `supports(capability)` 判定上游是否支持某项能力。
+
+其余域填写该字段不会被任何代码读取，也不影响安装、启用与调用：
+
+- 支付域的能力由 `supportedActions()` 决定，`['precreate', 'query', 'notify_verify']` 只是描述性标注。
+- 短信域的能力由 `sms.templates.*` 的模板动作存在性决定。
+- 邮件、实名、验证码、插件域同理，均不消费该字段。
+
+因此非 `upstream` 域可以省略 `info.capabilities`；保留时请按上述语义理解，不要以为写了就代表系统会校验或据此路由。
+
 ### 标识语义：slug、plugin_key、gateway_key / driver_key
 
 同一个插件在系统里有三套标识，用途不同，不能互相替代（A-03）：
@@ -607,6 +619,15 @@ php artisan schedule:list
 - 回调类可放 `controller/`，但平台路由必须统一做签名、幂等、日志和审计。
 - 插件返回值必须由平台 adapter 转换为 DTO/Result，不把第三方原始结构直接透传到业务层。
 
+## 跨插件共享的平台传输层（已知取舍）
+
+`backend/plugins/servers/hosting_panel` 与 `backend/plugins/servers/zjmf_finance` 共用同一套上游 HTTP 传输层
+`backend/app/Services/Upstream/Drivers/HostingPanelApi/HostingPanelApiTransport.php`（实现 9 个 `Provides*` 能力接口）。
+
+- 为什么留在系统侧：两个插件的能力语义（主机、数据库、域名、SSL 等）几乎相同，若各自复制一份传输层，会产生两份需要同步维护的签名、重试与错误映射实现，这是更大的耦合风险。
+- 代价：插件目录不再完全自包含，`HostingPanel.php:18` 与 `ZjmfAuthManager.php:8` 直接 `use` 系统侧类。插件安装/卸载/迁移时必须同步确认该传输层存在且签名未变。
+- 边界约束：新增共享传输层必须在 `HostingPanelApi/` 目录内提供能力接口实现，不得让插件引用该目录之外的系统类；`plugins:audit-registrations` 不覆盖此类依赖，靠 code review 把关。
+
 ## 运行时调用模型
 
 插件入口统一接收如下结构：
@@ -696,3 +717,21 @@ npm.cmd run build
 cd backend
 composer audit:plugins
 ```
+
+### 插件单元测试
+
+插件测试放在插件目录自己的 `tests/` 下，文件名以 `Test.php` 结尾。`backend/phpunit.xml.dist` 已把整个 `plugins` 目录登记为 `Plugins` testsuite，因此 **放进插件的测试会被 `php artisan test` 与 `composer verify` 自动收集，不需要改任何配置**：
+
+```bash
+cd backend
+php artisan test plugins/gateways/ali_pay/tests
+php artisan test --filter=Zjmf
+```
+
+写插件测试必须知道的三件事：
+
+- **插件类不走 Composer 自动加载**。运行时由 `PluginFileLoader` 按 `lib/`、`logic/`、`controller/` 顺序 `require`，所以测试文件要自己 `require_once __DIR__.'/../lib/XxxClient.php';`。用 `PHPUnit\\Framework\\TestCase` 即可跑纯逻辑；需要容器或数据库时改继承 `Tests\\TestCase`。
+- **不要在测试里运行时生成 RSA 密钥**。本机 PHP 的 OpenSSL 需要显式 `OPENSSL_CONF`，CI 与本地行为不一致；改用固定的测试密钥对常量（仅测试用，绝不能是生产凭据），固定密钥签名与验签不依赖 OpenSSL 配置文件。
+- **入参层级按插件实际收到的结构构造**。平台把 HTTP 参数包成 `payload` 后传给 `execute(array $request)`；验签类插件的 `verifyCallback()` 普遍再读一层 `$requestPayload['payload']`，所以测试要双层构造，少一层会让插件读到空载荷、静默降级成引导提示而不是报错。
+
+当前已覆盖的插件回归（补测试时优先参照这些写法）：支付宝验签、易支付验签、Stay33 回调 HMAC 验签、百度人脸回跳放行契约、SMTP 配置校验与发送失败分支；其余插件尚未覆盖，属技术债，见 `docs/执行计划/进行中/整体审查待处理项修复-2026-10-26.md`。

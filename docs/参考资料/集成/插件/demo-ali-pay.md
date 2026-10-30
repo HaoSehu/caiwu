@@ -42,17 +42,6 @@ return [
         'version' => '1.0.0',
         'entry' => AliPayPlugin::class,
         'capabilities' => ['precreate', 'query', 'refund', 'notify_verify'],
-        'extra' => [
-            'legacy_settings' => [
-                'group' => 'payment',
-                'map' => [
-                    'alipay_enabled' => 'alipay_enabled',
-                    'app_id' => 'alipay_app_id',
-                    'private_key' => 'alipay_private_key',
-                    'alipay_public_key' => 'alipay_public_key',
-                ],
-            ],
-        ],
     ],
     'config' => [
         'alipay_enabled' => ['title' => '启用', 'type' => 'switch', 'value' => true, 'required' => true],
@@ -68,6 +57,7 @@ return [
 - `slug=ali_pay` 必须和目录名一致。
 - `key=alipay` 必须保持历史业务 key，不要改为 `ali_pay`，否则历史 `payments.gateway=alipay` 无法兼容。
 - 私钥、公钥必须 `secret=true`。
+- 插件配置是支付宝参数的唯一真源：不要在 `info.extra` 里再声明 `legacy_settings` 指向 `settings` 表。历史上两处同存导致管理员清空插件配置后仍被 Setting 旧值顶回，该映射已于 2026-10-28 随迁移收敛删除。
 
 ## 入口类 demo
 
