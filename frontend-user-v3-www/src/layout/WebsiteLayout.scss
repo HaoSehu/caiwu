@@ -6,8 +6,7 @@
 }
 
 .container {
-  width: min(1200px, calc(100% - 48px));
-  margin: 0 auto;
+  @include site-container;
 }
 
 .site-header {
@@ -15,9 +14,9 @@
   top: 0;
   z-index: 100;
   height: $navbar-height;
+  // 背景已是 96% 不透明白，模糊几乎不可见；常驻 backdrop-filter 会强制
+  // 浏览器为整个吸顶头建立合成层并在每次滚动重算模糊，收益≈0、成本确定，故去掉。
   background: rgba(255, 255, 255, 0.96);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
   border-bottom: 1px solid transparent;
   transition:
     border-color $motion-base ease,
@@ -64,7 +63,7 @@
   color: $text-color-inverse;
   font-size: 14px;
   font-weight: 600;
-  border-radius: 6px;
+  border-radius: $btn-border-radius;
   white-space: nowrap;
 }
 
@@ -82,7 +81,7 @@
   gap: 3px;
   padding: 0 20px;
   height: $navbar-height;
-  color: #374151;
+  color: $text-color-nav;
   font-size: 14px;
   font-weight: 500;
   letter-spacing: 0.01em;
@@ -318,7 +317,10 @@
 }
 
 // 同布局子页面切换过渡（router-view transition name="page-fade"）：
-// 进场 ease-out 上移入场，退场 ease-in 淡出
+// 进场 ease-out 上移入场，退场 ease-in 淡出。
+// 两端都不落到 opacity: 0：mode="out-in" 下旧页退场完成后才插入新页，
+// 若退场归零、进场再从零起，串行期间就是一片全白（0.14s + 0.18s），
+// 所以退场止于 0.5、进场起于 0.5，交接处保持同一不透明度。
 .page-fade-enter-active {
   transition:
     opacity 0.18s ease-out,
@@ -332,12 +334,12 @@
 }
 
 .page-fade-enter-from {
-  opacity: 0;
+  opacity: 0.5;
   transform: translateY(6px);
 }
 
 .page-fade-leave-to {
-  opacity: 0;
+  opacity: 0.5;
 }
 
 .header-actions {
@@ -355,7 +357,7 @@
   width: 34px;
   height: 34px;
   border-radius: 50%;
-  color: #374151;
+  color: $text-color-nav;
   text-decoration: none;
   transition:
     color 0.16s ease,
@@ -392,7 +394,7 @@
   .header-user-name {
     font-size: 13px;
     font-weight: 500;
-    color: #374151;
+    color: $text-color-nav;
     white-space: nowrap;
     max-width: 120px;
     overflow: hidden;
@@ -405,7 +407,7 @@
 
   .header-user-arrow {
     font-size: 12px;
-    color: #6b7280;
+    color: $text-color-placeholder;
     transition:
       transform 0.25s ease,
       color 0.16s ease;
@@ -413,7 +415,7 @@
 
   &.is-active .header-user-arrow,
   &:hover .header-user-arrow {
-    color: #374151;
+    color: $text-color-nav;
   }
 }
 
@@ -552,7 +554,7 @@
   align-items: center;
   height: 34px;
   padding: 0 14px;
-  color: #374151;
+  color: $text-color-nav;
   font-size: 13px;
   font-weight: 500;
   text-decoration: none;
@@ -576,7 +578,7 @@
   padding: 0 22px;
   margin-left: 4px;
   border: none;
-  border-radius: 8px;
+  border-radius: $btn-border-radius-lg;
   background: $color-primary;
   color: $text-color-inverse;
   font-size: 13px;
@@ -636,7 +638,7 @@
   justify-content: center;
   width: 44px;
   height: 44px;
-  color: #374151;
+  color: $text-color-nav;
   text-decoration: none;
   flex-shrink: 0;
   border-radius: 50%;
@@ -718,6 +720,8 @@
   z-index: 99;
   background: $bg-color-card;
   border-bottom: 1px solid $divider-color;
+  /* iOS 手势条会盖住面板最后一项，底部留出安全区 */
+  padding-bottom: env(safe-area-inset-bottom);
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
@@ -739,7 +743,7 @@
 .mobile-menu-col--left {
   flex-shrink: 0;
   width: 120px;
-  background: #f5f7fa;
+  background: $bg-color-muted;
   border-right: 1px solid $divider-color;
   padding: 8px 0 0;
   display: flex;
@@ -856,7 +860,7 @@
 
 .mobile-third-level-list {
   padding: 4px 0 8px 12px;
-  background: #f9fafb;
+  background: $bg-color-stripe;
   border-radius: 6px;
   margin: 4px 0 8px;
 }
@@ -923,7 +927,7 @@
   font-weight: 500;
   color: $text-color-inverse;
   background: $color-primary;
-  border-radius: 6px;
+  border-radius: $btn-border-radius;
   text-decoration: none;
   transition: opacity 0.15s ease;
 }
@@ -941,6 +945,11 @@
   flex: 1;
   position: relative;
   z-index: 1;
+}
+
+/* main 由脚本聚焦用于读屏定位，非交互元素，不画焦点环 */
+.site-main:focus {
+  outline: none;
 }
 
 .mobile-menu-mask-enter-active,
@@ -964,7 +973,7 @@
   transform: translateY(-4px);
 }
 
-@media (max-width: 1180px) {
+@media (max-width: $breakpoint-wide) {
   .header-link {
     display: none;
   }
@@ -1015,7 +1024,7 @@
   }
 }
 
-@media (max-width: 640px) {
+@media (max-width: $breakpoint-compact) {
   .container {
     width: calc(100% - 24px);
   }

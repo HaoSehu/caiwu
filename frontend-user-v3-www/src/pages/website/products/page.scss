@@ -1,7 +1,7 @@
 /* ===== 整体布局 ===== */
 .shop-wrap {
   display: flex;
-  min-height: calc(100vh - 64px);
+  min-height: calc(100vh - $navbar-height);
   background: $bg-color-card;
 }
 
@@ -118,9 +118,9 @@
   display: flex;
   flex-direction: column;
   position: sticky;
-  top: 64px;
-  height: calc(100vh - 64px);
-  height: calc(100dvh - 64px);
+  top: $navbar-height;
+  height: calc(100vh - $navbar-height);
+  height: calc(100dvh - $navbar-height);
   overflow-y: auto;
   transition: width $motion-base ease;
 
@@ -162,7 +162,7 @@
 
 .sidebar-section-label {
   padding: 10px 14px 6px;
-  font-size: 11px;
+  font-size: $font-size-sm;
   color: $text-color-placeholder;
   letter-spacing: 0.06em;
   white-space: nowrap;
@@ -181,7 +181,9 @@
   text-align: left;
   color: inherit;
   border-left: 3px solid transparent;
-  transition: all $motion-fast ease;
+  transition:
+    background-color $motion-fast ease,
+    border-color $motion-fast ease;
   min-height: 52px;
 
   &:hover {
@@ -221,13 +223,15 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
+  font-size: $font-size-sm;
   font-weight: 700;
   border-radius: 2px;
   background: $bg-color-soft;
   color: $text-color-secondary;
   letter-spacing: 0.02em;
-  transition: all $motion-fast ease;
+  transition:
+    background-color $motion-fast ease,
+    color $motion-fast ease;
 }
 
 .item-body {
@@ -248,7 +252,7 @@
 }
 
 .item-sub {
-  font-size: 11px;
+  font-size: $font-size-sm;
   color: $text-color-placeholder;
   white-space: nowrap;
 }
@@ -261,12 +265,14 @@
   border-radius: 9px;
   background: $bg-color-soft;
   color: $text-color-secondary;
-  font-size: 11px;
+  font-size: $font-size-sm;
   font-weight: 600;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: all $motion-fast ease;
+  transition:
+    background-color $motion-fast ease,
+    color $motion-fast ease;
 }
 
 /* ===== 右侧整体 ===== */
@@ -284,6 +290,44 @@
   padding: 0 0 48px;
 }
 
+/* ===== 首屏目录加载态 ===== */
+/* 慢网下主区必须显示「正在加载」，而不是一片空白等目录接口返回 */
+.catalog-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 48px 20px;
+  text-align: center;
+}
+
+.catalog-loading__spinner {
+  width: 22px;
+  height: 22px;
+  border: 2px solid $color-primary-border;
+  border-top-color: $color-primary;
+  border-radius: 50%;
+  animation: catalog-loading-spin 0.8s linear infinite;
+}
+
+.catalog-loading__text {
+  color: $text-color-secondary;
+  font-size: 14px;
+}
+
+@keyframes catalog-loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 减弱动效偏好下不转圈，只留文案（旋转动画对前庭敏感用户不友好） */
+@media (prefers-reduced-motion: reduce) {
+  .catalog-loading__spinner {
+    animation: none;
+  }
+}
+
 /* ===== 页面加载失败态 ===== */
 .catalog-error {
   padding: 48px 20px;
@@ -299,7 +343,7 @@
 .catalog-error__retry {
   padding: 10px 32px;
   border: 1px solid $color-primary;
-  border-radius: 6px;
+  border-radius: $btn-border-radius;
   background: $color-primary;
   color: $text-color-inverse;
   font-size: 14px;
@@ -316,6 +360,13 @@
   &:active {
     background: $color-primary-active;
     transform: scale(0.98);
+  }
+
+  // 重试期间禁用，避免连点重复打聚合接口
+  &:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: none;
   }
 }
 
@@ -356,6 +407,50 @@
 
   .config-area > :last-child {
     padding-bottom: 20px;
+  }
+}
+
+// 移动端产品类型切换：桌面左侧栏在移动端被隐藏，这里是唯一入口
+.mobile-type-tabs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 12px 14px;
+  border-bottom: 1px solid $divider-color;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+.mobile-type-tab {
+  flex-shrink: 0;
+  // 触控目标 ≥44px，产品类型是移动端第一层导航
+  min-height: 44px;
+  padding: 0 18px;
+  border: 1px solid $border-color;
+  border-radius: 999px;
+  background: $bg-color-card;
+  color: $text-color-secondary;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    border-color $motion-fast ease,
+    background-color $motion-fast ease,
+    color $motion-fast ease;
+
+  &:hover {
+    border-color: $color-primary;
+    color: $color-primary;
+  }
+
+  &.active {
+    border-color: $color-primary;
+    background: $color-primary;
+    color: $text-color-inverse;
   }
 }
 
@@ -508,7 +603,10 @@
   color: $text-color-secondary;
   font-size: 12px;
   cursor: pointer;
-  transition: all $motion-fast ease;
+  transition:
+    border-color $motion-fast ease,
+    background-color $motion-fast ease,
+    color $motion-fast ease;
   white-space: nowrap;
 
   &:hover {
@@ -569,7 +667,10 @@
     color: $text-color-secondary;
     font-size: 13px;
     line-height: 28px;
-    transition: all $motion-fast ease;
+    transition:
+      border-color $motion-fast ease,
+      background-color $motion-fast ease,
+      color $motion-fast ease;
   }
 
   :deep(.el-tabs__item:hover) {
@@ -608,7 +709,10 @@
   color: $text-color-secondary;
   font-size: 13px;
   cursor: pointer;
-  transition: all $motion-fast ease;
+  transition:
+    border-color $motion-fast ease,
+    background-color $motion-fast ease,
+    color $motion-fast ease;
   white-space: nowrap;
 
   &:hover {
@@ -642,7 +746,10 @@
   color: $text-color-primary;
   font-size: 13px;
   cursor: pointer;
-  transition: all $motion-fast ease;
+  transition:
+    border-color $motion-fast ease,
+    background-color $motion-fast ease,
+    color $motion-fast ease;
   white-space: nowrap;
 
   &:hover {
@@ -724,7 +831,10 @@
   color: $text-color-primary;
   font-size: 13px;
   cursor: pointer;
-  transition: all $motion-fast ease;
+  transition:
+    border-color $motion-fast ease,
+    background-color $motion-fast ease,
+    color $motion-fast ease;
   white-space: nowrap;
 
   &:hover {
@@ -846,12 +956,20 @@
   }
 }
 
+// 数值列（vCPU/内存/频率/价格）右对齐，与移动端费用表口径一致；
+// 名称列与处理器列保持左对齐并在下方单独覆盖
 .machine-spec-cell {
   min-width: 0;
   padding: 0 12px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-align: right;
+}
+
+.machine-spec-cell--name,
+.machine-spec-cell--processor {
+  text-align: left;
 }
 
 .machine-spec-cell--sortable {
@@ -935,7 +1053,7 @@
 }
 
 .machine-spec-cell--processor {
-  color: #0072c6;
+  color: $color-primary;
   font-weight: 700;
 }
 
@@ -1072,7 +1190,9 @@
   border-radius: 4px;
   background: $bg-color-card;
   cursor: pointer;
-  transition: all $motion-fast ease;
+  transition:
+    border-color $motion-fast ease,
+    background-color $motion-fast ease;
   position: relative;
   text-align: left;
 
@@ -1167,7 +1287,10 @@
   color: $text-color-primary;
   font-size: 12px;
   cursor: pointer;
-  transition: all $motion-fast ease;
+  transition:
+    border-color $motion-fast ease,
+    background-color $motion-fast ease,
+    color $motion-fast ease;
   white-space: nowrap;
 
   &:hover {
@@ -1189,9 +1312,9 @@
   border-left: 1px solid $divider-color;
   background: $bg-color-card;
   position: sticky;
-  top: 64px;
-  height: calc(100vh - 64px);
-  height: calc(100dvh - 64px);
+  top: $navbar-height;
+  height: calc(100vh - $navbar-height);
+  height: calc(100dvh - $navbar-height);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -1446,10 +1569,11 @@
 }
 
 .cost-amount {
-  font-size: 26px;
+  font-size: $font-price-md;
   font-weight: 700;
   color: $color-primary;
   line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
 
 .cost-amount--loading {
@@ -1497,7 +1621,7 @@
   width: 100%;
   height: 44px;
   border: none;
-  border-radius: 4px;
+  border-radius: $btn-border-radius-sm;
   background: $color-primary;
   color: $text-color-inverse;
   font-size: 15px;
@@ -1524,11 +1648,11 @@
   }
 
   &.is-sold-out {
-    background: #dc2626;
+    background: $color-danger;
   }
 
   &.is-sold-out:hover {
-    background: #b91c1c;
+    background: $color-danger-text;
   }
 }
 
@@ -1572,18 +1696,21 @@
   display: inline-flex;
   align-items: baseline;
   gap: 1px;
-  color: #ff1f1f;
+  // 与配置区「当前费用」同为品牌主色：同一笔合计用两种颜色会让用户以为是两个价格
+  color: $color-primary;
 }
 
 .allocation-footer-symbol {
-  font-size: 18px;
+  font-size: $font-price-symbol;
   font-weight: 700;
 }
 
 .allocation-footer-num {
-  font-size: 22px;
+  // 原 22px 与配置区 26px、移动总计 28px 三套并存，同一笔金额在三种视口下三种大小
+  font-size: $font-price-md;
   line-height: 1.1;
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
 .allocation-footer-discount-text {
@@ -1613,7 +1740,7 @@
       top: 50%;
       width: 1px;
       height: 10px;
-      background: #d9dde4;
+      background: $border-color;
       transform: translateY(-50%);
     }
   }
@@ -1625,12 +1752,13 @@
   gap: 10px;
 }
 
+// 辅助入口与购买按钮同行：左侧占满剩余宽度、右对齐，不再绝对定位压住按钮热区
 .allocation-footer-links {
-  position: absolute;
-  right: 16px;
-  bottom: 10px;
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 12px;
 }
 
@@ -1686,7 +1814,7 @@
   flex: 0 0 112px;
   height: 42px;
   border: none;
-  border-radius: 4px;
+  border-radius: $btn-border-radius-sm;
   background: $color-primary;
   color: $text-color-inverse;
   font-size: 15px;
@@ -1713,11 +1841,11 @@
   }
 
   &.is-sold-out {
-    background: #dc2626;
+    background: $color-danger;
   }
 
   &.is-sold-out:hover:not(:disabled) {
-    background: #b91c1c;
+    background: $color-danger-text;
   }
 }
 
@@ -1810,7 +1938,7 @@
 }
 
 .mobile-cost-table {
-  border-top: 1px solid #eef1f5;
+  border-top: 1px solid $divider-color;
 }
 
 .mobile-cost-table-header,
@@ -1824,7 +1952,7 @@
 }
 
 .mobile-cost-table-header {
-  background: #f4f7fc;
+  background: $bg-color-soft;
   // 原 #7c8593 在 #f4f7fc 上 3.47:1 不达标，改用次文本色（5.05:1）
   color: $text-color-secondary;
   font-size: 13px;
@@ -1832,7 +1960,7 @@
 }
 
 .mobile-cost-table-row {
-  border-bottom: 1px solid #eef1f5;
+  border-bottom: 1px solid $divider-color;
   font-size: 14px;
 }
 
@@ -1842,7 +1970,7 @@
 }
 
 .mobile-cost-table-detail {
-  color: #6d7480;
+  color: $text-color-secondary;
   word-break: break-word;
 }
 
@@ -1855,7 +1983,7 @@
 
 .mobile-cost-table-total {
   grid-template-columns: 1fr auto;
-  border-bottom: 1px solid #eef1f5;
+  border-bottom: 1px solid $divider-color;
   font-size: 16px;
 
   span {
@@ -1864,9 +1992,10 @@
   }
 
   strong {
-    color: #ff3b30;
-    font-size: 28px;
+    color: $color-primary;
+    font-size: $font-price-lg;
     line-height: 1;
+    font-variant-numeric: tabular-nums;
   }
 }
 
@@ -1886,81 +2015,6 @@
   border-radius: 4px;
 }
 
-.mobile-drawer-sheet {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-}
-
-.mobile-drawer-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  padding-bottom: 14px;
-  border-bottom: 1px solid $divider-color;
-}
-
-.mobile-drawer-title {
-  font-size: 18px;
-  font-weight: 700;
-  color: $text-color-primary;
-}
-
-.mobile-drawer-desc {
-  margin: 6px 0 0;
-  font-size: 12px;
-  color: $text-color-placeholder;
-}
-
-.mobile-drawer-switch {
-  flex-shrink: 0;
-  height: 32px;
-  padding: 0 12px;
-  border: 1px solid $border-color;
-  border-radius: 4px;
-  background: $bg-color-card;
-  color: $color-primary;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.mobile-drawer-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding-top: 16px;
-}
-
-.mobile-drawer-item {
-  width: 100%;
-  min-height: 46px;
-  padding: 0 14px;
-  border: 1px solid $divider-color;
-  border-radius: 4px;
-  background: $bg-color-card;
-  color: $text-color-primary;
-  display: inline-flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  font-size: 14px;
-  cursor: pointer;
-  transition: all $motion-fast ease;
-
-  &:hover {
-    border-color: rgba($color-primary, 0.45);
-    color: $color-primary;
-  }
-
-  &.active {
-    border-color: $color-primary;
-    background: $color-primary-soft;
-    color: $color-primary;
-    font-weight: 600;
-  }
-}
 
 .mobile-product-sheet-list {
   display: flex;
@@ -1981,7 +2035,10 @@
   text-align: left;
   font-size: 15px;
   cursor: pointer;
-  transition: all $motion-fast ease;
+  transition:
+    background-color $motion-fast ease,
+    border-color $motion-fast ease,
+    color $motion-fast ease;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2037,14 +2094,6 @@
 
 .mobile-product-sheet-item.active .mobile-product-sheet-meta {
   color: inherit;
-}
-
-:deep(.mobile-category-drawer) {
-  max-width: 380px;
-}
-
-:deep(.mobile-category-drawer .el-drawer__body) {
-  padding: 16px 14px 20px;
 }
 
 .mobile-coupon-sheet-body {
@@ -2138,7 +2187,7 @@
 @media (max-width: $breakpoint-nav) {
   .shop-wrap {
     flex-direction: column;
-    background: #f7f8fa;
+    background: $bg-color;
     // 避让随 fixed 结算栏实际高度联动（含 safe-area），footer 增高时不再遮挡配置区
     padding-bottom: calc(
       var(--allocation-footer-height, 136px) +

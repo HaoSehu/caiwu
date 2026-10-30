@@ -16,8 +16,13 @@ $color-danger-soft: #fff1f0;
 $color-danger-text: #b42318;
 $color-info: #5b6b82;
 $color-info-soft: #f8fafc;
-$color-accent-orange: #dd7a1f;
+// 暖色点缀：仅用于内容页 hero 的径向渐变底纹（ContentListPage 的 .hero-panel）。
+// 只有这一档透明度，故不再保留实色 $color-accent-orange（全仓零引用）。
 $color-accent-orange-soft: rgba(221, 122, 31, 0.14);
+
+// 危险色透明档：售罄按钮的呼吸投影等脉冲动画引用，避免散写 rgba(240, 68, 56, x)
+$color-danger-a0: rgba(240, 68, 56, 0);
+$color-danger-a34: rgba(240, 68, 56, 0.34);
 
 // 主色透明档：浅色底、描边、投影统一引用，避免各页散写 rgba(22, 93, 255, x)
 $color-primary-a06: rgba(22, 93, 255, 0.06);
@@ -35,6 +40,10 @@ $bg-color: #f5f7fb;
 $bg-color-soft: #f8fafc;
 $bg-color-card: #ffffff;
 $bg-color-hover: #f2f6fd;
+// 中性底板：页脚、移动菜单侧列、区块底色带的统一填充。
+// 此前同一层视觉在 6 处写成 #f4f7fc / #f4f6fb / #f5f7fa 三种近似值
+// （通道差 1~2，肉眼无差），收编成一档，避免后续再漂。
+$bg-color-muted: #f4f7fc;
 $bg-color-stripe: #fbfcfe;
 $bg-color-overlay: rgba(245, 247, 251, 0.96);
 
@@ -43,37 +52,94 @@ $text-color-primary: #1f2937;
 $text-color-secondary: #5b6b82;
 $text-color-placeholder: #606d80;
 $text-color-disabled: #c9cdd4;
+// 标题专用深色：首页各 section、内容页大标题用色。
+// 此前同一层深蓝黑在 3 个组件里写成 #0f172a / #111a34 / #111827 三种值
+// （最大通道差 3/3/14，1400px 宽屏下肉眼不可辨），收编成一档。
+// 注意：正文仍用 $text-color-primary，不要拿这个令牌写段落。
+$text-color-heading: #0f172a;
+// 站头导航/用户菜单文字：比正文主色浅一档（#374151 而非 #1f2937），
+// 让 64px 高、字号 14px 的横排导航不至于过重。此前在 WebsiteLayout.scss
+// 重复裸写 6 次，收编为令牌，视觉零变化。
+$text-color-nav: #374151;
 $text-color-inverse: #ffffff;
 
 // 4. Border & divider
 $border-color: #e5eaf3;
 $divider-color: #eef2f7;
 $border-color-strong: #cfd8e6;
+// 危险色描边：首页公告条的暖红边框（与 $color-danger-soft 成对使用）
+$color-danger-border: #ffe1d8;
+
+// 内容侧栏热榜名次徽章（金/银/铜三档）。
+// 文字色均已按 12px 字号 ≥4.5:1 校验过：原 #d97706 / #3b82f6 / #b45309 不达标，
+// 加深为下面这组；换值时必须重跑对比度，不能凭观感调浅。
+$badge-rank-1-bg: #fff0d9;
+$badge-rank-1-text: #92400e;
+$badge-rank-2-bg: #e9f1fb;
+$badge-rank-2-text: #1d4ed8;
+$badge-rank-3-bg: #f7e8de;
+$badge-rank-3-text: #7c2d12;
 
 // 5. Typography
-$font-family-main: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+$font-family-main: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
 $font-size-base: 14px;
 $font-size-lg: 16px;
 $font-size-sm: 12px;
 $font-size-h1: 28px;
 $font-size-h2: 18px;
 
+// 价格排版：金额类数字必须等宽（font-variant-numeric: tabular-nums），
+// 否则报价刷新进位时数字宽度跳动，吸底条与费用栏会左右抽动。
+// 两个字号对应两种语义角色，不要再用第三、第四种写法：
+//   配置区实时费用（可编辑上下文）   -> $font-price-md
+//   结算合计（吸底条 / 移动费用总计） -> $font-price-lg
+$font-price-symbol: 18px;
+$font-price-md: 26px;
+$font-price-lg: 28px;
+
 // 6. Layout & spacing
-$sidebar-width: 220px;
-$sidebar-width-collapsed: 72px;
+// 站点统一容器：内容最大 1200px，两侧各留 24px。
+// 此前 12 个文件各写一遍 min(1200px, calc(100% - 48px))，改宽度要全仓搜；
+// 抽成 mixin 后单点维护。用法：`@include site-container;`
+@mixin site-container {
+  width: min(1200px, calc(100% - 48px));
+  margin: 0 auto;
+}
+
+// 只保留真正被引用的尺寸：$navbar-height（站头/吸顶基准）、
+// $sm-border-radius / $lg-border-radius（控件与卡片）。原 $sidebar-width、
+// $sidebar-width-collapsed、$base-padding、$base-margin、$base-border-radius
+// 是管理端布局遗留，官网零引用，已删除。
 $navbar-height: 64px;
-$base-padding: 20px;
-$base-margin: 16px;
-$base-border-radius: 14px;
 $sm-border-radius: 10px;
 $lg-border-radius: 16px;
-// 移动形态断点：992 对齐控制台 useDeviceLayout 的 tablet 上限（2026-10-11 X1 裁决），
-// CSS 与 JS（WebsiteLayout / useWebsiteProductsCatalog / router scrollBehavior）共用此值
+// 手写按钮圆角三档。此前 14 个按钮各写 2/4/6/8px，同语义跨页不一致
+// （最典型：products 吸底结算 4px vs ProductDetail 吸底结算 10px）。
+// 按按钮体量分档，不按页面分档：
+//   -sm  购买主按钮（.buy-btn 44px 高）、吸底结算、SEO 与方案 CTA —— 小圆角硬朗
+//   -    首页 hero CTA、注册条按钮、错误重试、移动端登录 —— 对话式中等圆角
+//   -lg  站头注册按钮（34px 矮按钮）、页脚 logo 回退块 —— 矮控件用大圆角才不塌
+$btn-border-radius-sm: 4px;
+$btn-border-radius: 6px;
+$btn-border-radius-lg: 8px;
+// 移动形态断点：992 对齐控制台 useDeviceLayout 的 tablet 上限（2026-10-11 X1 裁决）。
+// 脚本侧同一取值在 src/constants/breakpoints.ts 的 MOBILE_BREAKPOINT：
+// SCSS 变量无法被 JS 引用，改动断点时两处必须同步。
 $breakpoint-nav: 992px;
 // sm 起点（>= 768px 属平板，docs/DESIGN.md §7）
 $breakpoint-narrow: 768px;
 // xs 上界：768 属于 sm，手机形态查询必须用 767.98px（与 theme.css、控制台 @screen-mobile-max 同口径）
 $breakpoint-mobile-max: $breakpoint-narrow - 0.02px;
+// 紧凑断点：手机竖屏收紧（字号、内边距、双列改单列）。历史上 13 个文件手写 640px，
+// 这里收成令牌，改值只需动一处。
+$breakpoint-compact: 640px;
+// 宽屏收缩断点：1200 容器在 1180 视口下开始挤压时提前降列（首页与站头共用）。
+$breakpoint-wide: 1180px;
+// 超窄断点：小屏手机（页脚、首页 hero 标题）极致压缩。
+$breakpoint-tiny: 480px;
+// 以下为页面局部一次性断点，不做全局令牌：内容详情 1200（正文栏收窄）、
+// 内容列表 1260（侧栏换行）、商品目录 1100（配置区双列改单列）、
+// SEO 落地页 1080/760（首屏左右分栏解除）。改这些值只影响单页，别再新增。
 
 // 7. Shadow
 $shadow-sm: 0 2px 10px rgba(15, 23, 42, 0.04);
@@ -81,27 +147,17 @@ $shadow-md: 0 10px 30px rgba(15, 23, 42, 0.06);
 $shadow-lg: 0 20px 50px rgba(15, 23, 42, 0.1);
 
 // 8. z-index
-$zindex-navbar: 1000;
-$zindex-sidebar: 1010;
-$zindex-modal: 1050;
+// 官网的层级是各页面自行写死的数值（站头 100、二级导航 98/99、遮罩 90、
+// 页面内悬浮 30、内容层 1），与这里原先的 1000/1010/1050 阶梯不一一对应，
+// 那三个令牌零引用已删除。要收敛成统一阶梯需逐处核对堆叠顺序，登记为后续令牌化。
 
 // 9. Motion
 $motion-fast: 0.15s;
 $motion-base: 0.2s;
 
-// 10. Legacy aliases
-$primary-color: $color-primary;
-$success-color: $color-success;
-$warning-color: $color-warning;
-$danger-color: $color-danger;
-$info-color: $color-info;
-
-$font-family: $font-family-main;
-$border-radius: $base-border-radius;
-$box-shadow: $shadow-md;
-
-$sidebar-collapsed-width: $sidebar-width-collapsed;
-$sidebar-bg: $bg-color-card;
-$sidebar-text: $text-color-secondary;
-$sidebar-active-text: $color-primary;
-$navbar-bg: $bg-color-card;
+// 10. Legacy aliases 已删除：$primary-color / $success-color / $warning-color /
+// $danger-color / $info-color / $font-family / $border-radius / $box-shadow /
+// $sidebar-collapsed-width / $sidebar-bg / $sidebar-text / $sidebar-active-text /
+// $navbar-bg 全部零引用（element/index.scss 里的 $border-radius / $box-shadow /
+// $font-family 是 Element Plus 的 with() 配置键名，不是读取这里的变量）。
+// 新代码一律直接用语义令牌，不要再引入别名层。
