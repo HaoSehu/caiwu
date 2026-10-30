@@ -56,26 +56,21 @@ frontend-user-v4-console/test-results/
 frontend-user-v4-console/dist-e2e/
 frontend-user-v4-console/.auth/
 shared/node_modules/
+# unplugin 生成的类型声明文件（unplugin-auto-import / unplugin-vue-components 构建时自动重建）
+frontend-user-v3-www/auto-imports.d.ts
+frontend-user-v3-www/components.d.ts
 
-# Frontend local environment overrides
-frontend-admin-v3/.env
-frontend-admin-v3/.env.dev
-frontend-admin-v3/.env.local
-frontend-admin-v3/.env.*.local
-frontend-admin-v3/.env.production
-frontend-admin-v3/.env.development
-frontend-user-v3-www/.env
-frontend-user-v3-www/.env.dev
-frontend-user-v3-www/.env.local
-frontend-user-v3-www/.env.*.local
-frontend-user-v3-www/.env.production
-frontend-user-v3-www/.env.development
-frontend-user-v4-console/.env
-frontend-user-v4-console/.env.dev
-frontend-user-v4-console/.env.local
-frontend-user-v4-console/.env.*.local
-frontend-user-v4-console/.env.production
-frontend-user-v4-console/.env.development
+# Frontend environment files：默认整目录忽略，仅放行显式声明的模板与 e2e 公开配置。
+# 改为通配后，新增 .env.staging / .env.preview 等不会再因白名单缺项而误入库。
+frontend-admin-v3/.env*
+frontend-user-v3-www/.env*
+frontend-user-v4-console/.env*
+!frontend-admin-v3/.env.example
+!frontend-user-v3-www/.env.example
+!frontend-user-v4-console/.env.example
+# e2e 配置只含本地回环地址与空域名，不含任何凭据，需随仓库分发
+!frontend-user-v3-www/.env.e2e
+!frontend-user-v4-console/.env.e2e
 
 # IDE
 .vscode/
@@ -163,6 +158,7 @@ howstack-bos-main/
 
 # 会话遗留产物（根目录误生成，不得入库）
 /MEMORY.md
+# 唯一基线是 backend/phpstan-baseline.neon（随仓库入库）；曾误生成的根基线含 E:\ 绝对路径，已删除
 /phpstan-baseline.neon
 
 # Claude
@@ -171,19 +167,14 @@ CLAUDE.md
 
 # Local-only docs（短期文档，本地保留不上传）
 docs/_local/
-# docs 目录仅跟踪参考资料，其余内容不入库
-docs/*
-!docs/参考资料/
-# 2026-10-11 裁决 C：设计/工程规范与执行计划体系纳入版本管理（防修订丢失）
-!docs/DESIGN.md
-!docs/FRONTEND.md
-!docs/catalog.json
-!docs/执行计划/
+# docs 是唯一长期文档系统，主干（README/ARCHITECTURE/BACKEND/DATABASE/治理/设计文档/产品规格/自动生成）全部入库；
+# 曾整体忽略 docs/* 导致文档门禁空转、26 条 catalog 记录指向从未入库的文件（干净 clone 必报 missing file）
 
 
 # Codex CLI：本地代理人格模板与工具配置，非项目定制
 .codex/
-AGENTS.md
+# AGENTS.md 是项目规则入口（AGENTS.md 与 CLAUDE.md 共享同一套规则），必须入库；
+# 曾被忽略导致新克隆没有任何项目规则，CLAUDE.md 指向一个不存在的文件。
 .github/agents/
 
 # Git hooks：husky 生成的 .husky/_ 是运行时壳，不入库；

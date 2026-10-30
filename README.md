@@ -171,7 +171,8 @@ php artisan db:seed --class=Database\\Seeders\\SettingsSeeder
 php artisan tinker
 App\Models\AdminUser::create([
     'username' => 'admin',
-    'password' => 'password',
+    // 必须使用强口令（install_db.py 会拒绝「用户名即口令」或常见弱口令组合）
+    'password' => \Illuminate\Support\Facades\Hash::make('请替换为至少 12 位的强口令'),
     'role_id'  => 1,
     'nickname' => '管理员',
 ]);

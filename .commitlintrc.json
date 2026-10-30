@@ -1,21 +1,20 @@
 {
   "extends": ["@commitlint/config-conventional"],
+  "parserPreset": {
+    "name": "caiwu-conventional",
+    "parserOpts": {
+      "headerPattern": "^(\\w+)(?:\\(([\\w\\$\\.\\-\\* ]*)\\))?!?:(.*)$",
+      "headerCorrespondence": ["type", "scope", "subject"],
+      "noteKeywords": ["BREAKING CHANGE", "BREAKING-CHANGE"],
+      "revertPattern": "^(?:Revert|revert:)\\s\"?(.*)\"?\\s*\\n\\nThis reverts commit (\\w+)\\.",
+      "revertCorrespondence": ["header", "hash"]
+    }
+  },
   "rules": {
     "type-enum": [
       2,
       "always",
       [
-        "feat",
-        "fix",
-        "docs",
-        "style",
-        "refactor",
-        "perf",
-        "test",
-        "chore",
-        "ci",
-        "build",
-        "revert",
         "Feat",
         "Fix",
         "Docs",
@@ -23,11 +22,16 @@
         "Refactor",
         "Perf",
         "Test",
-        "Chore"
+        "Chore",
+        "CI",
+        "Build",
+        "Revert"
       ]
     ],
     "type-case": [0],
+    "subject-empty": [2, "never"],
     "subject-min-length": [2, "always", 2],
-    "subject-max-length": [2, "always", 100]
+    "subject-max-length": [2, "always", 100],
+    "subject-full-stop": [0]
   }
 }

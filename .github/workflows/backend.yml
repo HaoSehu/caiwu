@@ -97,6 +97,11 @@ jobs:
       - name: 静态分析
         run: composer analyse
 
+      - name: 严格类型声明检查
+        # 只约束新增文件：历史文件登记在 backend/strict-types-baseline.json，
+        # 清单只减不增，条目对应的文件补上声明或文件消失都会失败，避免清单烂尾。
+        run: composer check:strict-types
+
       - name: 前端接口清单一致性
         # 生成物 frontend-admin-v3/src/data/apiCatalog.generated.json 由
         # backend/scripts/generate_frontend_api_catalog.php 依据 route:list 产出，
@@ -106,6 +111,16 @@ jobs:
 
       - name: 插件来源审计
         run: composer audit:plugins
+
+      - name: 敏感文件扫描
+        # 扫描 Git 树中的高置信凭据（.env / 配置 / 文档散文 / 源码字面量）；
+        # 命中即失败，避免真实口令、Token、私钥入库。
+        working-directory: ..
+        run: node backend/scripts/sensitive_file_scan.mjs
+
+      - name: 迁移规范检查
+        # 迁移只新增、不改历史；破坏性语句必须有显式审批标记。
+        run: php artisan db:migration-lint
 
       - name: 依赖安全扫描
         # 走 Packagist 的 CVE 通告库扫描 composer.lock 中的生产依赖（--no-dev 跳过 require-dev）。

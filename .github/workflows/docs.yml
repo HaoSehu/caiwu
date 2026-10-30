@@ -28,3 +28,7 @@ jobs:
 
       - name: 复核期限扫描
         run: npm run docs:freshness
+
+      - name: 工作区健康检查
+        # 校验根目录、workspace 声明、被忽略的幽灵目录与文档入口是否一致。
+        run: node backend/scripts/workspace_health_check.mjs

@@ -19,37 +19,45 @@
     "build:frontends:dry": "node backend/scripts/build_frontends.mjs --dry-run",
     "test:build-config": "node backend/scripts/build_frontends.test.mjs",
     "docs:check": "node backend/scripts/check_docs.mjs",
-    "docs:freshness": "node backend/scripts/check_docs.mjs --freshness",
+    "docs:freshness": "node backend/scripts/check_docs.mjs --strict-freshness",
     "lint:shared": "npm run lint --workspace shared",
     "lint:admin-v3": "npm run lint --workspace caiwu-admin-v3",
     "lint:user-v3-www": "npm run lint --workspace caiwu-user-v3-www",
     "lint:user-v4-console": "npm run lint --workspace caiwu-user-v4-console",
-    "lint:frontends": "npm run lint:shared && npm run lint:admin-v3 && npm run lint:user-v3-www && npm run lint:user-v4-console",
+    "lint:styles": "npm run stylelint --workspace caiwu-admin-v3 && npm run stylelint --workspace caiwu-user-v4-console",
+    "lint:frontends": "npm run lint:shared && npm run lint:admin-v3 && npm run lint:user-v3-www && npm run lint:user-v4-console && npm run lint:styles",
     "typecheck:shared": "npm run typecheck --workspace shared",
     "typecheck:admin-v3": "npm run build:type --workspace caiwu-admin-v3",
     "typecheck:user-v3-www": "npm run build:type --workspace caiwu-user-v3-www",
     "typecheck:user-v4-console": "npm run build:type --workspace caiwu-user-v4-console",
     "typecheck:frontends": "npm run typecheck:shared && npm run typecheck:admin-v3 && npm run typecheck:user-v3-www && npm run typecheck:user-v4-console",
     "test:shared": "npm run test --workspace shared",
-    "format": "prettier --write \"**/*.{js,ts,vue,json,css,scss,md}\"",
-    "format:check": "prettier --check \"**/*.{js,ts,vue,json,css,scss,md}\"",
+    "format": "prettier --write \"frontend-admin-v3/**/*.{js,jsx,ts,tsx,vue,json}\" \"frontend-user-v4-console/**/*.{js,jsx,ts,tsx,vue,json}\"",
+    "format:check": "prettier --check \"frontend-admin-v3/**/*.{js,jsx,ts,tsx,vue,json}\" \"frontend-user-v4-console/**/*.{js,jsx,ts,tsx,vue,json}\"",
     "verify:frontends": "npm run lint:frontends && npm run typecheck:frontends && npm run build:frontends && npm run verify:refactor --workspace caiwu-user-v3-www && npm run verify:refactor --workspace caiwu-user-v4-console",
     "workspace:health": "node backend/scripts/workspace_health_check.mjs",
-    "prepare": "husky"
+    "prepare": "husky",
+    "lint:commit": "commitlint --edit"
   },
   "lint-staged": {
     "frontend-admin-v3/**/*.{js,jsx,ts,tsx,vue}": [
       "eslint --fix --no-warn-ignored --config frontend-admin-v3/eslint.config.js",
       "prettier --write"
     ],
-    "frontend-user-v3-www/**/*.{js,jsx,ts,tsx,vue}": [
-      "eslint --fix --no-warn-ignored --config frontend-user-v3-www/eslint.config.js"
+    "frontend-admin-v3/**/*.less": [
+      "prettier --write"
     ],
     "frontend-user-v4-console/**/*.{js,jsx,ts,tsx,vue}": [
       "eslint --fix --no-warn-ignored --config frontend-user-v4-console/eslint.config.js",
       "prettier --write"
     ],
-    "shared/**/*.{js,jsx,ts,tsx,vue}": [
+    "frontend-user-v4-console/**/*.less": [
+      "prettier --write"
+    ],
+    "frontend-user-v3-www/**/*.{js,mjs,cjs,jsx,ts,mts,cts,tsx,vue}": [
+      "eslint --fix --no-warn-ignored --config frontend-user-v3-www/eslint.config.js"
+    ],
+    "shared/**/*.{js,mjs,cjs,jsx,ts,mts,cts,tsx,vue}": [
       "eslint --fix --no-warn-ignored --config shared/eslint.config.js"
     ],
     "backend/**/*.php": [
@@ -87,5 +95,8 @@
     "undici": "7.29.0",
     "fast-uri@<4": "3.1.5",
     "less@<4.9.0": "4.9.0"
+  },
+  "engines": {
+    "node": ">=20.19.0"
   }
 }
