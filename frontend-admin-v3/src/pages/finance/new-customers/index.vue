@@ -29,7 +29,19 @@
     <!-- 列表展示：桌面端表格 / 移动端卡片 -->
     <t-card :bordered="false">
       <div v-if="!isMobile" class="table-scroll">
-        <t-table row-key="date" :data="dailyList" :columns="columns" :loading="loading" hover table-layout="fixed" />
+        <t-table
+          row-key="date"
+          :data="dailyList"
+          :columns="columns"
+          :loading="loading"
+          hover
+          table-layout="fixed"
+          aria-label="每日新增客户列表"
+        >
+          <template #empty>
+            <t-empty :description="loading ? '加载中…' : '暂无数据'" />
+          </template>
+        </t-table>
       </div>
 
       <div v-else class="record-mobile-list">

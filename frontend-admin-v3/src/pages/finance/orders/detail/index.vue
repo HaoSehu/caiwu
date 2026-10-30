@@ -39,6 +39,16 @@
         >
           退款
         </t-button>
+        <!-- 取消订单：挂账订单被豁免支付窗口清理后的唯一人工出口（权限 order.manage） -->
+        <t-button
+          v-if="canCancelOrder"
+          theme="danger"
+          variant="outline"
+          :loading="cancelLoading"
+          @click="handleCancelOrder"
+        >
+          取消订单
+        </t-button>
         <t-button v-if="order.user_id" variant="outline" @click="router.push(`/admin/users/${order.user_id}`)">
           查看用户资料
         </t-button>
@@ -215,7 +225,9 @@
             <div v-if="order.trace_id" class="detail-kv-item detail-kv-item--span-2">
               <span class="detail-kv-item__label">链路追踪号 (Trace ID)</span>
               <div class="detail-kv-item__value detail-copy-wrap">
-                <span style="font-family: monospace; font-size: 13px">{{ order.trace_id }}</span>
+                <span style="font-family: monospace; font-size: var(--td-font-size-size-3, 14px)">{{
+                  order.trace_id
+                }}</span>
                 <t-tooltip content="复制 Trace ID" placement="top">
                   <t-button variant="text" shape="square" size="small" @click="copyText(order.trace_id || '')">
                     <template #icon><file-copy-icon /></template>
@@ -304,7 +316,7 @@
               <div class="payment-item__head">
                 <div>
                   <strong>{{ fieldValue(payment.payment_no) }}</strong>
-                  <span style="font-size: 12px; color: var(--td-text-color-placeholder)">
+                  <span style="font-size: var(--td-font-size-size-1, 12px); color: var(--td-text-color-placeholder)">
                     第三方单号：{{ fieldValue(payment.trade_no) }}
                   </span>
                 </div>
@@ -386,6 +398,7 @@ import {
   toTagTypeMap,
 } from '@caiwu/shared/statusConfig';
 import { FileCopyIcon } from 'tdesign-icons-vue-next';
+import { DialogPlugin } from 'tdesign-vue-next/es/dialog/plugin';
 import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -396,8 +409,10 @@ import InvoiceDetailDrawer from '@/components/finance-record-detail/InvoiceDetai
 import RefundDialog from '@/components/finance-record-detail/RefundDialog.vue';
 import type { RecordDetailMetric, RecordDetailTab } from '@/components/record-detail-page/index.vue';
 import RecordDetailPage from '@/components/record-detail-page/index.vue';
+import { AdminPermissions } from '@/constants/permissions';
 import { useRefundMark } from '@/hooks/useRefundMark';
 import { copyToClipboard, fieldValue, formatBillingCycle, formatDateTime, formatMoney } from '@/utils/format';
+import { hasAdminPermission } from '@/utils/permission';
 import { errorMessage } from '@/utils/userMessage';
 
 defineOptions({
@@ -564,6 +579,39 @@ const refundInvoice = ref<InvoiceRecord>({} as InvoiceRecord);
 const canRefundFromOrder = computed(
   () => hasRefundPermission.value && Boolean(order.value.invoice_id) && Number(order.value.status) === 1,
 );
+
+// ─── 取消订单（2026-10-28）：挂账订单被豁免支付窗口自动清理后唯一的人工终态出口 ───
+// 仅在待支付可取消（与 OrderService::cancel 的「仅待支付订单可取消」同口径），权限 order.manage。
+const cancelLoading = ref(false);
+const canCancelOrder = computed(
+  () => hasAdminPermission(AdminPermissions.ORDER_MANAGE) && Number(order.value.status) === 0,
+);
+
+function handleCancelOrder(): void {
+  if (!order.value.id) return;
+  // DialogPlugin.confirm 返回的是 DialogInstance（不是 Promise<boolean>），
+  // 结果必须在 onConfirm 里处理，否则 await 会立刻拿到实例、确认框形同虚设。
+  const dialog = DialogPlugin.confirm({
+    header: '取消订单',
+    body: '取消后订单不可继续支付，关联账单会一并取消。确认取消？',
+    theme: 'warning',
+    confirmBtn: { content: '确定', theme: 'warning' },
+    cancelBtn: '再想想',
+    async onConfirm() {
+      cancelLoading.value = true;
+      try {
+        await adminApi.orders.cancel(order.value!.id);
+        MessagePlugin.success('订单已取消');
+        await loadDetail();
+        dialog.hide();
+      } catch (error) {
+        MessagePlugin.error(errorMessage(error, '取消订单失败'));
+      } finally {
+        cancelLoading.value = false;
+      }
+    },
+  });
+}
 
 async function openRefundFromOrder() {
   const invoiceId = Number(order.value.invoice_id ?? 0);
@@ -856,6 +904,9 @@ function serviceIdLabel(service: unknown) {
   return fieldValue(record.service_id || record.id);
 }
 
+// D-7：本地兜底，不从 @/utils/format 取。该面板展示的是任意 JSON 片段，
+// 兜底语义只在「不是对象就交给 fieldValue 显示占位」这里成立；依赖外部工具模块
+// 会把这个页面的编译正确性绑到别人对 format.ts 的改动上（顺序/导出都可能变）。
 function toRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 }

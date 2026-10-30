@@ -3,15 +3,15 @@
 .finance-recharges-page {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--td-comp-margin-l);
 }
 
 .recharge-filter {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: var(--td-comp-margin-m);
   align-items: center;
-  margin-bottom: 16px;
+  margin-bottom: var(--td-comp-margin-l);
 
   .filter-keyword {
     flex: 1 1 240px;
@@ -29,7 +29,7 @@
   .filter-actions {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--td-comp-margin-s);
     margin-left: auto;
   }
 }
@@ -38,8 +38,8 @@
   .recharge-filter {
     flex-direction: column;
     align-items: stretch;
-    gap: 8px;
-    margin-bottom: 12px;
+    gap: var(--td-comp-margin-s);
+    margin-bottom: var(--td-comp-margin-m);
 
     .filter-keyword,
     .filter-status,

@@ -1,17 +1,6 @@
 // 财务三页共享：表格滚动、堆叠单元格、分页行、移动端列表与快捷筛选行
 // （订单/账单/充值页共用，页面自身 less 保留各自的筛选栅格与断点）
 
-.table-scroll {
-  overflow-x: auto;
-}
-
-.stack-cell {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 3px;
-}
-
 .stack-cell strong {
   overflow: hidden;
   color: var(--td-text-color-primary);
@@ -28,12 +17,6 @@
   white-space: nowrap;
 }
 
-.pagination-row {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 16px;
-}
-
 .record-mobile-list {
   min-height: 120px;
 }
@@ -45,11 +28,6 @@
 }
 
 @media (max-width: 767.98px) {
-  .pagination-row {
-    justify-content: flex-start;
-    overflow-x: auto;
-  }
-
   .pagination-row .t-pagination {
     min-width: max-content;
   }

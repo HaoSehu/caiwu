@@ -52,7 +52,18 @@
       </div>
 
       <div v-if="!isMobile" class="table-scroll">
-        <t-table row-key="id" :data="orders" :columns="columns" :loading="loading" hover table-layout="fixed">
+        <t-table
+          row-key="id"
+          :data="orders"
+          :columns="columns"
+          :loading="loading"
+          hover
+          table-layout="fixed"
+          aria-label="订单列表"
+        >
+          <template #empty>
+            <t-empty :description="loading ? '加载中…' : hasActiveFilters ? '未找到匹配结果' : '暂无订单'" />
+          </template>
           <template #user="{ row }">
             <div class="stack-cell">
               <strong>{{ userName(row) }}</strong>
@@ -133,7 +144,7 @@
           :current="pagination.page"
           :page-size="pagination.page_size"
           :total="total"
-          :page-size-options="[20, 50, 100]"
+          :page-size-options="pagination.pageSizeOptions"
           show-jumper
           @change="handlePaginationChange"
         />
@@ -355,6 +366,7 @@ function discountTextOf(row: Record<string, unknown>): string {
   return parts.join(' / ');
 }
 
+// 列表页只用这一个取对象的工具函数，本地实现即可，不依赖 @/utils/format 的额外导出
 function toRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 }

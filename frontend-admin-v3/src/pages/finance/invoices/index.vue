@@ -34,7 +34,18 @@
       </div>
 
       <div v-if="!isMobile" class="table-scroll">
-        <t-table row-key="id" :data="invoices" :columns="columns" :loading="loading" hover table-layout="fixed">
+        <t-table
+          row-key="id"
+          :data="invoices"
+          :columns="columns"
+          :loading="loading"
+          hover
+          table-layout="fixed"
+          aria-label="账单列表"
+        >
+          <template #empty>
+            <t-empty :description="loading ? '加载中…' : hasActiveFilters ? '未找到匹配结果' : '暂无账单'" />
+          </template>
           <template #user="{ row }">
             <div class="stack-cell">
               <strong>{{ userName(row.user) }}</strong>
@@ -128,7 +139,7 @@
           :current="pagination.page"
           :page-size="pagination.page_size"
           :total="total"
-          :page-size-options="[20, 50, 100]"
+          :page-size-options="pagination.pageSizeOptions"
           show-jumper
           @change="handlePaginationChange"
         />
@@ -156,7 +167,7 @@ import { AdminPermissions, hasPermissionInList } from '@/constants/permissions';
 import { useListPage } from '@/hooks/useListPage';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useUserStore } from '@/store';
-import { fieldValue, formatDateTime, formatMoney } from '@/utils/format';
+import { fieldValue, formatDateTime, formatMoney, toRecord } from '@/utils/format';
 import { errorMessage } from '@/utils/userMessage';
 
 defineOptions({
@@ -361,9 +372,5 @@ function memberDiscountOf(row: Record<string, unknown>): number {
 function userName(user: unknown) {
   const record = toRecord(user);
   return fieldValue(record.nickname || record.display_name || record.email);
-}
-
-function toRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 }
 </script>

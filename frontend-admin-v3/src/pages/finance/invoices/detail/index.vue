@@ -141,26 +141,32 @@ async function submitRefund(payload: { amount: number; remark: string; idempoten
   await load();
 }
 
-async function handleCancel(): Promise<void> {
+function handleCancel(): void {
   if (!invoice.value.id) return;
-  const confirmed = await DialogPlugin.confirm({
+  // DialogPlugin.confirm 返回的是 DialogInstance（不是 Promise<boolean>），
+  // 结果必须在 onConfirm 里处理，否则 await 会立刻拿到实例、确认框形同虚设。
+  const dialog = DialogPlugin.confirm({
     header: '取消账单',
     body: '取消后账单不可继续支付，确认取消？',
     confirmBtn: { content: '确定', theme: 'danger' },
     cancelBtn: '再想想',
+    async onConfirm() {
+      // 对话框自身的确定按钮也要进入 loading，否则确认后界面无反馈、可被重复点击。
+      dialog.setConfirmLoading(true);
+      cancelLoading.value = true;
+      try {
+        await adminApi.invoices.cancel(invoice.value!.id);
+        MessagePlugin.success('账单已取消');
+        await load();
+        dialog.hide();
+      } catch (error) {
+        MessagePlugin.error(errorMessage(error, '取消账单失败'));
+      } finally {
+        cancelLoading.value = false;
+        dialog.setConfirmLoading(false);
+      }
+    },
   });
-  if (!confirmed) return;
-
-  cancelLoading.value = true;
-  try {
-    await adminApi.invoices.cancel(invoice.value.id);
-    MessagePlugin.success('账单已取消');
-    await load();
-  } catch (error) {
-    MessagePlugin.error(errorMessage(error, '取消账单失败'));
-  } finally {
-    cancelLoading.value = false;
-  }
 }
 
 onMounted(load);

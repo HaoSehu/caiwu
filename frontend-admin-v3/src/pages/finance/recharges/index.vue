@@ -31,7 +31,18 @@
       </div>
 
       <div v-if="!isMobile" class="table-scroll">
-        <t-table row-key="id" :data="recharges" :columns="columns" :loading="loading" hover table-layout="fixed">
+        <t-table
+          row-key="id"
+          :data="recharges"
+          :columns="columns"
+          :loading="loading"
+          hover
+          table-layout="fixed"
+          aria-label="充值记录列表"
+        >
+          <template #empty>
+            <t-empty :description="loading ? '加载中…' : hasActiveFilters ? '未找到匹配结果' : '暂无充值记录'" />
+          </template>
           <template #user="{ row }">
             <div class="stack-cell">
               <strong>{{ userName(row.user) }}</strong>
@@ -100,7 +111,7 @@
           :current="pagination.page"
           :page-size="pagination.page_size"
           :total="total"
-          :page-size-options="[20, 50, 100]"
+          :page-size-options="pagination.pageSizeOptions"
           show-jumper
           @change="handlePaginationChange"
         />
@@ -145,7 +156,7 @@ import type { InvoiceDetailPayload } from '@/hooks/useFinanceDetailDrawer';
 import { useFinanceDetailDrawer } from '@/hooks/useFinanceDetailDrawer';
 import { useListPage } from '@/hooks/useListPage';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { fieldValue, formatDateTime, formatMoney } from '@/utils/format';
+import { fieldValue, formatDateTime, formatMoney, toRecord } from '@/utils/format';
 import { errorMessage } from '@/utils/userMessage';
 
 defineOptions({
@@ -331,9 +342,5 @@ function invoiceStatusLabel(status: unknown) {
 function invoiceStatusTheme(status: unknown) {
   const value = statusTypeMap[String(status ?? '')] || 'default';
   return value === 'info' ? 'default' : value;
-}
-
-function toRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 }
 </script>
