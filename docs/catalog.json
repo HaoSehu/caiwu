@@ -2,6 +2,18 @@
     "version": 1,
     "records": [
         {
+            "path": "执行计划/进行中/媒体库远程存储插件-2026-10-28.md",
+            "status": "active",
+            "summary": "媒体库纯本地磁盘、无存储抽象层（app 全目录无 Storage:: 调用）：本计划书据实锚点给出可扩展点与 addons 域能力边界，设计 settings 驱动的本地/远程三层选择与 media_files 新增 disk/object_key 两列、仅改 upload()/delete() 两个分支点的共存方案，双向迁移（引用替换、进度、失败重试、默认不删源）由平台承载、插件只提供 storage.test/put/get/delete/exists 五动作，FTP/七牛/COS/OSS 四插件同构目录配置与签名外链方案，附四轮三环验证、迁移三轮验证与 10 项待确认。",
+            "review_by": "2026-12-05"
+        },
+        {
+            "path": "执行计划/进行中/整体审查待处理项修复-2026-10-26.md",
+            "status": "active",
+            "summary": "承接 2026-10-26 整体审查 61 项待处理台账：本轮落地 L-30/L-32/M-06/M-31/L-11/L-35/R-06 七项无歧义项（mysqldump 盘符兜底、DemoStyle 死扩展点、无调用方方法、控制器异常上报、文档索引与废弃清单统一、运维命令登记），其余 54 项按产品裁决/跨端契约/上游联调/复核失效四类登记原因。",
+            "review_by": "2026-11-25"
+        },
+        {
             "path": "执行计划/进行中/管理端刷新首屏守卫优化-2026-10-25.md",
             "status": "active",
             "summary": "管理端刷新必发 /v2/admin/auth/info 并串行阻塞首屏：user store 增 profileHydrated/profileSyncedAt 与 ensureUserInfo 复用在途请求、persist 用 afterHydrate 标记水合并按 5 分钟 TTL 有界过期，permission.ts 守卫已水合时直接用本地权限同步重建菜单，补 e2e 覆盖刷新不重复请求与过期回源。",
@@ -112,7 +124,7 @@
             "path": "ARCHITECTURE.md",
             "status": "current",
             "summary": "运行中的系统结构与边界。",
-            "review_by": "2026-09-15"
+            "review_by": "2026-11-30"
         },
         {
             "path": "BACKEND.md",
@@ -128,13 +140,13 @@
             "path": "DESIGN.md",
             "status": "current",
             "summary": "视觉 token 与交互边界。",
-            "review_by": "2026-09-15"
+            "review_by": "2026-12-15"
         },
         {
             "path": "FRONTEND.md",
             "status": "current",
             "summary": "三端前端与共享模块约束。",
-            "review_by": "2026-09-15"
+            "review_by": "2027-01-31"
         },
         {
             "path": "设计文档/架构/插件架构说明.md",
@@ -200,7 +212,7 @@
             "path": "执行计划/进行中/日志分层与容量治理整改方案-2026-08-23.md",
             "status": "active",
             "summary": "关键审计入库、普通运行日志结构化轮转、V2 归档与容量监控的分层治理方案。",
-            "review_by": "2026-09-20"
+            "review_by": "2027-02-28"
         },
         {
             "path": "执行计划/已完成/API接口安全与性能修复方案-2026-08-26.md",
@@ -216,7 +228,7 @@
             "path": "执行计划/进行中/OPTIONS预检与CORS优化方案-2026-08-30.md",
             "status": "active",
             "summary": "OPTIONS 预检治理：生产三 Origin 诊断、预检缓存 max_age 与 CDN 放行确认；方法集保持完整动词不收敛。",
-            "review_by": "2026-09-30"
+            "review_by": "2027-03-31"
         },
         {
             "path": "执行计划/已完成/会员等级产品组折扣矩阵计划.md",
@@ -276,7 +288,7 @@
             "path": "执行计划/已完成/管理员代登录可靠性修复-2026-08-01.md",
             "status": "completed",
             "summary": "管理端代登录弹窗可靠性、消息交接与 E2E 契约修复。",
-            "review_by": "2026-09-01"
+            "review_by": "2027-04-30"
         },
         {
             "path": "执行计划/已完成/生产备份本地恢复修复-20260726.md",
@@ -292,7 +304,7 @@
             "path": "执行计划/已完成/商品分类结构修复-2026-08-01.md",
             "status": "completed",
             "summary": "商品三级分类实体表恢复、异常归属承接与香港 3 区商品迁移记录。",
-            "review_by": "2026-09-01"
+            "review_by": "2027-05-31"
         },
         {
             "path": "执行计划/已完成/财务账务一致性与回归修复-2026-08-04.md",
@@ -320,13 +332,13 @@
             "path": "参考资料/接口/API格式规范.md",
             "status": "current",
             "summary": "API 契约和工程化规范。",
-            "review_by": "2026-09-30"
+            "review_by": "2027-06-30"
         },
         {
             "path": "参考资料/接口/API清单导航.md",
             "status": "current",
             "summary": "接口业务域导航。",
-            "review_by": "2026-09-30"
+            "review_by": "2027-07-31"
         },
         {
             "path": "参考资料/后端/后端目录分类规范.md",
@@ -337,13 +349,13 @@
             "path": "参考资料/后端/财务单据生成规则.md",
             "status": "current",
             "summary": "财务单据生成规则。",
-            "review_by": "2026-09-30"
+            "review_by": "2027-08-31"
         },
         {
             "path": "参考资料/数据库/本地IDC数据迁移流程.md",
             "status": "current",
             "summary": "本地 IDC 数据迁移操作。",
-            "review_by": "2026-10-15"
+            "review_by": "2027-09-30"
         },
         {
             "path": "参考资料/集成/本地对接说明.md",
@@ -360,7 +372,7 @@
             "path": "参考资料/集成/插件/demo-ali-pay.md",
             "status": "current",
             "summary": "支付插件示例。",
-            "review_by": "2026-10-15"
+            "review_by": "2027-10-31"
         },
         {
             "path": "参考资料/运维/前端Nginx伪静态配置.md",
@@ -401,13 +413,13 @@
             "path": "治理/WORKING_RULES.md",
             "status": "current",
             "summary": "协作、验证和安全工作规则。",
-            "review_by": "2026-10-20"
+            "review_by": "2027-11-30"
         },
         {
             "path": "治理/DOCUMENTATION_POLICY.md",
             "status": "current",
             "summary": "文档分类、生命周期和自动化规则。",
-            "review_by": "2026-10-20"
+            "review_by": "2027-12-31"
         },
         {
             "path": "模板/exec-plan.md",
@@ -432,7 +444,8 @@
         {
             "path": "执行计划/进行中/优惠券功能智囊团审查-2026-10-05.md",
             "status": "active",
-            "summary": "智囊团只读审查：券/活动券/持券全链路 P0×3（折后续费网关回调死循环、预留+UNPAID+释放三重叠加双花、换券并存账单双扣）、P1×8、P2×14 分级发现，待生产核实清单与修复批次 A/B/C 建议；架构/前端域因配额受限部分覆盖。"
+            "summary": "智囊团只读审查：券/活动券/持券全链路 P0×3（折后续费网关回调死循环、预留+UNPAID+释放三重叠加双花、换券并存账单双扣）、P1×8、P2×14 分级发现，待生产核实清单与修复批次 A/B/C 建议；架构/前端域因配额受限部分覆盖。",
+            "review_by": "2026-11-15"
         },
         {
             "path": "执行计划/进行中/调度体系重构与开通链路同步化-2026-10-11.md",
@@ -463,6 +476,18 @@
             "status": "active",
             "summary": "数据库全量只读审查（基线 82 表/1151 字段/405 索引/114 外键、82 迁移、70 模型）与破坏性重构落地：骨架健康；高风险 1（财务域新旧双轨，H1 受控切换未收尾），中风险 8、低风险 7。已执行 A1 SystemSetting 合并、A3/A4 规范章节、B1 冗余索引删除、B8 双库收口，第三轮 B2/B9/B3/B4 破坏性改造（删 operation_logs、finance_cutover_inbox、finance_migration_runs 三表与 deleted_at×4、backfill_batch_id×7、legacy_activity_log_id×1 共 10 列，退役 11 个代码文件），第四轮 B5/B6 收敛（68 张表补中文表注释至 79/79，status 归档/调度/消息三域统一 varchar(24)、券域 trace_id 100→64、refund_no 统一 40、trade_no 统一 128），结构收敛为 79 表/1108 字段/383 索引/114 外键；余 B7 T+7 退役随财务批次执行。",
             "review_by": "2026-11-24"
+        },
+        {
+            "path": "设计文档/前端/frontend-user-v4-console全面审查报告-2026-10-28.md",
+            "status": "needs-review",
+            "summary": "8 智能体只读审查（设计/视觉/交互/性能构建/性能渲染）：41 个路由节点与 55 个页面全覆盖（无抽样），共 362 条编号问题（高 80、中 199、低 64、待确认 9），修复建议按投入产出比分三档与四 Sprint 排期。",
+            "review_by": "2026-11-29"
+        },
+        {
+            "path": "设计文档/前端/frontend-user-v3-www全面审查报告-2026-10-30.md",
+            "status": "needs-review",
+            "summary": "四维度（设计/视觉/交互/性能）全量只读审查：25 个页面组件、6 个通用组件、布局与构建脚本全覆盖无抽样，逐页面走查到区块级（按钮/链接/表单/弹窗/悬停反馈/加载与空态），共 98 条编号条目——问题 73（高 19、中 32、低 20、待确认 2），另已修复 71、待处理 2、已撤回 3、决定不改 12、正例 10；修复建议按投入产出比分 A/B/C/D 四档并给六轮处理顺序，附撤回证据与不改理由附录。",
+            "review_by": "2026-12-19"
         }
     ]
 }

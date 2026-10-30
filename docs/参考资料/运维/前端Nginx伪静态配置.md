@@ -59,6 +59,28 @@ add_header Referrer-Policy "strict-origin-when-cross-origin" always;
 - `frame-ancestors 'none'` + `X-Frame-Options: DENY` 禁止第三方 iframe 嵌入官网，阻断点击劫持。
 - `object-src 'none'`、`base-uri 'self'`、`form-action 'self'` 收窄插件/表单跳转面。
 - 后续若把 `index.html` 的首页预热脚本抽为独立文件，可去掉 `script-src` 中的 `'unsafe-inline'` 进一步收紧。
+
+#### CSP 收紧待办（阶段二，来源：官网 index.html 原注释）
+
+现状：`script-src 'self' 'unsafe-inline'`，`frontend-user-v3-www/index.html` 内实际有 **2 段内联脚本**（不是 3 段）：
+
+1. 首页 LCP 预热脚本（只读 `%VITE_API_BASE_URL%`，非根路径直接 return）；
+2. `<script nomodule>` 老内核升级提示。
+
+首屏 splash 是内联 `<style>` 不是 `<script>`，只受 `style-src` 约束。保留 `'unsafe-inline'` 等价于放弃对注入脚本的拦截，是当前 CSP 最实质的弱点（XSS 一旦落地即可直接执行）。
+
+风险：
+
+- 静态托管（nginx 直出 dist）无法按请求下发 nonce；改成 hash 需与构建产物同源，且每次改动内联脚本都会静默失效（浏览器只报违规、不阻断，容易上线后无人察觉）。
+- 若改用响应头 CSP + nonce，需要 nginx 侧注入变量或 SSR，涉及部署链路改造，回滚成本高。
+
+建议方案（按风险从低到高）：
+
+1. 先把 2 段内联脚本外移到 `public/` 或由 Vite 产物引出的独立 `.js`（预热脚本可改为 `<link rel="modulepreload">` + 首帧后执行），内联清空后再删 `'unsafe-inline'`；
+2. 外移后对剩余必须内联的部分用 sha256 hash 白名单（脚本内容固定、含 `%VITE_API_BASE_URL%` 替换，hash 必须在构建后生成，可挂到 vite `closeBundle` 阶段回写 index.html）；
+3. 最终形态改为 nginx 响应头 CSP + 每请求 nonce，meta 版仅作兜底。
+
+本阶段只登记待办，不修改 `index.html` 里 CSP 的取值：改动会立刻破坏首屏预热与老内核降级，必须在同一次发布内完成 1/2 才可动。
 - 控制台/管理端站点如与官网同域，可套用同一组头；不同子域按各自资源需求调整 `connect-src`。
 
 ## 用户控制台：console

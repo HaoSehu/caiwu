@@ -15,7 +15,7 @@ owner: frontend-platform
 - `frontend-user-v4-console`：新版用户控制台，Vue 3 + Vite + TypeScript + TDesign Vue Next。
 - `shared`：跨端共享包，导出状态、runtime、content 和用户控制台基础组件。
 
-旧路径 `frontend-admin`、`frontend-client`、`frontend-user-v3-console`、`frontend-www-v2`、`frontend-console-v2` 当前不存在，不要新增引用。
+旧路径 `frontend-admin`、`frontend-client`、`frontend-user-v3-console`、`frontend-www-v2`、`frontend-console-v2` 当前不存在，不要新增引用。完整废弃目录清单以 [AGENTS.md](../AGENTS.md) 为唯一真源（另含根 `scripts`、`.kiro`）。
 
 ## 2. 通用规则
 
@@ -24,7 +24,7 @@ owner: frontend-platform
 - HTTP 请求走各端现有 `src/api/*` 与 request/runtime 工具，不直接创建 axios 实例。
 - Token、session、站点信息走现有 auth/runtime/store，不直接读写 localStorage 键。
 - 复杂页面逻辑下沉到同目录 `composables`、`domains`、`features`、`services` 或 `utils`。
-- **列表/详情加载必须做请求竞态防护（requestSeq 模式）**：自增序号 + 响应返回时比对，旧响应不得覆盖新数据（参照 `domains/finance/useRecords.ts`、`domains/services/console/useConsoleTabs.ts`）；懒加载标签以“加载成功”作为已加载置位条件，失败后允许重拉。
+- **列表/详情加载必须做请求竞态防护（requestSeq 模式）**：自增序号 + 响应返回时比对，旧响应不得覆盖新数据（参照控制台的 `frontend-user-v4-console/src/domains/finance/useRecords.ts`、`frontend-user-v4-console/src/domains/services/console/useConsoleTabs.ts`，管理端 `src/domains/` 当前只有 `finance/dateFilters.ts`，照控制台的范式写，不要引用不存在的管理端路径）；懒加载标签以“加载成功”作为已加载置位条件，失败后允许重拉。
 - 用户可见文案使用简体中文，错误提示优先读取后端 `message` 和 `data.errors`，不要展示英文异常或第三方原始错误。
 - 状态展示先复用 `@caiwu/shared`。
 - **状态管理按端独立，不跨端合并同名 store**：`frontend-admin-v3/src/store/modules/` 与 `frontend-user-v4-console/src/store/modules/` 下的同名模块（`permission`、`setting`、`tabs-router`、`user`）分别服务管理端与控制台两种产品形态，**不是重复代码，不做合并**：
@@ -55,6 +55,11 @@ owner: frontend-platform
 - 页面不新增 Element Plus 组件、样式或图标。
 - 管理列表页不做说明型页头大卡片，优先筛选区、指标区、工具栏、表格卡片。
 - 管理端页面禁止新增独立“头部说明卡片”。
+- **多标签页与页面缓存**：`src/config/style.ts` 的 `isUseTabsRouter` 默认开启，标签栏、页面缓存与「关闭标签刷新」都依赖它。
+  - KeepAlive 的 `include` 取自标签的 `meta.keepAliveName || route.name`，与实际组件名比对；`<script setup>` 未声明 `defineOptions({ name })` 时推断名是文件名（大量为 `index`），缓存会静默失效。**新增可缓存页面必须同时声明 `defineOptions({ name })` 并在路由 `meta.keepAliveName` 写明同一个名字。**
+  - 多个路由共用一个组件时（列表不同 tab、详情不同 id），`meta.keepAliveName` 统一指向该组件名，页面内部按 `route.path` / `route.query` 自行同步，否则切标签不重载会显示上一个入口的数据。
+  - 标签缓存键是 `route.path`，不要改成 `fullPath`：页内切 query 会把同一标签缓存成多份。
+  - **控制台（frontend-user-v4-console）口径与本节相反**：`src/config/style.ts` 的 `isUseTabsRouter` 默认 `false`，不用 `defineOptions({ name })` + `meta.keepAliveName` 那套 include 匹配；`src/layouts/components/Content.vue` 直接按 `route.name ?? route.path` 做 key 缓存 `keepAlive !== false` 的页面，上限与页签上限同源（`MAX_TAB_COUNT`）。改缓存策略时两处分别对照，别把一端的约定套到另一端。
 
 验证：
 
@@ -71,10 +76,10 @@ npm run build
 - `src/app/`：bootstrap、router、runtime、stores 等核心能力。
 - `src/api/`：站点与用户 API。
 - `src/pages/website/`：官网页面。
-- `src/pages/client/`：用户入口/用户中心页面。
+- `src/pages/common/`：公共页面（当前只有 `NotFound.vue`；登录、注册在 `src/pages/website/` 下，用户中心页面由 `frontend-user-v4-console` 承担）。
 - `src/domains/`：产品、服务等领域逻辑。
 - `src/composables/`：跨页面组合逻辑。
-- `src/features/`：局部业务组件。
+- `src/components/`：局部业务组件（没有 `src/features/` 目录）。
 - `src/assets/styles/`：Sass token、全局样式、Element Plus 样式入口。
 
 实现约束：
@@ -136,8 +141,7 @@ npm run verify:refactor
 - `@caiwu/shared/status`
 - `@caiwu/shared/runtime`
 - `@caiwu/shared/content`
-- `@caiwu/shared/components/StatusTag.vue`
-- `shared/user-v3`
+- `@caiwu/shared/user-v3`（含 `components/StatusTag.vue`、`components/DataState.vue`）
 
 规则：
 
@@ -172,7 +176,7 @@ npm run verify:frontends
 
 ## 8. 依赖版本口径
 
-- `unplugin-vue-components` 三端统一锁 `^0.27.5`。`frontend-user-v4-console` 曾声明 `^28.8.0`，但该大版本改写了 `ComponentResolverObject` 契约与解析时机，与两端现有自定义 `createTDesignResolver()` 实现不匹配；两端各装一个主版本还会让 Vite 按 workspace 分别解析，出现「同一份 `vite.config.ts` 在 admin 生效、在 console 失效」的难查故障。降回 0.27.5 后三端 dedupe 到同一份实现，按需引入行为一致。
+- `unplugin-vue-components` 三端统一锁 `^0.27.5`（当前 `frontend-user-v3-www` 仍声明 `^0.27.0`，属待对齐的漂移项，锁文件会 dedupe 到同一份实现）。`frontend-user-v4-console` 曾声明 `^28.8.0`，但该大版本改写了 `ComponentResolverObject` 契约与解析时机，与两端现有自定义 `createTDesignResolver()` 实现不匹配；两端各装一个主版本还会让 Vite 按 workspace 分别解析，出现「同一份 `vite.config.ts` 在 admin 生效、在 console 失效」的难查故障。降回 0.27.x 后三端 dedupe 到同一份实现，按需引入行为一致。
 - `vue-tsc` 锁 `3.3.11`（不写 `^`）。`vue-tsc` 的次版本会改变类型推导严格度，放开版本会让 CI 与本地在不同时间得出不同结果。
 - `@playwright/test` 三端统一 `^1.62.1`；e2e 产物目录（`dist-e2e/`、`test-results/`、`playwright-report/`）一律不入库。
 - 体积门禁预算在 `backend/scripts/frontend_budget.mjs`：首屏 gzip admin 560,000 B、www 115,000 B、console 420,000 B。改动构建配置（按需引入、manualChunks、依赖增删）后必须跑 `npm run build:frontends`，超预算即失败。
