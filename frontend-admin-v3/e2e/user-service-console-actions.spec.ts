@@ -1,4 +1,6 @@
-import type { Page } from '@playwright/test';
+import { Buffer } from 'node:buffer';
+
+import type { Page, Route } from '@playwright/test';
 
 import { collectConsoleErrors, envelope, expect, mockAuthenticatedSession, test } from './fixtures';
 
@@ -12,7 +14,9 @@ import { collectConsoleErrors, envelope, expect, mockAuthenticatedSession, test 
  * 2. 首屏只等本地快照（sync_remote=0）就渲染，远程状态补丁放行后异步补齐运行状态；
  * 3. 概览页签的实例操作区恰好是需求约定的五项（电源能力为空时不出现开关机/重启）；
  * 4. 五个页签齐全，历史跟踪页签能新增带留言的记录并回显操作人；
- * 5. 全程无 console 报错。
+ * 5. 历史跟踪上传图片必须把 t-upload 包装对象里的原始 File（raw）交给 FormData，
+ *    否则后端收到 "[object Object]" 会回「文件必须是图片」；
+ * 6. 全程无 console 报错。
  */
 
 const USER_DETAIL_RESPONSE = {
@@ -92,6 +96,32 @@ const SERVICE_CONNECTION_RESPONSE = {
 /** 历史跟踪列表初始为空，新增后返回本次提交的内容。 */
 let trackingRecords: Array<Record<string, unknown>> = [];
 
+/** 图片上传接口实际收到的 multipart 原文（latin1 解码），用于断言提交的是真实文件字节。 */
+let uploadImageBody = '';
+
+/** 与 t-upload 展示、提交都相关的假图片地址：命中 /media 路由，避免 404 污染 console 断言。 */
+const UPLOADED_IMAGE = {
+  id: 7,
+  url: '/media/2026/10/e2e-tracking.png',
+  filename: 'e2e-tracking.png',
+  width: 2,
+  height: 2,
+};
+
+/** 最小合法 PNG（2x2 RGBA），用内存文件喂给上传组件，避免依赖仓库内的二进制夹具。 */
+const TRACKING_PNG_BASE64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAEUlEQVR4nGPQz7/xH4QZYAwAUtQJ1dMQoaYAAAAASUVORK5CYII=';
+
+const TRACKING_PNG = Buffer.from(TRACKING_PNG_BASE64, 'base64');
+
+/** PNG 文件头：接口收到的字节必须以它开头，才能证明提交的是文件而不是 "[object Object]"。 */
+const PNG_SIGNATURE = '\x89PNG\r\n\x1A\n';
+
+/** 缩略图地址统一回这张 PNG，避免图片 404 打进 console 断言。 */
+function serveTrackingImage(route: Route) {
+  return route.fulfill({ status: 200, contentType: 'image/png', body: TRACKING_PNG });
+}
+
 const EMPTY_OPTIONS = envelope({ list: [] as Record<string, unknown>[] });
 
 /** 详情接口请求地址，用于断言首屏用的是本地快照（sync_remote=0）。 */
@@ -109,7 +139,9 @@ async function mockServiceConsolePage(
 ) {
   trackingRecords = [];
   detailRequestUrls = [];
+  uploadImageBody = '';
   await mockAuthenticatedSession(page);
+  await page.route('**/media/**', serveTrackingImage);
   await page.route('**/v2/admin/member-levels*', (route) => route.fulfill(jsonResponse(EMPTY_OPTIONS)));
   await page.route('**/v2/admin/promotion-ambassadors*', (route) => route.fulfill(jsonResponse(EMPTY_OPTIONS)));
   await page.route('**/v2/admin/coupon-product-groups**', (route) => route.fulfill(jsonResponse(EMPTY_OPTIONS)));
@@ -128,6 +160,19 @@ async function mockServiceConsolePage(
         return route.fulfill(jsonResponse({ code: 50000, message: '上游暂不可用', data: null }, 500));
       }
       return route.fulfill(jsonResponse(envelope({ service: SERVICE_REMOTE_STATUS_RESPONSE })));
+    }
+    if (pathname.endsWith('/services/9/tracking-images')) {
+      if (method !== 'POST') {
+        return route.fulfill(jsonResponse({ code: 40500, message: '方法不允许', data: null }, 405));
+      }
+      const raw = route.request().postDataBuffer();
+      uploadImageBody = raw ? raw.toString('latin1') : '';
+      // 真实后端走 image 规则校验上传内容；这里同样只认 PNG 文件头，
+      // 一旦前端又把普通对象塞进 FormData（" [object Object]"），用例立刻失败在「文件必须是图片」。
+      if (!uploadImageBody.includes(PNG_SIGNATURE)) {
+        return route.fulfill(jsonResponse({ code: 42200, message: '文件必须是图片。', data: null }, 422));
+      }
+      return route.fulfill(jsonResponse(envelope({ image: UPLOADED_IMAGE }, 0, '图片上传成功')));
     }
     if (pathname.endsWith('/services/9/tracking-records')) {
       if (method === 'POST') {
@@ -260,7 +305,14 @@ test('服务控制台独立页：首屏先渲染本地快照，远程状态后�
 
   await expect(page).toHaveURL(/\/admin\/users\/1\/services\/9$/);
   await expect(page.locator('.identity-title')).toHaveText('E2E 云服务器');
-  await expect(page.locator('.t-tabs__nav-item')).toHaveText(['概览', '相关订单', '相关账单', '操作日志', '历史跟踪']);
+  // 必须限定在页面自己的页签容器内：管理端已开启多标签页，全局标签栏也是 .t-tabs__nav-item
+  await expect(page.locator('.service-console-page .t-tabs__nav-item')).toHaveText([
+    '概览',
+    '相关订单',
+    '相关账单',
+    '操作日志',
+    '历史跟踪',
+  ]);
 
   // 首屏用的是本地快照：详情请求带 sync_remote=0，且远程补丁还没回来时页面已完整渲染
   await expect.poll(() => detailRequestUrls.length).toBe(1);
@@ -301,10 +353,30 @@ test('服务控制台独立页：首屏先渲染本地快照，远程状态后�
   const createDialog = page.locator('.t-dialog').filter({ hasText: '新增跟踪记录' }).first();
   await expect(createDialog).toBeVisible();
   await createDialog.locator('textarea').fill('e2e 跟进：已联系上游确认续费');
+
+  // 上传一张真实 PNG：t-upload 的 input 是隐藏的，直接对它 setInputFiles 走完整上传链路
+  await createDialog.locator('input[type=file]').setInputFiles({
+    name: 'e2e-tracking.png',
+    mimeType: 'image/png',
+    buffer: TRACKING_PNG,
+  });
+
+  // 成功上传后卡片进入 success 态：显示缩略图与文件名，不再出现失败文案
+  const uploadCard = createDialog.locator('.t-upload__card-item').filter({ hasText: 'e2e-tracking.png' });
+  await expect(uploadCard).toHaveCount(1);
+  await expect(uploadCard.locator('img')).toHaveAttribute('src', UPLOADED_IMAGE.url);
+  await expect(createDialog).not.toContainText('文件必须是图片');
+  await expect(createDialog).not.toContainText('图片读取失败');
+  // 接口收到的必须是文件字节（multipart 里带 PNG 文件头），而不是 "[object Object]"
+  expect(uploadImageBody).toContain(PNG_SIGNATURE);
+  expect(uploadImageBody).not.toContain('[object Object]');
+
   await createDialog.getByRole('button', { name: '确定' }).click();
 
   await expect(page.locator('.tracking-item__content')).toHaveText('e2e 跟进：已联系上游确认续费');
   await expect(page.locator('.tracking-item__operator')).toContainText('测试管理员');
+  // 记录以 { url, name } 结构提交，缩略图按后端返回的地址渲染
+  await expect(page.locator('.tracking-thumb img')).toHaveAttribute('src', UPLOADED_IMAGE.url);
 
   expect(errors).toEqual([]);
 });
