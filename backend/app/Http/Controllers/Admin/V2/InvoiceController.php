@@ -99,9 +99,11 @@ class InvoiceController extends Controller
         $actor = $request->user();
 
         if ($actor instanceof AdminUser) {
+            // 与 AdminInvoiceActionV2Service / AdminOrderActionV2Service 保持同一条取值链，
+            // 避免同一账单的退款与取消两条写路径在审计里落到不同的人身上。
             return [
                 'id' => (int) $actor->getKey(),
-                'name' => (string) ($actor->username ?? $actor->nickname ?? 'admin'),
+                'name' => (string) ($actor->username ?? $actor->email ?? 'admin'),
             ];
         }
 

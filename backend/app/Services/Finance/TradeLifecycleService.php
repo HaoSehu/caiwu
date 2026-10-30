@@ -215,10 +215,7 @@ class TradeLifecycleService
      */
     private function completedRefundTotal(Invoice $invoice): float
     {
-        return round((float) FinanceRefund::query()
-            ->where('invoice_id', (int) $invoice->id)
-            ->where('status', FinanceRefund::STATUS_COMPLETED)
-            ->sum('amount'), 2);
+        return FinanceRefund::completedAmountForInvoice((int) $invoice->id);
     }
 
     /**

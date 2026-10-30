@@ -6,6 +6,7 @@ namespace App\Http\Requests\Admin\V2\IntegrationPlugin;
 
 use App\Http\Requests\Admin\V2\Common\AdminFormRequest;
 use App\Services\Integrations\Plugins\PluginDomain;
+use App\Support\Pagination;
 use Illuminate\Validation\Rule;
 
 class ListIntegrationPluginsRequest extends AdminFormRequest
@@ -40,6 +41,6 @@ class ListIntegrationPluginsRequest extends AdminFormRequest
 
     public function pageSize(): int
     {
-        return max(1, min((int) $this->integer('page_size', 50), 50));
+        return Pagination::clamp((int) $this->integer('page_size', 50), 50);
     }
 }

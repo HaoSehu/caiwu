@@ -20,8 +20,7 @@ class ListOrdersRequest extends ClientFormRequest
             'type' => ['nullable', 'string', Rule::in(OrderType::values())],
             'keyword' => ['nullable', 'string', 'max:80'],
             ...$this->dateRangeRules(),
-            'page' => ['nullable', 'integer', 'min:1'],
-            'page_size' => ['nullable', 'integer', 'min:1', 'max:100'],
+            ...$this->paginationRules(),
             'pageSize' => ['prohibited'],
             'per_page' => ['prohibited'],
         ];

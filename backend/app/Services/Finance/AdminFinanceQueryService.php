@@ -180,10 +180,10 @@ class AdminFinanceQueryService
                 'product_id',
                 'type',
                 // 收入净额口径（退款标记批 2026-10-11）：实收 − 已完成退款累计
-                // （refunds 表同表口径，纯标记与真退款统一），GREATEST 防负。
+                // （FinanceRefund::completedRefundSumSql 统一口径，纯标记与真退款都计入），GREATEST 防负。
                 // 子查询必须置于 SUM() 内：ONLY_FULL_GROUP_BY 下 select 列表的
                 // 非聚合子查询列（引用 group by 之外的 invoices.id）会直接报错。
-                DB::raw('SUM(GREATEST((CASE WHEN paid_amount > 0 THEN paid_amount ELSE COALESCE(amount, 0) END) - COALESCE((SELECT SUM(r.amount) FROM finance_refunds r WHERE r.invoice_id = invoices.id AND r.funds_moved = 1 AND r.status = '.FinanceRefund::STATUS_COMPLETED.'), 0), 0)) as income_amount'),
+                DB::raw('SUM(GREATEST((CASE WHEN paid_amount > 0 THEN paid_amount ELSE COALESCE(amount, 0) END) - COALESCE('.FinanceRefund::completedRefundSumSql('invoices.id').', 0), 0)) as income_amount'),
                 DB::raw('SUM(COALESCE(quantity, 1)) as quantity_total'),
             ])
             ->where('status', InvoiceStatus::PAID)

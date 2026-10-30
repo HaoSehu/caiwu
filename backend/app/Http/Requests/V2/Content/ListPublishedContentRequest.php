@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\V2\Content;
 
+use App\Support\Pagination;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -49,6 +50,7 @@ class ListPublishedContentRequest extends FormRequest
 
     public function perPage(int $default = 10): int
     {
-        return max(1, min((int) $this->integer('page_size', $default), 50));
+        // 官网内容列表有意收窄到 50：页面一次性渲染的卡片数量上限。
+        return Pagination::clamp((int) $this->integer('page_size', $default), 50);
     }
 }

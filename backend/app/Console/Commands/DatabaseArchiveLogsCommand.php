@@ -11,7 +11,7 @@ use Throwable;
 
 class DatabaseArchiveLogsCommand extends Command
 {
-    protected $signature = 'db:archive-logs
+    protected $signature = 'db:logs:archive
         {--dry-run : 仅预览影响行数并校验 pt-archiver 命令；未指定 --execute 时默认 dry-run}
         {--execute : 使用 pt-archiver 导出 CSV 并通过 --purge 物理删除超过保留期限的日志}
         {--table=* : 只处理指定日志表，可重复}
@@ -21,6 +21,10 @@ class DatabaseArchiveLogsCommand extends Command
         {--batch-size= : 每批处理行数，默认读取后台日志归档设置}
         {--sleep-seconds= : 批次间隔秒数，默认读取后台日志归档设置}
         {--json : 以 JSON 输出结果}';
+
+    // 旧名继续可用：运维脚本、外部定时任务与历史文档里都写着改名前的命令名，
+    // 直接重命名会让它们在升级后静默失败（Laravel 只在调用时才发现命令不存在）。
+    protected $aliases = ['db:archive-logs'];
 
     protected $description = '使用 pt-archiver 并行归档并物理删除超过保留期限的日志记录';
 

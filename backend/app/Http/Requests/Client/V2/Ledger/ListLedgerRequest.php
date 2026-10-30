@@ -5,19 +5,14 @@ declare(strict_types=1);
 namespace App\Http\Requests\Client\V2\Ledger;
 
 use App\Constants\FinanceLedgerEventType;
+use App\Http\Requests\Client\V2\Common\ClientFormRequest;
 use App\Http\Requests\Concerns\HasDateRangeFilter;
-use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
-class ListLedgerRequest extends FormRequest
+class ListLedgerRequest extends ClientFormRequest
 {
     use HasDateRangeFilter;
-
-    public function authorize(): bool
-    {
-        return true;
-    }
 
     public function rules(): array
     {
@@ -32,8 +27,7 @@ class ListLedgerRequest extends FormRequest
             'start_date' => ['sometimes', 'date_format:Y-m-d'],
             'end_date' => ['sometimes', 'date_format:Y-m-d'],
             'date_range' => ['prohibited'],
-            'page' => ['sometimes', 'integer', 'min:1'],
-            'page_size' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            ...$this->paginationRules(),
             'per_page' => ['prohibited'],
             'pageSize' => ['prohibited'],
             'type' => ['prohibited'],
@@ -62,10 +56,5 @@ class ListLedgerRequest extends FormRequest
             'start_date',
             'end_date',
         ]);
-    }
-
-    public function perPage(int $default = 15): int
-    {
-        return max(1, min((int) $this->integer('page_size', $default), 100));
     }
 }

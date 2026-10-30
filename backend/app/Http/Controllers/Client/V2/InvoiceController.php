@@ -63,7 +63,9 @@ class InvoiceController extends Controller
      */
     private function withPaymentOptions(Invoice $invoice, array $payload): array
     {
-        $payableAmount = (float) ($payload['payable_amount'] ?? max((float) $invoice->amount - (float) ($invoice->paid_amount ?? 0), 0));
+        // 应付额统一以 Invoice::payableAmount() 为准，与收银台/入账引擎同一实现。
+        // 不再优先取 $payload['payable_amount']：同一数字存在两个来源时，改口径必然漏改一处。
+        $payableAmount = $invoice->payableAmount();
         $security = $this->checkoutSecurityService->issueInvoicePaymentSession($invoice, (int) $invoice->user_id);
         // 仅待支付账单可取消/可发起支付（历史值 3 为已收敛死值，统一用常量引用）
         $canCancel = in_array((int) $invoice->status, [InvoiceStatus::UNPAID], true);

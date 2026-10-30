@@ -12,10 +12,12 @@ use App\Models\Coupon;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Product;
+use App\Services\Finance\CheckoutSecurityService;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Services\ProductCatalog\ProductFullPathResolver;
 use App\Support\Concerns\FiltersDateRange;
 use App\Support\LikeEscape;
+use App\Support\Pagination;
 
 class ClientOrderQueryService
 {
@@ -24,6 +26,7 @@ class ClientOrderQueryService
     public function __construct(
         private readonly OrderService $orders,
         private readonly ProductFullPathResolver $productFullPathResolver,
+        private readonly CheckoutSecurityService $checkoutSecurityService,
     ) {}
 
     /**
@@ -51,7 +54,7 @@ class ClientOrderQueryService
         }
         $this->applyDateFilter($query, $filters);
 
-        $paginator = $query->paginate(max(1, min((int) ($filters['page_size'] ?? 15), 100)));
+        $paginator = $query->paginate(Pagination::clamp((int) ($filters['page_size'] ?? 15)));
 
         // 订单缺 product_spec_snapshot 时，展示名与商品全路径会在 listItem() 内逐行回源解析；
         // 拆分商品的源商品、以及商品投影刻意未取的 custom_display_name 都是逐行单查，
@@ -187,11 +190,13 @@ class ClientOrderQueryService
             'product_name' => (string) ($order->display_product_name ?? $order->product_spec_snapshot ?? ''),
             'product_full_path' => $this->productFullPathResolver->pathForOrder($order),
             'service_name' => (string) ($order->service?->name ?? ''),
+            // 支付窗口是否已关闭随订单下发：前端订单列表/详情的「去支付」入口据此与账单侧（payment_window_expired）保持一致
             'invoice' => $order->invoice ? [
                 'id' => (int) $order->invoice->id,
                 'invoice_no' => (string) $order->invoice->invoice_no,
                 'status' => (int) $order->invoice->status,
                 'amount' => number_format((float) $order->invoice->amount, 2, '.', ''),
+                'payment_window_expired' => $this->checkoutSecurityService->isPaymentSessionExpired($order->invoice),
             ] : null,
             'paid_at' => $order->paid_at?->format('Y-m-d H:i:s'),
             'created_at' => $order->created_at?->format('Y-m-d H:i:s'),
@@ -224,6 +229,7 @@ class ClientOrderQueryService
             'paid_at' => $order->invoice->paid_at?->format('Y-m-d H:i:s'),
             'due_date' => $order->invoice->due_date?->format('Y-m-d H:i:s'),
             'created_at' => $order->invoice->created_at?->format('Y-m-d H:i:s'),
+            'payment_window_expired' => $this->checkoutSecurityService->isPaymentSessionExpired($order->invoice),
         ] : null;
         $base['config_snapshot'] = (array) ($order->config_snapshot ?? []);
         $base['config_pricing_snapshot'] = (array) ($order->config_pricing_snapshot ?? []);

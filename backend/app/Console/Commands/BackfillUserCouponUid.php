@@ -11,12 +11,28 @@ use Illuminate\Support\Facades\DB;
 
 class BackfillUserCouponUid extends Command
 {
-    protected $signature = 'coupons:backfill-uid';
+    protected $signature = 'coupons:backfill-uid {--dry-run : 仅统计待回填数量，不写库} {--force : 跳过交互确认，直接执行}';
 
-    protected $description = 'Backfill user coupon uid and historical used status.';
+    protected $description = '回填用户优惠券 uid 与历史已使用状态（批量写库，需显式确认）。';
 
     public function handle(): int
     {
+        if (! $this->option('dry-run') && ! $this->confirmDestructiveOperation()) {
+            return self::FAILURE;
+        }
+
+        $uidPending = UserCoupon::query()->whereNull('uid')->count();
+        $usedPending = UserCoupon::query()
+            ->where('status', UserCouponStatus::OWNED)
+            ->whereNotNull('last_used_at')
+            ->count();
+
+        if ($this->option('dry-run')) {
+            $this->info("待回填 uid: {$uidPending} 条；待回填已使用状态: {$usedPending} 条（dry-run 未写库）");
+
+            return self::SUCCESS;
+        }
+
         $uidCount = 0;
 
         UserCoupon::query()
@@ -44,6 +60,24 @@ class BackfillUserCouponUid extends Command
         $this->info("used status backfilled: {$usedCount}");
 
         return self::SUCCESS;
+    }
+
+    /**
+     * 生产库批量改写优惠券状态前必须显式确认：该命令会把 OWNED+last_used_at 的行整批改成 USED。
+     */
+    private function confirmDestructiveOperation(): bool
+    {
+        if ($this->option('force')) {
+            return true;
+        }
+
+        if (! $this->input->isInteractive()) {
+            $this->error('非交互环境必须显式传入 --force 才能执行批量回填。');
+
+            return false;
+        }
+
+        return $this->confirm('将批量改写 user_coupons.uid 与历史使用状态，确认继续？', false);
     }
 
     private function generateUid(): string

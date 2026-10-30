@@ -6,6 +6,7 @@ namespace App\Http\Requests\Admin\V2\Schedule;
 
 use App\Http\Requests\Admin\V2\Common\AdminFormRequest;
 use App\Http\Requests\Concerns\HasDateRangeFilter;
+use App\Support\Pagination;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
@@ -55,7 +56,7 @@ class ListScheduleTaskRunsRequest extends AdminFormRequest
             'end_date' => ['sometimes', 'date_format:Y-m-d'],
             'date_range' => ['prohibited'],
             'page' => ['sometimes', 'integer', 'min:1'],
-            'page_size' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'page_size' => ['sometimes', 'integer', 'min:1', 'max:'.Pagination::MAX_PAGE_SIZE],
             'pageSize' => ['prohibited'],
             'per_page' => ['prohibited'],
             'sort' => ['sometimes', 'string', Rule::in(self::SORTS)],

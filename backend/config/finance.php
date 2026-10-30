@@ -61,6 +61,16 @@ return [
         'stale_processing_seconds' => (int) env('FINANCE_IDEMPOTENCY_STALE_SECONDS', 120),
     ],
 
+    /*
+     * T+7 退役开关（000015 删 user_accounts.cash_balance、000016 归档旧财务表）。
+     *
+     * 必须经 config() 读取：迁移在 config:cache 之后执行时 env() 恒为 null，
+     * 会让「带环境变量的 rollback + migrate 重放」永远跳过。
+     */
+    'retire' => [
+        'enabled' => (bool) env('FINANCE_ALLOW_RETIRE', false),
+    ],
+
     'rebuild' => [
         /*
          * finance:rebuild --execute --fresh 会物理清空新账本，属于「资金历史只增不减」

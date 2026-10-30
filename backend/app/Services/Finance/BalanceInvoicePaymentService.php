@@ -52,7 +52,7 @@ class BalanceInvoicePaymentService
                     new BusinessException('账单状态异常，无法支付')
                 );
 
-                $amount = round((float) $lockedInvoice->amount - (float) ($lockedInvoice->paid_amount ?? 0), 2);
+                $amount = $lockedInvoice->payableAmount();
                 throw_if($amount <= 0, new BusinessException('当前账单无需支付'));
 
                 $currentBalance = $this->accounts->balanceCents((int) $lockedUser->id, true);

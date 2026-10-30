@@ -880,7 +880,7 @@ trait HandlesAdminUserServices
                 ->where('service_id', $service->id)
                 ->update(['service_id' => null]);
 
-            // Record-only deletion must not invoke or destroy the upstream instance.
+            // 仅记录型删除不得调用或销毁上游实例。
             DB::table('service_upstream_bindings')
                 ->where('service_id', $service->id)
                 ->delete();

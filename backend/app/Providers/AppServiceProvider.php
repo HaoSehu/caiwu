@@ -73,6 +73,23 @@ class AppServiceProvider extends ServiceProvider
         // 按 IP 计数；throttle 中间件在 auth 之前执行，此处不依赖登录态。
         RateLimiter::for('api', fn (Request $request) => Limit::perMinute(120)->by('api:'.$request->ip()));
 
+        // 未认证前端入口按 IP 收敛：实名回调/二维码跳转与密码修改属于可被脚本化利用的端点，
+        // 全局 120/分钟过宽，这里单独压到与业务节奏匹配的水平。
+        RateLimiter::for('client-verification-callback', fn (Request $request) => Limit::perMinute(30)->by('client-verification-callback:'.$request->ip()));
+        RateLimiter::for('client-verification-scan', fn (Request $request) => Limit::perMinute(30)->by('client-verification-scan:'.$request->ip()));
+        RateLimiter::for('client-verification-init', fn (Request $request) => Limit::perMinute(5)->by('client-verification-init:'.$request->ip()));
+        RateLimiter::for('client-password', fn (Request $request) => Limit::perMinute(5)->by('client-password:'.$request->ip()));
+
+        // 管理端敏感写接口（人员、角色权限、数据库运维、系统设置、插件与推广）按操作者收敛，
+        // 防止会话被盗后脚本化批量改权限/导出备份；已登录用户按 id 计数避免共享出口 IP 互相影响。
+        // 阈值取 30/分钟：批量排序、逐条保存的常规后台操作不会被误伤，同时挡掉脚本化枚举。
+        $adminSensitiveKey = static function (Request $request, string $prefix): string {
+            $userId = (int) ($request->user()?->getAuthIdentifier() ?? 0);
+
+            return $prefix.':'.($userId > 0 ? 'user:'.$userId : 'ip:'.$request->ip());
+        };
+        RateLimiter::for('admin-privilege-write', fn (Request $request) => Limit::perMinute(30)->by($adminSensitiveKey($request, 'admin-privilege-write')));
+
         // 心跳任务超时被杀时，Worker 在 SIGKILL 前同步派发 JobTimedOut；
         // 监听器把运行台账收敛为 retrying/failed，避免队列重试被状态 CAS 永久拒绝。
         Event::listen(JobTimedOut::class, HeartbeatTaskTimedOutListener::class);

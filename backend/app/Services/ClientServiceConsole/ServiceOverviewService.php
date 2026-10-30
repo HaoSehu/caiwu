@@ -14,6 +14,7 @@ use App\Models\ThirdProductGroup;
 use App\Models\User;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Support\LikeEscape;
+use App\Support\Pagination;
 use App\Support\ProductGroupHierarchyFields;
 use App\Support\SchemaMetadataCache;
 use Carbon\Carbon;
@@ -44,7 +45,7 @@ class ServiceOverviewService
 
     public function paginateForUser(User $user, array $filters = []): array
     {
-        $pageSize = max(1, min((int) ($filters['page_size'] ?? 12), 100));
+        $pageSize = Pagination::clamp((int) ($filters['page_size'] ?? 12));
         $query = Service::query()
             ->select([
                 'id', 'user_id', 'product_id', 'order_id', 'invoice_id', 'name', 'domain',
@@ -182,7 +183,7 @@ class ServiceOverviewService
         Cache::forget($this->buildGroupedOverviewCacheKey($userId));
     }
 
-    // ── Private build methods ───────────────────────────────────────────────
+    // ── 私有构建方法 ───────────────────────────────────────────────────
 
     private function buildGroupedOverview(User $user): array
     {

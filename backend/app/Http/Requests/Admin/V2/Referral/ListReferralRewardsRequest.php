@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Requests\Admin\V2\Referral;
 
 use App\Http\Requests\Admin\V2\Common\AdminFormRequest;
+use App\Support\Pagination;
 use Illuminate\Validation\Validator;
 
 class ListReferralRewardsRequest extends AdminFormRequest
@@ -15,7 +16,7 @@ class ListReferralRewardsRequest extends AdminFormRequest
             'keyword' => ['nullable', 'string', 'max:100'],
             'status' => ['nullable', 'integer', 'in:0,1,2'],
             'page' => ['nullable', 'integer', 'min:1'],
-            'page_size' => ['nullable', 'integer', 'min:1', 'max:100'],
+            'page_size' => ['nullable', 'integer', 'min:1', 'max:'.Pagination::MAX_PAGE_SIZE],
             'per_page' => ['prohibited'],
             'pageSize' => ['prohibited'],
         ];

@@ -23,6 +23,7 @@ use App\Support\AdminPermissions;
 use App\Support\AdminPrivacy;
 use App\Support\LikeEscape;
 use App\Support\MediaAssetTypes;
+use App\Support\Pagination;
 use App\Support\PublicUrl;
 use App\Support\SchemaMetadataCache;
 use App\Support\SecureAsset;
@@ -380,7 +381,18 @@ class TicketService
         }
 
         if (isset($filters['status']) && $filters['status'] !== '') {
-            $query->where('status', $filters['status']);
+            // 'ongoing' 聚合「未关闭」三态，与管理端 adminList 同口径。
+            // 控制台首屏要的是「待处理工单数」，而客户端列表原先只认单值 status，
+            // 前端只能拉 5 条再本地数，超过 5 条就永远数成 5。
+            if ((string) $filters['status'] === 'ongoing') {
+                $query->whereIn('status', [
+                    self::STATUS_OPEN,
+                    self::STATUS_CLIENT_REPLY,
+                    self::STATUS_STAFF_REPLY,
+                ]);
+            } else {
+                $query->where('status', $filters['status']);
+            }
         }
 
         if (! empty($filters['keyword'])) {
@@ -543,7 +555,7 @@ class TicketService
     {
         $ticket->loadMissing('user:id,email,nickname');
         $clientName = $ticket->user?->display_name ?: '客户';
-        $perPage = max(1, min($perPage, 100));
+        $perPage = Pagination::clamp($perPage);
 
         if (self::tableExists('ticket_replies')) {
             $paginator = TicketReply::query()

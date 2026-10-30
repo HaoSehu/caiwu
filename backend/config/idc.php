@@ -32,12 +32,6 @@ return [
         'triennial' => 1095,
     ],
 
-    // 支持的支付网关
-    'payment_gateways' => [
-        'balance' => '余额支付',
-        'alipay' => '支付宝',
-        'wechat' => '微信支付',
-    ],
     // 实名认证配置
     'verification' => [
         'api' => env('VERIFICATION_API', ''),

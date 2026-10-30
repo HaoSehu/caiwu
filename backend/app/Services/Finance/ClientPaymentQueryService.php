@@ -9,6 +9,7 @@ use App\Constants\PaymentStatus;
 use App\Models\Payment;
 use App\Support\Concerns\FiltersDateRange;
 use App\Support\LikeEscape;
+use App\Support\Pagination;
 
 class ClientPaymentQueryService
 {
@@ -49,7 +50,7 @@ class ClientPaymentQueryService
         }
         $this->applyDateFilter($query, $filters);
 
-        $paginator = $query->paginate(max(1, min((int) ($filters['page_size'] ?? 15), 100)));
+        $paginator = $query->paginate(Pagination::clamp((int) ($filters['page_size'] ?? 15)));
 
         return [
             'list' => collect($paginator->items())

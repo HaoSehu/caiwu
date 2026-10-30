@@ -38,6 +38,9 @@ class ClientInvoiceSummaryResource extends AdminInvoiceSummaryResource
             'payable_amount' => (string) ($invoice['payable_amount'] ?? '0.00'),
             'status' => (int) ($invoice['status'] ?? 0),
             'status_label' => (string) ($invoice['status_label'] ?? ''),
+            // 支付窗口是否已过：详情接口的 payment_security.can_pay 在列表侧的等价只读标记，
+            // 供列表页判断「去支付」是否还有意义（与 CheckoutSecurityService 同一判据）。
+            'payment_window_expired' => (bool) ($invoice['payment_window_expired'] ?? false),
             'summary' => $this->summary($invoice['summary'] ?? null),
             'payment_summary' => $this->paymentSummary($invoice['payment_summary'] ?? null),
             'due_date' => $invoice['due_date'] ?? null,

@@ -50,7 +50,8 @@ return new class extends Migration
 
     private function retirementEnabled(string $direction): bool
     {
-        if ((bool) env('FINANCE_ALLOW_RETIRE', false)) {
+        // 用 config() 而非 env()：config:cache 之后 env() 读不到 .env，重放会永远跳过。
+        if ((bool) config('finance.retire.enabled', false)) {
             return true;
         }
 

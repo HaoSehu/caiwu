@@ -43,7 +43,10 @@ class DatabaseStatusController extends Controller
         } catch (InvalidArgumentException $exception) {
             return $this->error(42200, $exception->getMessage());
         } catch (RuntimeException $exception) {
-            return $this->error(50000, $exception->getMessage());
+            // 优化失败可能夹带 SQL 原文、表名以外的连接信息；先落日志，再返回统一文案。
+            report($exception);
+
+            return $this->error(50000, '数据表优化失败，请稍后重试');
         }
 
         return $this->success(

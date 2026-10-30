@@ -17,8 +17,7 @@ class ListFinanceLedgerRequest extends ClientFormRequest
     {
         return [
             ...$this->filterRules(),
-            'page' => ['nullable', 'integer', 'min:1'],
-            'page_size' => ['nullable', 'integer', 'min:1', 'max:100'],
+            ...$this->paginationRules(),
             'pageSize' => ['prohibited'],
             'per_page' => ['prohibited'],
         ];

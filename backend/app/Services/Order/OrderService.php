@@ -143,6 +143,15 @@ class OrderService
             return $freshOrder;
         }
 
+        // 管理员手动开通产生的挂账订单按 due_date 计费，不参与支付会话窗口自动清理：
+        // 与账单侧（CheckoutService::cancelExpiredUnpaidInvoice）和定时清理同一口径。
+        // 一旦在此取消，cancel() 会级联取消关联挂账单（TradeLifecycleService::cancelTrade），
+        // 用户在账期内失去支付入口。预留统计按订单状态（PENDING/PAID）占用库存，
+        // 豁免清理的挂账订单会持续占用名额，需管理端显式取消释放。
+        if ($this->isAdminManualOrder($freshOrder)) {
+            return $freshOrder;
+        }
+
         if (! $this->checkoutSecurityService->isPaymentSessionExpired($freshOrder)) {
             return $freshOrder;
         }
@@ -168,6 +177,11 @@ class OrderService
             ->where('status', OrderStatus::PENDING)
             ->where('created_at', '<=', $threshold);
 
+        // 候选集约束与定时清理同源（CheckoutSecurityService::applyExpiredOrderSweepScope）：
+        // 账期内按 due_date 计窗口的续费订单不进候选集；due_date 已过的仍会被正常关闭；
+        // 挂账订单留在候选集内，由 cancelExpiredPendingOrder 的 admin_manual 豁免拒绝。
+        $this->checkoutSecurityService->applyExpiredOrderSweepScope($query);
+
         if ($userId !== null && $userId > 0) {
             $query->where('user_id', $userId);
         }
@@ -176,12 +190,6 @@ class OrderService
 
         $query->chunkById(100, function ($orders) use (&$count, $context): void {
             foreach ($orders as $order) {
-                // 管理员手动开通产生的挂账订单按 due_date 计费，不受 5 分钟支付会话窗口约束；
-                // 预留统计按订单状态（PENDING/PAID）占用库存，豁免清理的挂账单会持续占用名额，需管理端显式取消释放。
-                if ($this->isAdminManualOrder($order)) {
-                    continue;
-                }
-
                 $updated = $this->cancelExpiredPendingOrder($order, $context);
                 if ((int) $updated->status === OrderStatus::CANCELLED) {
                     $count++;
@@ -192,7 +200,12 @@ class OrderService
         return $count;
     }
 
-    private function isAdminManualOrder(Order $order): bool
+    /**
+     * 管理端挂账标记判断：config_snapshot.admin_manual=true。
+     *
+     * 公开给清理任务复用（僵尸挂账订单收敛），避免同一判据散落在多个服务里各写一套。
+     */
+    public function isAdminManualOrder(Order $order): bool
     {
         $snapshot = $order->config_snapshot;
         if (! is_array($snapshot)) {

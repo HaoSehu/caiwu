@@ -442,6 +442,13 @@ class CheckoutService
             return $freshInvoice;
         }
 
+        // 管理员挂账单按 due_date 计费，不参与支付会话窗口自动清理：
+        // 与定时清理（InvoiceCleanupAutomationService）、订单侧（OrderService::isAdminManualOrder）同一口径。
+        // 一旦被这里取消，cancel() 会级联取消待开通订单、释放预留库存，用户也失去账单支付入口。
+        if ($this->checkoutSecurityService->isAdminManualInvoice($freshInvoice)) {
+            return $freshInvoice;
+        }
+
         if (! $this->checkoutSecurityService->isPaymentSessionExpired($freshInvoice)) {
             return $freshInvoice;
         }
@@ -468,20 +475,26 @@ class CheckoutService
         $threshold = now()->subSeconds(CheckoutSecurityService::paymentSessionTtlSeconds());
         $count = 0;
 
-        // 与订单侧清理（OrderService::cancelExpiredPendingOrdersForUser）一致按主键分批，
-        // 避免积压场景（调度停摆、支付窗口调整）一次性把全部过期账单装载进内存。
-        Invoice::query()
+        // 候选集约束与定时清理同源（CheckoutSecurityService::applyExpiredInvoiceSweepScope）：
+        // 账期内按 due_date 计费的续费账单不进候选集；due_date 已过的续费账单仍会被正常关闭；
+        // 管理员挂账单留在候选集内，由 cancelExpiredUnpaidInvoice 的 admin_manual 豁免拒绝。
+        $query = Invoice::query()
             ->where('user_id', $userId)
             ->where('status', InvoiceStatus::UNPAID)
-            ->where('created_at', '<=', $threshold)
-            ->chunkById(100, function ($invoices) use (&$count, $context): void {
-                foreach ($invoices as $invoice) {
-                    $updated = $this->cancelExpiredUnpaidInvoice($invoice, $context);
-                    if ((int) $updated->status === InvoiceStatus::CANCELLED) {
-                        $count++;
-                    }
+            ->where('created_at', '<=', $threshold);
+
+        $this->checkoutSecurityService->applyExpiredInvoiceSweepScope($query);
+
+        // 与订单侧清理（OrderService::cancelExpiredPendingOrdersForUser）一致按主键分批，
+        // 避免积压场景（调度停摆、支付窗口调整）一次性把全部过期账单装载进内存。
+        $query->chunkById(100, function ($invoices) use (&$count, $context): void {
+            foreach ($invoices as $invoice) {
+                $updated = $this->cancelExpiredUnpaidInvoice($invoice, $context);
+                if ((int) $updated->status === InvoiceStatus::CANCELLED) {
+                    $count++;
                 }
-            });
+            }
+        });
 
         return $count;
     }

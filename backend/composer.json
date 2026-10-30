@@ -56,9 +56,13 @@
     "api:check": [
       "@php scripts/check_api_sources_consistency.php"
     ],
+    "check:strict-types": [
+      "@php scripts/check_strict_types.php"
+    ],
     "verify": [
       "@format:check",
       "@analyse",
+      "@check:strict-types",
       "@audit:plugins",
       "@audit:admin-routes",
       "@api:spec",

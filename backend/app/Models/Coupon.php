@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\ReleasesUniqueKeysOnDelete;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -16,7 +17,18 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  */
 class Coupon extends Model
 {
+    use ReleasesUniqueKeysOnDelete;
     use SoftDeletes;
+
+    /**
+     * 软删时释放 code 全局唯一键，否则同一券码删除后无法重新创建。
+     *
+     * @return array<int, string>
+     */
+    public function uniqueKeysToReleaseOnDelete(): array
+    {
+        return ['code'];
+    }
 
     protected $fillable = [
         'coupon_campaign_id',

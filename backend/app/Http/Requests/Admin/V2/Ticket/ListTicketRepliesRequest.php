@@ -6,6 +6,7 @@ namespace App\Http\Requests\Admin\V2\Ticket;
 
 use App\Http\Requests\Admin\V2\Common\AdminFormRequest;
 use App\Models\Ticket;
+use App\Support\Pagination;
 
 class ListTicketRepliesRequest extends AdminFormRequest
 {
@@ -19,7 +20,7 @@ class ListTicketRepliesRequest extends AdminFormRequest
         return [
             'ticket' => ['required', 'integer', 'min:1'],
             'page' => ['sometimes', 'integer', 'min:1'],
-            'page_size' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'page_size' => ['sometimes', 'integer', 'min:1', 'max:'.Pagination::MAX_PAGE_SIZE],
             'per_page' => ['prohibited'],
             'pageSize' => ['prohibited'],
         ];

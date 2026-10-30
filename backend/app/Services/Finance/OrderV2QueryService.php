@@ -10,6 +10,7 @@ use App\Models\Product;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Support\Concerns\FiltersDateRange;
 use App\Support\LikeEscape;
+use App\Support\Pagination;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -197,7 +198,7 @@ class OrderV2QueryService
      */
     private function pageSize(array $filters): int
     {
-        return max(1, min((int) ($filters['page_size'] ?? 20), 100));
+        return Pagination::clamp((int) ($filters['page_size'] ?? 20));
     }
 
     /**

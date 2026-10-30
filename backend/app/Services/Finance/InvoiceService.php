@@ -381,7 +381,7 @@ class InvoiceService
             'coupon_code' => (string) ($invoice->coupon_code ?? ''),
             'coupon_name' => $this->resolveInvoiceCouponName($invoice),
             'paid_amount' => number_format((float) ($invoice->paid_amount ?? 0), 2, '.', ''),
-            'payable_amount' => number_format(max((float) $invoice->amount - (float) ($invoice->paid_amount ?? 0), 0), 2, '.', ''),
+            'payable_amount' => Money::format($invoice->payableAmount()),
             'status' => (int) $displayStatus['status'],
             'status_label' => (string) $displayStatus['status_label'],
             'is_partial_paid' => $displayStatus['is_partial_paid'],
@@ -522,7 +522,7 @@ class InvoiceService
             'coupon_code' => (string) ($invoice->coupon_code ?? ''),
             'coupon_name' => $this->resolveInvoiceCouponName($invoice),
             'paid_amount' => number_format((float) ($invoice->paid_amount ?? 0), 2, '.', ''),
-            'payable_amount' => number_format(max((float) $invoice->amount - (float) ($invoice->paid_amount ?? 0), 0), 2, '.', ''),
+            'payable_amount' => Money::format($invoice->payableAmount()),
             'status' => (int) $displayStatus['status'],
             'status_label' => (string) $displayStatus['status_label'],
             'is_partial_paid' => $displayStatus['is_partial_paid'],
@@ -623,7 +623,7 @@ class InvoiceService
             'coupon_code' => (string) ($invoice->coupon_code ?? ''),
             'coupon_name' => $this->resolveInvoiceCouponName($invoice),
             'paid_amount' => number_format((float) ($invoice->paid_amount ?? 0), 2, '.', ''),
-            'payable_amount' => number_format(max((float) $invoice->amount - (float) ($invoice->paid_amount ?? 0), 0), 2, '.', ''),
+            'payable_amount' => Money::format($invoice->payableAmount()),
             'status' => (int) $displayStatus['status'],
             'status_label' => (string) $displayStatus['status_label'],
             'is_partial_paid' => $displayStatus['is_partial_paid'],
@@ -977,7 +977,7 @@ class InvoiceService
             ['label' => '计费周期', 'value' => trim((string) ($invoice->billing_cycle ?? $invoice->order?->billing_cycle ?? ''))],
             ['label' => '账单金额', 'value' => number_format((float) $invoice->amount, 2, '.', '')],
             ['label' => '已付金额', 'value' => number_format((float) ($invoice->paid_amount ?? 0), 2, '.', '')],
-            ['label' => '应付金额', 'value' => number_format(max((float) $invoice->amount - (float) ($invoice->paid_amount ?? 0), 0), 2, '.', '')],
+            ['label' => '应付金额', 'value' => Money::format($invoice->payableAmount())],
             ['label' => '数量', 'value' => (string) (int) ($invoice->quantity ?? 1)],
             ['label' => '支付方式', 'value' => (string) ($paymentSummary['gateway_label'] ?? '')],
             ['label' => '支付状态', 'value' => (string) ($paymentSummary['status_label'] ?? '')],
@@ -1447,7 +1447,7 @@ class InvoiceService
                 new BusinessException('当前账单状态不支持手动入账')
             );
 
-            $payableAmount = round((float) $lockedInvoice->amount - (float) ($lockedInvoice->paid_amount ?? 0), 2);
+            $payableAmount = $lockedInvoice->payableAmount();
             throw_if($payableAmount <= 0, new BusinessException('当前账单无需再入账'));
             throw_if($requestedAmount <= 0, new BusinessException('入账金额必须大于 0'));
             throw_if(Money::greaterThan($requestedAmount, $payableAmount), new BusinessException('入账金额不能超过账单应付金额'));

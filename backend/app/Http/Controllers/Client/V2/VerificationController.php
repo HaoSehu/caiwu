@@ -42,7 +42,7 @@ class VerificationController extends Controller
      */
     public function qrcode(QrcodeRequest $request)
     {
-        // validation handled by QrcodeRequest
+        // 参数校验由 QrcodeRequest 完成
 
         $user = $request->user();
         $certifyId = (string) $request->input('certify_id');
@@ -106,7 +106,7 @@ class VerificationController extends Controller
      */
     public function status(StatusRequest $request)
     {
-        // validation handled by StatusRequest
+        // 参数校验由 StatusRequest 完成
 
         $user = $request->user();
         $certifyId = (string) $request->input('certify_id');
@@ -162,8 +162,12 @@ class VerificationController extends Controller
      */
     public function callback(Request $request)
     {
-        $certifyId = (string) $request->input('certify_id', $request->input('order_no', ''));
+        $certifyId = trim((string) $request->input('certify_id', $request->input('order_no', '')));
 
+        // 该端点是第三方认证服务商的浏览器回跳落点：请求不携带可信凭证
+        // （百度 H5 为后验查询模型，回跳参数可被任意伪造），因此这里只做跳转与回执，
+        // 既不查询上游也不写入认证状态。状态同步统一走已鉴权的 GET /verification/status，
+        // 由该端点用 hash_equals 校验 certify_id 归属后再落库。
         if ($certifyId === '') {
             return $this->success([
                 'certify_id' => '',
@@ -172,46 +176,28 @@ class VerificationController extends Controller
             ], '认证回调已接收');
         }
 
-        $user = $this->verificationService->findUserByCertifyId($certifyId);
-        if (! $user) {
-            \Log::warning('[实名认证回调] 未找到对应用户', ['certify_id' => $certifyId]);
-
-            return $this->error(40400, '未找到对应的认证记录');
-        }
-
-        $result = $this->verificationService->queryStatus($certifyId);
-        $this->verificationService->syncUserStatus($user, $result, $certifyId);
-
-        \Log::info('[实名认证回调] 状态已更新', [
-            'user_id' => $user->id,
-            'certify_id' => $certifyId,
-            'status' => $result['status'],
+        \Log::info('[实名认证回调] 收到服务商回跳，等待前端查询结果', [
+            'certify_id_hash' => hash('sha256', $certifyId),
         ]);
 
         $payload = [
             'certify_id' => $certifyId,
-            'status' => $result['status'],
-            'message' => $result['msg'],
+            'status' => 4,
+            'message' => '请返回前端页面继续查询认证结果',
         ];
 
         if ($request->isMethod('get')) {
-            return redirect()->away($this->buildFrontendVerificationResultUrl(
-                $certifyId,
-                (int) ($result['status'] ?? 4),
-                (string) ($result['msg'] ?? '')
-            ));
+            return redirect()->away($this->buildFrontendVerificationResultUrl($certifyId));
         }
 
         return $this->success($payload, '认证回调已接收');
     }
 
-    private function buildFrontendVerificationResultUrl(string $certifyId, int $status, string $message): string
+    private function buildFrontendVerificationResultUrl(string $certifyId): string
     {
         $query = http_build_query([
             'verification_callback' => 1,
             'certify_id' => $certifyId,
-            'result_status' => $status,
-            'result_message' => $message,
             't' => time(),
         ]);
 

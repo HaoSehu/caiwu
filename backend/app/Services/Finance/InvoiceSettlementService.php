@@ -150,14 +150,14 @@ class InvoiceSettlementService
                     $payload
                 );
 
-                if (! Money::equals($lockedPayment->amount, $this->invoicePayableAmount($invoice))) {
+                if (! Money::equals($lockedPayment->amount, $invoice->payableAmount())) {
                     $this->mixPaymentService->creditCapturedPaymentToBalance($lockedPayment, $invoice, $tradeNo, $payload, 'payable_amount_mismatch');
 
                     Log::warning("[{$logLabel}] 支付金额与账单当前应付不匹配，已转入余额", [
                         'payment_no' => $lockedPayment->payment_no,
                         'invoice_id' => $invoice->id,
                         'payment_amount' => number_format((float) $lockedPayment->amount, 2, '.', ''),
-                        'payable_amount' => number_format($this->invoicePayableAmount($invoice), 2, '.', ''),
+                        'payable_amount' => Money::format($invoice->payableAmount()),
                     ]);
 
                     return ['dispatch' => false, 'invoice' => $invoice, 'payment_no' => (string) $lockedPayment->payment_no];
@@ -267,14 +267,6 @@ class InvoiceSettlementService
                 'channel' => $logLabel,
             ],
         );
-    }
-
-    /**
-     * 与 MixPaymentService 各持一份的私有副本（3 行纯计算），避免引擎↔Mix 互依成环。
-     */
-    private function invoicePayableAmount(Invoice $invoice): float
-    {
-        return round(max((float) $invoice->amount - (float) ($invoice->paid_amount ?? 0), 0), 2);
     }
 
     private function withLock(string $lockKey, int $seconds, callable $callback, string $timeoutMessage): mixed

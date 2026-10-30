@@ -6,6 +6,7 @@ namespace App\Http\Requests\Admin\V2\ProductGroup;
 
 use App\Constants\ProductType;
 use App\Http\Requests\Admin\V2\Common\AdminFormRequest;
+use App\Support\Pagination;
 use Illuminate\Validation\Rule;
 
 class ListProductGroupsRequest extends AdminFormRequest
@@ -19,7 +20,7 @@ class ListProductGroupsRequest extends AdminFormRequest
     {
         return [
             'page' => ['sometimes', 'integer', 'min:1'],
-            'page_size' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'page_size' => ['sometimes', 'integer', 'min:1', 'max:'.Pagination::MAX_PAGE_SIZE],
             'per_page' => ['prohibited'],
             'pageSize' => ['prohibited'],
             'keyword' => ['sometimes', 'nullable', 'string', 'max:100'],

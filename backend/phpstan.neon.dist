@@ -6,10 +6,13 @@ parameters:
 
     # B-04：paths 从只 app 扩展为 app + config + database/migrations。
     # config、database/migrations 此前被 excludePaths 显式排除，本次一并纳入并移除排除项。
+    # 插件（plugins）同样纳入静态分析门禁：插件是运行时 require 加载的独立命名空间，
+    # 此前只靠 audit:plugins 的注册审计，类型与调用错误无法在 CI 暴露。
     paths:
         - app
         - config
         - database/migrations
+        - plugins
 
     # level 5：升 6 需先处理约 2989 个历史告警
     # The level 9 is the highest level
@@ -29,11 +32,5 @@ parameters:
         # Add specific ignores here if needed
         # - '#some regex pattern#'
 
-        # 两个历史迁移用 env('FINANCE_ALLOW_RETIRE') 做退役开关，触发 larastan
-        # noEnvCallsOutsideOfConfig。按文件精确忽略，不放开整条规则；改法（env→config）
-        # 涉及发版口径，留待迁移作者处理，处理完删除本段即可。
-        # PHPStan 默认 reportUnmatchedIgnoredErrors，迁移改好后本段会因未命中而报错，不会被静默遗留。
-        - identifier: larastan.noEnvCallsOutsideOfConfig
-          path: database/migrations/2026_10_21_000015_drop_user_accounts_cash_balance_column.php
-        - identifier: larastan.noEnvCallsOutsideOfConfig
-          path: database/migrations/2026_10_21_000016_archive_legacy_finance_tables.php
+        # 迁移层的 env('FINANCE_ALLOW_RETIRE') 已改为 config('finance.retire.enabled')，
+        # 原先的两条按文件忽略已删除；若再有迁移直接读 env，larastan 会重新报错。

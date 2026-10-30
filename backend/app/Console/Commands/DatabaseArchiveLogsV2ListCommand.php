@@ -12,12 +12,16 @@ use Throwable;
 
 class DatabaseArchiveLogsV2ListCommand extends Command
 {
-    protected $signature = 'db:archive-logs-v2:list
+    protected $signature = 'db:logs:archive-v2:list
         {--table= : 只列出指定白名单表}
         {--status= : 只列出指定状态}
         {--batch-id= : 只列出指定批次}
         {--limit= : 最大条数，默认 100，最大 500}
         {--json : 以 JSON 输出}';
+
+    // 旧名继续可用：运维脚本、外部定时任务与历史文档里都写着改名前的命令名，
+    // 直接重命名会让它们在升级后静默失败（Laravel 只在调用时才发现命令不存在）。
+    protected $aliases = ['db:archive-logs-v2:list'];
 
     protected $description = '只读列出 V2 归档批次物与可恢复性（冷检索打底，不导入不删除）';
 

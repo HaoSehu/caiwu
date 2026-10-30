@@ -126,6 +126,21 @@ class Invoice extends Model
         return $this->hasMany(InvoiceItem::class, 'invoice_id');
     }
 
+    /**
+     * 账单应付额：折后应付（`amount`）减去已付（`paid_amount`），不足零按零。
+     *
+     * 这是应付额的唯一实现，不要在 Service 里再写 `amount - paid_amount` 的私有副本：
+     * 过去 12 处手写分成三种写法（多数钳零、少数不钳零只靠调用处的 throw_if、
+     * 客户端控制器第四种不 round），改口径时容易漏改一处导致收银台与入账判定不一致。
+     *
+     * 两列都是 decimal:2，差值本身已是两位小数，因此这里的 round 只用于防浮点尾差，
+     * 不改变任何既有边界结论（钳零仍由 max 保证）。
+     */
+    public function payableAmount(): float
+    {
+        return max(Money::add($this->amount, -1 * (float) ($this->paid_amount ?? 0)), 0.0);
+    }
+
     public function getDisplayProductNameAttribute(): string
     {
         $snapshotPayload = $this->product_snapshot_json;

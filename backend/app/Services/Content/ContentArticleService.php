@@ -142,7 +142,8 @@ class ContentArticleService
 
     public function delete(ContentArticle $article): void
     {
-        // 事务内软删：slug 唯一键释放（ReleasesUniqueKeysOnDelete）与 deleted_at 写入原子
+        // 事务内软删：slug 唯一键释放（ContentArticle::booted() 的 deleting 钩子改名为 {slug}_deleted_{id}）
+        // 与 deleted_at 写入原子，避免重建同 slug 文章撞 content_articles_slug_unique。
         DB::transaction(function () use ($article): void {
             $article->delete();
         });

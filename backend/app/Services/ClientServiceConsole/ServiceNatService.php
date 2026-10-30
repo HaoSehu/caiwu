@@ -194,7 +194,7 @@ class ServiceNatService
         ];
     }
 
-    // ── NAT ACL context resolution ─────────────────────────────────────────
+    // ── NAT ACL 上下文解析 ─────────────────────────────────────────────
 
     public function resolveNatAclContext(Service $service, bool $fresh = false): array
     {
@@ -247,7 +247,7 @@ class ServiceNatService
         Cache::forget($this->buildNatAclContextCacheKey($service));
     }
 
-    // ── NAT ACL HTML parsing ───────────────────────────────────────────────
+    // ── NAT ACL HTML 解析 ──────────────────────────────────────────────
 
     private function parseNatAclPage(string $html): array
     {

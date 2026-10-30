@@ -27,6 +27,9 @@ class UserNotificationType
     /** 账单逾期提醒 */
     public const INVOICE_OVERDUE_REMINDER = 'invoice_overdue_reminder';
 
+    /** 支付款项转入余额（账单已取消/已支付/金额不符等异常捕获款） */
+    public const PAYMENT_CREDITED_TO_BALANCE = 'payment_credited_to_balance';
+
     /** 工单提交成功（客户创建工单） */
     public const TICKET_OPENED = 'ticket_opened';
 
@@ -52,6 +55,7 @@ class UserNotificationType
         self::SERVICE_EXPIRE_REMINDER => '到期提醒',
         self::INVOICE_PAYMENT_REMINDER => '账单提醒',
         self::INVOICE_OVERDUE_REMINDER => '逾期提醒',
+        self::PAYMENT_CREDITED_TO_BALANCE => '余额到账',
         self::TICKET_OPENED => '工单提交',
         self::TICKET_STAFF_REPLY => '工单回复',
         self::TICKET_PENDING_REMINDER => '工单提醒',

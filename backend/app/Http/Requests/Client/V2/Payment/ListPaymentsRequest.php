@@ -21,8 +21,7 @@ class ListPaymentsRequest extends ClientFormRequest
             'gateway' => ['nullable', 'string', Rule::in(PaymentGatewayCode::thirdPartyGateways())],
             'keyword' => ['nullable', 'string', 'max:80'],
             ...$this->dateRangeRules(),
-            'page' => ['nullable', 'integer', 'min:1'],
-            'page_size' => ['nullable', 'integer', 'min:1', 'max:100'],
+            ...$this->paginationRules(),
             'pageSize' => ['prohibited'],
             'per_page' => ['prohibited'],
         ];

@@ -95,12 +95,8 @@ class IntegrationPluginService
 
     public function install(string $domain, string $slug): array
     {
-        // demo 插件不在管理端列表展示，也不允许通过管理端安装，
-        // 否则会产生“已安装但列表不可见”的状态，无法再停用或卸载。
-        if ($this->isDemoManifest($this->scanner->requireManifest($domain, $slug))) {
-            throw new BusinessException('示例插件仅供开发调试，不支持在管理端安装', 42200);
-        }
-
+        // demo 插件不在管理端列表展示，也不允许通过管理端安装（守卫下沉在
+        // PluginInstaller::install，命令、调度等旁路调用同样受约束）。
         $plugin = $this->installer->install($domain, $slug);
 
         return $this->detail($plugin);
@@ -114,10 +110,7 @@ class IntegrationPluginService
      */
     public function upgrade(IntegrationPlugin $plugin): array
     {
-        if ($this->isDemoManifest($this->scanner->requireManifest((string) $plugin->domain, (string) $plugin->slug))) {
-            throw new BusinessException('示例插件仅供开发调试，不支持在管理端升级', 42200);
-        }
-
+        // 同上，demo 守卫下沉在 PluginInstaller::upgrade。
         return $this->installer->upgrade($plugin);
     }
 
@@ -437,21 +430,13 @@ class IntegrationPluginService
         return $current !== null && ! hash_equals($recorded, $current);
     }
 
+    /**
+     * demo 判定与安装守卫共用 PluginInstaller 的同一份实现，避免「列表过滤」与
+     * 「安装拦截」两处各写一套启发式而出现判定漂移。
+     */
     private function isDemoManifest(PluginManifest $manifest): bool
     {
-        // 优先采用清单显式声明（info.demo），demo_ 前缀启发式仅作未改造插件的兼容兜底。
-        if (($manifest->extra['demo'] ?? false) === true) {
-            return true;
-        }
-
-        foreach ([$manifest->slug, $manifest->key] as $identifier) {
-            $normalized = strtolower(trim($identifier));
-            if ($normalized === 'demo' || str_starts_with($normalized, 'demo_') || str_starts_with($normalized, 'demo-')) {
-                return true;
-            }
-        }
-
-        return str_starts_with(strtolower(trim($manifest->name)), 'demo ');
+        return PluginInstaller::isDemoManifest($manifest);
     }
 
     private function enableDisabledReason(string $domain, ?IntegrationPlugin $plugin, ?IntegrationPlugin $enabledPlugin): ?string

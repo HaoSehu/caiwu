@@ -29,7 +29,8 @@ class AdminPermissions
     // 专用权限码：订单补录属资金写入，默认不下发任何内置角色，避免随 order.manage 静默提权
     public const ORDER_MANUAL_ENTRY = 'order.manual_entry';
 
-    // 预留权限码：管理端订单暂无写操作路由（仅 index/show），保留以维持 impliedPermissions 下发 order.list/order.detail
+    // 订单写操作权限码：管理端订单取消（POST /orders/{order}/cancellations）由它把关，
+    // 同时经 impliedPermissions 下发 order.list/order.detail。
     public const ORDER_MANAGE = 'order.manage';
 
     public const INVOICE_LIST = 'invoice.list';
@@ -295,6 +296,7 @@ class AdminPermissions
             self::SITE_MANAGE => [self::SITE_VIEW],
             self::LOG_MANAGE => [self::LOG_LIST],
             self::MEMBER_LEVEL_MANAGE => [self::MEMBER_LEVEL_LIST],
+            self::PROMOTION_AMBASSADOR_MANAGE => [self::PROMOTION_AMBASSADOR_LIST],
             self::CONTENT_MANAGE => [self::CONTENT_LIST],
             self::STAFF_MANAGE => [self::STAFF_LIST],
             self::ROLE_MANAGE => [self::ROLE_LIST, self::PERMISSION_LIST],

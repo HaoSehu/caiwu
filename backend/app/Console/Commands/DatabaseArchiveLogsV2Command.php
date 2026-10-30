@@ -11,7 +11,7 @@ use Throwable;
 
 class DatabaseArchiveLogsV2Command extends Command
 {
-    protected $signature = 'db:archive-logs-v2
+    protected $signature = 'db:logs:archive-v2
         {--execute : 暂存导出 .part 并校验发布 manifest}
         {--purge : 对已发布批次执行源数据分块删除（危险操作；可与 --execute 组合成同一批次闭环，或配合 --batch-id 单独执行）}
         {--restore-dry-run : 按 manifest 只读校验归档物可恢复性，不导入数据}
@@ -21,6 +21,10 @@ class DatabaseArchiveLogsV2Command extends Command
         {--file-retain-days= : V2 归档文件保留天数，覆盖后台设置}
         {--batch-id= : 指定批次（单独 --purge / --restore-dry-run 必填）}
         {--json : 以 JSON 输出结果}';
+
+    // 旧名继续可用：运维脚本、外部定时任务与历史文档里都写着改名前的命令名，
+    // 直接重命名会让它们在升级后静默失败（Laravel 只在调用时才发现命令不存在）。
+    protected $aliases = ['db:archive-logs-v2'];
 
     protected $description = 'V2 两阶段归档：暂存导出 -> 校验 -> 发布 manifest -> 显式清除';
 

@@ -73,6 +73,13 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
         Route::get('/orders/{order}', [OrderController::class, 'show']);
     });
 
+    // 订单取消：挂账订单被豁免支付窗口自动清理后，唯一的人工终态收敛出口
+    // （关联账单若已取消，订单会一直是待支付）。复用 order.manage，不新造权限码。
+    Route::middleware(['permission:'.AdminPermissions::ORDER_MANAGE])->group(function (): void {
+        Route::post('/orders/{order}/cancellations', [OrderController::class, 'cancel'])
+            ->middleware('throttle:20,1,admin-order-cancel');
+    });
+
     Route::middleware(['permission:'.AdminPermissions::INVOICE_LIST])->group(function (): void {
         Route::get('/invoices', [InvoiceController::class, 'index']);
         Route::get('/finance/ledger', [FinanceLedgerController::class, 'index']);
@@ -367,7 +374,7 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
         Route::get('/promotion-ambassadors', [PromotionAmbassadorController::class, 'index']);
     });
 
-    Route::middleware(['permission:'.AdminPermissions::PROMOTION_AMBASSADOR_MANAGE])->group(function (): void {
+    Route::middleware(['permission:'.AdminPermissions::PROMOTION_AMBASSADOR_MANAGE, 'throttle:admin-privilege-write'])->group(function (): void {
         Route::post('/promotion-ambassadors', [PromotionAmbassadorController::class, 'store']);
         Route::put('/promotion-ambassadors/{promotionAmbassador}', [PromotionAmbassadorController::class, 'update']);
         Route::delete('/promotion-ambassadors/{promotionAmbassador}', [PromotionAmbassadorController::class, 'destroy']);
@@ -379,7 +386,7 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
         Route::get('/integration-plugins/{plugin}/schema', [IntegrationPluginController::class, 'schema']);
     });
 
-    Route::middleware(['permission:'.AdminPermissions::INTEGRATION_PLUGIN_MANAGE])->group(function (): void {
+    Route::middleware(['permission:'.AdminPermissions::INTEGRATION_PLUGIN_MANAGE, 'throttle:admin-privilege-write'])->group(function (): void {
         Route::post('/integration-plugins', [IntegrationPluginController::class, 'install']);
         Route::post('/integration-plugin-scans', [IntegrationPluginController::class, 'scan']);
         Route::put('/integration-plugins/{plugin}/config', [IntegrationPluginController::class, 'updateConfig']);
@@ -410,7 +417,7 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
         Route::get('/suppliers/{supplier}', [SupplierController::class, 'show']);
     });
 
-    Route::middleware(['permission:'.AdminPermissions::SUPPLIER_MANAGE])->group(function (): void {
+    Route::middleware(['permission:'.AdminPermissions::SUPPLIER_MANAGE, 'throttle:admin-privilege-write'])->group(function (): void {
         Route::post('/suppliers', [SupplierController::class, 'store']);
         Route::put('/suppliers/{supplier}', [SupplierController::class, 'update']);
         Route::delete('/suppliers/{supplier}', [SupplierController::class, 'destroy']);
@@ -434,7 +441,7 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
         Route::get('/settings', [SettingController::class, 'index']);
     });
 
-    Route::middleware(['permission:'.AdminPermissions::SETTINGS_MANAGE])->group(function (): void {
+    Route::middleware(['permission:'.AdminPermissions::SETTINGS_MANAGE, 'throttle:admin-privilege-write'])->group(function (): void {
         Route::post('/notification-templates/test-send', [SettingController::class, 'testNotificationTemplate']);
         Route::post('/notification-templates/sms/provider-sync', [SettingController::class, 'syncSmsProviderTemplates'])->middleware('throttle:20,1');
         Route::post('/notification-templates/sms/provider-template/import-defaults', [SettingController::class, 'importDefaultSmsProviderTemplates'])->middleware('throttle:20,1');
@@ -457,7 +464,7 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
         Route::get('/system/readiness', [SystemReadinessController::class, 'show']);
     });
 
-    Route::middleware(['permission:'.AdminPermissions::DATABASE_MANAGE])->group(function (): void {
+    Route::middleware(['permission:'.AdminPermissions::DATABASE_MANAGE, 'throttle:admin-privilege-write'])->group(function (): void {
         Route::post('/database/optimizations', [DatabaseStatusController::class, 'optimize']);
         Route::post('/database/backups', [DatabaseStatusController::class, 'exportBackup']);
         Route::get('/database/backups/{taskId}', [DatabaseStatusController::class, 'showBackup'])
@@ -472,7 +479,7 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
         Route::get('/staff/{staff}', [StaffController::class, 'show']);
     });
 
-    Route::middleware(['permission:'.AdminPermissions::STAFF_MANAGE])->group(function (): void {
+    Route::middleware(['permission:'.AdminPermissions::STAFF_MANAGE, 'throttle:admin-privilege-write'])->group(function (): void {
         Route::post('/staff', [StaffController::class, 'store']);
         Route::put('/staff/{staff}', [StaffController::class, 'update']);
         Route::delete('/staff/{staff}', [StaffController::class, 'destroy']);
@@ -489,7 +496,7 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
         Route::get('/roles/{role}', [RoleController::class, 'show']);
     });
 
-    Route::middleware(['permission:'.AdminPermissions::ROLE_MANAGE])->group(function (): void {
+    Route::middleware(['permission:'.AdminPermissions::ROLE_MANAGE, 'throttle:admin-privilege-write'])->group(function (): void {
         Route::post('/roles', [RoleController::class, 'store']);
         Route::put('/roles/{role}', [RoleController::class, 'update']);
         Route::delete('/roles/{role}', [RoleController::class, 'destroy']);

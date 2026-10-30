@@ -12,6 +12,7 @@ use App\Services\Integrations\Plugins\PluginBindingResolver;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Support\Concerns\ResolvesBinding;
 use App\Support\LikeEscape;
+use App\Support\Pagination;
 use App\Support\SchemaMetadataCache;
 use App\Support\ServiceHostname;
 use App\Support\ServiceListPresentation;
@@ -33,7 +34,7 @@ class AdminServiceListService
      */
     public function paginate(array $filters = []): array
     {
-        $pageSize = min(max((int) ($filters['page_size'] ?? 20), 1), 100);
+        $pageSize = Pagination::clamp((int) ($filters['page_size'] ?? 20));
         $page = max((int) ($filters['page'] ?? 1), 1);
 
         $query = Service::query()

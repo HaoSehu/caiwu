@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Requests\Admin\V2\Setting;
 
 use App\Http\Requests\Admin\V2\Common\AdminFormRequest;
+use App\Support\Pagination;
 
 class ListSettingsRequest extends AdminFormRequest
 {
@@ -18,7 +19,7 @@ class ListSettingsRequest extends AdminFormRequest
         return [
             'group' => ['sometimes', 'nullable', 'string', 'max:50'],
             'page' => ['sometimes', 'integer', 'min:1'],
-            'page_size' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'page_size' => ['sometimes', 'integer', 'min:1', 'max:'.Pagination::MAX_PAGE_SIZE],
             'per_page' => ['prohibited'],
             'pageSize' => ['prohibited'],
         ];
@@ -38,6 +39,6 @@ class ListSettingsRequest extends AdminFormRequest
 
     public function pageSize(): int
     {
-        return max(1, min((int) $this->integer('page_size', 100), 100));
+        return Pagination::clamp((int) $this->integer('page_size', 100));
     }
 }

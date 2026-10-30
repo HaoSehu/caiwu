@@ -22,7 +22,6 @@ use App\Services\Automation\ScheduleTaskService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use InvalidArgumentException;
-use RuntimeException;
 
 class ScheduleTaskController extends Controller
 {
@@ -48,14 +47,6 @@ class ScheduleTaskController extends Controller
             );
         } catch (InvalidArgumentException $exception) {
             return $this->error(42200, $exception->getMessage());
-        } catch (RuntimeException $exception) {
-            // 锁、运行记录表或队列不可用属于预期的基础设施异常，保持管理端 API 的统一错误结构，
-            // 不把底层连接/驱动异常原文返回给客户端。
-            return $this->error(50000, '定时任务暂时不可触发，请稍后重试');
-        } catch (\Throwable $exception) {
-            // 插件任务注册等扩展点也可能抛出 Error/TypeError；管理端操作接口不能因为
-            // 调试环境的默认异常渲染而泄露内部连接、文件路径或插件实现细节。
-            return $this->error(50000, '定时任务暂时不可触发，请稍后重试');
         }
 
         return $this->success(AdminActionResultResource::make($result)->resolve(), (string) $result['message']);
@@ -101,10 +92,6 @@ class ScheduleTaskController extends Controller
             );
         } catch (InvalidArgumentException $exception) {
             return $this->error(42200, $exception->getMessage());
-        } catch (RuntimeException $exception) {
-            return $this->error(50000, '定时任务人工重跑暂时不可用，请稍后重试');
-        } catch (\Throwable $exception) {
-            return $this->error(50000, '定时任务人工重跑暂时不可用，请稍后重试');
         }
 
         return $this->success(AdminActionResultResource::make($result)->resolve(), (string) $result['message']);
@@ -135,10 +122,6 @@ class ScheduleTaskController extends Controller
             );
         } catch (InvalidArgumentException $exception) {
             return $this->error(42200, $exception->getMessage());
-        } catch (RuntimeException $exception) {
-            return $this->error(50000, '队列任务删除失败，请稍后重试');
-        } catch (\Throwable $exception) {
-            return $this->error(50000, '队列任务删除失败，请稍后重试');
         }
 
         return $this->success(AdminActionResultResource::make([
@@ -166,10 +149,6 @@ class ScheduleTaskController extends Controller
             );
         } catch (InvalidArgumentException $exception) {
             return $this->error(42200, $exception->getMessage());
-        } catch (RuntimeException $exception) {
-            return $this->error(50000, '队列清空失败，请稍后重试');
-        } catch (\Throwable $exception) {
-            return $this->error(50000, '队列清空失败，请稍后重试');
         }
 
         return $this->success(AdminActionResultResource::make([

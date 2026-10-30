@@ -14,6 +14,7 @@ use App\Models\Product;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Support\Concerns\FiltersDateRange;
 use App\Support\LikeEscape;
+use App\Support\Pagination;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -70,11 +71,29 @@ class InvoiceV2QueryService
         // 逐行解析会随当页账单行数增长；必须在渲染前按当页商品一次性预载。
         $this->preloadInvoiceProductDisplayNames($paginator->items());
 
+        // 列表接口不返回支付会话，前端原本只能用 status 判断是否可付；支付窗口已过的账单仍会显示「去支付」，
+        // 点进去才在详情页被拦回。这里用与详情页完全相同的判据补一个只读标记，
+        // 避免前端另立一套窗口口径（判据只读账单自身字段，无额外查询）。
+        $checkoutSecurity = app(CheckoutSecurityService::class);
+
         $paginator->setCollection(
-            $paginator->getCollection()->map(fn (Invoice $invoice): array => $this->invoices->adminListItem($invoice))
+            $paginator->getCollection()->map(
+                fn (Invoice $invoice): array => $this->clientInvoiceListRow($invoice, $checkoutSecurity)
+            )
         );
 
         return $paginator;
+    }
+
+    /**
+     * 客户端账单列表行：adminListItem 的共用字段 + 支付窗口是否已过的只读标记。
+     */
+    private function clientInvoiceListRow(Invoice $invoice, CheckoutSecurityService $checkoutSecurity): array
+    {
+        $row = $this->invoices->adminListItem($invoice);
+        $row['payment_window_expired'] = $checkoutSecurity->isPaymentSessionExpired($invoice);
+
+        return $row;
     }
 
     public function findClientInvoice(int $userId, int $id): Invoice
@@ -172,7 +191,7 @@ class InvoiceV2QueryService
      */
     private function pageSize(array $filters): int
     {
-        return max(1, min((int) ($filters['page_size'] ?? 20), 100));
+        return Pagination::clamp((int) ($filters['page_size'] ?? 20));
     }
 
     /**

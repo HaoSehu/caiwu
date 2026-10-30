@@ -23,6 +23,7 @@ class AdminVerificationDetailResource extends JsonResource
             'email' => (string) ($verification['email'] ?? ''),
             'phone' => (string) ($verification['phone'] ?? ''),
             'real_name' => (string) ($verification['real_name'] ?? ''),
+            'id_card' => $verification['id_card'] ?? null,
             'id_card_masked' => (string) ($verification['id_card_masked'] ?? ''),
             'verification_status' => (int) ($verification['verification_status'] ?? 0),
             'verification_status_label' => User::verificationStatusLabel((int) ($verification['verification_status'] ?? 0)),

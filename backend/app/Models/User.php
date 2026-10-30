@@ -66,14 +66,14 @@ class User extends Authenticatable
     }
 
     /**
-     * 软删时释放 email/phone 全局唯一键（见 ReleasesUniqueKeysOnDelete）。
+     * 软删时释放 email/phone/referral_code 全局唯一键（见 ReleasesUniqueKeysOnDelete）。
      * 删除是终局性操作（UserService::deleteUser 含资产保护），原始值由操作日志留痕。
      *
      * @return array<int, string>
      */
     public function uniqueKeysToReleaseOnDelete(): array
     {
-        return ['email', 'phone'];
+        return ['email', 'phone', 'referral_code'];
     }
 
     public function hasBoundAlipayAccount(): bool

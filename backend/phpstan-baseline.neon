@@ -37,24 +37,6 @@ parameters:
 			path: app/Console/Commands/DatabaseArchiveLogsHealthCommand.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Supplier\:\:\$api_key\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Console/Commands/LocalProductSimulateCommand.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Supplier\:\:\$api_url\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Console/Commands/LocalProductSimulateCommand.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Supplier\:\:\$api_username\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Console/Commands/LocalProductSimulateCommand.php
-
-		-
 			message: '#^Constant App\\Console\\Commands\\ServeBackendStackCommand\:\:DEFAULT_INTERNAL_HTTP_PORT is unused\.$#'
 			identifier: classConstant.unused
 			count: 1
@@ -1112,18 +1094,6 @@ parameters:
 			path: app/Models/Setting.php
 
 		-
-			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:buildReleasedUniqueValue\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: app/Models/User.php
-
-		-
-			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:uniqueKeysToReleaseOnDelete\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: app/Models/User.php
-
-		-
 			message: '#^Method App\\Models\\User\:\:nullableValue\(\) is unused\.$#'
 			identifier: method.unused
 			count: 1
@@ -1928,12 +1898,6 @@ parameters:
 			path: app/Services/ClientServiceConsole/ServiceTransformService.php
 
 		-
-			message: '#^Method App\\Services\\ClientServiceConsole\\ServiceTransformService\:\:resolveExpiry\(\) should return Carbon\\Carbon\|null but returns string\|null\.$#'
-			identifier: return.type
-			count: 1
-			path: app/Services/ClientServiceConsole/ServiceTransformService.php
-
-		-
 			message: '#^Offset ''actor_type'' on array\{\} on left side of \?\? does not exist\.$#'
 			identifier: nullCoalesce.offset
 			count: 1
@@ -2579,7 +2543,7 @@ parameters:
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$first_order_only\.$#'
 			identifier: property.notFound
 			count: 1
-			path: app/Services/Finance/CouponService.php
+			path: app/Services/Finance/Coupons/CouponOwnershipService.php
 
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
@@ -2606,12 +2570,6 @@ parameters:
 			path: app/Services/Finance/CouponService.php
 
 		-
-			message: '#^Method App\\Services\\Finance\\CouponService\:\:buildClaimablePublicCouponItems\(\) is unused\.$#'
-			identifier: method.unused
-			count: 1
-			path: app/Services/Finance/CouponService.php
-
-		-
 			message: '#^Method App\\Services\\Finance\\CouponService\:\:resolveProductHierarchyList\(\) should return array\<int, array\{id\: int, name\: string, type_label\: string, parent_group_name\: string, group_name\: string\}\> but returns array\<int, array\<''_sort_group''\|''_sort_parent''\|''_sort_type''\|''effective_product…''\|''first_product_group…''\|''id''\|''name''\|''product_type''\|''product_type_label''\|''second_product…''\|''service_type_code''\|''service_type_label''\|''third_product_group…'', mixed\>\>\.$#'
 			identifier: return.type
 			count: 1
@@ -2633,7 +2591,7 @@ parameters:
 			message: '#^Using nullsafe property access "\?\-\>first_order_only" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
-			path: app/Services/Finance/CouponService.php
+			path: app/Services/Finance/Coupons/CouponOwnershipService.php
 
 		-
 			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
@@ -3106,24 +3064,6 @@ parameters:
 			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Services/Finance/MixPaymentService.php
-
-		-
-			message: '#^Trait App\\Services\\Integrations\\Payments\\Concerns\\BuildsGatewayHttpClient is used zero times and is not analysed\.$#'
-			identifier: trait.unused
-			count: 1
-			path: app/Services/Integrations/Payments/Concerns/BuildsGatewayHttpClient.php
-
-		-
-			message: '#^Trait App\\Services\\Integrations\\Payments\\Concerns\\InteractsWithStandardPaymentActions is used zero times and is not analysed\.$#'
-			identifier: trait.unused
-			count: 1
-			path: app/Services/Integrations/Payments/Concerns/InteractsWithStandardPaymentActions.php
-
-		-
-			message: '#^Trait App\\Services\\Integrations\\Payments\\Concerns\\WrapsPemKeys is used zero times and is not analysed\.$#'
-			identifier: trait.unused
-			count: 1
-			path: app/Services/Integrations/Payments/Concerns/WrapsPemKeys.php
 
 		-
 			message: '#^Using nullsafe property access "\?\-\>id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
@@ -5647,24 +5587,6 @@ parameters:
 			path: app/Services/Ticket/TicketService.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Supplier\:\:\$api_key\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Upstream/Drivers/HostingPanelApi/HostingPanelApiTransport.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Supplier\:\:\$api_url\.$#'
-			identifier: property.notFound
-			count: 5
-			path: app/Services/Upstream/Drivers/HostingPanelApi/HostingPanelApiTransport.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Supplier\:\:\$api_username\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Upstream/Drivers/HostingPanelApi/HostingPanelApiTransport.php
-
-		-
 			message: '#^Call to function is_array\(\) with list\<string\> will always evaluate to true\.$#'
 			identifier: function.alreadyNarrowedType
 			count: 2
@@ -5877,12 +5799,6 @@ parameters:
 		-
 			message: '#^Method App\\Services\\User\\UserService\:\:findUserInvoice\(\) should return App\\Models\\Invoice but returns Illuminate\\Database\\Eloquent\\Model\.$#'
 			identifier: return.type
-			count: 1
-			path: app/Services/User/UserService.php
-
-		-
-			message: '#^Method App\\Services\\User\\UserService\:\:resolveInvoiceDisplayStatus\(\) is unused\.$#'
-			identifier: method.unused
 			count: 1
 			path: app/Services/User/UserService.php
 

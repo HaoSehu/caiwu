@@ -313,11 +313,7 @@ class DashboardService
      */
     private function salesIncomeInvoices(): Builder
     {
-        $refundTotals = FinanceRefund::query()
-            ->select('invoice_id', DB::raw('SUM(amount) as refunded_total'))
-            ->where('funds_moved', 1)
-            ->where('status', FinanceRefund::STATUS_COMPLETED)
-            ->groupBy('invoice_id');
+        $refundTotals = FinanceRefund::completedTotalsQuery();
 
         return Invoice::query()
             ->leftJoinSub($refundTotals, 'invoice_refund_totals', 'invoice_refund_totals.invoice_id', '=', 'invoices.id')

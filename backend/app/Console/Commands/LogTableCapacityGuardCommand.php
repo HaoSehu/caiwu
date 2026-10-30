@@ -21,9 +21,13 @@ use Throwable;
  */
 class LogTableCapacityGuardCommand extends Command
 {
-    protected $signature = 'db:log-capacity-guard
+    protected $signature = 'db:logs:capacity-guard
         {--threshold-mb=2048 : 单表告警阈值（MB）}
         {--json : 以 JSON 输出}';
+
+    // 旧名继续可用：运维脚本、外部定时任务与历史文档里都写着改名前的命令名，
+    // 直接重命名会让它们在升级后静默失败（Laravel 只在调用时才发现命令不存在）。
+    protected $aliases = ['db:log-capacity-guard'];
 
     protected $description = '只读检查高增长日志/审计表容量，超过阈值时以非零退出码告警';
 

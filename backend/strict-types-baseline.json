@@ -1,0 +1,886 @@
+{
+    "description": "declare(strict_types=1) 基线清单：登记尚未补充该声明的 PHP 文件。新增文件不在清单内即视为必须带 strict_types，由 backend/scripts/check_strict_types.php 在 CI 中强制；从清单移除条目时须同时补齐声明并跑所属模块测试。清单只减不增。",
+    "recorded_at": "2026-10-26",
+    "files": [
+        {
+            "file": "app/Casts/LegacyEncrypted.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Console/Commands/BackfillInvoiceFromOrdersCommand.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Console/Commands/FinalizeUpstreamBindingsCommand.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Console/Commands/ReleaseReferralRewardsCommand.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Console/Commands/SchedulerHeartbeatCommand.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Console/Commands/SyncUpstreamServicesCommand.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Console/Commands/WarmupSiteCache.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Constants/CouponStatus.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Constants/FinanceLedgerEventType.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Constants/InvoiceStatus.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Constants/InvoiceType.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Constants/ManualPaymentGateway.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Constants/OrderStatus.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Constants/OrderType.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Constants/PaymentStatus.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Constants/ProductType.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Constants/ServiceStatus.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Constants/UserCouponStatus.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Constants/UserNotificationType.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Controllers/Client/V2/CouponController.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Controllers/Client/V2/FinanceController.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Controllers/Client/V2/PaymentCallbackController.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Controllers/Client/V2/ReferralController.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Controllers/Client/V2/TicketWorkflowController.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Controllers/Client/V2/VerificationController.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Controllers/Controller.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Controllers/SecureAssetController.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Controllers/Site/WebController.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Middleware/LogOperation.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Middleware/VerifyAlipayCallbackSignature.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Requests/Admin/V2/Auth/LoginRequest.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Requests/Admin/V2/Auth/UpdateProfileRequest.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Requests/Admin/V2/Product/ProductBatchUpdateCategoryRequest.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Requests/Admin/V2/Product/ProductReorderRequest.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Requests/Admin/V2/Product/ProductSplitPreviewRequest.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Requests/Admin/V2/Product/ProductSplitRequest.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Requests/Admin/V2/Product/StoreProductRequest.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Requests/Admin/V2/Supplier/UpsertSupplierRequest.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Requests/Admin/V2/User/ListUserInvoicesRequest.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Requests/Admin/V2/User/ListUserNotificationLogsRequest.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Requests/Admin/V2/User/ListUserOperationLogsRequest.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Requests/Admin/V2/User/ListUserTicketsRequest.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Requests/Admin/V2/User/ListUsersRequest.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Requests/Admin/V2/User/RechargeUserRequest.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Requests/Admin/V2/User/StoreUserRequest.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Requests/Admin/V2/User/UpdateUserRequest.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Requests/Admin/V2/UserService/ListUserServicesRequest.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Requests/Admin/V2/UserService/RefreshUserServiceStatusesRequest.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Requests/Admin/V2/UserService/StoreUserServiceRequest.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Requests/Admin/V2/UserService/UpdateUserServiceMetaRequest.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Requests/Client/V2/Auth/ExchangeLoginAsCodeRequest.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Requests/Client/V2/Auth/LoginByCodeRequest.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Requests/Client/V2/Auth/LoginRequest.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Requests/Client/V2/Auth/RegisterRequest.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Requests/Client/V2/Auth/ResetPasswordRequest.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Requests/Client/V2/Auth/SendEmailCodeRequest.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Requests/Client/V2/Auth/SendPhoneCodeRequest.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Requests/Client/V2/Auth/UpdateAlipayAccountRequest.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Requests/Client/V2/Auth/UpdateEmailRequest.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Requests/Client/V2/Auth/UpdateNotificationPreferencesRequest.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Requests/Client/V2/Auth/UpdatePasswordRequest.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Requests/Client/V2/Auth/UpdatePhoneRequest.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Requests/Client/V2/Auth/UpdateProfileRequest.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Requests/Client/V2/Auth/VerifyBoundEmailCodeRequest.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Requests/Client/V2/Auth/VerifyBoundPhoneCodeRequest.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Requests/Client/V2/Coupon/ListCouponsRequest.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Requests/Client/V2/Invoice/PayByAlipayRequest.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Requests/Client/V2/Invoice/PayByBalanceAndAlipayRequest.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Requests/Client/V2/Invoice/PayByBalanceRequest.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Requests/Client/V2/Invoice/QueryAlipayStatusRequest.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Requests/Client/V2/Invoice/StoreRequest.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Requests/Client/V2/Recharge/StatusRequest.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Requests/Client/V2/Recharge/StoreRequest.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Requests/Client/V2/Referral/AccountLogsRequest.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Requests/Client/V2/Referral/ApplyWithdrawalRequest.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Requests/Client/V2/Referral/RewardsRequest.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Requests/Client/V2/Referral/WithdrawalsRequest.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Requests/Concerns/HasDateRangeFilter.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Requests/Site/QuoteProductRequest.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Requests/Site/ShowSecureAssetRequest.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Http/Resources/Finance/FinanceLedgerResource.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Jobs/ExportDatabaseBackupJob.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Jobs/ProcessPaidOrderFulfillmentJob.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Jobs/ProcessPaidOrderReferralRewardJob.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Jobs/RefreshSiteProductStockJob.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Jobs/RunScheduleTaskJob.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Jobs/SendAccountSecurityAlertJob.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Jobs/SendPaidInvoiceAdminNotificationJob.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Jobs/SendTemplateEmailJob.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Models/ActivityLog.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Models/AdminUser.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Models/AutomationLog.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Models/ContentArticle.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Models/ContentCategory.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Models/Coupon.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Models/CouponCampaign.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Models/FirstProductGroup.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Models/GatewayLog.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Models/Invoice.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Models/InvoiceItem.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Models/MarketingProductGroup.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Models/MarketingProductGroupItem.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Models/MediaFile.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Models/MemberLevel.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Models/MemberLevelGroupDiscount.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Models/MessageLog.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Models/NoticeRead.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Models/NotificationTemplate.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Models/Payment.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Models/PaymentCallback.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Models/PromotionAmbassador.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Models/ReferralReward.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Models/ReferralWithdrawal.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Models/Role.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Models/ScheduleRunLog.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Models/ScheduleTaskRun.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Models/ScheduleTick.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Models/SecondProductGroup.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Models/Service.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Models/ServiceTrackingRecord.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Models/Setting.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Models/SmsProviderTemplate.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Models/Supplier.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Models/ThirdProductGroup.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Models/Ticket.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Models/TicketReply.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Models/User.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Models/UserAccount.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Models/UserCoupon.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Models/UserNotification.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Models/UserReferral.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Models/VerificationHistory.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Providers/AppServiceProvider.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Services/Auth/AdminVerificationQueryService.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Services/Auth/GeeTestService.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Services/Auth/MessageRateLimitService.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Services/Auth/VerificationCodeService.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Services/Auth/VerificationService.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Services/Automation/AutoRenewService.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Services/Automation/BillingAutomationService.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Services/Automation/Contracts/ScheduleHook.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Services/Automation/InvoiceCleanupAutomationService.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Services/Automation/ScheduleHookService.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Services/Automation/ScheduleTaskService.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Services/Automation/ServiceLifecycleAutomationService.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Services/Content/ContentArticleService.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Services/Content/ContentCategoryService.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Services/Content/MediaFileService.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Services/Content/NoticeReadService.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Services/Finance/ClientFinanceQueryService.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Services/Finance/FinanceLedgerQueryService.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Services/Finance/InvoiceService.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Services/Notification/InboxService.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Services/Notification/UserNotificationService.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Services/Order/PaidOrderBusinessFlowDispatcher.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Services/ProductCatalog/CpuModelCatalogService.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Services/ProductCatalog/ProductTypeService.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Services/Provisioning/Concerns/GeneratesProvisionHostname.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Services/Provisioning/ProvisionService.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Services/Provisioning/ServiceRenewService.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Services/Referral/AdminReferralOverviewService.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Services/Site/SiteProductQuoteService.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Services/Site/SiteProductReadService.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Services/System/Concerns/InteractsWithMessageLogs.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Services/System/NotificationService.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Services/System/NotificationTemplateService.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Services/System/OperationLogService.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Services/System/ScheduleRunLogService.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Services/System/SettingService.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Services/System/SmsService.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Services/Ticket/TicketAutomationService.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Support/AdminPermissions.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Support/AutomationScheduleExpression.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "app/Support/SecureAsset.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "plugins/gateways/ali_pay/lib/AlipayClient.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "plugins/servers/zjmf_finance/lib/Commands/RestoreZjmfBillingCommand.php",
+            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
+            "recorded_at": "2026-10-26"
+        }
+    ]
+}

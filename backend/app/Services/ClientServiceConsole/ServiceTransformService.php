@@ -24,7 +24,6 @@ use App\Support\ServiceListPresentation;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
-use Illuminate\Support\Facades\Log;
 
 /**
  * 共享转换辅助服务
@@ -124,7 +123,7 @@ class ServiceTransformService
         );
     }
 
-    // ── List item transform ────────────────────────────────────────────────
+    // ── 列表项转换 ─────────────────────────────────────────────────────
 
     public function transformListItem(Service $service): array
     {
@@ -196,7 +195,7 @@ class ServiceTransformService
         ];
     }
 
-    // ── Detail transform ───────────────────────────────────────────────────
+    // ── 详情转换 ───────────────────────────────────────────────────────
 
     public function transformDetail(Service $service, ?array $remoteState = null, string $remoteError = ''): array
     {
@@ -362,7 +361,7 @@ class ServiceTransformService
         return '上游状态同步失败，请稍后重试';
     }
 
-    // ── Operation log transform ────────────────────────────────────────────
+    // ── 操作日志转换 ───────────────────────────────────────────────────
 
     public function transformServiceOperationLog(ActivityLog $log): array
     {
@@ -410,7 +409,7 @@ class ServiceTransformService
         return $cycles;
     }
 
-    // ── Service state helpers (used across sub-services) ──────────────────
+    // ── 服务状态辅助（跨子服务共用） ───────────────────────────────────
 
     public function canManageService(Service $service): bool
     {
@@ -482,7 +481,7 @@ class ServiceTransformService
         return ! in_array($normalizedUpstreamStatus, ['pending', 'suspended', 'cancelled', 'deleted', 'fraud'], true);
     }
 
-    // ── Connection cache helpers ───────────────────────────────────────────
+    // ── 连接缓存辅助 ───────────────────────────────────────────────────
 
     public function readCachedConnection(array $provisionData): array
     {
@@ -574,7 +573,7 @@ class ServiceTransformService
         ];
     }
 
-    // ── Spec builders ──────────────────────────────────────────────────────
+    // ── 规格构建 ───────────────────────────────────────────────────────
 
     public function buildSpecs(array $host, array $provisionData, array $productConfigOptions = []): array
     {
@@ -817,7 +816,7 @@ class ServiceTransformService
         ];
     }
 
-    // ── Status/label resolution helpers ───────────────────────────────────
+    // ── 状态与标签解析辅助 ─────────────────────────────────────────────
 
     public function resolveServiceTone(int $status): string
     {
@@ -869,20 +868,102 @@ class ServiceTransformService
         };
     }
 
+    /**
+     * 上游状态码 → 本地状态码的纯映射（不读库、不写库）。
+     *
+     * 需要落库的同步链路一律走 resolveSyncedServiceStatus()：它在映射前还会判断
+     * 「本地已暂停有原因」「本地已开通未到期」两种保留态，两条链路混用会写回错误状态。
+     */
     public function resolveServiceStatusFromUpstream(string $status): int
     {
         return ServiceStatus::fromUpstreamDomainStatus($status);
     }
 
+    /**
+     * 上游状态落库前的本地保护：
+     * 1. 本地已暂停且有暂停原因，上游随后给出开通中/运行中/已暂停（解封未完成等过渡态）时保留本地暂停；
+     * 2. 续费保护：本地已开通且未到期、无本地暂停原因，但上游仍显示暂停（续费后上游未解除暂停）时保留本地开通。
+     *
+     * 控制台详情触发的同步与后台定时同步必须共用本方法，否则两条写入链会给出不同状态。
+     */
+    public function resolveSyncedServiceStatus(Service $service, int $upstreamStatus): int
+    {
+        if ($this->shouldPreserveLocalSuspendedState($service, $upstreamStatus)
+            || $this->shouldPreserveLocalActiveState($service, $upstreamStatus)) {
+            return (int) $service->status;
+        }
+
+        return $upstreamStatus;
+    }
+
+    /**
+     * 解析同步后的暂停原因：本地暂停被保留时沿用原原因，两侧同为暂停时也沿用，其余情况清空。
+     */
+    public function resolveSyncedSuspendedReason(Service $service, int $resolvedStatus, int $upstreamStatus): ?string
+    {
+        if ($this->shouldPreserveLocalSuspendedState($service, $upstreamStatus)) {
+            return $service->suspended_reason;
+        }
+
+        return $resolvedStatus === ServiceStatus::SUSPENDED
+            && (int) $service->status === ServiceStatus::SUSPENDED
+            ? $service->suspended_reason
+            : null;
+    }
+
+    public function shouldPreserveLocalSuspendedState(Service $service, int $upstreamStatus): bool
+    {
+        $localReason = trim((string) ($service->suspended_reason ?? ''));
+
+        return (int) $service->status === ServiceStatus::SUSPENDED
+            && $localReason !== ''
+            && in_array($upstreamStatus, [ServiceStatus::ACTIVE, ServiceStatus::PENDING, ServiceStatus::SUSPENDED], true);
+    }
+
+    /**
+     * 续费保护：本地已开通、未到期且无本地暂停原因，而上游显示暂停时，
+     * 视为续费后上游未解除暂停的过渡态，保留本地已开通状态。
+     */
+    public function shouldPreserveLocalActiveState(Service $service, int $upstreamStatus): bool
+    {
+        return (int) $service->status === ServiceStatus::ACTIVE
+            && trim((string) ($service->suspended_reason ?? '')) === ''
+            && $service->expires_at !== null
+            && Carbon::parse($service->expires_at)->isFuture()
+            && $upstreamStatus === ServiceStatus::SUSPENDED;
+    }
+
+    /**
+     * 解析同步后的到期时间，含续费保护：本地到期时间晚于上游解析值时保留本地，
+     * 防止续费后的延期被上游旧到期时间回退而触发到期暂停误杀。
+     */
     public function resolveExpiry(array $host, Service $service): ?Carbon
     {
         $nextDueDate = $host['nextduedate'] ?? null;
-        if (is_numeric($nextDueDate) && (int) $nextDueDate > 0) {
-            // 上游时间戳按应用时区解析，避免 UTC 服务器上偏移 8 小时
-            return Carbon::createFromTimestamp((int) $nextDueDate, config('app.timezone'));
+        $resolved = null;
+
+        if (is_numeric($nextDueDate)) {
+            $timestamp = (int) $nextDueDate;
+
+            if ($timestamp > 0) {
+                // 上游时间戳按应用时区解析，避免 UTC 服务器上偏移 8 小时
+                $resolved = Carbon::createFromTimestamp($timestamp, config('app.timezone'));
+            }
+        } elseif (is_string($nextDueDate) && trim($nextDueDate) !== '') {
+            // 兼容上游 Y-m-d / Y-m-d H:i:s 日期字符串
+            try {
+                $resolved = Carbon::parse(trim($nextDueDate));
+            } catch (\Throwable) {
+                $resolved = null;
+            }
         }
 
-        return $service->expires_at;
+        $local = $service->expires_at !== null ? Carbon::parse($service->expires_at) : null;
+        if ($resolved instanceof Carbon && $local instanceof Carbon && $local->greaterThan($resolved)) {
+            return $local;
+        }
+
+        return $resolved ?? $local;
     }
 
     public function resolveMachineCategory(Service $service, string $catalogProductType, string $consoleMode): array
@@ -1056,7 +1137,7 @@ class ServiceTransformService
         return [];
     }
 
-    // ── Private spec helpers ───────────────────────────────────────────────
+    // ── 私有规格辅助 ───────────────────────────────────────────────────
 
     private function buildSpecDefinitions(array $productConfigOptions): array
     {
@@ -1424,7 +1505,7 @@ class ServiceTransformService
         return mb_strtolower(trim($value));
     }
 
-    // ── Connection/password helpers ────────────────────────────────────────
+    // ── 连接与密码辅助 ─────────────────────────────────────────────────
 
     private function resolveConnectionPassword(array $host, array $cachedConnection): string
     {
@@ -1449,7 +1530,7 @@ class ServiceTransformService
             || in_array(mb_strtolower($password), ['hidden', 'masked', 'secret'], true);
     }
 
-    // ── Operation log helpers ──────────────────────────────────────────────
+    // ── 操作日志辅助 ───────────────────────────────────────────────────
 
     private function resolveOperationCategoryByAction(string $action): string
     {

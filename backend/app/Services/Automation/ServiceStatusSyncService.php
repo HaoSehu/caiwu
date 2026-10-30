@@ -12,6 +12,7 @@ use App\Models\Product;
 use App\Models\Service;
 use App\Models\Supplier;
 use App\Services\ClientServiceConsole\ServiceOverviewService;
+use App\Services\ClientServiceConsole\ServiceTransformService;
 use App\Services\Integrations\Plugins\PluginBindingResolver;
 use App\Services\Integrations\Plugins\ServiceUpstreamBindingWriter;
 use App\Services\Integrations\Support\ProviderErrorMapper;
@@ -21,7 +22,6 @@ use App\Services\Upstream\ProviderResolver;
 use App\Support\Concerns\ResolvesBinding;
 use App\Support\SchemaMetadataCache;
 use App\Support\ServiceHostname;
-use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Crypt;
@@ -51,6 +51,7 @@ class ServiceStatusSyncService
 
     public function __construct(
         private ProviderResolver $providerResolver,
+        private ServiceTransformService $transformService,
         private ?PluginBindingResolver $bindingResolver = null,
         private ?ServiceUpstreamBindingWriter $bindingWriter = null,
     ) {}
@@ -638,8 +639,8 @@ class ServiceStatusSyncService
         $currentProvisionData = $this->bindingResolver()->serviceProvisionData($service, includeSecrets: true);
         $cachedConnection = $this->readCachedConnection($currentProvisionData);
         $normalizedHostStatus = strtolower(trim((string) ($host['domainstatus'] ?? '')));
-        $resolvedUpstreamStatus = $this->resolveServiceStatusFromUpstream((string) ($host['domainstatus'] ?? ''));
-        $resolvedServiceStatus = $this->resolveSyncedServiceStatus($service, $resolvedUpstreamStatus);
+        $resolvedUpstreamStatus = ServiceStatus::fromUpstreamDomainStatus((string) ($host['domainstatus'] ?? ''));
+        $resolvedServiceStatus = $this->transformService->resolveSyncedServiceStatus($service, $resolvedUpstreamStatus);
 
         if ($resolvedServiceStatus === ServiceStatus::ACTIVE
             && (int) $service->status === ServiceStatus::ACTIVE
@@ -688,8 +689,8 @@ class ServiceStatusSyncService
             'name' => ServiceHostname::resolveInstanceName($service, $provisionData, $host),
             'domain' => trim((string) ($host['domain'] ?? $service->domain)),
             'status' => $resolvedServiceStatus,
-            'expires_at' => $this->resolveExpiry($host, $service),
-            'suspended_reason' => $this->resolveSyncedSuspendedReason($service, $resolvedServiceStatus, $resolvedUpstreamStatus),
+            'expires_at' => $this->transformService->resolveExpiry($host, $service),
+            'suspended_reason' => $this->transformService->resolveSyncedSuspendedReason($service, $resolvedServiceStatus, $resolvedUpstreamStatus),
             'provision_data' => $provisionData,
         ])->save();
 
@@ -886,90 +887,5 @@ class ServiceStatusSyncService
 
         return preg_match('/^[*]+$/', $password) === 1
             || in_array(mb_strtolower($password), ['hidden', 'masked', 'secret'], true);
-    }
-
-    private function resolveServiceStatusFromUpstream(string $status): int
-    {
-        return ServiceStatus::fromUpstreamDomainStatus($status);
-    }
-
-    private function resolveSyncedServiceStatus(Service $service, int $upstreamStatus): int
-    {
-        if ($this->shouldPreserveLocalSuspendedState($service, $upstreamStatus)) {
-            return (int) $service->status;
-        }
-
-        // 续费保护：本地已开通且未到期、无本地暂停原因，但上游仍显示暂停
-        // （续费后上游未解除暂停的过渡态），保留本地状态，避免"续费成功却仍被暂停"。
-        if ($this->shouldPreserveLocalActiveState($service, $upstreamStatus)) {
-            return (int) $service->status;
-        }
-
-        return $upstreamStatus;
-    }
-
-    private function resolveSyncedSuspendedReason(Service $service, int $resolvedStatus, int $upstreamStatus): ?string
-    {
-        if ($this->shouldPreserveLocalSuspendedState($service, $upstreamStatus)) {
-            return $service->suspended_reason;
-        }
-
-        return $resolvedStatus === ServiceStatus::SUSPENDED
-            && (int) $service->status === ServiceStatus::SUSPENDED
-            ? $service->suspended_reason
-            : null;
-    }
-
-    private function shouldPreserveLocalSuspendedState(Service $service, int $upstreamStatus): bool
-    {
-        $localReason = trim((string) ($service->suspended_reason ?? ''));
-
-        return (int) $service->status === ServiceStatus::SUSPENDED
-            && $localReason !== ''
-            && in_array($upstreamStatus, [ServiceStatus::ACTIVE, ServiceStatus::PENDING, ServiceStatus::SUSPENDED], true);
-    }
-
-    /**
-     * 续费保护：本地已开通、未到期且无本地暂停原因，而上游显示暂停时，
-     * 视为续费后上游未解除暂停的过渡态，保留本地已开通状态。
-     */
-    private function shouldPreserveLocalActiveState(Service $service, int $upstreamStatus): bool
-    {
-        return (int) $service->status === ServiceStatus::ACTIVE
-            && trim((string) ($service->suspended_reason ?? '')) === ''
-            && $service->expires_at !== null
-            && Carbon::parse($service->expires_at)->isFuture()
-            && $upstreamStatus === ServiceStatus::SUSPENDED;
-    }
-
-    private function resolveExpiry(array $host, Service $service): ?Carbon
-    {
-        $nextDueDate = $host['nextduedate'] ?? null;
-        $resolved = null;
-
-        if (is_numeric($nextDueDate)) {
-            $timestamp = (int) $nextDueDate;
-
-            if ($timestamp > 0) {
-                // 上游时间戳按应用时区解析，避免 UTC 服务器上偏移 8 小时
-                $resolved = Carbon::createFromTimestamp($timestamp, config('app.timezone'));
-            }
-        } elseif (is_string($nextDueDate) && trim($nextDueDate) !== '') {
-            // 兼容上游 Y-m-d / Y-m-d H:i:s 日期字符串。
-            try {
-                $resolved = Carbon::parse(trim($nextDueDate));
-            } catch (\Throwable) {
-                $resolved = null;
-            }
-        }
-
-        // 续费保护：本地到期时间晚于上游解析值时保留本地（上游可能尚未同步续费结果），
-        // 防止续费后的延期被上游旧到期时间回退而触发到期暂停误杀。
-        $local = $service->expires_at !== null ? Carbon::parse($service->expires_at) : null;
-        if ($resolved instanceof Carbon && $local instanceof Carbon && $local->greaterThan($resolved)) {
-            return $local;
-        }
-
-        return $resolved ?? $local;
     }
 }

@@ -5,18 +5,13 @@ declare(strict_types=1);
 namespace App\Http\Requests\Client\V2\Invoice;
 
 use App\Constants\InvoiceType;
+use App\Http\Requests\Client\V2\Common\ClientFormRequest;
 use App\Http\Requests\Concerns\HasDateRangeFilter;
-use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Validator;
 
-class ListInvoicesRequest extends FormRequest
+class ListInvoicesRequest extends ClientFormRequest
 {
     use HasDateRangeFilter;
-
-    public function authorize(): bool
-    {
-        return true;
-    }
 
     /**
      * HTTP 查询串带来的 status 是字符串（如 ?status=5），统一转型为 int，
@@ -64,8 +59,7 @@ class ListInvoicesRequest extends FormRequest
             'start_date' => ['sometimes', 'date_format:Y-m-d'],
             'end_date' => ['sometimes', 'date_format:Y-m-d'],
             'date_range' => ['prohibited'],
-            'page' => ['sometimes', 'integer', 'min:1'],
-            'page_size' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            ...$this->paginationRules(),
             'pageSize' => ['prohibited'],
             'per_page' => ['prohibited'],
         ];

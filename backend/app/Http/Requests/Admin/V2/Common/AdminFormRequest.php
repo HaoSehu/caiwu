@@ -6,6 +6,7 @@ namespace App\Http\Requests\Admin\V2\Common;
 
 use App\Http\Requests\Admin\V2\Concerns\RejectsLegacyPagination;
 use App\Support\AdminPrivacy;
+use App\Support\Pagination;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Validator;
 
@@ -21,7 +22,7 @@ abstract class AdminFormRequest extends FormRequest
     /**
      * @return array<string, list<string>>
      */
-    protected function paginationRules(int $maxPageSize = 100): array
+    protected function paginationRules(int $maxPageSize = Pagination::MAX_PAGE_SIZE): array
     {
         return [
             'page' => ['nullable', 'integer', 'min:1'],
@@ -29,12 +30,12 @@ abstract class AdminFormRequest extends FormRequest
         ];
     }
 
-    public function perPage(int $default = 20, int $max = 100): int
+    public function perPage(int $default = 20, int $max = Pagination::MAX_PAGE_SIZE): int
     {
         $validated = $this->validated();
         $pageSize = (int) ($validated['page_size'] ?? $default);
 
-        return max(1, min($pageSize, $max));
+        return Pagination::clamp($pageSize, $max);
     }
 
     /**

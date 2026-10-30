@@ -15,6 +15,7 @@ use App\Models\Service;
 use App\Models\Supplier;
 use App\Models\User;
 use App\Services\ClientServiceConsole\ServiceOverviewService;
+use App\Services\Finance\CheckoutSecurityService;
 use App\Services\Finance\CheckoutService;
 use App\Services\Finance\CouponService;
 use App\Services\Finance\InvoiceRefundService;
@@ -371,7 +372,11 @@ class ServiceRenewService
             $expectedApplication = $this->resolveRenewCoupon($service, $user, $userCouponId, $effectiveProduct, $cycle, $couponBaseAmount, false, $memberDiscountAmount > 0);
             $expectedDiscount = round((float) ($expectedApplication['coupon_payload']['discount_amount'] ?? 0), 2);
 
-            if ($existingCatalogAmount === $amount && $existingMemberDiscount === $memberDiscountAmount && $existingCouponDiscount === $expectedDiscount && (int) $existingInvoice->product_id === (int) $effectiveProduct->id) {
+            // 支付窗口已过的同周期未付账单不可复用：续费账单按 due_date 计费，过期后复用会把用户送到
+            // 无可用支付方式的支付页，且每次点"立即续费"都复用到同一张死单；过期单落到下方事务内取消重建。
+            $existingWindowOpen = ! app(CheckoutSecurityService::class)->isPaymentSessionExpired($existingInvoice);
+
+            if ($existingWindowOpen && $existingCatalogAmount === $amount && $existingMemberDiscount === $memberDiscountAmount && $existingCouponDiscount === $expectedDiscount && (int) $existingInvoice->product_id === (int) $effectiveProduct->id) {
                 $existingInvoice->loadMissing(['product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires', 'service']);
                 $this->operationLogService->writeServiceConsoleLog($service, 'service.console.renew.invoice.create', [
                     'category' => 'renew',
@@ -415,16 +420,19 @@ class ServiceRenewService
                 $expectedApplication = $this->resolveRenewCoupon($service, $user, $userCouponId, $effectiveProduct, $cycle, $couponBaseAmount, false, $memberDiscountAmount > 0);
                 $expectedDiscount = round((float) ($expectedApplication['coupon_payload']['discount_amount'] ?? 0), 2);
 
-                if ($existingCatalogAmount === $amount && $existingMemberDiscount === $memberDiscountAmount && $existingCouponDiscount === $expectedDiscount && (int) $concurrentInvoice->product_id === (int) $effectiveProduct->id) {
+                $concurrentWindowOpen = ! app(CheckoutSecurityService::class)->isPaymentSessionExpired($concurrentInvoice);
+
+                if ($concurrentWindowOpen && $existingCatalogAmount === $amount && $existingMemberDiscount === $memberDiscountAmount && $existingCouponDiscount === $expectedDiscount && (int) $concurrentInvoice->product_id === (int) $effectiveProduct->id) {
                     return $concurrentInvoice->load(['product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires', 'service']);
                 }
 
-                // 同周期未付账单参数不一致：在服务行锁内取消后重建，避免残留同周期未付账单。
+                // 同周期未付账单参数不一致或支付窗口已过：在服务行锁内取消后重建，避免残留同周期未付账单，
+                // 也避免把已过期的未付账单继续复用给用户。
                 app(CheckoutService::class)->cancel($concurrentInvoice, array_merge($context, [
                     'actor_type' => 'system',
                     'actor_user_id' => (int) $user->id,
                     'actor_name' => (string) ($user->display_name ?? $user->nickname ?? $user->email ?? ''),
-                    'reason' => 'renew_invoice_replaced',
+                    'reason' => $concurrentWindowOpen ? 'renew_invoice_replaced' : 'payment_window_expired',
                 ]));
             }
 

@@ -333,7 +333,7 @@ class ServiceSecurityGroupService
         return ['message' => $message];
     }
 
-    // ── Security group context resolution ─────────────────────────────────
+    // ── 安全组上下文解析 ───────────────────────────────────────────────
 
     public function resolveSecurityGroupContext(Service $service, bool $fresh = false): array
     {
@@ -460,7 +460,7 @@ class ServiceSecurityGroupService
         Cache::forget($this->buildSecurityGroupContextCacheKey($service, (int) $supplier->id, (int) $hostId));
     }
 
-    // ── Private helpers ────────────────────────────────────────────────────
+    // ── 私有辅助 ───────────────────────────────────────────────────────
 
     private function callSecurityGroupAction(Service $service, string $func, array $payload, string $action, ?array $context = null): array
     {

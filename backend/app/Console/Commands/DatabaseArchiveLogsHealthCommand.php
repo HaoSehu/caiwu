@@ -19,7 +19,11 @@ use RecursiveIteratorIterator;
  */
 class DatabaseArchiveLogsHealthCommand extends Command
 {
-    protected $signature = 'db:archive-logs:health {--json : 以 JSON 输出健康检查结果}';
+    protected $signature = 'db:logs:archive:health {--json : 以 JSON 输出健康检查结果}';
+
+    // 旧名继续可用：运维脚本、外部定时任务与历史文档里都写着改名前的命令名，
+    // 直接重命名会让它们在升级后静默失败（Laravel 只在调用时才发现命令不存在）。
+    protected $aliases = ['db:archive-logs:health'];
 
     protected $description = '只读检查日志归档候选积压、最近成功/失败批次与归档文件规模';
 

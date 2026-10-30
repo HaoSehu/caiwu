@@ -123,11 +123,11 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
                     $protocol = strtolower(trim((string) config('log_archive.protocol', 'v1')));
 
                     return match ($protocol) {
-                        'v1' => $this->runArtisan('db:archive-logs', [
+                        'v1' => $this->runArtisan('db:logs:archive', [
                             '--execute' => true,
                             '--json' => true,
                         ]),
-                        'v2' => $this->runArtisan('db:archive-logs-v2', [
+                        'v2' => $this->runArtisan('db:logs:archive-v2', [
                             '--execute' => true,
                             '--purge' => true,
                             '--json' => true,
@@ -147,7 +147,7 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
                 category: '系统维护',
                 description: '只读检查 10 张高增长日志/审计表容量，任一张超过阈值（默认 2GB）时告警，提示评估分区或缩短归档窗口。',
                 triggers: [ScheduleRule::everyTicks(24)],
-                handler: fn (): array => $this->runArtisan('db:log-capacity-guard', [
+                handler: fn (): array => $this->runArtisan('db:logs:capacity-guard', [
                     '--json' => true,
                 ]),
                 timeout: 120,
@@ -267,7 +267,7 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
                 key: 'order-cleanup',
                 title: '账单与充值清理',
                 category: '账单清理',
-                description: '自动取消超过 5 分钟未付款的订单、账单和充值单。',
+                description: '自动取消超过 5 分钟未付款的订单、账单和充值单；并收敛关联账单已取消超 7 天的挂账订单。',
                 triggers: [ScheduleRule::automation(
                     (string) ($automation['order_cleanup_schedule_mode'] ?? AutomationScheduleExpression::MODE_EVERY_FIFTEEN_MINUTES),
                     (string) ($automation['order_cleanup_schedule_time'] ?? '00:00:00'),
@@ -276,7 +276,14 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
                 )],
                 handler: function (): array {
                     $summary = app(InvoiceCleanupAutomationService::class)->handle();
-                    if (array_sum($summary) > 0) {
+                    // 汇总里 pending_order_cleanup_skipped 是布尔标记（开关关闭时置 true），
+                    // array_sum 会把它算成 1，导致开关关闭后每轮都误报「有变更」。
+                    // 这里改成只累加真正的处理计数。
+                    $changed = (int) ($summary['invoices_cancelled'] ?? 0)
+                        + (int) ($summary['orders_cancelled'] ?? 0)
+                        + (int) ($summary['abandoned_orders_cancelled'] ?? 0)
+                        + (int) ($summary['recharges_expired'] ?? 0);
+                    if ($changed > 0) {
                         Log::debug('[定时任务] 账单与充值清理执行完成', $summary);
                     }
 
@@ -431,7 +438,7 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
      */
     private function runHealthCheck(): array
     {
-        $command = 'db:archive-logs:health';
+        $command = 'db:logs:archive:health';
         $parameters = ['--json' => true];
         $exitCode = Artisan::call($command, $parameters);
         $output = trim(Artisan::output());

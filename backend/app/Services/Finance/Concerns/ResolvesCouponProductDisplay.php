@@ -7,6 +7,7 @@ namespace App\Services\Finance\Concerns;
 use App\Constants\ProductType;
 use App\Models\Coupon;
 use App\Models\Product;
+use App\Services\Finance\Coupons\CouponNormalizer;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Support\ProductGroupHierarchyFields;
 use Illuminate\Support\Collection;
@@ -23,7 +24,7 @@ trait ResolvesCouponProductDisplay
     {
         $productIds = $coupons
             ->filter()
-            ->flatMap(fn (Coupon $coupon) => $this->normalizeProductIds((array) ($coupon->product_ids ?? [])))
+            ->flatMap(fn (Coupon $coupon) => CouponNormalizer::normalizeProductIds((array) ($coupon->product_ids ?? [])))
             ->unique()
             ->values()
             ->all();

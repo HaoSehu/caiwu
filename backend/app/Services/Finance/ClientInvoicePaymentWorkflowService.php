@@ -11,6 +11,7 @@ use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\User;
 use App\Services\Integrations\Payments\PaymentGatewayManager;
+use App\Support\Money;
 use App\Support\VersionedJson;
 
 class ClientInvoicePaymentWorkflowService
@@ -279,7 +280,7 @@ class ClientInvoicePaymentWorkflowService
     private function invoicePayload(Invoice $invoice): array
     {
         $detail = $this->invoices->clientDetail($invoice);
-        $payableAmount = (string) ($detail['payable_amount'] ?? number_format($this->payableAmount($invoice), 2, '.', ''));
+        $payableAmount = (string) ($detail['payable_amount'] ?? Money::format($invoice->payableAmount()));
         $paymentSecurity = $this->checkoutSecurity->issueInvoicePaymentSession($invoice, (int) $invoice->user_id);
         $sessionToken = (string) ($paymentSecurity['session_token'] ?? '');
         $canCancel = in_array((int) $invoice->status, [InvoiceStatus::UNPAID], true);
@@ -353,10 +354,5 @@ class ClientInvoicePaymentWorkflowService
         }
 
         return null;
-    }
-
-    private function payableAmount(Invoice $invoice): float
-    {
-        return round(max((float) ($invoice->amount ?? 0) - (float) ($invoice->paid_amount ?? 0), 0), 2);
     }
 }

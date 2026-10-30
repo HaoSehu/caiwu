@@ -7,6 +7,7 @@ namespace App\Http\Requests\Admin\V2\Log;
 use App\Http\Requests\Admin\V2\Common\AdminFormRequest;
 use App\Services\System\AdminLogService;
 use App\Services\System\AdminLogV2QueryService;
+use App\Support\Pagination;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
@@ -22,7 +23,7 @@ class ListLogsRequest extends AdminFormRequest
         return [
             'channel' => ['required', Rule::in(AdminLogV2QueryService::channels())],
             'page' => ['sometimes', 'integer', 'min:1'],
-            'page_size' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'page_size' => ['sometimes', 'integer', 'min:1', 'max:'.Pagination::MAX_PAGE_SIZE],
             'include_summary' => ['sometimes', 'boolean'],
             // 复用基类 trait 的旧分页参数禁用规则，替代手抄的 per_page/pageSize prohibited。
             ...$this->legacyPaginationRules(),
@@ -68,7 +69,7 @@ class ListLogsRequest extends AdminFormRequest
             }
 
             $page = max(1, (int) $this->input('page', 1));
-            $pageSize = max(1, min((int) $this->input('page_size', 20), 100));
+            $pageSize = Pagination::clamp((int) $this->input('page_size', 20));
             $maxPage = intdiv(
                 AdminLogService::API_CANDIDATE_MAX_ROWS + $pageSize - 1,
                 $pageSize,

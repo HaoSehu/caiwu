@@ -38,9 +38,17 @@ class PluginInstaller
         private readonly Container $container,
     ) {}
 
-    public function install(string $domain, string $slug): IntegrationPlugin
+    /**
+     * 安装插件。
+     *
+     * $allowDemo 默认 false：demo 插件只能在显式的开发/演示链路里被安装（例如 simulate:product
+     * 在 local/testing 环境自建演示数据），管理端与其它调用方一律被拒，避免出现
+     * 「已装但列表不可见、无法再停用或卸载」的半状态。
+     */
+    public function install(string $domain, string $slug, bool $allowDemo = false): IntegrationPlugin
     {
         $manifest = $this->scanner->requireManifest($domain, $slug);
+        $this->assertDemoAllowed($manifest, $allowDemo);
         $this->assertManifestExecutable($manifest);
         $this->assertKeyAvailable($domain, $manifest);
 
@@ -85,9 +93,10 @@ class PluginInstaller
      *
      * @return array{plugin: IntegrationPlugin, diff: array<string, array<int, string>>, previous_version: string}
      */
-    public function upgrade(IntegrationPlugin $plugin): array
+    public function upgrade(IntegrationPlugin $plugin, bool $allowDemo = false): array
     {
         $manifest = $this->scanner->requireManifest((string) $plugin->domain, (string) $plugin->slug);
+        $this->assertDemoAllowed($manifest, $allowDemo);
         $this->assertManifestExecutable($manifest);
 
         if ((string) $plugin->plugin_key !== $manifest->key) {
@@ -217,9 +226,10 @@ class PluginInstaller
         ];
     }
 
-    public function enable(IntegrationPlugin $plugin): IntegrationPlugin
+    public function enable(IntegrationPlugin $plugin, bool $allowDemo = false): IntegrationPlugin
     {
         $manifest = $this->scanner->requireManifest((string) $plugin->domain, (string) $plugin->slug);
+        $this->assertDemoAllowed($manifest, $allowDemo);
         $this->assertManifestExecutable($manifest);
 
         DB::transaction(function () use ($plugin, $manifest): void {
@@ -344,6 +354,41 @@ class PluginInstaller
         $this->forgetDomainRuntime($manifest->domain);
 
         return $plugin->fresh('config') ?? $plugin;
+    }
+
+    /**
+     * demo 守卫：拒绝 demo 插件的安装/升级/启用，除非调用方显式传 $allowDemo。
+     *
+     * 判定放在 PluginInstaller 而不是只放管理端服务层，是因为本类是唯一写
+     * integration_plugins 的入口；只守服务层会被命令、测试、未来的调度链路绕过。
+     */
+    private function assertDemoAllowed(PluginManifest $manifest, bool $allowDemo): void
+    {
+        if ($allowDemo || ! self::isDemoManifest($manifest)) {
+            return;
+        }
+
+        throw new BusinessException('示例插件仅供开发调试，不支持在管理端安装或启用', 42200);
+    }
+
+    /**
+     * 是否为示例插件：优先采用清单显式声明（info.demo），demo_ 前缀启发式
+     * 仅作未改造插件的兼容兜底。管理端列表过滤与安装守卫共用同一判定。
+     */
+    public static function isDemoManifest(PluginManifest $manifest): bool
+    {
+        if (($manifest->extra['demo'] ?? false) === true) {
+            return true;
+        }
+
+        foreach ([$manifest->slug, $manifest->key] as $identifier) {
+            $normalized = strtolower(trim($identifier));
+            if ($normalized === 'demo' || str_starts_with($normalized, 'demo_') || str_starts_with($normalized, 'demo-')) {
+                return true;
+            }
+        }
+
+        return str_starts_with(strtolower(trim($manifest->name)), 'demo ');
     }
 
     private function assertManifestExecutable(PluginManifest $manifest): void

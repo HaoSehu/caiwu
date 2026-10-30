@@ -98,6 +98,7 @@ class AdminUserDetailResource extends JsonResource
             'verification_status' => (int) ($user->verification_status ?? 0),
             'verification_status_label' => User::verificationStatusLabel((int) ($user->verification_status ?? 0)),
             'real_name' => $privacy->name($realName),
+            'id_card' => $privacy->idCardRaw($user->id_card),
             'id_card_masked' => $privacy->idCard($user->id_card),
             'referred_at' => $user->referred_at?->format('Y-m-d H:i:s'),
             'alipay_real_name' => $privacy->name($user->alipay_real_name),

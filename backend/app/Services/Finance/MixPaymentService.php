@@ -8,6 +8,7 @@ use App\Constants\FinanceLedgerEventType;
 use App\Constants\InvoiceStatus;
 use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
+use App\Constants\UserNotificationType;
 use App\Exceptions\BusinessException;
 use App\Models\FinanceLedgerEntry;
 use App\Models\FinanceReconciliationDiff;
@@ -18,6 +19,7 @@ use App\Services\Finance\Core\FinanceAccountService;
 use App\Services\Integrations\Payments\PaymentGatewayManager;
 use App\Services\Integrations\Payments\PaymentGatewayOperationService;
 use App\Services\Integrations\Plugins\PaymentGatewayBindingResolver;
+use App\Services\Notification\UserNotificationService;
 use App\Support\Money;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -62,7 +64,8 @@ class MixPaymentService
 
         $traceId = $this->resolveTraceId($context, "mix:invoice:{$invoice->id}");
         $paymentType = trim((string) ($context['payment_type'] ?? ''));
-        $lockKey = "lock:pay:mix:invoice:{$invoice->id}";
+        // 与余额支付、单独网关支付共用账单级支付锁，避免同一张账单被并发推进成交叉支付
+        $lockKey = "lock:pay:invoice:{$invoice->id}";
         $normalizedBalanceAmount = round(max($balanceAmount, 0), 2);
 
         $payload = $this->withLock($lockKey, 20, function () use ($invoice, $user, $traceId, $normalizedBalanceAmount, $context) {
@@ -80,7 +83,7 @@ class MixPaymentService
                     new BusinessException('账单状态异常，无法支付')
                 );
 
-                $remainingAmount = round((float) $lockedInvoice->amount - (float) ($lockedInvoice->paid_amount ?? 0), 2);
+                $remainingAmount = $lockedInvoice->payableAmount();
                 throw_if($remainingAmount <= 0, new BusinessException('当前账单无需支付'));
                 throw_if($normalizedBalanceAmount <= 0, new BusinessException('余额支付金额必须大于 0'));
                 throw_if($normalizedBalanceAmount >= $remainingAmount, new BusinessException('余额支付金额需小于待支付金额'));
@@ -110,7 +113,7 @@ class MixPaymentService
 
                 return [
                     'invoice' => $lockedInvoice,
-                    'remaining_amount' => round(max((float) $lockedInvoice->amount - (float) ($lockedInvoice->paid_amount ?? 0), 0), 2),
+                    'remaining_amount' => $lockedInvoice->payableAmount(),
                 ];
             });
         }, '支付请求处理中，请勿重复提交');
@@ -396,7 +399,7 @@ class MixPaymentService
         array $context = [],
     ): Invoice {
         $paymentAmount = round((float) $capturedPayment->amount, 2);
-        if ($paymentAmount <= $this->invoicePayableAmount($invoice) + 0.0001) {
+        if (! Money::greaterThan($paymentAmount, $invoice->payableAmount())) {
             return $invoice;
         }
 
@@ -511,6 +514,45 @@ class MixPaymentService
             'trace_id' => $traceId !== '' ? $traceId : $payment->trace_id,
         ])->save();
         $this->callbackProjector->syncProjection($payment);
+
+        // 异常捕获款只进余额、不推进账单，用户侧只能看到"账单仍未支付"，容易重复支付或以为扣款丢失；
+        // 这里补一条站内信说明"钱已到账、账单未支付、可用余额支付"（写入失败不阻断入账）。
+        $this->notifyCreditedToBalance($lockedUser, $payment, $invoice, $amount, $reason);
+    }
+
+    /**
+     * 异常捕获款转入余额的站内信告知。
+     */
+    private function notifyCreditedToBalance(User $user, Payment $payment, Invoice $invoice, float $amount, string $reason): void
+    {
+        $reasonText = match ($reason) {
+            'invoice_already_paid' => '该账单此前已支付完成，本次重复支付的',
+            'cancelled_invoice' => '对应账单已关闭，本次支付的',
+            'payment_window_expired' => '对应账单支付窗口已关闭，本次支付的',
+            default => '本次支付金额与账单应付金额不一致，该笔',
+        };
+
+        app(UserNotificationService::class)->create(
+            (int) $user->id,
+            UserNotificationType::PAYMENT_CREDITED_TO_BALANCE,
+            '支付款项已转入账户余额',
+            sprintf(
+                '%s款项 %s 元已转入账户余额（账单 %s / 支付单 %s）。账单不因此变为已支付，续费或新购时可直接使用余额支付；如需退款请联系客服。',
+                $reasonText,
+                Money::format($amount),
+                (string) $invoice->invoice_no,
+                (string) $payment->payment_no,
+            ),
+            '/client/payments',
+            [
+                'payment_id' => (int) $payment->id,
+                'payment_no' => (string) $payment->payment_no,
+                'invoice_id' => (int) $invoice->id,
+                'invoice_no' => (string) $invoice->invoice_no,
+                'amount' => number_format($amount, 2, '.', ''),
+                'credit_reason' => $reason,
+            ],
+        );
     }
 
     /**
@@ -525,14 +567,6 @@ class MixPaymentService
         }
 
         return PaymentCallbackRaw::mixBalanceAmount($callbackRaw);
-    }
-
-    /**
-     * 与统一入账引擎各持一份的私有副本（3 行纯计算），避免 Mix↔引擎互依成环。
-     */
-    private function invoicePayableAmount(Invoice $invoice): float
-    {
-        return round(max((float) $invoice->amount - (float) ($invoice->paid_amount ?? 0), 0), 2);
     }
 
     /**

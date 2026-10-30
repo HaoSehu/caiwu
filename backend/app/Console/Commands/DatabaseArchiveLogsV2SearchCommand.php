@@ -11,12 +11,16 @@ use Throwable;
 
 class DatabaseArchiveLogsV2SearchCommand extends Command
 {
-    protected $signature = 'db:archive-logs-v2:search
+    protected $signature = 'db:logs:archive-v2:search
         {--table= : 必填，归档白名单表名}
         {--start-date= : 必填，起始时间（Y-m-d 或 Y-m-d H:i:s），含}
         {--end-date= : 必填，结束时间（Y-m-d 或 Y-m-d H:i:s），含}
         {--limit= : 最大命中条数，默认 100，最大 500}
         {--json : 以 JSON 输出}';
+
+    // 旧名继续可用：运维脚本、外部定时任务与历史文档里都写着改名前的命令名，
+    // 直接重命名会让它们在升级后静默失败（Laravel 只在调用时才发现命令不存在）。
+    protected $aliases = ['db:archive-logs-v2:search'];
 
     protected $description = '只读冷检索：在已发布归档 CSV 中按表与时间范围匹配记录，不导入不删除';
 

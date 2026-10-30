@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Constants\FinanceLedgerEventType;
 use App\Constants\InvoiceStatus;
 use App\Constants\OrderStatus;
 use App\Constants\ServiceStatus;
@@ -17,6 +18,7 @@ use App\Models\User;
 use App\Services\Finance\BalanceInvoicePaymentService;
 use App\Services\Finance\CheckoutSecurityService;
 use App\Services\Finance\CheckoutService;
+use App\Services\Finance\Core\FinanceAccountService;
 use App\Services\Finance\InvoiceService;
 use App\Services\Integrations\Plugins\PluginFileLoader;
 use App\Services\Integrations\Plugins\PluginInstaller;
@@ -46,10 +48,21 @@ class LocalProductSimulateCommand extends Command
 
     public function handle(): int
     {
+        // 该命令会创建商品、安装插件、写账单与余额，只允许在本地/测试环境运行。
+        if (! app()->environment(['local', 'testing'])) {
+            $this->error('simulate:product 仅允许在 local/testing 环境执行。');
+
+            return self::FAILURE;
+        }
+
         Config::set('queue.default', 'sync');
 
         $this->user = User::query()->findOrFail(1);
-        $this->info("测试账号: #{$this->user->id} {$this->user->nickname} ({$this->user->email}) 余额={$this->user->balance}");
+        // users 表已无 balance 列，余额真源是 finance_accounts（分为单位）。
+        $financeAccounts = app(FinanceAccountService::class);
+        $balanceCents = $financeAccounts->balanceCents((int) $this->user->id);
+        $balanceText = number_format($balanceCents / 100, 2, '.', '');
+        $this->info("测试账号: #{$this->user->id} {$this->user->nickname} ({$this->user->email}) 余额={$balanceText}");
 
         // 激活 demo_servers 插件
         app(PluginFileLoader::class)->ensureLoaded(
@@ -59,9 +72,19 @@ class LocalProductSimulateCommand extends Command
         $this->laravel->forgetInstance(ProviderRegistry::class);
         $this->laravel->forgetInstance(ProviderResolver::class);
 
-        // 余额不足则补充
-        if ((float) $this->user->balance < 500) {
-            $this->user->forceFill(['balance' => '500.00'])->save();
+        // 余额不足则通过财务内核补足（users 表已无 balance 列，forceFill 写不进去）
+        if ($balanceCents < 50000) {
+            $financeAccounts->credit(
+                (int) $this->user->id,
+                50000 - $balanceCents,
+                FinanceLedgerEventType::MANUAL_RECHARGE,
+                [
+                    'source_type' => 'local_simulation',
+                    'source_id' => (int) $this->user->id,
+                    'remark' => '本地模拟：补足测试账号余额至 500.00',
+                ],
+            );
+            $this->user->refresh();
             $this->info('余额补充至 500.00');
         }
 
@@ -339,12 +362,13 @@ class LocalProductSimulateCommand extends Command
             ->where('domain', $domain)->where('plugin_key', $slug)->first();
 
         if (! $existing) {
-            $plugin = $installer->install($domain, $slug);
-            $installer->enable($plugin);
+            // demo 插件只在演示数据链路里放行（installer 默认拒绝 demo），命令本身已限 local/testing。
+            $plugin = $installer->install($domain, $slug, allowDemo: true);
+            $installer->enable($plugin, allowDemo: true);
         } elseif ((int) $existing->status !== 1) {
             $plugin = IntegrationPlugin::query()->find((int) $existing->id);
             if ($plugin) {
-                $installer->enable($plugin);
+                $installer->enable($plugin, allowDemo: true);
             }
         }
     }

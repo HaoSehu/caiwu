@@ -30,6 +30,7 @@ class AdminVerificationListItemResource extends JsonResource
             'nickname' => (string) ($user->nickname ?? ''),
             'display_name' => $privacy->displayName($user->display_name, $email, $phone, $realName),
             'real_name' => $privacy->name($realName),
+            'id_card' => $privacy->idCardRaw($user->id_card),
             'id_card_masked' => $privacy->idCard($user->id_card),
             'verification_status' => (int) ($user->verification_status ?? 0),
             'verification_status_label' => User::verificationStatusLabel((int) ($user->verification_status ?? 0)),

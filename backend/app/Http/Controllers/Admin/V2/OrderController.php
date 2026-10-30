@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Admin\V2;
 use App\Exceptions\BusinessException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\V2\Invoice\RefundInvoiceToBalanceRequest;
+use App\Http\Requests\Admin\V2\Order\CancelOrderActionRequest;
 use App\Http\Requests\Admin\V2\Order\ListOrdersRequest;
 use App\Http\Requests\Admin\V2\Order\ShowOrderRequest;
 use App\Http\Resources\Admin\V2\AdminActionResultResource;
@@ -15,6 +16,7 @@ use App\Http\Resources\Admin\V2\AdminOrderSummaryResource;
 use App\Models\AdminUser;
 use App\Models\Order;
 use App\Models\User;
+use App\Services\Admin\V2\AdminOrderActionV2Service;
 use App\Services\Finance\InvoiceRefundService;
 use App\Services\Finance\OrderV2QueryService;
 use App\Services\ProductCatalog\ProductFullPathResolver;
@@ -27,6 +29,7 @@ class OrderController extends Controller
         private readonly OrderV2QueryService $orders,
         private readonly ProductFullPathResolver $productFullPathResolver,
         private readonly InvoiceRefundService $refunds,
+        private readonly AdminOrderActionV2Service $actions,
     ) {}
 
     public function index(ListOrdersRequest $request): JsonResponse
@@ -74,14 +77,27 @@ class OrderController extends Controller
         return $this->success(AdminActionResultResource::make($result)->resolve(), $message);
     }
 
+    /**
+     * 取消订单：挂账僵尸订单的唯一人工出口（权限由路由组 order.manage 把关）。
+     * 状态机与审计复用 OrderService::cancel()，不在此重复校验。
+     */
+    public function cancel(CancelOrderActionRequest $request, Order $order): JsonResponse
+    {
+        $result = $this->actions->cancel($order, $request);
+
+        return $this->success(AdminActionResultResource::make($result)->resolve(), (string) $result['message']);
+    }
+
     private function resolveAdminActor(Request $request): array
     {
         $actor = $request->user();
 
         if ($actor instanceof AdminUser) {
+            // 与 AdminInvoiceActionV2Service / AdminOrderActionV2Service 保持同一条取值链，
+            // 避免同一控制器的退款与取消两条写路径在审计里落到不同的人身上。
             return [
                 'id' => (int) $actor->getKey(),
-                'name' => (string) ($actor->username ?? $actor->nickname ?? 'admin'),
+                'name' => (string) ($actor->username ?? $actor->email ?? 'admin'),
             ];
         }
 

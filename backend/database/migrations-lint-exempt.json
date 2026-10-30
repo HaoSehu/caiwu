@@ -11,6 +11,26 @@
             "file": "2026_10_10_000005_fix_log_status_column_defaults.php",
             "reason": "已在 2026-10-10 入库并于 idc / idc_test 执行；ALTER COLUMN SET/DROP DEFAULT 为元数据级操作且本身可按当前值重复执行，但修改已执行文件仍违反只追加原则。",
             "recorded_at": "2026-10-21"
+        },
+        {
+            "file": "2026_08_13_234138_add_source_composite_index_to_account_transactions.php",
+            "reason": "与 2026_08_13_234138_backfill_status_enum_comments.php 同秒前缀，均来自提交 7aa71660 且已在 idc / idc_test 执行；改名会改变 Laravel 的文件名排序执行顺序，属于修改已执行迁移，只能在检查中豁免。后续禁止再新增同秒前缀迁移。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "2026_08_13_234138_backfill_status_enum_comments.php",
+            "reason": "与 2026_08_13_234138_add_source_composite_index_to_account_transactions.php 同秒前缀，同上：已在 idc / idc_test 执行，改名会改变执行顺序，只能豁免。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "2026_08_23_000001_create_archive_items_table.php",
+            "reason": "与 2026_08_23_000001_sync_email_templates_to_latest_defaults.php 同秒前缀，均来自提交 9d998ea3 且已在 idc / idc_test 执行；改名会改变 Laravel 的文件名排序执行顺序，只能豁免。后续禁止再新增同秒前缀迁移。",
+            "recorded_at": "2026-10-26"
+        },
+        {
+            "file": "2026_08_23_000001_sync_email_templates_to_latest_defaults.php",
+            "reason": "与 2026_08_23_000001_create_archive_items_table.php 同秒前缀，同上：已在 idc / idc_test 执行，改名会改变执行顺序，只能豁免。",
+            "recorded_at": "2026-10-26"
         }
     ]
 }

@@ -17,6 +17,8 @@ final class PaymentGatewayCode
 
     public const WECHAT = 'wechat';
 
+    // 预留：暂无对应插件与受理链路。保留常量是为了让历史数据查询
+    // （第三方网关集合过滤、日志筛选）口径稳定，不要据此以为已支持 Stripe。
     public const STRIPE = 'stripe';
 
     public const MANUAL = 'manual';

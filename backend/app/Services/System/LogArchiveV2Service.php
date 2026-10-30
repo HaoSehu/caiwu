@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\System;
 
 use App\Models\ArchiveItem;
+use App\Support\Pagination;
 use Carbon\CarbonImmutable;
 use Illuminate\Process\Pool;
 use Illuminate\Support\Collection;
@@ -19,7 +20,7 @@ use Throwable;
 /**
  * V2 归档协议实现：planned -> staging -> verified -> published -> purging -> purged。
  *
- * 与旧版 db:archive-logs 的差异：
+ * 与旧版 db:logs:archive 的差异：
  * - pt-archiver 只导出 .part，不带 --purge；
  * - 导出文件流式校验（CSV 表头、行数、ID 边界、SHA-256）通过后才原子发布为最终文件并写入 manifest；
  * - 源数据删除只允许发生在 published 之后，且必须显式 --purge；
@@ -439,7 +440,7 @@ class LogArchiveV2Service
 
         $limit = max(1, min((int) ($filters['limit'] ?? 100), 500));
         $page = isset($filters['page']) ? max(1, (int) $filters['page']) : null;
-        $pageSize = isset($filters['page_size']) ? max(1, min((int) $filters['page_size'], 100)) : null;
+        $pageSize = isset($filters['page_size']) ? Pagination::clamp((int) $filters['page_size']) : null;
         $total = (int) (clone $query)->count();
         $itemsQuery = $query->orderByDesc('id');
         if ($page !== null && $pageSize !== null) {
@@ -477,7 +478,7 @@ class LogArchiveV2Service
     }
 
     /**
-     * 与旧版 db:archive-logs 对齐的阶段前置校验：
+     * 与旧版 db:logs:archive 对齐的阶段前置校验：
      * 凭据文件必须可读、pt-archiver 必须可执行，否则在产生任何暂存物前失败。
      *
      * @param  array<string, mixed>  $config

@@ -199,7 +199,7 @@ class ClientServiceConsoleService
     }
 
     // ══════════════════════════════════════════════════════════════════════
-    // VNC
+    // VNC 远程桌面
     // ══════════════════════════════════════════════════════════════════════
 
     public function getVncUrlForUser(User $user, int $serviceId, array $context = []): array

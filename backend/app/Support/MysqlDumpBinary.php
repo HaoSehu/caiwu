@@ -24,8 +24,6 @@ final class MysqlDumpBinary
     {
         return array_values(array_filter([
             config('database.mysqldump_path'),
-            'D:\\BtSoft\\mysql\\MySQL8.0\\bin\\mysqldump.exe',
-            'D:\\BtSoft\\mysql\\MySQL5.7\\bin\\mysqldump.exe',
             '/www/server/mysql/bin/mysqldump',
             '/usr/bin/mysqldump',
             '/usr/local/mysql/bin/mysqldump',

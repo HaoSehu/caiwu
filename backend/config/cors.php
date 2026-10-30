@@ -29,12 +29,18 @@ $baseOrigins = array_values(array_filter([
 // CDN 已强制 HTTPS：不再为 https 来源补 http 对偶，明文页面发起的跨域请求直接拒绝。
 $allowedOrigins = $baseOrigins;
 
+// 额外来源用正则登记：官网存在裸域与 www 共站的事实，无法用精确字符串覆盖；
+// 换域名时只改这里的环境变量，不必修改本文件。
+$extraOriginPatterns = array_values(array_filter(array_map(
+    static fn (string $pattern): string => trim($pattern),
+    explode(',', (string) env('CORS_EXTRA_ORIGIN_PATTERNS', '#^https://(www\.)?coyjs\.cn$#')),
+)));
+
 return [
     'paths' => ['api/*'],
     'allowed_methods' => ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     'allowed_origins' => $allowedOrigins,
-    // www 端存在裸域与 www 共站的事实（CDN 已强制 HTTPS，仅放行 https 来源）。
-    'allowed_origins_patterns' => ['#^https://(www\.)?coyjs\.cn$#'],
+    'allowed_origins_patterns' => $extraOriginPatterns,
     'allowed_headers' => [
         'Accept',
         'Authorization',

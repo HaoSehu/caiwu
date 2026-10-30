@@ -475,13 +475,9 @@ class InvoiceRefundService
 
     private function completedRefundAmount(Invoice $invoice): float
     {
-        // 口径统一（2026-10-21）：真实退款（funds_moved=1）与历史纯标记（funds_moved=0）
-        // 同表记录、都是「已确认退过」的事实，累计必须全部计入；只算 funds_moved=1
-        // 会让「先标记 30、再真退 100」叠出 130 的超额退款。
-        return round((float) FinanceRefund::query()
-            ->where('invoice_id', (int) $invoice->id)
-            ->where('status', FinanceRefund::STATUS_COMPLETED)
-            ->sum('amount'), 2);
+        // 口径统一（2026-10-21）：真实退款与历史纯标记同表、都是「已确认退过」的事实，
+        // 累计一律计入（见 FinanceRefund::completedAmountForInvoice）。
+        return FinanceRefund::completedAmountForInvoice((int) $invoice->id);
     }
 
     /**

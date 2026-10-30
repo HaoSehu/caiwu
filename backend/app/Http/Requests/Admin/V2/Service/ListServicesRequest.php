@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Requests\Admin\V2\Service;
 
 use App\Http\Requests\Admin\V2\Common\AdminFormRequest;
+use App\Support\Pagination;
 
 class ListServicesRequest extends AdminFormRequest
 {
@@ -21,7 +22,7 @@ class ListServicesRequest extends AdminFormRequest
             'keyword' => ['nullable', 'string', 'max:120'],
             'status' => ['nullable', 'integer'],
             'page' => ['nullable', 'integer', 'min:1'],
-            'page_size' => ['nullable', 'integer', 'min:1', 'max:100'],
+            'page_size' => ['nullable', 'integer', 'min:1', 'max:'.Pagination::MAX_PAGE_SIZE],
             'pageSize' => ['prohibited'],
             'per_page' => ['prohibited'],
         ];

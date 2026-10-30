@@ -101,6 +101,7 @@ class AdminVerificationQueryService
             'email' => $privacy->email($email),
             'phone' => $privacy->phone($phone),
             'real_name' => $privacy->name($realName),
+            'id_card' => $privacy->idCardRaw($idCard),
             'id_card_masked' => $privacy->idCard($idCard),
             'verification_status' => (int) $user->verification_status,
             'verification_message' => (string) $user->verification_message,
@@ -140,6 +141,7 @@ class AdminVerificationQueryService
             $list = collect([[
                 'id' => 0,
                 'real_name' => $privacy->name($realName),
+                'id_card' => $privacy->idCardRaw($idCard),
                 'id_card_masked' => $privacy->idCard($idCard),
                 'verification_status' => (int) $user->verification_status,
                 'verification_message' => (string) $user->verification_message,
@@ -175,6 +177,7 @@ class AdminVerificationQueryService
         return [
             'id' => (int) $history->id,
             'real_name' => $privacy->name($history->real_name),
+            'id_card' => $privacy->idCardRaw($idCard),
             'id_card_masked' => $privacy->idCard($idCard),
             'verification_status' => (int) $history->verification_status,
             'verification_message' => (string) $history->verification_message,

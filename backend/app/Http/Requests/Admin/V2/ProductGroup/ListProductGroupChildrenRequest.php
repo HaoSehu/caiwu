@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Requests\Admin\V2\ProductGroup;
 
 use App\Http\Requests\Admin\V2\Common\AdminFormRequest;
+use App\Support\Pagination;
 use Illuminate\Validation\Rule;
 
 class ListProductGroupChildrenRequest extends AdminFormRequest
@@ -20,7 +21,7 @@ class ListProductGroupChildrenRequest extends AdminFormRequest
             'group' => ['required', 'integer', 'min:1'],
             'level' => ['required', 'integer', Rule::in([1, 2])],
             'page' => ['sometimes', 'integer', 'min:1'],
-            'page_size' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'page_size' => ['sometimes', 'integer', 'min:1', 'max:'.Pagination::MAX_PAGE_SIZE],
             'per_page' => ['prohibited'],
             'pageSize' => ['prohibited'],
             'keyword' => ['sometimes', 'nullable', 'string', 'max:100'],

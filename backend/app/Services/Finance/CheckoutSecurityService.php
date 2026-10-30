@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace App\Services\Finance;
 
 use App\Constants\InvoiceStatus;
+use App\Constants\InvoiceType;
 use App\Exceptions\BusinessException;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Support\Money;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
@@ -168,14 +170,113 @@ class CheckoutSecurityService
         return self::PAYMENT_SESSION_TTL_SECONDS;
     }
 
+    /**
+     * 支付窗口截止时间唯一计算入口：按 due_date 计费的账单（续费账单、管理员挂账单）及其影子订单
+     * 跟随账期，其余记录按 5 分钟支付会话窗口。
+     *
+     * 续费账单建单后要承载到期前 1/3/5 天提醒与逾期催收，若沿用 5 分钟窗口，
+     * 账单会被请求路径懒清理与定时清理当成过期单取消，催收提醒永不可达、
+     * 用户点开提醒落地页即见"已取消"，续费链路被阻断。
+     * 管理员挂账单同样是"按账期收款"的账单（创建时不扣余额、保持待支付等用户付款），
+     * 5 分钟窗口会让用户在账期内根本无法完成支付。
+     */
     public function paymentSessionExpiresAt(Invoice|Order $record): CarbonImmutable
     {
+        $dueDateWindowEnd = $this->dueDateWindowEnd($record);
+        if ($dueDateWindowEnd instanceof CarbonImmutable) {
+            return $dueDateWindowEnd;
+        }
+
         $createdAt = $record->created_at;
         $base = $createdAt instanceof \DateTimeInterface
             ? CarbonImmutable::instance($createdAt)
             : ($createdAt ? CarbonImmutable::parse((string) $createdAt) : CarbonImmutable::now());
 
         return $base->addSeconds(self::PAYMENT_SESSION_TTL_SECONDS);
+    }
+
+    /**
+     * 账单过期清理的候选集 SQL 约束：请求路径懒清理与定时任务共用同一处口径。
+     *
+     * 按 due_date 计窗口的续费账单在账期内不会过期，先用 SQL 把它们剔出候选集，
+     * 避免每次扫描都把账期内续费账单（定时任务还带 product 预载）逐条装载进内存再判定。
+     * due_date 已过（早于今天）的续费账单仍留在候选集内，由正常清理路径按同一判据关闭。
+     * 管理员挂账单的标记在 config_snapshot JSON 内：MySQL 可以用 JSON_EXTRACT 判定，
+     * 但该表达式无法命中索引（每次都要回表逐行求值），因此这里不做 SQL 收窄，仍留在候选集，
+     * 由 CheckoutService::cancelExpiredUnpaidInvoice() 的 admin_manual 豁免拒绝。
+     */
+    public function applyExpiredInvoiceSweepScope(Builder $query): void
+    {
+        $today = CarbonImmutable::now()->toDateString();
+
+        $query->where(function (Builder $builder) use ($today): void {
+            $builder->where('type', '!=', InvoiceType::RENEW)
+                ->orWhereNull('due_date')
+                ->orWhereDate('due_date', '<', $today);
+        });
+    }
+
+    /**
+     * 订单过期清理的候选集 SQL 约束：与账单侧同源。
+     *
+     * 影子续费订单跟随关联账单按 due_date 计窗口，剔除「关联账单是续费且账期未过」的订单；
+     * 挂账订单的标记同样在 config_snapshot JSON 内，可用 JSON_EXTRACT 判定但不可索引，
+     * 因此不做 SQL 收窄，仍留在候选集，由 OrderService::cancelExpiredPendingOrder()
+     * 的 admin_manual 豁免拒绝。
+     */
+    public function applyExpiredOrderSweepScope(Builder $query): void
+    {
+        $today = CarbonImmutable::now()->toDateString();
+
+        $query->whereDoesntHave('invoice', function (Builder $invoiceQuery) use ($today): void {
+            $invoiceQuery->where('type', InvoiceType::RENEW)
+                ->whereDate('due_date', '>=', $today);
+        });
+    }
+
+    /**
+     * 按 due_date（账期截止日）计费的窗口结束时间：续费账单、管理员挂账单及其影子订单。
+     *
+     * 以 due_date 当日 23:59:59 为界，与逾期提醒口径（due_date 早于今天才算逾期）保持一致；
+     * 订单表没有 due_date 列，影子订单跟随关联账单。
+     */
+    private function dueDateWindowEnd(Invoice|Order $record): ?CarbonImmutable
+    {
+        $invoice = $record instanceof Invoice
+            ? $record
+            : ($record->relationLoaded('invoice') ? $record->invoice : $record->invoice()->first());
+
+        if (! $invoice instanceof Invoice || ! $this->isDueDateBilledInvoice($invoice)) {
+            return null;
+        }
+
+        $dueDate = $invoice->due_date;
+        if ($dueDate === null) {
+            return null;
+        }
+
+        // due_date 为 date cast，统一按字符串解析（与催收提醒链路口径一致：due_date 当日 23:59:59 截止）
+        return CarbonImmutable::parse((string) $dueDate)->endOfDay();
+    }
+
+    /**
+     * 按 due_date 计费的账单口径唯一判断：系统续费账单，或管理端手动开通/补录的挂账单。
+     */
+    private function isDueDateBilledInvoice(Invoice $invoice): bool
+    {
+        return (string) $invoice->type === InvoiceType::RENEW || $this->isAdminManualInvoice($invoice);
+    }
+
+    /**
+     * 管理员挂账单判断：创建时 config_snapshot 打了 admin_manual 标记
+     * （createDirect 直接写入，createFromOrder 从订单快照继承）。
+     * 挂账单不参与支付会话窗口自动清理，与订单侧 OrderService::isAdminManualOrder 同口径。
+     */
+    public function isAdminManualInvoice(Invoice $invoice): bool
+    {
+        $snapshot = $invoice->config_snapshot;
+
+        return is_array($snapshot) && filter_var($snapshot['admin_manual'] ?? false, FILTER_VALIDATE_BOOL);
     }
 
     public function paymentRecordExpiresAt(Payment $payment): CarbonImmutable
@@ -195,7 +296,7 @@ class CheckoutSecurityService
 
     public function issueInvoicePaymentSession(Invoice $invoice, int $userId): array
     {
-        $payableAmount = $this->resolveInvoicePayableAmount($invoice);
+        $payableAmount = $invoice->payableAmount();
         if ((int) $invoice->status !== InvoiceStatus::UNPAID) {
             return [
                 'session_token' => '',
@@ -236,7 +337,7 @@ class CheckoutSecurityService
 
         throw_if(! is_array($payload), new BusinessException('支付会话已失效，请刷新页面后重试'));
 
-        $currentPayableAmount = Money::format($this->resolveInvoicePayableAmount($invoice));
+        $currentPayableAmount = Money::format($invoice->payableAmount());
 
         throw_if(
             (int) ($payload['invoice_id'] ?? 0) !== (int) $invoice->id
@@ -413,11 +514,6 @@ class CheckoutSecurityService
         }
 
         return $payload;
-    }
-
-    private function resolveInvoicePayableAmount(Invoice $invoice): float
-    {
-        return round(max((float) ($invoice->amount ?? 0) - (float) ($invoice->paid_amount ?? 0), 0), 2);
     }
 
     private function hashClientIp(string $clientIp): string

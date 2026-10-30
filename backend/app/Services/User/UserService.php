@@ -898,21 +898,6 @@ class UserService
             ?? $collection->first($isRefundablePayment);
     }
 
-    private function resolveInvoiceDisplayStatus(Invoice $invoice, ?array $paymentSummary): array
-    {
-        if (($paymentSummary['status'] ?? null) === PaymentStatus::REFUNDED || (int) $invoice->status === InvoiceStatus::REFUNDED) {
-            return [
-                'status' => InvoiceStatus::REFUNDED,
-                'status_label' => '已退款',
-            ];
-        }
-
-        return [
-            'status' => (int) $invoice->status,
-            'status_label' => InvoiceStatus::$labels[$invoice->status] ?? (string) $invoice->status,
-        ];
-    }
-
     private function resolvePaymentStatusLabel(int $status): string
     {
         return match ($status) {

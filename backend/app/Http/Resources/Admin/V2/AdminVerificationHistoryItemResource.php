@@ -20,6 +20,7 @@ class AdminVerificationHistoryItemResource extends JsonResource
         return [
             'id' => (int) ($history['id'] ?? 0),
             'real_name' => (string) ($history['real_name'] ?? ''),
+            'id_card' => $history['id_card'] ?? null,
             'id_card_masked' => (string) ($history['id_card_masked'] ?? ''),
             'verification_status' => (int) ($history['verification_status'] ?? 0),
             'verification_status_label' => User::verificationStatusLabel((int) ($history['verification_status'] ?? 0)),

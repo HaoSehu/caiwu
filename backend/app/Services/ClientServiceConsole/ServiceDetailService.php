@@ -64,7 +64,7 @@ class ServiceDetailService
         $this->bindingResolver = $bindingResolver ?? new PluginBindingResolver;
     }
 
-    // ── Public API ─────────────────────────────────────────────────────────
+    // ── 公开 API ───────────────────────────────────────────────────────
 
     public function getServiceConfigForUser(User $user, int $serviceId): array
     {
@@ -401,7 +401,7 @@ class ServiceDetailService
         ]));
     }
 
-    // ── Remote sync (shared with power/vnc sub-services via this class) ───
+    // ── 远端同步（与 power/vnc 子服务共用本类） ────────────────────────
 
     public function syncServiceFromRemote(Service $service, array $host, array $runtime = [], array $nat = []): void
     {
@@ -456,8 +456,9 @@ class ServiceDetailService
             'last_synced_at' => now()->format('Y-m-d H:i:s'),
         ]);
 
+        $upstreamStatus = ServiceStatus::fromUpstreamDomainStatus((string) ($host['domainstatus'] ?? ''));
         $resolvedStatus = $host !== []
-            ? $this->transformService->resolveServiceStatusFromUpstream((string) ($host['domainstatus'] ?? ''))
+            ? $this->transformService->resolveSyncedServiceStatus($service, $upstreamStatus)
             : (int) $service->status;
 
         $service->forceFill([
@@ -467,7 +468,9 @@ class ServiceDetailService
             'expires_at' => $host !== []
                 ? $this->transformService->resolveExpiry($host, $service)
                 : $service->expires_at,
-            'suspended_reason' => $this->resolveConsoleSyncedSuspendedReason($service, $resolvedStatus),
+            'suspended_reason' => $host !== []
+                ? $this->transformService->resolveSyncedSuspendedReason($service, $resolvedStatus, $upstreamStatus)
+                : $service->suspended_reason,
             'provision_data' => $provisionData,
         ])->save();
         $this->serviceBindingWriter()->syncServiceState($service, null, $provisionData);
@@ -475,22 +478,6 @@ class ServiceDetailService
         // 上游同步会改写概览输出字段（name/status/expires_at），必须失效该用户的服务概览缓存，
         // 否则客户端在 120 秒 TTL 内仍看到同步前的旧状态。
         app(ServiceOverviewService::class)->forgetGroupedOverviewCache((int) $service->user_id);
-    }
-
-    private function resolveConsoleSyncedSuspendedReason(Service $service, int $resolvedStatus): ?string
-    {
-        $localReason = trim((string) ($service->suspended_reason ?? ''));
-
-        if ((int) $service->status === ServiceStatus::SUSPENDED
-            && $localReason !== ''
-            && in_array($resolvedStatus, [ServiceStatus::ACTIVE, ServiceStatus::PENDING, ServiceStatus::SUSPENDED], true)) {
-            return $service->suspended_reason;
-        }
-
-        return $resolvedStatus === ServiceStatus::SUSPENDED
-            && (int) $service->status === ServiceStatus::SUSPENDED
-            ? $service->suspended_reason
-            : null;
     }
 
     public function fetchRemoteState(Service $service, ?Supplier $supplier = null, ?string $jwt = null, bool $freshSnapshot = false): array
@@ -687,7 +674,7 @@ class ServiceDetailService
         return [];
     }
 
-    // ── Upstream context helpers ───────────────────────────────────────────
+    // ── 上游上下文辅助 ─────────────────────────────────────────────────
 
     public function resolveUpstreamContext(Service $service): array
     {
@@ -751,7 +738,7 @@ class ServiceDetailService
         return $supplier instanceof Supplier ? $this->bindingResolver->supplierWithRuntimeCredentials($supplier) : null;
     }
 
-    // ── Module status helpers ──────────────────────────────────────────────
+    // ── 模块状态辅助 ───────────────────────────────────────────────────
 
     public function assertSuccess(array $response, string $action, string $providerKey = ''): void
     {
@@ -857,7 +844,7 @@ class ServiceDetailService
         return 'upstream:'.$this->providerKeyForSupplier($supplier).":reinstall_options:{$supplier->id}:{$hostId}";
     }
 
-    // ── Cache key helpers ──────────────────────────────────────────────────
+    // ── 缓存键辅助 ─────────────────────────────────────────────────────
 
     public function buildDetailResponseCacheKey(Service $service, string $scope = ''): string
     {
@@ -902,7 +889,7 @@ class ServiceDetailService
         }
     }
 
-    // ── Private helpers ────────────────────────────────────────────────────
+    // ── 私有辅助 ───────────────────────────────────────────────────────
 
     private function needsRemoteSnapshotRefresh(Service $service): bool
     {

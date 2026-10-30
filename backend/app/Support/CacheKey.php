@@ -112,6 +112,24 @@ final class CacheKey
     }
 
     /**
+     * VNC 公开 token → 已派生 relay token 的句柄缓存。
+     * 同一公开 token 重复兑换必须复用同一 relay token（刷新/重连/多页签幂等），
+     * 因此需要一个独立于 token 载荷的索引键。
+     */
+    public static function vncRelayHandle(string $publicTokenHash): string
+    {
+        return 'vnc_relay_handle:'.$publicTokenHash;
+    }
+
+    /**
+     * VNC 公开 token 兑换次数计数（防单链接被脚本化无限兑换）。
+     */
+    public static function vncTokenExchangeCount(string $publicTokenHash): string
+    {
+        return 'vnc_token_exchanges:'.$publicTokenHash;
+    }
+
+    /**
      * 验证码缓存（通用包装）。
      */
     public static function verificationCode(string $key): string
@@ -143,6 +161,14 @@ final class CacheKey
     public static function geeTestScript(): string
     {
         return 'geetest:script';
+    }
+
+    /**
+     * GeeTest 已通过 lot_number 防复用缓存（D-05）。
+     */
+    public static function geetestVerifiedLot(string $fingerprint): string
+    {
+        return 'geetest:verified_lot:'.$fingerprint;
     }
 
     /**

@@ -134,6 +134,18 @@ class AdminPrivacy
         return mb_substr($name, 0, 1).str_repeat('*', max(mb_strlen($name) - 1, 1));
     }
 
+    /**
+     * 明文证件号：仅对持有 privacy.view_raw 的账号返回，其余返回 null。
+     *
+     * 展示层据此决定显示明文还是 idCard() 的脱敏值，避免把「是否脱敏」的判定散落到各前端页面。
+     */
+    public function idCardRaw(mixed $value): ?string
+    {
+        $idCard = trim((string) ($value ?? ''));
+
+        return $this->canViewRaw && $idCard !== '' ? $idCard : null;
+    }
+
     public function idCard(mixed $value): string
     {
         $idCard = trim((string) ($value ?? ''));

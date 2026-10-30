@@ -58,13 +58,6 @@ class TicketWorkflowController extends Controller
         return $this->success($image, '图片上传成功');
     }
 
-    public function show(Request $request, int $id)
-    {
-        $ticket = $this->ticketService->findForUser((int) $request->user()->id, $id);
-
-        return $this->success($this->ticketService->detail($ticket));
-    }
-
     public function reply(ReplyRequest $request, int $id)
     {
         $ticket = $this->ticketService->findForUser((int) $request->user()->id, $id);
@@ -78,14 +71,6 @@ class TicketWorkflowController extends Controller
         );
 
         return $this->success($reply, '回复成功');
-    }
-
-    public function recall(Request $request, int $id, int $replyId)
-    {
-        $ticket = $this->ticketService->findForUser((int) $request->user()->id, $id);
-        $this->ticketService->recallReply($ticket, $replyId, $request->user()->id);
-
-        return $this->success(null, '消息已撤回');
     }
 
     public function close(Request $request, int $id)

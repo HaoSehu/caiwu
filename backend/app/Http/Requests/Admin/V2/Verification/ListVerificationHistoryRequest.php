@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Requests\Admin\V2\Verification;
 
 use App\Http\Requests\Admin\V2\Common\AdminFormRequest;
+use App\Support\Pagination;
 
 class ListVerificationHistoryRequest extends AdminFormRequest
 {
@@ -12,7 +13,7 @@ class ListVerificationHistoryRequest extends AdminFormRequest
     {
         return [
             'page' => ['nullable', 'integer', 'min:1'],
-            'page_size' => ['nullable', 'integer', 'min:1', 'max:100'],
+            'page_size' => ['nullable', 'integer', 'min:1', 'max:'.Pagination::MAX_PAGE_SIZE],
             'per_page' => ['prohibited'],
             'pageSize' => ['prohibited'],
         ];

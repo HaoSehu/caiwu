@@ -7,6 +7,7 @@ namespace App\Http\Requests\Admin\V2\Order;
 use App\Constants\OrderType;
 use App\Http\Requests\Admin\V2\Common\AdminFormRequest;
 use App\Http\Requests\Concerns\HasDateRangeFilter;
+use App\Support\Pagination;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
@@ -29,7 +30,7 @@ class ListOrdersRequest extends AdminFormRequest
             'end_date' => ['nullable', 'date_format:Y-m-d'],
             'date_range' => ['prohibited'],
             'page' => ['nullable', 'integer', 'min:1'],
-            'page_size' => ['nullable', 'integer', 'min:1', 'max:100'],
+            'page_size' => ['nullable', 'integer', 'min:1', 'max:'.Pagination::MAX_PAGE_SIZE],
             'pageSize' => ['prohibited'],
             'per_page' => ['prohibited'],
         ];

@@ -557,14 +557,14 @@ class ScheduleTaskService
                 'label' => '未付款账单清理',
                 'value' => $config['pending_order_cleanup_enabled'] ? '已开启' : '已关闭',
                 'note' => $config['pending_order_cleanup_enabled']
-                    ? '未付款订单、账单和充值 5 分钟后自动取消，任务周期：'
+                    ? '未付款订单、账单和充值 5 分钟后自动取消；挂账订单不按 5 分钟取消，只在关联账单被取消超 7 天后收敛为已取消。任务周期：'
                         .AutomationScheduleExpression::describe(
                             (string) $config['order_cleanup_schedule_mode'],
                             (string) $config['order_cleanup_schedule_time'],
                             AutomationScheduleExpression::MODE_EVERY_FIFTEEN_MINUTES,
                             '00:00:00'
                         )
-                    : '不会自动取消未付款账单',
+                    : '不会自动取消未付款账单；关联账单已被取消的挂账订单仍会自动收敛为已取消',
             ],
         ];
     }

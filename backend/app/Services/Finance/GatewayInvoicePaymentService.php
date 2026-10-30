@@ -56,7 +56,10 @@ class GatewayInvoicePaymentService
 
         $traceId = $this->resolveTraceId($context, "{$gateway}:invoice:{$invoice->id}");
         $paymentType = trim((string) ($context['payment_type'] ?? ''));
-        $lockKey = "lock:pay:{$gateway}:invoice:{$invoice->id}";
+        // 账单级支付锁与余额支付（BalanceInvoicePaymentService）、组合支付（MixPaymentService）共用同一键：
+        // 同一张账单同一时刻只允许一个支付入口推进，否则并发「余额支付 + 扫码支付」会各建一笔支付单，
+        // 后到付款方只能走异常入账转余额（用户视角：付了两次、账单仍只付清一次）。
+        $lockKey = "lock:pay:invoice:{$invoice->id}";
 
         $payload = $this->withLock($lockKey, 20, function () use ($invoice, $user, $traceId, $gateway, $paymentType) {
             return DB::transaction(function () use ($invoice, $user, $traceId, $gateway, $paymentType) {
@@ -70,7 +73,7 @@ class GatewayInvoicePaymentService
                     new BusinessException('账单状态异常，无法支付')
                 );
 
-                $amount = round((float) $lockedInvoice->amount - (float) ($lockedInvoice->paid_amount ?? 0), 2);
+                $amount = $lockedInvoice->payableAmount();
                 throw_if($amount <= 0, new BusinessException('无需支付'));
 
                 $payment = Payment::query()

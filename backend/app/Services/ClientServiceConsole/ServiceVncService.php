@@ -25,6 +25,9 @@ class ServiceVncService
 
     private const VNC_RELAY_TOKEN_TTL_SECONDS = 60;
 
+    /** 单个公开 token 允许的最大兑换次数（刷新/重连的合理上限）。 */
+    private const VNC_MAX_EXCHANGES_PER_TOKEN = 30;
+
     public function __construct(
         private readonly OperationLogService $operationLogService,
         private readonly ServiceDetailService $detailService,
@@ -242,21 +245,37 @@ class ServiceVncService
     public function resolvePublicVncTokenPayload(string $token): array
     {
         $params = $this->consumeVncLaunchToken($token);
-        $relayToken = bin2hex(random_bytes(24));
-        $relayPayload = $params;
-        // relay 建连仅需 host/port/path/encrypt/origin，不落明文 VNC 密码到 Redis。
-        unset($relayPayload['password']);
-        Cache::store('redis_volatile')->put(CacheKey::vncToken($relayToken), array_merge($relayPayload, [
-            'token_scope' => 'relay',
-            'public_token_hash' => hash('sha256', $token),
-        ]), now()->addSeconds(self::VNC_RELAY_TOKEN_TTL_SECONDS));
+        $publicTokenHash = hash('sha256', $token);
 
-        $this->safeLog('info', '[VNC] 公开 token 已换取 relay token', [
-            'service_id' => (int) ($params['service_id'] ?? 0),
-            'token_hash' => hash('sha256', $token),
-            'relay_token_hash' => hash('sha256', $relayToken),
-            'has_password' => trim((string) ($params['password'] ?? '')) !== '',
-        ]);
+        $this->assertVncExchangeQuota($publicTokenHash);
+
+        $relayToken = $this->reusableRelayToken($publicTokenHash);
+
+        if ($relayToken === null) {
+            $relayToken = bin2hex(random_bytes(24));
+            $relayPayload = $params;
+            // relay 建连仅需 host/port/path/encrypt/origin，不落明文 VNC 密码到 Redis。
+            unset($relayPayload['password']);
+            Cache::store('redis_volatile')->put(CacheKey::vncToken($relayToken), array_merge($relayPayload, [
+                'token_scope' => 'relay',
+                'public_token_hash' => $publicTokenHash,
+            ]), now()->addSeconds(self::VNC_RELAY_TOKEN_TTL_SECONDS));
+
+            // 记录公开 token 与 relay token 的映射：同一公开 token 在其有效期内只派生一次 relay，
+            // 页面刷新/重连/多页签重复兑换得到同一个 relay token，避免每次兑换都签发新凭证。
+            Cache::store('redis_volatile')->put(
+                CacheKey::vncRelayHandle($publicTokenHash),
+                $relayToken,
+                now()->addSeconds(self::VNC_RELAY_TOKEN_TTL_SECONDS)
+            );
+
+            $this->safeLog('info', '[VNC] 公开 token 已换取 relay token', [
+                'service_id' => (int) ($params['service_id'] ?? 0),
+                'token_hash' => $publicTokenHash,
+                'relay_token_hash' => hash('sha256', $relayToken),
+                'has_password' => trim((string) ($params['password'] ?? '')) !== '',
+            ]);
+        }
 
         return [
             'token' => $relayToken,
@@ -266,6 +285,51 @@ class ServiceVncService
             'target' => (string) ($params['target'] ?? ''),
             'expires_in' => self::VNC_RELAY_TOKEN_TTL_SECONDS,
         ];
+    }
+
+    /**
+     * 单个公开 token 的兑换次数上限：正常使用是「打开一次 + 刷新/重连若干次」，
+     * 30 次足以覆盖浏览器重连，又能阻止拿到链接后脚本化反复兑换。
+     *
+     * 注意：relay token 已按公开 token 幂等复用（见 reusableRelayToken），本计数挡的是
+     * 「同一公开 token 被反复兑换」的请求量，不是「会派生多个 relay 凭证」。
+     */
+    private function assertVncExchangeQuota(string $publicTokenHash): void
+    {
+        $cache = Cache::store('redis_volatile');
+        $countKey = CacheKey::vncTokenExchangeCount($publicTokenHash);
+
+        // add() 是原子的「键不存在才写入」，首次兑换即建键并带上 TTL。
+        // 先 has() 再 put() 的两步写法在并发首帧下会把计数重复写成 1，等于放大配额。
+        if ($cache->add($countKey, 1, now()->addSeconds(self::VNC_TOKEN_TTL_SECONDS))) {
+            return;
+        }
+
+        $attempts = (int) $cache->increment($countKey);
+
+        if ($attempts > self::VNC_MAX_EXCHANGES_PER_TOKEN) {
+            $this->safeLog('warning', '[VNC] 公开 token 兑换次数超限', [
+                'token_hash' => $publicTokenHash,
+                'attempts' => $attempts,
+            ]);
+
+            throw new BusinessException('VNC 链接使用次数过多，请重新获取', 42900, 429);
+        }
+    }
+
+    private function reusableRelayToken(string $publicTokenHash): ?string
+    {
+        $cache = Cache::store('redis_volatile');
+        $relayToken = $cache->get(CacheKey::vncRelayHandle($publicTokenHash));
+
+        if (! is_string($relayToken) || $relayToken === '') {
+            return null;
+        }
+
+        $relayPayload = $cache->get(CacheKey::vncToken($relayToken));
+
+        // relay token 已过期（60 秒短 TTL）时不再复用，直接派生新凭证。
+        return is_array($relayPayload) && ! empty($relayPayload) ? $relayToken : null;
     }
 
     private function withCachedVncCredentials(Service $service, array $vncParams): array
