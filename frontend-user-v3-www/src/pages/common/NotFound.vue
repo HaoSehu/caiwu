@@ -6,7 +6,7 @@
       <p>你访问的页面可能已迁移，或者链接地址有误。</p>
       <div class="not-found-actions">
         <el-button type="primary" @click="router.push('/')">返回首页</el-button>
-        <el-button @click="router.back()">返回上一页</el-button>
+        <el-button @click="goBack">返回上一页</el-button>
       </div>
       <div class="not-found-alt-links">
         <router-link to="/products">浏览产品</router-link>
@@ -21,6 +21,18 @@
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
+
+// 直接打开 404（无历史栈）时 router.back() 无效，退化为回首页
+function goBack() {
+  const hasHistory = Boolean(
+    window.history.state?.back ?? router.options.history.state.back,
+  )
+  if (hasHistory) {
+    router.back()
+    return
+  }
+  router.push('/')
+}
 </script>
 
 <style scoped lang="scss">
@@ -51,13 +63,13 @@ const router = useRouter()
 
 h1 {
   margin: 0;
-  color: #0f172a;
+  color: $text-color-primary;
   font-size: 28px;
 }
 
 p {
   margin: 12px 0 0;
-  color: #64748b;
+  color: $text-color-secondary;
   line-height: 1.8;
 }
 
@@ -83,6 +95,21 @@ p {
 
   a:hover {
     color: $color-primary;
+  }
+}
+
+@media (max-width: $breakpoint-mobile-max) {
+  .not-found-card {
+    padding: 24px 18px;
+    border-radius: 14px;
+  }
+
+  .not-found-code {
+    font-size: 44px;
+  }
+
+  h1 {
+    font-size: 22px;
   }
 }
 </style>

@@ -324,8 +324,7 @@ watch(
 
 <style scoped lang="scss">
 .container {
-  width: min(1200px, calc(100% - 48px));
-  margin: 0 auto;
+  @include site-container;
 }
 
 .product-tabs-section {
@@ -340,7 +339,7 @@ watch(
 
 .product-tabs__title {
   margin: 0;
-  color: #0f172a;
+  color: $text-color-heading;
   font-size: clamp(26px, 2.4vw, 30px);
   font-weight: 700;
   line-height: 1.28;
@@ -388,7 +387,7 @@ watch(
   padding: 8px 2px 16px;
   border: none;
   background: transparent;
-  color: #556274;
+  color: $text-color-secondary;
   font-size: 15px;
   font-weight: 500;
   line-height: 1.5;
@@ -461,7 +460,7 @@ watch(
 .product-card__title {
   flex: 1;
   min-width: 0;
-  color: #111827;
+  color: $text-color-heading;
   font-size: 16px;
   font-weight: 600;
   line-height: 1.4;
@@ -514,7 +513,7 @@ watch(
   }
 }
 
-@media (max-width: 1180px) {
+@media (max-width: $breakpoint-wide) {
   .product-tabs__grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -530,7 +529,7 @@ watch(
   }
 }
 
-@media (max-width: 640px) {
+@media (max-width: $breakpoint-compact) {
   .product-tabs-section {
     padding: 48px 0 56px;
   }

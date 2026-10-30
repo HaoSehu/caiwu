@@ -201,8 +201,7 @@ function openNotice(item) {
 
 <style scoped lang="scss">
 .container {
-  width: min(1200px, calc(100% - 48px));
-  margin: 0 auto;
+  @include site-container;
 }
 
 .news-section {
@@ -218,7 +217,7 @@ function openNotice(item) {
 
 .news-section__title {
   margin: 0;
-  color: #0f172a;
+  color: $text-color-heading;
   font-size: clamp(26px, 2.4vw, 30px);
   font-weight: 700;
   line-height: 1.28;
@@ -372,7 +371,7 @@ function openNotice(item) {
 }
 
 .news-feature__date strong {
-  color: #0f172a;
+  color: $text-color-heading;
   font-size: 32px;
   font-weight: 700;
   line-height: 1;
@@ -391,7 +390,7 @@ function openNotice(item) {
 
 .news-feature__title {
   display: block;
-  color: #111827;
+  color: $text-color-heading;
   font-size: 14px;
   font-weight: 600;
   line-height: 1.5;
@@ -480,8 +479,8 @@ function openNotice(item) {
   gap: 12px;
   padding: 20px 22px;
   border: none;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #f0f5ff, #e0eaff);
+  border-radius: $sm-border-radius;
+  background: linear-gradient(135deg, $color-primary-soft, $color-primary-border);
   text-align: left;
   cursor: pointer;
   appearance: none;
@@ -537,7 +536,7 @@ function openNotice(item) {
 
 .news-promo__title {
   display: block;
-  color: #111827;
+  color: $text-color-heading;
   font-size: 15px;
   font-weight: 600;
   line-height: 1.5;
@@ -579,7 +578,7 @@ function openNotice(item) {
   transform: translateX(2px);
 }
 
-@media (max-width: 1180px) {
+@media (max-width: $breakpoint-wide) {
   .news-board {
     grid-template-columns: 1fr;
   }
@@ -621,7 +620,7 @@ function openNotice(item) {
   }
 }
 
-@media (max-width: 640px) {
+@media (max-width: $breakpoint-compact) {
   .news-section__title {
     font-size: 20px;
   }

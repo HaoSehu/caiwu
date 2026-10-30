@@ -28,10 +28,6 @@ export function isSessionExpired() {
   return isClientSessionExpired()
 }
 
-export function getUserType() {
-  return 'client'
-}
-
 export function touchSessionActivity() {
   touchClientSessionActivity()
 }

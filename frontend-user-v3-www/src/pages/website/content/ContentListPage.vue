@@ -47,6 +47,7 @@
             type="button"
             class="category-tab"
             :class="{ 'is-active': activeCategoryId === 0 }"
+            :aria-pressed="activeCategoryId === 0"
             @click="selectCategory(0)"
           >
             {{ config.allCategoryLabel }}
@@ -58,6 +59,7 @@
             type="button"
             class="category-tab"
             :class="{ 'is-active': activeCategoryId === item.id }"
+            :aria-pressed="activeCategoryId === item.id"
             @click="selectCategory(item.id)"
           >
             {{ item.name }}
@@ -98,8 +100,16 @@
             </article>
           </template>
 
+          <div v-else-if="loadError" class="list-error" role="alert">
+            <p class="list-error__text">内容加载失败，请检查网络后重试</p>
+            <el-button type="primary" @click="retryLoad">重新加载</el-button>
+          </div>
+
+          <!-- role=status：搜到空结果时读屏必须播报，否则用户以为还在加载 -->
           <div v-else-if="!loading" class="list-empty">
             <el-empty
+              role="status"
+              aria-live="polite"
               :description="
                 keyword.trim()
                   ? `未找到与“${keyword.trim()}”相关的内容`
@@ -116,13 +126,15 @@
             </div>
           </div>
 
-          <div v-if="total > pageSize" class="list-panel__pager">
+          <div v-if="total > 0" class="list-panel__pager">
             <el-pagination
               v-model:current-page="page"
               :page-size="pageSize"
+              :page-sizes="PAGE_SIZE_OPTIONS"
               :total="total"
-              layout="total, prev, pager, next"
+              :layout="pagerLayout"
               @current-change="updatePage"
+              @size-change="updatePageSize"
             />
           </div>
         </section>
@@ -153,26 +165,42 @@
         <section class="sidebar-card">
           <div class="sidebar-card__title">{{ config.hotTitle }}</div>
 
-          <div v-if="hotArticles.length" class="ranking-list">
+          <div v-if="sidebarLoading" class="sidebar-hint">加载中…</div>
+          <div v-else-if="sidebarError" class="sidebar-hint">
+            <span>加载失败</span>
+            <el-button link type="primary" @click="retrySidebar"
+              >重试</el-button
+            >
+          </div>
+          <div v-else-if="hotArticles.length" class="ranking-list">
             <router-link
               v-for="(item, index) in hotArticles"
               :key="item.id"
               class="ranking-item"
               :to="buildDetailRoute(item)"
             >
-              <span class="ranking-item__index" :class="`top-${index + 1}`">{{
-                index + 1
-              }}</span>
+              <span
+                class="ranking-item__index"
+                :class="index < 3 ? `top-${index + 1}` : undefined"
+                >{{ index + 1 }}</span
+              >
               <span class="ranking-item__title">{{ item.title }}</span>
             </router-link>
           </div>
-          <el-empty v-else description="暂无数据" />
+          <el-empty v-else role="status" aria-live="polite" description="暂无数据" />
         </section>
 
         <section class="sidebar-card">
           <div class="sidebar-card__title">{{ config.secondaryTitle }}</div>
 
-          <div v-if="recentArticles.length" class="recent-list">
+          <div v-if="sidebarLoading" class="sidebar-hint">加载中…</div>
+          <div v-else-if="sidebarError" class="sidebar-hint">
+            <span>加载失败</span>
+            <el-button link type="primary" @click="retrySidebar"
+              >重试</el-button
+            >
+          </div>
+          <div v-else-if="recentArticles.length" class="recent-list">
             <router-link
               v-for="item in recentArticles"
               :key="item.id"
@@ -185,7 +213,7 @@
               }}</span>
             </router-link>
           </div>
-          <el-empty v-else description="暂无数据" />
+          <el-empty v-else role="status" aria-live="polite" description="暂无数据" />
         </section>
       </aside>
     </div>
@@ -215,15 +243,32 @@ const api = computed(() => siteApi);
 const config = computed(() => getContentConfig(props.contentType, props.scope));
 
 const loading = ref(false);
+// 列表请求失败标记；与「空结果」分开，否则失败会伪装成「暂无内容」
+const loadError = ref(false);
+// 侧栏独立的加载/失败态
+const sidebarLoading = ref(false);
+const sidebarError = ref(false);
 const categories = ref([]);
 const articleList = ref([]);
 const hotArticles = ref([]);
 const recentArticles = ref([]);
 const keyword = ref("");
 const page = ref(1);
-const pageSize = 10;
+const PAGE_SIZE_OPTIONS = [10, 20, 50];
+// 侧栏热门/最新固定最多显示 5 条。概览接口返回 5 条公告 + 6 篇帮助，
+// 不截断会让两类页面的侧栏条数随内容类型漂移。
+const SIDEBAR_ARTICLE_LIMIT = 5;
+const pageSize = ref(10);
 const total = ref(0);
 const activeCategoryId = ref(0);
+
+// 只有一页时不需要「每页条数下拉」和「跳页输入框」：它们改变不了任何结果，
+// 却会占掉小屏分页条的整行宽度。多页时才放出完整布局。
+const pagerLayout = computed(() =>
+  total.value > pageSize.value
+    ? "total, sizes, prev, pager, next, jumper"
+    : "total, prev, pager, next",
+);
 
 const heroKeywords = computed(() => {
   const categoryNames = categories.value.slice(0, 5).map((item) => item.name);
@@ -258,23 +303,53 @@ function normalizeQuery(query) {
   return result;
 }
 
+function parseTimestamp(item) {
+  const value = new Date(item.publish_at || item.created_at || 0).getTime();
+  return Number.isNaN(value) ? 0 : value;
+}
+
+// 概览接口已同时返回分类与「最新若干条」，侧栏热门/最新都从这里派生，
+// 不再额外列表接口打一次（原实现首屏对同一列表接口发两次请求）。
+// 已知语义限制：服务端无按 view_count 排序的能力，热门只能在该类型最新若干条内排序。
+function applySidebarFromOverview(articles) {
+  const pool = Array.isArray(articles) ? articles : [];
+  recentArticles.value = [...pool]
+    .sort((timeA, timeB) => parseTimestamp(timeB) - parseTimestamp(timeA))
+    .slice(0, SIDEBAR_ARTICLE_LIMIT);
+  hotArticles.value = [...pool]
+    .sort((a, b) => Number(b.view_count || 0) - Number(a.view_count || 0))
+    .slice(0, SIDEBAR_ARTICLE_LIMIT);
+}
+
 async function loadOverview(token) {
+  sidebarLoading.value = true;
   try {
     const res = await api.value.contentOverview();
     if (token !== syncToken) return;
     categories.value = res.data?.[config.value.overviewCategoryKey] || [];
+    applySidebarFromOverview(res.data?.[config.value.overviewArticleKey]);
+    sidebarError.value = false;
   } catch {
-    // 分类拉取失败保留空态，错误提示由 HTTP 拦截器统一处理
+    // 分类拉取失败保留空态，错误提示由 HTTP 拦截器统一处理；
+    // 但侧栏需要可重试入口，不能永远停在「暂无数据」
+    if (token === syncToken) {
+      sidebarError.value = true;
+    }
+  } finally {
+    if (token === syncToken) {
+      sidebarLoading.value = false;
+    }
   }
 }
 
 async function loadList(token) {
   loading.value = true;
+  loadError.value = false;
 
   try {
     const params = {
       page: page.value,
-      page_size: pageSize,
+      page_size: pageSize.value,
     };
 
     if (activeCategoryId.value > 0) {
@@ -294,52 +369,17 @@ async function loadList(token) {
       categories.value = res.data?.categories || [];
     }
   } catch {
-    // 请求失败：清空列表，避免展示与当前 URL 不一致的旧数据
+    // 请求失败：清空列表，避免展示与当前 URL 不一致的旧数据，
+    // 并置失败标记，让模板渲染可重试的错误态而不是「暂无内容」
     if (token === syncToken) {
       articleList.value = [];
       total.value = 0;
+      loadError.value = true;
     }
   } finally {
     if (token === syncToken) {
       loading.value = false;
     }
-  }
-}
-
-// 侧边栏数据独立于列表：仅首次进入某个内容类型时拉取一次，翻页/切分类/搜索不再重复请求
-let sidebarLoadedKey = "";
-
-async function loadSidebarContent(token) {
-  const typeKey = config.value.routeBasePath;
-  if (sidebarLoadedKey === typeKey) {
-    return;
-  }
-  try {
-    const res = await api.value[config.value.apiListMethod]({
-      page: 1,
-      page_size: 20,
-    });
-
-    if (token !== syncToken) return;
-    const list = res.data?.list || [];
-    hotArticles.value = [...list]
-      .sort((a, b) => Number(b.view_count || 0) - Number(a.view_count || 0))
-      .slice(0, 5);
-
-    recentArticles.value = [...list]
-      .sort((a, b) => {
-        const parseTimestamp = (item) => {
-          const t = new Date(item.publish_at || item.created_at || 0).getTime();
-          return Number.isNaN(t) ? 0 : t;
-        };
-        const timeA = parseTimestamp(a);
-        const timeB = parseTimestamp(b);
-        return timeB - timeA;
-      })
-      .slice(0, 5);
-    sidebarLoadedKey = typeKey;
-  } catch {
-    // 侧边栏拉取失败保留旧数据，下次进入仍会尝试
   }
 }
 
@@ -354,11 +394,7 @@ async function syncPage() {
   activeCategoryId.value = parseQueryNumber(route.query.category, 0);
 
   try {
-    await Promise.all([
-      loadOverview(token),
-      loadList(token),
-      loadSidebarContent(token),
-    ]);
+    await Promise.all([loadOverview(token), loadList(token)]);
   } catch {
     // 各子请求已内部处理失败，此处兜底避免 unhandled rejection
   }
@@ -389,6 +425,26 @@ function updatePage(nextPage) {
     ...route.query,
     page: nextPage > 1 ? nextPage : undefined,
   });
+}
+
+// 改变每页条数后回到第一页，避免停留在越界页码上
+function updatePageSize(nextSize) {
+  pageSize.value = Number(nextSize) || 10;
+  updatePage(1);
+}
+
+// 列表失败后的显式重试（失败态与空态分离后必须有出口）
+function retryLoad() {
+  loadError.value = false;
+  syncPage();
+}
+
+function retrySidebar() {
+  sidebarError.value = false;
+  // 传 ++syncToken 而不是当前值：loadOverview 用 token !== syncToken 判定「已被更新的
+  // 同步取代」，传当前值只能通过一次；若期间 syncPage 推进了 token，本次重试结果会被丢弃，
+  // 且 finally 里的 token === syncToken 不成立，sidebarLoading 会永久停在 true。
+  loadOverview(++syncToken);
 }
 
 function submitSearch() {
@@ -459,6 +515,9 @@ onBeforeUnmount(() => {
 .content-list-page {
   display: flex;
   flex-direction: column;
+  // 补齐站点统一容器：此前根节点无 max-width、无水平留白，内容在宽屏上贴边
+  @include site-container;
+  padding: 24px 0 56px;
 }
 
 .content-list-layout {
@@ -481,7 +540,7 @@ onBeforeUnmount(() => {
   background:
     radial-gradient(
       circle at top right,
-      rgba(221, 122, 31, 0.12),
+      $color-accent-orange-soft,
       transparent 32%
     ),
     linear-gradient(
@@ -515,7 +574,8 @@ onBeforeUnmount(() => {
 
 .hero-copy h1 {
   color: $text-color-primary;
-  font-size: 20px;
+  // 列表页 h1 与详情页正文 h1 同档，此前 24px 是全站最小的一级标题
+  font-size: $font-size-h1;
   font-weight: 700;
 }
 
@@ -684,7 +744,7 @@ onBeforeUnmount(() => {
   justify-content: flex-end;
   padding: 20px 24px;
 
-  @media (max-width: 640px) {
+  @media (max-width: $breakpoint-compact) {
     flex-wrap: wrap;
     justify-content: center;
     gap: 8px;
@@ -693,6 +753,27 @@ onBeforeUnmount(() => {
 
 .list-empty {
   padding: 40px 20px;
+}
+
+.list-error {
+  padding: 56px 24px;
+  text-align: center;
+}
+
+.list-error__text {
+  margin: 0 0 16px;
+  color: $text-color-secondary;
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.sidebar-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 0 4px;
+  color: $text-color-placeholder;
+  font-size: 13px;
 }
 
 .list-empty__actions {
@@ -789,20 +870,20 @@ onBeforeUnmount(() => {
   font-weight: 700;
   flex-shrink: 0;
 
+  // 12px 文字需 ≥4.5:1，三档配色在 variables 里已校验并注明换值要求
   &.top-1 {
-    // 12px 文字需 ≥4.5:1，原 #d97706/#3b82f6/#b45309 不达标，加深文字色
-    background: #fff0d9;
-    color: #92400e;
+    background: $badge-rank-1-bg;
+    color: $badge-rank-1-text;
   }
 
   &.top-2 {
-    background: #e9f1fb;
-    color: #1d4ed8;
+    background: $badge-rank-2-bg;
+    color: $badge-rank-2-text;
   }
 
   &.top-3 {
-    background: #f7e8de;
-    color: #7c2d12;
+    background: $badge-rank-3-bg;
+    color: $badge-rank-3-text;
   }
 }
 
@@ -853,7 +934,12 @@ onBeforeUnmount(() => {
   }
 }
 
-@media (max-width: 640px) {
+@media (max-width: $breakpoint-compact) {
+  .content-list-page {
+    width: calc(100% - 24px);
+    padding: 16px 0 40px;
+  }
+
   .hero-panel__inner,
   .list-item,
   .sidebar-card {

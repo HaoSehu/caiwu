@@ -87,8 +87,10 @@ export function useNavProductMenu() {
       }))
 
       groupsByType.value = { ...groupsByType.value, [typeValue]: groups }
-    } catch {
-      // silent
+    } catch (error) {
+      // 分组拉取失败不能静默：导航下拉会呈现"分类在但分组空"，是典型难以复现的线上反馈。
+      // 这里只告警不抛出，避免打断导航渲染；不写缓存，下次 activateType 仍会重试。
+      console.warn('[useNavProductMenu] 加载产品分组失败', typeValue, error)
     }
   }
 
@@ -104,15 +106,20 @@ export function useNavProductMenu() {
     if (initialized.value) {
       return
     }
-    initialized.value = true
-    await loadProductTypes()
-    if (activeTypeValue.value) {
-      await loadGroupsForType(activeTypeValue.value)
+    // initialized 必须在首次加载成功后才置位：原先在 await 之前置 true，
+    // 一旦 loadProductTypes 首次失败就直接 await pendingRequest 抛出，
+    // 而 initialized 已是 true，后续任何调用都会被这里短路返回，永不重试。
+    // 失败时这里只告警不向外抛：调用方 useMegaMenu/useMobileNav 都是 initProducts() 直接丢弃返回值的
+    // （不 await），抛出去会变成 unhandled rejection，而导航本身不该因数据失败而中断。
+    try {
+      await loadProductTypes()
+      if (activeTypeValue.value) {
+        await loadGroupsForType(activeTypeValue.value)
+      }
+      initialized.value = true
+    } catch (error) {
+      console.warn('[useNavProductMenu] 初始化产品导航失败，保持未初始化以便重试', error)
     }
-  }
-
-  function reset() {
-    initialized.value = false
   }
 
   return {
@@ -125,6 +132,5 @@ export function useNavProductMenu() {
     activateType,
     loadGroupsForType,
     init,
-    reset,
   }
 }

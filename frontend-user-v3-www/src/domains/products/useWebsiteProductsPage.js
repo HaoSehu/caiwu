@@ -1,4 +1,4 @@
-import { watch } from "vue";
+import { onBeforeUnmount, watch } from "vue";
 import { useWebsiteProductsCatalog } from "./useWebsiteProductsCatalog";
 import { useWebsiteProductsPurchase } from "./useWebsiteProductsPurchase";
 
@@ -46,6 +46,10 @@ export function useWebsiteProductsPage() {
     },
     { immediate: true },
   );
+
+  // 离开页面时必须撤销排队中的空闲预取：回调里持有 purchase.prefetchProductDetails，
+  // 组件卸载后仍会发出详情请求并写已销毁的响应式状态。
+  onBeforeUnmount(cancelIdlePrefetch);
 
   return {
     ...catalog,

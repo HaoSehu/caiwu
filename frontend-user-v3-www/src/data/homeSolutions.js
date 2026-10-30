@@ -3,7 +3,6 @@ const rawIndustrySolutions = [
     key: 'ecommerce',
     label: '电商',
     title: '电商解决方案',
-    subtitle: '业务运营、数据分析、安全防护',
     description: '我们提供一站式的电商解决方案，将业务运营、数据分析、安全防护等多方面服务融为一体，确保您的电商业务顺畅无阻。',
     points: [
       '业务运营优化',
@@ -14,14 +13,11 @@ const rawIndustrySolutions = [
     image: '/img/website/solutions/ecommerce.svg',
     productPath: '/products',
     consultPath: '/help',
-    accent: '#165DFF',
-    accentSoft: 'rgba(22, 93, 255, 0.12)',
   },
   {
     key: 'game',
     label: '游戏',
     title: '游戏云解决方案',
-    subtitle: '高并发接入、弹性扩容、稳定防护',
     description: '针对高并发、低时延和稳定交付场景，整合弹性计算、流量调度、告警巡检和节点容灾能力，支撑游戏业务稳定运行。',
     points: [
       '弹性资源调度',
@@ -32,14 +28,11 @@ const rawIndustrySolutions = [
     image: '/img/website/solutions/game.svg',
     productPath: '/products',
     consultPath: '/help',
-    accent: '#2563EB',
-    accentSoft: 'rgba(37, 99, 235, 0.12)',
   },
   {
     key: 'security',
     label: '安全',
     title: '安全行业解决方案',
-    subtitle: '访问控制、日志审计、资产防护',
     description: '围绕身份认证、权限管理、日志留痕和风险告警构建防护体系，帮助企业把安全能力前置到采购、交付和运维全链路。',
     points: [
       '身份认证与权限隔离',
@@ -50,14 +43,11 @@ const rawIndustrySolutions = [
     image: '/img/website/solutions/security.svg',
     productPath: '/products',
     consultPath: '/help',
-    accent: '#0F766E',
-    accentSoft: 'rgba(15, 118, 110, 0.12)',
   },
   {
     key: 'website',
     label: '网站',
     title: '网站托管解决方案',
-    subtitle: '快速部署、稳定托管、持续运维',
     description: '从建站部署、性能优化到备案支撑和日常巡检，为展示站、业务站和内容站提供一站式上云托管方案。',
     points: [
       '建站资源快速开通',
@@ -68,14 +58,11 @@ const rawIndustrySolutions = [
     image: '/img/website/solutions/website.svg',
     productPath: '/products',
     consultPath: '/help',
-    accent: '#1D4ED8',
-    accentSoft: 'rgba(29, 78, 216, 0.12)',
   },
   {
     key: 'finance',
     label: '金融',
     title: '金融业务解决方案',
-    subtitle: '稳定交付、审计留痕、合规支撑',
     description: '围绕资金处理、敏感操作留痕、故障兜底 and 高可用资源编排，帮助金融场景建立更稳妥的基础设施与运维体系。',
     points: [
       '账单与计费链路清晰',
@@ -86,14 +73,11 @@ const rawIndustrySolutions = [
     image: '/img/website/solutions/finance.svg',
     productPath: '/products',
     consultPath: '/help',
-    accent: '#1E40AF',
-    accentSoft: 'rgba(30, 64, 175, 0.12)',
   },
   {
     key: 'go-global',
     label: '出海',
     title: '出海业务解决方案',
-    subtitle: '全球节点、链路优化、服务协同',
     description: '面向跨境业务提供全球节点部署、区域路由优化、多地资源调度与统一交付支持，帮助业务更快覆盖海外用户。',
     points: [
       '全球节点接入',
@@ -104,14 +88,11 @@ const rawIndustrySolutions = [
     image: '/img/website/solutions/go-global.svg',
     productPath: '/products',
     consultPath: '/help',
-    accent: '#0EA5E9',
-    accentSoft: 'rgba(14, 165, 233, 0.12)',
   },
   {
     key: 'government',
     label: '政府',
     title: '政企上云解决方案',
-    subtitle: '资源统筹、权限管理、长期运维',
     description: '针对政企项目周期长、流程严谨和运维要求高的特点，提供从资源规划、权限管理到持续服务支撑的整套方案。',
     points: [
       '资源统一规划与交付',
@@ -122,8 +103,6 @@ const rawIndustrySolutions = [
     image: '/img/website/solutions/government.svg',
     productPath: '/products',
     consultPath: '/help',
-    accent: '#334155',
-    accentSoft: 'rgba(51, 65, 85, 0.12)',
   },
 ]
 

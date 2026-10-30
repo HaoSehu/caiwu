@@ -55,8 +55,11 @@
             </div>
           </div>
 
+          <!-- role=status：异步加载完成后空态才出现，读屏需被告知结果 -->
           <el-empty
             v-else-if="!loading"
+            role="status"
+            aria-live="polite"
             :description="config.emptyText"
             class="reader-empty"
           />
@@ -253,7 +256,12 @@ const articleContentHtml = computed(() => {
     imageAltFallback:
       currentArticle.value?.title || config.value.detailTitle || "相关配图",
   });
-  return rewriteApiAssetUrlsInHtml(rendered, apiBaseUrl);
+  // 宽表要横向滚动，必须是「外层容器滚动 + 内层 table 保持 table 布局」；
+  // 直接给 table 加 overflow 不生效，加 display:block 又会破坏列宽算法。
+  return rewriteApiAssetUrlsInHtml(rendered, apiBaseUrl).replace(
+    /<table[\s\S]*?<\/table>/g,
+    (table) => `<div class="reader-table-wrap">${table}</div>`,
+  );
 });
 
 async function loadOverview() {
@@ -315,11 +323,16 @@ async function syncPage() {
   }
 }
 
+// 返回列表时保留用户此前的搜索词与页码，避免点击分类后上下文全部丢失
 function goCategoryList(categoryId) {
+  // 页码在换分类后不再有效，只带搜索词
+  const keyword = String(route.query.keyword || "").trim();
+
   router.push({
     path: config.value.routeBasePath,
     query: {
       category: categoryId,
+      ...(keyword ? { keyword } : {}),
     },
   });
 }
@@ -329,6 +342,8 @@ function scrollToAnchor(anchorId) {
     return;
   }
 
+  // 目录点击后需要减掉吸顶头部高度，否则目标标题会被盖住；
+  // 偏移量由 .reader-content 里的 scroll-margin-top 承担（样式侧统一维护）。
   document.getElementById(anchorId)?.scrollIntoView({
     behavior: "smooth",
     block: "start",
@@ -387,7 +402,9 @@ watch(
   display: flex;
   flex-direction: column;
   gap: 16px;
-  padding-top: 24px;
+  // 补齐站点统一容器：此前根节点无宽度约束，正文在宽屏上贴边
+  @include site-container;
+  padding: 24px 0 56px;
 }
 
 .reader-breadcrumb {
@@ -474,6 +491,8 @@ watch(
   line-height: 1.8;
   word-break: break-word;
 
+  // 正文标题四档必须给出字号差：此前四档共用一组声明、都没有 font-size，
+  // 渲染后 h1~h4 会退回浏览器默认以外的同号，读者无法从视觉上判断层级。
   :deep(h1),
   :deep(h2),
   :deep(h3),
@@ -482,6 +501,24 @@ watch(
     color: $text-color-primary;
     font-weight: 700;
     line-height: 1.45;
+    // 目录锚点跳转需避开吸顶头部（$navbar-height 64px）
+    scroll-margin-top: calc($navbar-height + 24px);
+  }
+
+  :deep(h1) {
+    font-size: 28px;
+  }
+
+  :deep(h2) {
+    font-size: 24px;
+  }
+
+  :deep(h3) {
+    font-size: 20px;
+  }
+
+  :deep(h4) {
+    font-size: 16px;
   }
 
   :deep(p) {
@@ -524,9 +561,15 @@ watch(
     color: $text-color-secondary;
   }
 
+  // 正文表格可能超宽：滚动容器必须包在表格外，不能给 table 自己 display:block
+  // （那会让列宽算法失效，各列退化成内容宽度、表头与数据对不齐）
+  :deep(.reader-table-wrap) {
+    margin-bottom: 16px;
+    overflow-x: auto;
+  }
+
   :deep(table) {
     width: 100%;
-    margin-bottom: 16px;
     border-collapse: collapse;
   }
 
@@ -664,6 +707,14 @@ watch(
 @media (max-width: 1200px) {
   .reader-layout {
     grid-template-columns: 1fr;
+  }
+}
+
+// 小屏容器留白与列表页、首页保持一致：48px 侧边距在 390 视口只剩 342px 可读宽度
+@media (max-width: $breakpoint-compact) {
+  .content-reader-page {
+    width: calc(100% - 24px);
+    padding: 16px 0 40px;
   }
 }
 

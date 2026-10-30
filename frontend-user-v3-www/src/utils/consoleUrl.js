@@ -17,7 +17,7 @@ function normalizeConsoleOrigin() {
         return publicUrl.toString().replace(/\/+$/, "");
       }
     } catch {
-      // ignore invalid public site url and continue with runtime fallback
+      // 忽略非法的公开站点地址，继续走运行时兜底
     }
   }
 
@@ -101,8 +101,21 @@ export function buildConsoleUrl(path = "/client/dashboard", query = {}) {
   }
 }
 
+// 判断「这条路径是不是站内相对的控制台路径」（导航配置里的 link.to 那种）。
+// 刻意不经过 normalizeConsolePath：那个函数为了防开放重定向会把绝对 URL 回落成
+// "/client/dashboard"，于是对任何绝对 URL 都恒返回 true。调用方既会传站内相对路径，
+// 也会传 buildConsoleUrl 的返回值（解析出控制台源站时是绝对 URL），两种都要判准。
 export function isConsolePath(path = "") {
-  return normalizeConsolePath(path).startsWith("/client/");
+  const normalized = String(path || "").trim();
+  if (!normalized.startsWith("/") || normalized.startsWith("//")) {
+    return false;
+  }
+
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(normalized)) {
+    return false;
+  }
+
+  return normalized.startsWith("/client/");
 }
 
 export function navigateToConsole(path = "/client/dashboard", query = {}) {

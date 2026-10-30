@@ -48,7 +48,10 @@ export function useNavContentMenu(contentType) {
         caches[contentType] = { data: list, timestamp: Date.now() }
         items.value = list
       })
-      .catch(() => {
+      .catch((error) => {
+        // 与 useNavProductMenu 同构：原先完全静默，导航面板会出现"入口在、列表空"却无任何线索。
+        // 只告警不抛出；失败不写缓存（cache.data 保持 null），下次 init/load 会重新请求。
+        console.warn('[useNavContentMenu] 加载内容列表失败', contentType, error)
         items.value = []
       })
       .finally(() => {
@@ -61,8 +64,16 @@ export function useNavContentMenu(contentType) {
 
   async function init() {
     if (initialized.value) return
-    initialized.value = true
+    // 与 useNavProductMenu 同构修复：initialized 原先在 await 前置位，
+    // load() 首次失败后再次调用会被这里短路，导航内容永不重试。
     await load()
+    // 注意与产品导航的差异：本 hook 的 load() 在 promise 链里自带 .catch，
+    // 失败时只是把 items 清空、缓存 data 仍为 null，load() 本身不会抛错。
+    // 所以不能把"await 走完"当成成功——必须确认缓存真的写入了才置位，
+    // 否则首次失败同样会被永久短路。空数组属于合法成功结果（[] 是真值）。
+    if (caches[contentType].data) {
+      initialized.value = true
+    }
   }
 
   const activeCategory = ref(null)

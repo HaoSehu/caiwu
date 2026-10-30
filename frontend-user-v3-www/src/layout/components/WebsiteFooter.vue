@@ -35,7 +35,7 @@
 
         <div class="footer-columns">
           <div class="footer-col">
-            <h3>产品</h3>
+            <h2>产品</h2>
             <router-link
               v-for="item in seoLandingFooterLinks"
               :key="item.to"
@@ -46,15 +46,23 @@
           </div>
 
           <div class="footer-col">
-            <h3>解决方案</h3>
-            <router-link to="/products">电商行业</router-link>
-            <router-link to="/products">游戏行业</router-link>
-            <router-link to="/products">金融行业</router-link>
-            <router-link to="/products">出海业务</router-link>
+            <h2>解决方案</h2>
+            <!-- 原先 4 条全部 to="/products"，是 4 个指向同一处的死链，语义上也没有对应用户目标。
+                 现按 src/data/seoLandingMeta.js 与 src/data/seoLanding/<slug>.js 的真实落地页逐条判定：
+                 · 游戏行业 → /high-defense-server：落地页 description/keywords/场景段明确写"游戏、游戏服务器防护、
+                   游戏业务入口"，属真实语义映射，改为链接。
+                 · 出海业务 → /hong-kong-server：落地页 title 为"面向出海与跨境访问的云服务器"，属真实语义映射，改为链接。
+                 · 电商行业、金融行业：现有落地页只有 云服务器/香港/美国/高防/云电脑 五类，
+                   均未覆盖电商与金融行业诉求；强行指向 /cloud-server 会让用户落到通用页，等于换个地址继续"假装可点"，
+                   故保留为静态文本（不可点击、无 hover 变色），等真有对应行业页时再改回链接。 -->
+            <span class="footer-col__static">电商行业</span>
+            <router-link to="/high-defense-server">游戏行业</router-link>
+            <span class="footer-col__static">金融行业</span>
+            <router-link to="/hong-kong-server">出海业务</router-link>
           </div>
 
           <div class="footer-col">
-            <h3>支持</h3>
+            <h2>支持</h2>
             <router-link to="/notices">站点公告</router-link>
             <router-link to="/help">帮助中心</router-link>
             <a :href="consoleUrl('/client/tickets')">工单系统</a>
@@ -64,7 +72,7 @@
           </div>
 
           <div class="footer-col">
-            <h3>账户</h3>
+            <h2>账户</h2>
             <a :href="consoleUrl('/client/register')">免费注册</a>
             <a :href="consoleUrl('/client/login')">账户登录</a>
             <a :href="consoleUrl('/client/dashboard')">进入控制台</a>
@@ -134,14 +142,13 @@ function handleFooterLogoError() {
 // 页脚原本与页头共用 .container：抽成独立组件后 scoped 选择器不再跨组件生效，
 // 因此这里复制一份同定义（页头那份仍留在 WebsiteLayout.vue）。
 .container {
-  width: min(1200px, calc(100% - 48px));
-  margin: 0 auto;
+  @include site-container;
 }
 
 .site-footer {
   margin-top: auto;
   padding: 56px 0 0;
-  background: #f4f7fc;
+  background: $bg-color-muted;
   border-top: 1px solid $divider-color;
 }
 
@@ -188,7 +195,7 @@ function handleFooterLogoError() {
   color: $text-color-inverse;
   font-size: 16px;
   font-weight: 600;
-  border-radius: 8px;
+  border-radius: $btn-border-radius-lg;
   white-space: nowrap;
 }
 
@@ -242,11 +249,13 @@ function handleFooterLogoError() {
   min-width: 0;
 }
 
-.footer-col h3 {
+/* 页脚四列是区块标题：页面没有 h2 父级的 h3 会让读屏层级从 h1 直接跳到 h3 */
+.footer-col h2 {
   margin: 0 0 8px;
   color: $text-color-primary;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
+  line-height: 1.4;
 }
 
 .footer-col a {
@@ -260,6 +269,16 @@ function handleFooterLogoError() {
 
 .footer-col a:hover {
   color: $color-primary;
+}
+
+/* 无真实落地页的行业项：按静态文本呈现，视觉上与相邻链接同排同字号，
+   但不给主色与 hover，避免"看起来可点其实点了没反应"。 */
+.footer-col__static {
+  color: $text-color-placeholder;
+  font-size: 13px;
+  line-height: 1;
+  padding: 6px 0;
+  cursor: default;
 }
 
 .footer-bottom {
@@ -311,7 +330,7 @@ function handleFooterLogoError() {
   }
 }
 
-@media (max-width: 640px) {
+@media (max-width: $breakpoint-compact) {
   .container {
     width: calc(100% - 24px);
   }
@@ -357,7 +376,7 @@ function handleFooterLogoError() {
   }
 }
 
-@media (max-width: 480px) {
+@media (max-width: $breakpoint-tiny) {
   .footer-contact {
     gap: 6px;
   }
@@ -370,11 +389,12 @@ function handleFooterLogoError() {
     gap: 18px 12px;
   }
 
-  .footer-col h3 {
-    font-size: 13px;
+  .footer-col h2 {
+    font-size: 14px;
   }
 
-  .footer-col a {
+  .footer-col a,
+  .footer-col__static {
     font-size: 12px;
   }
 }

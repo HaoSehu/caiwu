@@ -11,8 +11,11 @@
         <el-button @click="router.push('/')">返回首页</el-button>
       </div>
 
+      <!-- role=status：文档地址来自异步配置，取到空值时需读屏播报 -->
       <el-empty
         v-if="!targetUrl"
+        role="status"
+        aria-live="polite"
         description="站点暂未配置该文档地址"
         :image-size="72"
       />
@@ -59,7 +62,15 @@ function openDocument() {
     return;
   }
 
-  window.open(targetUrl.value, "_blank", "noopener,noreferrer");
+  // 浏览器可能拦截弹窗：取返回值判空，为空时提示用户放行后重试。
+  // 注意不能在这里传 noopener/noreferrer 特性——按 HTML 规范这两种特性会让 window.open 恒定返回 null，
+  // 导致每次点击都误报「被拦截」；改为打开后手动切断 opener 引用，达到同样的隔离效果。
+  const opened = window.open(targetUrl.value, "_blank");
+  if (!opened) {
+    ElMessage.warning("弹窗被浏览器拦截，请允许本站弹窗后重试");
+    return;
+  }
+  opened.opener = null;
 }
 </script>
 
@@ -69,7 +80,7 @@ function openDocument() {
   display: grid;
   place-items: center;
   padding: 56px 20px;
-  background: #f5f8fd;
+  background: $bg-color;
 }
 
 .legal-card {
@@ -83,12 +94,13 @@ function openDocument() {
 
 .legal-card h1 {
   margin: 0;
-  color: #0f172a;
+  color: $text-color-primary;
+  font-size: 28px;
 }
 
 .legal-card p {
   margin: 16px 0 0;
-  color: #64748b;
+  color: $text-color-secondary;
   line-height: 1.8;
 }
 
@@ -96,5 +108,20 @@ function openDocument() {
   display: flex;
   gap: 12px;
   margin: 24px 0;
+}
+
+@media (max-width: $breakpoint-mobile-max) {
+  .legal-page {
+    padding: 32px 12px;
+  }
+
+  .legal-card {
+    padding: 20px 16px;
+    border-radius: 14px;
+  }
+
+  .legal-card h1 {
+    font-size: 24px;
+  }
 }
 </style>

@@ -37,7 +37,7 @@ export const useUserStore = defineStore('user', () => {
         await clientAuthApi.logout()
       }
     } catch {
-      // Always clear local state even if the revoke request fails.
+      // 即使注销请求失败也要清除本地状态。
     } finally {
       info.value = null
       removeToken()

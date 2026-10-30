@@ -83,6 +83,10 @@ const props = defineProps({
     type: Boolean,
     default: true,
   },
+  // 说明：曾提供 confirmLoading / confirmDisabled 两个提交态开关，但全仓
+  // 零调用方——本项目所有 MobileSheet 的 confirm 都是同步的本地选择确认，
+  // 唯一的真实提交入口是商品页的 .buy-btn（自带 disabled 三重守卫）。
+  // 按「不保留无调用方的旧代码」清理，需要异步提交态时再按实际场景补。
 });
 
 const emit = defineEmits([
@@ -153,7 +157,7 @@ function handleCancel() {
   gap: 12px;
   min-height: 46px;
   padding: 0 14px;
-  border-bottom: 1px solid #eef1f5;
+  border-bottom: 1px solid $divider-color;
   flex-shrink: 0;
 }
 

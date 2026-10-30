@@ -56,18 +56,19 @@
       class="container hero-stage"
       @mouseenter="pauseRotation"
       @mouseleave="resumeRotation"
+      @focusin="pauseRotation"
+      @focusout="resumeRotation"
       @touchstart="handleTouchStart"
       @touchend="handleTouchEnd"
     >
-      <aside class="hero-rail" role="tablist" aria-label="产品入口">
+      <aside class="hero-rail" aria-label="产品入口">
         <button
           v-for="(slide, index) in heroSlides"
           :key="slide.key"
           type="button"
-          role="tab"
           class="hero-rail__item"
           :class="{ 'is-active': index === activeIndex }"
-          :aria-selected="index === activeIndex"
+          :aria-current="index === activeIndex ? 'true' : undefined"
           @click="activateSlide(index)"
         >
           <span
@@ -86,12 +87,14 @@
         class="hero-body"
         :class="{ 'hero-body--instant': instantBodyReveal }"
       >
-        <h1 :key="activeSlide.key" class="hero-title">
-          {{ activeSlide.title }}
-        </h1>
-        <p :key="`hero-desc-${activeSlide.key}`" class="hero-desc">
-          {{ activeSlide.desc }}
-        </p>
+        <div class="hero-body__copy" aria-live="polite" aria-atomic="true">
+          <h1 :key="activeSlide.key" class="hero-title">
+            {{ activeSlide.title }}
+          </h1>
+          <p :key="`hero-desc-${activeSlide.key}`" class="hero-desc">
+            {{ activeSlide.desc }}
+          </p>
+        </div>
         <div class="hero-actions">
           <button
             type="button"
@@ -110,18 +113,28 @@
         </div>
       </div>
 
-      <div class="hero-dots" role="tablist" aria-label="轮播指示">
+      <!-- 去掉 tablist 后需有 role 承载 aria-label，group 只表达"一组控件"，不暗示 tab/tabpanel 关系 -->
+      <div class="hero-dots" role="group" aria-label="轮播指示">
         <button
           v-for="(slide, index) in heroSlides"
           :key="`dot-${slide.key}`"
           type="button"
-          role="tab"
           class="hero-dots__item"
           :class="{ 'is-active': index === activeIndex }"
           :aria-label="`切换到 ${slide.railTitle}`"
-          :aria-selected="index === activeIndex"
+          :aria-current="index === activeIndex ? 'true' : undefined"
           @click="activateSlide(index)"
         ></button>
+        <button
+          type="button"
+          class="hero-rotate-toggle"
+          :aria-pressed="rotationPaused"
+          :aria-label="rotationPaused ? '继续自动切换' : '暂停自动切换'"
+          @click="toggleRotation"
+        >
+          <el-icon v-if="rotationPaused"><VideoPlay /></el-icon>
+          <el-icon v-else><VideoPause /></el-icon>
+        </button>
       </div>
 
       <div class="hero-mobile-nav" role="group" aria-label="轮播控制">
@@ -137,21 +150,42 @@
             @click="activateSlide(index)"
           ></button>
         </div>
+        <!-- hero-dots 在 <=992px 被隐藏，这里提供同源的暂停按钮，避免移动端失去 WCAG 2.2.2 的暂停能力 -->
+        <button
+          type="button"
+          class="hero-rotate-toggle"
+          :aria-pressed="rotationPaused"
+          :aria-label="rotationPaused ? '继续自动切换' : '暂停自动切换'"
+          @click="toggleRotation"
+        >
+          <el-icon v-if="rotationPaused"><VideoPlay /></el-icon>
+          <el-icon v-else><VideoPause /></el-icon>
+        </button>
       </div>
     </div>
 
     <div class="container">
       <div class="hero-feature-strip">
-        <article
-          v-for="feature in heroFeatures"
-          :key="feature.key"
-          class="hero-feature"
-          @click="feature.path && router.push(feature.path)"
-        >
-          <span class="hero-feature__kicker">{{ feature.kicker }}</span>
-          <strong class="hero-feature__title">{{ feature.title }}</strong>
-          <p class="hero-feature__desc">{{ feature.desc }}</p>
-        </article>
+        <template v-for="feature in heroFeatures" :key="feature.key">
+          <!-- 有落地页时渲染为原生 button：键盘可聚焦，Enter/Space 直接跳转 -->
+          <button
+            v-if="feature.path"
+            type="button"
+            class="hero-feature hero-feature--link"
+            @click="router.push(feature.path)"
+          >
+            <span class="hero-feature__kicker">{{ feature.kicker }}</span>
+            <strong class="hero-feature__title">{{ feature.title }}</strong>
+            <!-- button 内只允许 phrasing content，这里用 span 承载原 p 的样式，渲染等价 -->
+            <span class="hero-feature__desc">{{ feature.desc }}</span>
+          </button>
+          <!-- 无落地页时保持纯展示的 article，不暴露可点击/可聚焦语义 -->
+          <article v-else class="hero-feature">
+            <span class="hero-feature__kicker">{{ feature.kicker }}</span>
+            <strong class="hero-feature__title">{{ feature.title }}</strong>
+            <p class="hero-feature__desc">{{ feature.desc }}</p>
+          </article>
+        </template>
       </div>
     </div>
   </section>
@@ -169,7 +203,7 @@ import {
 } from "vue";
 import { useRouter } from "vue-router";
 import { ElIcon } from "element-plus/es/components/icon/index.mjs";
-import { ArrowRight } from "@element-plus/icons-vue";
+import { ArrowRight, VideoPause, VideoPlay } from "@element-plus/icons-vue";
 import { resolveApiAssetUrl } from "@/utils/apiAssetUrl";
 
 const props = defineProps({
@@ -195,6 +229,8 @@ const videoSlotA = ref("");
 const videoSlotB = ref("");
 const videoDurations = new Map();
 const activeIndex = ref(0);
+// 用户显式暂停自动切换（WCAG 2.2.2）：与 isHovering 的临时暂停相互独立
+const rotationPaused = ref(false);
 const heroSlides = shallowRef(Object.freeze([]));
 const heroFeatures = shallowRef(Object.freeze([]));
 
@@ -455,6 +491,35 @@ const activePoster = computed(() => String(activeSlide.value?.poster || ""));
 
 const MIN_ROTATION_INTERVAL = 6000;
 const MAX_ROTATION_INTERVAL = 15000;
+// 系统级「减弱动态效果」下自动轮播不启动；用户显式点「继续」时再放开，
+// 否则弱动效用户会被 6~15s 强制换页（WCAG 2.2.2 暂停要求只靠按钮仍可满足，
+// 但把默认行为改成不自动切换才符合 reduce 语义）。
+const reducedMotionQuery =
+  typeof window !== "undefined" && typeof window.matchMedia === "function"
+    ? window.matchMedia("(prefers-reduced-motion: reduce)")
+    : null;
+const prefersReducedMotion = ref(Boolean(reducedMotionQuery?.matches));
+// 用户显式点「继续」后即便系统开启减弱动效也尊重其选择
+const reducedMotionOptIn = ref(false);
+
+function syncReducedMotion(event) {
+  prefersReducedMotion.value = Boolean(event.matches);
+  // 系统偏好中途变化后重新评估当前是否应继续自动切换
+  if (prefersReducedMotion.value && !reducedMotionOptIn.value) {
+    stopRotation();
+  } else if (!isHovering && !rotationPaused.value) {
+    startRotation();
+  }
+}
+
+if (reducedMotionQuery) {
+  if (typeof reducedMotionQuery.addEventListener === "function") {
+    reducedMotionQuery.addEventListener("change", syncReducedMotion);
+  } else if (typeof reducedMotionQuery.addListener === "function") {
+    // 旧 Safari 只实现 addListener
+    reducedMotionQuery.addListener(syncReducedMotion);
+  }
+}
 const PLAYBACK_RETRY_DELAY = 400;
 const MAX_PLAYBACK_RETRIES = 3;
 const HERO_VIDEO_IDLE_TIMEOUT = 1200;
@@ -689,7 +754,11 @@ function queueActiveVideoPlayback(delay = 0) {
 
 function startRotation() {
   stopRotation();
-  if (isHovering) return;
+  // 悬停/焦点临时暂停，以及用户显式暂停，都不允许重启计时器
+  if (isHovering || rotationPaused.value) return;
+  // 减弱动效用户默认不自动换页；rotationPaused 为 false 但用户已在本次会话显式
+  // 点过「继续」时（reducedMotionOptIn）才恢复计时器
+  if (prefersReducedMotion.value && !reducedMotionOptIn.value) return;
   rotationTimer = setTimeout(() => {
     const count = heroSlides.value.length || 1;
     const nextIndex = (activeIndex.value + 1) % count;
@@ -702,9 +771,35 @@ function pauseRotation() {
   stopRotation();
 }
 
-function resumeRotation() {
+function resumeRotation(event) {
+  // focusout 会冒泡：键盘在舞台内部（指示点之间）移动焦点时不应恢复轮播，
+  // 只有焦点真正离开舞台才恢复，否则键盘用户浏览期间轮播仍在后台换页
+  if (
+    event?.type === "focusout" &&
+    event.currentTarget?.contains(event.relatedTarget)
+  ) {
+    return;
+  }
   isHovering = false;
+  // rotationPaused 由用户点击暂停按钮控制，不能被移出/失焦覆盖
+  if (rotationPaused.value) return;
   startRotation();
+}
+
+// 用户主动暂停/继续自动切换：显式意图，独立于 hover 与 focus 的临时暂停
+function toggleRotation() {
+  if (rotationPaused.value) {
+    rotationPaused.value = false;
+    // 显式意图优先于系统 reduce 偏好
+    reducedMotionOptIn.value = true;
+    // 不能复用 resumeRotation()：它无条件把 isHovering 置 false，
+    // 而鼠标此刻可能仍停在舞台内，会把 hover 暂停误清掉并立即启动轮播。
+    // 这里只解除用户暂停，hover 态保持原值。
+    if (!isHovering) startRotation();
+  } else {
+    rotationPaused.value = true;
+    pauseRotation();
+  }
 }
 
 function handleTouchStart(event) {
@@ -917,6 +1012,13 @@ onBeforeUnmount(() => {
   stopRotation();
   stopPlaybackRetry();
   pauseAllVideos();
+  if (reducedMotionQuery) {
+    if (typeof reducedMotionQuery.removeEventListener === "function") {
+      reducedMotionQuery.removeEventListener("change", syncReducedMotion);
+    } else if (typeof reducedMotionQuery.removeListener === "function") {
+      reducedMotionQuery.removeListener(syncReducedMotion);
+    }
+  }
   if (heroVisibilityObserver) {
     heroVisibilityObserver.disconnect();
     heroVisibilityObserver = null;
@@ -930,8 +1032,7 @@ onBeforeUnmount(() => {
 <style scoped lang="scss">
 .container {
   // 与 WebsiteLayout 布局壳的 .container 对齐（1200px），保证首页各 section 左右边缘一致
-  width: min(1200px, calc(100% - 48px));
-  margin: 0 auto;
+  @include site-container;
 }
 
 @media (max-width: $breakpoint-nav) {
@@ -940,7 +1041,7 @@ onBeforeUnmount(() => {
   }
 }
 
-@media (max-width: 640px) {
+@media (max-width: $breakpoint-compact) {
   .container {
     width: calc(100% - 24px);
   }
@@ -949,7 +1050,7 @@ onBeforeUnmount(() => {
 .hero-section {
   position: relative;
   padding: 28px 0 44px;
-  background: #f3f5f8;
+  background: $bg-color-muted;
   isolation: isolate;
 }
 
@@ -1096,7 +1197,7 @@ onBeforeUnmount(() => {
   border: none;
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.36);
-  color: #2c3654;
+  color: $text-color-nav;
   font-size: 16px;
   font-weight: 500;
   text-align: left;
@@ -1110,7 +1211,7 @@ onBeforeUnmount(() => {
 
 .hero-rail__item:hover {
   background: rgba(255, 255, 255, 0.7);
-  color: #111a34;
+  color: $text-color-heading;
   transform: translateX(2px);
 }
 
@@ -1261,6 +1362,39 @@ onBeforeUnmount(() => {
   background: $color-primary-hover;
 }
 
+// 轮播暂停/继续按钮：与指示点同色系，透明底，居中排在指示点之后
+.hero-rotate-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  margin-left: 4px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(44, 54, 84, 0.6);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+    color 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.hero-rotate-toggle:hover {
+  background: rgba(44, 54, 84, 0.08);
+  color: rgba(44, 54, 84, 0.85);
+}
+
+.hero-rotate-toggle:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px $color-primary-a22;
+}
+
 .hero-body {
   position: relative;
   display: flex;
@@ -1270,9 +1404,16 @@ onBeforeUnmount(() => {
   padding: 8px 0 0;
 }
 
+// 标题/描述播报容器：仅承载 aria-live，不改变原有排版
+.hero-body__copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
 .hero-title {
   margin: 0;
-  color: #111a34;
+  color: $text-color-heading;
   font-size: clamp(34px, 4.2vw, 52px);
   font-weight: 700;
   line-height: 1.14;
@@ -1307,7 +1448,7 @@ onBeforeUnmount(() => {
   height: 44px;
   padding: 0 18px;
   border: none;
-  border-radius: 6px;
+  border-radius: $btn-border-radius;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
@@ -1350,7 +1491,7 @@ onBeforeUnmount(() => {
 
 .hero-cta--secondary:hover {
   transform: translateY(-2px);
-  background: #f5f8ff;
+  background: $bg-color-hover;
   border-color: rgba(22, 93, 255, 0.44);
   box-shadow: 0 16px 30px $color-primary-a22;
 }
@@ -1392,6 +1533,28 @@ onBeforeUnmount(() => {
   transition:
     background 0.24s cubic-bezier(0.22, 1, 0.36, 1),
     color 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+// 有落地页时渲染为原生 button：复位 UA 默认样式，保持与原 article 完全一致的视觉
+.hero-feature--link {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  width: 100%;
+  margin: 0;
+  border: 0;
+  border-left: 1px solid $color-primary-a08;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+// 无落地页的 feature 只是展示卡片，不应出现"可点击"的手型光标
+.hero-feature:not(.hero-feature--link) {
+  cursor: default;
 }
 
 .hero-feature::before {
@@ -1446,7 +1609,7 @@ onBeforeUnmount(() => {
 .hero-feature__title {
   display: block;
   margin-top: 8px;
-  color: #111a34;
+  color: $text-color-heading;
   font-size: 15px;
   font-weight: 600;
   line-height: 1.45;
@@ -1463,7 +1626,7 @@ onBeforeUnmount(() => {
   -webkit-line-clamp: 2;
 }
 
-@media (max-width: 1180px) {
+@media (max-width: $breakpoint-wide) {
   .hero-stage {
     grid-template-columns: 220px minmax(0, 1fr);
     grid-template-rows: auto auto auto;
@@ -1562,88 +1725,9 @@ onBeforeUnmount(() => {
     display: none;
   }
 
-  .hero-body {
-    grid-column: 1;
-    grid-row: auto;
-    padding-top: 0;
-  }
-
-  .hero-desc {
-    margin-top: 16px;
-  }
-
-  .hero-actions {
-    margin-top: 22px;
-  }
-
-  .hero-feature-strip {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    margin-top: 22px;
-  }
-
-  .hero-feature {
-    padding: 16px 18px;
-    border-left: none !important;
-    border-top: 1px solid $color-primary-a08;
-  }
-
-  .hero-feature:nth-child(-n + 2) {
-    border-top: none;
-  }
-
-  .hero-feature:nth-child(odd) {
-    border-right: 1px solid $color-primary-a08;
-  }
-
-  .hero-feature:last-child:nth-child(odd) {
-    grid-column: 1 / -1;
-    border-right: none;
-  }
-}
-
-@media (max-width: 640px) {
-  .hero-section {
-    padding: 16px 0 24px;
-  }
-
-  .hero-rail {
-    display: none;
-  }
-
-  .hero-title {
-    font-size: clamp(24px, 7vw, 32px);
-  }
-
-  .hero-desc {
-    font-size: 14px;
-    line-height: 1.8;
-    margin-top: 14px;
-  }
-
-  .hero-actions {
-    flex-wrap: nowrap;
-    gap: 8px;
-    margin-top: 18px;
-  }
-
-  .hero-cta {
-    flex: 0 0 auto;
-    width: auto;
-    min-width: 114px;
-    height: 38px;
-    padding: 0 14px;
-    font-size: 13px;
-    border-radius: 6px;
-  }
-
-  .hero-cta--primary {
-    box-shadow: 0 8px 20px $color-primary-a22;
-  }
-
-  .hero-cta--secondary {
-    box-shadow: 0 6px 16px $color-primary-a08;
-  }
-
+  // hero-dots 在此断点起被隐藏，移动控制条必须同时接管：
+  // 若仍等到 640px 才显示，641~992px（平板竖屏/小窗桌面）自动轮播每 6~15s 强制换页
+  // 且没有任何暂停入口，不满足 WCAG 2.2.2（自动更新内容须可暂停）。
   .hero-mobile-nav {
     display: flex;
     align-items: center;
@@ -1688,6 +1772,96 @@ onBeforeUnmount(() => {
     background: $color-primary;
   }
 
+  .hero-body {
+    grid-column: 1;
+    grid-row: auto;
+    padding-top: 0;
+  }
+
+  .hero-desc {
+    margin-top: 16px;
+  }
+
+  .hero-actions {
+    margin-top: 22px;
+  }
+
+  .hero-feature-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-top: 22px;
+  }
+
+  .hero-feature {
+    padding: 16px 18px;
+    border-left: none !important;
+    border-top: 1px solid $color-primary-a08;
+  }
+
+  .hero-feature:nth-child(-n + 2) {
+    border-top: none;
+  }
+
+  .hero-feature:nth-child(odd) {
+    border-right: 1px solid $color-primary-a08;
+  }
+
+  .hero-feature:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+    border-right: none;
+  }
+}
+
+@media (max-width: $breakpoint-compact) {
+  .hero-section {
+    padding: 16px 0 24px;
+  }
+
+  // 窄屏不再隐藏入口列表：⩽992 已把它做成横向滚动的胶囊行，
+  // 隐藏后 5 个带文案的产品入口在手机上彻底消失，只剩无法辨识内容的圆点。
+  .hero-rail {
+    gap: 6px;
+    padding-bottom: 2px;
+  }
+
+  .hero-rail__item {
+    padding: 6px 12px;
+    font-size: 13px;
+  }
+
+  .hero-title {
+    font-size: clamp(24px, 7vw, 32px);
+  }
+
+  .hero-desc {
+    font-size: 14px;
+    line-height: 1.8;
+    margin-top: 14px;
+  }
+
+  .hero-actions {
+    flex-wrap: nowrap;
+    gap: 8px;
+    margin-top: 18px;
+  }
+
+  .hero-cta {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: 114px;
+    height: 38px;
+    padding: 0 14px;
+    font-size: 13px;
+    border-radius: $btn-border-radius;
+  }
+
+  .hero-cta--primary {
+    box-shadow: 0 8px 20px $color-primary-a22;
+  }
+
+  .hero-cta--secondary {
+    box-shadow: 0 6px 16px $color-primary-a08;
+  }
+
   .hero-feature-strip {
     grid-template-columns: 1fr;
     margin-top: 18px;
@@ -1723,7 +1897,7 @@ onBeforeUnmount(() => {
   }
 }
 
-@media (max-width: 480px) {
+@media (max-width: $breakpoint-tiny) {
   .hero-title {
     font-size: clamp(22px, 7.5vw, 28px);
     line-height: 1.22;

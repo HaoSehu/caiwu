@@ -30,21 +30,19 @@ function goRegister() {
 
 <style scoped lang="scss">
 .container {
-  width: min(1200px, calc(100% - 48px));
-  margin: 0 auto;
+  @include site-container;
 }
 
 .register-bar-section {
   padding: 24px 0 64px;
-  background: #f4f7fc;
+  background: $bg-color-muted;
 }
 
 .register-bar {
   position: relative;
   overflow: hidden;
   border-radius: 14px;
-  width: min(1200px, calc(100% - 48px));
-  margin: 0 auto;
+  @include site-container;
   background: $color-primary;
   box-shadow: 0 24px 48px rgba(27, 58, 166, 0.22);
 
@@ -55,7 +53,7 @@ function goRegister() {
     inset: 0;
     opacity: 0.04;
     pointer-events: none;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3%3Ffilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
     z-index: 0;
   }
 }
@@ -123,7 +121,7 @@ function goRegister() {
   height: 44px;
   padding: 0 28px;
   border: none;
-  border-radius: 6px;
+  border-radius: $btn-border-radius;
   background: $bg-color-card;
   color: $color-primary; /* Using blue for primary as per AGENTS.md */
   font-size: 14px;
@@ -137,13 +135,17 @@ function goRegister() {
 
 .register-bar__button:hover {
   transform: translateY(-2px);
-  background: #f8faff;
+  background: $bg-color-hover;
   box-shadow: 0 16px 30px rgba(0, 0, 0, 0.18);
 }
 
 .register-bar__button:focus-visible {
+  // 双环：白色内环保证深色底上可见，深蓝外环保证浅色底上可见（本文件无 variables 引入，外环用字面色）
   outline: none;
-  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.16), 0 0 0 3px rgba(255, 255, 255, 0.6);
+  box-shadow:
+    0 12px 24px rgba(0, 0, 0, 0.16),
+    0 0 0 2px rgba(255, 255, 255, 0.95),
+    0 0 0 5px rgba(22, 93, 255, 0.55);
 }
 
 .register-bar__button:active {
@@ -167,7 +169,7 @@ function goRegister() {
   }
 }
 
-@media (max-width: 640px) {
+@media (max-width: $breakpoint-compact) {
   .register-bar {
     width: calc(100% - 24px);
   }

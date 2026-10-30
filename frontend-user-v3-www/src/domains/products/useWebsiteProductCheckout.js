@@ -10,12 +10,12 @@ import {
   resolveProductDisplayName,
   toMoneyNumber,
 } from "@/utils/websiteProductConfig";
-import { navigateToConsole } from "@/utils/consoleUrl";
+import { buildConsoleUrl, isConsolePath, navigateToConsole } from "@/utils/consoleUrl";
 import {
   buildIdempotencyKey,
   encodePendingWebsiteCheckout,
   savePendingWebsiteCheckout,
-} from "@/utils/websiteCheckout";
+} from "@caiwu/shared/utils/websiteCheckout";
 import {
   buildPendingCouponRedirectUrl,
   clearPendingWebsiteCoupon,
@@ -39,6 +39,10 @@ export function useWebsiteProductCheckout({
   const quoteLoading = ref(false);
   const quoteError = ref(false);
   const quoteToken = ref("");
+  // 后端报价凭证的有效期（CheckoutSecurityService::QUOTE_TTL_SECONDS = 600 秒）。
+  // 首页停留超过这个时间再点购买，token 已在服务端失效，跳过去只会被建单接口拒绝，
+  // 而那时人已经在控制台、回不到官网重新询价 —— 所以在跳转前本地先拦一次。
+  const quoteExpiresAt = ref("");
   const productStock = ref(null);
   const productStockLoading = ref(false);
   const productStockError = ref("");
@@ -169,6 +173,7 @@ export function useWebsiteProductCheckout({
   function resetQuoteState() {
     quoteResult.value = null;
     quoteToken.value = "";
+    quoteExpiresAt.value = "";
     quoteSnapshotVersion = -1;
   }
 
@@ -178,6 +183,7 @@ export function useWebsiteProductCheckout({
     quoteVersion += 1;
     quoteResult.value = null;
     quoteToken.value = "";
+    quoteExpiresAt.value = "";
   }
 
   function suspendQuoteWatch() {
@@ -199,6 +205,7 @@ export function useWebsiteProductCheckout({
   ) {
     quoteResult.value = payload || null;
     quoteToken.value = String(payload?.quote_token || "");
+    quoteExpiresAt.value = String(payload?.quote_expires_at || "");
     selectedCouponId.value = Number(
       nextCouponId || payload?.user_coupon_id || 0,
     );
@@ -316,6 +323,7 @@ export function useWebsiteProductCheckout({
   function redirectToConsoleCheckout(orderPayload, idempotencyKey) {
     const pendingCheckout = {
       source: "website-products",
+      savedAt: Date.now(),
       createdAt: Date.now(),
       idempotencyKey,
       orderPayload,
@@ -327,12 +335,28 @@ export function useWebsiteProductCheckout({
       "/client/checkout-resume",
       orderPayload.user_coupon_id,
     );
-    ElMessage.success("正在进入控制台继续创建账单");
 
-    navigateToConsole(
-      checkoutPath,
-      checkoutPayload ? { checkout_payload: checkoutPayload } : {},
-    );
+    const checkoutQuery = checkoutPayload
+      ? { checkout_payload: checkoutPayload }
+      : {};
+
+    // buildConsoleUrl 解析出控制台源站时返回绝对 URL，推断失败时退回「站内 /client/* 路径」。
+    // 后者在官网只有 404（官网没有 /client/* 路由），所以仍是站内路径就报错不跳。
+    // 注意 isConsolePath 对绝对 URL 必须返回 false——它此前先过 normalizeConsolePath，
+    // 绝对 URL 会被那个防开放重定向的兜底回落成 "/client/dashboard"，导致守卫恒真：
+    // 配好 VITE_CONSOLE_SITE_URL 的正常环境反而被拦下报「控制台地址未配置」。
+    const targetUrl = buildConsoleUrl(checkoutPath, checkoutQuery);
+    if (isConsolePath(targetUrl)) {
+      ElMessage.error(
+        "控制台地址未配置（VITE_CONSOLE_SITE_URL），暂时无法继续创建账单，请联系客服",
+      );
+      return;
+    }
+
+    // 先发起跳转再提示：navigateToConsole 内部同步执行 window.location.assign，
+    // assign 之后的代码仍会执行，因此提示一定在跳转动作已提交后才出现。
+    navigateToConsole(checkoutPath, checkoutQuery);
+    ElMessage.success("正在进入控制台继续创建账单");
   }
 
   async function requestQuote(nextCouponId = selectedCouponId.value) {
@@ -464,6 +488,39 @@ export function useWebsiteProductCheckout({
     await executeQuote(0, { fallbackInvalidCoupon: false });
   }
 
+  // 移除优惠券是「不可撤销 + 会立刻改变价格」的破坏性操作，误点后既找不回券也看不到价格变化原因，
+  // 因此统一加二次确认。返回 true 表示确实移除了，调用方可据此决定是否收起移动抽屉。
+  async function confirmClearCoupon() {
+    if (!selectedCouponId.value) {
+      return false;
+    }
+
+    try {
+      // ElMessageBox 与它的样式只在用户真的点「移除」时才需要，静态引入会把
+      // base/input/button/overlay/message-box 五份样式合并进入口 CSS（实测首屏 +4.5KB gzip）。
+      const [{ ElMessageBox }] = await Promise.all([
+        import("element-plus/es/components/message-box/index.mjs"),
+        import("element-plus/es/components/message-box/style/index"),
+      ]);
+
+      await ElMessageBox.confirm(
+        "移除后优惠券将不再生效，费用会按原价重新计算。确定移除吗？",
+        "移除优惠券",
+        {
+          confirmButtonText: "移除",
+          cancelButtonText: "取消",
+          type: "warning",
+        },
+      );
+    } catch {
+      // 用户取消或关闭弹层：保持当前优惠券不变
+      return false;
+    }
+
+    await clearCoupon();
+    return true;
+  }
+
   function fetchQuote() {
     if (quoteWatchSuspendCount > 0) {
       return;
@@ -479,6 +536,17 @@ export function useWebsiteProductCheckout({
   function retryQuote() {
     quoteError.value = false;
     void executeQuote(selectedCouponId.value, { fallbackInvalidCoupon: true });
+  }
+
+  // 后端未下发 quote_expires_at（或格式异常）时视为「不判定」，避免误拦正常提交。
+  function isQuoteExpired() {
+    const raw = quoteExpiresAt.value;
+    if (!raw) return false;
+
+    const expiresAt = Date.parse(raw);
+    if (!Number.isFinite(expiresAt)) return false;
+
+    return expiresAt <= Date.now();
   }
 
   async function submitOrder() {
@@ -505,6 +573,15 @@ export function useWebsiteProductCheckout({
 
     if (!quoteToken.value) {
       ElMessage.warning("报价凭证已失效，请稍后重试");
+      return;
+    }
+
+    // 报价凭证有效期只有 10 分钟（后端 CheckoutSecurityService::QUOTE_TTL_SECONDS）。
+    // 首页/列表页停留久了再点购买，token 早已失效：跳转本身会成功（只是个 URL），
+    // 但控制台建单必被拒，而那时用户已经离开官网、无法重新询价。所以这里就地拦截并自动重算。
+    if (isQuoteExpired()) {
+      ElMessage.warning("报价已超时，正在重新计算价格，请稍候再提交");
+      void executeQuote(selectedCouponId.value, { fallbackInvalidCoupon: true });
       return;
     }
 
@@ -800,7 +877,7 @@ export function useWebsiteProductCheckout({
     purchaseRequirementList,
     purchaseRequirementSummary,
     handleCouponChange,
-    clearCoupon,
+    confirmClearCoupon,
     handleSubmit: submitOrder,
     loadSelectedProduct,
     applyLoadedProduct,

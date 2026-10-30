@@ -75,7 +75,9 @@
                 class="solution-panel__action solution-panel__action--primary"
                 @click="router.push(activeIndustrySolution.productPath)"
               >
-                云服务器
+                <!-- 文案必须与跳转目标一致：productPath 是 /products 列表页，
+                     写成具体产品名（原为"云服务器"）会让人以为直达对应机型 -->
+                查看相关产品
               </button>
               <button
                 type="button"
@@ -138,15 +140,14 @@ function onRailKeydown(event) {
 
 <style scoped lang="scss">
 .container {
-  width: min(1200px, calc(100% - 48px));
-  margin: 0 auto;
+  @include site-container;
 }
 
 .solution-section {
   position: relative;
   padding: 72px 0 0;
   overflow: hidden;
-  background: #f4f7fc;
+  background: $bg-color-muted;
 }
 
 .solution-section__head {
@@ -156,7 +157,7 @@ function onRailKeydown(event) {
 
 .solution-section__title {
   margin: 0;
-  color: #0f172a;
+  color: $text-color-heading;
   font-size: clamp(26px, 2.4vw, 30px);
   font-weight: 700;
   line-height: 1.28;
@@ -212,7 +213,7 @@ function onRailKeydown(event) {
     inset: 0;
     opacity: 0.03;
     pointer-events: none;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3%3Ffilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
   }
 }
 
@@ -238,8 +239,8 @@ function onRailKeydown(event) {
   flex-direction: column;
   gap: 4px;
   padding: 16px 0;
-  background: #f4f6fb;
-  border-right: 1px solid #e9edf5;
+  background: $bg-color-muted;
+  border-right: 1px solid $border-color;
 }
 
 .solution-panel__rail-item {
@@ -288,7 +289,7 @@ function onRailKeydown(event) {
 
 .solution-panel__title {
   margin: 0;
-  color: #111827;
+  color: $text-color-heading;
   font-size: 20px;
   font-weight: 700;
   line-height: 1.35;
@@ -296,7 +297,7 @@ function onRailKeydown(event) {
 
 .solution-panel__summary {
   margin: 12px 0 0;
-  color: #4b5565;
+  color: $text-color-secondary;
   font-size: 14px;
   line-height: 1.9;
 }
@@ -321,7 +322,7 @@ function onRailKeydown(event) {
   display: flex;
   align-items: center;
   gap: 10px;
-  color: #4b5565;
+  color: $text-color-secondary;
   font-size: 13px;
   line-height: 1.7;
 }
@@ -352,8 +353,8 @@ function onRailKeydown(event) {
   min-width: 110px;
   height: 36px;
   padding: 0 20px;
-  border: 1px solid #d5dbe8;
-  border-radius: 4px;
+  border: 1px solid $border-color-strong;
+  border-radius: $btn-border-radius-sm;
   background: $bg-color-card;
   color: $text-color-primary;
   font-size: 13px;
@@ -394,7 +395,7 @@ function onRailKeydown(event) {
   opacity: 0;
 }
 
-@media (max-width: 1180px) {
+@media (max-width: $breakpoint-wide) {
   .solution-stage {
     padding: 120px 0 64px;
   }
@@ -426,7 +427,7 @@ function onRailKeydown(event) {
     gap: 8px;
     padding: 10px 12px;
     border-right: none;
-    border-bottom: 1px solid #e9edf5;
+    border-bottom: 1px solid $border-color;
     overflow-x: auto;
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
@@ -453,7 +454,7 @@ function onRailKeydown(event) {
   }
 }
 
-@media (max-width: 640px) {
+@media (max-width: $breakpoint-compact) {
   .solution-stage {
     padding: 40px 0 36px;
   }

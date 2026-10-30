@@ -19,11 +19,14 @@
         class="mrp-col"
         role="listbox"
         aria-label="地区"
+        tabindex="0"
+        :aria-activedescendant="regionDescendant"
         @keydown="onRegionKeydown"
       >
         <div class="mrp-spacer" :style="{ height: spacerH + 'px' }"></div>
         <button
           v-for="g in regions"
+          :id="`${optionIdPrefix}-region-${g.id}`"
           :key="g.id"
           :data-id="g.id"
           type="button"
@@ -43,11 +46,14 @@
         class="mrp-col"
         role="listbox"
         aria-label="可用区"
+        tabindex="0"
+        :aria-activedescendant="zoneDescendant"
         @keydown="onZoneKeydown"
       >
         <div class="mrp-spacer" :style="{ height: spacerH + 'px' }"></div>
         <button
           v-for="z in zoneMap"
+          :id="`${optionIdPrefix}-zone-${z.id}`"
           :key="z.id"
           :data-id="z.id"
           type="button"
@@ -66,7 +72,7 @@
 </template>
 
 <script setup>
-import { ref, watch, onBeforeUnmount, nextTick } from "vue";
+import { ref, computed, watch, onBeforeUnmount, nextTick, useId } from "vue";
 import MobileSheet from "@/components/MobileSheet.vue";
 
 const props = defineProps({
@@ -83,6 +89,15 @@ const regionCol = ref(null);
 const zoneCol = ref(null);
 const tempGroupId = ref(0);
 const tempZoneId = ref(0);
+// 两列都是 listbox：active 项用 aria-activedescendant 播报，
+// 与 MobileOptionPicker 保持同一套读屏口径（此前只有 OptionPicker 有）
+const optionIdPrefix = `mrp-opt-${useId()}`;
+const regionDescendant = computed(() =>
+  tempGroupId.value ? `${optionIdPrefix}-region-${tempGroupId.value}` : undefined,
+);
+const zoneDescendant = computed(() =>
+  tempZoneId.value ? `${optionIdPrefix}-zone-${tempZoneId.value}` : undefined,
+);
 const spacerH = ref(104);
 let scrollBound = false;
 let resizeObs = null;
@@ -243,25 +258,44 @@ function handleZoneClick(z) {
   if (item) setActive(zoneCol.value, item);
 }
 
-// 键盘：方向键滚动对应滚轮（触发吸附更新选中项），与触摸交互一致
-function onRegionKeydown(event) {
-  if (event.key === "ArrowUp") {
-    event.preventDefault();
-    regionCol.value?.scrollBy({ top: -34, behavior: "smooth" });
-  } else if (event.key === "ArrowDown") {
-    event.preventDefault();
-    regionCol.value?.scrollBy({ top: 34, behavior: "smooth" });
+// 键盘：方向键滚动对应滚轮（触发吸附更新选中项），与触摸交互一致；
+// Home/End 直达首末，Enter 等价点“确定”，与 MobileOptionPicker 的键位保持一致。
+function scrollCol(col, key) {
+  if (!col) return;
+  if (key === "ArrowUp") {
+    col.scrollBy({ top: -34, behavior: "smooth" });
+  } else if (key === "ArrowDown") {
+    col.scrollBy({ top: 34, behavior: "smooth" });
+  } else if (key === "Home") {
+    col.scrollTo({ top: 0, behavior: "smooth" });
+  } else if (key === "End") {
+    col.scrollTo({ top: col.scrollHeight, behavior: "smooth" });
   }
 }
 
-function onZoneKeydown(event) {
-  if (event.key === "ArrowUp") {
+function onRegionKeydown(event) {
+  if (event.key === "Enter") {
+    // 选项按钮自身聚焦时交给原生 click，避免与 handleConfirm 重复触发
+    if (event.target?.classList?.contains("mrp-item")) return;
     event.preventDefault();
-    zoneCol.value?.scrollBy({ top: -34, behavior: "smooth" });
-  } else if (event.key === "ArrowDown") {
-    event.preventDefault();
-    zoneCol.value?.scrollBy({ top: 34, behavior: "smooth" });
+    handleConfirm();
+    return;
   }
+  if (!["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
+  event.preventDefault();
+  scrollCol(regionCol.value, event.key);
+}
+
+function onZoneKeydown(event) {
+  if (event.key === "Enter") {
+    if (event.target?.classList?.contains("mrp-item")) return;
+    event.preventDefault();
+    handleConfirm();
+    return;
+  }
+  if (!["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
+  event.preventDefault();
+  scrollCol(zoneCol.value, event.key);
 }
 
 function handleConfirm() {
@@ -361,7 +395,8 @@ watch(
       }
     });
   },
-  { deep: true },
+  // 上游每次都是整数组替换（tempChildGroups.value = [...]），浅监听即可命中；
+  // deep 监听会逐项递归比较整棵地区树，弹层重开时白跑一遍深比较。
 );
 </script>
 
@@ -370,7 +405,8 @@ watch(
   position: relative;
   height: 242px;
   display: grid;
-  grid-template-columns: 55% 45%;
+  // 与 MobileOsPicker 的双列宽度保持一致
+  grid-template-columns: 1fr 1fr;
   overflow: hidden;
 }
 
@@ -397,6 +433,13 @@ watch(
   -webkit-overflow-scrolling: touch;
   display: flex;
   flex-direction: column;
+  outline: none;
+
+  // 列表本身可聚焦，键盘方向键/Home/End 才可达，故补可见焦点环
+  &:focus-visible {
+    box-shadow: inset 0 0 0 2px $color-primary;
+    border-radius: 2px;
+  }
 }
 
 .mrp-col::-webkit-scrollbar {
@@ -418,8 +461,8 @@ watch(
   border: 0;
   padding: 0 10px;
   background: transparent;
-  color: $text-color-disabled;
-  font-size: 16px;
+  color: $text-color-secondary;
+  font-size: 15px;
   line-height: 34px;
   white-space: nowrap;
   cursor: pointer;
@@ -433,6 +476,7 @@ watch(
 
 .mrp-item.is-active {
   color: $color-primary;
+  font-size: 15px;
   font-weight: 700;
 }
 </style>

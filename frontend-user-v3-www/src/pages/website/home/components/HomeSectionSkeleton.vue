@@ -20,6 +20,9 @@
           </div>
         </div>
 
+        <!-- 第三列在真实 hero 中是留白（无可见内容），空单元格即可保证三列不塌 -->
+        <div class="home-section-skeleton__hero-side"></div>
+
         <div class="home-section-skeleton__hero-features">
           <span
             v-for="item in 5"
@@ -157,8 +160,7 @@ defineProps({
 
 <style scoped lang="scss">
 .container {
-  width: min(1200px, calc(100% - 48px));
-  margin: 0 auto;
+  @include site-container;
 }
 
 .home-section-skeleton {
@@ -167,14 +169,15 @@ defineProps({
 }
 
 .home-section-skeleton--hero {
-  min-height: 640px;
-  padding: 120px 0 32px;
-  background: linear-gradient(135deg, #f8fbff 0%, #eef4ff 52%, $bg-color-card 100%);
+  // 与 HomeHeroCarousel 的 hero-stage 对齐（min-height 460px / padding 40px 0 24px），避免骨架切换真实内容时跳动
+  min-height: 460px;
+  padding: 40px 0 24px;
+  background: linear-gradient(135deg, $bg-color-hover 0%, $color-primary-soft 52%, $bg-color-card 100%);
 }
 
 .home-section-skeleton--solutions,
 .home-section-skeleton--register {
-  background: #f4f7fc;
+  background: $bg-color-muted;
 }
 
 .home-section-skeleton--register {
@@ -188,7 +191,8 @@ defineProps({
 
 .home-section-skeleton__hero {
   display: grid;
-  grid-template-columns: 240px minmax(0, 1fr);
+  // 与真实 hero-stage 完全一致的三列栅格
+  grid-template-columns: 220px minmax(0, 1fr) minmax(340px, 420px);
   grid-template-rows: minmax(320px, auto) auto;
   gap: 28px 48px;
   align-items: center;
@@ -203,6 +207,11 @@ defineProps({
   display: grid;
   align-content: center;
   gap: 18px;
+}
+
+// 第三列留白单元格：仅占位，不绘制任何视觉
+.home-section-skeleton__hero-side {
+  min-width: 0;
 }
 
 .home-section-skeleton__hero-features {
@@ -267,7 +276,7 @@ defineProps({
   align-content: start;
   gap: 14px;
   padding: 24px 20px;
-  background: #f4f6fb;
+  background: $bg-color-muted;
 }
 
 .home-section-skeleton__panel-body {
@@ -291,8 +300,8 @@ defineProps({
   display: block;
   width: 100%;
   height: 208px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #dfe9fb 0%, #f1f5fb 100%);
+  border-radius: $sm-border-radius;
+  background: linear-gradient(135deg, $color-primary-border 0%, $bg-color-hover 100%);
 }
 
 .home-section-skeleton__feature-copy,
@@ -452,10 +461,17 @@ defineProps({
   }
 }
 
-@media (max-width: 1180px) {
+@media (max-width: $breakpoint-wide) {
   .home-section-skeleton__grid--products,
   .home-section-skeleton__promo-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  // 与真实 .hero-stage 在 1180 断点同步：min-height 归零、padding 收到 28px 0 16px，
+  // 否则 993~1180 区间骨架占 460+px 而真实 hero 只有约 44px 高，切换时整页跳版
+  .home-section-skeleton--hero {
+    min-height: 0;
+    padding: 28px 0 16px;
   }
 }
 
@@ -472,7 +488,19 @@ defineProps({
 
   .home-section-skeleton__hero {
     grid-template-rows: auto;
-    gap: 24px;
+    gap: 18px;
+  }
+
+  // padding 属于外层修饰符（对应真实 .hero-stage 这一单层元素），
+  // 写在内层栅格上会与 1180 块的外层 padding 叠加
+  .home-section-skeleton--hero {
+    min-height: 0;
+    padding: 12px 0 4px;
+  }
+
+  // 单列后第三列不再存在，空占位单元格会白占一段 row-gap，隐藏
+  .home-section-skeleton__hero-side {
+    display: none;
   }
 
   .home-section-skeleton__hero-features {
@@ -486,7 +514,7 @@ defineProps({
   }
 }
 
-@media (max-width: 640px) {
+@media (max-width: $breakpoint-compact) {
   .container {
     width: calc(100% - 24px);
   }
@@ -505,10 +533,6 @@ defineProps({
     grid-template-columns: 1fr;
   }
 
-  .home-section-skeleton--hero {
-    min-height: 560px;
-    padding: 92px 0 28px;
-  }
 }
 
 .home-section-skeleton__partner {
@@ -534,7 +558,7 @@ defineProps({
   animation: home-section-skeleton-shimmer 1.4s ease-out infinite;
 }
 
-@media (max-width: 640px) {
+@media (max-width: $breakpoint-compact) {
   .home-section-skeleton__partner-strip {
     height: 56px;
   }

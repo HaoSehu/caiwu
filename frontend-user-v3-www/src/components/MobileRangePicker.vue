@@ -10,20 +10,22 @@
           :disabled="isFixed || modelValue <= min"
           @click="step(-1)"
         >
-          <svg
-            viewBox="0 0 12 12"
-            fill="none"
-            width="12"
-            height="12"
-            aria-hidden="true"
-          >
-            <path
-              d="M2.5 6h7"
-              stroke="currentColor"
-              stroke-width="1.5"
-              stroke-linecap="round"
-            />
-          </svg>
+          <span class="mrange-btn-icon">
+            <svg
+              viewBox="0 0 12 12"
+              fill="none"
+              width="12"
+              height="12"
+              aria-hidden="true"
+            >
+              <path
+                d="M2.5 6h7"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+              />
+            </svg>
+          </span>
         </button>
         <span class="mrange-value">{{ modelValue }}</span>
         <button
@@ -33,20 +35,22 @@
           :disabled="isFixed || modelValue >= max"
           @click="step(1)"
         >
-          <svg
-            viewBox="0 0 12 12"
-            fill="none"
-            width="12"
-            height="12"
-            aria-hidden="true"
-          >
-            <path
-              d="M6 2.5v7M2.5 6h7"
-              stroke="currentColor"
-              stroke-width="1.5"
-              stroke-linecap="round"
-            />
-          </svg>
+          <span class="mrange-btn-icon">
+            <svg
+              viewBox="0 0 12 12"
+              fill="none"
+              width="12"
+              height="12"
+              aria-hidden="true"
+            >
+              <path
+                d="M6 2.5v7M2.5 6h7"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+              />
+            </svg>
+          </span>
         </button>
       </div>
     </div>
@@ -61,7 +65,7 @@
         :step="stepSize"
         :value="modelValue"
         :disabled="isFixed"
-        @input="$emit('update:modelValue', Number($event.target.value))"
+        @input="handleInput"
       />
       <div class="mrange-labels">
         <span>{{ min }}</span>
@@ -72,7 +76,7 @@
 </template>
 
 <script setup>
-import { computed } from "vue";
+import { computed, onBeforeUnmount } from "vue";
 
 const props = defineProps({
   modelValue: { type: Number, default: 1 },
@@ -87,6 +91,33 @@ const emit = defineEmits(["update:modelValue"]);
 const isFixed = computed(() => props.min === props.max);
 const sliderMin = computed(() => props.min);
 const sliderMax = computed(() => (isFixed.value ? props.min + 1 : props.max));
+
+// 拖动滑块时约 100ms 节流，避免每个 input 都触发父组件更新
+let inputTimer = null;
+let pendingValue = null;
+
+function handleInput(event) {
+  pendingValue = Number(event.target.value);
+  if (inputTimer) return;
+  inputTimer = setTimeout(() => {
+    inputTimer = null;
+    if (pendingValue === null) return;
+    emit("update:modelValue", pendingValue);
+    pendingValue = null;
+  }, 100);
+}
+
+onBeforeUnmount(() => {
+  if (inputTimer) {
+    clearTimeout(inputTimer);
+    inputTimer = null;
+    // 卸载前补发最后一次值，保证不丢失
+    if (pendingValue !== null) {
+      emit("update:modelValue", pendingValue);
+      pendingValue = null;
+    }
+  }
+});
 
 function step(delta) {
   const next = props.modelValue + delta * props.stepSize;
@@ -126,8 +157,9 @@ function step(delta) {
 }
 
 .mrange-btn {
-  width: 32px;
-  height: 32px;
+  // 触控目标不小于 44px；内层图标用 .mrange-btn-icon 维持原 12px 视觉尺寸
+  min-width: 44px;
+  min-height: 44px;
   border: none;
   background: transparent;
   color: $text-color-placeholder;
@@ -148,6 +180,14 @@ function step(delta) {
     opacity: 0.3;
     cursor: not-allowed;
   }
+}
+
+.mrange-btn-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
 }
 
 .mrange-value {

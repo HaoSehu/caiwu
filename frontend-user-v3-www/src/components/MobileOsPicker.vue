@@ -20,11 +20,13 @@
         role="listbox"
         aria-label="系统"
         tabindex="0"
+        :aria-activedescendant="groupDescendant"
         @keydown="handleGroupKeydown"
       >
         <div class="mop-spacer" :style="{ height: spacerH + 'px' }"></div>
         <button
           v-for="g in osGroups"
+          :id="`${optionIdPrefix}-group-${g.id}`"
           :key="g.id"
           :data-id="g.id"
           type="button"
@@ -56,11 +58,13 @@
         role="listbox"
         aria-label="版本"
         tabindex="0"
+        :aria-activedescendant="versionDescendant"
         @keydown="handleVerKeydown"
       >
         <div class="mop-spacer" :style="{ height: spacerH + 'px' }"></div>
         <button
           v-for="v in currentVersions"
+          :id="`${optionIdPrefix}-version-${v.id}`"
           :key="v.id"
           :data-id="v.id"
           type="button"
@@ -84,7 +88,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onBeforeUnmount, nextTick } from "vue";
+import { ref, computed, watch, onBeforeUnmount, nextTick, useId } from "vue";
 import MobileSheet from "@/components/MobileSheet.vue";
 
 const props = defineProps({
@@ -100,11 +104,24 @@ const groupCol = ref(null);
 const verCol = ref(null);
 const tempGroupId = ref("");
 const tempVersionId = ref("");
+// 两列都是 listbox：用 aria-activedescendant 播报当前项，
+// 前缀按实例生成，避免同页多个选择器的 id 冲突（与 OptionPicker 口径一致）
+const optionIdPrefix = `mop-opt-${useId()}`;
+const groupDescendant = computed(() =>
+  tempGroupId.value ? `${optionIdPrefix}-group-${tempGroupId.value}` : undefined,
+);
+const versionDescendant = computed(() =>
+  tempVersionId.value
+    ? `${optionIdPrefix}-version-${tempVersionId.value}`
+    : undefined,
+);
 const spacerH = ref(104);
 let scrollBound = false;
 let resizeObs = null;
 let removeScrollListeners = null;
 let programmaticScrollCount = 0;
+// 程序化滚动的兜底定时器句柄，cleanup 时逐个清理
+let centerTimers = [];
 
 // 缓存 DOM 查询结果，避免每帧 querySelectorAll
 let cachedGroupItems = [];
@@ -178,6 +195,8 @@ function cleanup() {
   resizeObs?.disconnect();
   resizeObs = null;
   programmaticScrollCount = 0;
+  centerTimers.forEach((t) => clearTimeout(t));
+  centerTimers = [];
   cachedGroupItems = [];
   cachedVerItems = [];
 }
@@ -206,7 +225,8 @@ function centerItem(item) {
     programmaticScrollCount = Math.max(programmaticScrollCount - 1, 0);
   };
   col.addEventListener("scrollend", onEnd, { once: true });
-  setTimeout(onEnd, 800);
+  // 兜底定时器存句柄，cleanup 时统一清理，避免抽屉关闭后仍对隐藏 DOM 写样式
+  centerTimers.push(setTimeout(onEnd, 800));
 }
 
 function getCachedItems(col) {
@@ -325,8 +345,10 @@ function navigateItem(col, items, direction, isGroup) {
   if (!items.length) return;
   const activeItem = col.querySelector(".mop-item.is-active");
   const idx = activeItem ? items.indexOf(activeItem) : -1;
-  const nextIdx = idx + direction;
-  if (nextIdx < 0 || nextIdx >= items.length) return;
+  // 越界回绕：首项上键到末项、末项下键到首项，与 HomeProductTabs 行为一致
+  let nextIdx = idx + direction;
+  if (nextIdx < 0) nextIdx = items.length - 1;
+  if (nextIdx >= items.length) nextIdx = 0;
   if (isGroup) {
     const group = props.osGroups.find(
       (g) => g.id === items[nextIdx].dataset.id,
@@ -337,23 +359,63 @@ function navigateItem(col, items, direction, isGroup) {
   }
 }
 
+// Home/End 交给滚动吸附处理（与 RegionPicker/OptionPicker 一致），
+// Enter 等价点「确定」；选项按钮自身聚焦时交给原生 click，避免重复触发
+function isEnterOnItem(e) {
+  return e.key === "Enter" && e.target?.classList?.contains("mop-item");
+}
+
 function handleGroupKeydown(e) {
+  if (e.key === "Enter") {
+    if (isEnterOnItem(e)) return;
+    e.preventDefault();
+    handleConfirm();
+    return;
+  }
   if (e.key === "ArrowUp") {
     e.preventDefault();
     navigateItem(groupCol.value, cachedGroupItems, -1, true);
   } else if (e.key === "ArrowDown") {
     e.preventDefault();
     navigateItem(groupCol.value, cachedGroupItems, 1, true);
+  } else if (e.key === "Home") {
+    e.preventDefault();
+    groupCol.value?.scrollTo({ top: 0, behavior: "smooth" });
+  } else if (e.key === "End") {
+    e.preventDefault();
+    if (groupCol.value) {
+      groupCol.value.scrollTo({
+        top: groupCol.value.scrollHeight,
+        behavior: "smooth",
+      });
+    }
   }
 }
 
 function handleVerKeydown(e) {
+  if (e.key === "Enter") {
+    if (isEnterOnItem(e)) return;
+    e.preventDefault();
+    handleConfirm();
+    return;
+  }
   if (e.key === "ArrowUp") {
     e.preventDefault();
     navigateItem(verCol.value, cachedVerItems, -1, false);
   } else if (e.key === "ArrowDown") {
     e.preventDefault();
     navigateItem(verCol.value, cachedVerItems, 1, false);
+  } else if (e.key === "Home") {
+    e.preventDefault();
+    verCol.value?.scrollTo({ top: 0, behavior: "smooth" });
+  } else if (e.key === "End") {
+    e.preventDefault();
+    if (verCol.value) {
+      verCol.value.scrollTo({
+        top: verCol.value.scrollHeight,
+        behavior: "smooth",
+      });
+    }
   }
 }
 
@@ -469,7 +531,7 @@ function init() {
   border: 0;
   padding: 0 10px;
   background: transparent;
-  color: $text-color-disabled;
+  color: $text-color-secondary;
   font-size: 15px;
   line-height: 34px;
   white-space: nowrap;
@@ -486,7 +548,8 @@ function init() {
 
 .mop-item.is-active {
   color: $color-primary;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 700;
 }
 
 .mop-item-icon {

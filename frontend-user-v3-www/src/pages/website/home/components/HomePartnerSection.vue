@@ -91,7 +91,8 @@ onBeforeUnmount(() => {
   }
 
   &__title {
-    font-size: clamp(22px, 3vw, 32px);
+    // 与 HomeProductTabs / HomeSolutionSection / HomeNewsSection 的标题规格保持一致
+    font-size: clamp(26px, 2.4vw, 30px);
     font-weight: 700;
     color: $text-color-primary;
     line-height: 1.3;
@@ -151,7 +152,7 @@ onBeforeUnmount(() => {
   to { transform: translateX(-50%); }
 }
 
-@media (max-width: 640px) {
+@media (max-width: $breakpoint-compact) {
   .partner-section {
     padding: 48px 0 40px;
 

@@ -18,11 +18,14 @@
         class="mopt-col"
         role="listbox"
         :aria-label="title"
+        tabindex="0"
+        :aria-activedescendant="activeDescendant"
         @keydown="onKeydown"
       >
         <div class="mopt-spacer" :style="{ height: spacerH + 'px' }"></div>
         <button
           v-for="opt in options"
+          :id="`${optionIdPrefix}-${opt.id}`"
           :key="opt.id"
           :data-id="opt.id"
           type="button"
@@ -41,7 +44,7 @@
 </template>
 
 <script setup>
-import { ref, watch, onBeforeUnmount, nextTick } from "vue";
+import { ref, computed, watch, onBeforeUnmount, nextTick, useId } from "vue";
 import MobileSheet from "@/components/MobileSheet.vue";
 
 const props = defineProps({
@@ -55,6 +58,15 @@ const emit = defineEmits(["close", "confirm"]);
 
 const col = ref(null);
 const tempId = ref("");
+// 每个实例一个前缀：同一页面会挂多个选择器（products 页 6 个），
+// 固定前缀会让不同实例产出相同 id，aria-activedescendant 可能指向别的实例的选项。
+const optionIdPrefix = `mopt-opt-${useId()}`;
+// 选中项 id，供 listbox 的 aria-activedescendant 指向（屏幕阅读器据此播报当前项）
+const activeDescendant = computed(() =>
+  tempId.value === "" || tempId.value === null || tempId.value === undefined
+    ? undefined
+    : `${optionIdPrefix}-${tempId.value}`,
+);
 const spacerH = ref(120);
 let scrollBound = false;
 let resizeObs = null;
@@ -196,6 +208,25 @@ function onKeydown(event) {
   } else if (event.key === "ArrowDown") {
     event.preventDefault();
     col.value?.scrollBy({ top: 34, behavior: "smooth" });
+  } else if (event.key === "Home") {
+    // Home 滚到顶部，滚动收敛后由既有吸附逻辑更新选中项
+    event.preventDefault();
+    col.value?.scrollTo({ top: 0, behavior: "smooth" });
+  } else if (event.key === "End") {
+    // End 滚到底部
+    event.preventDefault();
+    if (col.value) {
+      col.value.scrollTo({
+        top: col.value.scrollHeight,
+        behavior: "smooth",
+      });
+    }
+  } else if (event.key === "Enter") {
+    // 选项按钮自身聚焦时，交给原生 click 选中该项，避免与 handleConfirm 重复触发
+    if (event.target?.classList?.contains("mopt-item")) return;
+    // Enter 等价点击“确定”，不改变既有平滑滚动与 programmaticScrollCount 逻辑
+    event.preventDefault();
+    handleConfirm();
   }
 }
 
@@ -276,6 +307,13 @@ function init() {
   -webkit-overflow-scrolling: touch;
   display: flex;
   flex-direction: column;
+  outline: none;
+
+  // 键盘聚焦时给出可见焦点环（列表本身可聚焦，方向键/Home/End 才可达）
+  &:focus-visible {
+    box-shadow: inset 0 0 0 2px $color-primary;
+    border-radius: 2px;
+  }
 }
 
 .mopt-col::-webkit-scrollbar {
@@ -297,7 +335,7 @@ function init() {
   border: 0;
   padding: 0 10px;
   background: transparent;
-  color: $text-color-disabled;
+  color: $text-color-secondary;
   font-size: 15px;
   line-height: 34px;
   white-space: nowrap;
@@ -312,6 +350,7 @@ function init() {
 
 .mopt-item.is-active {
   color: $color-primary;
+  font-size: 15px;
   font-weight: 700;
 }
 </style>

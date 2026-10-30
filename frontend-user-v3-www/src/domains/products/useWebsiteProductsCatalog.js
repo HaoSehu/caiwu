@@ -12,8 +12,9 @@ import {
   readWebsiteProductRouteParams,
 } from "@/utils/productRoute";
 
-// 992 对齐控制台 useDeviceLayout 的 tablet 上限，保证 960~992 区间两端形态一致
-const MOBILE_BREAKPOINT = 992;
+import { ElMessage } from "element-plus/es/components/message/index.mjs";
+
+import { useMobileBreakpoint } from "@/composables/useMobileBreakpoint";
 
 // 进行中的目录请求去重（site.js 的 catalogCache 负责结果缓存）
 const catalogPendingMap = new Map();
@@ -53,8 +54,13 @@ export function useWebsiteProductsCatalog({
   const pageLoading = ref(false);
   const pageError = ref(false);
   const sidebarCollapsed = ref(false);
-  const isMobile = ref(false);
-  const mobileCategoryDrawer = ref(false);
+  // 断点判定与商品详情、站点头部共用同一份 matchMedia 查询；
+  // listen 传 false 是因为本 composable 已在自己的 onMounted 里注册 resize 监听，
+  // 由 resize 调 updateMobileState 同步（与改造前的事件模型一致）。
+  const {
+    isMobile,
+    updateMobileState,
+  } = useMobileBreakpoint({ listen: false });
   const mobileProductDrawer = ref(false);
   const mobilePendingProductId = ref(0);
 
@@ -76,12 +82,6 @@ export function useWebsiteProductsCatalog({
   let rootToken = 0;
   let groupAbortController = null;
 
-  const activeType = computed(
-    () =>
-      productTypes.value.find((type) => type.value === activeTypeValue.value) ||
-      null,
-  );
-  const activeTypeLabel = computed(() => activeType.value?.label || "");
   const activeGroup = computed(
     () =>
       rootGroups.value.find((group) => group.id === activeGroupId.value) ||
@@ -220,16 +220,10 @@ export function useWebsiteProductsCatalog({
     selectProduct(products[0].id, { syncRoute: shouldSyncRoute(options) });
   }
 
-  function openMobileCategoryDrawer() {
-    if (!rootGroups.value.length) {
-      return;
-    }
-
-    mobileCategoryDrawer.value = true;
-  }
-
   function openMobileRegionDrawer() {
     if (!rootGroups.value.length) {
+      // 地区目录还没加载出来时按钮点了毫无反应，用户无法判断是没数据还是坏了。
+      ElMessage.warning("地区列表尚未加载完成，请稍后重试");
       return;
     }
 
@@ -258,8 +252,14 @@ export function useWebsiteProductsCatalog({
         .then((res) => res.data);
       setCachedCatalog(id, data);
       tempChildGroups.value = data.children || [];
-    } catch {
-      // 静默处理
+    } catch (error) {
+      if (error?.code === "ERR_CANCELED" || error?.name === "CanceledError") {
+        return;
+      }
+      // 不再静默：此前失败后可用区列永久空白，用户既不知道失败也没有重试理由。
+      // 保留用户刚选的 tempGroupId，仅提示并可再次点选重试。
+      tempChildGroups.value = [];
+      ElMessage.warning("可用区加载失败，请重新选择地区");
     }
   }
 
@@ -268,24 +268,28 @@ export function useWebsiteProductsCatalog({
   }
 
   async function confirmRegionSelection(groupId, childId) {
-    mobileRegionDrawer.value = false;
     const targetGroupId = groupId || tempGroupId.value;
-    await withSuspendedRouteSync(async () => {
-      await switchGroup(targetGroupId, {
-        syncRoute: false,
-        targetChildId:
-          childId ||
-          tempChildGroups.value.find((g) => g.id === (childId || 0))?.id ||
-          0,
-        targetProductId: selectedProductId.value,
+    try {
+      await withSuspendedRouteSync(async () => {
+        await switchGroup(targetGroupId, {
+          syncRoute: false,
+          targetChildId:
+            childId ||
+            tempChildGroups.value.find((g) => g.id === (childId || 0))?.id ||
+            0,
+          targetProductId: selectedProductId.value,
+        });
       });
-    });
-    await syncSelectionRoute();
-  }
+    } catch {
+      // 失败时保持抽屉打开：此前先关抽屉再请求，失败后抽屉已消失、页面无任何提示，
+      // 用户以为「已切换」但数据仍是旧的。现在保留抽屉与失败提示，用户可重试或换地区。
+      mobileRegionDrawer.value = true;
+      ElMessage.warning("切换地区失败，请重试");
+      return;
+    }
 
-  function handleMobileGroupSelect(id) {
-    mobileCategoryDrawer.value = false;
-    return switchGroup(id, { syncRoute: true });
+    mobileRegionDrawer.value = false;
+    await syncSelectionRoute();
   }
 
   async function openMobileProductDrawer() {
@@ -295,11 +299,19 @@ export function useWebsiteProductsCatalog({
       visibleProducts.value.every((product) => !hasDisplayPrice(product))
     ) {
       invalidateCatalogCache(activeGroupId.value);
-      await loadGroupPayload(activeGroupId.value, {
-        syncRoute: false,
-        targetChildId: activeChildId.value,
-        targetProductId: selectedProductId.value,
-      });
+      try {
+        await loadGroupPayload(activeGroupId.value, {
+          syncRoute: false,
+          targetChildId: activeChildId.value,
+          targetProductId: selectedProductId.value,
+        });
+      } catch {
+        // loadGroupPayload 在非取消场景会 throw，而本函数的调用方
+        // products/index.vue 的 openMobileProductGroupDrawer 用 void 丢弃 Promise，
+        // 不在此消化会变成 unhandled rejection：用户点「规格」既没有抽屉也没有提示。
+        // 补价只是让列表带上价格，失败不该阻断选规格，因此提示后继续打开抽屉。
+        ElMessage.warning("商品列表加载失败，请重试");
+      }
     }
 
     mobilePendingProductId.value =
@@ -339,7 +351,6 @@ export function useWebsiteProductsCatalog({
     resetSelectedProduct({ syncRoute: false });
     productsByGroup.value = {};
     childGroups.value = [];
-    mobileCategoryDrawer.value = false;
     mobileProductDrawer.value = false;
 
     await loadRootGroups(options);
@@ -461,6 +472,11 @@ export function useWebsiteProductsCatalog({
   }
 
   function applyGroupPayload(data, options = {}) {
+    // 成功写入即代表本次加载已恢复：pageError 只在 loadRootGroups/loadGroupPayload 的
+    // 失败分支置 true，命中缓存走 applyGroupPayload 时不会经过那些分支，
+    // 若不复位，切换回已缓存地区后错误块会一直挂在页面上（配置区其实已正常渲染）。
+    pageError.value = false;
+
     const children = data.children || [];
     childGroups.value = children;
 
@@ -680,23 +696,11 @@ export function useWebsiteProductsCatalog({
     }
   }
 
-  function updateMobileState() {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    // isMobile 未变化时直接返回，避免 resize 触发不必要的状态切换与重渲染
-    const nextMobile = window.innerWidth <= MOBILE_BREAKPOINT;
-    if (nextMobile === isMobile.value) return;
-    isMobile.value = nextMobile;
-  }
-
   watch(isMobile, async (mobile) => {
     if (mobile) {
       return;
     }
 
-    mobileCategoryDrawer.value = false;
     mobileProductDrawer.value = false;
 
     if (!activeTypeValue.value && productTypes.value.length) {
@@ -736,7 +740,13 @@ export function useWebsiteProductsCatalog({
             routePayload.productId !== currentProductId);
 
         if (changed) {
-          await applyRouteSelection();
+          // 目录请求失败时 loadGroupPayload 会 throw；这里没有 catch 就会变成
+          // unhandled rejection 且页面停在旧数据上，用户只看到地址变了、内容没变。
+          try {
+            await applyRouteSelection();
+          } catch {
+            pageError.value = true;
+          }
         }
 
         return;
@@ -761,7 +771,6 @@ export function useWebsiteProductsCatalog({
     retryInit: init,
     sidebarCollapsed,
     isMobile,
-    mobileCategoryDrawer,
     mobileProductDrawer,
     mobileRegionDrawer,
     tempGroupId,
@@ -774,16 +783,13 @@ export function useWebsiteProductsCatalog({
     activeGroupId,
     activeChildId,
     selectedProductId,
-    activeTypeLabel,
     activeGroupName,
     activeChildName,
     visibleProducts,
-    openMobileCategoryDrawer,
     openMobileRegionDrawer,
     selectTempGroup,
     handleRegionChange,
     confirmRegionSelection,
-    handleMobileGroupSelect,
     openMobileProductDrawer,
     confirmMobileProductSelection,
     switchType,

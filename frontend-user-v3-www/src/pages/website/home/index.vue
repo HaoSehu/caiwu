@@ -5,8 +5,13 @@
 
     <div v-if="homeRequestFailed" class="home-error-bar" role="alert">
       <span class="home-error-bar__text">页面数据加载失败，请检查网络连接</span>
-      <button type="button" class="home-error-bar__retry" @click="retryLoad">
-        重新加载
+      <button
+        type="button"
+        class="home-error-bar__retry"
+        :disabled="loading"
+        @click="retryLoad"
+      >
+        {{ loading ? "重新加载中…" : "重新加载" }}
       </button>
     </div>
 
@@ -81,6 +86,9 @@ const notices = ref<any[]>([]);
 const rootGroups = ref<any[]>([]);
 const groupCatalogMap = ref<Record<string, unknown>>({});
 const productTypes = ref<ProductTypeItem[]>([]);
+// 请求序号：首屏加载与「重新加载」连点会并发打同一个 /v2/site/home，
+// 只允许最后一次请求写回页面状态与全局站点配置，避免旧响应覆盖新数据（docs/FRONTEND.md 竞态要求）
+let homeLoadToken = 0;
 const homeContentReady = computed(() => homeLoaded.value);
 // 请求完成即视为就绪：空数据/请求失败时由子组件各自的兜底接管，
 // 避免整页永久骨架屏（HomeHeroCarousel 有 DEFAULT_SLIDES，HomeProductTabs 有空态）
@@ -129,12 +137,17 @@ function resolveHome() {
 }
 
 async function loadHomePage() {
+  const token = ++homeLoadToken;
   loading.value = true;
   homeLoaded.value = false;
   homeLoadSucceeded.value = false;
   homeRequestFailed.value = false;
 
   const homeRes = await resolveHome().catch(() => undefined);
+  // 已被更新的请求接管：丢弃本次结果，防止旧响应回写 notices/hero/siteConfig
+  if (token !== homeLoadToken) {
+    return;
+  }
   if (homeRes?.data) {
     homeLoadSucceeded.value = true;
     const data = homeRes.data || {};
@@ -208,6 +221,8 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
+  // 卸载后到达的响应不再写状态
+  homeLoadToken += 1;
   if (deferredObserver) {
     deferredObserver.disconnect();
     deferredObserver = null;
@@ -224,12 +239,12 @@ onBeforeUnmount(() => {
   max-width: 1200px;
   margin: 24px auto 0;
   padding: 12px 20px;
-  border: 1px solid #ffe1d8;
+  border: 1px solid $color-danger-border;
   border-radius: 8px;
-  background: #fff7f5;
+  background: $color-danger-soft;
 
   &__text {
-    color: #b54708;
+    color: $color-warning-text;
     font-size: 14px;
   }
 
@@ -243,7 +258,13 @@ onBeforeUnmount(() => {
     cursor: pointer;
 
     &:hover {
-      background: #fff1f0;
+      background: $color-danger-soft;
+    }
+
+    // 重试期间禁用，避免连点重复打 /v2/site/home
+    &:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
     }
   }
 }

@@ -18,9 +18,10 @@
         </article>
         <article class="about-card">
           <h2>联系方式</h2>
-          <p>客服邮箱：{{ appStore.serviceEmail || '暂无配置' }}</p>
-          <p>服务时间：{{ appStore.serviceHours || '以站内通知为准' }}</p>
-          <p>官方群号：{{ appStore.serviceQqGroup || '暂无配置' }}</p>
+          <!-- 运维缺失不应暴露给访客：未配置的联系方式整行不渲染 -->
+          <p v-if="appStore.serviceEmail">客服邮箱：{{ appStore.serviceEmail }}</p>
+          <p v-if="appStore.serviceHours">服务时间：{{ appStore.serviceHours }}</p>
+          <p v-if="appStore.serviceQqGroup">官方群号：{{ appStore.serviceQqGroup }}</p>
         </article>
       </div>
     </section>
@@ -35,13 +36,12 @@ const appStore = useAppStore()
 
 <style scoped lang="scss">
 .container {
-  width: min(1200px, calc(100% - 48px));
-  margin: 0 auto;
+  @include site-container;
 }
 
 .about-hero {
   padding: 64px 0 32px;
-  background: linear-gradient(180deg, $bg-color-card 0%, #f5f8fd 100%);
+  background: linear-gradient(180deg, $bg-color-card 0%, $bg-color 100%);
 }
 
 .about-kicker {
@@ -52,14 +52,15 @@ const appStore = useAppStore()
 
 h1 {
   margin: 12px 0 0;
-  color: #0f172a;
-  font-size: 40px;
+  color: $text-color-primary;
+  font-size: 32px;
+  line-height: 1.25;
 }
 
 .about-desc {
   max-width: 720px;
   margin-top: 16px;
-  color: #64748b;
+  color: $text-color-secondary;
   line-height: 1.9;
 }
 
@@ -73,9 +74,21 @@ h1 {
   gap: 20px;
 }
 
+// 小屏容器留白与列表页、内容详情页保持一致（48px 侧边距在 390 视口只剩 342px 可读宽度）
+@media (max-width: $breakpoint-compact) {
+  .container {
+    width: calc(100% - 24px);
+  }
+}
+
 @media (max-width: $breakpoint-mobile-max) {
   .about-grid {
     grid-template-columns: 1fr;
+  }
+
+  // 移动端标题字号降级，避免 32px 在窄屏挤压换行
+  h1 {
+    font-size: 28px;
   }
 }
 
@@ -89,12 +102,15 @@ h1 {
 
 .about-card h2 {
   margin: 0 0 12px;
-  color: #0f172a;
+  color: $text-color-primary;
+  // 不写 font-size 会退回继承字号，与正文 14px 几乎没有差别
+  font-size: $font-size-h2;
+  line-height: 1.5;
 }
 
 .about-card p {
   margin: 8px 0 0;
-  color: #64748b;
+  color: $text-color-secondary;
   line-height: 1.8;
 }
 </style>

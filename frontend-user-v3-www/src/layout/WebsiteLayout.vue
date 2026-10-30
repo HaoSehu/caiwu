@@ -204,8 +204,8 @@
 
               <template v-else-if="activeMenuId === 'about'">
                 <div class="mega-menu__types">
-                  <div class="mega-type-heading">支持</div>
-                  <div class="mega-type-desc">联系方式与常用服务入口</div>
+                  <div class="mega-type-heading">关于我们</div>
+                  <div class="mega-type-desc">公司简介、服务能力与联系方式</div>
                 </div>
                 <div class="mega-menu__groups">
                   <template v-for="link in aboutQuickLinks" :key="link.to">
@@ -683,7 +683,8 @@
       </div>
     </transition>
 
-    <main id="main-content" class="site-main">
+    <!-- tabindex="-1" 让 main 可被脚本聚焦：路由切换后把焦点移入主内容，读屏与键盘用户不必从头重走导航 -->
+    <main id="main-content" class="site-main" tabindex="-1">
       <router-view v-slot="{ Component }">
         <transition name="page-fade" mode="out-in">
           <component :is="Component" />
@@ -696,7 +697,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { ElIcon } from "element-plus/es/components/icon/index.mjs";
 import {
@@ -857,11 +858,17 @@ function handleLogoError() {
 }
 
 watch(
-  () => route.fullPath,
+  () => route.path,
   () => {
     closeMobileMenu();
     activeMenuId.value = null;
     mobileExpandedType.value = "";
+    // 仅路径切换时转移焦点；改 query（分页/筛选）不动焦点，避免打断当前操作。
+    // 带 hash 的跳转交给浏览器定位锚点，不抢焦点。
+    if (route.hash) return;
+    nextTick(() => {
+      document.getElementById("main-content")?.focus({ preventScroll: true });
+    });
   },
 );
 

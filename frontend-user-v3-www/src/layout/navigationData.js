@@ -26,11 +26,15 @@ export const navigationItems = [
     match: ['WwwHelp', 'WwwHelpDetail'],
     menuId: 'help',
   },
-  { to: '/about', label: '支持', match: ['WwwAbout'], menuId: 'about' },
+  // /about 页的实际内容是「关于我们 / 服务能力 / 联系方式」三块。
+  // 原先标签写作「支持」，与左侧「帮助」菜单语义重叠，访客分不清该进哪个，
+  // 故按页面真实内容命名。
+  { to: '/about', label: '关于我们', match: ['WwwAbout'], menuId: 'about' },
 ]
 
 export const aboutQuickLinks = [
-  { to: '/about', title: '关于我们', desc: '企业简介、发展愿景与服务承诺' },
+  // desc 必须能对上 /about 页实际存在的区块，否则点进去会「找不到说的内容」。
+  { to: '/about', title: '关于我们', desc: '公司简介、服务能力与联系方式' },
   {
     to: '/client/tickets',
     title: '工单支持',

@@ -49,11 +49,36 @@
     <!-- 右侧主区域 -->
     <div class="shop-body">
       <!-- 中间配置区 -->
-      <div class="shop-main" v-loading="pageLoading">
+      <div class="shop-main">
+        <!-- 页面标题视觉隐藏：产品页是目录型界面，视觉上的层级由左侧「产品目录」
+             与移动端产品类型切换按钮承担，再叠一个大标题会挤掉首屏配置区。
+             h1 仍保留在无障碍树里，读屏与 SEO 有明确页面主题。 -->
         <h1 class="sr-only">产品与服务 - 配置选型与报价</h1>
+        <!-- 移动端产品类型切换：桌面靠左侧栏完成，移动端侧栏被隐藏，必须另给入口 -->
+        <!-- 这是一组筛选按钮而非标签页：切换只改数据筛选，没有对应的 tabpanel，
+             也没有左右方向键切换的 Tab 键盘模型。用 role="tab" 会让读屏进入「标签页」
+             模式却等不到 aria-controls/tabpanel，因此与桌面侧栏一致改用组 + aria-pressed。 -->
+        <div
+          v-if="isMobile && productTypes.length > 1"
+          class="mobile-type-tabs"
+          role="group"
+          aria-label="产品类型"
+        >
+          <button
+            v-for="type in productTypes"
+            :key="type.value"
+            type="button"
+            class="mobile-type-tab"
+            :class="{ active: activeTypeValue === type.value }"
+            :aria-pressed="activeTypeValue === type.value"
+            @click="switchType(type.value)"
+          >
+            {{ type.label }}
+          </button>
+        </div>
         <div v-if="isMobile" class="mobile-picker-row mobile-picker-row--duo">
           <div class="mobile-picker-col">
-            <div class="config-block-title">地区</div>
+            <h2 class="config-block-title">地区</h2>
             <button
               type="button"
               class="mobile-picker-trigger"
@@ -81,7 +106,7 @@
             </button>
           </div>
           <div v-if="visibleProducts.length" class="mobile-picker-col">
-            <div class="config-block-title">产品规格选择</div>
+            <h2 class="config-block-title">产品规格选择</h2>
             <button
               type="button"
               class="mobile-picker-trigger"
@@ -145,7 +170,7 @@
           v-if="selectedProduct && productIntroText && !isMobile"
           class="product-intro-card"
         >
-          <div class="config-block-title">商品介绍</div>
+          <h2 class="config-block-title">商品介绍</h2>
           <p>{{ productIntroText }}</p>
         </div>
 
@@ -157,7 +182,7 @@
         >
           <!-- 操作系统 -->
           <div v-if="osGroups.length && isMobile" class="mobile-picker-row">
-            <div class="config-block-title">操作系统</div>
+            <h2 class="config-block-title">操作系统</h2>
             <button
               type="button"
               class="mobile-picker-trigger"
@@ -190,7 +215,7 @@
             class="config-block"
             v-if="osConfig && !isMobile && !machineConfigs.length"
           >
-            <div class="config-block-title">系统安装</div>
+            <h2 class="config-block-title">系统安装</h2>
             <div class="os-section">
               <div v-if="osGroups.length" class="os-cards">
                 <button
@@ -260,7 +285,7 @@
               class="mobile-picker-row mobile-picker-row--duo"
             >
               <div class="mobile-picker-col">
-                <div class="config-block-title">CPU</div>
+                <h2 class="config-block-title">CPU</h2>
                 <button
                   type="button"
                   class="mobile-picker-trigger"
@@ -285,7 +310,7 @@
                 </button>
               </div>
               <div class="mobile-picker-col">
-                <div class="config-block-title">内存</div>
+                <h2 class="config-block-title">内存</h2>
                 <button
                   type="button"
                   class="mobile-picker-trigger"
@@ -315,7 +340,7 @@
               class="mobile-picker-row mobile-picker-row--duo"
             >
               <div v-if="cpuConfig" class="mobile-picker-col">
-                <div class="config-block-title">{{ cpuConfig.label }}</div>
+                <h2 class="config-block-title">{{ cpuConfig.label }}</h2>
                 <button
                   type="button"
                   class="mobile-picker-trigger"
@@ -344,7 +369,7 @@
                 </button>
               </div>
               <div v-if="memConfig" class="mobile-picker-col">
-                <div class="config-block-title">{{ memConfig.label }}</div>
+                <h2 class="config-block-title">{{ memConfig.label }}</h2>
                 <button
                   type="button"
                   class="mobile-picker-trigger"
@@ -441,18 +466,36 @@
             </div>
           </div>
           <div class="config-block" v-if="machineConfigs.length && !isMobile">
-            <div class="config-block-title">机型配置</div>
+            <h2 class="config-block-title">机型配置</h2>
             <div
               v-if="desktopMachineSpecRows.length"
               class="desktop-machine-spec-panel"
             >
               <div class="desktop-machine-table-scroll">
-                <div class="desktop-machine-table">
-                  <div class="desktop-machine-table-head">
-                  <span class="machine-spec-cell machine-spec-cell--name"
+                <!-- 表格语义要成对：只有 role="row"/"columnheader" 而没有 role="table"
+                     容器时，读屏不会把它当表格，列标题也不会关联到单元格 -->
+                <div
+                  class="desktop-machine-table"
+                  role="table"
+                  aria-label="机型规格"
+                >
+                  <div class="desktop-machine-table-head" role="row">
+                  <span
+                    class="machine-spec-cell machine-spec-cell--name"
+                    role="columnheader"
                     >实例规格</span
                   >
-                  <span class="machine-spec-cell machine-spec-cell--sortable">
+                  <span
+                    class="machine-spec-cell machine-spec-cell--sortable"
+                    role="columnheader"
+                    :aria-sort="
+                      machineSpecSort.key === 'cpu'
+                        ? machineSpecSort.direction === 'asc'
+                          ? 'ascending'
+                          : 'descending'
+                        : 'none'
+                    "
+                  >
                     <span>vCPU</span>
                     <span
                       class="machine-spec-sort-controls"
@@ -486,7 +529,17 @@
                       </button>
                     </span>
                   </span>
-                  <span class="machine-spec-cell machine-spec-cell--sortable">
+                  <span
+                    class="machine-spec-cell machine-spec-cell--sortable"
+                    role="columnheader"
+                    :aria-sort="
+                      machineSpecSort.key === 'memory'
+                        ? machineSpecSort.direction === 'asc'
+                          ? 'ascending'
+                          : 'descending'
+                        : 'none'
+                    "
+                  >
                     <span>内存</span>
                     <span
                       class="machine-spec-sort-controls"
@@ -520,12 +573,24 @@
                       </button>
                     </span>
                   </span>
-                  <span class="machine-spec-cell machine-spec-cell--processor"
+                  <span
+                    class="machine-spec-cell machine-spec-cell--processor"
+                    role="columnheader"
                     >处理器</span
                   >
-                  <span class="machine-spec-cell">主频/睿频</span>
+                  <span class="machine-spec-cell" role="columnheader"
+                    >主频/睿频</span
+                  >
                   <span
                     class="machine-spec-cell machine-spec-cell--price machine-spec-cell--sortable"
+                    role="columnheader"
+                    :aria-sort="
+                      machineSpecSort.key === 'price'
+                        ? machineSpecSort.direction === 'asc'
+                          ? 'ascending'
+                          : 'descending'
+                        : 'none'
+                    "
                   >
                     <span>基础价格</span>
                     <span
@@ -566,14 +631,18 @@
                   :key="row.id"
                   type="button"
                   class="desktop-machine-table-row"
+                  role="row"
                   :class="{ active: row.active }"
-                  :aria-pressed="row.active"
+                  :aria-selected="row.active"
                   :aria-describedby="
                     row.note ? `spec-note-${row.id}` : undefined
                   "
                   @click="selectDesktopMachineSpec(row)"
                 >
-                  <span class="machine-spec-cell machine-spec-cell--name">
+                  <span
+                    class="machine-spec-cell machine-spec-cell--name"
+                    role="cell"
+                  >
                     <span class="machine-spec-radio" aria-hidden="true"></span>
                     <span class="machine-spec-name-wrap">
                       <span class="machine-spec-name">{{ row.name }}</span>
@@ -587,24 +656,34 @@
                         <template #content>
                           <div class="spec-note-content">{{ row.note }}</div>
                         </template>
-                        <span class="spec-note-trigger" aria-hidden="true"
+                        <span
+                          class="spec-note-trigger"
+                          aria-hidden="true"
+                          @click.stop
                           >?</span
                         >
                       </el-tooltip>
                     </span>
                   </span>
-                  <span class="machine-spec-cell">{{ row.cpuText }}</span>
-                  <span class="machine-spec-cell">{{ row.memoryText }}</span>
+                  <span class="machine-spec-cell" role="cell">{{
+                    row.cpuText
+                  }}</span>
+                  <span class="machine-spec-cell" role="cell">{{
+                    row.memoryText
+                  }}</span>
                   <span
                     class="machine-spec-cell machine-spec-cell--processor"
+                    role="cell"
                     >{{ row.processorLabel }}</span
                   >
-                  <span class="machine-spec-cell">{{
+                  <span class="machine-spec-cell" role="cell">{{
                     formatFrequencyPair(row.baseFrequency, row.turboFrequency)
                   }}</span>
-                  <span class="machine-spec-cell machine-spec-cell--price">{{
-                    row.basePriceText
-                  }}</span>
+                  <span
+                    class="machine-spec-cell machine-spec-cell--price"
+                    role="cell"
+                    >{{ row.basePriceText }}</span
+                  >
                 </button>
                 <div class="sr-only">
                   <template
@@ -751,7 +830,7 @@
 
           <!-- 网络配置 -->
           <div class="config-block" v-if="networkConfigs.length">
-            <div class="config-block-title">网络配置</div>
+            <h2 class="config-block-title">网络配置</h2>
             <div class="spec-list">
               <template v-for="cfg in networkConfigs" :key="cfg.key">
                 <MobileRangePicker
@@ -820,7 +899,7 @@
 
           <!-- 其他配置（兜底） -->
           <div class="config-block" v-if="otherConfigs.length">
-            <div class="config-block-title">其他配置</div>
+            <h2 class="config-block-title">其他配置</h2>
             <div class="spec-list">
               <template v-for="cfg in otherConfigs" :key="cfg.key">
                 <MobileRangePicker
@@ -886,7 +965,7 @@
 
           <!-- 基础设置 -->
           <div class="config-block">
-            <div class="config-block-title">基础设置</div>
+            <h2 class="config-block-title">基础设置</h2>
             <div class="spec-list">
               <!-- 计费周期 -->
               <div class="spec-row">
@@ -915,36 +994,51 @@
           </div>
         </div>
 
+        <!-- 首屏加载态：此前只有 v-loading 遮罩，去掉后 main 区在加载期间是纯空白，
+             慢网下用户看不到任何「正在加载」的反馈。 -->
         <div
-          v-if="!pageLoading && pageError"
+          v-if="pageLoading"
+          class="catalog-loading"
+          role="status"
+          aria-live="polite"
+        >
+          <span class="catalog-loading__spinner" aria-hidden="true"></span>
+          <span class="catalog-loading__text">产品数据加载中…</span>
+        </div>
+
+        <div
+          v-else-if="pageError"
           class="catalog-error"
           role="alert"
         >
           <p class="catalog-error__text">产品数据加载失败，请检查网络连接</p>
-          <button type="button" class="catalog-error__retry" @click="retryInit">
+          <!-- 本块是 v-else-if="pageError"，pageLoading 为真时上方加载态已接管，
+               所以这里不可能处于加载中，不写 :disabled 与三元文案以免误导。 -->
+          <button
+            type="button"
+            class="catalog-error__retry"
+            @click="retryInit"
+          >
             重新加载
           </button>
         </div>
 
         <el-empty
           v-else-if="
-            !pageLoading &&
-            !configLoading &&
-            !selectedProduct &&
-            visibleProducts.length
+            !configLoading && !selectedProduct && visibleProducts.length
           "
+          role="status"
+          aria-live="polite"
           description="请选择商品后查看配置与报价"
           style="padding: 60px 0"
         />
 
         <el-empty
           v-else-if="
-            !pageLoading &&
-            !pageError &&
-            !configLoading &&
-            !selectedProduct &&
-            !visibleProducts.length
+            !configLoading && !selectedProduct && !visibleProducts.length
           "
+          role="status"
+          aria-live="polite"
           description="当前分类暂无商品，可切换其他分类查看"
           style="padding: 60px 0"
         />
@@ -1053,7 +1147,7 @@
               v-if="appliedCoupon"
               type="button"
               class="coupon-clear-btn"
-              @click="clearCoupon"
+              @click="confirmClearCoupon"
             >
               移除
             </button>
@@ -1194,6 +1288,30 @@
           </div>
         </div>
         <div class="allocation-footer-actions">
+          <!-- 辅助入口进入文档流并与购买按钮同行，避免绝对定位压住按钮热区 -->
+          <div class="allocation-footer-links">
+            <button
+              v-if="productIntroText"
+              type="button"
+              class="allocation-footer-detail-btn"
+              @click="mobileIntroDrawer = true"
+            >
+              <el-icon class="allocation-footer-detail-icon"
+                ><Document
+              /></el-icon>
+              商品介绍
+            </button>
+            <button
+              type="button"
+              class="allocation-footer-detail-btn"
+              @click="mobileCostDrawer = true"
+            >
+              <el-icon class="allocation-footer-detail-icon"
+                ><Document
+              /></el-icon>
+              费用明细
+            </button>
+          </div>
           <button
             class="allocation-footer-action"
             :disabled="!canSubmit || submitting || quoteLoading"
@@ -1205,33 +1323,14 @@
             }}</span>
           </button>
         </div>
-        <div class="allocation-footer-links">
-          <button
-            v-if="productIntroText"
-            type="button"
-            class="allocation-footer-detail-btn"
-            @click="mobileIntroDrawer = true"
-          >
-            <el-icon class="allocation-footer-detail-icon"
-              ><Document
-            /></el-icon>
-            商品介绍
-          </button>
-          <button
-            type="button"
-            class="allocation-footer-detail-btn"
-            @click="mobileCostDrawer = true"
-          >
-            <el-icon class="allocation-footer-detail-icon"
-              ><Document
-            /></el-icon>
-            费用明细
-          </button>
-        </div>
       </div>
     </div>
 
+    <!-- 移动专属抽屉必须用 isMobile 门控：defineAsyncComponent 只把 chunk 从路由
+         chunk 里切出去，父组件一渲染该 vnode 就会触发 loader（实测桌面端仍会下载
+         MobileSheet / MobileRegionPicker / MobileOsPicker 约 12.5KB gzip）。 -->
     <MobileSheet
+      v-if="isMobile"
       v-model="mobileIntroDrawer"
       size="40%"
       title="商品介绍"
@@ -1244,6 +1343,7 @@
     </MobileSheet>
 
     <MobileSheet
+      v-if="isMobile"
       v-model="mobileCostDrawer"
       size="78%"
       title="费用明细"
@@ -1291,6 +1391,7 @@
     </MobileSheet>
 
     <MobileSheet
+      v-if="isMobile"
       v-model="mobileCouponDrawer"
       size="42%"
       title="选择优惠券"
@@ -1338,6 +1439,7 @@
     </MobileSheet>
 
     <MobileRegionPicker
+      v-if="isMobile"
       :visible="mobileRegionDrawer"
       :regions="rootGroups"
       :zone-map="tempChildGroups"
@@ -1349,6 +1451,7 @@
     />
 
     <MobileOsPicker
+      v-if="isMobile"
       :visible="mobileOsDrawer"
       :os-groups="osGroups"
       :active-os-group-id="configForm.os_group || ''"
@@ -1358,7 +1461,7 @@
     />
 
     <MobileOptionPicker
-      v-if="cpuConfig"
+      v-if="isMobile && cpuConfig"
       :visible="mobileCpuDrawer"
       :title="cpuConfig.label"
       :options="cpuConfig.options"
@@ -1368,7 +1471,7 @@
     />
 
     <MobileOptionPicker
-      v-if="memConfig"
+      v-if="isMobile && memConfig"
       :visible="mobileMemDrawer"
       :title="memConfig.label"
       :options="memConfig.options"
@@ -1378,7 +1481,7 @@
     />
 
     <MobileOptionPicker
-      v-if="hasMobileProductGroups"
+      v-if="isMobile && hasMobileProductGroups"
       :visible="mobileSpecFamilyDrawer"
       title="产品规格"
       :options="mobileSpecFamilyOptions"
@@ -1388,7 +1491,7 @@
     />
 
     <MobileOptionPicker
-      v-if="hasMobileProductGroups"
+      v-if="isMobile && hasMobileProductGroups"
       :visible="mobileGroupedCpuDrawer"
       title="CPU"
       :options="mobileGroupedCpuOptions"
@@ -1398,7 +1501,7 @@
     />
 
     <MobileOptionPicker
-      v-if="hasMobileProductGroups"
+      v-if="isMobile && hasMobileProductGroups"
       :visible="mobileGroupedMemoryDrawer"
       title="内存"
       :options="mobileGroupedMemoryOptions"
@@ -1408,7 +1511,7 @@
     />
 
     <MobileOptionPicker
-      v-if="mobileSingleConfig"
+      v-if="isMobile && mobileSingleConfig"
       :visible="mobileSingleConfigDrawer"
       :title="mobileSingleConfig.label"
       :options="mobileSingleConfig.options"
@@ -1417,54 +1520,9 @@
       @confirm="confirmMobileSingleConfigSelection"
     />
 
-    <el-drawer
-      v-model="mobileCategoryDrawer"
-      direction="ltr"
-      size="72%"
-      :with-header="false"
-      class="mobile-category-drawer"
-    >
-      <div class="mobile-drawer-sheet">
-        <div class="mobile-drawer-head">
-          <div>
-            <div class="mobile-drawer-title">地区</div>
-            <p class="mobile-drawer-desc">
-              {{ activeTypeLabel || "当前一级菜单" }}
-            </p>
-          </div>
-        </div>
-
-        <div class="mobile-drawer-list">
-          <button
-            v-for="g in rootGroups"
-            :key="g.id"
-            type="button"
-            class="mobile-drawer-item"
-            :class="{ active: activeGroupId === g.id }"
-            @click="handleMobileGroupSelect(g.id)"
-          >
-            <span>{{ g.name }}</span>
-            <svg
-              viewBox="0 0 12 12"
-              fill="none"
-              width="12"
-              height="12"
-              aria-hidden="true"
-            >
-              <path
-                d="M4.5 3l3 3-3 3"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
-          </button>
-        </div>
-      </div>
-    </el-drawer>
 
     <MobileSheet
+      v-if="isMobile"
       v-model="mobileProductDrawer"
       size="40%"
       title="请选择产品规格"
@@ -1494,7 +1552,12 @@
                 popper-class="spec-note-popper"
               >
                 <template #reference>
-                  <span class="spec-note-trigger" aria-hidden="true">?</span>
+                  <span
+                    class="spec-note-trigger"
+                    aria-hidden="true"
+                    @click.stop
+                    >?</span
+                  >
                 </template>
                 <div class="spec-note-content">{{ group.note }}</div>
               </el-popover>
@@ -1529,7 +1592,12 @@
                 popper-class="spec-note-popper"
               >
                 <template #reference>
-                  <span class="spec-note-trigger" aria-hidden="true">?</span>
+                  <span
+                    class="spec-note-trigger"
+                    aria-hidden="true"
+                    @click.stop
+                    >?</span
+                  >
                 </template>
                 <div class="spec-note-content">
                   {{ normalizeInstanceSpecNote(p.instance_spec_note) }}
@@ -1570,6 +1638,7 @@
 <script setup>
 import {
   computed,
+  defineAsyncComponent,
   nextTick,
   onBeforeUnmount,
   onMounted,
@@ -1584,12 +1653,24 @@ import {
   Fold,
   Ticket,
 } from "@element-plus/icons-vue";
+import { ElMessage } from "element-plus/es/components/message/index.mjs";
 import { useWebsiteProductsPage } from "@/domains/products/useWebsiteProductsPage";
-import MobileRegionPicker from "@/components/MobileRegionPicker.vue";
-import MobileOsPicker from "@/components/MobileOsPicker.vue";
-import MobileOptionPicker from "@/components/MobileOptionPicker.vue";
 import MobileRangePicker from "@/components/MobileRangePicker.vue";
-import MobileSheet from "@/components/MobileSheet.vue";
+// 抽屉类移动组件只在移动端真正打开时才需要，桌面访问者永远用不到；
+// 静态引入会让它们随 products 路由 chunk 一起下发（实测移动端专属部分 gzip 约 16KB）。
+// MobileRangePicker 保持静态：它是移动端配置区的行内控件，首次渲染就要到位。
+const MobileRegionPicker = defineAsyncComponent(
+  () => import("@/components/MobileRegionPicker.vue"),
+);
+const MobileOsPicker = defineAsyncComponent(
+  () => import("@/components/MobileOsPicker.vue"),
+);
+const MobileOptionPicker = defineAsyncComponent(
+  () => import("@/components/MobileOptionPicker.vue"),
+);
+const MobileSheet = defineAsyncComponent(
+  () => import("@/components/MobileSheet.vue"),
+);
 import {
   resolveProductDisplayName,
   toMoneyNumber,
@@ -1613,7 +1694,6 @@ const {
   submitting,
   sidebarCollapsed,
   isMobile,
-  mobileCategoryDrawer,
   mobileProductDrawer,
   mobileRegionDrawer,
   tempChildGroups,
@@ -1634,7 +1714,6 @@ const {
   productStockLoading,
   productStockError,
   selectedProductDisplayName,
-  activeTypeLabel,
   activeGroupName,
   activeChildName,
   osConfig,
@@ -1664,14 +1743,13 @@ const {
   purchaseRequirementList,
   purchaseRequirementSummary,
   handleCouponChange,
-  clearCoupon,
+  confirmClearCoupon,
   visibleProducts,
   selectOsGroup,
   handleSubmit,
   openMobileRegionDrawer,
   handleRegionChange,
   confirmRegionSelection,
-  handleMobileGroupSelect,
   openMobileProductDrawer,
   confirmMobileProductSelection: confirmRawMobileProductSelection,
   switchType,
@@ -1697,9 +1775,11 @@ function applyMobileCoupon(id) {
   mobileCouponDrawer.value = false;
 }
 
-function removeMobileCoupon() {
-  clearCoupon();
-  mobileCouponDrawer.value = false;
+async function removeMobileCoupon() {
+  // 二次确认通过后才收起抽屉：取消时保留原优惠券与抽屉，用户可继续切换
+  if (await confirmClearCoupon()) {
+    mobileCouponDrawer.value = false;
+  }
 }
 
 // 会员折扣 + 优惠券合计让利，用于浮动合计条与费用明细的折扣文案
@@ -1751,10 +1831,6 @@ function setupAllocationFooterObserver() {
           "--allocation-footer-height",
           `${height}px`,
         );
-        allocationFooterEl.value?.style.setProperty(
-          "--allocation-footer-height",
-          `${height}px`,
-        );
       }
     });
     allocationFooterResizeObserver.observe(allocationFooterInnerEl.value);
@@ -1773,13 +1849,23 @@ watch([isMobile, selectedProduct], () => {
   nextTick(setupAllocationFooterObserver);
 });
 
-// 跨断点切换为桌面形态时，收起 view 层的移动抽屉，避免 DOM 被 v-if 隐藏后状态残留
+// 跨断点切换为桌面形态时，收起 view 层的移动抽屉，避免 DOM 被 v-if 隐藏后状态残留。
+// 抽屉外层现在统一带 v-if="isMobile"，切到桌面会整块卸载，若不在这里复位 ref，
+// 切回移动端时组件重新挂载会凭残留的 true 立刻弹出上次的抽屉。
 watch(isMobile, (mobile) => {
   if (!mobile) {
     mobileOsDrawer.value = false;
     mobileIntroDrawer.value = false;
     mobileCostDrawer.value = false;
     mobileCouponDrawer.value = false;
+    mobileRegionDrawer.value = false;
+    mobileProductDrawer.value = false;
+    mobileCpuDrawer.value = false;
+    mobileMemDrawer.value = false;
+    mobileSpecFamilyDrawer.value = false;
+    mobileGroupedCpuDrawer.value = false;
+    mobileGroupedMemoryDrawer.value = false;
+    mobileSingleConfigDrawer.value = false;
   }
 });
 
@@ -1869,8 +1955,8 @@ function normalizeMobileModelBaseName(value, cpuText, memoryText) {
       );
   });
 
-  // Fallback: strip any remaining vCPU / memory spec patterns that may not have been
-  // caught above (e.g. when cpuText / memoryText were not separately available).
+  // 兜底：清理上面未捕获的 vCPU / 内存规格片段
+  // （例如 cpuText / memoryText 未单独提供时）。
   text = text.replace(/[-_\s]+\d+vcpu\s*$/i, "");
   text = text.replace(/[-_\s]+\d+g(?:ib?)?\s*$/i, "");
 
@@ -2588,23 +2674,36 @@ async function openMobileProductGroupDrawer() {
 }
 
 function openMobileCpuDrawer() {
-  if (!cpuConfig.value?.options?.length) return;
+  if (!cpuConfig.value?.options?.length) {
+    // 静默 return 会让用户点了毫无反应，误以为按钮坏了；明确告知当前无可选项。
+    ElMessage.warning("当前机型没有可选的 CPU 规格");
+    return;
+  }
   mobileCpuDrawer.value = true;
 }
 
 function openMobileMemDrawer() {
-  if (!memConfig.value?.options?.length) return;
+  if (!memConfig.value?.options?.length) {
+    ElMessage.warning("当前机型没有可选的内存规格");
+    return;
+  }
   mobileMemDrawer.value = true;
 }
 
 function openMobileGroupedCpuDrawer() {
-  if (!mobileGroupedCpuOptions.value.length) return;
+  if (!mobileGroupedCpuOptions.value.length) {
+    ElMessage.warning("当前商品没有可选的 CPU 规格");
+    return;
+  }
   mobileGroupedCpuDrawer.value = true;
 }
 
 function openMobileSpecPicker() {
   if (hasMobileProductGroups.value) {
-    if (!mobileSpecFamilyOptions.value.length) return;
+    if (!mobileSpecFamilyOptions.value.length) {
+      ElMessage.warning("当前商品没有可选的规格");
+      return;
+    }
     mobileSpecFamilyDrawer.value = true;
     return;
   }
@@ -2613,7 +2712,10 @@ function openMobileSpecPicker() {
 }
 
 function openMobileGroupedMemoryDrawer() {
-  if (!mobileGroupedMemoryOptions.value.length) return;
+  if (!mobileGroupedMemoryOptions.value.length) {
+    ElMessage.warning("当前商品没有可选的内存规格");
+    return;
+  }
   mobileGroupedMemoryDrawer.value = true;
 }
 
@@ -2741,7 +2843,10 @@ function selectedOptionLabel(cfg) {
 }
 
 function openMobileSingleConfigDrawer(cfg) {
-  if (!cfg?.options?.length) return;
+  if (!cfg?.options?.length) {
+    ElMessage.warning(`当前机型没有可选的${cfg?.label || "配置项"}`);
+    return;
+  }
   mobileSingleConfig.value = cfg;
   mobileSingleConfigDrawer.value = true;
 }
@@ -2763,7 +2868,10 @@ function isRangeConfig(cfg) {
 }
 
 function openMobileOsDrawer() {
-  if (!osGroups.value.length) return;
+  if (!osGroups.value.length) {
+    ElMessage.warning("当前商品没有可选的操作系统");
+    return;
+  }
   mobileOsDrawer.value = true;
 }
 
@@ -2778,13 +2886,19 @@ function confirmOsSelection(groupId, versionId) {
   }
 }
 
-function handleDesktopGroupChange(value) {
+async function handleDesktopGroupChange(value) {
   const nextGroupId = Number(value || 0);
   if (!nextGroupId) {
     return;
   }
 
-  void switchGroup(nextGroupId);
+  try {
+    await switchGroup(nextGroupId);
+  } catch {
+    // 品类目录请求失败会 throw；桌面下拉切换此前是 void 调用，失败后
+    // 下拉已切到新值但列表还是旧数据，且控制台只有 unhandled rejection。
+    ElMessage.warning("目录加载失败，请重新选择地区");
+  }
 }
 
 function handleDesktopChildChange(value) {

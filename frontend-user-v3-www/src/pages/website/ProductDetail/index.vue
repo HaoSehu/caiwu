@@ -64,20 +64,11 @@
         </div>
       </div>
 
-      <!-- 产品名称下拉按钮 -->
-      <div class="pd-name-bar">
-        <button type="button" class="product-name-btn active">
-          <span>{{ selectedMachineSpec.displayName }}</span>
-          <svg viewBox="0 0 12 12" fill="none" width="12" height="12">
-            <path
-              d="M3 4.5l3 3 3-3"
-              stroke="currentColor"
-              stroke-width="1.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-          </svg>
-        </button>
+      <!-- 当前机型标签：纯展示文本。此前渲染成带下拉箭头的 button 却无点击行为，属于假控件 -->
+      <div v-if="selectedMachineSpec.displayName" class="pd-name-bar">
+        <span class="product-name-tag">{{
+          selectedMachineSpec.displayName
+        }}</span>
       </div>
 
       <section v-if="showCatalogHero" class="pd-hero">
@@ -103,7 +94,7 @@
         <div class="pd-config">
           <!-- 区域 -->
           <div class="cfg-group" v-if="regionOptions.length">
-            <div class="cfg-group-head">区域</div>
+            <h2 class="cfg-group-head">区域</h2>
             <div class="cfg-group-body">
               <div class="opt-wrap">
                 <button
@@ -122,7 +113,7 @@
 
           <!-- 操作系统 -->
           <div class="cfg-group" v-if="osConfig">
-            <div class="cfg-group-head">操作系统</div>
+            <h2 class="cfg-group-head">操作系统</h2>
             <div class="cfg-group-body">
               <div v-if="isMobile" class="pd-mobile-picker-row">
                 <div class="pd-mobile-picker-col">
@@ -214,7 +205,7 @@
 
           <!-- 机型配置 -->
           <div class="cfg-group" v-if="specConfigs.length">
-            <div class="cfg-group-head">机型配置</div>
+            <h2 class="cfg-group-head">机型配置</h2>
             <div class="cfg-group-body">
               <div class="spec-row" v-for="cfg in specConfigs" :key="cfg.key">
                 <div class="spec-label">{{ cfg.label }}</div>
@@ -239,13 +230,11 @@
                       {{ opt.label }}
                     </button>
                   </div>
-                  <button
+                  <span
                     v-else-if="cfg.options.length === 1"
-                    type="button"
-                    class="opt-btn active"
+                    class="opt-btn active opt-btn--static"
+                    >{{ cfg.options[0].label }}</span
                   >
-                    {{ cfg.options[0].label }}
-                  </button>
                 </div>
               </div>
             </div>
@@ -253,7 +242,7 @@
 
           <!-- 网络配置 -->
           <div class="cfg-group" v-if="netConfigs.length">
-            <div class="cfg-group-head">网络配置</div>
+            <h2 class="cfg-group-head">网络配置</h2>
             <div class="cfg-group-body">
               <div class="spec-row" v-for="cfg in netConfigs" :key="cfg.key">
                 <div class="spec-label">{{ cfg.label }}</div>
@@ -278,13 +267,11 @@
                       {{ opt.label }}
                     </button>
                   </div>
-                  <button
+                  <span
                     v-else-if="cfg.options.length === 1"
-                    type="button"
-                    class="opt-btn active"
+                    class="opt-btn active opt-btn--static"
+                    >{{ cfg.options[0].label }}</span
                   >
-                    {{ cfg.options[0].label }}
-                  </button>
                 </div>
               </div>
             </div>
@@ -292,7 +279,7 @@
 
           <!-- 基础设置 -->
           <div class="cfg-group">
-            <div class="cfg-group-head">基础设置</div>
+            <h2 class="cfg-group-head">基础设置</h2>
             <div class="cfg-group-body">
               <!-- 计费周期 -->
               <div class="spec-row">
@@ -443,7 +430,7 @@
                   v-if="appliedCoupon"
                   type="button"
                   class="coupon-clear-btn"
-                  @click="clearCoupon"
+                  @click="confirmClearCoupon"
                 >
                   移除
                 </button>
@@ -599,7 +586,8 @@
       </div>
     </div>
 
-    <div class="pd-empty" v-else-if="!loading">
+    <!-- role=status：加载失败与「商品不存在」必须被读屏播报，否则只剩视觉反差 -->
+    <div class="pd-empty" v-else-if="!loading" role="status" aria-live="polite">
       <el-empty
         :description="
           loadFailed ? '商品加载失败，请检查网络连接' : '商品不存在或已下架'
@@ -614,8 +602,10 @@
       </el-empty>
     </div>
 
+    <!-- 移动专属抽屉用 isMobile 门控：异步组件只切 chunk 不阻止加载，
+         桌面端只要渲染到这个 vnode 就会去拉 MobileOsPicker / MobileSheet。 -->
     <MobileOsPicker
-      v-if="osConfig"
+      v-if="isMobile && osConfig"
       :visible="mobileOsDrawer"
       :os-groups="osGroups"
       :active-os-group-id="configForm.os_group || ''"
@@ -625,6 +615,7 @@
     />
 
     <MobileSheet
+      v-if="isMobile"
       v-model="mobileCouponDrawer"
       size="42%"
       title="选择优惠券"
@@ -661,7 +652,14 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import {
+  computed,
+  defineAsyncComponent,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  watch,
+} from "vue";
 import { useRoute, useRouter } from "vue-router";
 import siteApi from "@/api/site";
 import {
@@ -685,8 +683,15 @@ import {
 } from "@/domains/products/machineSpecResolver";
 import { useWebsiteProductConfigurator } from "@/domains/products/useWebsiteProductConfigurator";
 import { useWebsiteProductCheckout } from "@/domains/products/useWebsiteProductCheckout";
-import MobileOsPicker from "@/components/MobileOsPicker.vue";
-import MobileSheet from "@/components/MobileSheet.vue";
+import { useMobileBreakpoint } from "@/composables/useMobileBreakpoint";
+// 这两个组件只在移动端弹层里出现，桌面端永不渲染；
+// 异步组件让它们不再随本页 chunk 静态下发。
+const MobileOsPicker = defineAsyncComponent(
+  () => import("@/components/MobileOsPicker.vue"),
+);
+const MobileSheet = defineAsyncComponent(
+  () => import("@/components/MobileSheet.vue"),
+);
 
 const route = useRoute();
 const router = useRouter();
@@ -695,35 +700,13 @@ const appStore = useAppStore();
 // 详情页 meta 与 canonical 的公网站点前缀
 const publicSiteUrl = resolvePublicSiteUrl();
 
-// 移动布局阈值与全站 isMobile 断点一致（variables.scss $breakpoint-nav = 992px）。
-// 注意：SCSS 变量无法进入 script 字符串，历史上这里写死 "$breakpoint-nav" 导致
-// matchMedia 解析失败、isMobile 恒为 false，移动端从未进入 JS 移动态，故此处
-// 用 JS 常量与 variables.scss 保持同步，修改断点时两处必须同时更新。
-const MOBILE_BREAKPOINT = 992;
-const MOBILE_MEDIA_QUERY = `(max-width: ${MOBILE_BREAKPOINT}px)`;
-
-// 声明时即初始化（与 WebsiteLayout 同策略）：避免移动端首帧先渲染桌面分支
-// （el-select 等）再切移动 picker 的一帧闪变；onMounted 中的 updateMobileState
-// 保留用于挂载后同步与 matchMedia change 监听
-const isMobile = ref(
-  typeof window === "undefined" || typeof window.matchMedia !== "function"
-    ? false
-    : window.matchMedia(MOBILE_MEDIA_QUERY).matches,
-);
+// 移动布局断点与商品列表、站点头部共用 useMobileBreakpoint 的同一份 matchMedia：
+// 声明时即读取初始值，避免移动端首帧先渲染桌面分支（el-select 等）再切移动
+// picker 的一帧闪变；matchMedia change 监听也由该 composable 在挂载/卸载时成对
+// 注册与移除，本页不再各自维护 mobileMediaQuery / mobileMediaListener。
+const { isMobile, updateMobileState } = useMobileBreakpoint();
 const mobileOsDrawer = ref(false);
 const mobileCouponDrawer = ref(false);
-let mobileMediaQuery = null;
-let mobileMediaListener = null;
-
-function updateMobileState() {
-  if (
-    typeof window === "undefined" ||
-    typeof window.matchMedia !== "function"
-  ) {
-    return;
-  }
-  isMobile.value = window.matchMedia(MOBILE_MEDIA_QUERY).matches;
-}
 
 function openMobileOsDrawer() {
   if (!osGroups.value.length) return;
@@ -753,13 +736,24 @@ function openMobileCouponDrawer() {
   mobileCouponDrawer.value = true;
 }
 
-function selectMobileCoupon(id) {
-  mobileCouponDrawer.value = false;
-  if (id) {
-    handleCouponChange(id);
-  } else {
-    clearCoupon();
+async function selectMobileCoupon(id) {
+  if (!id) {
+    // 当前本就没选券：移除请求无事可做，confirmClearCoupon() 会直接返回 false，
+    // 若照搬「取消就不关抽屉」的逻辑，用户点这一行将毫无反应。
+    if (!selectedCouponId.value) {
+      mobileCouponDrawer.value = false;
+      return;
+    }
+    // 已选券时选「不使用优惠券」等价于移除，需要二次确认；取消时抽屉保持打开
+    if (!(await confirmClearCoupon())) {
+      return;
+    }
+    mobileCouponDrawer.value = false;
+    return;
   }
+
+  handleCouponChange(id);
+  mobileCouponDrawer.value = false;
 }
 
 const loading = ref(false);
@@ -797,7 +791,7 @@ const {
   purchaseRequirementList,
   purchaseRequirementSummary,
   handleCouponChange,
-  clearCoupon,
+  confirmClearCoupon,
   handleSubmit,
   applyLoadedProduct,
 } = useWebsiteProductCheckout({
@@ -1035,7 +1029,8 @@ const submitButtonText = computed(() => {
 
 function switchProduct(id) {
   const routePayload = resolveWebsiteProductRoutePayloadByDetail(product.value);
-  router.replace(
+  // 用 push 保留浏览历史，否则同级切换后按浏览器后退会直接跳回上上级页面
+  router.push(
     buildWebsiteProductPath({
       ...routePayload,
       productId: Number(id || 0),
@@ -1090,6 +1085,14 @@ watch(
     if (v) loadProduct();
   },
 );
+// 抽屉外层带 v-if="isMobile"，切到桌面即整块卸载；不复位 ref 的话，切回移动端时
+// 组件重新挂载会凭残留的 true 立刻弹出上次打开的抽屉。
+watch(isMobile, (mobile) => {
+  if (!mobile) {
+    mobileOsDrawer.value = false;
+    mobileCouponDrawer.value = false;
+  }
+});
 watch(
   () => route.query.user_coupon_id,
   (value) => {
@@ -1104,36 +1107,16 @@ watch(
   { immediate: true },
 );
 onMounted(() => {
+  // 挂载后再同步一次：脚本执行到挂载之间视口可能已经变化；
+  // matchMedia change 监听由 useMobileBreakpoint 内部注册，这里不再重复注册
   updateMobileState();
-  if (
-    typeof window !== "undefined" &&
-    typeof window.matchMedia === "function"
-  ) {
-    // 实例复用：removeEventListener/removeListener 仅对同一实例生效
-    mobileMediaQuery = window.matchMedia(MOBILE_MEDIA_QUERY);
-    mobileMediaListener = (event) => {
-      isMobile.value = event.matches;
-    };
-    if (typeof mobileMediaQuery.addEventListener === "function") {
-      mobileMediaQuery.addEventListener("change", mobileMediaListener);
-    } else if (typeof mobileMediaQuery.addListener === "function") {
-      mobileMediaQuery.addListener(mobileMediaListener);
-    }
-  }
   loadProduct();
 });
 
 onBeforeUnmount(() => {
   // 使仍在途的 loadProduct 响应失效；报价/库存在途请求由 checkout 的 onBeforeUnmount 中止
+  // 断点监听由 useMobileBreakpoint 的 onBeforeUnmount 移除
   productLoadToken += 1;
-
-  if (mobileMediaQuery && mobileMediaListener) {
-    if (typeof mobileMediaQuery.removeEventListener === "function") {
-      mobileMediaQuery.removeEventListener("change", mobileMediaListener);
-    } else if (typeof mobileMediaQuery.removeListener === "function") {
-      mobileMediaQuery.removeListener(mobileMediaListener);
-    }
-  }
 });
 </script>
 
@@ -1148,7 +1131,9 @@ onBeforeUnmount(() => {
 */
 
 .pd-page {
-  min-height: calc(100vh - 160px);
+  /* 100vh 减去站头与页脚可见基线；原写死 160px 与 $navbar-height 无关联，
+     改由令牌推导，站头改高时不必再回来找魔法数。 */
+  min-height: calc(100vh - ($navbar-height + 96px));
   background: $bg-color;
   padding-bottom: 40px;
 
@@ -1215,7 +1200,10 @@ onBeforeUnmount(() => {
   font-size: 13px;
   cursor: pointer;
   white-space: nowrap;
-  transition: all 0.15s;
+  transition:
+    border-color $motion-fast ease,
+    background-color $motion-fast ease,
+    color $motion-fast ease;
 
   &:hover {
     border-color: $color-primary;
@@ -1243,7 +1231,7 @@ onBeforeUnmount(() => {
   padding: 18px 20px;
   border: 1px solid $border-color;
   border-radius: 4px;
-  background: linear-gradient(135deg, $bg-color-card 0%, #f5f9ff 100%);
+  background: linear-gradient(135deg, $bg-color-card 0%, $bg-color-hover 100%);
 }
 
 .pd-hero-copy {
@@ -1296,39 +1284,22 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
-.product-name-btn {
+/* 当前机型标签：纯文本展示，不带 pointer 与箭头，避免误导为可展开控件 */
+.product-name-tag {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 36px;
-  padding: 0 14px;
-  border: 1px solid $border-color-strong;
-  border-radius: 4px;
-  background: $bg-color-card;
-  color: $text-color-primary;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
   max-width: 100%;
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: $color-primary-soft;
+  color: $color-primary;
+  font-size: 12px;
+  font-weight: 600;
 
-  span {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  svg {
-    flex-shrink: 0;
-    color: $text-color-placeholder;
-  }
-
-  &.active {
-    border-color: $color-primary;
-    color: $color-primary;
-    svg {
-      color: $color-primary;
-    }
-  }
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ===== 主体 ===== */
@@ -1374,7 +1345,7 @@ onBeforeUnmount(() => {
   font-size: 14px;
   font-weight: 600;
   color: $text-color-primary;
-  border-bottom: 1px solid #f2f3f5;
+  border-bottom: 1px solid $divider-color;
 }
 
 .cfg-group-body {
@@ -1395,12 +1366,15 @@ onBeforeUnmount(() => {
   padding: 0 14px;
   border: 1px solid $border-color-strong;
   border-radius: 4px;
-  background: #fafafa;
+  background: $bg-color-soft;
   color: $text-color-primary;
   font-size: 13px;
   cursor: pointer;
   white-space: nowrap;
-  transition: all 0.15s;
+  transition:
+    border-color $motion-fast ease,
+    background-color $motion-fast ease,
+    color $motion-fast ease;
 
   &:hover {
     border-color: $color-primary;
@@ -1413,6 +1387,16 @@ onBeforeUnmount(() => {
     color: $color-primary;
     font-weight: 600;
   }
+
+}
+
+// 只有一个可选值时渲染为纯展示标签（span），不带手型光标与 hover 反馈。
+// 该 span 恒带 .active，.opt-btn.active 已给出最终配色，因此这里不能也不需要
+// 再写 :hover —— 上一版保留了整组 hover 声明，与注释矛盾且永远不可见。
+.opt-btn--static {
+  // 保留文本可选中，只去掉手型光标；悬停配色由恒生效的 .active 提供，
+  // 不再重复写 :hover（写了也看不出差别，且与「无 hover 反馈」的意图矛盾）
+  cursor: default;
 }
 
 /* ===== 规格行 ===== */
@@ -1421,7 +1405,7 @@ onBeforeUnmount(() => {
   align-items: flex-start;
   gap: 16px;
   padding: 10px 0;
-  border-bottom: 1px solid #f2f3f5;
+  border-bottom: 1px solid $divider-color;
 
   &:first-child {
     padding-top: 0;
@@ -1464,7 +1448,7 @@ onBeforeUnmount(() => {
   justify-content: center;
   width: 34px;
   border: none;
-  background: #fafafa;
+  background: $bg-color-soft;
   color: $text-color-secondary;
   cursor: pointer;
   transition: background 0.15s;
@@ -1543,9 +1527,11 @@ onBeforeUnmount(() => {
   padding: 8px 14px;
   border: 1px solid $border-color-strong;
   border-radius: 4px;
-  background: #fafafa;
+  background: $bg-color-soft;
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    border-color $motion-fast ease,
+    background-color $motion-fast ease;
 
   &:hover {
     border-color: $color-primary;
@@ -1579,7 +1565,9 @@ onBeforeUnmount(() => {
 /* ===== 右侧摘要 ===== */
 .pd-aside {
   position: sticky;
-  top: 80px;
+  /* 站头 64px + 16px 呼吸位；与 products 页侧栏的 64px 贴顶不同，
+     这里是要塞在站头下方带间距的卡片区，故多留 16px。 */
+  top: calc($navbar-height + 16px);
 
   @media (max-width: $breakpoint-nav) {
     position: static;
@@ -1684,7 +1672,7 @@ onBeforeUnmount(() => {
 
 .aside-divider {
   height: 1px;
-  background: #f2f3f5;
+  background: $divider-color;
   margin: 12px 0;
 }
 
@@ -1839,7 +1827,7 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   align-items: center;
   padding: 8px 0 16px;
-  border-top: 1px solid #f2f3f5;
+  border-top: 1px solid $divider-color;
   margin-top: 8px;
 }
 
@@ -1861,10 +1849,11 @@ onBeforeUnmount(() => {
 }
 
 .cost-amount {
-  font-size: 26px;
+  font-size: $font-price-md;
   font-weight: 700;
   color: $color-primary;
   line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
 
 .cost-amount--loading {
@@ -1906,7 +1895,7 @@ onBeforeUnmount(() => {
   width: 100%;
   height: 44px;
   border: none;
-  border-radius: 4px;
+  border-radius: $btn-border-radius-sm;
   background: $color-primary;
   color: $text-color-inverse;
   font-size: 15px;
@@ -1934,13 +1923,21 @@ onBeforeUnmount(() => {
   }
 
   &.is-sold-out {
-    background: linear-gradient(135deg, #b91c1c 0%, #ef4444 100%);
-    box-shadow: 0 0 0 0 rgba(#ef4444, 0.34);
+    background: linear-gradient(
+      135deg,
+      $color-danger-text 0%,
+      $color-danger 100%
+    );
+    box-shadow: 0 0 0 0 $color-danger-a34;
     animation: soldOutPulse 1.7s ease-in-out infinite;
   }
 
   &.is-sold-out:hover {
-    background: linear-gradient(135deg, #b91c1c 0%, #ef4444 100%);
+    background: linear-gradient(
+      135deg,
+      $color-danger-text 0%,
+      $color-danger 100%
+    );
   }
 }
 
@@ -1997,9 +1994,11 @@ onBeforeUnmount(() => {
 }
 
 .allocation-footer-num {
-  font-size: 24px;
+  // 与商品配置页的吸底条统一为同一档金额字号（原 24px 与 22px 两页不一致）
+  font-size: $font-price-md;
   line-height: 1;
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
 .allocation-footer-cycle {
@@ -2026,7 +2025,7 @@ onBeforeUnmount(() => {
   width: 112px;
   height: 44px;
   border: none;
-  border-radius: 10px;
+  border-radius: $btn-border-radius-sm;
   background: $color-primary;
   color: $text-color-inverse;
   font-size: 15px;
@@ -2053,13 +2052,21 @@ onBeforeUnmount(() => {
   }
 
   &.is-sold-out {
-    background: linear-gradient(135deg, #b91c1c 0%, #ef4444 100%);
-    box-shadow: 0 0 0 0 rgba(#ef4444, 0.34);
+    background: linear-gradient(
+      135deg,
+      $color-danger-text 0%,
+      $color-danger 100%
+    );
+    box-shadow: 0 0 0 0 $color-danger-a34;
     animation: soldOutPulse 1.7s ease-in-out infinite;
   }
 
   &.is-sold-out:hover {
-    background: linear-gradient(135deg, #b91c1c 0%, #ef4444 100%);
+    background: linear-gradient(
+      135deg,
+      $color-danger-text 0%,
+      $color-danger 100%
+    );
   }
 }
 
@@ -2117,11 +2124,11 @@ onBeforeUnmount(() => {
 @keyframes soldOutPulse {
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(#ef4444, 0.34);
+    box-shadow: 0 0 0 0 $color-danger-a34;
   }
 
   50% {
-    box-shadow: 0 0 0 6px rgba(#ef4444, 0);
+    box-shadow: 0 0 0 6px $color-danger-a0;
   }
 }
 
@@ -2200,7 +2207,8 @@ onBeforeUnmount(() => {
   }
 
   &:disabled {
-    color: #c0c4cc;
+    // 原 #c0c4cc 对白仅 1.75:1，改用已校验的禁用色令牌
+    color: $text-color-disabled;
     cursor: not-allowed;
   }
 }
@@ -2217,7 +2225,7 @@ onBeforeUnmount(() => {
   width: 100%;
   min-height: 52px;
   padding: 0 14px;
-  border: 1px solid #eef2f7;
+  border: 1px solid $divider-color;
   border-radius: 6px;
   background: $bg-color-card;
   color: $text-color-primary;
