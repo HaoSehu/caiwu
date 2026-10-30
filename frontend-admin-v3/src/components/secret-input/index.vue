@@ -10,7 +10,12 @@
     <span
       v-if="hasValue && canReveal"
       class="secret-input__toggle secret-input__toggle--textarea"
+      role="button"
+      tabindex="0"
+      :aria-label="visible ? '隐藏内容' : '显示内容'"
       @click.stop="toggleVisible"
+      @keydown.enter.prevent.stop="toggleVisible"
+      @keydown.space.prevent.stop="toggleVisible"
     >
       <browse-off-icon v-if="visible" />
       <browse-icon v-else />
@@ -26,7 +31,15 @@
     @update:model-value="handleInput"
   >
     <template v-if="hasValue && canReveal" #suffix-icon>
-      <span class="secret-input__toggle" @click.stop="toggleVisible">
+      <span
+        class="secret-input__toggle"
+        role="button"
+        tabindex="0"
+        :aria-label="visible ? '隐藏内容' : '显示内容'"
+        @click.stop="toggleVisible"
+        @keydown.enter.prevent.stop="toggleVisible"
+        @keydown.space.prevent.stop="toggleVisible"
+      >
         <browse-off-icon v-if="visible" />
         <browse-icon v-else />
       </span>
@@ -79,15 +92,16 @@ const edited = ref(false);
 const loadedValue = ref<string | null>(null);
 const loading = ref(false);
 
+/**
+ * 展示值只由「是否已编辑」和「是否正在查看」决定，查看态永远读 loadedValue：
+ * 明文只在组件内部用于展示，绝不回写 v-model —— 否则父层无法区分「只是看了一眼」和「真的要改」，
+ * 保存时会把明文当作新值提交，等于把「仅查看」变成一次密钥重写。
+ */
 const displayValue = computed(() => {
   if (!props.hasValue)
     return props.modelValue === null || props.modelValue === undefined ? '' : String(props.modelValue);
-  if (visible.value) {
-    return props.modelValue === null || props.modelValue === undefined || props.modelValue === ''
-      ? loadedValue.value || ''
-      : String(props.modelValue);
-  }
   if (edited.value) return props.modelValue === null || props.modelValue === undefined ? '' : String(props.modelValue);
+  if (visible.value) return loadedValue.value ?? '';
   return props.mask;
 });
 
@@ -129,9 +143,7 @@ async function toggleVisible() {
   }
 
   if (loadedValue.value !== null) {
-    emit('update:modelValue', loadedValue.value);
     visible.value = true;
-    emit('edited-change', false);
     return;
   }
 
@@ -141,7 +153,6 @@ async function toggleVisible() {
   try {
     const value = await props.reveal();
     loadedValue.value = typeof value === 'string' ? value : JSON.stringify(value ?? '');
-    emit('update:modelValue', loadedValue.value);
     visible.value = true;
     emit('edited-change', false);
   } catch (error) {

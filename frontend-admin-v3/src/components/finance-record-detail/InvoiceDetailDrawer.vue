@@ -104,7 +104,9 @@
             <div v-if="invoice.trace_id" class="detail-kv-item detail-kv-item--span-2">
               <span class="detail-kv-item__label">链路追踪 (Trace ID)</span>
               <div class="detail-kv-item__value detail-copy-wrap">
-                <span style="font-family: monospace; font-size: 13px">{{ invoice.trace_id }}</span>
+                <span style="font-family: monospace; font-size: var(--td-font-size-size-3, 14px)">{{
+                  invoice.trace_id
+                }}</span>
                 <t-tooltip content="复制 Trace ID" placement="top">
                   <t-button variant="text" shape="square" size="small" @click="copyText(invoice.trace_id)">
                     <template #icon><file-copy-icon /></template>
@@ -115,7 +117,9 @@
             <div v-if="invoice.refund_trace_id" class="detail-kv-item detail-kv-item--span-2">
               <span class="detail-kv-item__label">退款追踪号</span>
               <div class="detail-kv-item__value detail-copy-wrap">
-                <span style="font-family: monospace; font-size: 13px">{{ invoice.refund_trace_id }}</span>
+                <span style="font-family: monospace; font-size: var(--td-font-size-size-3, 14px)">{{
+                  invoice.refund_trace_id
+                }}</span>
                 <t-tooltip content="复制退款追踪" placement="top">
                   <t-button variant="text" shape="square" size="small" @click="copyText(invoice.refund_trace_id)">
                     <template #icon><file-copy-icon /></template>
@@ -244,7 +248,7 @@ import type { InvoiceRecord } from '@/api/admin';
 import type { RecordDetailMetric, RecordDetailTab } from '@/components/record-detail-page/index.vue';
 import RecordDetailPage from '@/components/record-detail-page/index.vue';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { copyToClipboard, formatDateTime, formatMoney } from '@/utils/format';
+import { copyToClipboard, fieldValue, formatDateTime, formatMoney, toRecord } from '@/utils/format';
 
 const props = withDefaults(
   defineProps<{
@@ -438,30 +442,22 @@ function paymentStatusTheme(payment: Record<string, unknown>) {
   return value === 'info' || value === 'purple' ? 'default' : value;
 }
 
-function fieldValue(value: unknown) {
-  if (value === null || value === undefined || value === '') return '-';
-  return String(value);
-}
-
-// formatMoney/formatDateTime 统一从 @/utils/format 导入（本文件此前本地重写违规，已修正）。
-
-function toRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
-}
+// formatMoney/formatDateTime/fieldValue/toRecord 统一从 @/utils/format 导入（本文件此前本地重写违规，已修正）。
 </script>
 <style lang="less" scoped>
 // embedded 模式（独立账单详情页）：撑满内容区，不出现抽屉遮罩
 .invoice-detail-embedded {
   min-height: 100%;
 }
+
 .finance-detail-section {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--td-comp-margin-m);
 }
 
 .finance-detail-section + .finance-detail-section {
-  margin-top: 20px;
+  margin-top: var(--td-comp-margin-xl);
 }
 
 .finance-detail-section h4 {
@@ -469,8 +465,8 @@ function toRecord(value: unknown): Record<string, unknown> {
   margin: 0;
   padding-left: 10px;
   color: var(--td-text-color-primary);
-  font-size: var(--td-font-size-title-medium, 14px);
-  font-weight: 700;
+  font-size: var(--td-font-size-title-medium);
+  font-weight: 600;
   line-height: 22px;
 
   &::before {
@@ -479,7 +475,7 @@ function toRecord(value: unknown): Record<string, unknown> {
     bottom: 3px;
     left: 0;
     width: 3px;
-    border-radius: var(--td-radius-small, 2px);
+    border-radius: var(--td-radius-small);
     background: var(--td-brand-color);
     content: '';
   }
@@ -499,12 +495,12 @@ function toRecord(value: unknown): Record<string, unknown> {
   padding: 10px 12px;
   background: var(--td-bg-color-secondarycontainer);
   border: 1px solid var(--td-component-border);
-  border-radius: var(--td-radius-medium, 6px);
+  border-radius: var(--td-radius-medium);
   min-width: 0;
 
   &__label {
     color: var(--td-text-color-placeholder);
-    font-size: var(--td-font-size-body-small, 12px);
+    font-size: var(--td-font-size-body-small);
     line-height: 1.4;
   }
 
@@ -513,7 +509,7 @@ function toRecord(value: unknown): Record<string, unknown> {
     align-items: center;
     gap: 6px;
     color: var(--td-text-color-primary);
-    font-size: var(--td-font-size-body-medium, 13px);
+    font-size: var(--td-font-size-body-medium);
     font-weight: 600;
     line-height: 1.5;
     font-variant-numeric: tabular-nums;
@@ -538,27 +534,27 @@ function toRecord(value: unknown): Record<string, unknown> {
 .finance-line-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--td-comp-margin-s);
 }
 
 .finance-line-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--td-comp-margin-m);
   padding: 10px 14px;
   background: var(--td-bg-color-secondarycontainer);
   border: 1px solid var(--td-component-border);
-  border-radius: var(--td-radius-medium, 6px);
+  border-radius: var(--td-radius-medium);
 
   span {
     color: var(--td-text-color-secondary);
-    font-size: var(--td-font-size-body-small, 12px);
+    font-size: var(--td-font-size-body-small);
   }
 
   strong {
     color: var(--td-text-color-primary);
-    font-size: var(--td-font-size-body-medium, 13px);
+    font-size: var(--td-font-size-body-medium);
     font-weight: 600;
     font-variant-numeric: tabular-nums;
   }
@@ -567,13 +563,15 @@ function toRecord(value: unknown): Record<string, unknown> {
 .finance-line-item--stacked {
   flex-direction: column;
   align-items: stretch;
-  gap: 6px;
+
+  /* 原文件末尾另有一份同选择器重复块（gap 5px、后写生效），合并后取实际生效值，避免两份互相覆盖 */
+  gap: 5px;
 
   .finance-line-item__head {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 2px;
+    margin-bottom: var(--td-comp-margin-xxs);
   }
 }
 
@@ -588,12 +586,6 @@ function toRecord(value: unknown): Record<string, unknown> {
   }
 }
 
-.finance-line-item--stacked {
-  align-items: stretch;
-  flex-direction: column;
-  gap: 5px;
-}
-
 .finance-line-item__head {
   display: flex;
   align-items: center;
@@ -603,11 +595,5 @@ function toRecord(value: unknown): Record<string, unknown> {
 
 .finance-line-item__head strong {
   min-width: 0;
-}
-
-@media (max-width: 560px) {
-  .finance-detail-grid {
-    grid-template-columns: 1fr;
-  }
 }
 </style>

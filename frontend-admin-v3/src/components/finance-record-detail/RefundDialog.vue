@@ -2,7 +2,7 @@
   <t-dialog
     :visible="visible"
     :header="`退款到余额 · ${targetLabel}`"
-    width="600px"
+    width="min(600px, calc(100vw - 32px))"
     :confirm-btn="{ content: '确定', loading: submitting, theme: 'danger', disabled: !canRefund }"
     @cancel="handleCancel"
     @confirm="handleSubmit"
@@ -28,7 +28,7 @@
       </div>
     </div>
 
-    <t-form ref="formRef" :data="form" :rules="rules" label-align="top">
+    <t-form ref="formRef" :data="form" :rules="rules" label-align="right">
       <t-form-item label="退款金额" name="amount">
         <t-input-number
           v-model="form.amount"
@@ -185,7 +185,7 @@ async function handleSubmit(): Promise<void> {
 <style scoped>
 .refund-dialog__summary {
   display: flex;
-  gap: 16px;
+  gap: var(--td-comp-margin-l);
   margin: 12px 0 16px;
   padding: 12px 16px;
   border-radius: 6px;
@@ -195,16 +195,16 @@ async function handleSubmit(): Promise<void> {
 .refund-dialog__kv {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--td-comp-margin-xs);
 }
 
 .refund-dialog__label {
-  font-size: 12px;
+  font-size: var(--td-font-size-size-1, 12px);
   color: var(--td-text-color-secondary);
 }
 
 .refund-dialog__value {
-  font-size: 16px;
+  font-size: var(--td-font-size-size-4, 16px);
   font-weight: 600;
   color: var(--td-text-color-primary);
 }
@@ -214,6 +214,6 @@ async function handleSubmit(): Promise<void> {
 }
 
 .refund-dialog__full-btn {
-  margin-top: 4px;
+  margin-top: var(--td-comp-margin-xs);
 }
 </style>

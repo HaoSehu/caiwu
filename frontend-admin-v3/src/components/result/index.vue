@@ -106,5 +106,14 @@ const dynamicComponent = computed(() => {
     font: var(--td-font-body-medium);
     color: var(--td-text-color-secondary);
   }
+
+  // 这层容器由使用页通过默认插槽传入（403/404/500 三页），DOM 带的是父组件的
+  // data-v 属性，scoped 直接写 .result-actions 永远命中不了 → 必须用 :deep 穿透。
+  :deep(.result-actions) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--td-comp-margin-s);
+    justify-content: center;
+  }
 }
 </style>

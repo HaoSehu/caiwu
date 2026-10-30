@@ -13,7 +13,9 @@
         <status-tag v-if="statusMap" :status-map="statusMap" :status="status ?? ''" />
         <t-tag v-else-if="statusLabel" :theme="statusTheme" variant="light">{{ statusLabel }}</t-tag>
         <t-dropdown v-if="actionOptions.length" :options="actionOptions" @click="handleAction">
-          <t-button class="mobile-record-card__more" variant="text" shape="square">...</t-button>
+          <t-button class="mobile-record-card__more" variant="text" shape="square" aria-label="更多操作">
+            <template #icon><more-icon /></template>
+          </t-button>
         </t-dropdown>
       </div>
     </div>
@@ -35,6 +37,7 @@
 </template>
 <script setup lang="ts">
 import StatusTag from '@caiwu/shared/user-v3/components/StatusTag.vue';
+import { MoreIcon } from 'tdesign-icons-vue-next';
 import type { DropdownOption } from 'tdesign-vue-next';
 import { computed } from 'vue';
 
@@ -100,15 +103,15 @@ function handleAction(option: DropdownOption) {
   position: relative;
   overflow: hidden;
   border: 1px solid var(--td-component-border);
-  border-radius: var(--td-radius-large, 8px);
+  border-radius: var(--td-radius-large);
   background: var(--td-bg-color-container);
-  box-shadow: 0 4px 14px rgb(28 45 84 / 6%);
+  box-shadow: var(--td-shadow-2);
 }
 
 .mobile-record-card.is-selected {
   border-color: var(--td-component-border);
   background: var(--td-bg-color-page);
-  box-shadow: 0 4px 14px rgb(28 45 84 / 8%);
+  box-shadow: var(--td-shadow-3);
 }
 
 .mobile-record-card__select {
@@ -131,7 +134,7 @@ function handleAction(option: DropdownOption) {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 8px;
+  gap: var(--td-comp-margin-s);
   min-height: 54px;
   border-bottom: 1px solid var(--td-component-border);
   padding: 10px 12px;
@@ -142,12 +145,12 @@ function handleAction(option: DropdownOption) {
   min-width: 0;
   flex-direction: column;
   align-items: flex-start;
-  gap: 4px;
+  gap: var(--td-comp-margin-xs);
 }
 
 .mobile-record-card__eyebrow {
   color: var(--td-text-color-placeholder);
-  font-size: 11px;
+  font-size: var(--td-font-size-size-1, 12px);
   font-weight: 600;
   line-height: 1;
 }
@@ -166,7 +169,7 @@ function handleAction(option: DropdownOption) {
 .mobile-record-card__tools {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--td-comp-margin-xs);
   min-width: 0;
 }
 
@@ -177,7 +180,7 @@ function handleAction(option: DropdownOption) {
   min-height: 44px;
   padding: 0;
   color: var(--td-text-color-placeholder);
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 1px;
 }
 
@@ -210,8 +213,8 @@ function handleAction(option: DropdownOption) {
 
 .mobile-record-card__highlight strong {
   color: var(--td-brand-color);
-  font-size: var(--td-font-size-size-5, 18px);
-  font-weight: 700;
+  font-size: var(--td-font-size-size-6, 20px);
+  font-weight: 600;
   line-height: 1.2;
 }
 
@@ -245,7 +248,7 @@ function handleAction(option: DropdownOption) {
   margin: 0;
   overflow: hidden;
   color: var(--td-text-color-primary);
-  font-size: var(--td-font-size-size-2, 13px);
+  font-size: var(--td-font-size-size-3, 14px);
   font-weight: 500;
   line-height: 20px;
   text-align: right;

@@ -23,9 +23,24 @@
     </div>
 
     <!-- 首次进入的三态统一复用 shared 的 DataState（与用户控制台同一套加载/空态表达）；
-         已加载完成后的刷新仍用 t-loading 原位覆盖，避免整页被替换（审查条目 A5） -->
+         已加载完成后的刷新仍用 t-loading 原位覆盖，避免整页被替换（审查条目 A5）。
+         首屏加载优先出骨架（与摘要卡同构），比居中 spinner 更少跳版；
+         错误态与真实空态仍交给 DataState 区分文案（审查条目 P2-12） -->
+    <div v-if="!ready && loading && !error" class="record-detail-skeleton" aria-busy="true">
+      <t-skeleton :row-col="summarySkeletonRowCol" animation="gradient" class="record-detail-skeleton__summary" />
+      <div class="record-detail-skeleton__metrics">
+        <t-skeleton
+          v-for="slot in 3"
+          :key="slot"
+          :row-col="metricSkeletonRowCol"
+          animation="gradient"
+          class="record-detail-skeleton__metric"
+        />
+      </div>
+      <t-skeleton :row-col="bodySkeletonRowCol" animation="gradient" class="record-detail-skeleton__body" />
+    </div>
     <data-state
-      v-if="!ready"
+      v-else-if="!ready"
       :loading="loading"
       :error="error"
       :error-text="errorText"
@@ -103,8 +118,10 @@
 <script setup lang="ts">
 import DataState from '@caiwu/shared/user-v3/components/DataState.vue';
 import { ChevronLeftIcon, FileCopyIcon, RefreshIcon } from 'tdesign-icons-vue-next';
-import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
+import type { SkeletonRowCol } from 'tdesign-vue-next';
 import { computed } from 'vue';
+
+import { copyToClipboard } from '@/utils/format';
 
 export interface RecordDetailMetric {
   label: string;
@@ -168,6 +185,18 @@ const emit = defineEmits<{
   (event: 'update:activeTab', value: string): void;
 }>();
 
+/* 骨架尺寸对齐真实摘要卡：标题行、指标卡、正文块，避免加载完成时版式跳动 */
+const summarySkeletonRowCol: SkeletonRowCol = [
+  [{ width: '96px', height: '12px' }],
+  [{ width: '220px', height: '24px', margin: '12px 0 0' }],
+  [{ width: '320px', height: '12px', margin: '12px 0 0' }],
+];
+const metricSkeletonRowCol: SkeletonRowCol = [
+  [{ width: '56px', height: '12px' }],
+  [{ width: '88px', height: '22px', margin: '8px 0 0' }],
+];
+const bodySkeletonRowCol: SkeletonRowCol = [[{ width: '100%', height: '220px' }]];
+
 const visibleMetrics = computed(() => props.metrics.filter((item) => item.show !== false && item.label !== '状态'));
 const visibleTabs = computed(() => props.tabs.filter((item) => item.show !== false));
 const currentTab = computed(() => props.activeTab || visibleTabs.value[0]?.value || 'basic');
@@ -183,27 +212,22 @@ function resolveTagTheme(theme?: string): 'default' | 'primary' | 'success' | 'w
   return theme as 'primary' | 'success' | 'warning' | 'danger';
 }
 
-async function copyText(text: string) {
-  try {
-    await navigator.clipboard.writeText(text);
-    MessagePlugin.success('已复制到剪贴板');
-  } catch {
-    MessagePlugin.error('复制失败，请手动选择复制');
-  }
+function copyText(text: string) {
+  void copyToClipboard(text);
 }
 </script>
 <style lang="less" scoped>
 .record-detail-page {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--td-comp-margin-l);
 }
 
 .record-detail-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--td-comp-margin-m);
   min-height: 36px;
 
   &__back {
@@ -219,14 +243,55 @@ async function copyText(text: string) {
   &__actions {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--td-comp-margin-s);
   }
 }
 
 .record-detail-shell {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--td-comp-margin-l);
+}
+
+/* 首屏骨架：与 .record-detail-summary 同一套留白与圆角，加载完成不跳版 */
+.record-detail-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--td-comp-margin-l);
+  padding: var(--td-comp-paddingTB-xl) var(--td-comp-paddingLR-xl);
+  border-radius: var(--td-radius-large);
+  background: var(--td-bg-color-container);
+  box-shadow: var(--td-shadow-1);
+}
+
+.record-detail-skeleton__summary {
+  display: flex;
+}
+
+.record-detail-skeleton__metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--td-comp-margin-m);
+}
+
+.record-detail-skeleton__metric {
+  padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-m);
+  border-radius: var(--td-radius-medium);
+  background: var(--td-bg-color-secondarycontainer);
+}
+
+.record-detail-skeleton__body {
+  display: flex;
+}
+
+@media (max-width: 767.98px) {
+  .record-detail-skeleton {
+    padding: var(--td-comp-paddingTB-l) var(--td-comp-paddingLR-l);
+  }
+
+  .record-detail-skeleton__metrics {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 /* 顶部概览大卡片 */
@@ -234,22 +299,22 @@ async function copyText(text: string) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 24px;
+  gap: var(--td-comp-margin-xxl);
   padding: 20px 24px;
   border: 1px solid var(--td-component-border);
-  border-radius: var(--td-radius-large, 8px);
+  border-radius: var(--td-radius-large);
   background: var(--td-bg-color-container);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--td-shadow-1);
 
   &__identity {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--td-comp-margin-s);
     min-width: 0;
     flex: 1;
 
     .identity-eyebrow {
-      font-size: var(--td-font-size-body-small, 12px);
+      font-size: var(--td-font-size-body-small);
       color: var(--td-text-color-placeholder);
       letter-spacing: 0.5px;
     }
@@ -261,8 +326,8 @@ async function copyText(text: string) {
       flex-wrap: wrap;
 
       .identity-title {
-        font-size: 22px;
-        font-weight: 700;
+        font-size: var(--td-font-size-size-6, 20px);
+        font-weight: 600;
         color: var(--td-text-color-primary);
         font-family: var(--td-font-family);
         line-height: 1.25;
@@ -270,13 +335,14 @@ async function copyText(text: string) {
 
       .copy-btn {
         color: var(--td-text-color-placeholder);
+
         &:hover {
           color: var(--td-brand-color);
         }
       }
 
       .identity-status-tag {
-        font-size: 13px;
+        font-size: var(--td-font-size-size-3, 14px);
         font-weight: 500;
         padding: 2px 10px;
         border-radius: 4px;
@@ -290,7 +356,7 @@ async function copyText(text: string) {
       flex-wrap: wrap;
 
       .identity-description {
-        font-size: var(--td-font-size-body-medium, 13px);
+        font-size: var(--td-font-size-body-medium);
         color: var(--td-text-color-secondary);
       }
     }
@@ -299,28 +365,28 @@ async function copyText(text: string) {
   &__metrics {
     display: flex;
     align-items: stretch;
-    gap: 12px;
+    gap: var(--td-comp-margin-m);
     flex-shrink: 0;
 
     .summary-metric-card {
       display: flex;
       flex-direction: column;
       justify-content: center;
-      gap: 4px;
+      gap: var(--td-comp-margin-xs);
       padding: 10px 18px;
       background: var(--td-bg-color-secondarycontainer);
-      border-radius: var(--td-radius-medium, 6px);
+      border-radius: var(--td-radius-medium);
       min-width: 120px;
       text-align: right;
 
       .metric-label {
-        font-size: var(--td-font-size-body-small, 12px);
+        font-size: var(--td-font-size-body-small);
         color: var(--td-text-color-placeholder);
       }
 
       .metric-value {
-        font-size: 18px;
-        font-weight: 700;
+        font-size: var(--td-font-size-size-6, 20px);
+        font-weight: 600;
         color: var(--td-text-color-primary);
         font-variant-numeric: tabular-nums;
         line-height: 1.3;
@@ -336,15 +402,15 @@ async function copyText(text: string) {
 .record-detail-relations {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--td-comp-margin-s);
 }
 
 /* 主体卡片 */
 .record-detail-body {
   border: 1px solid var(--td-component-border);
-  border-radius: var(--td-radius-large, 8px);
+  border-radius: var(--td-radius-large);
   background: var(--td-bg-color-container);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--td-shadow-1);
   overflow: hidden;
 
   .record-detail-tabs {
@@ -377,7 +443,7 @@ async function copyText(text: string) {
 
     &__identity {
       .identity-headline .identity-title {
-        font-size: 18px;
+        font-size: var(--td-font-size-size-6, 20px);
       }
     }
 
@@ -392,7 +458,7 @@ async function copyText(text: string) {
         padding: 8px 12px;
 
         .metric-value {
-          font-size: 16px;
+          font-size: var(--td-font-size-size-4, 16px);
         }
       }
     }
