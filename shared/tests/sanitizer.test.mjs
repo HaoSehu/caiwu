@@ -145,11 +145,14 @@ const { sanitizeRenderedHtml } = await import('../htmlSanitizer.ts')
   assert.ok(result.includes('rowspan="3"'), '合法 rowspan 应保留')
 }
 
-// 19. 相对路径和锚点链接应保留
+// 19. 相对路径和锚点链接应保留，且站内链接不得被强制新开标签或加 nofollow
 {
   const result = sanitizeRenderedHtml('<a href="/page">Page</a><a href="#section">Section</a>')
   assert.ok(result.includes('/page'), '相对路径应保留')
   assert.ok(result.includes('#section'), '锚点应保留')
+  // 站内链接必须留在当前标签：加 target="_blank" 会打断阅读，加 nofollow 会丢内链权重
+  assert.equal(result.includes('target="_blank"'), false, '站内链接不应加 target="_blank"')
+  assert.equal(result.includes('nofollow'), false, '站内链接不应加 rel=nofollow')
 }
 
 // 20. 默认不开启 allowStyleAttr 时 style 属性应被移除

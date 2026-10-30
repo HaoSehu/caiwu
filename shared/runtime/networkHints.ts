@@ -1,11 +1,4 @@
 const hintedOrigins = new Set<string>()
-const DEFAULT_HINT_URLS = [
-  'https://static.geetest.com',
-  'https://gcaptcha4.geetest.com',
-  'https://api.geetest.com',
-  'https://qr.alipay.com',
-  'https://mclient.alipay.com',
-]
 
 function getConnection() {
   if (typeof navigator === 'undefined') {
@@ -76,29 +69,6 @@ function appendHeadLink(rel: string, href: string, crossOrigin = false) {
   document.head.appendChild(link)
 }
 
-export function warmupOrigins(candidates: Array<string | undefined | null>) {
-  if (typeof window === 'undefined') {
-    return
-  }
-
-  const origins = new Set<string>()
-
-  candidates
-    .flatMap((candidate) => String(candidate || '').split(','))
-    .map((candidate) => candidate.trim())
-    .forEach((candidate) => {
-      const origin = toOrigin(candidate)
-      if (origin && origin !== window.location.origin) {
-        origins.add(origin)
-      }
-    })
-
-  origins.forEach((origin) => {
-    appendHeadLink('dns-prefetch', toDnsPrefetchHref(origin))
-    appendHeadLink('preconnect', origin, true)
-  })
-}
-
 export function getNetworkProfile() {
   const connection = getConnection()
   const effectiveType = String(connection?.effectiveType || '').toLowerCase()
@@ -150,11 +120,17 @@ export function primeConnectionHints({ urls = [], origins = [] }: { urls?: Array
   })
 }
 
+/**
+ * 初始化运行时连接预热。
+ *
+ * 这里只预热调用方显式传入的地址：第三方域名（验证码、支付二维码等）由各端在
+ * 自己的入口按需传入 urls，shared 不再内置任何业务域名，避免单个端要用的域名
+ * 变成所有端都会预连接的公共开销。
+ */
 export function initRuntimeConnectionHints(options: { apiBaseUrl?: string, urls?: Array<string | undefined | null> } = {}) {
   primeConnectionHints({
     urls: [
       options.apiBaseUrl,
-      ...DEFAULT_HINT_URLS,
       ...(Array.isArray(options.urls) ? options.urls : []),
     ],
   })

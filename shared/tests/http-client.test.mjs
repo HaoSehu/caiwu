@@ -68,6 +68,8 @@ assert.equal(toUserMessage(undefined, '自定义回退'), '自定义回退')
   await assert.rejects(client.get('/anything'), (err) => {
     assert.equal(err.message, '参数错误')
     assert.equal(err.__handled, true)
+    // 业务码必须透传，否则调用方无法按 code 分支（此前只保留 message）
+    assert.equal(err.code, 42200)
     return true
   })
   assert.deepEqual(errors, ['参数错误'])
@@ -99,11 +101,19 @@ assert.equal(toUserMessage(undefined, '自定义回退'), '自定义回退')
 }
 
 // 业务 40100：触发 onUnauthorized，不进入通用提示
+// 后端对 >=40100 一律回 HTTP 401（ApiResponseBuilder::httpStatusForErrorCode），
+// 用例必须用真实状态码，否则覆盖不到生产链路
 {
   const { client, errors, unauthorized } = createTestClient(() => ({
-    response: envelopeResponse({ code: 40100, message: '未登录或登录已过期', data: null }),
+    response: envelopeResponse({ code: 40100, message: '未登录或登录已过期', data: null }, 401),
   }))
-  await assert.rejects(client.get('/anything'), (err) => err.message === '未登录或登录已过期')
+  await assert.rejects(client.get('/anything'), (err) => {
+    assert.equal(err.message, '未登录或登录已过期')
+    assert.equal(err.code, 40100)
+    // 本轮语义变更点：401 不再由拦截器弹提示，必须让调用方知道「没弹过」
+    assert.equal(err.__handled, false)
+    return true
+  })
   assert.deepEqual(unauthorized, ['未登录或登录已过期'])
   assert.equal(errors.length, 0)
 }
@@ -120,6 +130,9 @@ assert.equal(toUserMessage(undefined, '自定义回退'), '自定义回退')
   await assert.rejects(client.post('/anything', {}), (err) => {
     assert.equal(err.message, '邮箱不能为空')
     assert.equal(err.__handled, true)
+    // HTTP 422 必须保留字段级错误，表单才能定位到具体输入项
+    assert.equal(err.code, 42200)
+    assert.deepEqual(err.validationErrors, { email: ['邮箱不能为空'] })
     return true
   })
   assert.deepEqual(errors, ['邮箱不能为空'])

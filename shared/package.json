@@ -5,7 +5,6 @@
   "type": "module",
   "exports": {
     ".": "./index.ts",
-    "./status": "./status/index.ts",
     "./runtime": "./runtime/index.ts",
     "./content": "./content/index.ts",
     "./finance": "./finance/index.ts",
@@ -15,24 +14,28 @@
     "./types/*": "./types/*",
     "./content/contentNormalizer": "./content/contentNormalizer.ts",
     "./content/createMarkdownRenderer": "./content/createMarkdownRenderer.ts",
-    "./content/htmlSanitizer": "./content/htmlSanitizer.ts",
     "./statusConfig": "./statusConfig.ts",
-    "./extraStatusMaps": "./extraStatusMaps.js",
-    "./htmlSanitizer": "./htmlSanitizer.ts"
+    "./utils/websiteCheckout": "./utils/websiteCheckout.ts",
+    "./htmlSanitizer": "./htmlSanitizer.ts",
+    "./runtime/routeLoading": "./runtime/routeLoading.ts"
   },
-  "types": "./index.d.ts",
   "dependencies": {
     "axios": "^1.18.1",
     "markdown-it": "^14.3.0",
     "vue": "^3.5.0"
   },
   "devDependencies": {
+    "@eslint/js": "^9.25.1",
     "@types/markdown-it": "^14.1.2",
-    "jsdom": "^29.1.1"
+    "eslint": "^9.39.3",
+    "eslint-plugin-vue": "^10.0.0",
+    "globals": "^16.0.0",
+    "jsdom": "^29.1.1",
+    "typescript-eslint": "^8.29.0"
   },
   "scripts": {
     "lint": "eslint . --ext .js,.ts,.vue",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --experimental-strip-types ./tests/runtime.test.mjs && node --experimental-strip-types ./tests/finance-snapshot.test.mjs && node --experimental-strip-types ./tests/money.test.mjs && node --experimental-strip-types ./tests/sanitizer.test.mjs && node --experimental-strip-types ./tests/http-validation.test.mjs && node --experimental-strip-types ./tests/http-core.test.mjs && node --experimental-strip-types ./tests/http-client.test.mjs && node --experimental-strip-types ./tests/content-normalizer.test.mjs"
+    "test": "node --experimental-strip-types ./tests/runtime.test.mjs && node --experimental-strip-types ./tests/finance-snapshot.test.mjs && node --experimental-strip-types ./tests/money.test.mjs && node --experimental-strip-types ./tests/sanitizer.test.mjs && node --experimental-strip-types ./tests/http-validation.test.mjs && node --experimental-strip-types ./tests/http-core.test.mjs && node --experimental-strip-types ./tests/http-client.test.mjs && node --experimental-strip-types ./tests/content-normalizer.test.mjs && node --experimental-strip-types ./tests/website-checkout.test.mjs"
   }
 }

@@ -3,7 +3,9 @@
  *  IDC 财务系统 —— 全局状态颜色 & 映射配置
  * ============================================================
  *  多个前端共用此文件
- *  引入方式：import { ORDER_STATUS, ... } from '@caiwu/shared/statusConfig'
+ *  引入方式：import { ORDER_STATUS_MAP, getStatusLabel, ... } from '@caiwu/shared/statusConfig'
+ *  注意：ORDER_STATUS / PAYMENT_STATUS 等「原始值枚举」已降级为本文件内部常量，
+ *  不再对外导出；调用方一律通过对应的 *_MAP 与 getStatusLabel/getStatusTagType 取值。
  *
  *  颜色体系说明：
  *  ┌──────────┬────────────┬───────────────────────────────┐
@@ -19,8 +21,7 @@
  *  └──────────┴────────────┴───────────────────────────────┘
  *
  *  tagType 字段为 UI 框架无关的语义值，各前端自行映射到组件属性：
- *  - TDesign 端：通过 toTagTypeMap() 直接用作 t-tag theme
- *  - Element Plus 端：通过 resolveElTagType() 转换后用作 el-tag type
+ *  - TDesign 端：通过 toTagTypeMap() 直接用作 t-tag theme；purple 需 StatusTag 附加自定义 class
  * ============================================================
  */
 
@@ -40,11 +41,11 @@ export type StatusMap = Record<string | number, StatusConfig>;
  * 访问器参数类型。调用方常持有来自 props、接口或局部字面量的宽松映射，
  * 而这些函数只做运行时查表并对缺失项返回兜底配置，因此入参保持宽松。
  */
-export type StatusMapInput = Record<string | number, unknown>;
+type StatusMapInput = Record<string | number, unknown>;
 
 // ===================== 颜色常量 =====================
 
-export const STATUS_COLORS: Record<string, string> = {
+const STATUS_COLORS: Record<string, string> = {
   warning: "#E6A23C", // 待支付
   blue: "#409EFF", // 已支付 / 开通中
   success: "#67C23A", // 运行中 / 已完成
@@ -53,21 +54,10 @@ export const STATUS_COLORS: Record<string, string> = {
   purple: "#8B5CF6", // 已冻结 / 已暂停
 };
 
-// tagType 语义值（UI 框架无关）
-// 各前端按需映射到组件属性
-export const STATUS_TAG_TYPES: Record<string, string> = {
-  warning: "warning",
-  blue: "", // 默认/primary
-  success: "success",
-  info: "info",
-  danger: "danger",
-  purple: "purple", // 需要配合自定义样式
-};
-
 // ===================== 购买状态（历史订单状态） =====================
 // 4 态：待支付 / 已支付 / 已取消 / 已退款。
 
-export const ORDER_STATUS: Record<string, number> = {
+const ORDER_STATUS: Record<string, number> = {
   PENDING: 0, // 待支付
   PAID: 1, // 已支付
   CANCELLED: 4, // 已取消
@@ -187,31 +177,11 @@ export const REFUND_STATUS: Record<string, number> = {
   FULL: 2, // 已全额退款
 };
 
-export const REFUND_STATUS_MAP: StatusMap = {
-  [REFUND_STATUS.NONE]: {
-    label: "未退款",
-    color: STATUS_COLORS.info,
-    tagType: "info",
-    icon: "CircleCheck",
-  },
-  [REFUND_STATUS.PARTIAL]: {
-    label: "部分退款",
-    color: STATUS_COLORS.danger,
-    tagType: "danger",
-    icon: "RefreshLeft",
-  },
-  [REFUND_STATUS.FULL]: {
-    label: "已全额退款",
-    color: STATUS_COLORS.danger,
-    tagType: "danger",
-    icon: "RefreshLeft",
-  },
-};
 
 // ===================== 第三方支付状态 =====================
 // 4 态：待支付 / 已支付 / 已取消 / 已退款，与订单同构。
 
-export const PAYMENT_STATUS: Record<string, number> = {
+const PAYMENT_STATUS: Record<string, number> = {
   PENDING: 0, // 待支付
   SUCCESS: 1, // 已支付
   CANCELLED: 4, // 已取消
@@ -305,7 +275,7 @@ export const SERVICE_STATUS_MAP: StatusMap = {
 
 // ===================== 工单状态 =====================
 
-export const TICKET_STATUS: Record<string, number> = {
+const TICKET_STATUS: Record<string, number> = {
   OPEN: 0, // 开启（待处理）
   USER_REPLY: 1, // 客户回复
   STAFF_REPLY: 2, // 员工回复
@@ -320,9 +290,10 @@ export const TICKET_STATUS_MAP: StatusMap = {
     icon: "ChatDotRound",
   },
   [TICKET_STATUS.USER_REPLY]: {
+    // 待处理类语义色统一为 warning（docs/DESIGN.md §4.2），与管理端、控制台口径一致
     label: "客户回复",
-    color: STATUS_COLORS.danger,
-    tagType: "danger",
+    color: STATUS_COLORS.warning,
+    tagType: "warning",
     icon: "Comment",
   },
   [TICKET_STATUS.STAFF_REPLY]: {
@@ -341,36 +312,9 @@ export const TICKET_STATUS_MAP: StatusMap = {
 
 // ===================== 邮件/通知状态 =====================
 
-export const NOTIFY_STATUS: Record<string, string> = {
-  PENDING: "pending",
-  SUCCESS: "success",
-  FAILED: "failed",
-};
-
-export const NOTIFY_STATUS_MAP: StatusMap = {
-  [NOTIFY_STATUS.PENDING]: {
-    label: "待发送",
-    color: STATUS_COLORS.warning,
-    tagType: "warning",
-    icon: "Clock",
-  },
-  [NOTIFY_STATUS.SUCCESS]: {
-    label: "成功",
-    color: STATUS_COLORS.success,
-    tagType: "success",
-    icon: "Select",
-  },
-  [NOTIFY_STATUS.FAILED]: {
-    label: "失败",
-    color: STATUS_COLORS.danger,
-    tagType: "danger",
-    icon: "CloseBold",
-  },
-};
-
 // ===================== 佣金奖励状态 =====================
 
-export const REWARD_STATUS: Record<string, number> = {
+const REWARD_STATUS: Record<string, number> = {
   FROZEN: 0, // 冻结中
   RELEASED: 1, // 已释放
   REVOKED: 2, // 已撤销
@@ -399,38 +343,24 @@ export const REWARD_STATUS_MAP: StatusMap = {
 
 // ===================== 交易流水类型 =====================
 
-export const TRANSACTION_TYPE_MAP: Record<string, string> = {
-  recharge: "充值",
-  consume: "消费",
-  refund: "退款",
-  withdraw: "提现",
-  commission: "佣金",
-  adjust: "调账",
-};
-
-export const FINANCE_LEDGER_EVENT_MAP: StatusMap = {
+// 键集与文案必须与后端 App\Constants\FinanceLedgerEventType::labels() 一一对应，
+// 后端定义了而这里缺失的事件在流水页会退化成「未知」，且会遮蔽后端下发的 display.badge。
+const FINANCE_LEDGER_EVENT_MAP: StatusMap = {
   invoice_payment: { label: "账单支付", tagType: "danger", direction: "out" },
   invoice_refund: { label: "账单退款", tagType: "success", direction: "in" },
   recharge: { label: "充值到账", tagType: "success", direction: "in" },
   manual_recharge: { label: "手动充值", tagType: "success", direction: "in" },
   manual_deduction: { label: "手动扣款", tagType: "danger", direction: "out" },
-  referral_credit_cash: {
-    label: "奖励转余额",
-    tagType: "success",
-    direction: "in",
-  },
+  referral_credit_cash: { label: "奖励转余额", tagType: "success", direction: "in" },
   system_adjustment: { label: "系统调账", tagType: "info", direction: "in" },
-  verification_fee: {
-    label: "实名认证费",
-    tagType: "danger",
-    direction: "out",
-  },
-  // 财务核心重构的切换校准行（实库 25 行 / 99,742.91）：不映射会在流水页裸露英文。
-  calibration: { label: "存量校准", tagType: "warning", direction: "in" },
-  // 管理员创建用户时写入的初始余额。
-  initial_balance: { label: "初始余额", tagType: "info", direction: "in" },
+  verification_fee: { label: "实名认证费用", tagType: "danger", direction: "out" },
+  // 文案与方向对齐后端 FinanceLedgerEventType::labels()/direction()：
+  // 存量校准由财务内核切换与账本重建补记，开户初始余额由管理员建号写入，两者都是正向入账。
+  calibration: { label: "存量校准", tagType: "info", direction: "in" },
+  initial_balance: { label: "开户初始余额", tagType: "success", direction: "in" },
 };
 
+// ===================== 交易流水类型 =====================
 export const ACCOUNT_TRANSACTION_EVENT_MAP: StatusMap = {
   ...FINANCE_LEDGER_EVENT_MAP,
   consume: { label: "消费", tagType: "danger", direction: "out" },
@@ -495,16 +425,6 @@ export function getStatusTagType(
   return getStatusConfig(statusMap, status).tagType as string;
 }
 
-/**
- * 获取状态颜色
- */
-export function getStatusColor(
-  statusMap: StatusMapInput,
-  status: string | number,
-): string {
-  return getStatusConfig(statusMap, status).color as string;
-}
-
 // ===================== TDesign 适配函数 =====================
 
 // TDesign Tag 支持的 theme 取值
@@ -528,42 +448,6 @@ export function resolveTdTagTheme(tagType: string): string {
   }
 
   return VALID_TD_THEMES.has(tagType) ? tagType : "default";
-}
-
-// ===================== Element Plus 适配函数 =====================
-// 以下函数仅供 Element Plus 端使用，TDesign 端无需调用
-
-const VALID_TAG_TYPES = new Set([
-  "primary",
-  "success",
-  "info",
-  "warning",
-  "danger",
-]);
-
-/**
- * 将通用 tagType 转为 Element Plus el-tag 可接受的 type
- * - 空字符串 → 'primary'
- * - 'purple' → 'info'（配合 resolveElTagClass 附加自定义样式）
- * - 其余值若在 Element Plus 合法范围内则原样返回，否则降级为 'info'
- */
-export function resolveElTagType(tagType: string): string {
-  if (tagType === "") {
-    return "primary";
-  }
-
-  if (tagType === "purple") {
-    return "info";
-  }
-
-  return VALID_TAG_TYPES.has(tagType) ? tagType : "info";
-}
-
-/**
- * 返回 Element Plus el-tag 需要附加的自定义 class（仅 purple 需要）
- */
-export function resolveElTagClass(tagType: string): string {
-  return tagType === "purple" ? "el-tag--purple" : "";
 }
 
 // ===================== 通用转换函数 =====================
@@ -612,42 +496,3 @@ export function toTagTypeMap(
   }
   return map;
 }
-
-export const VERIFICATION_STATUS_MAP: StatusMap = {
-  0: {
-    label: "未提交",
-    color: STATUS_COLORS.info,
-    tagType: "info",
-    icon: "CircleClose",
-  },
-  1: {
-    label: "待认证",
-    color: STATUS_COLORS.warning,
-    tagType: "warning",
-    icon: "Clock",
-  },
-  2: {
-    label: "认证成功",
-    color: STATUS_COLORS.success,
-    tagType: "success",
-    icon: "CircleCheck",
-  },
-  3: {
-    label: "认证失败",
-    color: STATUS_COLORS.danger,
-    tagType: "danger",
-    icon: "WarningFilled",
-  },
-  4: {
-    label: "待认证",
-    color: STATUS_COLORS.warning,
-    tagType: "warning",
-    icon: "Clock",
-  },
-  5: {
-    label: "已驳回",
-    color: STATUS_COLORS.danger,
-    tagType: "danger",
-    icon: "CircleClose",
-  },
-};

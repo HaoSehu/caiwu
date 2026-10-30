@@ -12,7 +12,10 @@ import {
   retrySafeRequest,
 } from "./core.ts";
 import { toUserMessage } from "./userMessage.ts";
-import { extractValidationErrors } from "./validationErrors.ts";
+import {
+  extractValidationErrors,
+  extractValidationErrorMap,
+} from "./validationErrors.ts";
 
 export const DEFAULT_TIMEOUT = 18000;
 export const SAFE_TIMEOUT = 16000;
@@ -41,6 +44,18 @@ export interface RuntimeHandledError extends Error {
   __handled?: boolean;
   response?: unknown;
   config?: unknown;
+  /** 后端业务码（信封中的 code；HTTP 422 时为 42200），调用方可据此分支处理 */
+  code?: number;
+  /** 字段级校验错误，保留「字段名 -> 错误列表」，供表单定位到具体输入项 */
+  validationErrors?: Record<string, string[]>;
+}
+
+/** 从 token 派生去重指纹：只用尾部若干位，避免把完整凭证写进缓存键。 */
+function buildTokenFingerprint(token: string | null | undefined) {
+  if (!token) {
+    return "anonymous";
+  }
+  return token.length > 8 ? token.slice(-8) : token;
 }
 
 export interface CreateHttpClientOptions {
@@ -156,7 +171,8 @@ export function createHttpClient(
       if (canDedupeSafeRequest(runtimeConfig, safeRequest)) {
         const sharedConfig = runtimeConfig as ClientRuntimeRequestConfig &
           Record<string, unknown>;
-        sharedConfig.__safeRequestKey = buildSafeRequestKey(sharedConfig);
+        // 去重键必须区分身份：同一 URL 在切换账号后仍在飞行时不能被合并，否则会串数据。
+        sharedConfig.__safeRequestKey = `${buildSafeRequestKey(sharedConfig)}|tok:${buildTokenFingerprint(token)}`;
         attachSafeRequestDedupe(sharedConfig, client.defaults.adapter);
       }
 
@@ -174,13 +190,13 @@ export function createHttpClient(
         const msg = toUserMessage(res.message, "请求失败");
         const captchaRequired = Boolean(res.data?.captcha_required);
 
-        if (res.code === 40100) {
+        const isUnauthorizedCode = res.code === 40100;
+        if (isUnauthorizedCode) {
           options.onUnauthorized?.(msg, runtimeConfig.__requestToken);
-          return Promise.reject(new Error(msg));
         }
 
         const shownByInterceptor =
-          !captchaRequired && !runtimeConfig?.silentError;
+          !isUnauthorizedCode && !captchaRequired && !runtimeConfig?.silentError;
         if (shownByInterceptor) {
           options.showError(msg);
         }
@@ -190,6 +206,11 @@ export function createHttpClient(
         err.__handled = shownByInterceptor || captchaRequired;
         err.response = { ...response, data: res };
         err.config = response.config;
+        err.code = Number(res.code);
+        const validationErrorMap = extractValidationErrorMap(res);
+        if (Object.keys(validationErrorMap).length > 0) {
+          err.validationErrors = validationErrorMap;
+        }
         return Promise.reject(err);
       }
 
@@ -229,6 +250,10 @@ export function createHttpClient(
         msg = "请求超时，请检查网络后重试";
       }
 
+      const validationErrorMap =
+        error.response?.status === 422
+          ? extractValidationErrorMap(error.response?.data)
+          : {};
       if (error.response?.status === 422) {
         const errors = extractValidationErrors(error.response?.data);
         const trustedErrors = errors
@@ -280,6 +305,12 @@ export function createHttpClient(
       err.__handled = shownByInterceptor;
       err.response = error.response;
       err.config = error.config;
+      if (error.response?.status === 422) {
+        err.code = 42200;
+        if (Object.keys(validationErrorMap).length > 0) {
+          err.validationErrors = validationErrorMap;
+        }
+      }
       return Promise.reject(err);
     },
   );
