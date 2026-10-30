@@ -1,7 +1,7 @@
 // SEO 落地页的轻量 meta 数据与路由工具。
 // 仅包含路由注册与结构化数据所需的字段（约 1KB），
-// 全量正文文案（hero/features/scenarios 等）保留在 seoLandingPages.js，
-// 由懒加载的落地页组件引入，避免约 8.9KB 全量数据进入每页首屏 entry chunk。
+// 全量正文文案（hero/features/scenarios 等）按 slug 拆分在 src/data/seoLanding/ 下，
+// 由各自的落地页薄壳静态引入，避免约 8.9KB 全量数据进入同一个页面 chunk。
 
 export const seoLandingMetaPages = [
   {
@@ -95,11 +95,6 @@ function absoluteUrl(siteUrl, path) {
   const normalizedSiteUrl = normalizeSiteUrl(siteUrl)
   const normalizedPath = normalizePath(path)
   return `${normalizedSiteUrl}${normalizedPath === '/' ? '/' : normalizedPath}`
-}
-
-export function getSeoLandingMetaByPath(path) {
-  const normalizedPath = normalizePath(path)
-  return seoLandingMetaPages.find((page) => page.path === normalizedPath) || null
 }
 
 export function buildSeoLandingStructuredData(page, siteUrl = DEFAULT_SITE_URL) {

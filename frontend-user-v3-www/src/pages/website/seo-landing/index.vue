@@ -79,11 +79,12 @@
           <router-link to="/products">查看全部产品 &gt;</router-link>
         </div>
 
+        <!-- 标签文案与高亮均取自当前落地页数据，不再固定标「推荐」 -->
         <div class="seo-category-tabs" aria-label="产品能力标签">
           <span
             v-for="tab in productTabs"
             :key="tab"
-            :class="{ 'is-active': tab === '推荐' }"
+            :class="{ 'is-active': tab === page.keyword }"
             class="seo-category-tabs__tag"
           >
             <span class="seo-category-tabs__icon" aria-hidden="true"></span>
@@ -132,11 +133,15 @@
         </div>
 
         <div class="seo-solution-panel">
+          <!-- 场景按钮切换的是下方同一块内容，不是独立的标签页面板，
+               所以用 aria-pressed 表达选中态（与产品列表页的移动端类型切换口径一致），
+               不用 role="tab" 以免读屏进入标签页模式却找不到对应 tabpanel。 -->
           <nav class="seo-solution-tabs" aria-label="场景列表">
             <button
               v-for="(scenario, index) in page.scenarios"
               :key="scenario.title"
               :class="{ 'is-active': index === activeScenarioIndex }"
+              :aria-pressed="index === activeScenarioIndex"
               type="button"
               @click="activeScenarioIndex = index"
             >
@@ -149,9 +154,12 @@
             <h3>{{ activeScenario.title }}</h3>
             <p>{{ activeScenario.description }}</p>
             <ul>
-              <li v-for="feature in page.features" :key="feature.title">
+              <li
+                v-for="(point, pointIndex) in activeScenarioPoints"
+                :key="`${activeScenario.title}-${pointIndex}`"
+              >
                 <el-icon><Check /></el-icon>
-                <span>{{ feature.title }}</span>
+                <span>{{ point }}</span>
               </li>
             </ul>
             <div class="seo-solution-content__related">
@@ -242,22 +250,18 @@
 
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from "vue";
-import { useRoute } from "vue-router";
 import { ArrowRight, Check, QuestionFilled } from "@element-plus/icons-vue";
 import { buildConsoleUrl } from "@/utils/consoleUrl";
-import {
-  getSeoLandingPageByPath,
-  seoLandingPages,
-} from "@/data/seoLandingPages";
 
-const route = useRoute();
+// 本组件只负责展示：文案由对应的落地页薄壳以 props 传入，
+// 这样每条路由的 chunk 里只包含自己那一份数据。
+const props = defineProps({
+  page: { type: Object, required: true },
+});
+
 const activeScenarioIndex = ref(0);
 
-const page = computed(
-  () =>
-    getSeoLandingPageByPath(route.meta?.seoLandingPath || route.path) ||
-    seoLandingPages[0],
-);
+const page = computed(() => props.page);
 
 // FAQ 结构化数据在组件懒加载后注入，避免把 faqs 全量数据拖入首屏 entry
 const FAQ_SCRIPT_ID = "seo-landing-faq-structured-data";
@@ -306,15 +310,19 @@ onBeforeUnmount(() => {
   clearFaqStructuredData();
 });
 
-const heroNavItems = computed(() =>
-  [
-    `${page.value.hero.eyebrow} · ${page.value.hero.points[0]}`,
-    ...page.value.hero.points
-      .slice(1)
-      .map((point) => `${point} · ${page.value.keyword}`),
-    page.value.hero.stats[0]?.label || "稳定服务",
-  ].slice(0, 4),
-);
+// 核心卖点列表：首项用「场景 · 首个卖点」点题，其余卖点与 keyword 配对，
+// 再接上 hero.stats 的全部 label。
+// 原实现只取 stats[0] 并用 slice(0, 4) 截断，导致 5 份落地页数据里
+// stats[1] 与 stats[2] 从未被渲染（共 10 条死内容）。
+const heroNavItems = computed(() => {
+  const { eyebrow, points, stats } = page.value.hero;
+  const headline = eyebrow ? `${eyebrow} · ${points[0]}` : points[0];
+  return [
+    headline,
+    ...points.slice(1).map((point) => `${point} · ${page.value.keyword}`),
+    ...stats.map((stat) => stat.label),
+  ].filter(Boolean);
+});
 
 const featureStripItems = computed(() => [
   ...page.value.features.slice(0, 3).map((feature) => ({
@@ -338,58 +346,89 @@ const secondaryCtaHref = computed(() =>
   buildConsoleUrl(page.value.cta.secondaryConsolePath),
 );
 
-const productTabs = ["推荐", "计算", "安全", "网络", "运维"];
-const defaultTags = [
-  ["弹性配置", "稳定可靠", "快速交付"],
-  ["标准部署", "可扩展", "工单支持"],
-  ["集中管理", "持续维护", "按需选择"],
-];
-const processSteps = [
-  {
-    index: "01",
-    title: "明确场景",
-    description: "确认业务访问区域、系统环境、带宽需求和预算范围。",
-  },
-  {
-    index: "02",
-    title: "查看配置",
-    description: "在产品列表中筛选合适的规格、节点和服务周期。",
-  },
-  {
-    index: "03",
-    title: "注册开通",
-    description: "进入控制台完成账号注册、下单、支付和服务管理。",
-  },
-  {
-    index: "04",
-    title: "持续维护",
-    description: "通过公告、帮助中心和工单体系跟踪使用与售后问题。",
-  },
-];
+// 场景切换后的要点：落地页数据（src/data/seoLanding/）的 scenarios 只有 title/description，
+// 没有独立要点字段（本阶段不新增数据结构），因此由当前场景的 title/description
+// 与所属页关键词拼出要点，保证切换场景后要点区内容随之变化。
+const activeScenarioPoints = computed(() => {
+  const scenario = activeScenario.value;
+  if (!scenario) return [];
+  // 按逗号、句号拆出当前场景描述里的分句，作为该场景的要点
+  const clauses = String(scenario.description || "")
+    .split(/[，,。；;]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  if (clauses.length >= 2) return clauses;
+  // 兜底文案，待运营补充：单句场景时补一条与当前场景绑定的说明，避免要点区只剩一行
+  return [
+    ...clauses,
+    `结合${page.value.keyword}按「${scenario.title}」的访问量调整配置。`,
+  ];
+});
 
+// 产品能力标签：取当前落地页已有的关键词、主标题前缀与卖点，共 5 项，
+// 不再让 5 个落地页共用一套固定文案（数据里没有独立标签字段，本阶段不新增）
+const productTabs = computed(() =>
+  [page.value.keyword, page.value.hero.eyebrow, ...page.value.hero.points].slice(
+    0,
+    5,
+  ),
+);
+
+// 产品卡片标签：取本条能力相对「所属页关键词」的差异点；数据里没有独立标签字段，用关键词补足
 function productTags(index) {
-  return defaultTags[index] || defaultTags[0];
+  const feature = page.value.features[index];
+  if (!feature) {
+    // 兜底文案，待运营补充
+    return ["弹性配置", "稳定可靠", "快速交付"];
+  }
+  return [feature.title, page.value.keyword].filter(Boolean);
 }
 
-watch(
-  () => route.path,
-  () => {
-    activeScenarioIndex.value = 0;
-  },
-);
+// 开通流程：标题与描述取当前落地页已有字段，避免 5 个落地页共用同一套文案
+const processSteps = computed(() => {
+  const relatedLinks = page.value.relatedLinks || [];
+  return [
+    {
+      index: "01",
+      title: page.value.hero.eyebrow,
+      description: page.value.hero.summary,
+    },
+    {
+      index: "02",
+      title: page.value.cta.primaryText,
+      // 兜底文案，待运营补充
+      description: "在产品列表中筛选合适的规格、节点和服务周期。",
+    },
+    {
+      index: "03",
+      title: page.value.cta.title,
+      description: page.value.cta.description,
+    },
+    {
+      index: "04",
+      // 兜底文案，待运营补充
+      title: "持续维护",
+      description: relatedLinks.length
+        ? `通过${relatedLinks.map((link) => link.label).join("、")}跟踪使用与售后问题。`
+        : "通过公告、帮助中心和工单体系跟踪使用与售后问题。",
+    },
+  ];
+});
+
+// 不再监听 route.path 重置场景索引：每条落地页是独立组件实例，
+// 切换路由时组件重建，activeScenarioIndex 自然归零。
 </script>
 
 <style scoped lang="scss">
 .seo-landing-page {
   min-height: 100%;
   overflow: hidden;
-  background: #f5f7fa;
+  background: $bg-color;
   color: $text-color-primary;
 }
 
 .seo-container {
-  width: min(1200px, calc(100% - 48px));
-  margin: 0 auto;
+  @include site-container;
 }
 
 .seo-hero {
@@ -533,7 +572,7 @@ watch(
   display: flex;
   align-items: center;
   min-height: 28px;
-  color: #273449;
+  color: $text-color-primary;
   font-size: 14px;
   font-weight: 600;
   line-height: 1.5;
@@ -551,7 +590,7 @@ watch(
   gap: 10px;
   max-width: 700px;
   margin: 0;
-  color: #25324a;
+  color: $text-color-primary;
   font-size: 14px;
   line-height: 1.7;
 }
@@ -561,8 +600,11 @@ watch(
   align-items: center;
   min-height: 22px;
   padding: 0 7px;
-  border-radius: 3px;
-  background: #ff3d3d;
+  // 圆角与全站统一为 4px
+  border-radius: 4px;
+  // 原 #ff3d3d 配白字仅 3.51:1；$color-danger(#f04438) 压深后见下方注释，
+  // 白字对比度仍不足 4.5:1，改用 $color-danger-text(#b42318)，对比度约 6.5:1
+  background: $color-danger-text;
   color: $text-color-inverse;
   font-size: 12px;
   font-weight: 700;
@@ -571,7 +613,7 @@ watch(
 
 .seo-hero h1 {
   margin: 18px 0 0;
-  color: #101828;
+  color: $text-color-primary;
   font-size: 48px;
   font-weight: 800;
   line-height: 1.14;
@@ -581,7 +623,7 @@ watch(
 .seo-hero__summary {
   max-width: 640px;
   margin: 20px 0 0;
-  color: #56657a;
+  color: $text-color-secondary;
   font-size: 16px;
   line-height: 1.85;
 }
@@ -602,7 +644,7 @@ watch(
   min-width: 132px;
   min-height: 42px;
   padding: 0 18px;
-  border-radius: 2px;
+  border-radius: $btn-border-radius-sm;
   font-size: 14px;
   font-weight: 700;
   line-height: 1.3;
@@ -634,7 +676,7 @@ watch(
 .seo-action--plain {
   border: 1px solid rgba(22, 93, 255, 0.18);
   background: rgba(255, 255, 255, 0.64);
-  color: #25324a;
+  color: $text-color-primary;
 }
 
 .seo-action--plain:hover {
@@ -663,7 +705,7 @@ watch(
   gap: 16px;
   min-width: 0;
   padding: 34px 28px;
-  border-left: 1px solid #edf2f7;
+  border-left: 1px solid $divider-color;
   background: $bg-color-card;
 }
 
@@ -680,13 +722,13 @@ watch(
   border-radius: 50%;
   background:
     radial-gradient(circle at 70% 24%, $bg-color-card 0 12%, transparent 13%),
-    linear-gradient(135deg, #80aaff 0%, $color-primary 100%);
+    linear-gradient(135deg, $color-primary-border 0%, $color-primary 100%);
   box-shadow: 0 8px 18px $color-primary-a24;
 }
 
 .seo-strip-card h2 {
   margin: 0;
-  color: #1d2738;
+  color: $text-color-primary;
   font-size: 18px;
   line-height: 1.45;
   letter-spacing: 0;
@@ -696,7 +738,8 @@ watch(
   display: -webkit-box;
   margin: 10px 0 0;
   overflow: hidden;
-  color: #66758a;
+  // 与页面内其他同色文字统一使用变量
+  color: $text-color-secondary;
   font-size: 13px;
   line-height: 1.75;
   -webkit-box-orient: vertical;
@@ -708,7 +751,7 @@ watch(
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  background: linear-gradient(135deg, #3477ff 0%, $color-primary 100%);
+  background: linear-gradient(135deg, $color-primary 0%, $color-primary-active 100%);
   color: $text-color-inverse;
 }
 
@@ -742,7 +785,7 @@ watch(
 
 .seo-section--products,
 .seo-section--process {
-  background: #f5f7fa;
+  background: $bg-color;
 }
 
 .seo-section__heading {
@@ -756,7 +799,7 @@ watch(
 
 .seo-section__heading h2 {
   margin: 0;
-  color: #101828;
+  color: $text-color-primary;
   font-size: 32px;
   line-height: 1.32;
   letter-spacing: 0;
@@ -764,7 +807,7 @@ watch(
 
 .seo-section__heading p {
   margin: 14px 0 0;
-  color: #66758a;
+  color: $text-color-secondary;
   font-size: 14px;
   line-height: 1.8;
 }
@@ -793,7 +836,7 @@ watch(
   gap: 10px;
   min-width: 76px;
   min-height: 72px;
-  color: #4f5f75;
+  color: $text-color-secondary;
   font-size: 14px;
   font-weight: 600;
   text-align: center;
@@ -831,12 +874,19 @@ watch(
     transform $motion-fast ease;
 }
 
-.seo-product-card:hover,
-.seo-product-card--featured {
-  border-color: #e2e8f3;
+// 悬停态：中性描边 + 上移
+.seo-product-card:hover {
+  border-color: $border-color;
   background: $bg-color-card;
   box-shadow: 0 14px 30px rgba(20, 38, 74, 0.07);
   transform: translateY(-2px);
+}
+
+// 选中态（首个产品）：主色描边区分于悬停，阴影更深，不位移
+.seo-product-card--featured {
+  border-color: $color-primary;
+  background: $bg-color-card;
+  box-shadow: 0 18px 36px $color-primary-a20;
 }
 
 .seo-product-card__head {
@@ -848,7 +898,7 @@ watch(
 
 .seo-product-card h3 {
   margin: 0;
-  color: #162033;
+  color: $text-color-primary;
   font-size: 22px;
   line-height: 1.4;
   letter-spacing: 0;
@@ -859,7 +909,7 @@ watch(
   align-items: center;
   min-height: 22px;
   padding: 0 7px;
-  border: 1px solid #b9ceff;
+  border: 1px solid $color-primary-border;
   color: $color-primary;
   font-size: 12px;
   line-height: 1;
@@ -868,7 +918,7 @@ watch(
 .seo-product-card p {
   min-height: 58px;
   margin: 14px 0 0;
-  color: #66758a;
+  color: $text-color-secondary;
   font-size: 14px;
   line-height: 1.75;
 }
@@ -885,8 +935,8 @@ watch(
   align-items: center;
   min-height: 26px;
   padding: 0 9px;
-  border: 1px solid #d9e1ec;
-  color: #516176;
+  border: 1px solid $border-color;
+  color: $text-color-secondary;
   font-size: 12px;
   line-height: 1;
 }
@@ -905,8 +955,8 @@ watch(
   min-height: 38px;
   min-width: 96px;
   padding: 0 14px;
-  border: 1px solid #ccd6e4;
-  color: #334155;
+  border: 1px solid $border-color-strong;
+  color: $text-color-primary;
   font-size: 13px;
   font-weight: 700;
   text-decoration: none;
@@ -919,17 +969,25 @@ watch(
 }
 
 .seo-section--solutions {
+  // 右端原 rgba(212, 224, 236, .92) 过亮，与白字仅 1.34:1。
+  // 加深到 rgba(36, 58, 85, .96) 后，左端合成约 #425c7b（6.9:1）、右端合成约 #2b415b（10.5:1），
+  // 最亮端也超过 4.5:1 要求。按最亮端校验。
+  // 兜底色（渐变未绘制时才会露出）原先取 #d4dee8，与白字仅 1.35:1：
+  // 渐变永远会覆盖它，但一旦某端渲染失败，白字就直接落在浅底上不可读。
+  // 换成与渐变右端同族的 #2b415b（白字 10.5:1），兜底也满足对比度。
   background:
-    linear-gradient(90deg, rgba(50, 78, 111, 0.9), rgba(212, 224, 236, 0.92)),
-    #d4dee8;
+    linear-gradient(90deg, rgba(50, 78, 111, 0.9), rgba(36, 58, 85, 0.96)),
+    #2b415b;
 }
 
 .seo-section--solutions .seo-section__heading h2 {
   color: $text-color-inverse;
 }
 
+// 副标不透明度由 .78 提到 .92：渐变最亮端（左端 rgba(50, 78, 111, .9)）上
+// 合成色约 #f0f2f4，与底色对比度约 6.1:1，超过 4.5:1。按最亮端校验。
 .seo-section--solutions .seo-section__heading p {
-  color: rgba(255, 255, 255, 0.78);
+  color: rgba(255, 255, 255, 0.92);
 }
 
 .seo-solution-panel {
@@ -979,7 +1037,7 @@ watch(
 
 .seo-solution-content h3 {
   margin: 12px 0 0;
-  color: #111827;
+  color: $text-color-primary;
   font-size: 28px;
   line-height: 1.35;
   letter-spacing: 0;
@@ -987,7 +1045,7 @@ watch(
 
 .seo-solution-content p:not(.seo-eyebrow) {
   margin: 14px 0 0;
-  color: #526174;
+  color: $text-color-secondary;
   font-size: 14px;
   line-height: 1.86;
 }
@@ -1005,7 +1063,7 @@ watch(
   display: flex;
   gap: 8px;
   min-width: 0;
-  color: #334155;
+  color: $text-color-primary;
   font-size: 13px;
   font-weight: 700;
   line-height: 1.55;
@@ -1022,7 +1080,7 @@ watch(
   flex-wrap: wrap;
   gap: 8px 14px;
   margin-top: 28px;
-  color: #526174;
+  color: $text-color-secondary;
   font-size: 13px;
 }
 
@@ -1042,7 +1100,7 @@ watch(
 .seo-process__item,
 .seo-faq {
   min-width: 0;
-  border: 1px solid #e2e8f3;
+  border: 1px solid $border-color;
   border-radius: 4px;
   background: $bg-color-card;
 }
@@ -1059,7 +1117,7 @@ watch(
 
 .seo-process__item h3 {
   margin: 14px 0 0;
-  color: #162033;
+  color: $text-color-primary;
   font-size: 17px;
   line-height: 1.4;
   letter-spacing: 0;
@@ -1067,7 +1125,7 @@ watch(
 
 .seo-process__item p {
   margin: 10px 0 0;
-  color: #66758a;
+  color: $text-color-secondary;
   font-size: 13px;
   line-height: 1.78;
 }
@@ -1087,7 +1145,7 @@ watch(
   display: flex;
   gap: 8px;
   margin: 0;
-  color: #162033;
+  color: $text-color-primary;
   font-size: 16px;
   line-height: 1.55;
   letter-spacing: 0;
@@ -1101,7 +1159,7 @@ watch(
 
 .seo-faq p {
   margin: 12px 0 0;
-  color: #5f6f83;
+  color: $text-color-secondary;
   font-size: 13px;
   line-height: 1.82;
 }
@@ -1247,7 +1305,7 @@ watch(
 
   .seo-strip-card {
     border-left: 0;
-    border-top: 1px solid #edf2f7;
+    border-top: 1px solid $divider-color;
     padding: 24px 18px;
   }
 

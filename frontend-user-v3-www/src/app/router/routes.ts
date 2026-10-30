@@ -2,12 +2,52 @@ import { lazyRouteView } from '@caiwu/shared/runtime'
 import { buildSeoLandingRouteMeta, seoLandingMetaPages } from '@/data/seoLandingMeta'
 import type { RouteRecordRaw } from 'vue-router'
 
-const seoLandingRoutes: RouteRecordRaw[] = seoLandingMetaPages.map((page) => ({
-  path: page.path.replace(/^\/+/, ''),
-  name: page.routeName,
-  component: lazyRouteView(() => import('@/pages/website/seo-landing/index.vue')),
-  meta: buildSeoLandingRouteMeta(page),
-}))
+// slug → 落地页薄壳。每条只静态引入自己那份文案数据，
+// 避免把 5 页全量文案塞进同一个 chunk（实测该数据块占 chunk gzip 的 50.3%）。
+const seoLandingViews: Record<string, () => Promise<unknown>> = {
+  'cloud-server': () => import('@/pages/website/seo-landing/pages/cloud-server.vue'),
+  'hong-kong-server': () => import('@/pages/website/seo-landing/pages/hong-kong-server.vue'),
+  'us-server': () => import('@/pages/website/seo-landing/pages/us-server.vue'),
+  'high-defense-server': () => import('@/pages/website/seo-landing/pages/high-defense-server.vue'),
+  'cloud-pc': () => import('@/pages/website/seo-landing/pages/cloud-pc.vue'),
+}
+
+// 落地页展示组件已改为必须接收 page prop（文案按 slug 拆分，见 src/data/seoLanding/）。
+// 因此「meta 有这条 slug 但没配薄壳」不能回退到展示组件——那会以 undefined prop 渲染并抛错。
+//
+// 但也不能直接 throw：这份路由表在 main.js 的模块求值期就会跑完（bootstrap 之前），
+// 一旦抛出，createApp 根本不会执行，#app-splash 会永久停留 = 全站白屏，比少一页严重得多。
+// 因此开发期直接抛（第一时间暴露配置疏漏），生产期记错误并丢弃该条路由（只影响这一个落地页）。
+function resolveSeoLandingView(page: { slug: string; path: string }) {
+  const view = seoLandingViews[page.slug]
+
+  if (view) return view
+
+  const message =
+    `SEO 落地页缺少薄壳组件：slug "${page.slug}"。请同时新增 ` +
+    `src/pages/website/seo-landing/pages/${page.slug}.vue 与 src/data/seoLanding/${page.slug}.js`
+
+  if (import.meta.env.DEV) {
+    throw new Error(message)
+  }
+
+  console.error(`[router] ${message}（已跳过该落地页路由，避免整站白屏）`)
+  return null
+}
+
+const seoLandingRoutes: RouteRecordRaw[] = seoLandingMetaPages.flatMap((page) => {
+  const view = resolveSeoLandingView(page)
+  if (!view) return []
+
+  return [
+    {
+      path: page.path.replace(/^\/+/, ''),
+      name: page.routeName,
+      component: lazyRouteView(view),
+      meta: buildSeoLandingRouteMeta(page),
+    },
+  ]
+})
 
 export const clientRoutes: RouteRecordRaw[] = [
   {

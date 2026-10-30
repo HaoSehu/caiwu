@@ -48,8 +48,12 @@ export function useMobileNav({ initProducts, initNotices, initHelp, isNavItemAct
     }
   }
 
+  // 记录打开前的内联 overflow，关闭时原样还原；直接写空串会抹掉页面上其他来源设置的值
+  let bodyOverflowBeforeLock = ''
+
   watch(mobileNavVisible, (visible) => {
     if (visible) {
+      bodyOverflowBeforeLock = document.body.style.overflow
       document.body.style.overflow = 'hidden'
       mobileExpandedType.value = ''
       initProducts()
@@ -62,7 +66,7 @@ export function useMobileNav({ initProducts, initNotices, initHelp, isNavItemAct
         if (firstItem) firstItem.focus()
       })
     } else {
-      document.body.style.overflow = ''
+      document.body.style.overflow = bodyOverflowBeforeLock
       // 关闭后焦点归还触发按钮
       mobileMenuToggleRef.value?.focus()
     }
