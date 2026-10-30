@@ -1,7 +1,7 @@
 <template>
   <t-drawer
     v-model:visible="showSettingPanel"
-    size="408px"
+    size="min(408px, calc(100vw - 32px))"
     :footer="false"
     :header="t('layout.setting.title')"
     :close-btn="true"
@@ -83,7 +83,8 @@ onUnmounted(() => {
 const initStyleConfig = () => {
   const styleConfig = STYLE_CONFIG;
   for (const key in styleConfig) {
-    if (Object.hasOwn(styleConfig, key)) {
+    // 用 hasOwnProperty.call 而非 Object.hasOwn：后者要 Chrome 93 / Safari 15.4，超出仓库声明的浏览器基线
+    if (Object.prototype.hasOwnProperty.call(styleConfig, key)) {
       (styleConfig[key as keyof typeof STYLE_CONFIG] as any) = settingStore[key as keyof typeof STYLE_CONFIG];
     }
   }
@@ -160,7 +161,7 @@ watchEffect(() => {
   transition: all 0.3s;
 
   .t-icon {
-    margin-left: 8px;
+    margin-left: var(--td-comp-margin-s);
   }
 
   .tdesign-setting-text {
@@ -174,19 +175,6 @@ watchEffect(() => {
     .tdesign-setting-text {
       display: inline-block;
     }
-  }
-}
-
-.setting-layout-color-group {
-  display: inline-flex;
-  justify-content: center;
-  align-items: center;
-  border-radius: 50% !important;
-  padding: 6px !important;
-  border: 2px solid transparent !important;
-
-  > .t-radio-button__label {
-    display: inline-flex;
   }
 }
 
@@ -210,7 +198,7 @@ watchEffect(() => {
 .setting-link {
   cursor: pointer;
   color: var(--td-brand-color);
-  margin-bottom: 8px;
+  margin-bottom: var(--td-comp-margin-s);
 }
 
 .setting-info {
@@ -251,7 +239,7 @@ watchEffect(() => {
     display: flex;
     flex-direction: column;
     align-items: center;
-    margin-bottom: 16px;
+    margin-bottom: var(--td-comp-margin-l);
 
     .t-radio-button {
       display: inline-flex;
@@ -265,8 +253,8 @@ watchEffect(() => {
       }
     }
 
-    .t-is-checked {
-      border: 2px solid var(--td-brand-color) !important;
+    .t-radio-button.t-is-checked {
+      border-color: var(--td-brand-color);
     }
 
     .t-form__controls-content {
@@ -276,13 +264,6 @@ watchEffect(() => {
 
   .t-form__controls-content {
     justify-content: end;
-  }
-}
-
-.setting-route-theme {
-  .t-form__label {
-    min-width: 310px !important;
-    color: var(--td-text-color-secondary);
   }
 }
 
@@ -313,7 +294,7 @@ watchEffect(() => {
     }
 
     .setting-layout-drawer .t-radio-button {
-      border-color: var(--td-component-border) !important;
+      border-color: var(--td-component-border);
       cursor: not-allowed;
     }
   }

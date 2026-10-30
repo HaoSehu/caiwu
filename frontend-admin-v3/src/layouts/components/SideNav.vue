@@ -125,7 +125,8 @@ watch(
 
 const onExpanded = (value: MenuValue[]) => {
   const openedMenus = value.filter((item) => !hasMenuValue(expanded.value, item));
-  const latestOpenedMenu = openedMenus.at(-1);
+  // 不用 Array.prototype.at：它要 Chrome 92 / Safari 15.4，超出仓库声明的浏览器基线
+  const latestOpenedMenu = openedMenus[openedMenus.length - 1];
 
   if (latestOpenedMenu) {
     expanded.value = findExpandedMenuBranch(menu as MenuRoute[], latestOpenedMenu) || [latestOpenedMenu];

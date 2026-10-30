@@ -31,6 +31,6 @@ const crumbs = computed(() => {
 </script>
 <style scoped>
 .tdesign-breadcrumb {
-  margin-bottom: 24px;
+  margin-bottom: var(--td-comp-margin-xxl);
 }
 </style>

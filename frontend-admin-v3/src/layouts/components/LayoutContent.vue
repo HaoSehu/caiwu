@@ -41,27 +41,35 @@
                 visible: activeTabPath === routeItem.path,
               }"
             >
-              <span class="tab-item-more" @click.stop>
+              <span
+                class="tab-item-more"
+                role="button"
+                tabindex="0"
+                aria-label="标签页操作菜单"
+                @click.stop
+                @keydown.enter.prevent.stop="toggleTabMenu(routeItem.path)"
+                @keydown.space.prevent.stop="toggleTabMenu(routeItem.path)"
+              >
                 <t-icon name="ellipsis" class="tab-item-more-icon" />
               </span>
               <template #dropdown>
                 <t-dropdown-menu>
-                  <t-dropdown-item @click="() => handleRefresh(routeItem, index)">
+                  <t-dropdown-item @click="() => handleRefresh(routeItem)">
                     <t-icon name="refresh" />
                     {{ t('layout.tagTabs.refresh') }}
                   </t-dropdown-item>
-                  <t-dropdown-item v-if="index > 1" @click="() => handleCloseAhead(routeItem.path, index)">
+                  <t-dropdown-item v-if="index > 1" @click="() => handleCloseAhead(routeItem.path)">
                     <t-icon name="arrow-left" />
                     {{ t('layout.tagTabs.closeLeft') }}
                   </t-dropdown-item>
                   <t-dropdown-item
                     v-if="index < tabRouters.length - 1"
-                    @click="() => handleCloseBehind(routeItem.path, index)"
+                    @click="() => handleCloseBehind(routeItem.path)"
                   >
                     <t-icon name="arrow-right" />
                     {{ t('layout.tagTabs.closeRight') }}
                   </t-dropdown-item>
-                  <t-dropdown-item v-if="tabRouters.length > 2" @click="() => handleCloseOther(routeItem.path, index)">
+                  <t-dropdown-item v-if="tabRouters.length > 2" @click="() => handleCloseOther(routeItem.path)">
                     <t-icon name="close-circle" />
                     {{ t('layout.tagTabs.closeOther') }}
                   </t-dropdown-item>
@@ -108,73 +116,86 @@ const activeTabPath = ref('');
 const { locale } = useLocale();
 
 const handleChangeCurrentTab = (path: string) => {
-  const { tabRouters } = tabsRouterStore;
-  const route = tabRouters.find((i) => i.path === path);
-  router.push({ path, query: route.query });
+  const target = tabsRouterStore.tabRouters.find((i) => i.path === path);
+  router.push({ path, query: target?.query });
 };
 
 const handleRemove = (options: TTabRemoveOptions) => {
-  const { tabRouters } = tabsRouterStore;
-  const nextRouter = tabRouters[options.index + 1] || tabRouters[options.index - 1];
+  // 相邻标签必须从「渲染出来的标签」里取：tabRouterList 里还留着 keepAlive:false 的路由
+  // （它们不渲染标签），按 store 下标取相邻会跳到用户看不到的页面上（审查 M2）。
+  const visibleTabs = tabRouters.value;
+  const closedIdx = visibleTabs.findIndex((i) => i.path === options.value);
+  const nextRouter = closedIdx >= 0 ? visibleTabs[closedIdx + 1] || visibleTabs[closedIdx - 1] : visibleTabs[0];
 
-  tabsRouterStore.subtractCurrentTabRouter({ path: options.value as string, routeIdx: options.index });
-  if ((options.value as string) === route.path) router.push({ path: nextRouter.path, query: nextRouter.query });
+  tabsRouterStore.subtractCurrentTabRouter({ path: options.value as string });
+  if (nextRouter && (options.value as string) === route.path) {
+    router.push({ path: nextRouter.path, query: nextRouter.query });
+  }
 };
 
 const renderTitle = (title?: LocalizedTitle) => {
   if (!title) return '';
   return title[locale.value as keyof LocalizedTitle] || '';
 };
-const handleRefresh = (route: TRouterInfo, routeIdx: number) => {
-  tabsRouterStore.toggleTabRouterAlive(routeIdx);
+const handleRefresh = (route: TRouterInfo) => {
+  // 必须按 path 定位：这里的 route 来自 tabRouters（已过滤掉非保活标签），
+  // 其下标与 store 里 tabRouterList 的真实下标不一致，传下标会刷新错标签。
+  tabsRouterStore.toggleTabRouterAlive(route.path);
   nextTick(() => {
-    tabsRouterStore.toggleTabRouterAlive(routeIdx);
+    tabsRouterStore.toggleTabRouterAlive(route.path);
     router.replace({ path: route.path, query: route.query });
   });
-  activeTabPath.value = null;
+  activeTabPath.value = '';
 };
-const handleCloseAhead = (path: string, routeIdx: number) => {
-  tabsRouterStore.subtractTabRouterAhead({ path, routeIdx });
+const handleCloseAhead = (path: string) => {
+  tabsRouterStore.subtractTabRouterAhead({ path });
 
-  handleOperationEffect('ahead', routeIdx);
+  handleOperationEffect('ahead', path);
 };
-const handleCloseBehind = (path: string, routeIdx: number) => {
-  tabsRouterStore.subtractTabRouterBehind({ path, routeIdx });
+const handleCloseBehind = (path: string) => {
+  tabsRouterStore.subtractTabRouterBehind({ path });
 
-  handleOperationEffect('behind', routeIdx);
+  handleOperationEffect('behind', path);
 };
-const handleCloseOther = (path: string, routeIdx: number) => {
-  tabsRouterStore.subtractTabRouterOther({ path, routeIdx });
+const handleCloseOther = (path: string) => {
+  tabsRouterStore.subtractTabRouterOther({ path });
 
-  handleOperationEffect('other', routeIdx);
+  handleOperationEffect('other', path);
 };
 
 // 处理非当前路由操作的副作用
-const handleOperationEffect = (type: 'other' | 'ahead' | 'behind', routeIndex: number) => {
+const handleOperationEffect = (type: 'other' | 'ahead' | 'behind', path: string) => {
   const currentPath = router.currentRoute.value.path;
-  const { tabRouters } = tabsRouterStore;
+  // 与 handleRemove 同源：一律用渲染出来的标签列表，否则可能落到 keepAlive:false 的无标签页（审查 M2）。
+  const visibleTabs = tabRouters.value;
 
-  const currentIdx = tabRouters.findIndex((i) => i.path === currentPath);
+  const currentIdx = visibleTabs.findIndex((i) => i.path === currentPath);
+  const targetIdx = visibleTabs.findIndex((i) => i.path === path);
   // 存在三种情况需要刷新当前路由
   // 点击非当前路由的关闭其他、点击非当前路由的关闭左侧且当前路由小于触发路由、点击非当前路由的关闭右侧且当前路由大于触发路由
   const needRefreshRouter =
-    (type === 'other' && currentIdx !== routeIndex) ||
-    (type === 'ahead' && currentIdx < routeIndex) ||
+    (type === 'other' && currentIdx !== targetIdx) ||
+    (type === 'ahead' && currentIdx < targetIdx) ||
     (type === 'behind' && currentIdx === -1);
   if (needRefreshRouter) {
-    const nextRouteIdx = type === 'behind' ? tabRouters.length - 1 : 1;
-    const nextRouter = tabRouters[nextRouteIdx];
-    router.push({ path: nextRouter.path, query: nextRouter.query });
+    const nextRouteIdx = type === 'behind' ? visibleTabs.length - 1 : 1;
+    const nextRouter = visibleTabs[nextRouteIdx];
+    if (nextRouter) router.push({ path: nextRouter.path, query: nextRouter.query });
   }
 
-  activeTabPath.value = null;
+  activeTabPath.value = '';
 };
 const handleTabMenuClick = (visible: boolean, ctx: PopupVisibleChangeContext, path: string) => {
-  if (ctx.trigger === 'document') activeTabPath.value = null;
+  if (ctx.trigger === 'document') activeTabPath.value = '';
   if (visible) activeTabPath.value = path;
 };
 
 const handleContextMenu = (e: MouseEvent, path: string) => {
+  activeTabPath.value = activeTabPath.value === path ? '' : path;
+};
+
+// 键盘可达：与右键/点击同一套开关逻辑，供 tab 的「更多」按钮在 Enter/Space 时触发
+const toggleTabMenu = (path: string) => {
   activeTabPath.value = activeTabPath.value === path ? '' : path;
 };
 
@@ -192,12 +213,13 @@ const handleTabAuxClick = (e: MouseEvent, routeItem: TRouterInfo, index: number)
 };
 
 const handleDragend = (options: { currentIndex: number; targetIndex: number }) => {
-  const { tabRouters } = tabsRouterStore;
+  // currentIndex / targetIndex 是 tabRouters（过滤后）的下标，需先映射成 path 再在 store 里换位；
+  // 直接改 tabRouters 是在改 computed 派生数组，不会写回 tabRouterList。
+  const fromPath = tabRouters.value[options.currentIndex]?.path;
+  const toPath = tabRouters.value[options.targetIndex]?.path;
+  if (!fromPath || !toPath) return;
 
-  [tabRouters[options.currentIndex], tabRouters[options.targetIndex]] = [
-    tabRouters[options.targetIndex],
-    tabRouters[options.currentIndex],
-  ];
+  tabsRouterStore.moveTabRouter(fromPath, toPath);
 };
 </script>
 <style lang="less" scoped>
@@ -216,7 +238,7 @@ const handleDragend = (options: { currentIndex: number; targetIndex: number }) =
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  margin-left: 4px;
+  margin-left: var(--td-comp-margin-xs);
   padding: 2px;
   border-radius: 3px;
   cursor: pointer;
@@ -231,7 +253,7 @@ const handleDragend = (options: { currentIndex: number; targetIndex: number }) =
   }
 
   .tab-item-more-icon {
-    font-size: 14px;
+    font-size: var(--td-font-size-size-3, 14px);
   }
 }
 </style>

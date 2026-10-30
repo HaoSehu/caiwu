@@ -2,7 +2,16 @@
   <div :class="layoutCls">
     <t-head-menu :class="menuCls" :theme="menuTheme" expand-type="popup" :value="active">
       <template #logo>
-        <span v-if="showLogo" class="header-logo-container" @click="handleNav('/dashboard/base')">
+        <span
+          v-if="showLogo"
+          class="header-logo-container"
+          role="link"
+          tabindex="0"
+          aria-label="返回工作台首页"
+          @click="handleNav('/admin/dashboard')"
+          @keydown.enter.prevent="handleNav('/admin/dashboard')"
+          @keydown.space.prevent="handleNav('/admin/dashboard')"
+        >
           <logo-full class="t-logo" />
         </span>
         <div v-else-if="!isMobileSideHeader" class="header-operate-left">
@@ -15,7 +24,15 @@
           <t-button theme="default" shape="square" variant="text" aria-label="切换侧边栏" @click="toggleMobileSidebar">
             <t-icon name="view-list" />
           </t-button>
-          <span class="header-mobile-logo" @click="handleNav('/dashboard/base')">
+          <span
+            class="header-mobile-logo"
+            role="link"
+            tabindex="0"
+            aria-label="返回工作台首页"
+            @click="handleNav('/admin/dashboard')"
+            @keydown.enter.prevent="handleNav('/admin/dashboard')"
+            @keydown.space.prevent="handleNav('/admin/dashboard')"
+          >
             <logo-full class="t-logo" />
           </span>
         </div>
@@ -68,12 +85,12 @@
     <t-dialog
       v-model:visible="passwordVisible"
       header="修改密码"
-      width="520px"
+      width="min(520px, calc(100vw - 32px))"
       :confirm-btn="{ content: '保存', theme: 'primary' }"
       :confirm-loading="passwordSaving"
       @confirm="submitPassword"
     >
-      <t-form ref="passwordFormRef" :data="passwordForm" :rules="passwordRules" label-align="top">
+      <t-form ref="passwordFormRef" :data="passwordForm" :rules="passwordRules" label-align="right">
         <t-form-item label="当前密码" name="current_password">
           <t-input v-model="passwordForm.current_password" type="password" autocomplete="current-password" />
         </t-form-item>
@@ -100,7 +117,7 @@ import LogoFull from '@/assets/assets-logo-full.svg?component';
 import { MOBILE_BREAKPOINT, prefix } from '@/config/global';
 import { t } from '@/locales';
 import { getActive } from '@/router';
-import { getPermissionStore, getTabsRouterStore, useSettingStore, useUserStore } from '@/store';
+import { useSettingStore, useUserStore } from '@/store';
 import type { MenuRoute, ModeType } from '@/types/interface';
 import { errorMessage } from '@/utils/userMessage';
 
@@ -256,16 +273,14 @@ const submitPassword = async () => {
   }
 };
 
-// 退出登录必须真正清理会话：吊销服务端 token（userStore.logout 内调用后端登出接口）、
-// 清本地 token 与 userInfo、丢弃标签页缓存并重置菜单。
+// 退出登录必须真正清理会话：吊销服务端 token、清本地 token 与 userInfo、
+// 丢弃标签页缓存并重置菜单，这一组动作统一由 userStore.logoutAdmin 负责。
 // 只做 router.push 的话 token 仍在，用户按后退键或手输 /admin/* 会被守卫直接放行，等于没有登出。
 // 管理端路由为静态注册，登出时无法也不需要在路由层撤销；未登录访问一律由守卫拦回登录页。
 // 也不要带 redirect：登出后再把人送回原页面与「退出」的语义相悖。
 const handleLogout = async () => {
-  // userStore.logout 内部已是完整 try/catch/finally（接口失败也不阻断本地清理），不会再抛出
-  await user.logout();
-  getTabsRouterStore().removeTabRouterList();
-  getPermissionStore().resetMenus();
+  // logoutAdmin 内部已是完整 try/catch/finally（接口失败也不阻断本地清理），不会再抛出
+  await user.logoutAdmin();
   router.push({ path: '/admin/login' });
 };
 </script>
@@ -327,7 +342,7 @@ const handleLogout = async () => {
   width: 184px;
   height: 26px;
   display: flex;
-  margin-left: 24px;
+  margin-left: var(--td-comp-margin-xxl);
   color: var(--td-text-color-primary);
 
   .t-logo {
@@ -369,8 +384,8 @@ const handleLogout = async () => {
   .header-mobile-logo-bar {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    margin-left: 8px;
+    gap: var(--td-comp-margin-s);
+    margin-left: var(--td-comp-margin-s);
   }
 
   .header-mobile-logo {
@@ -416,7 +431,7 @@ const handleLogout = async () => {
 
   &:last-child {
     :deep(.t-dropdown__item) {
-      margin-bottom: 8px;
+      margin-bottom: var(--td-comp-margin-s);
     }
   }
 }

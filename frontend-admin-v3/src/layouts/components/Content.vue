@@ -3,7 +3,7 @@
     <router-view v-if="!isFramePage" v-slot="{ Component }">
       <transition name="fade" mode="out-in">
         <keep-alive :include="aliveViews">
-          <component :is="Component" />
+          <component :is="Component" :key="route.path" />
         </keep-alive>
       </transition>
     </router-view>
@@ -21,17 +21,10 @@ import { useRoute } from 'vue-router';
 import FramePage from '@/layouts/frame/index.vue';
 import { useTabsRouterStore } from '@/store';
 
-// <suspense>标签属于实验性功能，请谨慎使用
-// 如果存在需解决/page/1=> /page/2 刷新数据问题 请修改代码 使用activeRouteFullPath 作为key
-// <suspense>
-//  <component :is="Component" :key="activeRouteFullPath" />
-// </suspense>
-
-// import { useRouter } from 'vue-router';
-// const activeRouteFullPath = computed(() => {
-//   const router = useRouter();
-//   return router.currentRoute.value.fullPath;
-// });
+// KeepAlive 的缓存键由 vnode 的 key 决定：一个标签页对应一个 path，key 必须用 route.path。
+// 若不写 key，同一组件（如 users/:id、tickets/:id、products/:id/edit）在多个标签间
+// 只会保留一个实例，从「用户 1」切到「用户 2」时不会重新挂载，页面会显示上一个 id 的数据。
+// 不能用 route.fullPath：页内切 tab 会改 query，那会把同一标签缓存成多份。
 
 const aliveViews = computed(() => {
   const tabsRouterStore = useTabsRouterStore();
