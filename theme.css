@@ -160,6 +160,21 @@
   --td-shadow-1: 0 1px 2px rgba(25, 35, 50, 0.06);
   --td-shadow-2: 0 2px 6px rgba(25, 35, 50, 0.08);
   --td-shadow-3: 0 4px 12px rgba(25, 35, 50, 0.1);
+  /* TDesign 没有对应档位的补充令牌：遮罩、媒体画布、深色代码块（DESIGN.md §3），
+     集中在此定义，禁止业务样式再写 rgb(0 0 0 / N%) / #101828 之类的裸值。 */
+  --caiwu-mask-overlay: rgb(0 0 0 / 50%);
+  --caiwu-mask-overlay-strong: rgb(0 0 0 / 55%);
+  --caiwu-mask-nav: rgb(0 0 0 / 42%);
+  --caiwu-text-on-mask-secondary: rgb(255 255 255 / 65%);
+  --caiwu-media-canvas: #000;
+  --caiwu-code-bg: #101828;
+  --caiwu-code-fg: #f8fafc;
+  /* 反向投影：抽屉/对话框底部固定操作栏需要向上投射，TDesign 三级投影均为向下，故补一枚同色阶的反向令牌 */
+  --caiwu-shadow-footer: 0 -4px 16px rgba(25, 35, 50, 0.08);
+  /* 选中/悬停光环与选中行左侧强调条：不是高度投影，TDesign 无对应令牌，集中定义避免各页各写一份 */
+  --caiwu-ring-brand: 0 0 0 2px var(--td-brand-color-light);
+  --caiwu-ring-brand-strong: 0 0 0 3px var(--td-brand-color-light);
+  --caiwu-accent-inset: inset 3px 0 0 var(--td-brand-color);
 }
 
 .t-default-menu .t-menu__item .t-icon,
@@ -438,8 +453,7 @@
 }
 
 #app .page-tabs-toolbar,
-#app .page-inline-actions,
-#app .page-inline-hero {
+#app .page-inline-actions {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -476,12 +490,6 @@
 
 #app .page-inline-actions {
   justify-content: flex-end;
-}
-
-#app .page-inline-hero {
-  padding: 0;
-  background: transparent;
-  border: 0;
 }
 
 @media (max-width: 767.98px) {
