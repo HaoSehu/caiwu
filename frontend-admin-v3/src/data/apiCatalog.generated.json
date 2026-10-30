@@ -1,7 +1,7 @@
 {
     "meta": {
-        "generatedAt": "2026-10-25 17:21:22",
-        "total": 391,
+        "generatedAt": "2026-10-28 18:19:05",
+        "total": 392,
         "baseURL": "/api/v2",
         "dataSource": "php artisan route:list --json v2-only",
         "scopeLabels": {
@@ -21,14 +21,14 @@
             "permission": "登录 + 权限"
         },
         "scopeCounts": {
-            "admin": 244,
+            "admin": 245,
             "client": 128,
             "site": 18,
             "system": 1
         },
         "accessCounts": {
             "auth": 121,
-            "permission": 235,
+            "permission": 236,
             "public": 35
         },
         "moduleCount": 78
@@ -955,8 +955,10 @@
             "access": "permission",
             "accessLabel": "登录 + 权限",
             "permission": "database.manage",
-            "throttle": "",
-            "guards": [],
+            "throttle": "admin-privilege-write",
+            "guards": [
+                "限流 admin-privilege-write"
+            ],
             "handler": "App\\Http\\Controllers\\Admin\\V2\\DatabaseStatusController@exportBackup",
             "sourceApps": [],
             "sourceAppLabels": [],
@@ -978,8 +980,10 @@
             "access": "permission",
             "accessLabel": "登录 + 权限",
             "permission": "database.manage",
-            "throttle": "",
-            "guards": [],
+            "throttle": "admin-privilege-write",
+            "guards": [
+                "限流 admin-privilege-write"
+            ],
             "handler": "App\\Http\\Controllers\\Admin\\V2\\DatabaseStatusController@showBackup",
             "sourceApps": [],
             "sourceAppLabels": [],
@@ -1001,8 +1005,10 @@
             "access": "permission",
             "accessLabel": "登录 + 权限",
             "permission": "database.manage",
-            "throttle": "",
-            "guards": [],
+            "throttle": "admin-privilege-write",
+            "guards": [
+                "限流 admin-privilege-write"
+            ],
             "handler": "App\\Http\\Controllers\\Admin\\V2\\DatabaseStatusController@downloadBackup",
             "sourceApps": [],
             "sourceAppLabels": [],
@@ -1024,8 +1030,10 @@
             "access": "permission",
             "accessLabel": "登录 + 权限",
             "permission": "database.manage",
-            "throttle": "",
-            "guards": [],
+            "throttle": "admin-privilege-write",
+            "guards": [
+                "限流 admin-privilege-write"
+            ],
             "handler": "App\\Http\\Controllers\\Admin\\V2\\DatabaseStatusController@optimize",
             "sourceApps": [],
             "sourceAppLabels": [],
@@ -1300,8 +1308,10 @@
             "access": "permission",
             "accessLabel": "登录 + 权限",
             "permission": "integration_plugin.manage",
-            "throttle": "",
-            "guards": [],
+            "throttle": "admin-privilege-write",
+            "guards": [
+                "限流 admin-privilege-write"
+            ],
             "handler": "App\\Http\\Controllers\\Admin\\V2\\IntegrationPluginController@scan",
             "sourceApps": [],
             "sourceAppLabels": [],
@@ -1346,8 +1356,10 @@
             "access": "permission",
             "accessLabel": "登录 + 权限",
             "permission": "integration_plugin.manage",
-            "throttle": "",
-            "guards": [],
+            "throttle": "admin-privilege-write",
+            "guards": [
+                "限流 admin-privilege-write"
+            ],
             "handler": "App\\Http\\Controllers\\Admin\\V2\\IntegrationPluginController@install",
             "sourceApps": [],
             "sourceAppLabels": [],
@@ -1369,8 +1381,10 @@
             "access": "permission",
             "accessLabel": "登录 + 权限",
             "permission": "integration_plugin.manage",
-            "throttle": "",
-            "guards": [],
+            "throttle": "admin-privilege-write",
+            "guards": [
+                "限流 admin-privilege-write"
+            ],
             "handler": "App\\Http\\Controllers\\Admin\\V2\\IntegrationPluginController@destroy",
             "sourceApps": [],
             "sourceAppLabels": [],
@@ -1415,8 +1429,10 @@
             "access": "permission",
             "accessLabel": "登录 + 权限",
             "permission": "integration_plugin.manage",
-            "throttle": "",
-            "guards": [],
+            "throttle": "admin-privilege-write",
+            "guards": [
+                "限流 admin-privilege-write"
+            ],
             "handler": "App\\Http\\Controllers\\Admin\\V2\\IntegrationPluginController@updateConfig",
             "sourceApps": [],
             "sourceAppLabels": [],
@@ -1486,8 +1502,10 @@
             "access": "permission",
             "accessLabel": "登录 + 权限",
             "permission": "integration_plugin.manage",
-            "throttle": "",
-            "guards": [],
+            "throttle": "admin-privilege-write",
+            "guards": [
+                "限流 admin-privilege-write"
+            ],
             "handler": "App\\Http\\Controllers\\Admin\\V2\\IntegrationPluginController@updateStatus",
             "sourceApps": [],
             "sourceAppLabels": [],
@@ -1534,8 +1552,9 @@
             "access": "permission",
             "accessLabel": "登录 + 权限",
             "permission": "integration_plugin.manage",
-            "throttle": "10,1,admin-integration-plugin-upgrade",
+            "throttle": "admin-privilege-write",
             "guards": [
+                "限流 admin-privilege-write",
                 "限流 10,1,admin-integration-plugin-upgrade"
             ],
             "handler": "App\\Http\\Controllers\\Admin\\V2\\IntegrationPluginController@upgrade",
@@ -2234,8 +2253,9 @@
             "access": "permission",
             "accessLabel": "登录 + 权限",
             "permission": "settings.manage",
-            "throttle": "20,1",
+            "throttle": "admin-privilege-write",
             "guards": [
+                "限流 admin-privilege-write",
                 "限流 20,1"
             ],
             "handler": "App\\Http\\Controllers\\Admin\\V2\\SettingController@syncSmsProviderTemplates",
@@ -2259,8 +2279,10 @@
             "access": "permission",
             "accessLabel": "登录 + 权限",
             "permission": "settings.manage",
-            "throttle": "",
-            "guards": [],
+            "throttle": "admin-privilege-write",
+            "guards": [
+                "限流 admin-privilege-write"
+            ],
             "handler": "App\\Http\\Controllers\\Admin\\V2\\SettingController@createSmsProviderTemplate",
             "sourceApps": [],
             "sourceAppLabels": [],
@@ -2282,8 +2304,9 @@
             "access": "permission",
             "accessLabel": "登录 + 权限",
             "permission": "settings.manage",
-            "throttle": "20,1",
+            "throttle": "admin-privilege-write",
             "guards": [
+                "限流 admin-privilege-write",
                 "限流 20,1"
             ],
             "handler": "App\\Http\\Controllers\\Admin\\V2\\SettingController@importDefaultSmsProviderTemplates",
@@ -2330,8 +2353,9 @@
             "access": "permission",
             "accessLabel": "登录 + 权限",
             "permission": "settings.manage",
-            "throttle": "20,1",
+            "throttle": "admin-privilege-write",
             "guards": [
+                "限流 admin-privilege-write",
                 "限流 20,1"
             ],
             "handler": "App\\Http\\Controllers\\Admin\\V2\\SettingController@submitAllSmsProviderTemplates",
@@ -2355,8 +2379,10 @@
             "access": "permission",
             "accessLabel": "登录 + 权限",
             "permission": "settings.manage",
-            "throttle": "",
-            "guards": [],
+            "throttle": "admin-privilege-write",
+            "guards": [
+                "限流 admin-privilege-write"
+            ],
             "handler": "App\\Http\\Controllers\\Admin\\V2\\SettingController@deleteSmsProviderTemplate",
             "sourceApps": [],
             "sourceAppLabels": [],
@@ -2378,8 +2404,9 @@
             "access": "permission",
             "accessLabel": "登录 + 权限",
             "permission": "settings.manage",
-            "throttle": "20,1",
+            "throttle": "admin-privilege-write",
             "guards": [
+                "限流 admin-privilege-write",
                 "限流 20,1"
             ],
             "handler": "App\\Http\\Controllers\\Admin\\V2\\SettingController@refreshSmsProviderTemplateById",
@@ -2403,8 +2430,9 @@
             "access": "permission",
             "accessLabel": "登录 + 权限",
             "permission": "settings.manage",
-            "throttle": "20,1",
+            "throttle": "admin-privilege-write",
             "guards": [
+                "限流 admin-privilege-write",
                 "限流 20,1"
             ],
             "handler": "App\\Http\\Controllers\\Admin\\V2\\SettingController@submitSmsProviderTemplateForReview",
@@ -2428,8 +2456,10 @@
             "access": "permission",
             "accessLabel": "登录 + 权限",
             "permission": "settings.manage",
-            "throttle": "",
-            "guards": [],
+            "throttle": "admin-privilege-write",
+            "guards": [
+                "限流 admin-privilege-write"
+            ],
             "handler": "App\\Http\\Controllers\\Admin\\V2\\SettingController@updateSmsProviderTemplate",
             "sourceApps": [],
             "sourceAppLabels": [],
@@ -2451,8 +2481,10 @@
             "access": "permission",
             "accessLabel": "登录 + 权限",
             "permission": "settings.manage",
-            "throttle": "",
-            "guards": [],
+            "throttle": "admin-privilege-write",
+            "guards": [
+                "限流 admin-privilege-write"
+            ],
             "handler": "App\\Http\\Controllers\\Admin\\V2\\SettingController@linkSmsProviderTemplate",
             "sourceApps": [],
             "sourceAppLabels": [],
@@ -2474,8 +2506,10 @@
             "access": "permission",
             "accessLabel": "登录 + 权限",
             "permission": "settings.manage",
-            "throttle": "",
-            "guards": [],
+            "throttle": "admin-privilege-write",
+            "guards": [
+                "限流 admin-privilege-write"
+            ],
             "handler": "App\\Http\\Controllers\\Admin\\V2\\SettingController@testNotificationTemplate",
             "sourceApps": [],
             "sourceAppLabels": [],
@@ -2523,6 +2557,31 @@
             "throttle": "",
             "guards": [],
             "handler": "App\\Http\\Controllers\\Admin\\V2\\OrderController@show",
+            "sourceApps": [],
+            "sourceAppLabels": [],
+            "sourceFiles": []
+        },
+        {
+            "id": "POST:/api/v2/admin/orders/{order}/cancellations",
+            "scope": "admin",
+            "scopeLabel": "管理端",
+            "module": "orders",
+            "moduleLabel": "订单",
+            "method": "POST",
+            "methods": [
+                "POST"
+            ],
+            "callPath": "/admin/orders/{order}/cancellations",
+            "backendPath": "/api/v2/admin/orders/{order}/cancellations",
+            "normalizedPath": "/admin/orders/{param}/cancellations",
+            "access": "permission",
+            "accessLabel": "登录 + 权限",
+            "permission": "order.manage",
+            "throttle": "20,1,admin-order-cancel",
+            "guards": [
+                "限流 20,1,admin-order-cancel"
+            ],
+            "handler": "App\\Http\\Controllers\\Admin\\V2\\OrderController@cancel",
             "sourceApps": [],
             "sourceAppLabels": [],
             "sourceFiles": []
@@ -3304,8 +3363,10 @@
             "access": "permission",
             "accessLabel": "登录 + 权限",
             "permission": "promotion_ambassador.manage",
-            "throttle": "",
-            "guards": [],
+            "throttle": "admin-privilege-write",
+            "guards": [
+                "限流 admin-privilege-write"
+            ],
             "handler": "App\\Http\\Controllers\\Admin\\V2\\PromotionAmbassadorController@store",
             "sourceApps": [],
             "sourceAppLabels": [],
@@ -3327,8 +3388,10 @@
             "access": "permission",
             "accessLabel": "登录 + 权限",
             "permission": "promotion_ambassador.manage",
-            "throttle": "",
-            "guards": [],
+            "throttle": "admin-privilege-write",
+            "guards": [
+                "限流 admin-privilege-write"
+            ],
             "handler": "App\\Http\\Controllers\\Admin\\V2\\PromotionAmbassadorController@destroy",
             "sourceApps": [],
             "sourceAppLabels": [],
@@ -3350,8 +3413,10 @@
             "access": "permission",
             "accessLabel": "登录 + 权限",
             "permission": "promotion_ambassador.manage",
-            "throttle": "",
-            "guards": [],
+            "throttle": "admin-privilege-write",
+            "guards": [
+                "限流 admin-privilege-write"
+            ],
             "handler": "App\\Http\\Controllers\\Admin\\V2\\PromotionAmbassadorController@update",
             "sourceApps": [],
             "sourceAppLabels": [],
@@ -3540,8 +3605,10 @@
             "access": "permission",
             "accessLabel": "登录 + 权限",
             "permission": "role.manage",
-            "throttle": "",
-            "guards": [],
+            "throttle": "admin-privilege-write",
+            "guards": [
+                "限流 admin-privilege-write"
+            ],
             "handler": "App\\Http\\Controllers\\Admin\\V2\\RoleController@store",
             "sourceApps": [],
             "sourceAppLabels": [],
@@ -3563,8 +3630,10 @@
             "access": "permission",
             "accessLabel": "登录 + 权限",
             "permission": "role.manage",
-            "throttle": "",
-            "guards": [],
+            "throttle": "admin-privilege-write",
+            "guards": [
+                "限流 admin-privilege-write"
+            ],
             "handler": "App\\Http\\Controllers\\Admin\\V2\\RoleController@destroy",
             "sourceApps": [],
             "sourceAppLabels": [],
@@ -3609,8 +3678,10 @@
             "access": "permission",
             "accessLabel": "登录 + 权限",
             "permission": "role.manage",
-            "throttle": "",
-            "guards": [],
+            "throttle": "admin-privilege-write",
+            "guards": [
+                "限流 admin-privilege-write"
+            ],
             "handler": "App\\Http\\Controllers\\Admin\\V2\\RoleController@update",
             "sourceApps": [],
             "sourceAppLabels": [],
@@ -3632,8 +3703,10 @@
             "access": "permission",
             "accessLabel": "登录 + 权限",
             "permission": "role.manage",
-            "throttle": "",
-            "guards": [],
+            "throttle": "admin-privilege-write",
+            "guards": [
+                "限流 admin-privilege-write"
+            ],
             "handler": "App\\Http\\Controllers\\Admin\\V2\\RoleController@copy",
             "sourceApps": [],
             "sourceAppLabels": [],
@@ -3908,8 +3981,10 @@
             "access": "permission",
             "accessLabel": "登录 + 权限",
             "permission": "settings.manage",
-            "throttle": "",
-            "guards": [],
+            "throttle": "admin-privilege-write",
+            "guards": [
+                "限流 admin-privilege-write"
+            ],
             "handler": "App\\Http\\Controllers\\Admin\\V2\\SettingController@update",
             "sourceApps": [],
             "sourceAppLabels": [],
@@ -4025,8 +4100,10 @@
             "access": "permission",
             "accessLabel": "登录 + 权限",
             "permission": "staff.manage",
-            "throttle": "",
-            "guards": [],
+            "throttle": "admin-privilege-write",
+            "guards": [
+                "限流 admin-privilege-write"
+            ],
             "handler": "App\\Http\\Controllers\\Admin\\V2\\StaffController@store",
             "sourceApps": [],
             "sourceAppLabels": [],
@@ -4071,8 +4148,10 @@
             "access": "permission",
             "accessLabel": "登录 + 权限",
             "permission": "staff.manage",
-            "throttle": "",
-            "guards": [],
+            "throttle": "admin-privilege-write",
+            "guards": [
+                "限流 admin-privilege-write"
+            ],
             "handler": "App\\Http\\Controllers\\Admin\\V2\\StaffController@destroy",
             "sourceApps": [],
             "sourceAppLabels": [],
@@ -4117,8 +4196,10 @@
             "access": "permission",
             "accessLabel": "登录 + 权限",
             "permission": "staff.manage",
-            "throttle": "",
-            "guards": [],
+            "throttle": "admin-privilege-write",
+            "guards": [
+                "限流 admin-privilege-write"
+            ],
             "handler": "App\\Http\\Controllers\\Admin\\V2\\StaffController@update",
             "sourceApps": [],
             "sourceAppLabels": [],
@@ -4140,8 +4221,10 @@
             "access": "permission",
             "accessLabel": "登录 + 权限",
             "permission": "staff.manage",
-            "throttle": "",
-            "guards": [],
+            "throttle": "admin-privilege-write",
+            "guards": [
+                "限流 admin-privilege-write"
+            ],
             "handler": "App\\Http\\Controllers\\Admin\\V2\\StaffController@resetPassword",
             "sourceApps": [],
             "sourceAppLabels": [],
@@ -4163,8 +4246,10 @@
             "access": "permission",
             "accessLabel": "登录 + 权限",
             "permission": "staff.manage",
-            "throttle": "",
-            "guards": [],
+            "throttle": "admin-privilege-write",
+            "guards": [
+                "限流 admin-privilege-write"
+            ],
             "handler": "App\\Http\\Controllers\\Admin\\V2\\StaffController@updateStatus",
             "sourceApps": [],
             "sourceAppLabels": [],
@@ -4209,8 +4294,10 @@
             "access": "permission",
             "accessLabel": "登录 + 权限",
             "permission": "supplier.manage",
-            "throttle": "",
-            "guards": [],
+            "throttle": "admin-privilege-write",
+            "guards": [
+                "限流 admin-privilege-write"
+            ],
             "handler": "App\\Http\\Controllers\\Admin\\V2\\SupplierController@store",
             "sourceApps": [],
             "sourceAppLabels": [],
@@ -4278,8 +4365,10 @@
             "access": "permission",
             "accessLabel": "登录 + 权限",
             "permission": "supplier.manage",
-            "throttle": "",
-            "guards": [],
+            "throttle": "admin-privilege-write",
+            "guards": [
+                "限流 admin-privilege-write"
+            ],
             "handler": "App\\Http\\Controllers\\Admin\\V2\\SupplierController@destroy",
             "sourceApps": [],
             "sourceAppLabels": [],
@@ -4324,8 +4413,10 @@
             "access": "permission",
             "accessLabel": "登录 + 权限",
             "permission": "supplier.manage",
-            "throttle": "",
-            "guards": [],
+            "throttle": "admin-privilege-write",
+            "guards": [
+                "限流 admin-privilege-write"
+            ],
             "handler": "App\\Http\\Controllers\\Admin\\V2\\SupplierController@update",
             "sourceApps": [],
             "sourceAppLabels": [],
@@ -4441,8 +4532,10 @@
             "access": "permission",
             "accessLabel": "登录 + 权限",
             "permission": "supplier.manage",
-            "throttle": "",
-            "guards": [],
+            "throttle": "admin-privilege-write",
+            "guards": [
+                "限流 admin-privilege-write"
+            ],
             "handler": "App\\Http\\Controllers\\Admin\\V2\\SupplierController@updateStatus",
             "sourceApps": [],
             "sourceAppLabels": [],
@@ -7036,8 +7129,10 @@
             "access": "auth",
             "accessLabel": "仅登录",
             "permission": "",
-            "throttle": "",
-            "guards": [],
+            "throttle": "client-password",
+            "guards": [
+                "限流 client-password"
+            ],
             "handler": "App\\Http\\Controllers\\Client\\V2\\AuthController@updatePassword",
             "sourceApps": [],
             "sourceAppLabels": [],
@@ -8547,8 +8642,9 @@
             "access": "public",
             "accessLabel": "公开",
             "permission": "",
-            "throttle": "",
+            "throttle": "client-verification-callback",
             "guards": [
+                "限流 client-verification-callback",
                 "签名校验"
             ],
             "handler": "App\\Http\\Controllers\\Client\\V2\\VerificationController@callback",
@@ -8618,8 +8714,10 @@
             "access": "auth",
             "accessLabel": "仅登录",
             "permission": "",
-            "throttle": "",
-            "guards": [],
+            "throttle": "client-verification-init",
+            "guards": [
+                "限流 client-verification-init"
+            ],
             "handler": "App\\Http\\Controllers\\Client\\V2\\VerificationController@init",
             "sourceApps": [],
             "sourceAppLabels": [],
@@ -8641,8 +8739,10 @@
             "access": "auth",
             "accessLabel": "仅登录",
             "permission": "",
-            "throttle": "",
-            "guards": [],
+            "throttle": "client-verification-init",
+            "guards": [
+                "限流 client-verification-init"
+            ],
             "handler": "App\\Http\\Controllers\\Client\\V2\\VerificationController@qrcode",
             "sourceApps": [],
             "sourceAppLabels": [],
@@ -8664,8 +8764,10 @@
             "access": "auth",
             "accessLabel": "仅登录",
             "permission": "",
-            "throttle": "",
-            "guards": [],
+            "throttle": "client-verification-init",
+            "guards": [
+                "限流 client-verification-init"
+            ],
             "handler": "App\\Http\\Controllers\\Client\\V2\\VerificationController@restart",
             "sourceApps": [],
             "sourceAppLabels": [],
@@ -8687,8 +8789,10 @@
             "access": "public",
             "accessLabel": "公开",
             "permission": "",
-            "throttle": "",
-            "guards": [],
+            "throttle": "client-verification-scan",
+            "guards": [
+                "限流 client-verification-scan"
+            ],
             "handler": "App\\Http\\Controllers\\Client\\V2\\VerificationController@scan",
             "sourceApps": [],
             "sourceAppLabels": [],
@@ -8969,8 +9073,10 @@
             "access": "public",
             "accessLabel": "公开",
             "permission": "",
-            "throttle": "",
-            "guards": [],
+            "throttle": "site-product-browse",
+            "guards": [
+                "限流 site-product-browse"
+            ],
             "handler": "App\\Http\\Controllers\\Site\\V2\\ProductGroupController@catalog",
             "sourceApps": [],
             "sourceAppLabels": [],
@@ -9040,8 +9146,10 @@
             "access": "public",
             "accessLabel": "公开",
             "permission": "",
-            "throttle": "",
-            "guards": [],
+            "throttle": "site-product-browse",
+            "guards": [
+                "限流 site-product-browse"
+            ],
             "handler": "App\\Http\\Controllers\\Site\\V2\\ProductController@purchaseContext",
             "sourceApps": [],
             "sourceAppLabels": [],
@@ -9063,8 +9171,10 @@
             "access": "public",
             "accessLabel": "公开",
             "permission": "",
-            "throttle": "",
-            "guards": [],
+            "throttle": "site-product-browse",
+            "guards": [
+                "限流 site-product-browse"
+            ],
             "handler": "App\\Http\\Controllers\\Site\\V2\\ProductController@types",
             "sourceApps": [],
             "sourceAppLabels": [],

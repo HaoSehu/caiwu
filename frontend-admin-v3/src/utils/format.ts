@@ -5,7 +5,7 @@ import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
  * 通用格式化工具。所有业务页面应从本模块导入，禁止本地重写。
  */
 
-/** 通用日期时间格式化：YYYY-MM-DD HH:mm:ss，无效或空值返回 '-' */
+/** 通用日期时间格式化：YYYY-MM-DD HH:mm:ss；空值返回 '-'，无法解析的值原样返回 */
 export function formatDateTime(value?: unknown): string {
   if (!value && value !== 0) return '-';
   const date = new Date(value as string | number | Date);
@@ -32,17 +32,15 @@ export function formatMoney(value?: unknown): string {
 }
 
 /**
- * 大额金额紧凑格式化：≥1 万折算为「万」单位，用于指标卡等窄容器展示。
+ * 指标卡金额格式化：完整金额（千分位 + 两位小数），不做「万」缩写。
  *
- * 空值口径与 formatMoney 有意不同：列表/详情里的金额是账务事实，空值按 0 显示为 ¥0.00；
- * 指标卡是聚合统计，非有限值（NaN/Infinity）说明上游数据异常，显示 '-' 才能与「真的是 0」区分。
+ * 口径见 docs/DESIGN.md §4.3：金额必须完整显示、不得截断，聚合指标同理，
+ * 因此不再折算「万」单位（旧实现 ≥1 万显示「¥12.34万」，与明细口径不一致，易误读）。
+ * 非有限值（NaN/Infinity）说明上游数据异常，显示 '-' 才能与「真的是 0」区分。
  */
-export function formatCompactMoney(value?: unknown): string {
+export function formatMetricMoney(value?: unknown): string {
   const amount = Number(value ?? 0);
   if (!Number.isFinite(amount)) return '-';
-  if (Math.abs(amount) >= 10000) {
-    return `¥${(amount / 10000).toFixed(2)}万`;
-  }
   return `¥${formatMoneyAmount(amount)}`;
 }
 
@@ -50,6 +48,36 @@ export function formatCompactMoney(value?: unknown): string {
 export function fieldValue(value?: unknown): string {
   if (value === '' || value === undefined || value === null) return '-';
   return String(value);
+}
+
+/** 取值收敛为普通对象：非对象（含 null/数组以外的原始值）返回空对象，避免模板里反复判空 */
+export function toRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+}
+
+/** JSON 美化：字符串先尝试解析再缩进，解析失败按去空白后的原文返回；其余类型直接 stringify */
+export function formatJson(value: unknown, fallback = '-'): string {
+  if (value === null || value === undefined || value === '') return fallback;
+  if (typeof value === 'string') {
+    const text = value.trim();
+    if (!text) return fallback;
+    try {
+      return JSON.stringify(JSON.parse(text), null, 2);
+    } catch {
+      return text;
+    }
+  }
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return fallback;
+  }
+}
+
+/** 数字千分位：空值按 0 展示，非有限数字回落原文展示（避免出现 'NaN'） */
+export function numberText(value: unknown): string {
+  const number = Number(value ?? 0);
+  return Number.isFinite(number) ? number.toLocaleString('zh-CN') : fieldValue(value);
 }
 
 /** 计费周期中文映射 */

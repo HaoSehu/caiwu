@@ -2,6 +2,7 @@ import type { Ref } from 'vue';
 import { computed, onActivated, onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
+import { PAGE_SIZE_OPTIONS } from '@/constants/pagination';
 import { matchQuickFilterByRange, resolveQuickDateRange } from '@/domains/finance/dateFilters';
 
 export interface ListPageResponse<T> {
@@ -16,7 +17,11 @@ export interface ListPageResponse<T> {
 export interface UseListPageOptions<F, T> {
   /** 列表请求函数，接收 { ...filters, page, page_size }，返回列表分页响应 */
   fetch: (params: F & { page: number; page_size: number }) => Promise<ListPageResponse<T>>;
-  /** 默认筛选值 */
+  /**
+   * 默认筛选值。
+   * 同时作为 hasActiveFilters 的键域：必须列全本页可筛选的键（含空字符串初始值），
+   * 漏写的键不参与「是否处于筛选状态」判定；传空对象则 hasActiveFilters 恒为 false。
+   */
   defaultFilters: F;
   /** 默认每页条数 */
   defaultPageSize?: number;
@@ -32,7 +37,6 @@ export interface UseListPageOptions<F, T> {
   enableQuickFilter?: boolean;
 }
 
-const PAGE_SIZE_OPTIONS = [20, 50, 100];
 const QUERY_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 /** URL 同步管理的通用筛选键（start_date/end_date/quick 按页面实际字段动态加入） */
 const BASE_QUERY_KEYS = ['page', 'page_size', 'keyword', 'status', 'type'];

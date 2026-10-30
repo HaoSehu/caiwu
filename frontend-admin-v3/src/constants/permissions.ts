@@ -61,6 +61,9 @@ export const AdminPermissions = {
   REFERRAL_WITHDRAWAL_LIST: 'referral_withdrawal.list',
   MEMBER_LEVEL_LIST: 'member_level.list',
   MEMBER_LEVEL_MANAGE: 'member_level.manage',
+  // 推广大使档位：默认不下发任何内置角色，与后端 AdminPermissions 保持一致
+  PROMOTION_AMBASSADOR_LIST: 'promotion_ambassador.list',
+  PROMOTION_AMBASSADOR_MANAGE: 'promotion_ambassador.manage',
   CONTENT_LIST: 'content.list',
   CONTENT_MANAGE: 'content.manage',
   STAFF_LIST: 'staff.list',
@@ -172,6 +175,8 @@ export function impliedPermissions(permission: string): string[] {
       return [AdminPermissions.LOG_LIST];
     case AdminPermissions.MEMBER_LEVEL_MANAGE:
       return [AdminPermissions.MEMBER_LEVEL_LIST];
+    case AdminPermissions.PROMOTION_AMBASSADOR_MANAGE:
+      return [AdminPermissions.PROMOTION_AMBASSADOR_LIST];
     case AdminPermissions.CONTENT_MANAGE:
       return [AdminPermissions.CONTENT_LIST];
     case AdminPermissions.STAFF_MANAGE:

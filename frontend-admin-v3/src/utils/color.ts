@@ -6,18 +6,27 @@ import type { TColorToken } from '@/config/color';
 /**
  * 依据主题类型获取颜色
  *
+ * 图表色板只在同一主题色下生成一次并缓存：getRandomPalette 每次调用都会返回新的随机色序，
+ * 若每帧重新取色，同一个饼图在重绘（数据刷新、窗口缩放）后会整体换色，看起来像数据变了。
+ *
  * @export
  * @returns {Array<string>} themeColorList
  */
+let cachedTheme: string | null = null;
+let cachedPalette: Array<string> = [];
+
 export function getColorFromTheme(): Array<string> {
   const theme = trim(getComputedStyle(document.documentElement).getPropertyValue('--td-brand-color'));
-  const themeColorList = Color.getRandomPalette({
+  if (cachedTheme === theme && cachedPalette.length) return cachedPalette;
+
+  cachedTheme = theme;
+  cachedPalette = Color.getRandomPalette({
     color: theme,
     colorGamut: 'bright',
     number: 8,
   });
 
-  return themeColorList;
+  return cachedPalette;
 }
 
 /** 图表颜色 */
