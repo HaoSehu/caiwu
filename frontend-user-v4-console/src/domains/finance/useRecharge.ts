@@ -11,14 +11,12 @@ import type {
   ServiceInstance,
 } from '@/types/client';
 import { getErrorMessage } from '@/utils/error';
-import { copyText, formatMoney } from '@/utils/format';
+import { copyText, formatMoney, formatMoneyText } from '@/utils/format';
 
 const ACTIVE_SERVICE_STATUS = 1;
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
 export const RECHARGE_PRESET_AMOUNTS = [20, 50, 100, 200, 500];
-
-export { formatMoney };
 
 export function normalizeRechargeAmount(value: unknown) {
   const amount = Number(value || 0);
@@ -93,12 +91,16 @@ export function useRecharge() {
   const rechargeCancelled = ref(false);
   const summaryLoading = ref(false);
   const paymentGatewaysLoading = ref(true);
+  // C-04：支付方式加载失败原先只弹一条 MessagePlugin.error，页面剩下的是一句「暂无可用支付方式」，
+  // 既说明不了失败原因也没有重试入口——充值页因此没有可用的错误态。这里保留失败文案供模板渲染重试。
+  const paymentGatewaysError = ref('');
   const selectedGateway = ref('');
   const paymentGateways = ref<RechargeGatewayOption[]>([]);
   const paymentPayload = shallowRef<RechargeOrderPayload | (RechargeOrderPayload & RechargeStatusPayload) | null>(null);
-  const rechargeSummary = reactive({
-    cashBalance: '0.00',
-    renewNeeded7Days: '0.00',
+  // 只存原始数值：格式化为展示字符串是渲染层的职责，混存会让格式化结果被二次解析成 NaN。
+  const rechargeSummary = reactive<{ cashBalance: number; renewNeeded7Days: number }>({
+    cashBalance: 0,
+    renewNeeded7Days: 0,
   });
 
   let pollingTimer: number | null = null;
@@ -137,14 +139,14 @@ export function useRecharge() {
     {
       key: 'balance',
       label: '当前余额',
-      value: rechargeSummary.cashBalance,
-      suffix: '元',
+      value: formatMoneyText(rechargeSummary.cashBalance),
+      suffix: '',
     },
     {
       key: 'renew-needed-7-days',
       label: '续费需要',
-      value: rechargeSummary.renewNeeded7Days,
-      suffix: '元',
+      value: formatMoneyText(rechargeSummary.renewNeeded7Days),
+      suffix: '',
       hint: '检测 7 天内到期的续费金额',
       quickFilter: 'expiring_7d',
     },
@@ -244,8 +246,10 @@ export function useRecharge() {
         };
         clearPollingTimer();
         await refreshClientInfo();
-        rechargeSummary.cashBalance = formatMoney(
-          payload.cash_balance ?? userStore.info?.cash_balance ?? rechargeSummary.cashBalance,
+        // 后端 status() 只在 paid=true 时回传 balance（= user_accounts.cash_balance 真源）；
+        // 原先读的 cash_balance 不是该接口字段，永远落到 store 旧值上，到账后余额会滞后显示。
+        rechargeSummary.cashBalance = Number(
+          payload.balance ?? userStore.info?.cash_balance ?? rechargeSummary.cashBalance,
         );
         notifyScreenReader('支付已成功，充值金额已到账');
         MessagePlugin.success('充值成功，余额已刷新');
@@ -258,8 +262,8 @@ export function useRecharge() {
           ...payload,
         };
         clearPollingTimer();
-        notifyScreenReader('该充值支付单已取消，请重新发起充值');
-        MessagePlugin.warning('该充值单已失效，请重新发起充值');
+        notifyScreenReader('该充值支付单已取消，请重新发起充值；若你已完成付款，款项会转入账户余额');
+        MessagePlugin.warning('该充值单已失效，请重新发起充值；若你已完成付款，款项会转入账户余额');
       } else if (!options.silentPending) {
         notifyScreenReader('支付仍在处理中，请稍候');
         MessagePlugin.info(payload.message || '当前仍未支付成功');
@@ -365,10 +369,10 @@ export function useRecharge() {
       });
       const renewNeeded7Days = await sumRenewAmounts(renewNeededServices);
 
-      rechargeSummary.cashBalance = formatMoney(userStore.info?.cash_balance || 0);
-      rechargeSummary.renewNeeded7Days = formatMoney(renewNeeded7Days);
+      rechargeSummary.cashBalance = Number(userStore.info?.cash_balance || 0);
+      rechargeSummary.renewNeeded7Days = Number(renewNeeded7Days || 0);
     } catch (error: unknown) {
-      rechargeSummary.cashBalance = formatMoney(userStore.info?.cash_balance || 0);
+      rechargeSummary.cashBalance = Number(userStore.info?.cash_balance || 0);
       MessagePlugin.error(getErrorMessage(error, '加载充值摘要失败'));
     } finally {
       summaryLoading.value = false;
@@ -377,6 +381,7 @@ export function useRecharge() {
 
   async function loadPaymentGateways() {
     paymentGatewaysLoading.value = true;
+    paymentGatewaysError.value = '';
 
     try {
       const response = await clientApi.rechargeGateways();
@@ -396,7 +401,9 @@ export function useRecharge() {
       paymentGateways.value = [];
       selectedGateway.value = '';
       clearPaymentPayload();
-      MessagePlugin.error(getErrorMessage(error, '加载支付方式失败'));
+      // 错误文案同时留在页面上：toast 会消失，用户回头再看这块区域时需要知道发生了什么。
+      paymentGatewaysError.value = getErrorMessage(error, '加载支付方式失败');
+      MessagePlugin.error(paymentGatewaysError.value);
     } finally {
       paymentGatewaysLoading.value = false;
     }
@@ -462,8 +469,10 @@ export function useRecharge() {
     }
   });
 
-  // 注：keep-alive 暂停/恢复钩子已移除——当前工程 keep-alive include 按组件名匹配，
-  // 页面无组件名注入实际不会被缓存（2026-10-11 裁决 A）；页面离开走 onBeforeUnmount 清理 timer。
+  // 注：keep-alive 暂停/恢复钩子已移除，但页面现在是真的会被缓存的
+  // （Content.vue 按 route.name 做 key，2026-10-11 的「include 按组件名匹配、不会被缓存」结论已失效）；
+  // 这里用 onBeforeUnmount 清理 timer —— 定时器只在弹窗打开时启动，
+  // 而弹窗打开时用户切走页签，本页会在缓存里继续跑，故由各弹窗的开关负责停表（见 startXxx/stopXxx）。
   onBeforeUnmount(() => {
     clearPollingTimer();
   });
@@ -480,6 +489,8 @@ export function useRecharge() {
     rechargeCancelled,
     summaryLoading,
     paymentGatewaysLoading,
+    paymentGatewaysError,
+    loadPaymentGateways,
     selectedGateway,
     paymentGateways,
     paymentPayload,
@@ -502,7 +513,6 @@ export function useRecharge() {
     startAutoPolling,
     clearPaymentPayload,
     loadRechargeSummary,
-    loadPaymentGateways,
     handleCreateOrder,
     copyPayUrl,
     openServiceQuickFilter,

@@ -1,6 +1,10 @@
 <template>
-  <t-breadcrumb max-item-width="150" class="tdesign-breadcrumb">
-    <t-breadcrumbItem v-for="item in crumbs" :key="item.to" :to="item.to">
+  <t-breadcrumb v-if="crumbs.length" max-item-width="150" class="tdesign-breadcrumb">
+    <t-breadcrumbItem
+      v-for="(item, index) in crumbs"
+      :key="item.to"
+      :to="index === crumbs.length - 1 ? undefined : item.to"
+    >
       {{ item.title }}
     </t-breadcrumbItem>
   </t-breadcrumb>
@@ -11,31 +15,18 @@ import { useRoute } from 'vue-router';
 
 const route = useRoute();
 
-const renderTitle = (title?: string, fallback?: string) => title || fallback || '';
-
-const crumbs = computed(() => {
-  const pathArray = route.path.split('/');
-  pathArray.shift();
-
-  const breadcrumbs = pathArray.reduce((breadcrumbArray, path, idx) => {
-    // 如果路由下有hiddenBreadcrumb或当前遍历到参数则隐藏
-    const meta = route.matched[idx]?.meta;
-    if (meta?.hiddenBreadcrumb || Object.values(route.params).includes(path)) {
-      return breadcrumbArray;
-    }
-    const title = renderTitle(meta?.title, path);
-    breadcrumbArray.push({
-      path,
-      to: breadcrumbArray[idx - 1] ? `${breadcrumbArray[idx - 1].to}/${path}` : `/${path}`,
-      title,
-    });
-    return breadcrumbArray;
-  }, []);
-  return breadcrumbs;
-});
+// 面包屑直接由 route.matched 生成：matched 就是路由层级本身，path 与 meta 天然对齐。
+// 原实现把 route.path 按 / 拆段后再用同一下标取 route.matched[idx]，两层下标含义不同，会出两类错误：
+//   ① 参数段（如 /services/:id）之后所有段与 matched 全部错位，标题与路径串到别的层级；
+//   ② 某些段被 hiddenBreadcrumb 跳过时，用 breadcrumbArray[idx - 1] 拼上级路径会拼错（L-13）。
+const crumbs = computed(() =>
+  route.matched
+    .filter((record) => Boolean(record.meta?.title) && record.meta?.hiddenBreadcrumb !== true)
+    .map((record) => ({ to: record.path, title: String(record.meta?.title ?? '') })),
+);
 </script>
 <style scoped>
 .tdesign-breadcrumb {
-  margin-bottom: 24px;
+  margin-bottom: var(--td-comp-margin-xxl);
 }
 </style>

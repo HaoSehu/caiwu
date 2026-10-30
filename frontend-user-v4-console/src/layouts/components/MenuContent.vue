@@ -13,7 +13,9 @@
             <component :is="menuIcon(item)" class="t-icon"></component>
           </template>
           {{ renderMenuTitle(item.title) }}
-          <span v-if="getMenuBadge(item)" class="menu-badge-dot">{{ getMenuBadge(item) }}</span>
+          <span v-if="item.path === '/client/notices' && noticesUnread" class="menu-badge-dot">{{
+            noticesUnread
+          }}</span>
         </t-menu-item>
       </template>
       <t-submenu v-else :name="item.path" :value="item.path" :title="renderMenuTitle(item.title)">
@@ -119,24 +121,32 @@ const openHref = (url: string) => {
 };
 
 const { unreadCount } = useNoticeReadStatus();
-const getMenuBadge = (item: ListItemType): number => {
-  if (item.path === '/client/notices' && unreadCount.value > 0) return unreadCount.value;
-  return 0;
-};
+
+// 角标只挂在「系统公告」一项，未读数直接取响应式值。
+// 原先模板写成 v-if="menuBadge(item)" 加插值 {{ menuBadge(item) }}，同一渲染里调两次函数（L-27）。
+// 现在只留一个 computed：它必须自己表达「无未读 = 不显示」这个空态，否则 0 会渲染成 '99+'。
+const noticesUnread = computed(() => {
+  if (unreadCount.value <= 0) return '';
+  return unreadCount.value > 99 ? '99+' : String(unreadCount.value);
+});
 </script>
 <style scoped lang="less">
 .menu-badge-dot {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
+  // 角标是 16px 见方的微件；尺寸必须取 --td-comp-size-xxxs（= --td-size-6 = 16），
+  // 原来借的是 --td-comp-margin-l（同值 16 但是间距令牌，调间距会把角标一起改肿）。
+  // 字号用最小的 body-small + tabular-nums 保证两位数不溢出（L-27 待设计确认）。
+  min-width: var(--td-comp-size-xxxs);
+  height: var(--td-comp-size-xxxs);
+  padding: 0 var(--td-comp-margin-xs);
   margin-left: auto;
   color: var(--td-text-color-anti);
   background: var(--td-error-color);
   border-radius: var(--td-radius-round);
-  font-size: 10px;
+  font: var(--td-font-body-small);
+  font-variant-numeric: tabular-nums;
   line-height: 1;
 }
 </style>

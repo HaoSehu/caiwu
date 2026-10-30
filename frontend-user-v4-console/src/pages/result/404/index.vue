@@ -5,7 +5,7 @@
       <h1 class="result-404-title">页面不存在或已下线</h1>
       <p class="result-404-description">请检查地址是否输入正确，或返回控制台继续操作。</p>
       <div class="result-404-actions">
-        <t-button theme="primary" @click="router.push('/client/dashboard')">返回控制台首页</t-button>
+        <t-button theme="primary" @click="router.replace('/client/dashboard')">返回控制台首页</t-button>
         <t-button v-if="canGoBack" variant="outline" @click="router.back()">返回上一页</t-button>
       </div>
     </div>
@@ -17,6 +17,8 @@ import { useRouter } from 'vue-router';
 
 const router = useRouter();
 
+// 用 replace 而非 push：从 404 跳到首页若留下历史记录，用户点浏览器后退会立刻回到这个
+// 不存在的地址，形成「退不出去」的死循环。replace 把 404 从会话历史里换掉。
 // 直接输入地址打开时无上一页历史，隐藏“返回上一页”避免无效按钮
 const canGoBack = computed(() => {
   const state = window.history?.state as { back?: unknown } | null;
@@ -43,6 +45,9 @@ const canGoBack = computed(() => {
   text-align: center;
   background: var(--td-bg-color-container);
   border: thin solid var(--td-component-stroke);
+  // 全站唯一漏掉圆角与阴影的卡片，补齐到与其它卡片一致
+  border-radius: var(--td-radius-medium);
+  box-shadow: var(--td-shadow-1);
 }
 
 .result-404-code {
@@ -56,8 +61,8 @@ const canGoBack = computed(() => {
 .result-404-title {
   margin: var(--td-comp-margin-xs) 0 0;
   color: var(--td-text-color-primary);
+  // 字体简写已含字重，后面的 font-weight 属于重复声明
   font: var(--td-font-title-large);
-  font-weight: 600;
 }
 
 .result-404-description {

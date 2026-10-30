@@ -14,8 +14,7 @@ import type {
   ServiceOperationLogRecord,
   ServiceOperationLogSummary,
 } from '@/types/client';
-
-import { resolveErrorMessage } from './useConsoleCore';
+import { getErrorMessage } from '@/utils/error';
 
 type MonitorRangePreset = '3h' | '24h' | '7d' | '30d';
 
@@ -118,7 +117,7 @@ export function useConsoleTabs(options: UseConsoleTabsOptions) {
       return true;
     } catch (error: unknown) {
       if (requestSeq !== monitorRequestSeq) return false;
-      monitorState.error = resolveErrorMessage(error, '加载监控数据失败');
+      monitorState.error = getErrorMessage(error, '加载监控数据失败');
       return false;
     } finally {
       if (requestSeq === monitorRequestSeq) monitorState.loading = false;
@@ -142,7 +141,7 @@ export function useConsoleTabs(options: UseConsoleTabsOptions) {
       return true;
     } catch (error: unknown) {
       if (requestSeq !== natRequestSeq) return false;
-      natState.error = resolveErrorMessage(error, '加载 NAT 转发失败');
+      natState.error = getErrorMessage(error, '加载 NAT 转发失败');
       return false;
     } finally {
       if (requestSeq === natRequestSeq) natState.loading = false;
@@ -186,7 +185,7 @@ export function useConsoleTabs(options: UseConsoleTabsOptions) {
       MessagePlugin.success(message || '端口转发创建成功');
       await loadNatForwardings();
     } catch (error: unknown) {
-      MessagePlugin.error(resolveErrorMessage(error, '创建端口转发失败'));
+      MessagePlugin.error(getErrorMessage(error, '创建端口转发失败'));
     } finally {
       natState.submitting = false;
     }
@@ -212,13 +211,26 @@ export function useConsoleTabs(options: UseConsoleTabsOptions) {
           await loadNatForwardings();
           dialog.hide();
         } catch (error: unknown) {
-          MessagePlugin.error(resolveErrorMessage(error, '删除端口转发失败'));
+          MessagePlugin.error(getErrorMessage(error, '删除端口转发失败'));
         } finally {
           natState.submitting = false;
           dialog.setConfirmLoading(false);
         }
       },
     });
+  }
+
+  // C-26：t-pagination 变更每页条数时会同时 emit page-size-change 与 change
+  // （node_modules/tdesign-vue-next/es/pagination/pagination.mjs:266-292 的 onSelectorChange 里
+  // setInnerPageSize 触发 page-size-change，nextTick 内再调 onChange），
+  // 两个事件里都发请求会打两次接口。page 与 page_size 已由 v-model 写入状态，
+  // 这里只把页码重置到第一页，翻页与刷新统一交给 @change。
+  function handleLogsPageSizeChange() {
+    logsState.page = 1;
+  }
+
+  function handleFinancePageSizeChange() {
+    financeState.page = 1;
   }
 
   async function loadLogs() {
@@ -240,7 +252,7 @@ export function useConsoleTabs(options: UseConsoleTabsOptions) {
       return true;
     } catch (error: unknown) {
       if (requestSeq !== logsRequestSeq) return false;
-      MessagePlugin.error(resolveErrorMessage(error, '加载操作日志失败'));
+      MessagePlugin.error(getErrorMessage(error, '加载操作日志失败'));
       return false;
     } finally {
       if (requestSeq === logsRequestSeq) logsState.loading = false;
@@ -270,7 +282,7 @@ export function useConsoleTabs(options: UseConsoleTabsOptions) {
       return true;
     } catch (error: unknown) {
       if (requestSeq !== financeRequestSeq) return false;
-      MessagePlugin.error(resolveErrorMessage(error, '加载财务日志失败'));
+      MessagePlugin.error(getErrorMessage(error, '加载财务日志失败'));
       return false;
     } finally {
       if (requestSeq === financeRequestSeq) financeState.loading = false;
@@ -293,6 +305,8 @@ export function useConsoleTabs(options: UseConsoleTabsOptions) {
     deleteNatForwarding,
     loadLogs,
     loadFinanceLogs,
+    handleLogsPageSizeChange,
+    handleFinancePageSizeChange,
   };
 }
 

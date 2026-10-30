@@ -63,11 +63,21 @@ onMounted(() => {
   appendNewRoute();
 });
 
+// 只监听 path 会漏掉同页不同 query 的切换（如账单列表按状态筛选），也不会让详情页参数变化重建标签。
+// 滚动容器在切换布局或首帧时可能尚未挂载，querySelector 返回 null 会直接抛错，必须先判空。
+const scrollLayoutToTop = () => {
+  const container = document.querySelector<HTMLElement>(`.${prefix}-layout`);
+  if (!container) return;
+  // 尊重系统「减少动态效果」偏好，避免强制平滑滚动
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  container.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' });
+};
+
 watch(
-  () => route.path,
+  () => [route.path, route.query] as const,
   () => {
     appendNewRoute();
-    document.querySelector(`.${prefix}-layout`).scrollTo({ top: 0, behavior: 'smooth' });
+    scrollLayoutToTop();
   },
 );
 </script>

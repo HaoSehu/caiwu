@@ -2,8 +2,9 @@
   <section class="payment-detail-page">
     <!-- 面包屑导航 -->
     <t-breadcrumb class="payment-breadcrumb">
-      <t-breadcrumb-item @click="router.push('/client/dashboard')">财务中心</t-breadcrumb-item>
-      <t-breadcrumb-item @click="router.push('/client/payments')">充值记录</t-breadcrumb-item>
+      <!-- O-23：用组件自带的 to 而不是 @click，这样渲染成可聚焦的 <a>。 -->
+      <t-breadcrumb-item to="/client/dashboard">财务中心</t-breadcrumb-item>
+      <t-breadcrumb-item to="/client/payments">充值记录</t-breadcrumb-item>
       <t-breadcrumb-item>充值详情</t-breadcrumb-item>
     </t-breadcrumb>
 
@@ -113,9 +114,9 @@ import { useRoute, useRouter } from 'vue-router';
 
 import clientApi from '@/api/client';
 import { resolveInvoiceTypeLabel } from '@/domains/finance/constants';
-import { formatMoney } from '@/domains/finance/useRecords';
 import type { PaymentRecord } from '@/types/client';
 import { getErrorMessage } from '@/utils/error';
+import { formatMoney } from '@/utils/format';
 
 const route = useRoute();
 const router = useRouter();
@@ -127,8 +128,14 @@ const loadErrorText = ref('');
 // 路由参数响应式：同路由换 id 时组件会被复用，必须靠 watch 重新拉取
 const paymentId = computed(() => Number(route.params.id || 0));
 
+// 请求序号：同路由快速换 id 或反复点重试时，只让最后一次响应落地，
+// 避免先发后到的旧响应覆盖新详情（照抄 useRecords 的 requestSeq 范式）。
+let requestSeq = 0;
+
 async function loadPayment() {
   const id = paymentId.value;
+  const seq = ++requestSeq;
+
   if (!id) {
     detail.value = null;
     loadError.value = false;
@@ -140,14 +147,16 @@ async function loadPayment() {
   loadErrorText.value = '';
   try {
     const res = await clientApi.paymentDetail(id);
+    if (seq !== requestSeq) return;
     detail.value = res.data || null;
   } catch (error: unknown) {
+    if (seq !== requestSeq) return;
     // 错误交给 DataState 呈现（含重试），不再静默置空导致用户只看到空态
     detail.value = null;
     loadError.value = true;
     loadErrorText.value = getErrorMessage(error, '充值详情加载失败');
   } finally {
-    loading.value = false;
+    if (seq === requestSeq) loading.value = false;
   }
 }
 
@@ -164,15 +173,22 @@ watch(
 );
 </script>
 <style scoped lang="less">
+// O-20：根容器统一管纵向间距，子块不再各自带下边距。
+.payment-detail-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--td-comp-margin-m);
+}
+
 .payment-breadcrumb {
-  margin-bottom: var(--td-comp-margin-m);
+  margin-bottom: 0;
 }
 
 .detail-toolbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: var(--td-comp-margin-m);
+  margin-bottom: 0;
 
   &__actions {
     display: flex;
@@ -180,9 +196,10 @@ watch(
   }
 }
 
+// O-20 / W-19：末卡不再多出一截底边距，间距由根容器的 gap 统一给。
 .payment-detail-card,
 .payment-related-card {
-  margin-bottom: var(--td-comp-margin-m);
+  margin-bottom: 0;
 }
 
 .detail-kv-grid {
@@ -211,12 +228,8 @@ watch(
   }
 }
 
-.detail-empty {
-  padding: var(--td-comp-paddingTB-xl) 0;
-  text-align: center;
-}
-
-@media (max-width: @screen-xs-rem) {
+// O-22：与 order-detail 同款，断点对齐控制台的 @screen-mobile-max。
+@media (max-width: @screen-mobile-max) {
   .detail-kv-grid {
     grid-template-columns: 1fr;
   }

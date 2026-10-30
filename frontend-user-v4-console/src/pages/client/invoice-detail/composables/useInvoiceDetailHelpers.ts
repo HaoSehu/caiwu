@@ -6,9 +6,9 @@ import { CreditcardIcon, LogoAlipayFilledIcon, LogoWechatpayFilledIcon, WalletIc
 import type { Ref } from 'vue';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
-import { formatMoney } from '@/domains/finance/useInvoices';
 import { formatBillingCycle, pricingSnapshotItems } from '@/domains/finance/useRecords';
 import type { InvoicePaymentMethod, InvoiceRecord } from '@/types/client';
+import { formatMoney } from '@/utils/format';
 
 export const renewFlowItems = [
   {

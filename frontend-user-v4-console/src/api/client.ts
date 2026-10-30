@@ -213,18 +213,11 @@ function v2ServiceDetail(id: number | string, config?: RequestConfig) {
   );
 }
 
-function v2ServiceBaseDetail(id: number | string) {
-  return Promise.all([
-    getEnvelope<V2ServiceDetailPayload>(`/v2/client/services/${id}`),
-    getEnvelope<V2ServiceConnectionPayload>(`/v2/client/services/${id}/connection`),
-  ]).then(([detailResponse, connectionResponse]) => {
-    const service = (detailResponse.data?.service || {}) as ConsoleServiceDetail;
-
-    return dataEnvelope(detailResponse, {
-      ...service,
-      connection: connectionResponse.data?.connection || null,
-    });
-  });
+// 只取连接信息：详情主体由 v2ServiceDetail 负责，避免同一份详情被并发请求重复拉取并相互覆盖
+function v2ServiceConnection(id: number | string) {
+  return getEnvelope<V2ServiceConnectionPayload>(`/v2/client/services/${id}/connection`).then((response) =>
+    dataEnvelope(response, response.data?.connection || null),
+  );
 }
 
 function v2ServiceRuntime(id: number | string) {
@@ -254,7 +247,7 @@ const clientApi = {
   services: (params?: QueryParams) => getEnvelope<PagedList<ServiceInstance>>('/v2/client/services', { params }),
   groupedOverview: () => getEnvelope<ServiceOverviewPayload>('/v2/client/services/grouped-overview'),
   serviceDetail: (id: number | string) => v2ServiceDetail(id, { silentError: true }),
-  serviceBaseDetail: (id: number | string) => v2ServiceBaseDetail(id),
+  serviceConnection: (id: number | string) => v2ServiceConnection(id),
   serviceRemoteStatus: (id: number | string) => v2ServiceRuntime(id),
   serviceConfig: (id: number | string) => request.get(`/v2/client/services/${id}/config`),
   updateServiceName: (id: number | string, data: Record<string, unknown>) =>

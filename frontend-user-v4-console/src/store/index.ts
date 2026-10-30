@@ -8,6 +8,7 @@ export { store };
 
 export * from './modules/permission';
 export * from './modules/setting';
+export * from './modules/site-branding';
 export * from './modules/tabs-router';
 export * from './modules/user';
 

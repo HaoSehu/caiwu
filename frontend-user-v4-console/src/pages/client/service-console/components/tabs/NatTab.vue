@@ -31,15 +31,17 @@
           <t-empty description="暂无端口转发" />
         </template>
         <template #operation="{ row }">
+          <t-tooltip v-if="row.can_delete === false" content="当前转发规则不支持删除">
+            <t-button theme="danger" variant="text" disabled>删除</t-button>
+          </t-tooltip>
           <t-button
-            v-if="row.can_delete !== false"
+            v-else
             theme="danger"
             variant="text"
             :disabled="natState.submitting"
             @click="deleteNatForwarding(row)"
             >删除</t-button
           >
-          <span v-else>--</span>
         </template>
       </t-table>
     </t-card>

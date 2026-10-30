@@ -1,5 +1,5 @@
 import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onActivated, onMounted, reactive, ref } from 'vue';
 
 import clientApi from '@/api/client';
 import type { ApiEnvelope, CouponRecord, PagedList } from '@/types/client';
@@ -111,9 +111,17 @@ export function useCoupons() {
     return tab === 'plaza' ? plazaState : ownedState;
   }
 
+  // PR-45：两个 tab 各持一个请求序号。快速切 tab、改分页与领券后并发刷新时，
+  // 晚返回的旧响应不得覆盖当前列表（领券成功会同时 loadList('owned') 与 loadList('plaza')）。
+  let ownedRequestSeq = 0;
+  let plazaRequestSeq = 0;
+
   async function loadList(tab: CouponTab = activeTab.value) {
     const state = getState(tab);
     const requestMethod = tab === 'plaza' ? clientApi.publicCoupons : clientApi.coupons;
+    const requestSeq = tab === 'plaza' ? ++plazaRequestSeq : ++ownedRequestSeq;
+    const isLatest = () => requestSeq === (tab === 'plaza' ? plazaRequestSeq : ownedRequestSeq);
+
     state.loading = true;
     state.error = '';
     try {
@@ -123,16 +131,18 @@ export function useCoupons() {
         keyword: state.keyword || undefined,
         status: state.status || undefined,
       });
+      if (!isLatest()) return;
       const payload = resolveListPayload(response);
       state.list = payload.list;
       state.total = payload.total;
     } catch (error: unknown) {
+      if (!isLatest()) return;
       state.error = getErrorMessage(error, tab === 'plaza' ? '优惠券广场加载失败' : '优惠券列表加载失败');
       state.list = [];
       state.total = 0;
       MessagePlugin.error(state.error);
     } finally {
-      state.loading = false;
+      if (isLatest()) state.loading = false;
     }
   }
 
@@ -145,9 +155,9 @@ export function useCoupons() {
     void loadList(tab);
   }
 
+  // C-26：t-pagination 变更每页条数时同时 emit page-size-change 与 change，只重置页码避免双请求
   function handlePageSizeChange(tab: CouponTab = activeTab.value) {
     getState(tab).page = 1;
-    void loadList(tab);
   }
 
   async function switchTab(tabValue: CouponTabChangeValue) {
@@ -181,6 +191,21 @@ export function useCoupons() {
 
   onMounted(() => {
     void loadList('owned');
+  });
+
+  // keep-alive 现在真的会缓存页面（Content.vue 按 route.name 做 key），onMounted 一生只跑一次，
+  // 从别的页签切回来会看到上次留下的旧数据。这里补一次重新拉取，只在非首次激活时触发，
+  // 避免刚挂载完紧跟着又来一次同样的请求。
+  let activatedOnce = false;
+  onActivated(() => {
+    if (!activatedOnce) {
+      activatedOnce = true;
+      return;
+    }
+    // 回来时重拉当前页签，不是固定拉「已领取」：用户在广场页切走再回来，应停在广场。
+    for (const tab of ['owned', 'plaza'] as const) {
+      if (activeTab.value === tab) void loadList(tab);
+    }
   });
 
   return {

@@ -28,6 +28,13 @@
 </template>
 <script setup lang="ts">
 import LoadingState from '@caiwu/shared/user-v3/components/LoadingState.vue';
+import type { PendingWebsiteCheckout } from '@caiwu/shared/utils/websiteCheckout';
+import {
+  clearPendingWebsiteCheckout,
+  decodePendingWebsiteCheckout,
+  getPendingWebsiteCheckout,
+  savePendingWebsiteCheckout,
+} from '@caiwu/shared/utils/websiteCheckout';
 import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -35,13 +42,6 @@ import { useRoute, useRouter } from 'vue-router';
 import clientApi from '@/api/client';
 import { formatBillingCycle } from '@/domains/finance/useRecords';
 import { getErrorMessage } from '@/utils/error';
-import type { PendingWebsiteCheckout } from '@/utils/websiteCheckout';
-import {
-  clearPendingWebsiteCheckout,
-  decodePendingWebsiteCheckout,
-  getPendingWebsiteCheckout,
-  savePendingWebsiteCheckout,
-} from '@/utils/websiteCheckout';
 
 type ResumeStatus = 'loading' | 'empty' | 'error';
 
@@ -161,7 +161,10 @@ async function resumeCheckout() {
     status.value = 'empty';
     return;
   }
+  // 并发守卫：重复点击「重新创建账单」或挂载期间的自动重试不会叠加建单请求
+  if (retrying.value) return;
 
+  retrying.value = true;
   status.value = 'loading';
   errorMessage.value = '';
 
@@ -178,6 +181,8 @@ async function resumeCheckout() {
   } catch (error) {
     status.value = 'error';
     errorMessage.value = getErrorMessage(error, '账单创建失败，请稍后重试');
+  } finally {
+    retrying.value = false;
   }
 }
 
@@ -196,7 +201,9 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: calc(100vh - var(--td-comp-size-xxxxxl));
+  // O-19：顶栏实际高度是 comp-size-xxxl（56，见 style/layout.less:131-132/195/217 与 FrameContent.vue:64），
+  // 这里原先多用了两个 x 的更大档令牌（72）会多减 16，页面底部凭空少一截。
+  min-height: calc(100vh - var(--td-comp-size-xxxl));
   // padding 由 Starter 布局层统一提供
 }
 

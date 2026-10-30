@@ -34,7 +34,8 @@ const SERVICE_OVERVIEW_RESPONSE = {
   catalog_types: [] as Record<string, unknown>[],
 };
 
-// available_coupons 小于优惠券汇总的 3，用于确认「仅在更大时覆盖」的分支不会被误触发
+// 控制台首屏不再请求推广概览（available_coupons 后端并不返回，校正分支是死代码，已删），
+// 这里保留一个只负责计数的 handler 用于断言「一个请求都没发」。
 const REFERRAL_OVERVIEW_RESPONSE = { available_coupons: 0 };
 
 const UNREAD_COUNT_RESPONSE = { count: 3 };
@@ -57,17 +58,19 @@ function jsonHandler(data: unknown, options: { shouldFail?: () => boolean; delay
 }
 
 interface DashboardMockOptions {
-  /** 首屏六个接口是否整体失败；返回 false 即恢复成功响应（供错误态重试用例翻转）。 */
+  /** 首屏五个核心接口是否整体失败；返回 false 即恢复成功响应（供错误态重试用例翻转）。 */
   failFirstScreen?: () => boolean;
   /** 每次命中 /v2/client/auth/info 时回调，用于断言重复请求。 */
   onAuthInfo?: () => void;
+  /** 每次命中 /v2/client/referral/overview 时回调，用于断言首屏不再打这个接口。 */
+  onReferralOverview?: () => void;
   /** 产品概览接口的延迟毫秒数，用于观察产品区骨架。 */
   slowGroupedOverviewMs?: number;
-  /** 推荐概览接口的延迟毫秒数，用于观察指标卡骨架（summaryReady 等六个接口全部落定）。 */
-  slowReferralMs?: number;
+  /** 工单接口返回的 total，用于验证待办计数取自聚合 total 而不是本地前几条。 */
+  ticketTotal?: number;
 }
 
-/** 页面挂载时首屏六接口 + 次屏四接口全量 mock，避免未匹配请求污染 console 与断言。 */
+/** 页面挂载时首屏五接口 + 次屏四接口全量 mock，避免未匹配请求污染 console 与断言。 */
 async function mockDashboard(page: Page, options: DashboardMockOptions = {}) {
   const authHandler = jsonHandler(E2E_USER_INFO);
   await page.route('**/api/v2/client/auth/info', async (route) => {
@@ -83,7 +86,12 @@ async function mockDashboard(page: Page, options: DashboardMockOptions = {}) {
   await page.route(/\/api\/v2\/client\/notices\/unread-count/, jsonHandler(UNREAD_COUNT_RESPONSE));
   await page.route(
     /\/api\/v2\/client\/tickets(\?|$)/,
-    jsonHandler(EMPTY_LIST, { shouldFail: options.failFirstScreen }),
+    jsonHandler(
+      // list 故意留空、只给 total：D-11 之后待办计数只认 total，
+      // 若实现退回「拉前 N 条本地数」，这两条用例会立刻变红。
+      { ...EMPTY_LIST, total: options.ticketTotal ?? 0 },
+      { shouldFail: options.failFirstScreen },
+    ),
   );
   await page.route(
     /\/api\/v2\/client\/ledger(\?|$)/,
@@ -100,13 +108,10 @@ async function mockDashboard(page: Page, options: DashboardMockOptions = {}) {
       delayMs: options.slowGroupedOverviewMs,
     }),
   );
-  await page.route(
-    /\/api\/v2\/client\/referral\/overview(\?|$)/,
-    jsonHandler(REFERRAL_OVERVIEW_RESPONSE, {
-      shouldFail: options.failFirstScreen,
-      delayMs: options.slowReferralMs,
-    }),
-  );
+  await page.route(/\/api\/v2\/client\/referral\/overview(\?|$)/, async (route) => {
+    options.onReferralOverview?.();
+    await jsonHandler(REFERRAL_OVERVIEW_RESPONSE)(route);
+  });
 
   await page.route(/\/api\/v2\/client\/help-articles(\?|$)/, jsonHandler(EMPTY_LIST));
   await page.route(/\/api\/v2\/client\/balance-logs(\?|$)/, jsonHandler(EMPTY_LIST));
@@ -132,9 +137,29 @@ test('控制台首屏：整页加载只请求一次 /v2/client/auth/info', async
   expect(authInfoHits).toBe(1);
 });
 
+test('控制台首屏：不再请求推广概览（available_coupons 校正分支已删）', async ({ page }) => {
+  let referralHits = 0;
+  await seedClientSession(page);
+  await mockDashboard(page, {
+    onReferralOverview: () => {
+      referralHits += 1;
+    },
+  });
+
+  await page.goto('/client/dashboard', { waitUntil: 'domcontentloaded' });
+
+  await expect(page.getByText('控制台首屏公告')).toBeVisible();
+  await expect(page.locator('.metric-card__value').first()).toBeVisible();
+  await page.waitForLoadState('networkidle');
+
+  // 后端 ReferralService::overview 从来不返回 available_coupons，
+  // 原先首屏与每次激活都会为校正一个恒为 0 的值白打一次重接口。
+  expect(referralHits).toBe(0);
+});
+
 test('控制台首屏：慢接口未返回时壳层与分区骨架已渲染', async ({ page }) => {
   await seedClientSession(page);
-  await mockDashboard(page, { slowGroupedOverviewMs: 6000, slowReferralMs: 6000 });
+  await mockDashboard(page, { slowGroupedOverviewMs: 6000 });
 
   await page.goto('/client/dashboard', { waitUntil: 'domcontentloaded' });
 
@@ -173,4 +198,18 @@ test('控制台首屏：核心接口全部失败时展示可重试错误态', as
   await expect(page.getByText('控制台首屏公告')).toBeVisible();
   await expect(page.locator('.metric-card__value').first()).toHaveText('¥1,000.00');
   await expect(retry).toBeHidden();
+});
+
+// D-11 回归：待处理工单数必须取自后端聚合 total，不能靠「拉前 N 条再本地数」。
+// 这里 list 故意为空、total 给 13 —— 旧实现（page_size=5 本地 filter）会渲染 0。
+test('控制台首屏：待处理工单数取自聚合 total 而非首屏前几条', async ({ page }) => {
+  await seedClientSession(page);
+  await mockDashboard(page, { ticketTotal: 13 });
+
+  await page.goto('/client/dashboard', { waitUntil: 'domcontentloaded' });
+
+  const ticketRow = page.locator('.todo-row', { hasText: '待处理工单' });
+  await expect(ticketRow).toBeVisible();
+  await expect(ticketRow.locator('.todo-row__count')).toHaveText('13');
+  await expect(ticketRow.locator('.todo-row__count')).toHaveClass(/is-alert/);
 });

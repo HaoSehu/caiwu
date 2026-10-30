@@ -2,8 +2,9 @@
   <section class="invoice-detail-page">
     <!-- 面包屑导航 -->
     <t-breadcrumb class="invoice-breadcrumb">
-      <t-breadcrumb-item @click="router.push('/client/dashboard')">财务中心</t-breadcrumb-item>
-      <t-breadcrumb-item @click="router.push('/client/invoices')">账单记录</t-breadcrumb-item>
+      <!-- O-23：用组件自带的 to 而不是 @click，这样渲染成可聚焦的 <a>。 -->
+      <t-breadcrumb-item to="/client/dashboard">财务中心</t-breadcrumb-item>
+      <t-breadcrumb-item to="/client/invoices">账单记录</t-breadcrumb-item>
       <t-breadcrumb-item>账单详情</t-breadcrumb-item>
     </t-breadcrumb>
 
@@ -22,6 +23,12 @@
         >
           去支付
         </t-button>
+        <!-- 三态齐全：可支付 / 窗口已关闭 / 状态本身不支持支付（已支付、已取消、已退款）。
+             原先只有前两态，status !== 0 时操作区什么都不显示，用户看不出「为什么没有去支付」。 -->
+        <span v-else-if="detail && isPayWindowClosed(detail)" class="invoice-window-closed">支付窗口已关闭</span>
+        <span v-else-if="detail" class="invoice-window-closed">{{
+          resolveNonPayableInvoiceMessage(Number(detail.status))
+        }}</span>
       </div>
     </div>
 
@@ -34,6 +41,26 @@
       @retry="loadInvoice"
     >
       <template v-if="detail">
+        <!-- I-03：账单详情与支付页是同一张单据的两个面，金额必须都站在同一个位置。
+             支付页有「本次应付」主视觉，详情页原先 12 个 kv 平铺、没有金额焦点，
+             用户从支付页返回后认不出是不是同一张单。这里补一条紧凑的金额摘要条
+             （不是统计卡、不是大 Hero，符合 DESIGN §5.2 对财务页的禁令）。 -->
+        <section class="invoice-amount-summary" aria-label="账单金额摘要">
+          <div class="invoice-amount-summary__main">
+            <span class="invoice-amount-summary__label">本次应付</span>
+            <strong class="invoice-amount-summary__value">
+              <span class="invoice-amount-summary__currency">¥</span>{{ formatMoney(detail.payable_amount) }}
+            </strong>
+          </div>
+          <div class="invoice-amount-summary__meta">
+            <status-tag :status-map="INVOICE_STATUS_MAP" :status="Number(detail.status)" />
+            <span class="invoice-amount-summary__no">{{ detail.invoice_no || '--' }}</span>
+            <span v-if="detail.paid_amount" class="invoice-amount-summary__paid">
+              已付 ¥{{ formatMoney(detail.paid_amount) }}
+            </span>
+          </div>
+        </section>
+
         <!-- 标签页 -->
         <t-card :bordered="false" class="invoice-detail-tabs-card">
           <t-tabs v-model="activeTab">
@@ -116,7 +143,7 @@
                   </div>
                 </div>
               </section>
-              <div v-else class="related-empty">暂无关联订单</div>
+              <t-empty v-else class="related-empty-state" size="small" description="暂无关联订单" />
 
               <!-- 优惠券 -->
               <section v-if="detail.coupon_code || detail.coupon_name" class="related-section">
@@ -153,7 +180,7 @@
                   <template #gateway="{ row }">{{ paymentGatewayDisplay(row) }}</template>
                 </t-table>
               </div>
-              <div v-else class="related-empty">暂无支付记录</div>
+              <t-empty v-else class="related-empty-state" size="small" description="暂无支付记录" />
             </t-tab-panel>
           </t-tabs>
         </t-card>
@@ -176,10 +203,11 @@ import { useRoute, useRouter } from 'vue-router';
 
 import clientApi from '@/api/client';
 import { resolveInvoiceTypeLabel } from '@/domains/finance/constants';
-import { formatMoney, isPayableInvoice } from '@/domains/finance/useInvoices';
+import { isPayableInvoice, resolveNonPayableInvoiceMessage } from '@/domains/finance/useInvoices';
 import { formatBillingCycle } from '@/domains/finance/useRecords';
 import type { InvoiceRecord } from '@/types/client';
 import { getErrorMessage } from '@/utils/error';
+import { formatMoney } from '@/utils/format';
 
 const route = useRoute();
 const router = useRouter();
@@ -201,8 +229,15 @@ const invoiceId = computed(() => Number(route.params.id || 0));
 const loadError = ref(false);
 const loadErrorText = ref('');
 
+// 支付入口与支付页同一判据：后端在账单详情里下发 payment_security.can_pay（续费账单与挂账单跟随
+// due_date，其余按 5 分钟支付会话窗口），窗口已关闭时不再给出必然被拦下的支付入口。
 function isPayable(row: InvoiceRecord | null) {
-  return isPayableInvoice(row);
+  if (!isPayableInvoice(row)) return false;
+  return row?.payment_security?.can_pay !== false;
+}
+
+function isPayWindowClosed(row: InvoiceRecord | null) {
+  return isPayableInvoice(row) && row?.payment_security?.can_pay === false;
 }
 
 function billingCycleLabel(value?: string) {
@@ -232,8 +267,14 @@ const paymentColumns: PrimaryTableCol[] = [
   { colKey: 'paid_at', title: '支付时间', minWidth: '12rem' },
 ];
 
+// 请求序号：同路由快速换 id 或反复点重试时，只让最后一次响应落地，
+// 避免先发后到的旧响应覆盖新详情（照抄 useRecords 的 requestSeq 范式）。
+let requestSeq = 0;
+
 async function loadInvoice() {
   const id = invoiceId.value;
+  const seq = ++requestSeq;
+
   if (!id) {
     detail.value = null;
     loadError.value = false;
@@ -245,14 +286,16 @@ async function loadInvoice() {
   loadErrorText.value = '';
   try {
     const res = await clientApi.invoiceDetail(id);
+    if (seq !== requestSeq) return;
     detail.value = res.data || null;
   } catch (error: unknown) {
+    if (seq !== requestSeq) return;
     // 错误交给 DataState 呈现（含重试），不再静默置空导致用户只看到空态
     detail.value = null;
     loadError.value = true;
     loadErrorText.value = getErrorMessage(error, '账单详情加载失败');
   } finally {
-    loading.value = false;
+    if (seq === requestSeq) loading.value = false;
   }
 }
 
@@ -265,19 +308,87 @@ watch(
 );
 </script>
 <style scoped lang="less">
+// O-20：根容器统一管纵向间距，子块不再各自带下边距。
+.invoice-detail-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--td-comp-margin-m);
+}
+
 .invoice-breadcrumb {
-  margin-bottom: var(--td-comp-margin-m);
+  margin-bottom: 0;
 }
 
 .detail-toolbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: var(--td-comp-margin-m);
+  margin-bottom: 0;
 
   &__actions {
     display: flex;
     gap: var(--td-comp-margin-s);
+  }
+}
+
+// I-03：紧凑金额摘要条（不是统计卡：单行、贴左、与页面同一基线）
+.invoice-amount-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--td-comp-margin-s) var(--td-comp-margin-l);
+  padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-l);
+  background: var(--td-bg-color-container);
+  border: thin solid var(--td-component-stroke);
+  border-radius: var(--td-radius-medium);
+
+  &__main {
+    display: flex;
+    align-items: baseline;
+    gap: var(--td-comp-margin-s);
+  }
+
+  &__label {
+    color: var(--td-text-color-secondary);
+    font: var(--td-font-body-medium);
+  }
+
+  &__value {
+    color: var(--td-brand-color);
+    font: var(--td-font-headline-small);
+    font-variant-numeric: tabular-nums;
+  }
+
+  &__currency {
+    font-size: var(--td-font-size-title-large);
+    font-weight: 600;
+    margin-right: var(--td-comp-margin-xxs);
+  }
+
+  &__meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--td-comp-margin-s);
+    color: var(--td-text-color-secondary);
+    font: var(--td-font-body-small);
+  }
+
+  &__no {
+    font-variant-numeric: tabular-nums;
+  }
+
+  &__paid {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+// O-22：与控制台统一的移动断点对齐（原 @screen-xs-rem 只到 40rem）。
+@media (max-width: @screen-mobile-max) {
+  .invoice-amount-summary {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
 
@@ -320,7 +431,7 @@ watch(
 
 .related-section {
   padding: var(--td-comp-paddingTB-m) 0;
-  border-bottom: thin solid var(--td-border-level-1-color);
+  border-bottom: thin solid var(--td-component-stroke);
 
   &:last-of-type {
     border-bottom: none;
@@ -334,22 +445,16 @@ watch(
   }
 }
 
-.related-empty {
-  padding: var(--td-comp-paddingTB-xl) 0;
-  text-align: center;
-  color: var(--td-text-color-placeholder);
+// 空态统一交给 TDesign 的 t-empty（C-16），这里只补上下留白，不重绘视觉
+.related-empty-state {
+  padding: var(--td-comp-paddingTB-l) 0;
 }
 
 .payment-list {
   padding: var(--td-comp-paddingTB-m) 0;
 }
 
-.detail-empty {
-  padding: var(--td-comp-paddingTB-xl) 0;
-  text-align: center;
-}
-
-@media (max-width: @screen-xs-rem) {
+@media (max-width: @screen-mobile-max) {
   .detail-kv-grid {
     grid-template-columns: 1fr;
   }
@@ -359,5 +464,11 @@ watch(
     gap: var(--td-comp-margin-s);
     align-items: flex-start;
   }
+}
+
+.invoice-window-closed {
+  color: var(--td-text-color-placeholder);
+  font: var(--td-font-body-small);
+  white-space: nowrap;
 }
 </style>

@@ -2,7 +2,7 @@
   <t-dialog
     v-model:visible="passwordVisible"
     header="重置实例密码"
-    width="min(30rem, calc(100vw - 2rem))"
+    width="min(32rem, calc(100vw - 2rem))"
     destroy-on-close
   >
     <div class="dialog-form">
@@ -24,7 +24,7 @@
     </div>
     <template #footer>
       <t-button variant="outline" @click="passwordVisible = false">取消</t-button>
-      <t-button theme="primary" :loading="actionLoading" @click="submitResetPassword">提交</t-button>
+      <t-button theme="primary" :loading="passwordLoading" @click="submitResetPassword">提交</t-button>
     </template>
   </t-dialog>
 </template>
@@ -32,6 +32,6 @@
 import { useServiceConsoleContext } from '../context';
 import { DiceIcon } from '../DiceIcon';
 
-const { passwordVisible, passwordForm, actionLoading, generateStrongPassword, submitResetPassword } =
+const { passwordVisible, passwordForm, passwordLoading, generateStrongPassword, submitResetPassword } =
   useServiceConsoleContext();
 </script>

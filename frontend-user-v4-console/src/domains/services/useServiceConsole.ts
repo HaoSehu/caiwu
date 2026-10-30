@@ -2,7 +2,8 @@ import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, onUnmounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 
-import { formatMoney, resolveServiceStatusLabel, resolveTdesignStatusTheme } from '@/domains/services/useServiceCenter';
+import { resolveServiceStatusLabel, resolveTdesignStatusTheme } from '@/domains/services/useServiceCenter';
+import { formatMoney } from '@/utils/format';
 
 import { copyText, DEFAULT_TAB, findSpecValue, isNatConsole, normalizeConsoleDetail } from './console/useConsoleCore';
 import { useConsoleDetail } from './console/useConsoleDetail';
@@ -19,13 +20,17 @@ export function useServiceConsole() {
   const router = useRouter();
   const showPassword = ref(true);
 
-  // Core detail state
+  // 服务详情核心状态
   const detailComposable = useConsoleDetail();
   const {
     detail,
     detailLoading,
+    detailError,
     statusSyncing,
-    actionLoading,
+    powerLoading,
+    reinstallLoading,
+    vncLoading,
+    passwordLoading,
     autoRenewLoading,
     activeTab,
     operationStatus,
@@ -44,11 +49,11 @@ export function useServiceConsole() {
   } = detailComposable;
   const route = detailComposable.route;
 
-  // Power management
+  // 电源管理
   const { handlePowerAction } = useConsolePower({
     serviceId,
     detail,
-    actionLoading,
+    powerLoading,
     setOperationStatus,
     clearOperationStatus,
     loadRemoteStatus,
@@ -56,7 +61,7 @@ export function useServiceConsole() {
     scheduleStatusSync,
   });
 
-  // Auto-renew toggle
+  // 自动续费开关
   const { handleToggleAutoRenew } = useConsoleAutoRenew({
     serviceId,
     detail,
@@ -64,7 +69,7 @@ export function useServiceConsole() {
     mergeDetail,
   });
 
-  // Renew dialog
+  // 续费弹窗
   const {
     renewVisible,
     renewLoading,
@@ -96,7 +101,7 @@ export function useServiceConsole() {
     submitTrafficPackageOrder,
   } = useConsoleTrafficPackages({ serviceId });
 
-  // Security groups
+  // 安全组
   const {
     securityState,
     activeSecurityGroup,
@@ -119,7 +124,7 @@ export function useServiceConsole() {
     deleteSecurityRule,
   } = useConsoleSecurity({ serviceId });
 
-  // Reinstall dialog
+  // 重装系统弹窗
   const {
     reinstallVisible,
     reinstallState,
@@ -130,7 +135,7 @@ export function useServiceConsole() {
     submitReinstall,
   } = useConsoleReinstall({
     serviceId,
-    actionLoading,
+    reinstallLoading,
     setOperationStatus,
     loadRemoteStatus,
     clearStatusSyncTimer,
@@ -139,14 +144,14 @@ export function useServiceConsole() {
     mergeDetail,
   });
 
-  // VNC
+  // VNC 远程
   const { vncUrl, handleOpenVnc } = useConsoleVnc({
     serviceId,
-    actionLoading,
+    vncLoading,
     activeTab,
   });
 
-  // Simple dialogs (name, remark, password)
+  // 简易弹窗（名称、备注、密码）
   const {
     nameVisible,
     nameSubmitting,
@@ -166,7 +171,7 @@ export function useServiceConsole() {
   } = useConsoleDialogs({
     serviceId,
     detail,
-    actionLoading,
+    passwordLoading,
     setOperationStatus,
     loadRemoteStatus,
     clearStatusSyncTimer,
@@ -174,7 +179,7 @@ export function useServiceConsole() {
     mergeDetail,
   });
 
-  // Tab-specific data loaders
+  // 各标签页数据加载
   const {
     monitorState,
     natState,
@@ -191,9 +196,11 @@ export function useServiceConsole() {
     deleteNatForwarding,
     loadLogs,
     loadFinanceLogs,
+    handleLogsPageSizeChange,
+    handleFinancePageSizeChange,
   } = useConsoleTabs({ serviceId });
 
-  // Computed: sync status handler
+  // 计算属性：同步状态处理
   async function handleSyncStatus() {
     statusSyncing.value = true;
     try {
@@ -207,7 +214,7 @@ export function useServiceConsole() {
     }
   }
 
-  // Computed: detail derivatives
+  // 计算属性：详情派生数据
   const serviceRegion = computed(
     () =>
       String(detail.value.machine_category?.label || '').trim() ||
@@ -279,7 +286,7 @@ export function useServiceConsole() {
     return detail.value.connection?.has_password ? '已设置' : '--';
   });
 
-  // Copy helper with toast
+  // 带提示的复制辅助函数
   async function copyTextWithToast(value: unknown) {
     await copyText(value, {
       successMsg: '内容已复制',
@@ -287,7 +294,7 @@ export function useServiceConsole() {
     });
   }
 
-  // Route watchers
+  // 路由监听
   watch(
     () => route.params.id,
     () => {
@@ -297,39 +304,74 @@ export function useServiceConsole() {
     { immediate: true },
   );
 
-  watch(activeTab, async (tab) => {
+  // 标签懒加载：首次进入某个标签立即请求，节流窗口内连续切换只保留最后一次。
+  // 若改成纯延迟（trailing）防抖，用户进监控后立刻改区间，首屏那次请求会被整批丢弃，
+  // 页面上就只剩改区间后的那一次，看不到默认区间的数据（e2e 已覆盖该时序）。
+  const ACTIVE_TAB_THROTTLE_MS = 300;
+  let activeTabSeq = 0;
+  let activeTabTimer: number | null = null;
+  let activeTabLastRunAt = 0;
+
+  const clearActiveTabTimer = () => {
+    if (activeTabTimer !== null) {
+      window.clearTimeout(activeTabTimer);
+      activeTabTimer = null;
+    }
+  };
+
+  const resolveTabLoader = (tab: string): (() => Promise<boolean>) | null => {
+    if (tab === 'monitor') return loadMonitor;
+    if (tab === 'security') return loadSecurityGroups;
+    if (tab === 'nat') return loadNatForwardings;
+    if (tab === 'logs') return loadLogs;
+    if (tab === 'finance') return loadFinanceLogs;
+    return null;
+  };
+
+  watch(activeTab, (tab) => {
     if (!availableTabs.value.includes(tab)) {
       activeTab.value = DEFAULT_TAB;
       return;
     }
-    // 懒加载成功后才置位 loadedTabs：失败时下次切换自动重拉，避免标签永久停留在错误态
-    if (tab === 'monitor' && !loadedTabs.monitor) {
-      if (await loadMonitor()) loadedTabs.monitor = true;
+    const loader = resolveTabLoader(tab);
+    if (!loader || loadedTabs[tab as keyof typeof loadedTabs]) return;
+
+    const seq = (activeTabSeq += 1);
+    clearActiveTabTimer();
+    const runLoader = () => {
+      activeTabLastRunAt = Date.now();
+      if (seq !== activeTabSeq || activeTab.value !== tab) return;
+      // 懒加载成功后才置位 loadedTabs：失败时下次切换自动重拉，避免标签永久停留在错误态
+      void loader().then((ok) => {
+        if (ok && seq === activeTabSeq) loadedTabs[tab as keyof typeof loadedTabs] = true;
+      });
+    };
+    const wait = ACTIVE_TAB_THROTTLE_MS - (Date.now() - activeTabLastRunAt);
+    if (wait <= 0) {
+      runLoader();
+      return;
     }
-    if (tab === 'security' && !loadedTabs.security) {
-      if (await loadSecurityGroups()) loadedTabs.security = true;
-    }
-    if (tab === 'nat' && !loadedTabs.nat) {
-      if (await loadNatForwardings()) loadedTabs.nat = true;
-    }
-    if (tab === 'logs' && !loadedTabs.logs) {
-      if (await loadLogs()) loadedTabs.logs = true;
-    }
-    if (tab === 'finance' && !loadedTabs.finance) {
-      if (await loadFinanceLogs()) loadedTabs.finance = true;
-    }
+    activeTabTimer = window.setTimeout(() => {
+      activeTabTimer = null;
+      runLoader();
+    }, wait);
   });
 
   onUnmounted(() => {
     clearStatusSyncTimer();
+    clearActiveTabTimer();
   });
 
   return {
-    // State refs
+    // 状态引用
     detail,
     detailLoading,
+    detailError,
     statusSyncing,
-    actionLoading,
+    powerLoading,
+    reinstallLoading,
+    vncLoading,
+    passwordLoading,
     autoRenewLoading,
     showPassword,
     activeTab,
@@ -372,7 +414,7 @@ export function useServiceConsole() {
     logsState,
     financeState,
 
-    // Computed
+    // 计算属性
     serviceId,
     availableTabs,
     canManageConsole,
@@ -400,7 +442,7 @@ export function useServiceConsole() {
     reinstallGroupedOptions,
     currentReinstallOptions,
 
-    // Helper functions
+    // 辅助函数
     findSpecValue: (aliases: string[], fallback = '--') => findSpecValue(detail, aliases, fallback),
     resolveServiceStatusLabel,
     resolveTdesignStatusTheme,
@@ -408,7 +450,8 @@ export function useServiceConsole() {
     router,
     copyText: copyTextWithToast,
 
-    // Action handlers
+    // 动作处理
+    bootstrap,
     handleSyncStatus,
     handlePowerAction,
     openRenewDialog,
@@ -446,11 +489,13 @@ export function useServiceConsole() {
     deleteNatForwarding,
     loadLogs,
     loadFinanceLogs,
+    handleLogsPageSizeChange,
+    handleFinancePageSizeChange,
     handleOpenVnc,
   };
 }
 
-// Re-export utilities for external use
+// 转发工具函数供外部使用
 export { mergeConsoleDetail, normalizeConsoleDetail } from './console/useConsoleCore';
 
 function normalizeConnectionValues(values: unknown[]): string[] {

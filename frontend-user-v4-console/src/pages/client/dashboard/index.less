@@ -2,10 +2,24 @@
   // padding 由 Starter 布局层统一提供
 }
 
+.client-page-heading {
+  h1 {
+    margin: 0;
+    color: var(--td-text-color-primary);
+    font: var(--td-font-title-large);
+  }
+}
+
 .summary-grid {
   display: grid;
   grid-template-columns: minmax(22rem, 2fr) repeat(4, minmax(10rem, 1fr));
   gap: var(--td-comp-margin-m);
+}
+
+// 分区失败告警与 4 张指标卡同属 .summary-grid 的子元素。
+// 告警本身只占一格会把账户卡挤到第二列、把 4 张指标卡整体推下去，所以必须跨满一行。
+.dashboard-section-alert {
+  grid-column: 1 / -1;
 }
 
 .dashboard-grid {
@@ -78,15 +92,8 @@
   font: var(--td-font-body-small);
 }
 
-.chart-load-failed {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--td-comp-margin-s);
-  min-height: 8rem;
-  color: var(--td-text-color-secondary);
-  font: var(--td-font-body-small);
-}
+// D-08：原先这里有一份 .chart-load-failed（自绘的失败态容器），模板已统一改用 t-empty，
+// 保留样式会让下一个改这块的人以为还有第二种失败态语言。
 
 .chart-card__actions {
   display: flex;
@@ -118,14 +125,35 @@
 }
 
 // 分区骨架：首屏先渲染页面壳层与占位，数据到达后逐块替换（见 index.vue 的 *Ready 标记）。
+// D-07：占位块的尺寸必须贴着真实排版取值，否则数据到达时卡片内部会跳。三条规则分别对应
+// 指标卡（标题行高 + 说明行高，行间距压到 4 = --td-comp-margin-xs，与说明的 margin-top 同值）、
+// 产品格（最小高度 = 图标 48 + 上下内边距 16）、消息与待办（行高 = 文本行高，最小高度对齐单行卡片）。
 .metric-card__skeleton {
   margin-top: var(--td-comp-margin-xs);
+
+  :deep(.t-skeleton__row) {
+    margin-bottom: var(--td-comp-margin-xs);
+
+    &:last-child {
+      margin-bottom: 0;
+    }
+  }
 }
 
 .product-tile-skeleton {
+  min-height: calc(var(--td-comp-size-xxl) + var(--td-comp-margin-l));
   padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-m);
   border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
+}
+
+.message-list :deep(.t-skeleton) {
+  min-height: var(--td-comp-size-xxl);
+  border-bottom: thin solid var(--td-component-stroke);
+}
+
+.todo-list :deep(.t-skeleton) {
+  min-height: calc(var(--td-comp-size-xxl) + var(--td-comp-margin-s));
 }
 
 .product-grid {
@@ -195,19 +223,21 @@
     background: var(--td-brand-color);
   }
 
+  // D-02：info 原先用 brand-7 饱和底 + 反白字，按同一条对比度口径改成浅底深字。
   &.is-info {
-    color: var(--td-text-color-anti);
-    background: var(--td-brand-color-7);
+    color: var(--td-brand-color-7);
+    background: var(--td-brand-color-light);
   }
 
+  // 状态色只做浅底，文字回到深色：饱和底色配白字的对比度约为 2 比 1，达不到正文可读要求
   &.is-success {
-    color: var(--td-text-color-anti);
-    background: var(--td-success-color);
+    color: var(--td-success-color-8);
+    background: var(--td-success-color-light);
   }
 
   &.is-warning {
-    color: var(--td-text-color-anti);
-    background: var(--td-warning-color);
+    color: var(--td-warning-color-8);
+    background: var(--td-warning-color-light);
   }
 
   &.is-muted {
@@ -311,6 +341,15 @@
   width: 50%;
 }
 
+// D-04：窄屏隔一个隐藏标签。7 根日柱并排时每柱可用宽度约 2.6rem，而「10/29」自身要 2rem，
+// 再加列间距必然互相压盖；月度 12 根柱更窄。间隔显示后刻度仍然等距，
+// 被隐藏的日期可从 tooltip 与每根的 aria-label 读到，信息不丢。
+@media (max-width: @screen-xs-rem) {
+  .bar-chart__label--wide-only {
+    display: none;
+  }
+}
+
 .bar-chart--monthly {
   height: 16rem;
   padding-top: var(--td-comp-paddingTB-l);
@@ -345,12 +384,19 @@
   color: var(--td-text-color-secondary);
   font: var(--td-font-body-small);
   white-space: nowrap;
+  pointer-events: none;
   opacity: 0;
   transition: opacity 0.2s ease;
 }
 
+// 峰值柱的金额常显：触屏设备没有 hover，只靠悬停显示等于金额不可读。
+// D-03 收口：非峰值柱在触屏上始终读不到金额（12 根月度柱并排常显会互相压盖，不能全开）。
+// :active 补住「按下这一下」——触屏点柱时金额立刻出现，抬起后由 tooltip 继续承载，
+// 键盘用户走 :focus-within，读屏用户走每根柱子上的 aria-label，三条路径都不落空。
+.bar-chart__value.is-peak,
 .bar-chart__slot:hover .bar-chart__value,
-.bar-chart__slot:focus-within .bar-chart__value {
+.bar-chart__slot:focus-within .bar-chart__value,
+.bar-chart__slot:active .bar-chart__value {
   opacity: 1;
 }
 

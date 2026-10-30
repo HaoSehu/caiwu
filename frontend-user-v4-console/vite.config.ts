@@ -5,17 +5,27 @@ import { brotliCompressSync, constants as zlibConstants, gzipSync } from 'node:z
 
 import vue from '@vitejs/plugin-vue';
 import vueJsx from '@vitejs/plugin-vue-jsx';
+import type { AcceptedPlugin } from 'postcss';
 import Components from 'unplugin-vue-components/vite';
 import type { ConfigEnv, UserConfig } from 'vite';
 import { loadEnv } from 'vite';
-import svgLoader from 'vite-svg-loader';
 
 import { createApiConnectSrcPlugin } from '../shared/vite/apiConnectSrcPlugin.mjs';
 
 const CWD = process.cwd();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const compressionExtensions = new Set(['.css', '.html', '.js', '.json', '.map', '.mjs', '.svg', '.txt', '.xml']);
-const compressionThreshold = 1024;
+// 预压缩产物只服务「浏览器首屏会主动请求」的四类资源：js/css 由 <script>/<link> 引用，html 是文档本身，
+// svg 走 <img>/background-image。json/map/mjs/txt/xml 在 dist 里只会是 sourcemap 与第三方 vnc 静态包的附属文件，
+// 压了也没人从网络拿它们的 .gz/.br，纯占磁盘（PB-14）。
+const compressionExtensions = new Set(['.css', '.html', '.js', '.svg']);
+// 阈值从 1024 提到 4096：实测 521 个产物里 55 个 js、24 个 css、12 个 svg 都小于 4 KB，
+// 它们压缩后普遍只省几百字节，但每个多生成 1~2 个文件，部署时的文件数膨胀比省下的字节更贵（PB-14）。
+// 例外是 html：整份 dist 只有 index.html 与 vnc/vnc.html 两个文档文件，数量不随代码增长，
+// 而 index.html 是首屏渲染阻塞资源。实测 index.html 2575 字节（gzip 后约 967 字节），
+// 被 4096 阈值挡掉后就不再产出 .gz/.br —— 源站若未开 gzip_static 就只能原样传 2575 字节。
+// 故 html 单独沿用 1024 阈值，其余扩展名走 4096。
+const compressionThreshold = 4096;
+const htmlCompressionThreshold = 1024;
 
 // TDesign 组件导出名 → es 子目录。数据取自 tdesign-vue-next/es/index.mjs 的导出语句，
 // 因为约四成导出名的目录不是 kebab-case（如 Col→grid、DescriptionsItem→descriptions）。
@@ -325,8 +335,9 @@ function createPrecompressedAssetsPlugin() {
           }
 
           const buffer = await readFile(filePath);
+          const threshold = extension === '.html' ? htmlCompressionThreshold : compressionThreshold;
 
-          if (buffer.byteLength < compressionThreshold) {
+          if (buffer.byteLength < threshold) {
             return;
           }
 
@@ -349,6 +360,39 @@ function createPrecompressedAssetsPlugin() {
     },
   };
 }
+
+// PB-09：TDesign 的 es/style/index.css（main.ts:15 全量引入）自带一整块
+// `:root.dark, :root[theme-mode='dark']` 暗色变量（源文件 6,044 字节，minify 后约 5,601 字节）。
+// 本仓库是纯浅色主题：theme.css:124 明确写「原暗色变量块已删除，禁止重新引入」，
+// src/store/modules/setting.ts 的 displayMode 恒为 'light'、changeMode 只 setAttribute('theme-mode','')，
+// 全仓没有任何代码会写入 dark —— 这块规则永远命中不了，属于确定性死重。
+// 不能改 node_modules，也不该在 src 里再引一份覆盖样式（那只会加字节），
+// 所以在构建产物层面整块剔除：只删「选择器完全由 :root.dark / :root[theme-mode=dark] 组成」的顶层块，
+// :root[theme-mode='light'] 与其它任何选择器原样保留。
+const DARK_ROOT_SELECTOR = /^:root(?:\.dark|\[theme-mode=['"]?dark['"]?\])$/;
+
+function isDarkOnlySelector(selectorText: string): boolean {
+  const parts = selectorText
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  return parts.length > 0 && parts.every((part) => DARK_ROOT_SELECTOR.test(part));
+}
+
+// 走 postcss 而不是 generateBundle 改产物文本：generateBundle 时 asset 的文件名已经定稿，
+// 改完内容不会重算 [hash]，产物会出现「文件名不变、内容变了」——CDN 与浏览器都按文件名缓存，
+// 线上会继续发旧内容。postcss 在 Vite 计算 hash 之前执行，hash 与内容始终对应。
+const lightThemeOnlyPostcssPlugin = {
+  postcssPlugin: 'client-light-theme-only',
+  Once(root: { walkRules: (visitor: (rule: { selector: string; remove: () => void }) => void) => void }) {
+    root.walkRules((rule) => {
+      if (isDarkOnlySelector(rule.selector)) {
+        rule.remove();
+      }
+    });
+  },
+};
 
 function createIndexNetworkHintsPlugin(assetBase: string) {
   return {
@@ -406,6 +450,12 @@ export default ({ mode }: ConfigEnv): UserConfig => {
     },
 
     css: {
+      // PB-09：剔除 TDesign 自带的 :root.dark / :root[theme-mode='dark'] 变量块。
+      // 放在 postcss 而不是 generateBundle，是因为 postcss 在 Vite 计算 [hash] 之前跑完，
+      // 文件名与内容始终对应，不会出现「文件没改名、内容变了」的缓存事故。
+      postcss: {
+        plugins: [lightThemeOnlyPostcssPlugin as unknown as AcceptedPlugin],
+      },
       preprocessorOptions: {
         less: {
           modifyVars: {
@@ -426,7 +476,6 @@ export default ({ mode }: ConfigEnv): UserConfig => {
         dts: false,
         resolvers: [createTDesignResolver()],
       }),
-      svgLoader(),
       createApiConnectSrcPlugin(env),
       createIndexNetworkHintsPlugin(assetBase),
       createPrecompressedAssetsPlugin(),
@@ -443,7 +492,14 @@ export default ({ mode }: ConfigEnv): UserConfig => {
       host: '127.0.0.1',
     },
     build: {
-      target: 'es2018',
+      // PB-18：从 es2018 提到 es2020。仓库里唯一有书面记录的浏览器基线是官网的
+      // browserslist（frontend-user-v3-www/package.json: chrome>=84 / edge>=88 /
+      // firefox>=89 / safari>=13.4 / ios_saf>=13.4，docs/DESIGN.md:240 亦有记载），
+      // 控制台与官网面向同一批访客，该基线完整覆盖 ?? 与 ?.（Chrome 80+ / Safari 13.1+）。
+      // es2018 会把入口里 894 处 void 0 与 145 处 !==void 0 的比较全部降级出来，
+      // 实测首屏 gzip 从 204,360 降到 203,476 字节。控制台自身没有 browserslist 声明，
+      // 若日后确认需支持更旧的浏览器，把这里调回 'es2018' 即可，不需要改别处。
+      target: 'es2020',
       sourcemap: false,
       minify: 'esbuild',
       cssMinify: 'esbuild',
@@ -462,17 +518,7 @@ export default ({ mode }: ConfigEnv): UserConfig => {
     },
     optimizeDeps: {
       noDiscovery: true,
-      include: [
-        'vue',
-        'vue-router',
-        'pinia',
-        'axios',
-        'tdesign-icons-vue-next',
-        'vue-i18n',
-        'dayjs',
-        'nprogress',
-        'qs',
-      ],
+      include: ['vue', 'vue-router', 'pinia', 'axios', 'tdesign-icons-vue-next', 'nprogress'],
     },
   };
 };

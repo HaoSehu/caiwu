@@ -3,13 +3,12 @@ import { reactive, ref } from 'vue';
 
 import clientApi from '@/api/client';
 import type { ConsoleServiceDetail } from '@/types/client';
-
-import { resolveErrorMessage } from './useConsoleCore';
+import { getErrorMessage } from '@/utils/error';
 
 export interface UseConsoleDialogsOptions {
   serviceId: { value: number };
   detail: { value: ConsoleServiceDetail };
-  actionLoading: { value: boolean };
+  passwordLoading: { value: boolean };
   setOperationStatus: (type: string, label: string) => void;
   loadRemoteStatus: (silent: boolean) => Promise<void>;
   clearStatusSyncTimer: () => void;
@@ -21,7 +20,7 @@ export function useConsoleDialogs(options: UseConsoleDialogsOptions) {
   const {
     serviceId,
     detail,
-    actionLoading,
+    passwordLoading,
     setOperationStatus,
     loadRemoteStatus,
     clearStatusSyncTimer,
@@ -50,7 +49,7 @@ export function useConsoleDialogs(options: UseConsoleDialogsOptions) {
       nameVisible.value = false;
       MessagePlugin.success('实例名称已保存');
     } catch (error: unknown) {
-      MessagePlugin.error(resolveErrorMessage(error, '实例名称保存失败'));
+      MessagePlugin.error(getErrorMessage(error, '实例名称保存失败'));
     } finally {
       nameSubmitting.value = false;
     }
@@ -73,7 +72,7 @@ export function useConsoleDialogs(options: UseConsoleDialogsOptions) {
       remarkVisible.value = false;
       MessagePlugin.success('备注已保存');
     } catch (error: unknown) {
-      MessagePlugin.error(resolveErrorMessage(error, '备注保存失败'));
+      MessagePlugin.error(getErrorMessage(error, '备注保存失败'));
     } finally {
       remarkSubmitting.value = false;
     }
@@ -127,7 +126,7 @@ export function useConsoleDialogs(options: UseConsoleDialogsOptions) {
       MessagePlugin.warning('两次输入的密码不一致');
       return;
     }
-    actionLoading.value = true;
+    passwordLoading.value = true;
     try {
       const res = await clientApi.serviceResetPassword(serviceId.value, {
         password: passwordForm.password,
@@ -142,9 +141,9 @@ export function useConsoleDialogs(options: UseConsoleDialogsOptions) {
       clearStatusSyncTimer();
       scheduleStatusSync(() => loadRemoteStatus(true), 1500);
     } catch (error: unknown) {
-      MessagePlugin.error(resolveErrorMessage(error, '重置密码失败'));
+      MessagePlugin.error(getErrorMessage(error, '重置密码失败'));
     } finally {
-      actionLoading.value = false;
+      passwordLoading.value = false;
     }
   }
 

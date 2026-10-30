@@ -1,5 +1,5 @@
 import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
+import { computed, onActivated, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { AUTH_BOUND_CODE_CONFIG, clientAuthApi } from '@/api/auth';
@@ -26,7 +26,15 @@ export function useProfile() {
   const userStore = useUserStore();
   const { runWithCaptcha } = useGeeTestCaptcha();
   const activeTab = ref<ProfileTab>('profile');
-  const profileLoading = ref(false);
+  // AC-19：按操作拆分布尔量，任一操作进行中不再联动禁用整页其他按钮
+  const savingProfile = ref(false);
+  const changingPassword = ref(false);
+  const submittingPhone = ref(false);
+  const submittingEmail = ref(false);
+  // AC-20：五个「发送验证码」按钮各自的进行中标志
+  const codeSending = reactive({ reset: false, phoneOld: false, emailOld: false, phone: false, email: false });
+  // AC-22：资料加载失败给出可重试的明确错误，而非留一张空白表单
+  const profileError = ref('');
   const passwordDialogVisible = ref(false);
   const phoneDialogVisible = ref(false);
   const emailDialogVisible = ref(false);
@@ -39,10 +47,6 @@ export function useProfile() {
   const emailCountdown = ref(0);
   const phoneOldCountdown = ref(0);
   const emailOldCountdown = ref(0);
-  let phoneTimer: ReturnType<typeof setInterval> | null = null;
-  let emailTimer: ReturnType<typeof setInterval> | null = null;
-  let phoneOldTimer: ReturnType<typeof setInterval> | null = null;
-  let emailOldTimer: ReturnType<typeof setInterval> | null = null;
   const profileForm = reactive({
     id: '',
     email: '',
@@ -58,7 +62,6 @@ export function useProfile() {
   const passwordMode = ref<'old' | 'reset'>('old');
   const resetForm = reactive({ type: 'phone' as 'phone' | 'email', code: '', password: '', confirmPassword: '' });
   const resetCountdown = ref(0);
-  let resetTimer: ReturnType<typeof setInterval> | null = null;
   const notificationList = reactive<NotificationItem[]>([
     {
       key: 'login_notify',
@@ -136,35 +139,47 @@ export function useProfile() {
     },
   ]);
 
-  function clearPhoneTimer() {
-    if (phoneTimer) {
-      clearInterval(phoneTimer);
-      phoneTimer = null;
+  // 五个验证码倒计时原本各起一个 setInterval：页面被 keep-alive 常驻时会同时挂 5 个
+  // 每秒唤醒的定时器。合并成单一 1 秒时钟后每秒只唤醒一次，全部归零时自动停表。
+  const countdownSlots = [resetCountdown, phoneOldCountdown, emailOldCountdown, phoneCountdown, emailCountdown];
+  let countdownTimer: ReturnType<typeof setInterval> | null = null;
+
+  function stopCountdownTimer() {
+    if (countdownTimer) {
+      clearInterval(countdownTimer);
+      countdownTimer = null;
     }
+  }
+
+  function ensureCountdownTimer() {
+    if (countdownTimer) return;
+    countdownTimer = setInterval(() => {
+      let running = false;
+      for (const slot of countdownSlots) {
+        if (slot.value > 0) {
+          slot.value -= 1;
+          if (slot.value > 0) running = true;
+        }
+      }
+      if (!running) stopCountdownTimer();
+    }, 1000);
+  }
+
+  // 只清自己的计数，共用时钟会在全部归零后自行停止
+  function clearPhoneTimer() {
+    phoneCountdown.value = 0;
   }
   function clearEmailTimer() {
-    if (emailTimer) {
-      clearInterval(emailTimer);
-      emailTimer = null;
-    }
+    emailCountdown.value = 0;
   }
   function clearPhoneOldTimer() {
-    if (phoneOldTimer) {
-      clearInterval(phoneOldTimer);
-      phoneOldTimer = null;
-    }
+    phoneOldCountdown.value = 0;
   }
   function clearEmailOldTimer() {
-    if (emailOldTimer) {
-      clearInterval(emailOldTimer);
-      emailOldTimer = null;
-    }
+    emailOldCountdown.value = 0;
   }
   function clearResetTimer() {
-    if (resetTimer) {
-      clearInterval(resetTimer);
-      resetTimer = null;
-    }
+    resetCountdown.value = 0;
   }
 
   function openPasswordDialog() {
@@ -186,6 +201,8 @@ export function useProfile() {
   }
 
   async function sendResetCode() {
+    if (codeSending.reset || resetCountdown.value > 0) return;
+    codeSending.reset = true;
     try {
       await runWithCaptcha(async (captcha: unknown) => {
         if (resetForm.type === 'phone') {
@@ -196,15 +213,11 @@ export function useProfile() {
       });
       MessagePlugin.success('验证码已发送');
       resetCountdown.value = 60;
-      resetTimer = setInterval(() => {
-        resetCountdown.value -= 1;
-        if (resetCountdown.value <= 0) {
-          clearResetTimer();
-          resetCountdown.value = 0;
-        }
-      }, 1000);
+      ensureCountdownTimer();
     } catch (error: unknown) {
       MessagePlugin.error(getErrorMessage(error, '验证码发送失败'));
+    } finally {
+      codeSending.reset = false;
     }
   }
 
@@ -225,7 +238,8 @@ export function useProfile() {
       MessagePlugin.warning('两次密码输入不一致');
       return;
     }
-    profileLoading.value = true;
+    if (changingPassword.value) return;
+    changingPassword.value = true;
     try {
       const account = resetForm.type === 'phone' ? profileForm.phone : profileForm.email;
       await clientAuthApi.resetPassword({
@@ -242,7 +256,7 @@ export function useProfile() {
     } catch (error: unknown) {
       MessagePlugin.error(getErrorMessage(error, '密码重置失败'));
     } finally {
-      profileLoading.value = false;
+      changingPassword.value = false;
     }
   }
 
@@ -275,14 +289,15 @@ export function useProfile() {
       MessagePlugin.warning('请输入 6 位原手机号验证码');
       return;
     }
-    profileLoading.value = true;
+    if (submittingPhone.value) return;
+    submittingPhone.value = true;
     try {
       await clientAuthApi.verifyBoundPhoneCode({ code: phoneForm.oldCode });
       phoneChangeStep.value = 2;
     } catch (error: unknown) {
       MessagePlugin.error(getErrorMessage(error, '原手机验证码错误或已过期'));
     } finally {
-      profileLoading.value = false;
+      submittingPhone.value = false;
     }
   }
 
@@ -291,14 +306,15 @@ export function useProfile() {
       MessagePlugin.warning('请输入 6 位原邮箱验证码');
       return;
     }
-    profileLoading.value = true;
+    if (submittingEmail.value) return;
+    submittingEmail.value = true;
     try {
       await clientAuthApi.verifyBoundEmailCode({ code: emailForm.oldCode });
       emailChangeStep.value = 2;
     } catch (error: unknown) {
       MessagePlugin.error(getErrorMessage(error, '原邮箱验证码错误或已过期'));
     } finally {
-      profileLoading.value = false;
+      submittingEmail.value = false;
     }
   }
 
@@ -307,6 +323,8 @@ export function useProfile() {
       MessagePlugin.warning('当前账号未绑定手机号');
       return;
     }
+    if (codeSending.phoneOld || phoneOldCountdown.value > 0) return;
+    codeSending.phoneOld = true;
     try {
       await runWithCaptcha(async (captcha: unknown) => {
         await clientAuthApi.sendPhoneCode(
@@ -316,15 +334,11 @@ export function useProfile() {
       });
       MessagePlugin.success('验证码已发送至原手机号');
       phoneOldCountdown.value = 60;
-      phoneOldTimer = setInterval(() => {
-        phoneOldCountdown.value -= 1;
-        if (phoneOldCountdown.value <= 0) {
-          clearPhoneOldTimer();
-          phoneOldCountdown.value = 0;
-        }
-      }, 1000);
+      ensureCountdownTimer();
     } catch (error: unknown) {
       MessagePlugin.error(getErrorMessage(error, '验证码发送失败'));
+    } finally {
+      codeSending.phoneOld = false;
     }
   }
 
@@ -333,6 +347,8 @@ export function useProfile() {
       MessagePlugin.warning('当前账号未绑定邮箱');
       return;
     }
+    if (codeSending.emailOld || emailOldCountdown.value > 0) return;
+    codeSending.emailOld = true;
     try {
       await runWithCaptcha(async (captcha: unknown) => {
         await clientAuthApi.sendEmailCode(
@@ -342,15 +358,11 @@ export function useProfile() {
       });
       MessagePlugin.success('验证码已发送至原邮箱');
       emailOldCountdown.value = 60;
-      emailOldTimer = setInterval(() => {
-        emailOldCountdown.value -= 1;
-        if (emailOldCountdown.value <= 0) {
-          clearEmailOldTimer();
-          emailOldCountdown.value = 0;
-        }
-      }, 1000);
+      ensureCountdownTimer();
     } catch (error: unknown) {
       MessagePlugin.error(getErrorMessage(error, '验证码发送失败'));
+    } finally {
+      codeSending.emailOld = false;
     }
   }
 
@@ -359,6 +371,8 @@ export function useProfile() {
       MessagePlugin.warning('请输入新手机号');
       return;
     }
+    if (codeSending.phone || phoneCountdown.value > 0) return;
+    codeSending.phone = true;
     try {
       await runWithCaptcha(async (captcha: unknown) => {
         await clientAuthApi.sendPhoneCode({
@@ -369,15 +383,11 @@ export function useProfile() {
       });
       MessagePlugin.success('验证码已发送');
       phoneCountdown.value = 60;
-      phoneTimer = setInterval(() => {
-        phoneCountdown.value -= 1;
-        if (phoneCountdown.value <= 0) {
-          clearPhoneTimer();
-          phoneCountdown.value = 0;
-        }
-      }, 1000);
+      ensureCountdownTimer();
     } catch (error: unknown) {
       MessagePlugin.error(getErrorMessage(error, '验证码发送失败'));
+    } finally {
+      codeSending.phone = false;
     }
   }
 
@@ -386,6 +396,8 @@ export function useProfile() {
       MessagePlugin.warning('请输入新邮箱');
       return;
     }
+    if (codeSending.email || emailCountdown.value > 0) return;
+    codeSending.email = true;
     try {
       await runWithCaptcha(async (captcha: unknown) => {
         // 这里发往的是「新邮箱」，不能用 change_email：后端 EMAIL_BOUND_PURPOSES 含 change_email，
@@ -394,15 +406,11 @@ export function useProfile() {
       });
       MessagePlugin.success('验证码已发送');
       emailCountdown.value = 60;
-      emailTimer = setInterval(() => {
-        emailCountdown.value -= 1;
-        if (emailCountdown.value <= 0) {
-          clearEmailTimer();
-          emailCountdown.value = 0;
-        }
-      }, 1000);
+      ensureCountdownTimer();
     } catch (error: unknown) {
       MessagePlugin.error(getErrorMessage(error, '验证码发送失败'));
+    } finally {
+      codeSending.email = false;
     }
   }
 
@@ -419,7 +427,8 @@ export function useProfile() {
       MessagePlugin.warning('请输入原手机号验证码');
       return;
     }
-    profileLoading.value = true;
+    if (submittingPhone.value) return;
+    submittingPhone.value = true;
     try {
       await clientAuthApi.updatePhone({
         phone: phoneForm.phone,
@@ -434,7 +443,7 @@ export function useProfile() {
     } catch (error: unknown) {
       MessagePlugin.error(getErrorMessage(error, '手机号修改失败'));
     } finally {
-      profileLoading.value = false;
+      submittingPhone.value = false;
     }
   }
 
@@ -451,7 +460,8 @@ export function useProfile() {
       MessagePlugin.warning('请输入原邮箱验证码');
       return;
     }
-    profileLoading.value = true;
+    if (submittingEmail.value) return;
+    submittingEmail.value = true;
     try {
       await clientAuthApi.updateEmail({
         email: emailForm.email,
@@ -466,7 +476,7 @@ export function useProfile() {
     } catch (error: unknown) {
       MessagePlugin.error(getErrorMessage(error, '邮箱修改失败'));
     } finally {
-      profileLoading.value = false;
+      submittingEmail.value = false;
     }
   }
 
@@ -483,8 +493,15 @@ export function useProfile() {
   }
 
   async function loadProfile() {
-    const info = await userStore.getUserInfo();
-    hydrateProfile(info);
+    // AC-22：不吞异常也不放未处理 rejection，失败时把错误交给页面展示并提供重试入口
+    try {
+      const info = await userStore.getUserInfo();
+      hydrateProfile(info);
+      profileError.value = '';
+    } catch (error: unknown) {
+      profileError.value = getErrorMessage(error, '个人资料加载失败，请稍后重试');
+      throw error;
+    }
   }
 
   async function copyText(text: string) {
@@ -507,7 +524,8 @@ export function useProfile() {
       MessagePlugin.warning('用户名最多 50 个字符');
       return;
     }
-    profileLoading.value = true;
+    if (savingProfile.value) return;
+    savingProfile.value = true;
     try {
       await clientAuthApi.updateProfile({ nickname: trimmed });
       await loadProfile();
@@ -515,7 +533,7 @@ export function useProfile() {
     } catch (error: unknown) {
       MessagePlugin.error(getErrorMessage(error, '资料保存失败'));
     } finally {
-      profileLoading.value = false;
+      savingProfile.value = false;
     }
   }
 
@@ -532,7 +550,8 @@ export function useProfile() {
       MessagePlugin.warning('两次密码输入不一致');
       return;
     }
-    profileLoading.value = true;
+    if (changingPassword.value) return;
+    changingPassword.value = true;
     try {
       await clientAuthApi.changePassword({
         oldPassword: passwordForm.oldPassword,
@@ -546,7 +565,7 @@ export function useProfile() {
     } catch (error: unknown) {
       MessagePlugin.error(getErrorMessage(error, '修改失败'));
     } finally {
-      profileLoading.value = false;
+      changingPassword.value = false;
     }
   }
 
@@ -575,22 +594,41 @@ export function useProfile() {
     }
   }
 
+  function loadProfilePage() {
+    // AC-22：Promise.all 中 loadProfile 会抛错，这里统一接住避免未处理 rejection；错误已由 profileError 呈现
+    return Promise.all([loadProfile(), loadNotificationPreferences()]).catch(() => undefined);
+  }
+
   onMounted(() => {
-    void Promise.all([loadProfile(), loadNotificationPreferences()]);
+    void loadProfilePage();
+  });
+
+  // keep-alive 现在真的会缓存页面（Content.vue 按 route.name 做 key），onMounted 一生只跑一次，
+  // 从别的页签切回来会看到上次留下的旧数据。这里补一次重新拉取，只在非首次激活时触发，
+  // 避免刚挂载完紧跟着又来一次同样的请求。
+  let activatedOnce = false;
+  onActivated(() => {
+    if (!activatedOnce) {
+      activatedOnce = true;
+      return;
+    }
+    void loadProfilePage();
   });
 
   onBeforeUnmount(() => {
-    clearPhoneTimer();
-    clearEmailTimer();
-    clearPhoneOldTimer();
-    clearEmailOldTimer();
-    clearResetTimer();
+    stopCountdownTimer();
   });
 
   return {
     router,
     activeTab,
-    profileLoading,
+    savingProfile,
+    changingPassword,
+    submittingPhone,
+    submittingEmail,
+    codeSending,
+    profileError,
+    loadProfile,
     notificationLoading,
     passwordDialogVisible,
     phoneDialogVisible,

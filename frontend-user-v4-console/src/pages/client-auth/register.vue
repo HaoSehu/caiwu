@@ -9,10 +9,12 @@
     hero-title="注册后即可进入控制台开始购买"
     hero-description="完成开户注册后，可以继续创建账单、管理服务，并处理实名认证与账户安全设置。"
   >
+    <!-- A-11：校验结果的读屏通道，节点常驻（v-if 挂载不会被播报）。 -->
+    <p class="client-auth-live" role="status" aria-live="polite">{{ liveText }}</p>
     <t-form ref="formRef" class="client-auth-form" :data="form" :rules="rules" label-width="0" @submit="handleRegister">
       <t-form-item name="account">
-        <div class="client-auth-field">
-          <label class="client-auth-label is-required" for="register-account">手机号 / 邮箱</label>
+        <label class="client-auth-field">
+          <span class="client-auth-label is-required">手机号 / 邮箱<span class="sr-only">（必填）</span></span>
           <t-input
             id="register-account"
             v-model="form.account"
@@ -20,15 +22,23 @@
             clearable
             autocomplete="username"
             placeholder="请输入手机号或邮箱"
+            @enter="submitForm"
           />
-        </div>
+        </label>
       </t-form-item>
 
       <t-form-item name="code">
-        <div class="client-auth-field">
-          <label class="client-auth-label is-required" for="register-code">验证码</label>
+        <label class="client-auth-field">
+          <span class="client-auth-label is-required">验证码<span class="sr-only">（必填）</span></span>
           <div class="client-auth-code-row">
-            <t-input id="register-code" v-model="form.code" size="large" maxlength="6" placeholder="请输入验证码" />
+            <t-input
+              id="register-code"
+              v-model="form.code"
+              size="large"
+              maxlength="6"
+              placeholder="请输入验证码"
+              @enter="submitForm"
+            />
             <t-button
               variant="outline"
               :disabled="countdown > 0"
@@ -38,38 +48,12 @@
               {{ countdown > 0 ? `${countdown}s` : '发送验证码' }}
             </t-button>
           </div>
-        </div>
-      </t-form-item>
-
-      <t-form-item name="nickname">
-        <div class="client-auth-field">
-          <label class="client-auth-label" for="register-nickname">用户名</label>
-          <t-input
-            id="register-nickname"
-            v-model="form.nickname"
-            size="large"
-            maxlength="50"
-            placeholder="选填，最多 50 个字符"
-          />
-        </div>
-      </t-form-item>
-
-      <t-form-item name="referral_code">
-        <div class="client-auth-field">
-          <label class="client-auth-label" for="register-referral">推广码</label>
-          <t-input
-            id="register-referral"
-            v-model="form.referral_code"
-            size="large"
-            maxlength="24"
-            placeholder="选填，如有推广邀请可填写"
-          />
-        </div>
+        </label>
       </t-form-item>
 
       <t-form-item name="password">
-        <div class="client-auth-field client-auth-field--password">
-          <label class="client-auth-label is-required" for="register-password">登录密码</label>
+        <label class="client-auth-field client-auth-field--password">
+          <span class="client-auth-label is-required">登录密码<span class="sr-only">（必填）</span></span>
           <t-input
             id="register-password"
             v-model="form.password"
@@ -78,18 +62,19 @@
             clearable
             autocomplete="new-password"
             placeholder="请输入至少 6 位密码"
+            @enter="submitForm"
           >
             <template #prefix-icon><lock-on-icon /></template>
             <template #suffix>
               <password-toggle v-model="showPassword" />
             </template>
           </t-input>
-        </div>
+        </label>
       </t-form-item>
 
       <t-form-item name="password_confirmation">
-        <div class="client-auth-field client-auth-field--password">
-          <label class="client-auth-label is-required" for="register-confirm-password">确认密码</label>
+        <label class="client-auth-field client-auth-field--password">
+          <span class="client-auth-label is-required">确认密码<span class="sr-only">（必填）</span></span>
           <t-input
             id="register-confirm-password"
             v-model="form.password_confirmation"
@@ -105,10 +90,50 @@
               <password-toggle v-model="showConfirmPassword" />
             </template>
           </t-input>
-        </div>
+        </label>
       </t-form-item>
 
-      <t-button class="client-auth-submit" block size="large" theme="primary" :loading="loading" @click="submitForm">
+      <!-- A-15：选填项原先夹在必填项之间，字号字重间距与必填完全一致，只靠红色星号区分，
+           扫读时会被当成「怎么填都不对」。移到必填项之后单独成组，并给出分组标题。 -->
+      <p class="client-auth-group-title">选填信息</p>
+
+      <t-form-item name="nickname">
+        <label class="client-auth-field">
+          <span class="client-auth-label">用户名</span>
+          <t-input
+            id="register-nickname"
+            v-model="form.nickname"
+            size="large"
+            maxlength="50"
+            placeholder="选填，最多 50 个字符"
+            @enter="submitForm"
+          />
+        </label>
+      </t-form-item>
+
+      <t-form-item name="referral_code">
+        <label class="client-auth-field">
+          <span class="client-auth-label">推广码</span>
+          <t-input
+            id="register-referral"
+            v-model="form.referral_code"
+            size="large"
+            maxlength="24"
+            placeholder="选填，如有推广邀请可填写"
+            @enter="submitForm"
+          />
+        </label>
+      </t-form-item>
+
+      <t-button
+        class="client-auth-submit"
+        block
+        size="large"
+        theme="primary"
+        :loading="loading"
+        :disabled="loading"
+        @click="submitForm"
+      >
         注册并进入控制台
       </t-button>
     </t-form>
@@ -128,6 +153,7 @@ import PasswordToggle from '@/components/auth/PasswordToggle.vue';
 import { useGeeTestCaptcha } from '@/composables/useGeeTestCaptcha';
 import { useUserStore } from '@/store';
 import { buildAccountPayload, detectAccountType, normalizeAccountValue } from '@/utils/account';
+import { resolveLoginRedirectPath } from '@/utils/loginRedirect';
 
 interface RegisterForm {
   account: string;
@@ -169,10 +195,10 @@ const loginLink = computed(() => ({
   query: route.query.redirect ? { redirect: route.query.redirect } : {},
 }));
 
-const redirectPath = computed(() => {
-  const redirect = route.query.redirect;
-  return typeof redirect === 'string' && redirect.startsWith('/') ? redirect : '/client/dashboard';
-});
+// A-23：原先这里自己写了一遍 `startsWith('/')` 判断，漏掉协议相对形态（//evil.com）。
+// 登录导向全站只有一处口径：@/utils/loginRedirect 的 resolveLoginRedirectPath
+// （路由守卫、401 拦截、login.vue 都用它），注册页也收敛到同一个函数。
+const redirectPath = computed(() => resolveLoginRedirectPath(route.query.redirect));
 
 const accountRule: FormRule = {
   validator: (value: string) => ({
@@ -228,6 +254,7 @@ function startCountdown() {
 }
 
 async function handleSendCode() {
+  if (sendingCode.value || countdown.value > 0) return;
   const accountPayload = buildAccountPayload(form.account);
   if (!accountPayload) {
     MessagePlugin.warning('请先输入正确的手机号或邮箱');
@@ -257,6 +284,7 @@ async function handleSendCode() {
 }
 
 async function submitForm() {
+  if (loading.value) return;
   if (!validateForm()) {
     return;
   }
@@ -264,11 +292,16 @@ async function submitForm() {
 }
 
 async function handleRegister(ctx: SubmitContext) {
+  if (loading.value) return;
   if (ctx.validateResult !== true || !validateForm()) return;
   await runRegister();
 }
 
+// A-11：校验失败的读屏播报文案。
+const liveText = ref('');
+
 function setFormErrors(errors: Partial<Record<keyof RegisterForm, string>>) {
+  liveText.value = Object.values(errors).filter(Boolean).join('；');
   const validateMessage: FormValidateMessage<RegisterForm> = {
     account: errors.account ? [{ type: 'error', message: errors.account }] : [],
     code: errors.code ? [{ type: 'error', message: errors.code }] : [],
@@ -314,11 +347,13 @@ function validateForm() {
     return false;
   }
 
+  liveText.value = '';
   formRef.value?.clearValidate();
   return true;
 }
 
 async function runRegister() {
+  if (loading.value) return;
   loading.value = true;
   try {
     await userStore.clientRegister({

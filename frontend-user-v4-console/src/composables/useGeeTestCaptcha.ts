@@ -117,8 +117,21 @@ function loadGeeTestScript(src: string, cacheKey = '') {
     geetestScriptPromise = new Promise((resolve, reject) => {
       const current = document.querySelector<HTMLScriptElement>('script[data-geetest-script="gt4"]');
       if (current) {
-        current.addEventListener('load', () => resolve(window.initGeetest4), { once: true });
-        current.addEventListener('error', () => reject(new Error('GeeTest 脚本加载失败')), { once: true });
+        // 复用已有的 script 节点：监听必须能显式摘掉，否则节点长期存在时每次进出页面都会叠加一对闭包
+        const handleLoad = () => {
+          detach();
+          resolve(window.initGeetest4);
+        };
+        const handleError = () => {
+          detach();
+          reject(new Error('GeeTest 脚本加载失败'));
+        };
+        const detach = () => {
+          current.removeEventListener('load', handleLoad);
+          current.removeEventListener('error', handleError);
+        };
+        current.addEventListener('load', handleLoad);
+        current.addEventListener('error', handleError);
         return;
       }
 
@@ -128,8 +141,16 @@ function loadGeeTestScript(src: string, cacheKey = '') {
       script.defer = true;
       script.dataset.geetestScript = 'gt4';
       script.dataset.captchaKey = scriptKey;
-      script.onload = () => resolve(window.initGeetest4);
-      script.onerror = () => reject(new Error('GeeTest 脚本加载失败'));
+      script.onload = () => {
+        script.onload = null;
+        script.onerror = null;
+        resolve(window.initGeetest4);
+      };
+      script.onerror = () => {
+        script.onload = null;
+        script.onerror = null;
+        reject(new Error('GeeTest 脚本加载失败'));
+      };
       document.head.appendChild(script);
     });
   }
@@ -139,7 +160,13 @@ function loadGeeTestScript(src: string, cacheKey = '') {
 
 function releaseGeeTestScript() {
   if (typeof window === 'undefined') return;
-  document.querySelector<HTMLScriptElement>('script[data-geetest-script="gt4"]')?.remove();
+  const script = document.querySelector<HTMLScriptElement>('script[data-geetest-script="gt4"]');
+  if (script) {
+    // 释放时一并清掉可能还挂着的加载回调，避免节点移除后闭包仍被引用
+    script.onload = null;
+    script.onerror = null;
+    script.remove();
+  }
   window.initGeetest4 = undefined;
   geetestScriptPromise = null;
 }

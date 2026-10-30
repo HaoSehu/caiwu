@@ -7,7 +7,6 @@
  * 因此该组选择器保留在 theme.css，不能下沉到本文件，否则 admin 推荐页会丢失表格覆写。
  */
 #app .record-page .record-table,
-#app .client-invoices .invoice-table-card,
 #app .client-services .service-table-card,
 #app .client-tickets .ticket-table-shell {
   background: transparent;
@@ -16,35 +15,41 @@
 }
 
 #app .record-page .record-table .t-table,
-#app .client-invoices .invoice-table-card .t-table,
 #app .client-services .service-table-card .t-table,
 #app .client-tickets .ticket-table-shell .t-table {
   background: transparent;
 }
 
 #app .record-page .record-table table,
-#app .client-invoices .invoice-table-card table,
 #app .client-services .service-table-card table,
 #app .client-tickets .ticket-table-shell table {
   border-collapse: collapse;
 }
 
+// 下面单元格底色与行 hover 的两处 !important 目前**没有证据表明是必需的**（C-20 待确认）：
+// 核对 tdesign-vue-next 1.20.7 的 es/table/style/index.css，单元格背景只由 `.t-table tr` 与
+// `.t-table__cell--highlight` 声明，均为 0 个 id 的选择器，被本文件的 `#app ...` 前缀天然压过，
+// 组件也没有内联 background。因此这两个 !important 属历史习惯，保留只是为了不做未经浏览器
+// 回归的视觉改动；后续做一轮真机比对后应当删除，不要在此基础上继续新增 !important。
 #app .record-page .record-table th,
 #app .record-page .record-table td,
-#app .client-invoices .invoice-table-card th,
-#app .client-invoices .invoice-table-card td,
 #app .client-services .service-table-card th,
 #app .client-services .service-table-card td,
 #app .client-tickets .ticket-table-shell th,
 #app .client-tickets .ticket-table-shell td {
-  height: 42px;
-  padding: 10px 18px;
+  // C-23：行高与单元格内边距改回令牌。
+  // 展开值以本项目的 theme.css 为准（它覆盖了 TDesign 默认值，别只看 node_modules）：
+  // theme.css:144 --td-comp-margin-xxxxl = 40、:136 --td-comp-margin-xxs = 2 → 行高 42；
+  // theme.css:148 --td-comp-paddingTB-m = 10、:155 --td-comp-paddingLR-m = 16 → 内边距 10 / 18。
+  // 注：node_modules 的默认值分别是 40 / 2 / 12 / 12（展开 12 / 14），与这里差在 theme.css 的覆盖；
+  // 与迁移前的硬编码 10 / 18 正好等值，要对齐的是 42 行高这一口径。
+  height: calc(var(--td-comp-margin-xxxxl) + var(--td-comp-margin-xxs));
+  padding: var(--td-comp-paddingTB-m) calc(var(--td-comp-paddingLR-m) + var(--td-comp-margin-xxs));
   background: var(--td-bg-color-container) !important;
-  border-bottom: 1px solid var(--td-component-stroke);
+  border-bottom: thin solid var(--td-component-stroke);
 }
 
 #app .record-page .record-table th,
-#app .client-invoices .invoice-table-card th,
 #app .client-services .service-table-card th,
 #app .client-tickets .ticket-table-shell th {
   color: var(--td-text-color-secondary);
@@ -53,7 +58,6 @@
 }
 
 #app .record-page .record-table td,
-#app .client-invoices .invoice-table-card td,
 #app .client-services .service-table-card td,
 #app .client-tickets .ticket-table-shell td {
   color: var(--td-text-color-primary);
@@ -61,7 +65,6 @@
 }
 
 #app .record-page .record-table tr:hover td,
-#app .client-invoices .invoice-table-card tr:hover td,
 #app .client-services .service-table-card tr:hover td,
 #app .client-tickets .ticket-table-shell tr:hover td {
   background: var(--td-brand-color-1) !important;

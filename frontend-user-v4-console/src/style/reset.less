@@ -38,11 +38,29 @@ p {
   box-sizing: border-box;
 }
 
+// 视觉隐藏但仍可被读屏读取。定义放在全局入口 style/index.less（经 reset.less 引入），
+// 而不是布局层 layout.less —— 认证页 client-auth/* 在 Starter 布局之外渲染，
+// 依赖 layouts/index.vue 的按需引入会让 .sr-only 在 dev 下时有时无。
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 // 统一键盘聚焦环（docs/DESIGN.md §7.2）：原生 button/a/可聚焦元素无自带焦点样式时在此兜底，
 // 与管理端 style/reset.less 的写法保持一致。
 :focus-visible {
-  outline: 2px solid var(--td-brand-color);
-  outline-offset: 2px;
+  // C-23：描边宽度写 0.125rem（= 2px）。TDesign 没有 border-width 令牌
+  // （--td-border-level-1/2 只有颜色），此前借 --td-radius-small 的 2px 数值来凑，
+  // 数值偶然相等、语义是圆角，调主题时会被一起改错。偏移仍走 margin-xxs。
+  outline: 0.125rem solid var(--td-brand-color);
+  outline-offset: var(--td-comp-margin-xxs);
 }
 
 // ========== 全局减弱动效（prefers-reduced-motion） ==========

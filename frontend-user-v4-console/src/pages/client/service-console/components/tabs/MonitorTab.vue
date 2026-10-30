@@ -3,7 +3,7 @@
     <t-card title="监控信息" :bordered="false">
       <template #actions>
         <t-space>
-          <t-radio-group v-model="monitorState.range" variant="default-filled" @change="() => loadMonitor(true)">
+          <t-radio-group v-model="monitorState.range" variant="default-filled" @change="handleRangeChange">
             <t-radio-button value="3h">3 小时</t-radio-button>
             <t-radio-button value="24h">24 小时</t-radio-button>
             <t-radio-button value="7d">7 天</t-radio-button>
@@ -37,10 +37,19 @@
                   class="monitor-chart"
                   :viewBox="`0 0 ${MONITOR_CHART_WIDTH} ${MONITOR_CHART_HEIGHT}`"
                   role="img"
-                  :aria-label="`${chart.label}趋势图`"
+                  tabindex="0"
+                  :aria-label="`${chart.label}趋势图，聚焦后用左右方向键逐点查看读数`"
                   preserveAspectRatio="none"
                   @mousemove="handleMonitorPointerMove($event, chart)"
                   @mouseleave="clearMonitorPointer"
+                  @touchstart.passive="handleMonitorPointerTouch($event, chart)"
+                  @touchmove.passive="handleMonitorPointerTouch($event, chart)"
+                  @touchend="clearMonitorPointer"
+                  @keydown.left.prevent="stepMonitorPointer(chart, -1)"
+                  @keydown.right.prevent="stepMonitorPointer(chart, 1)"
+                  @keydown.home.prevent="stepMonitorPointer(chart, 'start')"
+                  @keydown.end.prevent="stepMonitorPointer(chart, 'end')"
+                  @keydown.esc="clearMonitorPointer"
                 >
                   <g class="monitor-chart-grid">
                     <line
@@ -115,7 +124,14 @@
               </div>
             </div>
           </div>
-          <div v-else class="monitor-chart-empty">{{ chart.message || '当前时间范围内暂无趋势数据' }}</div>
+          <!-- SC-16：单图无数据原来是一段自绘占位文本，与页面其它空态（t-empty）两套语言；
+               统一收进 t-empty，尺寸取 small 以贴合卡片内的行高。 -->
+          <t-empty
+            v-else
+            class="monitor-chart-empty"
+            size="small"
+            :description="chart.message || '当前时间范围内暂无趋势数据'"
+          />
           <div class="monitor-metrics">
             <span
               >平均 <strong>{{ chart.averageText }}</strong></span
@@ -134,6 +150,8 @@
   </section>
 </template>
 <script setup lang="ts">
+import { onBeforeUnmount } from 'vue';
+
 import {
   MONITOR_CHART_BOTTOM,
   MONITOR_CHART_HEIGHT,
@@ -148,8 +166,30 @@ const { monitorState, loadMonitor } = useServiceConsoleContext();
 const {
   monitorChartViews,
   handleMonitorPointerMove,
+  handleMonitorPointerTouch,
+  stepMonitorPointer,
   clearMonitorPointer,
   resolveActiveMonitorPointCached,
   resolveMonitorTooltipStyle,
 } = useConsoleMonitor(monitorState);
+
+// 区间是离散点击，但连续切换会连着打满 4 个区间请求；合并到 200 毫秒只发最后一次。
+const RANGE_CHANGE_DELAY_MS = 200;
+let rangeChangeTimer: number | null = null;
+
+function clearRangeChangeTimer() {
+  if (rangeChangeTimer === null) return;
+  window.clearTimeout(rangeChangeTimer);
+  rangeChangeTimer = null;
+}
+
+function handleRangeChange() {
+  clearRangeChangeTimer();
+  rangeChangeTimer = window.setTimeout(() => {
+    rangeChangeTimer = null;
+    void loadMonitor(true);
+  }, RANGE_CHANGE_DELAY_MS);
+}
+
+onBeforeUnmount(clearRangeChangeTimer);
 </script>

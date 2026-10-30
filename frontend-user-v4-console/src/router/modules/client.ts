@@ -298,9 +298,11 @@ export default [
         meta: { title: title('工单详情'), requireAuth: true, hidden: true, activeMenu: '/client/tickets' },
       },
       {
+        // 历史入口 /client/ticket-conversations/:id 与 /client/tickets/:id 指向同一详情页，
+        // 保留单一路由并把旧地址永久重定向，避免「同一功能两个 URL」造成埋点/分享链接分裂。
         path: 'ticket-conversations/:id',
         name: 'ClientTicketConversation',
-        component: () => import('@/pages/client/ticket-detail/index.vue'),
+        redirect: (to) => ({ path: `/client/tickets/${String(to.params.id ?? '')}` }),
         meta: { title: title('工单交流'), requireAuth: true, hidden: true, activeMenu: '/client/tickets' },
       },
       {

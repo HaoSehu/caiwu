@@ -213,7 +213,7 @@
               </div>
             </t-card>
 
-            <t-card v-if="showPayActions && hasPayMethods" class="pay-work-card" :bordered="false">
+            <t-card v-if="showPayActions" class="pay-work-card" :bordered="false">
               <div class="pay-work-head">
                 <div>
                   <h2>选择支付方式</h2>
@@ -221,34 +221,40 @@
                 </div>
               </div>
 
-              <div class="pay-method-list">
+              <t-alert
+                v-if="!hasPayMethods"
+                theme="warning"
+                message="当前账单暂无可用支付方式，请联系客服开通后再完成支付。"
+              />
+
+              <div v-if="hasPayMethods" class="pay-method-list">
                 <button
-                  v-for="method in payMethods"
-                  :key="paymentOptionKey(method)"
+                  v-for="method in payMethodViews"
+                  :key="method.key"
                   type="button"
                   class="pay-method-card"
-                  :class="{ 'is-active': selectedPayMethod === paymentOptionKey(method) }"
+                  :class="{ 'is-active': method.isActive }"
                   :disabled="!canPay || paying"
-                  :aria-pressed="selectedPayMethod === paymentOptionKey(method)"
+                  :aria-pressed="method.isActive"
                   :aria-label="method.name"
                   :title="method.name"
-                  @click="selectPayMethod(paymentOptionKey(method))"
+                  @click="selectPayMethod(method.key)"
                 >
                   <span class="pay-method-card__icon">
-                    <component :is="paymentMethodIcon(method)" />
+                    <component :is="method.icon" />
                   </span>
                   <span class="pay-method-card__text">
-                    <strong>{{ method.name || method.label || '支付' }}</strong>
-                    <small>{{ method.label || method.key || '扫码支付' }}</small>
+                    <strong>{{ method.name }}</strong>
+                    <small>{{ method.subLabel }}</small>
                   </span>
                   <span class="pay-method-card__check">
-                    <check-circle-icon v-if="selectedPayMethod === paymentOptionKey(method)" />
+                    <check-circle-icon v-if="method.isActive" />
                     <span v-else />
                   </span>
                 </button>
               </div>
 
-              <div v-if="showBalanceDeductionOption" class="deduction-panel">
+              <div v-if="hasPayMethods && showBalanceDeductionOption" class="deduction-panel">
                 <div class="deduction-panel__head">
                   <strong>余额抵扣</strong>
                   <span>最多可抵扣 ¥{{ autoDeductionAmountText }}</span>
@@ -265,7 +271,7 @@
 
               <div class="pay-actions">
                 <t-button
-                  v-if="selectedPayMethod === 'balance'"
+                  v-if="hasPayMethods && selectedPayMethod === 'balance'"
                   theme="primary"
                   size="large"
                   :loading="paying"
@@ -275,7 +281,7 @@
                   支付
                 </t-button>
                 <t-button
-                  v-else-if="selectedPayMethod && selectedPayMethod !== 'free'"
+                  v-else-if="hasPayMethods && selectedPayMethod && selectedPayMethod !== 'free'"
                   theme="primary"
                   size="large"
                   :loading="paying"
@@ -288,7 +294,12 @@
                       : `生成${selectedPayMethodName}二维码`
                   }}
                 </t-button>
-                <t-button v-else-if="selectedPayMethod === 'free'" theme="primary" size="large" disabled>
+                <t-button
+                  v-else-if="hasPayMethods && selectedPayMethod === 'free'"
+                  theme="primary"
+                  size="large"
+                  disabled
+                >
                   零元账单无需操作
                 </t-button>
                 <t-button variant="outline" size="large" :disabled="paying || loading" @click="() => loadDetail()"
@@ -330,7 +341,7 @@
 </template>
 <script setup lang="ts">
 import { CheckCircleIcon, RefreshIcon } from 'tdesign-icons-vue-next';
-import { defineAsyncComponent } from 'vue';
+import { computed, defineAsyncComponent } from 'vue';
 
 const QrcodeVue = defineAsyncComponent(() => import('qrcode.vue'));
 
@@ -338,8 +349,9 @@ import { INVOICE_STATUS_MAP } from '@caiwu/shared/statusConfig';
 import DataState from '@caiwu/shared/user-v3/components/DataState.vue';
 import StatusTag from '@caiwu/shared/user-v3/components/StatusTag.vue';
 
-import { formatMoney, resolveInvoiceNo, useInvoiceDetail } from '@/domains/finance/useInvoices';
+import { resolveInvoiceNo, useInvoiceDetail } from '@/domains/finance/useInvoices';
 import { resolvePaymentStatusLabel } from '@/domains/finance/useRecords';
+import { formatMoney } from '@/utils/format';
 
 import {
   isNewPurchaseInvoice,
@@ -407,5 +419,23 @@ const {
   hasPriceDiscount,
   originalAmountText,
 } = useInvoiceDetailHelpers(detail);
+
+/**
+ * 支付方式视图模型：原先每个 method 在模板里被 paymentOptionKey 调用 5 次
+ * （key、选中态、aria-pressed、点击参数、勾选图标），换一次列表引用就要重算一遍。
+ */
+const payMethodViews = computed(() =>
+  payMethods.value.map((method) => {
+    const key = paymentOptionKey(method);
+
+    return {
+      key,
+      name: method.name || method.label || '支付',
+      subLabel: method.label || method.key || '扫码支付',
+      icon: paymentMethodIcon(method),
+      isActive: selectedPayMethod.value === key,
+    };
+  }),
+);
 </script>
 <style src="./index.less" lang="less" scoped></style>

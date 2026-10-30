@@ -470,7 +470,6 @@ export interface ReferralOverviewPayload {
   referral_code?: string;
   register_path?: string;
   referral_link?: string;
-  available_coupons?: number;
   reward_rate?: number | string;
   renewal_reward_rate?: number | string;
   reward_freeze_days?: number | string;
@@ -1104,6 +1103,8 @@ export interface InvoiceRecord {
   payments?: PaymentRecord[];
   pay_methods?: InvoicePaymentMethod[];
   payment_security?: InvoicePaymentSecurity | null;
+  /** 列表接口下发的只读标记：支付窗口已关闭（与详情页 payment_security.can_pay 同一判据） */
+  payment_window_expired?: boolean;
   summary?: InvoiceSummaryInfo | null;
   config_snapshot?: Record<string, unknown> | null;
   config_pricing_snapshot?: Record<string, unknown> | null;
@@ -1222,6 +1223,8 @@ export interface OrderInvoiceInfo {
   paid_at?: string;
   due_date?: string;
   created_at?: string;
+  /** 后端按统一判据下发的支付窗口状态：true 表示窗口已关闭，订单页不应再给出支付入口 */
+  payment_window_expired?: boolean;
   payments?: OrderPaymentInfo[];
   [key: string]: unknown;
 }

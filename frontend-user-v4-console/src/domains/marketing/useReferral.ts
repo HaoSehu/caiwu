@@ -1,6 +1,6 @@
 import { ACCOUNT_TRANSACTION_EVENT_MAP, getStatusLabel } from '@caiwu/shared/statusConfig';
 import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onActivated, onMounted, reactive, ref } from 'vue';
 
 import { clientAuthApi } from '@/api/auth';
 import clientApi from '@/api/client';
@@ -293,9 +293,23 @@ export function useReferral() {
   }
 
   async function submitWithdrawal() {
+    if (withdrawSubmitting.value) return;
+
     const amount = Number(withdrawForm.amount || 0);
     if (!Number.isFinite(amount) || amount <= 0) {
       MessagePlugin.warning('请输入提现金额');
+      return;
+    }
+    // 与后端 ReferralService::createWithdrawal 的前置校验对齐：先在前端拦住，
+    // 避免用户填完数字再吃一次 422，两处口径（最低额、可提现余额）保持一致。
+    const minAmount = Number(overview.withdraw_min_amount || 20);
+    if (amount < minAmount) {
+      MessagePlugin.warning(`最低提现金额为 ${money(minAmount)} 元`);
+      return;
+    }
+    const available = Number(overview.referral_available_amount || 0);
+    if (amount > available) {
+      MessagePlugin.warning('提现金额不能超过可提现奖励');
       return;
     }
 
@@ -317,10 +331,24 @@ export function useReferral() {
     }
   }
 
-  // 注：keep-alive 复用重拉（onActivated）已移除——当前工程 keep-alive include 按组件名匹配，
-  // 页面无组件名注入实际不会被缓存（2026-10-11 裁决 A）；每次进入页面由 onMounted 全量拉取兜底。
+  // 2026-10-11 的旧结论「include 按组件名匹配、页面实际不会被缓存」已经失效：
+  // Content.vue 现在按 route.name 做 key，页面是真的会被缓存的，onMounted 一生只跑一次。
+  function loadReferralPage() {
+    return Promise.all([loadAll(), loadAlipayAccount()]);
+  }
+
   onMounted(() => {
-    void Promise.all([loadAll(), loadAlipayAccount()]);
+    void loadReferralPage();
+  });
+
+  // keep-alive 切回来时重拉，只在非首次激活时触发，避免刚挂载完紧跟着再来一次同样的请求。
+  let activatedOnce = false;
+  onActivated(() => {
+    if (!activatedOnce) {
+      activatedOnce = true;
+      return;
+    }
+    void loadReferralPage();
   });
 
   return {

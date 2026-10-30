@@ -126,7 +126,7 @@ export const useUserStore = defineStore('user', {
           await clientAuthApi.logout();
         }
       } catch {
-        // Logout must always clear the local client session even if the API is unavailable.
+        // 退出登录必须清除本地客户端会话，即使接口不可用。
       } finally {
         this.clearLocalSession();
       }

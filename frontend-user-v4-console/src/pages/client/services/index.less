@@ -5,6 +5,14 @@
   // padding 由 Starter 布局层统一提供
 }
 
+.client-page-heading {
+  h1 {
+    margin: 0;
+    color: var(--td-text-color-primary);
+    font: var(--td-font-title-large);
+  }
+}
+
 .service-filter-card {
   background: var(--td-bg-color-container);
   border: thin solid var(--td-component-stroke);
@@ -42,7 +50,7 @@
   width: 100%;
   min-height: 11.5rem;
   padding: 1rem 1.125rem 0.875rem;
-  border: 0.0625rem solid var(--td-component-stroke);
+  border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-large);
   background: var(--td-bg-color-container);
   box-shadow: var(--td-shadow-1);
@@ -62,45 +70,37 @@
   }
 }
 
+// S-05：卡片角标与表格徽标是同一个语义（已开启自动续费），原先一套是 1.75rem 的
+// clip-path 三角旗、另一套是 1.125rem 的圆角小方块，同页面两套视觉。统一成「绿底白字小标签」：
+// 高度与圆角走同一组令牌，只有定位不同（卡片贴左下角，表格 inline）。
 .service-auto-renew-badge {
   position: absolute;
   left: 0;
   bottom: 0;
-  width: 1.75rem;
-  height: 1.75rem;
-  z-index: 1;
-  pointer-events: none;
-}
-
-.service-auto-renew-badge::before {
-  content: '';
-  position: absolute;
-  inset: 0;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--td-comp-margin-xs);
+  height: var(--td-comp-size-xxs);
   background: var(--td-success-color);
-  clip-path: polygon(0 0, 100% 100%, 0 100%);
-}
-
-.service-auto-renew-badge__text {
-  position: absolute;
-  left: 0.125rem;
-  bottom: 0.125rem;
+  border-radius: 0 var(--td-radius-small) 0 0;
   color: var(--td-text-color-anti);
-  font-size: var(--td-font-size-body-small);
+  font: var(--td-font-body-small);
   font-weight: 700;
   line-height: 1;
   white-space: nowrap;
   z-index: 1;
+  pointer-events: none;
 }
 
 .service-table-auto-renew {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.125rem;
-  height: 1.125rem;
+  width: var(--td-comp-size-xxs);
+  height: var(--td-comp-size-xxs);
   background: var(--td-success-color);
   color: var(--td-text-color-anti);
-  font-size: var(--td-font-size-body-small);
+  font: var(--td-font-body-small);
   font-weight: 700;
   line-height: 1;
   border-radius: var(--td-radius-small);
@@ -148,18 +148,20 @@
 .service-system-loader__core {
   position: absolute;
   inset: 0;
-  border-radius: 50%;
+  // C-24：圆形一律走 --td-radius-circle
+  border-radius: var(--td-radius-circle);
 }
 
 .service-system-loader__ring {
-  border: 0.1875rem solid var(--td-error-color-1);
-  border-top-color: var(--td-error-color);
+  // 进行中用品牌色：错误色会让人误以为开通失败
+  border: 0.1875rem solid var(--td-brand-color-1);
+  border-top-color: var(--td-brand-color);
   animation: service-loader-spin 1.2s linear infinite;
 }
 
 .service-system-loader__core {
   inset: 0.4375rem;
-  background: var(--td-error-color-2);
+  background: var(--td-brand-color-2);
   border-radius: var(--td-radius-circle);
 }
 
@@ -303,21 +305,31 @@
   color: var(--td-brand-color);
   font-size: var(--td-font-size-body-small);
   font-weight: 600;
-  padding: 0 0.6875rem;
+  padding: 0 var(--td-comp-paddingLR-s);
   height: 1.875rem;
   border-radius: var(--td-radius-large);
+
+  // 自绘按钮不在 theme.css 的 .t-button 触控基线覆盖范围内，补足可点区域
+  @media (max-width: @screen-mobile-max) {
+    min-height: var(--td-comp-size-xxl);
+  }
 }
 
 .service-action-more {
-  border: 0.0625rem solid var(--td-component-border);
+  border: thin solid var(--td-component-border);
   background: var(--td-bg-color-container);
   color: var(--td-text-color-secondary);
   font-size: var(--td-font-size-body-small);
   font-weight: 600;
   min-width: 3.25rem;
   height: 1.875rem;
-  padding: 0 0.6875rem;
+  padding: 0 var(--td-comp-paddingLR-s);
   border-radius: var(--td-radius-large);
+
+  // 同上：移动端补足触控基线
+  @media (max-width: @screen-mobile-max) {
+    min-height: var(--td-comp-size-xxl);
+  }
 }
 
 .service-spec-line {
@@ -352,7 +364,7 @@
   gap: 0.875rem;
   margin-top: auto;
   padding-top: 0.625rem;
-  border-top: 0.0625rem solid var(--td-component-stroke);
+  border-top: thin solid var(--td-component-stroke);
   flex-wrap: wrap;
 }
 
@@ -377,6 +389,12 @@
   align-items: center;
   min-height: 2rem;
   padding: 0;
+
+  // IP 复制按钮在移动端同样要有可点区域
+  @media (max-width: @screen-mobile-max) {
+    min-height: var(--td-comp-size-xxl);
+  }
+
   border: none;
   background: transparent;
   color: var(--td-text-color-primary);
@@ -438,7 +456,7 @@
   width: 0.25rem;
   height: 0.25rem;
   background: var(--td-component-stroke);
-  border-radius: 50%;
+  border-radius: var(--td-radius-circle);
 }
 
 .service-table-specs {
@@ -509,6 +527,19 @@
   }
 }
 
+// S-03：窄屏默认隐藏（桌面端筛选条始终可见，不需要另设复位入口）。
+.service-filter-reset {
+  display: none;
+}
+
+// S-04：卡片最小宽度 24rem 在 992–1200 这一段只排得下一列（侧栏 232 + 页面留白之后可用宽度
+// 撑不到两个 24rem 加间距），页面会出现一整段单列的长卡片。这一段降到 18rem，两列能放下。
+@media (max-width: @screen-lg-rem) {
+  .service-card-grid {
+    grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+  }
+}
+
 @media (max-width: @screen-md-rem) {
   .service-card-grid {
     grid-template-columns: minmax(0, 1fr);
@@ -520,14 +551,6 @@
 }
 
 @media (max-width: @screen-mobile-max) {
-  .client-services {
-    padding: var(--td-comp-paddingTB-l) var(--td-comp-paddingLR-l);
-  }
-
-  .service-filter-card :deep(.t-card__body) {
-    padding: var(--td-comp-paddingTB-l) var(--td-comp-paddingLR-l);
-  }
-
   .service-filter-bar {
     grid-template-columns: repeat(2, minmax(0, 1fr));
 
@@ -537,12 +560,14 @@
     }
   }
 
-  .service-filter-actions {
+  // 视图切换在手机端无意义（只有卡片视图），但复位入口要有：筛选卡片被压成两列后，
+  // 用户改完下拉很难意识到页面上方还有一处「清空筛选」的空态出口。
+  .service-view-toggle {
     display: none;
   }
 
-  .service-view-toggle {
-    display: none;
+  .service-filter-reset {
+    display: inline-flex;
   }
 
   .service-row-card {

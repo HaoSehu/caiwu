@@ -67,17 +67,17 @@
               <template #empty>
                 <t-empty description="暂无被邀请用户，复制上方推广链接邀请好友" />
               </template>
-              <template #user="{ row }">{{ row.display_name || row.nickname || row.email || '--' }}</template>
-              <template #referred_at="{ row }">{{ row.referred_at || row.created_at || '--' }}</template>
+              <template #user="{ row }">{{ directVm(row).user }}</template>
+              <template #referred_at="{ row }">{{ directVm(row).referredAt }}</template>
               <template #consumption="{ row }"
-                ><span class="referral-money">¥{{ money(row.customer_consumption) }}</span></template
+                ><span class="referral-money">¥{{ directVm(row).consumption }}</span></template
               >
               <template #earnings="{ row }"
-                ><span class="referral-money">¥{{ money(row.my_earnings) }}</span></template
+                ><span class="referral-money">¥{{ directVm(row).earnings }}</span></template
               >
             </t-table>
           </t-tab-panel>
-          <t-tab-panel value="rewards" label="奖励明细">
+          <t-tab-panel value="rewards" label="奖励明细" lazy>
             <t-table
               row-key="id"
               :data="rewards"
@@ -88,29 +88,21 @@
               <template #empty>
                 <t-empty description="暂无奖励记录" />
               </template>
-              <template #user="{ row }">{{
-                row.referred_user?.display_name || row.referred_user?.nickname || row.referred_user?.email || '--'
-              }}</template>
-              <template #product="{ row }">{{
-                row.invoice?.product_display_name || row.product?.display_name || row.product?.name || '--'
-              }}</template>
-              <template #order_type="{ row }">{{ row.order_type || '--' }}</template>
+              <template #user="{ row }">{{ rewardVm(row).user }}</template>
+              <template #product="{ row }">{{ rewardVm(row).product }}</template>
+              <template #order_type="{ row }">{{ rewardVm(row).orderType }}</template>
               <template #order_amount="{ row }"
-                ><span class="referral-money">¥{{ money(row.order_amount) }}</span></template
+                ><span class="referral-money">¥{{ rewardVm(row).orderAmount }}</span></template
               >
               <template #amount="{ row }"
-                ><span class="referral-money"
-                  >¥{{ money(row.reward_amount) }}({{ Number(row.reward_rate || 0) }}%)</span
-                ></template
+                ><span class="referral-money">¥{{ rewardVm(row).amount }}</span></template
               >
               <template #status="{ row }">
-                <t-tag :theme="rewardStatus(row.status).theme" variant="light">{{
-                  rewardStatus(row.status).label
-                }}</t-tag>
+                <t-tag :theme="rewardVm(row).statusTheme" variant="light">{{ rewardVm(row).statusLabel }}</t-tag>
               </template>
             </t-table>
           </t-tab-panel>
-          <t-tab-panel value="withdrawals" label="提现记录">
+          <t-tab-panel value="withdrawals" label="提现记录" lazy>
             <t-table
               row-key="id"
               :data="withdrawals"
@@ -121,19 +113,19 @@
               <template #empty>
                 <t-empty description="暂无提现记录" />
               </template>
-              <template #method="{ row }">{{ row.method === 'balance' ? '转余额' : '支付宝' }}</template>
+              <template #method="{ row }">{{ withdrawalVm(row).method }}</template>
               <template #amount="{ row }"
-                ><span class="referral-money">¥{{ money(row.amount) }}</span></template
+                ><span class="referral-money">¥{{ withdrawalVm(row).amount }}</span></template
               >
-              <template #account="{ row }">{{ row.account_name || '--' }} {{ row.account_no || '' }}</template>
+              <template #account="{ row }">{{ withdrawalVm(row).account }}</template>
               <template #status="{ row }">
-                <t-tag :theme="withdrawStatus(row.status).theme" variant="light">{{
-                  withdrawStatus(row.status).label
+                <t-tag :theme="withdrawalVm(row).statusTheme" variant="light">{{
+                  withdrawalVm(row).statusLabel
                 }}</t-tag>
               </template>
             </t-table>
           </t-tab-panel>
-          <t-tab-panel value="logs" label="账户流水">
+          <t-tab-panel value="logs" label="账户流水" lazy>
             <t-table
               row-key="id"
               :data="accountLogs"
@@ -144,9 +136,9 @@
               <template #empty>
                 <t-empty description="暂无账户流水" />
               </template>
-              <template #event_type="{ row }">{{ accountEventLabel(row.event_type) }}</template>
+              <template #event_type="{ row }">{{ logVm(row).eventLabel }}</template>
               <template #amount="{ row }"
-                ><span class="referral-money">¥{{ money(row.amount) }}</span></template
+                ><span class="referral-money">¥{{ logVm(row).amount }}</span></template
               >
             </t-table>
           </t-tab-panel>
@@ -179,8 +171,10 @@
 import DataState from '@caiwu/shared/user-v3/components/DataState.vue';
 import { LinkIcon } from 'tdesign-icons-vue-next';
 import type { PrimaryTableCol } from 'tdesign-vue-next';
+import { computed } from 'vue';
 
 import { accountEventLabel, money, rewardStatus, useReferral, withdrawStatus } from '@/domains/marketing/useReferral';
+import type { ReferralUserBrief } from '@/types/client';
 
 const {
   loading,
@@ -248,6 +242,118 @@ const logColumns: PrimaryTableCol[] = [
   { colKey: 'amount', title: '变动金额', width: '9rem', align: 'right' },
   { colKey: 'remark', title: '说明', minWidth: '14rem' },
 ];
+
+/*
+ * 四张表的行视图模型：原先每个金额/文案槽都在模板里重复调 money()、
+ * accountEventLabel()、rewardStatus() 等纯函数，同一行一次渲染要算好几遍。
+ * 这里按行 id 预算一次，模板只做取值（PR-22）。
+ */
+interface RewardRowViewModel {
+  user: string;
+  product: string;
+  orderType: string;
+  orderAmount: string;
+  amount: string;
+  statusLabel: string;
+  statusTheme: string;
+}
+interface DirectRowViewModel {
+  user: string;
+  referredAt: string;
+  consumption: string;
+  earnings: string;
+}
+interface WithdrawalRowViewModel {
+  method: string;
+  amount: string;
+  account: string;
+  statusLabel: string;
+  statusTheme: string;
+}
+interface LogRowViewModel {
+  eventLabel: string;
+  amount: string;
+}
+const rewardRowViewModels = computed(() => {
+  const map = new Map<number, RewardRowViewModel>();
+  for (const row of rewards.value) {
+    map.set(row.id, {
+      user: row.referred_user?.display_name || row.referred_user?.nickname || row.referred_user?.email || '--',
+      product: row.invoice?.product_display_name || row.product?.display_name || row.product?.name || '--',
+      orderType: row.order_type || '--',
+      orderAmount: money(row.order_amount),
+      amount: `${money(row.reward_amount)}(${Number(row.reward_rate || 0)}%)`,
+      statusLabel: rewardStatus(row.status).label,
+      statusTheme: rewardStatus(row.status).theme,
+    });
+  }
+  return map;
+});
+/** 被邀请人行的扩展字段：后端在列表里随行下发消费额与收益，类型定义未收录，这里显式声明。 */
+type DirectReferralRow = ReferralUserBrief & {
+  referred_at?: string;
+  customer_consumption?: number | string;
+  my_earnings?: number | string;
+};
+// 用行对象本身做键，而不是 id：接口理论上必带 id，但一旦某行为空则所有无 id 的行
+// 都会落到同一个兜底键上互相覆盖，表格里几条不同的记录会显示成同一份文案。
+const directRowViewModels = computed(() => {
+  const map = new Map<DirectReferralRow, DirectRowViewModel>();
+  for (const row of directReferrals.value as DirectReferralRow[]) {
+    map.set(row, {
+      user: row.display_name || row.nickname || row.email || '--',
+      referredAt: row.referred_at || row.created_at || '--',
+      consumption: money(row.customer_consumption),
+      earnings: money(row.my_earnings),
+    });
+  }
+  return map;
+});
+const withdrawalRowViewModels = computed(() => {
+  const map = new Map<number, WithdrawalRowViewModel>();
+  for (const row of withdrawals.value) {
+    map.set(row.id, {
+      method: row.method === 'balance' ? '转余额' : '支付宝',
+      amount: money(row.amount),
+      account: `${row.account_name || '--'} ${row.account_no || ''}`,
+      statusLabel: withdrawStatus(row.status).label,
+      statusTheme: withdrawStatus(row.status).theme,
+    });
+  }
+  return map;
+});
+const logRowViewModels = computed(() => {
+  const map = new Map<number, LogRowViewModel>();
+  for (const row of accountLogs.value) {
+    map.set(row.id, {
+      eventLabel: accountEventLabel(row.event_type),
+      amount: money(row.amount),
+    });
+  }
+  return map;
+});
+const EMPTY_REWARD_ROW: RewardRowViewModel = {
+  user: '--',
+  product: '--',
+  orderType: '--',
+  orderAmount: '--',
+  amount: '--',
+  statusLabel: '--',
+  statusTheme: 'default',
+};
+const EMPTY_DIRECT_ROW: DirectRowViewModel = { user: '--', referredAt: '--', consumption: '--', earnings: '--' };
+const EMPTY_WITHDRAWAL_ROW: WithdrawalRowViewModel = {
+  method: '--',
+  amount: '--',
+  account: '--',
+  statusLabel: '--',
+  statusTheme: 'default',
+};
+const EMPTY_LOG_ROW: LogRowViewModel = { eventLabel: '--', amount: '--' };
+const rewardVm = (row: { id: number }) => rewardRowViewModels.value.get(row.id) ?? EMPTY_REWARD_ROW;
+const directVm = (row: DirectReferralRow) => directRowViewModels.value.get(row) ?? EMPTY_DIRECT_ROW;
+const withdrawalVm = (row: { id: number }) => withdrawalRowViewModels.value.get(row.id) ?? EMPTY_WITHDRAWAL_ROW;
+const logVm = (row: { id: number }) => logRowViewModels.value.get(row.id) ?? EMPTY_LOG_ROW;
 </script>
 <style scoped lang="less">
 /* 金额列等宽数字（DESIGN.md §4.3：金额列不截断 + tabular-nums，右对齐由列定义 align 承担） */
@@ -336,12 +442,7 @@ const logColumns: PrimaryTableCol[] = [
 }
 
 @media (max-width: @screen-mobile-max) {
-  .referral-stats {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: @screen-mobile-max) {
+  // 原先两个同断点块连写，前者被后者完全覆盖；合并为单一规则。
   .referral-stats,
   .referral-link-row {
     grid-template-columns: 1fr;

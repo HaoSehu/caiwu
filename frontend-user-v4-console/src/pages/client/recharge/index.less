@@ -170,10 +170,13 @@
     background-color @anim-duration-base @anim-time-fn-easing,
     box-shadow @anim-duration-base @anim-time-fn-easing;
 
-  &:hover,
+  &:hover {
+    border-color: var(--td-brand-color);
+  }
+
+  // 焦点描边交给 reset.less 的全局 :focus-visible，此处不得用 outline: 0 抹掉键盘可见性
   &:focus-visible {
     border-color: var(--td-brand-color);
-    outline: 0;
   }
 
   &.is-active {

@@ -13,7 +13,11 @@
           @enter="handleSearch(activeTab)"
           @clear="handleSearch(activeTab)"
         >
-          <template #suffixIcon><search-icon /></template>
+          <!-- O-02：suffixIcon 槽在 clearable 且有内容时会被 TDesign 换成清除图标，
+                放大镜随鼠标悬停消失、点下去变成清空。改用 #suffix 槽放可点按钮，位置稳定。 -->
+          <template #suffix>
+            <search-field-button @search="handleSearch(activeTab)" />
+          </template>
         </t-input>
         <t-select v-model="currentState.status" clearable placeholder="全部状态" @change="handleSearch(activeTab)">
           <t-option v-for="item in currentStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
@@ -40,8 +44,18 @@
             <t-button theme="primary" @click="switchTab('plaza')">去券广场领取</t-button>
           </template>
           <div class="coupon-grid">
-            <article v-for="item in ownedState.list" :key="item.id" class="coupon-item">
-              <button class="coupon-item__detail" type="button" @click="openCouponDetail(item)">详情</button>
+            <article
+              v-for="item in ownedState.list"
+              :key="item.id"
+              class="coupon-item coupon-item--clickable"
+              role="link"
+              tabindex="0"
+              :aria-label="`查看优惠券 ${item.name || '优惠券'} 详情`"
+              @click="openCouponDetail(item)"
+              @keydown.enter.self.prevent="openCouponDetail(item)"
+              @keydown.space.self.prevent="openCouponDetail(item)"
+            >
+              <button class="coupon-item__detail" type="button" @click.stop="openCouponDetail(item)">详情</button>
               <div class="coupon-item__head">
                 <div class="coupon-item__value">
                   <span>{{ resolveDiscountTypeLabel(item.discount_type) }}</span>
@@ -94,9 +108,26 @@
           description="当前暂无可领取的优惠券"
           @retry="loadList('plaza')"
         >
+          <!-- 空态必须有出口：券广场空时原先只有一句描述，用户既不能回「我的优惠券」也不知道下一步做什么。 -->
+          <template #empty-action>
+            <div class="coupon-empty-actions">
+              <t-button theme="primary" @click="switchTab('owned')">查看我的优惠券</t-button>
+              <t-button variant="outline" @click="router.push('/client/dashboard')">回到控制台</t-button>
+            </div>
+          </template>
           <div class="coupon-grid">
-            <article v-for="item in plazaState.list" :key="item.id" class="coupon-item">
-              <button class="coupon-item__detail" type="button" @click="openCouponDetail(item)">详情</button>
+            <article
+              v-for="item in plazaState.list"
+              :key="item.id"
+              class="coupon-item coupon-item--clickable"
+              role="link"
+              tabindex="0"
+              :aria-label="`查看优惠券 ${item.name || '优惠券'} 详情`"
+              @click="openCouponDetail(item)"
+              @keydown.enter.self.prevent="openCouponDetail(item)"
+              @keydown.space.self.prevent="openCouponDetail(item)"
+            >
+              <button class="coupon-item__detail" type="button" @click.stop="openCouponDetail(item)">详情</button>
               <div class="coupon-item__head">
                 <div class="coupon-item__value">
                   <span>{{ resolveDiscountTypeLabel(item.discount_type) }}</span>
@@ -125,7 +156,7 @@
                   theme="primary"
                   :disabled="!item.can_claim"
                   :loading="claimingId === item.id"
-                  @click="claimCoupon(item.id)"
+                  @click.stop="claimCoupon(item.id)"
                 >
                   {{ item.can_claim ? '领取' : item.status_label || '不可领' }}
                 </t-button>
@@ -195,9 +226,10 @@
 </template>
 <script setup lang="ts">
 import DataState from '@caiwu/shared/user-v3/components/DataState.vue';
-import { SearchIcon } from 'tdesign-icons-vue-next';
 import { computed } from 'vue';
+import { useRouter } from 'vue-router';
 
+import SearchFieldButton from '@/components/common/SearchFieldButton.vue';
 import {
   resolveDiscountAmountText,
   resolveDiscountTypeLabel,
@@ -207,6 +239,8 @@ import {
   useCoupons,
 } from '@/domains/marketing/useCoupons';
 import type { CouponProductScopeItem } from '@/types/client';
+
+const router = useRouter();
 
 const {
   activeTab,
@@ -348,6 +382,13 @@ function mergeCouponProductHierarchy(data: CouponHierarchyItem[]): MergedCouponH
   min-height: 14rem;
 }
 
+.coupon-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--td-comp-margin-s);
+}
+
 .coupon-tabs {
   display: flex;
   flex-wrap: wrap;
@@ -373,6 +414,19 @@ function mergeCouponProductHierarchy(data: CouponHierarchyItem[]): MergedCouponH
   box-shadow: var(--td-shadow-1);
 }
 
+// P-01：券卡的「详情」按钮原先只有文字本身可点（约 0.8rem 高），鼠标落在卡片别处毫无反应。
+// 整卡可点时内嵌的「详情 / 领取」都必须 .stop，否则一次点击会触发两个动作。
+.coupon-item--clickable {
+  cursor: pointer;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+
+  &:hover {
+    border-color: var(--td-brand-color);
+  }
+}
+
 .coupon-item__detail {
   position: absolute;
   top: var(--td-comp-margin-s);
@@ -382,6 +436,20 @@ function mergeCouponProductHierarchy(data: CouponHierarchyItem[]): MergedCouponH
   border: 0;
   cursor: pointer;
   font: var(--td-font-body-small);
+  // 原先只有文字本身可点（约 13 高），用伪元素把热区撑到触控基线，视觉不变
+  padding: 0;
+  border-radius: var(--td-radius-small);
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: -0.75rem -0.5rem;
+  }
+
+  &:focus-visible {
+    outline: 0.125rem solid var(--td-brand-color);
+    outline-offset: 0.125rem;
+  }
 }
 
 .coupon-item__head,
@@ -510,7 +578,7 @@ function mergeCouponProductHierarchy(data: CouponHierarchyItem[]): MergedCouponH
   grid-template-columns: minmax(7rem, 9rem) minmax(0, 1fr);
   overflow: hidden;
   min-height: 3rem;
-  border: 0.0625rem solid var(--td-component-border);
+  border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
 
   span,
@@ -525,7 +593,7 @@ function mergeCouponProductHierarchy(data: CouponHierarchyItem[]): MergedCouponH
   span {
     color: var(--td-text-color-secondary);
     background: var(--td-bg-color-component);
-    border-right: 0.0625rem solid var(--td-component-border);
+    border-right: thin solid var(--td-component-stroke);
   }
 
   strong {
@@ -536,7 +604,7 @@ function mergeCouponProductHierarchy(data: CouponHierarchyItem[]): MergedCouponH
 
 .coupon-hierarchy-sheet {
   overflow: hidden;
-  border: 0.0625rem solid var(--td-component-border);
+  border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
   background: var(--td-bg-color-container);
 }
@@ -548,8 +616,8 @@ function mergeCouponProductHierarchy(data: CouponHierarchyItem[]): MergedCouponH
 
   td {
     padding: var(--td-comp-paddingTB-s) var(--td-comp-paddingLR-m);
-    border-right: 0.0625rem solid var(--td-component-border);
-    border-bottom: 0.0625rem solid var(--td-component-border);
+    border-right: thin solid var(--td-component-stroke);
+    border-bottom: thin solid var(--td-component-stroke);
     color: var(--td-text-color-primary);
     font: var(--td-font-body-small);
     line-height: 1.5;
@@ -574,14 +642,6 @@ function mergeCouponProductHierarchy(data: CouponHierarchyItem[]): MergedCouponH
 }
 
 @media (max-width: @screen-mobile-max) {
-  .coupon-page {
-    padding: var(--td-comp-paddingTB-l) var(--td-comp-paddingLR-l);
-  }
-
-  .coupon-card-shell :deep(.t-card__body) {
-    padding: var(--td-comp-paddingTB-l) var(--td-comp-paddingLR-l);
-  }
-
   .coupon-filter-bar,
   .coupon-grid {
     grid-template-columns: 1fr;

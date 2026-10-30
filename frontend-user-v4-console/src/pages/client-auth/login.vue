@@ -12,6 +12,10 @@
       <t-tab-panel value="code" label="验证码登录" />
     </t-tabs>
 
+    <!-- A-11：校验结果的读屏通道。节点必须常驻（v-if 挂载的节点不会被播报），
+         文本只跟随当前可见的那套表单，避免两套错误同时被读出来。 -->
+    <p class="client-auth-live" role="status" aria-live="polite">{{ liveText }}</p>
+
     <!-- 密码登录 -->
     <t-form
       v-if="loginMode === 'password'"
@@ -23,8 +27,12 @@
       @submit="handleLogin"
     >
       <t-form-item name="account">
-        <div class="client-auth-field">
-          <label class="client-auth-label is-required" for="login-account">手机号 / 邮箱</label>
+        <!-- A-09：t-input 只把传入的属性落到 .t-input__wrap 这个 div 上（input.mjs 的
+             inputAttrs 白名单里没有 id / aria-*），原生 input 拿不到 id，所以 <label for>
+             永远指不到控件，点标签不聚焦、读屏也不会把标签念给输入框。改成用 label 元素
+             把控件包起来靠隐式关联，标签自身降级为 span。 -->
+        <label class="client-auth-field">
+          <span class="client-auth-label is-required">手机号 / 邮箱<span class="sr-only">（必填）</span></span>
           <t-input
             id="login-account"
             v-model="form.account"
@@ -36,12 +44,12 @@
           >
             <template #prefix-icon><user-icon /></template>
           </t-input>
-        </div>
+        </label>
       </t-form-item>
 
       <t-form-item name="password">
-        <div class="client-auth-field client-auth-field--password">
-          <label class="client-auth-label is-required" for="login-password">密码</label>
+        <label class="client-auth-field client-auth-field--password">
+          <span class="client-auth-label is-required">密码<span class="sr-only">（必填）</span></span>
           <t-input
             id="login-password"
             v-model="form.password"
@@ -57,14 +65,21 @@
               <password-toggle v-model="showPassword" />
             </template>
           </t-input>
-        </div>
+        </label>
       </t-form-item>
 
       <div class="client-auth-form__links">
         <router-link to="/client/forgot-password">忘记密码？</router-link>
       </div>
 
-      <t-button block size="large" theme="primary" :loading="loading || captchaLoading" @click="submitForm"
+      <t-button
+        class="client-auth-submit"
+        block
+        size="large"
+        theme="primary"
+        :loading="loading || captchaLoading"
+        :disabled="loading || captchaLoading"
+        @click="submitForm"
         >登录</t-button
       >
     </t-form>
@@ -80,8 +95,8 @@
       @submit="handleCodeLogin"
     >
       <t-form-item name="account">
-        <div class="client-auth-field">
-          <label class="client-auth-label is-required" for="login-code-account">手机号 / 邮箱</label>
+        <label class="client-auth-field">
+          <span class="client-auth-label is-required">手机号 / 邮箱<span class="sr-only">（必填）</span></span>
           <t-input
             id="login-code-account"
             v-model="codeForm.account"
@@ -92,14 +107,15 @@
           >
             <template #prefix-icon><user-icon /></template>
           </t-input>
-        </div>
+        </label>
       </t-form-item>
 
       <t-form-item name="code">
-        <div class="client-auth-field">
-          <label class="client-auth-label is-required" for="login-code">验证码</label>
+        <label class="client-auth-field">
+          <span class="client-auth-label is-required">验证码<span class="sr-only">（必填）</span></span>
           <div class="client-auth-code-row">
             <t-input
+              id="login-code"
               v-model="codeForm.code"
               size="large"
               maxlength="6"
@@ -115,7 +131,7 @@
               {{ countdown > 0 ? `${countdown}s` : '发送验证码' }}
             </t-button>
           </div>
-        </div>
+        </label>
       </t-form-item>
 
       <t-button
@@ -124,6 +140,7 @@
         size="large"
         theme="primary"
         :loading="codeLoading"
+        :disabled="codeLoading || sendingCode"
         @click="submitCodeForm"
         >登录</t-button
       >
@@ -251,6 +268,7 @@ async function performLogin(captcha: unknown = null) {
 }
 
 async function submitForm() {
+  if (loading.value || captchaLoading.value) return;
   if (!validateForm()) {
     return;
   }
@@ -258,11 +276,18 @@ async function submitForm() {
 }
 
 async function handleLogin(ctx: SubmitContext) {
+  if (loading.value || captchaLoading.value) return;
   if (ctx.validateResult !== true || !validateForm()) return;
   await runLogin();
 }
 
+// A-11：校验失败的读屏播报文案。视觉上的红字由 t-form 渲染，这里只补无障碍通道。
+const formLiveText = ref('');
+const codeLiveText = ref('');
+const liveText = computed(() => (loginMode.value === 'password' ? formLiveText.value : codeLiveText.value));
+
 function setFormErrors(errors: Partial<Record<keyof LoginForm, string>>) {
+  formLiveText.value = Object.values(errors).filter(Boolean).join('；');
   const validateMessage: FormValidateMessage<LoginForm> = {
     account: errors.account ? [{ type: 'error', message: errors.account }] : [],
     password: errors.password ? [{ type: 'error', message: errors.password }] : [],
@@ -284,11 +309,13 @@ function validateForm() {
     return false;
   }
 
+  formLiveText.value = '';
   formRef.value?.clearValidate();
   return true;
 }
 
 async function runLogin() {
+  if (loading.value) return;
   // 登录提交期间屏蔽并发 401 弹跳，避免成功跳转被旧请求失效竞态打断
   holdLoginRedirect();
   loading.value = true;
@@ -350,11 +377,16 @@ function startCountdown() {
     countdown.value -= 1;
     if (countdown.value <= 0) {
       clearTimer();
+      // A-17：复位为 0。register / forgot-password 都这么做，只有这里漏了，
+      // 计时器停在被减到的负数上（-1），按钮文案虽仍靠 countdown > 0 兜住，
+      // 但两页对同一状态给出不同值，属实现漂移。
+      countdown.value = 0;
     }
   }, 1000);
 }
 
 async function handleSendCode() {
+  if (sendingCode.value || countdown.value > 0) return;
   const accountPayload = buildAccountPayload(codeForm.account);
   if (!accountPayload) {
     MessagePlugin.warning('请先输入正确的手机号或邮箱');
@@ -384,6 +416,7 @@ async function handleSendCode() {
 }
 
 async function handleCodeLogin(ctx: SubmitContext) {
+  if (codeLoading.value) return;
   if (ctx.validateResult !== true || !validateCodeForm()) return;
   await runCodeLogin();
 }
@@ -398,6 +431,7 @@ function validateCodeForm() {
   }
 
   if (Object.keys(errors).length > 0) {
+    codeLiveText.value = Object.values(errors).filter(Boolean).join('；');
     const validateMessage: FormValidateMessage<CodeLoginForm> = {
       account: errors.account ? [{ type: 'error', message: errors.account }] : [],
       code: errors.code ? [{ type: 'error', message: errors.code }] : [],
@@ -406,11 +440,13 @@ function validateCodeForm() {
     return false;
   }
 
+  codeLiveText.value = '';
   codeFormRef.value?.clearValidate();
   return true;
 }
 
 async function runCodeLogin() {
+  if (codeLoading.value) return;
   holdLoginRedirect();
   codeLoading.value = true;
   try {
@@ -432,13 +468,17 @@ async function runCodeLogin() {
 }
 
 async function submitCodeForm() {
+  if (codeLoading.value) return;
   if (!validateCodeForm()) return;
   await runCodeLogin();
 }
 
 onMounted(() => {
   if (typeof route.query.account === 'string') {
+    // A-18：两套登录表单共用同一个入口参数。只回填密码表单时，
+    // 从带 account 的链接进来再切「验证码登录」，账号栏是空的要重输一遍。
     form.account = route.query.account;
+    codeForm.account = route.query.account;
   }
 });
 
@@ -449,30 +489,18 @@ onBeforeUnmount(() => {
 <style scoped lang="less">
 @import './shared-auth.less';
 
-.client-auth-code-row {
-  display: flex;
-  align-items: stretch;
-  gap: 0.75rem;
+// A-04：这里原先重定义了 .client-auth-code-row（flex + gap 0.75rem + 按钮 height:auto），
+// 而 register / forgot-password 只 @import shared-auth.less，导致同一条验证码行在三个页面
+// 呈两套布局、两套高度。验证码行属于通用表单骨架，统一由 shared-auth.less 提供。
 
-  :deep(.t-input) {
-    flex: 1;
-  }
-
-  :deep(.t-button) {
-    height: auto;
-    min-height: unset;
-  }
-}
-
+// A-14：这里原先还有一条 .client-auth-submit { margin-top: var(--td-comp-margin-s) }，
+// 与 shared-auth.less:144-146 完全重复；配合密码模式按钮漏写该类，造成切 tab 时间距跳变。
+// 现统一由 shared-auth.less 提供，页面只保留 tabs 自身样式。
 .client-auth-tabs {
-  margin-bottom: 1rem;
+  margin-bottom: var(--td-comp-margin-l);
 
   :deep(.t-tabs__nav-item) {
     font-size: var(--td-font-size-body-medium);
   }
-}
-
-.client-auth-submit {
-  margin-top: 0.5rem;
 }
 </style>

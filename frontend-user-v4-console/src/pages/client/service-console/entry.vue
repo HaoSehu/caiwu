@@ -9,7 +9,7 @@ import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import clientApi from '@/api/client';
-import { isNatConsole } from '@/domains/services/console/useConsoleCore';
+import { isNatConsole, normalizeConsoleDetail, rememberConsoleDetail } from '@/domains/services/console/useConsoleCore';
 import type { ConsoleServiceDetail } from '@/types/client';
 import { getErrorMessage } from '@/utils/error';
 
@@ -28,7 +28,9 @@ onMounted(async () => {
 
   try {
     const response = await clientApi.serviceDetail(id);
-    const service = (response.data || {}) as ConsoleServiceDetail;
+    const service = normalizeConsoleDetail((response.data || {}) as ConsoleServiceDetail);
+    // 类型判定已拿到完整详情，交给目标页复用，避免进入控制台时重复请求同一份详情
+    rememberConsoleDetail(id, service);
     await router.replace({
       name: isNatConsole(service) ? 'ClientNatConsole' : 'ClientComputeConsole',
       params: { id: String(id) },

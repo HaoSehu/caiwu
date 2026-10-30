@@ -3,8 +3,9 @@ import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 
 import clientApi from '@/api/client';
 import type { ConsoleRuntimeInfo, ConsoleServiceDetail } from '@/types/client';
+import { getErrorMessage } from '@/utils/error';
 
-import { mergeConsoleDetail, normalizeConsoleDetail, resolveErrorMessage } from './useConsoleCore';
+import { mergeConsoleDetail, normalizeConsoleDetail } from './useConsoleCore';
 
 export const POWER_LABELS: Record<string, string> = {
   on: '开机',
@@ -25,7 +26,7 @@ export const OPTIMISTIC_POWER_DETAIL: Record<string, { runtime: ConsoleRuntimeIn
 export interface UseConsolePowerOptions {
   serviceId: { value: number };
   detail: { value: ConsoleServiceDetail };
-  actionLoading: { value: boolean };
+  powerLoading: { value: boolean };
   setOperationStatus: (type: string, label: string) => void;
   clearOperationStatus: (type?: string) => void;
   loadRemoteStatus: (silent: boolean) => Promise<void>;
@@ -37,7 +38,7 @@ export function useConsolePower(options: UseConsolePowerOptions) {
   const {
     serviceId,
     detail,
-    actionLoading,
+    powerLoading,
     setOperationStatus,
     clearOperationStatus,
     loadRemoteStatus,
@@ -63,7 +64,7 @@ export function useConsolePower(options: UseConsolePowerOptions) {
         } else {
           setOperationStatus('power', `${label}中`);
         }
-        actionLoading.value = true;
+        powerLoading.value = true;
         try {
           const res = await clientApi.servicePower(serviceId.value, { action });
           const payload = res.data || {};
@@ -74,9 +75,9 @@ export function useConsolePower(options: UseConsolePowerOptions) {
         } catch (error: unknown) {
           detail.value = previousDetail;
           clearOperationStatus('power');
-          MessagePlugin.error(resolveErrorMessage(error, `${label}失败`));
+          MessagePlugin.error(getErrorMessage(error, `${label}失败`));
         } finally {
-          actionLoading.value = false;
+          powerLoading.value = false;
           dialog.setConfirmLoading(false);
         }
       },
@@ -107,7 +108,7 @@ export function useConsoleAutoRenew(options: UseConsoleAutoRenewOptions) {
       mergeDetail({ auto_renew: value ? 1 : 0 });
       MessagePlugin.success(`自动续费已${value ? '开启' : '关闭'}`);
     } catch (error: unknown) {
-      MessagePlugin.error(resolveErrorMessage(error, '自动续费更新失败'));
+      MessagePlugin.error(getErrorMessage(error, '自动续费更新失败'));
     } finally {
       autoRenewLoading.value = false;
     }

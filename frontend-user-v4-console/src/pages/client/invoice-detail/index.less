@@ -12,140 +12,11 @@
   gap: var(--td-comp-margin-m);
 }
 
-.pay-toolbar__main {
-  display: flex;
-  gap: var(--td-comp-margin-m);
-  align-items: center;
-  min-width: 0;
-
-  h1 {
-    margin: 0;
-    color: var(--td-text-color-primary);
-    font: var(--td-font-title-large);
-    font-weight: 600;
-  }
-
-  p {
-    margin: 0.125rem 0 0;
-    color: var(--td-text-color-secondary);
-    font: var(--td-font-body-small);
-  }
-}
-
 .pay-toolbar__actions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--td-comp-margin-s);
   justify-content: flex-end;
-}
-
-.overview-status-tag {
-  width: fit-content;
-  min-width: 4rem;
-  justify-content: center;
-  font-weight: 600;
-  border-radius: var(--td-radius-round);
-}
-
-.overview-session {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--td-comp-margin-xs);
-  align-items: center;
-  margin-top: var(--td-comp-margin-xs);
-  color: var(--td-text-color-secondary);
-  font: var(--td-font-body-small);
-
-  b {
-    display: inline-flex;
-    min-height: 1.5rem;
-    align-items: center;
-    padding: 0 0.5rem;
-    color: var(--td-warning-color);
-    font-weight: 600;
-    font-variant-numeric: tabular-nums;
-    background: var(--td-warning-color-light);
-    border: thin solid var(--td-warning-color-3);
-    border-radius: var(--td-radius-round);
-
-    &.is-expired {
-      color: var(--td-error-color);
-      background: var(--td-error-color-light);
-      border-color: var(--td-error-color-3);
-    }
-  }
-}
-
-.payment-flow {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--td-comp-margin-s);
-}
-
-.payment-flow__item {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: var(--td-comp-margin-s);
-  align-items: center;
-  min-width: 0;
-  padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-m);
-  background: var(--td-bg-color-component);
-  border: thin solid var(--td-component-stroke);
-  border-radius: var(--td-radius-medium);
-
-  strong,
-  small {
-    display: block;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  strong {
-    color: var(--td-text-color-primary);
-    font: var(--td-font-body-medium);
-    font-weight: 600;
-  }
-
-  small {
-    margin-top: 0.125rem;
-    color: var(--td-text-color-secondary);
-    font: var(--td-font-body-small);
-  }
-
-  &.is-active {
-    background: var(--td-brand-color-light);
-    border-color: var(--td-brand-color);
-  }
-
-  &.is-pending {
-    color: var(--td-text-color-secondary);
-  }
-}
-
-.payment-flow__mark {
-  display: inline-flex;
-  width: 1.75rem;
-  height: 1.75rem;
-  align-items: center;
-  justify-content: center;
-  color: var(--td-brand-color);
-  background: var(--td-bg-color-container);
-  border: thin solid var(--td-component-stroke);
-  border-radius: 50%;
-
-  > span {
-    width: 0.5rem;
-    height: 0.5rem;
-    background: currentcolor;
-    border-radius: 50%;
-  }
-
-  svg {
-    width: 1rem;
-    height: 1rem;
-  }
 }
 
 .pay-shell {
@@ -156,21 +27,17 @@
 }
 
 .pay-main-column,
-.invoice-summary-column,
-.invoice-detail-column,
-.pay-action-column {
+.invoice-summary-column {
   display: grid;
   gap: var(--td-comp-margin-m);
   min-width: 0;
 }
 
-.invoice-summary-column,
-.pay-action-column {
+.invoice-summary-column {
   position: sticky;
   top: var(--td-comp-margin-l);
 }
 
-.panel-card,
 .pay-work-card,
 .payment-record-card,
 .renew-info-card,
@@ -180,43 +47,6 @@
   border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
   box-shadow: var(--td-shadow-1);
-}
-
-.panel-heading {
-  display: flex;
-  gap: var(--td-comp-margin-s);
-  align-items: flex-start;
-  margin-bottom: var(--td-comp-margin-m);
-
-  h2 {
-    margin: 0;
-    color: var(--td-text-color-primary);
-    font: var(--td-font-title-medium);
-    font-weight: 600;
-  }
-
-  p {
-    margin: 0.125rem 0 0;
-    color: var(--td-text-color-secondary);
-    font: var(--td-font-body-small);
-  }
-}
-
-.panel-heading__icon {
-  display: inline-flex;
-  width: 2rem;
-  height: 2rem;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  color: var(--td-brand-color);
-  background: var(--td-brand-color-light);
-  border-radius: var(--td-radius-medium);
-
-  svg {
-    width: 1rem;
-    height: 1rem;
-  }
 }
 
 .pay-work-head {
@@ -265,15 +95,19 @@
     box-shadow 0.2s ease,
     transform 0.2s ease;
 
-  &:hover:not(:disabled),
+  // hover 与 focus-visible 共用同一圈外扩阴影，键盘聚焦时不能抹掉焦点描边（WCAG 2.4.7），
+  // 所以额外收一层 outline 到自身轮廓，避免与外扩阴影叠成两层描边。
+  &:hover:not(:disabled) {
+    border-color: var(--td-brand-color);
+    box-shadow: 0 0 0 0.1875rem var(--td-brand-color-light);
+    transform: translateY(-0.0625rem);
+  }
+
   &:focus-visible {
     border-color: var(--td-brand-color);
     box-shadow: 0 0 0 0.1875rem var(--td-brand-color-light);
-    outline: 0;
-  }
-
-  &:hover:not(:disabled) {
-    transform: translateY(-0.0625rem);
+    outline: 0.125rem solid var(--td-brand-color);
+    outline-offset: 0.0625rem;
   }
 
   &:disabled {
@@ -348,7 +182,8 @@
     width: 0.625rem;
     height: 0.625rem;
     border: thin solid var(--td-component-stroke);
-    border-radius: 50%;
+    // C-24：圆形一律走 --td-radius-circle，不写裸 50%
+    border-radius: var(--td-radius-circle);
   }
 
   svg {
@@ -412,37 +247,6 @@
   :deep(.t-button) {
     flex: 1;
     min-width: 0;
-  }
-}
-
-.pay-note-card {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: var(--td-comp-margin-s);
-  align-items: flex-start;
-  padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-m);
-  color: var(--td-text-color-secondary);
-  background: var(--td-bg-color-component);
-  border: thin solid var(--td-component-stroke);
-  border-radius: var(--td-radius-medium);
-
-  > svg {
-    width: 1rem;
-    height: 1rem;
-    margin-top: 0.125rem;
-    color: var(--td-brand-color);
-  }
-
-  strong {
-    color: var(--td-text-color-primary);
-    font: var(--td-font-body-medium);
-    font-weight: 600;
-  }
-
-  p {
-    margin: 0.25rem 0 0;
-    font: var(--td-font-body-small);
-    line-height: 1.6;
   }
 }
 
@@ -584,10 +388,9 @@
   font-weight: 600;
   background: var(--td-brand-color-light);
   border: thin solid var(--td-brand-color);
-  border-radius: 50%;
+  border-radius: var(--td-radius-circle);
 }
 
-.invoice-kv-grid,
 .order-summary-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -598,11 +401,6 @@
   border-radius: var(--td-radius-medium);
 }
 
-.invoice-kv-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.invoice-kv-item,
 .order-kv-item {
   display: flex;
   flex-direction: column;
@@ -624,31 +422,8 @@
   }
 }
 
-.invoice-kv-item--wide,
 .order-summary-grid__wide {
   grid-column: 1 / -1;
-}
-
-.product-route-strip {
-  display: grid;
-  gap: var(--td-comp-margin-xxs);
-  margin-bottom: var(--td-comp-margin-m);
-  padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-m);
-  background: var(--td-bg-color-component);
-  border: thin solid var(--td-component-stroke);
-  border-radius: var(--td-radius-medium);
-
-  span {
-    color: var(--td-text-color-secondary);
-    font: var(--td-font-body-small);
-  }
-
-  strong {
-    color: var(--td-text-color-primary);
-    font: var(--td-font-title-small);
-    font-weight: 600;
-    overflow-wrap: anywhere;
-  }
 }
 
 .order-pricing-block {
@@ -749,7 +524,7 @@
 
 .summary-amount {
   padding-bottom: var(--td-comp-margin-m);
-  border-bottom: thin dashed var(--td-border-level-1-color);
+  border-bottom: thin dashed var(--td-component-stroke);
   margin-bottom: var(--td-comp-margin-m);
 }
 
@@ -868,7 +643,7 @@
 }
 
 .summary-divider {
-  border-top: thin solid var(--td-border-level-1-color);
+  border-top: thin solid var(--td-component-stroke);
   height: 0;
   opacity: 0.6;
   margin: 0.25rem 0;
@@ -919,10 +694,8 @@
 }
 
 @media (max-width: @screen-md-rem) {
-  .payment-flow,
   .pay-shell,
   .pay-method-list,
-  .invoice-kv-grid,
   .renew-kv-grid,
   .renew-flow-list,
   .order-summary-grid,
@@ -930,8 +703,7 @@
     grid-template-columns: 1fr;
   }
 
-  .invoice-summary-column,
-  .pay-action-column {
+  .invoice-summary-column {
     position: static;
   }
 }
@@ -940,12 +712,6 @@
   .pay-toolbar {
     align-items: flex-start;
     flex-direction: column;
-  }
-
-  .pay-toolbar__main {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: var(--td-comp-margin-s);
   }
 
   .pay-toolbar__actions,
@@ -957,10 +723,6 @@
       flex: 1 1 10rem;
       margin-left: 0;
     }
-  }
-
-  .payment-flow__item {
-    padding: var(--td-comp-paddingTB-s) var(--td-comp-paddingLR-m);
   }
 
   .renew-service-panel {
@@ -988,8 +750,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pay-method-card,
-  .payment-flow__item {
+  .pay-method-card {
     transition: none;
 
     &:hover:not(:disabled) {

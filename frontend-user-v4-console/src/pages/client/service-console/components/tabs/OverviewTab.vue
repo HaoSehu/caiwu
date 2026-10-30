@@ -29,13 +29,7 @@
 
     <t-card class="console-panel console-panel-wide" title="配置信息" :bordered="false">
       <template #actions>
-        <t-button
-          v-if="canBuyTrafficPackage"
-          variant="text"
-          theme="primary"
-          :loading="trafficLoading"
-          @click="openTrafficPackageDialog"
-        >
+        <t-button v-if="canBuyTrafficPackage" variant="text" theme="primary" @click="openTrafficPackageDialog">
           {{ detail.traffic?.button_text || '购买流量包' }}
         </t-button>
       </template>
@@ -50,12 +44,12 @@
           strong
         />
         <info-cell label="区域" :value="serviceRegion" strong />
-        <info-cell label="CPU" :value="findSpecValue(['CPU', '核心'])" strong />
-        <info-cell label="内存" :value="findSpecValue(['内存', 'RAM'])" strong />
-        <info-cell label="系统盘" :value="findSpecValue(['系统盘'], DEFAULT_SYSTEM_DISK_LABEL)" strong />
+        <info-cell label="CPU" :value="specValues.cpu" strong />
+        <info-cell label="内存" :value="specValues.memory" strong />
+        <info-cell label="系统盘" :value="specValues.systemDisk" strong />
         <info-cell label="带宽" :value="bandwidthText" strong />
         <info-cell label="IP数量" :value="serviceIpCount" strong />
-        <info-cell label="数据盘" :value="findSpecValue(['数据盘'])" strong />
+        <info-cell label="数据盘" :value="specValues.dataDisk" strong />
       </div>
     </t-card>
 
@@ -155,33 +149,11 @@
       </div>
     </t-card>
   </section>
-
-  <t-dialog
-    v-model:visible="ipDialogVisible"
-    :header="primaryConnectionLabel"
-    width="min(24rem, calc(100vw - 2rem))"
-    destroy-on-close
-  >
-    <div class="ip-dialog-list">
-      <div v-for="ip in primaryConnectionValues" :key="ip" class="ip-dialog-item">
-        <strong>{{ ip }}</strong>
-        <button type="button" class="copy-link" :aria-label="`复制${ip}`" @click="copyText(ip)">
-          <copy-icon size="1rem" />
-        </button>
-      </div>
-    </div>
-    <template #footer>
-      <t-button v-if="primaryConnectionValues.length > 1" variant="outline" @click="copyText(primaryConnectionText)"
-        >复制全部</t-button
-      >
-      <t-button theme="primary" @click="ipDialogVisible = false">关闭</t-button>
-    </template>
-  </t-dialog>
 </template>
 <script setup lang="ts">
 import { DEFAULT_SYSTEM_DISK_LABEL } from '@caiwu/shared/finance';
 import { BrowseIcon, BrowseOffIcon, CopyIcon } from 'tdesign-icons-vue-next';
-import { computed, ref } from 'vue';
+import { computed } from 'vue';
 
 import { useServiceConsoleContext } from '../context';
 import { InfoCell } from '../InfoCell';
@@ -194,7 +166,6 @@ const {
   serviceOs,
   primaryConnectionLabel,
   primaryConnectionValues,
-  primaryConnectionText,
   connectionEndpointText,
   connectionPortText,
   instanceStatusText,
@@ -208,10 +179,15 @@ const {
   openTrafficPackageDialog,
   openPasswordDialog,
   copyText,
-  trafficLoading,
 } = useServiceConsoleContext();
 
-const ipDialogVisible = ref(false);
+// 规格项一次算清：原先把 findSpecValue 直接写在模板里，detail 每次换引用都要重新线性扫 4 遍
+const specValues = computed(() => ({
+  cpu: findSpecValue(['CPU', '核心']),
+  memory: findSpecValue(['内存', 'RAM']),
+  systemDisk: findSpecValue(['系统盘'], DEFAULT_SYSTEM_DISK_LABEL),
+  dataDisk: findSpecValue(['数据盘']),
+}));
 
 const canBuyTrafficPackage = computed(() =>
   Boolean(detail.value.actions?.traffic_package && detail.value.traffic?.purchase_enabled !== false),

@@ -1,6 +1,6 @@
 // 通用声明
 
-// Vue
+// Vue 组件类型声明
 declare module '*.vue' {
   import type { DefineComponent } from 'vue';
 

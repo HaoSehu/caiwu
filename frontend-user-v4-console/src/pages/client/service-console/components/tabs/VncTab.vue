@@ -5,8 +5,8 @@
         <div class="vnc-toolbar">
           <p>{{ vncUrl ? 'VNC 控制台已在当前页面载入。' : '点击连接后将向后端申请一次性 VNC 地址。' }}</p>
           <t-space>
-            <t-button theme="primary" :loading="actionLoading" @click="handleOpenVnc()">连接 VNC</t-button>
-            <t-button variant="outline" :loading="actionLoading" @click="handleOpenVnc('window')">新窗口打开</t-button>
+            <t-button theme="primary" :loading="vncLoading" @click="handleOpenVnc()">连接 VNC</t-button>
+            <t-button variant="outline" :loading="vncLoading" @click="handleOpenVnc('window')">新窗口打开</t-button>
           </t-space>
         </div>
 
@@ -29,5 +29,5 @@
 <script setup lang="ts">
 import { useServiceConsoleContext } from '../context';
 
-const { vncUrl, actionLoading, handleOpenVnc } = useServiceConsoleContext();
+const { vncUrl, vncLoading, handleOpenVnc } = useServiceConsoleContext();
 </script>

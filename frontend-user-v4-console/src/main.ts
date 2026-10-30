@@ -19,8 +19,12 @@ import './permission';
 const app = createApp(App);
 
 initClientSessionActivityTracking();
-// 接口域与站点跨域（VITE_API_BASE_URL），启动即预热 dns-prefetch / preconnect（审查条目 D6）
-initClientRuntimeConnectionHints({ apiBaseUrl: import.meta.env.VITE_API_BASE_URL });
+// 接口域与站点跨域（VITE_API_BASE_URL），启动即预热 dns-prefetch / preconnect。
+// 极验验证码脚本来自 static.geetest.com，由本端显式声明（shared 不再硬编码业务域名）。
+initClientRuntimeConnectionHints({
+  apiBaseUrl: import.meta.env.VITE_API_BASE_URL,
+  urls: ['https://static.geetest.com'],
+});
 
 app.use(store);
 app.use(router);

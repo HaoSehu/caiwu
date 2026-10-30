@@ -26,13 +26,18 @@
             @enter="submitSearch"
             @clear="submitSearch"
           >
-            <template #suffixIcon><search-icon /></template>
+            <!-- O-02：suffixIcon 槽在 clearable 且有内容时会被 TDesign 换成清除图标，
+                 放大镜随鼠标悬停消失、点下去变成清空。改用 #suffix 槽放可点按钮，位置稳定。 -->
+            <template #suffix>
+              <search-field-button @search="submitSearch" />
+            </template>
           </t-input>
         </t-card>
 
         <t-card class="content-card category-card" :bordered="false">
           <t-space break-line>
             <t-button
+              :class="{ 'is-active': activeCategoryId === 0 }"
               :theme="activeCategoryId === 0 ? 'primary' : 'default'"
               variant="outline"
               @click="selectCategory(0)"
@@ -42,6 +47,7 @@
             <t-button
               v-for="item in categories"
               :key="item.id"
+              :class="{ 'is-active': activeCategoryId === Number(item.id) }"
               :theme="activeCategoryId === Number(item.id) ? 'primary' : 'default'"
               variant="outline"
               @click="selectCategory(item.id)"
@@ -62,13 +68,24 @@
             :error="!loading && Boolean(loadError)"
             :error-text="loadError"
             :empty="!loading && !loadError && !articleList.length"
-            :description="config.emptyText"
+            :description="hasActiveFilters ? '当前筛选条件下没有匹配内容' : config.emptyText"
             @retry="syncPage"
           >
+            <!-- N-06：空态必须给一条可执行的出口，否则用户只能自己猜是换个词还是清分类。
+                 补：没有筛选条件时的空态原先没有任何按钮（docs/DESIGN.md §5.2 要求空数据必须给出引导路径），
+                 与账单/订单/服务页口径不一致，这里补一条回控制台的出口。 -->
+            <template #empty-action>
+              <t-button v-if="hasActiveFilters" theme="primary" variant="outline" @click="resetFilters"
+                >清除筛选条件</t-button
+              >
+              <t-button v-else theme="primary" variant="outline" @click="router.push('/client/dashboard')"
+                >回到控制台</t-button
+              >
+            </template>
             <article v-for="item in articleList" :key="item.id" class="article-row">
               <div class="article-row__head">
                 <router-link class="article-row__title" :to="buildDetailRoute(item)">{{ item.title }}</router-link>
-                <t-tag v-if="Number(item.is_pinned) === 1" theme="danger" variant="light">置顶</t-tag>
+                <t-tag v-if="Number(item.is_pinned) === 1" theme="primary" variant="light" class="pin-tag">置顶</t-tag>
               </div>
               <p v-if="item.excerpt">{{ item.excerpt }}</p>
               <div class="article-row__meta">
@@ -99,7 +116,7 @@
               <strong>{{ item.title }}</strong>
             </router-link>
           </div>
-          <t-empty v-else description="暂无数据" />
+          <t-empty v-else :description="hasActiveFilters ? '当前分类下暂无内容' : '暂无数据'" />
         </t-card>
 
         <t-card class="content-card" :bordered="false">
@@ -110,7 +127,7 @@
               <span>{{ item.publish_at || item.created_at || '--' }}</span>
             </router-link>
           </div>
-          <t-empty v-else description="暂无数据" />
+          <t-empty v-else :description="hasActiveFilters ? '当前分类下暂无内容' : '暂无数据'" />
         </t-card>
       </aside>
     </div>
@@ -118,10 +135,14 @@
 </template>
 <script setup lang="ts">
 import DataState from '@caiwu/shared/user-v3/components/DataState.vue';
-import { SearchIcon } from 'tdesign-icons-vue-next';
+import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
+import { computed, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
 
+import SearchFieldButton from '@/components/common/SearchFieldButton.vue';
 import { useContentList } from '@/domains/content/useContent';
 import { useNoticeReadStatus } from '@/domains/content/useNoticeReadStatus';
+import { getErrorMessage } from '@/utils/error';
 
 const props = defineProps<{
   contentType: 'notice' | 'help';
@@ -147,15 +168,37 @@ const {
   updatePage,
   submitSearch,
   applyKeyword,
+  resetFilters,
   buildDetailRoute,
 } = useContentList(props.contentType);
 
+const router = useRouter();
 const { unreadCount, markAllRead, fetchUnreadCount } = useNoticeReadStatus();
 const isNotice = props.contentType === 'notice';
+// 空态文案要能区分「真没有内容」与「被筛选条件筛空」，两者的可执行出口不同
+const hasActiveFilters = computed(() => Boolean(keyword.value) || activeCategoryId.value > 0);
+
+// N-03：公告未读数是跨页共享的模块级状态，进列表页先对齐一次，
+// 否则「全部标记已读 (n)」显示的可能是上一次路由停留时的旧值或 0。
+onMounted(() => {
+  if (!isNotice) return;
+  void fetchUnreadCount();
+});
 
 async function handleMarkAllRead() {
-  await markAllRead();
-  await fetchUnreadCount(true);
+  // markAllRead 失败会抛错，未捕获会变成未处理的 rejection 且用户看不到任何反馈
+  try {
+    await markAllRead();
+  } catch (error: unknown) {
+    MessagePlugin.error(getErrorMessage(error, '批量标记已读失败，请稍后重试'));
+
+    return;
+  }
+  try {
+    await fetchUnreadCount(true);
+  } catch {
+    // 未读计数只是辅助信息，刷新失败不回滚已成功的标记结果
+  }
 }
 </script>
 <style scoped lang="less">
@@ -183,6 +226,19 @@ async function handleMarkAllRead() {
   border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
   box-shadow: var(--td-shadow-1);
+}
+
+.category-card {
+  // N-04：选中态原来只靠 theme=primary 的描边色，浅色主题下与未选中几乎同色。
+  // 再加一条底色与字重，让当前分类在扫视时能被一眼拎出来。
+  :deep(.t-button.is-active) {
+    background: var(--td-brand-color-light);
+    font-weight: 600;
+  }
+}
+
+.pin-tag {
+  flex: none;
 }
 
 .hero-card {
@@ -217,12 +273,10 @@ async function handleMarkAllRead() {
 }
 
 .article-row {
+  // N-07：原来给首条写 padding-top: 0，卡片自身还有一层内边距抵扣掉，
+  // 结果首条标题与列表卡上边缘的距离小于条目之间，读起来像黏在标题下面。
   padding: var(--td-comp-paddingTB-l) 0;
   border-bottom: thin solid var(--td-component-stroke);
-
-  &:first-child {
-    padding-top: 0;
-  }
 
   &:last-child {
     border-bottom: 0;
@@ -342,7 +396,8 @@ async function handleMarkAllRead() {
 }
 
 @media (max-width: @screen-mobile-max) {
-  .hero-card,
+  // .hero-card 是 flex 纵向容器，原先与 .content-sidebar 合并声明 grid-template-columns 属于死规则，
+  // 这里只保留真正需要单列的侧栏。
   .content-sidebar {
     grid-template-columns: 1fr;
   }

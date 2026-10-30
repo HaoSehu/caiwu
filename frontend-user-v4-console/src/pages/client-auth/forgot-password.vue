@@ -9,10 +9,12 @@
     hero-title="重置密码后，继续进入控制台"
     hero-description="找回登录凭证后，可继续处理服务、账单与账户安全设置。"
   >
+    <!-- A-11：校验结果的读屏通道，节点常驻（v-if 挂载不会被播报）。 -->
+    <p class="client-auth-live" role="status" aria-live="polite">{{ liveText }}</p>
     <t-form ref="formRef" class="client-auth-form" :data="form" :rules="rules" label-width="0" @submit="handleSubmit">
       <t-form-item name="account">
-        <div class="client-auth-field">
-          <label class="client-auth-label is-required" for="forgot-account">手机号 / 邮箱</label>
+        <label class="client-auth-field">
+          <span class="client-auth-label is-required">手机号 / 邮箱<span class="sr-only">（必填）</span></span>
           <t-input
             id="forgot-account"
             v-model="form.account"
@@ -21,12 +23,12 @@
             autocomplete="username"
             placeholder="请输入注册手机号或邮箱"
           />
-        </div>
+        </label>
       </t-form-item>
 
       <t-form-item name="code">
-        <div class="client-auth-field">
-          <label class="client-auth-label is-required" for="forgot-code">验证码</label>
+        <label class="client-auth-field">
+          <span class="client-auth-label is-required">验证码<span class="sr-only">（必填）</span></span>
           <div class="client-auth-code-row">
             <t-input id="forgot-code" v-model="form.code" size="large" maxlength="6" placeholder="请输入验证码" />
             <t-button
@@ -38,12 +40,12 @@
               {{ countdown > 0 ? `${countdown}s` : '发送验证码' }}
             </t-button>
           </div>
-        </div>
+        </label>
       </t-form-item>
 
       <t-form-item name="password">
-        <div class="client-auth-field client-auth-field--password">
-          <label class="client-auth-label is-required" for="forgot-password">新密码</label>
+        <label class="client-auth-field client-auth-field--password">
+          <span class="client-auth-label is-required">新密码<span class="sr-only">（必填）</span></span>
           <t-input
             id="forgot-password"
             v-model="form.password"
@@ -58,12 +60,12 @@
               <password-toggle v-model="showPassword" />
             </template>
           </t-input>
-        </div>
+        </label>
       </t-form-item>
 
       <t-form-item name="password_confirmation">
-        <div class="client-auth-field client-auth-field--password">
-          <label class="client-auth-label is-required" for="forgot-password-confirm">确认新密码</label>
+        <label class="client-auth-field client-auth-field--password">
+          <span class="client-auth-label is-required">确认新密码<span class="sr-only">（必填）</span></span>
           <t-input
             id="forgot-password-confirm"
             v-model="form.password_confirmation"
@@ -79,10 +81,18 @@
               <password-toggle v-model="showConfirmPassword" />
             </template>
           </t-input>
-        </div>
+        </label>
       </t-form-item>
 
-      <t-button class="client-auth-submit" block size="large" theme="primary" :loading="loading" @click="submitForm">
+      <t-button
+        class="client-auth-submit"
+        block
+        size="large"
+        theme="primary"
+        :loading="loading"
+        :disabled="loading"
+        @click="submitForm"
+      >
         重置密码
       </t-button>
     </t-form>
@@ -189,6 +199,7 @@ function startCountdown() {
 }
 
 async function handleSendCode() {
+  if (sendingCode.value || countdown.value > 0) return;
   const accountPayload = buildAccountPayload(form.account);
   if (!accountPayload) {
     MessagePlugin.warning('请先输入正确的手机号或邮箱');
@@ -218,6 +229,7 @@ async function handleSendCode() {
 }
 
 async function submitForm() {
+  if (loading.value) return;
   if (!validateForm()) {
     return;
   }
@@ -225,11 +237,16 @@ async function submitForm() {
 }
 
 async function handleSubmit(ctx: SubmitContext) {
+  if (loading.value) return;
   if (ctx.validateResult !== true || !validateForm()) return;
   await runResetPassword();
 }
 
+// A-11：校验失败的读屏播报文案。
+const liveText = ref('');
+
 function setFormErrors(errors: Partial<Record<keyof ResetPasswordForm, string>>) {
+  liveText.value = Object.values(errors).filter(Boolean).join('；');
   const validateMessage: FormValidateMessage<ResetPasswordForm> = {
     account: errors.account ? [{ type: 'error', message: errors.account }] : [],
     code: errors.code ? [{ type: 'error', message: errors.code }] : [],
@@ -267,11 +284,13 @@ function validateForm() {
     return false;
   }
 
+  liveText.value = '';
   formRef.value?.clearValidate();
   return true;
 }
 
 async function runResetPassword() {
+  if (loading.value) return;
   loading.value = true;
   try {
     await clientAuthApi.resetPassword({

@@ -3,10 +3,9 @@ import { computed, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 import clientApi from '@/api/client';
-import { formatMoney } from '@/domains/services/useServiceCenter';
 import type { CouponOption, RenewCouponBindingInfo, RenewCycleOption, ServiceRenewPreview } from '@/types/client';
-
-import { resolveErrorMessage } from './useConsoleCore';
+import { getErrorMessage } from '@/utils/error';
+import { formatMoney } from '@/utils/format';
 
 export interface UseConsoleRenewOptions {
   serviceId: { value: number };
@@ -38,7 +37,14 @@ export function useConsoleRenew(options: UseConsoleRenewOptions) {
     return binding && typeof binding === 'object' ? binding : null;
   });
 
-  async function loadRenewPreview() {
+  /**
+   * 加载续费预览。
+   * applyDefaults 仅用于首次打开弹窗：用服务端默认周期/默认券回填表单。
+   * 用户手动切换周期或优惠券时传 false，只刷新金额，否则服务端默认值会把用户的选择弹回。
+   */
+  async function loadRenewPreview(options: { applyDefaults?: boolean } = {}) {
+    const { applyDefaults = true } = options;
+
     renewLoading.value = true;
     try {
       const res = await clientApi.serviceRenewPreview(serviceId.value, {
@@ -46,12 +52,14 @@ export function useConsoleRenew(options: UseConsoleRenewOptions) {
         user_coupon_id: renewForm.user_coupon_id || undefined,
       });
       renewData.value = res.data || null;
-      renewForm.billing_cycle = String(
-        res.data?.default_cycle || res.data?.billing_cycle || res.data?.cycles?.[0]?.billing_cycle || '',
-      );
-      renewForm.user_coupon_id = Number(res.data?.selected_user_coupon_id || 0);
+      if (applyDefaults) {
+        renewForm.billing_cycle = String(
+          res.data?.default_cycle || res.data?.billing_cycle || res.data?.cycles?.[0]?.billing_cycle || '',
+        );
+        renewForm.user_coupon_id = Number(res.data?.selected_user_coupon_id || 0);
+      }
     } catch (error: unknown) {
-      MessagePlugin.error(resolveErrorMessage(error, '加载续费信息失败'));
+      MessagePlugin.error(getErrorMessage(error, '加载续费信息失败'));
     } finally {
       renewLoading.value = false;
     }
@@ -67,12 +75,12 @@ export function useConsoleRenew(options: UseConsoleRenewOptions) {
 
   async function handleRenewCycleChange(value: unknown) {
     renewForm.billing_cycle = String(value || '');
-    await loadRenewPreview();
+    await loadRenewPreview({ applyDefaults: false });
   }
 
   async function handleRenewCouponChange(value: unknown) {
     renewForm.user_coupon_id = Number(value || 0);
-    await loadRenewPreview();
+    await loadRenewPreview({ applyDefaults: false });
   }
 
   async function submitRenew() {
@@ -99,7 +107,7 @@ export function useConsoleRenew(options: UseConsoleRenewOptions) {
       );
       router.push('/client/invoices');
     } catch (error: unknown) {
-      MessagePlugin.error(resolveErrorMessage(error, '创建续费账单失败'));
+      MessagePlugin.error(getErrorMessage(error, '创建续费账单失败'));
     } finally {
       renewSubmitting.value = false;
     }

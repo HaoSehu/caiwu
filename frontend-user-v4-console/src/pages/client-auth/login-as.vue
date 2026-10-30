@@ -7,13 +7,21 @@
     hero-title="正在校验本次身份切换请求"
     hero-description="验证通过后将自动进入控制台，本次跳转不会修改现有业务数据。"
   >
-    <div class="login-as-result" :class="`login-as-result--${status}`">
+    <!-- A-12：代登录是纯异步状态机，读屏用户看不到图标与文字的切换。
+         容器常驻并挂 aria-live，状态变化时把标题+说明整段播报出去。 -->
+    <div
+      class="login-as-result"
+      :class="`login-as-result--${status}`"
+      role="status"
+      aria-live="polite"
+      :aria-busy="status === 'loading'"
+    >
       <div class="login-as-result__icon">
         <check-circle-icon v-if="status === 'success'" />
         <error-circle-icon v-else-if="status === 'error'" />
         <loading-icon v-else />
       </div>
-      <h3 class="login-as-result__title">{{ resultTitle }}</h3>
+      <h2 class="login-as-result__title">{{ resultTitle }}</h2>
       <p class="login-as-result__desc">{{ resultSubtitle }}</p>
       <t-space>
         <t-button v-if="status === 'error'" theme="primary" :loading="loading" @click="retryExchange">
@@ -35,6 +43,7 @@ import { useRoute, useRouter } from 'vue-router';
 
 import AuthShell from '@/components/auth/AuthShell.vue';
 import { useUserStore } from '@/store';
+import { resolveLoginRedirectPath } from '@/utils/loginRedirect';
 
 interface RuntimeHandledError {
   __handled?: boolean;
@@ -52,13 +61,9 @@ const LOGIN_AS_CODE_EVENT = 'caiwu:login-as-code';
 const LOGIN_AS_MESSAGE_TIMEOUT_MS = 10000;
 let messageTimer: number | null = null;
 
-const redirectPath = computed(() => {
-  const redirect = route.query.redirect;
-  // 仅接受站内绝对路径，拒绝 //evil.com 协议相对形态
-  return typeof redirect === 'string' && redirect.startsWith('/') && !redirect.startsWith('//')
-    ? redirect
-    : '/client/dashboard';
-});
+// 走统一口径：与路由守卫（permission.ts）、登录页、注册页同一套解码与拒绝规则，
+// 免得这里漏掉 decodeURIComponent 或某天放宽 startswith 判断后成为开放重定向口子。
+const redirectPath = computed(() => resolveLoginRedirectPath(route.query.redirect));
 
 const resultTitle = computed(() => {
   if (status.value === 'success') return '代登录成功';
@@ -187,7 +192,8 @@ onBeforeUnmount(() => {
 
 .login-as-result__icon {
   display: inline-flex;
-  font-size: 3rem;
+  // C-23：48px 正好是 display-medium 字号，不再写裸 3rem
+  font-size: var(--td-font-size-display-medium);
   line-height: 1;
 
   .login-as-result--success & {

@@ -4,12 +4,11 @@ import { computed, reactive, ref } from 'vue';
 
 import clientApi from '@/api/client';
 import type { ConsoleServiceDetail, ServiceReinstallOption } from '@/types/client';
-
-import { resolveErrorMessage } from './useConsoleCore';
+import { getErrorMessage } from '@/utils/error';
 
 export interface UseConsoleReinstallOptions {
   serviceId: { value: number };
-  actionLoading: { value: boolean };
+  reinstallLoading: { value: boolean };
   setOperationStatus: (type: string, label: string) => void;
   loadRemoteStatus: (silent: boolean) => Promise<void>;
   clearStatusSyncTimer: () => void;
@@ -24,8 +23,14 @@ interface ReinstallGroupOption {
 }
 
 export function useConsoleReinstall(options: UseConsoleReinstallOptions) {
-  const { serviceId, actionLoading, setOperationStatus, loadRemoteStatus, clearStatusSyncTimer, scheduleStatusSync } =
-    options;
+  const {
+    serviceId,
+    reinstallLoading,
+    setOperationStatus,
+    loadRemoteStatus,
+    clearStatusSyncTimer,
+    scheduleStatusSync,
+  } = options;
 
   const reinstallVisible = ref(false);
   const reinstallState = reactive({
@@ -65,7 +70,7 @@ export function useConsoleReinstall(options: UseConsoleReinstallOptions) {
       reinstallState.os_group = firstGroup?.group_name || '';
       reinstallState.os_id = String(firstGroup?.items?.[0]?.os_id || '');
     } catch (error: unknown) {
-      MessagePlugin.error(resolveErrorMessage(error, '加载重装系统选项失败'));
+      MessagePlugin.error(getErrorMessage(error, '加载重装系统选项失败'));
     } finally {
       reinstallState.loading = false;
     }
@@ -105,7 +110,7 @@ export function useConsoleReinstall(options: UseConsoleReinstallOptions) {
     });
     if (!confirmed) return;
 
-    actionLoading.value = true;
+    reinstallLoading.value = true;
     try {
       const res = await clientApi.serviceReinstall(serviceId.value, { os_id: reinstallState.os_id });
       const payload = res.data || {};
@@ -115,9 +120,9 @@ export function useConsoleReinstall(options: UseConsoleReinstallOptions) {
       clearStatusSyncTimer();
       scheduleStatusSync(() => loadRemoteStatus(true), 1500);
     } catch (error: unknown) {
-      MessagePlugin.error(resolveErrorMessage(error, '重装系统失败'));
+      MessagePlugin.error(getErrorMessage(error, '重装系统失败'));
     } finally {
-      actionLoading.value = false;
+      reinstallLoading.value = false;
     }
   }
 

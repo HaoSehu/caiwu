@@ -17,6 +17,13 @@
 @screen-md-max: calc(@screen-lg-min - 1px);
 @screen-lg-max: calc(@screen-xl-min - 1px);
 
+// 两档断点口径（C-06，勿混用）：
+// · @screen-sm-max（991px）= 平板及以下。用于布局层页边距归零（layout.less）、
+//   卡片内边距收窄（record-page.less）、认证页单列化（AuthShell / shared-auth）、
+//   Header 精简。这些是「给平板更多横向空间」的意图，收窄到 767px 会让 768~991px 缺少归零而出现双重边距。
+// · @screen-mobile-max（767.98px）= 手机形态。用于模板/脚本的桌面↔移动二选一，
+//   必须与 useDeviceLayout 的 isMobile 同口径。
+
 // rem 版本断点（业务页 @media 统一引用，根字号 16px）
 // @screen-xxs-rem: 超小屏 → 小屏（≤ 30rem 为超小屏）
 // @screen-xs-rem: 小屏 → 手机/平板交界（≤ 40rem 为小屏）
@@ -33,6 +40,11 @@
 // 因此手机形态查询必须用 767.98px 而不是 @screen-sm-rem（48rem = 768px 会把 768 也算进手机）。
 // 与 useDeviceLayout 的 isMobile（vueuse smaller(768) = max-width: 767.9px）及 theme.css 的 767.98px 同口径。
 @screen-mobile-max: 767.98px;
+
+// 侧边栏宽度：布局占位（layout.less）、Header 顶栏左偏移、SideNav 折叠态三处必须同源，
+// 原来在 6 个位置各写一遍 232px / 64px，任何一处漏改都会让顶栏与侧栏错位（L-23）
+@starter-sidebar-width: 232px;
+@starter-sidebar-collapsed-width: 64px;
 
 // 动画
 @anim-time-fn-easing: cubic-bezier(0.38, 0, 0.24, 1);

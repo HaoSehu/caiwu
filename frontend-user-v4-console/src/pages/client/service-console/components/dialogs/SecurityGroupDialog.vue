@@ -1,5 +1,5 @@
 <template>
-  <t-dialog v-model:visible="groupVisible" header="新建安全组" width="min(30rem, calc(100vw - 2rem))" destroy-on-close>
+  <t-dialog v-model:visible="groupVisible" header="新建安全组" width="min(32rem, calc(100vw - 2rem))" destroy-on-close>
     <div class="dialog-form">
       <label>
         <span>名称</span>
@@ -16,7 +16,7 @@
       </label>
     </div>
     <template #footer>
-      <t-button variant="outline" @click="groupVisible = false">取消</t-button>
+      <t-button variant="outline" :disabled="securityState.submitting" @click="groupVisible = false">取消</t-button>
       <t-button theme="primary" :loading="securityState.submitting" @click="submitSecurityGroup">创建</t-button>
     </template>
   </t-dialog>

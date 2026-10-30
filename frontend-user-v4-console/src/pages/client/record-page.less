@@ -78,7 +78,7 @@
   color: var(--td-text-color-primary);
   cursor: pointer;
   background: var(--td-bg-color-container);
-  border: 0.0625rem solid var(--td-component-stroke);
+  border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
   box-shadow: var(--td-shadow-1);
   transition: border-color @anim-duration-base @anim-time-fn-easing;
@@ -99,7 +99,7 @@
 
 .record-mobile-card__head {
   padding-bottom: 0.625rem;
-  border-bottom: 0.0625rem solid var(--td-component-stroke);
+  border-bottom: thin solid var(--td-component-stroke);
 }
 
 .record-mobile-card__head strong {
@@ -151,7 +151,8 @@
       left: 0;
       width: 0.1875rem;
       background: var(--td-brand-color);
-      border-radius: 0.125rem;
+      // C-24：0.125rem 与 --td-radius-small 等值
+      border-radius: var(--td-radius-small);
       content: '';
     }
   }
@@ -267,7 +268,6 @@
   .record-toolbar {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-
 }
 
 @media (max-width: @screen-sm-max) {

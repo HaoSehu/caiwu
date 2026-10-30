@@ -1,6 +1,6 @@
 import { CopyIcon } from 'tdesign-icons-vue-next';
 import { Popup as TPopup } from 'tdesign-vue-next/es/popup';
-import { defineComponent, h, nextTick, onMounted, onUpdated, ref } from 'vue';
+import { defineComponent, h, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 export const InfoCell = defineComponent({
   name: 'InfoCell',
@@ -16,23 +16,40 @@ export const InfoCell = defineComponent({
     const textRef = ref<HTMLElement | null>(null);
     const isTruncated = ref(false);
 
+    // 只在文本或可用宽度变化时重判，避免父组件任意更新（onUpdated）都触发一次
+    // 「读 scrollWidth」的强制同步布局——概览页一屏有 10 个以上 InfoCell。
     const checkTruncated = () => {
       const el = textRef.value;
       if (!el) {
         isTruncated.value = false;
         return;
       }
-      isTruncated.value = el.scrollWidth > el.clientWidth;
+      const next = el.scrollWidth > el.clientWidth;
+      if (next !== isTruncated.value) isTruncated.value = next;
     };
 
-    onMounted(async () => {
-      await nextTick();
-      checkTruncated();
+    let resizeObserver: ResizeObserver | null = null;
+
+    onMounted(() => {
+      void nextTick(() => {
+        checkTruncated();
+        const el = textRef.value;
+        if (!el || typeof ResizeObserver === 'undefined') return;
+        resizeObserver = new ResizeObserver(() => checkTruncated());
+        resizeObserver.observe(el);
+      });
     });
-    onUpdated(async () => {
-      await nextTick();
-      checkTruncated();
+    onBeforeUnmount(() => {
+      resizeObserver?.disconnect();
+      resizeObserver = null;
     });
+
+    watch(
+      () => props.value,
+      () => {
+        void nextTick(checkTruncated);
+      },
+    );
 
     return () => {
       const tag = props.strong ? 'strong' : 'span';

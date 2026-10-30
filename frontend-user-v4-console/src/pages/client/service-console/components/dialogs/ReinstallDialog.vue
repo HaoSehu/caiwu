@@ -2,7 +2,7 @@
   <t-dialog
     v-model:visible="reinstallVisible"
     header="重装系统"
-    width="min(34rem, calc(100vw - 2rem))"
+    width="min(32rem, calc(100vw - 2rem))"
     destroy-on-close
   >
     <loading-state :loading="reinstallState.loading" text="数据加载中…" compact>
@@ -32,8 +32,8 @@
       </div>
     </loading-state>
     <template #footer>
-      <t-button variant="outline" @click="reinstallVisible = false">取消</t-button>
-      <t-button theme="primary" :loading="actionLoading" :disabled="!reinstallState.os_id" @click="submitReinstall"
+      <t-button variant="outline" :disabled="reinstallLoading" @click="reinstallVisible = false">取消</t-button>
+      <t-button theme="primary" :loading="reinstallLoading" :disabled="!reinstallState.os_id" @click="submitReinstall"
         >提交重装</t-button
       >
     </template>
@@ -47,7 +47,7 @@ import { useServiceConsoleContext } from '../context';
 const {
   reinstallVisible,
   reinstallState,
-  actionLoading,
+  reinstallLoading,
   reinstallGroupedOptions,
   currentReinstallOptions,
   handleReinstallGroupChange,

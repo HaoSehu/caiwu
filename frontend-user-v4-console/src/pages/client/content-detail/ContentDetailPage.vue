@@ -30,7 +30,7 @@
               </header>
 
               <t-divider v-if="currentArticle" />
-              <div ref="contentRef" class="reader-content" v-html="articleContentHtml"></div>
+              <div class="reader-content" v-html="articleContentHtml"></div>
             </article>
           </data-state>
         </t-card>
@@ -87,7 +87,6 @@ const {
   detailLoadError,
   currentCategoryId,
   tocItems,
-  contentRef,
   backToListRoute,
   timeLabel,
   currentCategoryName,
@@ -162,6 +161,18 @@ const {
   font: var(--td-font-body-small);
 }
 
+/*
+  N-12：目录锚点跳转原先会被布局层吸顶的路由页签挡住标题。
+  .tdesign-starter-layout 是滚动容器（src/style/layout.less:132-133），子元素 -tabs-nav
+  绑了 position: sticky / top: 0（LayoutContent.vue:10 的行内样式，会盖过 layout.less:135-139
+  的 position: fixed），scrollIntoView({ block: 'start' }) 把目标顶到容器上沿后页签正压在上面。
+  scroll-margin-top 让浏览器滚动时预留这段距离，是这条链路里唯一不用改布局层的解法
+  （全仓此前没有任何 scroll-margin / scroll-padding）。预留量按页签栏保守估算：一档控件高加一段间隙。
+*/
+.reader-article {
+  scroll-margin-top: calc(var(--td-comp-size-xxl) + var(--td-comp-margin-s));
+}
+
 .reader-content {
   color: var(--td-text-color-primary);
   font: var(--td-font-body-medium);
@@ -175,6 +186,8 @@ const {
     margin: var(--td-comp-margin-l) 0 var(--td-comp-margin-s);
     color: var(--td-text-color-primary);
     font-weight: 600;
+    // N-12：同上，正文小标题被目录跳转顶到固定页签下面
+    scroll-margin-top: calc(var(--td-comp-size-xxl) + var(--td-comp-margin-s));
   }
 
   :deep(p),
@@ -209,7 +222,8 @@ const {
 
   :deep(blockquote) {
     padding: var(--td-comp-paddingTB-s) var(--td-comp-paddingLR-m);
-    border-left: var(--td-comp-size-xxxs) solid var(--td-brand-color);
+    // 原误用尺寸令牌当边框宽度（过粗），改用引用块标准左边线
+    border-left: 0.25rem solid var(--td-brand-color);
   }
 
   :deep(table) {
@@ -253,6 +267,8 @@ const {
 
 .toc-row {
   width: 100%;
+  // 原纵向内边距偏小、行高约 28 未达触控基线，改为等比放大
+  min-height: var(--td-comp-size-l);
   padding: var(--td-comp-paddingTB-s) 0;
   color: var(--td-text-color-secondary);
   background: transparent;
@@ -270,12 +286,6 @@ const {
 @media (max-width: @screen-lg-rem) {
   .reader-layout {
     grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: @screen-mobile-max) {
-  .content-detail-page {
-    padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-s);
   }
 }
 </style>

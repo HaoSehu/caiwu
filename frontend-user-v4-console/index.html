@@ -15,7 +15,14 @@
       http-equiv="Content-Security-Policy"
       content="default-src 'self'; script-src 'self' https://static.geetest.com https://tdesign.gtimg.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https:; media-src 'self' https: blob:; frame-src 'self' https: alipays:; object-src 'none'; base-uri 'self'; form-action 'self'"
     />
-    <link rel="icon" href="/favicon.ico" />
+    <!-- 单图 32×32：浏览器标签页的最大渲染尺寸就是 32px，
+         原先是 64×64 单图未压缩 32bpp（16958 B），缩到 32×32 后 4286 B，首访省 12.6 KB（PB-21） -->
+    <link rel="icon" type="image/x-icon" sizes="32x32" href="/favicon.ico" />
+    <!-- PB-20：极验脚本域名在 main.ts 里由 initClientRuntimeConnectionHints 预热，
+         但那段代码要等 JS 下载+解析完才执行，登录页因此白等一个 RTT。
+         静态 dns-prefetch 在 HTML 解析阶段就发出，代价只有一次 DNS 查询。
+         不用 preconnect：绝大多数访客不进登录页，提前建 TCP/TLS 会白占连接。 -->
+    <link rel="dns-prefetch" href="//static.geetest.com" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="robots" content="noindex,nofollow" />
     <title>创欧云用户控制台</title>

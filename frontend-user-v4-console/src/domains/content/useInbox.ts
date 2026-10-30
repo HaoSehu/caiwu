@@ -1,6 +1,9 @@
 import { ref } from 'vue';
 
 import clientApi from '@/api/client';
+import { getErrorMessage } from '@/utils/error';
+
+import { createUnreadCounter } from './createUnreadCounter';
 
 export interface InboxItem {
   id: string;
@@ -15,39 +18,28 @@ export interface InboxItem {
   created_at: string | null;
 }
 
+// 铃铛未读 = 公告未读 + 个性化通知未读（GET /notifications/unread-count），
+// 与 useNoticeReadStatus 的「公告未读」不是同一个数字，禁止互相复用。
+const counter = createUnreadCounter(async () => {
+  const res = await clientApi.notificationUnreadCount();
+  return Number((res as { data?: { count?: number } })?.data?.count ?? 0);
+});
+
 // 模块级单例：未读数与下拉列表在铃铛、侧栏、Dashboard 间共享
-const unreadCount = ref(0);
 const feedItems = ref<InboxItem[]>([]);
 const feedLoading = ref(false);
-let lastCountFetch = 0;
-const COUNT_TTL = 30_000;
-
-function extractData<T>(res: unknown): T | undefined {
-  return (res as { data?: T })?.data;
-}
 
 export function useInbox() {
-  async function fetchUnreadCount(force = false) {
-    const now = Date.now();
-    if (!force && now - lastCountFetch < COUNT_TTL) return;
-    try {
-      const res = await clientApi.notificationUnreadCount();
-      unreadCount.value = extractData<{ count: number }>(res)?.count ?? 0;
-      lastCountFetch = Date.now();
-    } catch {
-      // 静默失败，避免影响页面
-    }
-  }
+  const { unreadCount, fetchUnreadCount, setUnreadCount, decrementUnread, invalidate } = counter;
 
   async function fetchFeed(limit = 10) {
     feedLoading.value = true;
     try {
       const res = await clientApi.notificationFeed(limit);
-      const data = extractData<{ list: InboxItem[]; unread_count: number }>(res);
+      const data = (res as { data?: { list: InboxItem[]; unread_count: number } })?.data;
       feedItems.value = data?.list ?? [];
       if (typeof data?.unread_count === 'number') {
-        unreadCount.value = data.unread_count;
-        lastCountFetch = Date.now();
+        setUnreadCount(data.unread_count);
       }
     } catch {
       feedItems.value = [];
@@ -56,7 +48,9 @@ export function useInbox() {
     }
   }
 
-  // 标记单条已读：公告进详情页自动已读，这里主要处理个性化消息
+  // 标记单条已读：公告进详情页自动已读，这里主要处理个性化消息。
+  // 失败必须向上抛出，调用方（Header）要能区分「已标记」与「标记失败」，
+  // 否则会出现已提示成功但服务端仍未读的状态漂移。
   async function markRead(item: InboxItem) {
     if (item.read) return;
     try {
@@ -67,26 +61,22 @@ export function useInbox() {
         await clientApi.markNoticeRead(noticeId);
       }
       item.read = true;
-      if (unreadCount.value > 0) unreadCount.value--;
-    } catch {
-      // 静默失败
+      // 走 counter 的减一：它除了把数字减下去，还会清掉「最近一次拉取时间」，
+      // 下一次进面板会真的回源校正；直接改 ref 会让计数在 TTL 内漂移。
+      decrementUnread();
+    } catch (error: unknown) {
+      throw new Error(getErrorMessage(error, '标记已读失败'));
     }
   }
 
   async function markAllRead() {
     try {
       await clientApi.markAllNotificationsRead();
-      unreadCount.value = 0;
-      lastCountFetch = Date.now();
+      setUnreadCount(0);
       feedItems.value = feedItems.value.map((item) => ({ ...item, read: true }));
-    } catch {
-      // 静默失败
+    } catch (error: unknown) {
+      throw new Error(getErrorMessage(error, '批量标记已读失败'));
     }
-  }
-
-  // 公告详情页打开后已读，需重新拉取未读数
-  function invalidate() {
-    lastCountFetch = 0;
   }
 
   return {
@@ -97,6 +87,7 @@ export function useInbox() {
     fetchFeed,
     markRead,
     markAllRead,
+    // 公告详情页打开后已读，需让下一次拉取真正请求
     invalidate,
   };
 }

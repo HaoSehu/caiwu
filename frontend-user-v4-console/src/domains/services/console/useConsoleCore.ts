@@ -120,18 +120,27 @@ export function mergeConsoleDetail(
   });
 }
 
+// 入口页已拉过一次详情用于判定控制台类型；把结果暂存，目标页 bootstrap 直接复用，
+// 避免同一实例在进入时被重复请求（一次进入曾产生 3 次详情级请求）。
+const prefetchedConsoleDetails = new Map<number, ConsoleServiceDetail>();
+
+export function rememberConsoleDetail(id: number, detail: ConsoleServiceDetail): void {
+  if (!Number.isFinite(id) || id <= 0) return;
+  prefetchedConsoleDetails.set(id, detail);
+}
+
+export function takeConsoleDetail(id: number): ConsoleServiceDetail | null {
+  const cached = prefetchedConsoleDetails.get(id);
+  if (!cached) return null;
+  prefetchedConsoleDetails.delete(id);
+  return cached;
+}
+
 export function normalizeToken(value: unknown): string {
   return String(value || '')
     .trim()
     .toLowerCase()
     .replace(/[\s_-]+/g, '');
-}
-
-export function resolveErrorMessage(error: unknown, fallback: string): string {
-  if (typeof error === 'object' && error !== null && 'message' in error && typeof error.message === 'string') {
-    return error.message.trim() || fallback;
-  }
-  return fallback;
 }
 
 export function isNatConsole(detail: ConsoleServiceDetail): boolean {

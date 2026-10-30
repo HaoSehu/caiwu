@@ -2,7 +2,7 @@
   <t-dialog
     v-model:visible="ruleVisible"
     header="新建安全组规则"
-    width="min(34rem, calc(100vw - 2rem))"
+    width="min(32rem, calc(100vw - 2rem))"
     destroy-on-close
   >
     <div class="dialog-form">
@@ -52,7 +52,7 @@
       </label>
     </div>
     <template #footer>
-      <t-button variant="outline" @click="ruleVisible = false">取消</t-button>
+      <t-button variant="outline" :disabled="securityState.submitting" @click="ruleVisible = false">取消</t-button>
       <t-button theme="primary" :loading="securityState.submitting" @click="submitSecurityRule">创建规则</t-button>
     </template>
   </t-dialog>

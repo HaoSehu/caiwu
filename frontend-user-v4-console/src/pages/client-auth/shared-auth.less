@@ -8,38 +8,42 @@
   width: 100%;
 }
 
+/* A-22：必填星号是 ::before 生成的纯 CSS 内容，读屏软件拿不到，
+   DOM 上也没有 aria-required（已核 t-design 的 form/form-item 不输出 aria-*）。
+   因此每张必填字段的 label 末尾另挂一个 .sr-only 的「（必填）」文本节点，
+   视觉不可见，读屏会把它念成「手机号 / 邮箱（必填）」。 */
 .client-auth-label {
   display: block;
-  margin-bottom: 0.5rem;
-  font-size: 0.875rem;
+  margin-bottom: var(--td-comp-margin-s);
+  font-size: var(--td-font-size-body-medium);
   font-weight: 500;
   color: var(--td-text-color-primary);
   line-height: 1.5;
 
   &.is-required::before {
     content: '*';
-    margin-right: 0.25rem;
+    margin-right: var(--td-comp-margin-xs);
     color: var(--td-error-color);
     font-weight: 400;
   }
 }
 
-/* 输入框下方的小提示 */
+/* 输入框下方的小提示（C-23：原 0.8125rem=13px 不在 TDesign 字号号段内，改用 body-small） */
 .client-auth-tip {
-  margin: 0.375rem 0 0;
-  font-size: 0.8125rem;
+  margin: calc(var(--td-comp-margin-s) - var(--td-comp-margin-xxs)) 0 0;
+  font-size: var(--td-font-size-body-small);
   color: var(--td-text-color-placeholder);
   line-height: 1.4;
 }
 
 /* 表单项间距 */
 :deep(.t-form__item) {
-  margin-bottom: 1.25rem;
+  margin-bottom: var(--td-comp-margin-xl);
 }
 
 /* 含 extra 提示的表单项需要额外间距，避免绝对定位的 extra 文字被下方元素遮挡 */
 :deep(.t-form__item.t-form__item-with-extra) {
-  padding-bottom: var(--td-line-height-body-small, 20px);
+  padding-bottom: var(--td-comp-margin-xl, 20px);
 }
 
 :deep(.t-form__controls-content) {
@@ -48,7 +52,10 @@
 
 :deep(.t-input) {
   width: 100%;
-  min-height: 2.875rem;
+  // A-03：原为 2.875rem（46px），与同一行「发送验证码」和主提交按钮的
+  // var(--td-comp-size-xxl)（48px）差 2px，同一行控件顶/底边对不齐。
+  // 统一取尺寸号段里的 48px，输入框与按钮用同一个令牌。
+  min-height: var(--td-comp-size-xxl);
   border-color: var(--td-border-level-2-color);
   background: var(--td-bg-color-container);
   box-shadow: none;
@@ -64,11 +71,11 @@
 
 :deep(.t-input.t-input--focused) {
   border-color: var(--td-brand-color);
-  box-shadow: 0 0 0 2px var(--td-brand-color-focus);
+  box-shadow: 0 0 0 var(--td-comp-margin-xxs) var(--td-brand-color-focus);
 }
 
 :deep(.t-input__inner) {
-  font-size: 0.875rem;
+  font-size: var(--td-font-size-body-medium);
 }
 
 :deep(.t-input__inner::placeholder) {
@@ -95,10 +102,10 @@
 .client-auth-form__links {
   display: flex;
   justify-content: flex-end;
-  margin: 0 0 1.375rem;
+  margin: 0 0 calc(var(--td-comp-margin-xl) + var(--td-comp-margin-xxs));
 
   a {
-    font-size: 0.875rem;
+    font-size: var(--td-font-size-body-medium);
     color: var(--td-brand-color);
     text-decoration: none;
     font-weight: 500;
@@ -113,12 +120,14 @@
 .client-auth-code-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 0.5rem;
+  gap: var(--td-comp-margin-s);
 }
 
 .client-auth-code-row .t-button {
+  // 8.5rem 由「获取验证码」文案宽度决定，属几何约束而非间距（C-21）
   min-width: 8.5rem;
-  height: 3rem;
+  // A-04：三张认证页共用一条验证码行布局（grid，两列），按钮高度与同行输入框同值
+  height: var(--td-comp-size-xxl);
 }
 
 /* 密码字段的可见性开关：
@@ -132,37 +141,63 @@
   display: none;
 }
 
+/* A-11：校验失败的播报通道。
+   t-form 的错误提示是纯视觉的 .t-form__error 文本，既不带动效也不在 DOM 上有 aria 语义，
+   读屏用户提交后只会听到「登录」按钮被按下，听不到哪一项错了。
+   这里给每张表单配一个常驻的 live 区（必须常驻，v-if 挂载不会被播报），
+   校验摘要写进它的文本节点，视觉上完全不可见。 */
+.client-auth-live {
+  position: absolute;
+  width: 0.0625rem;
+  height: 0.0625rem;
+  padding: 0;
+  margin: -0.0625rem;
+  overflow: hidden;
+  white-space: nowrap;
+  border: 0;
+  clip-path: inset(50%);
+}
+
+/* A-15：选填项分组标题。选填项原先夹在必填项之间且样式完全一致，
+   现在移到必填项之后，用这条标题把两段分开；字号用 body-small、色用 secondary，
+   比字段标签弱一档，不会被读成另一个字段。 */
+.client-auth-group-title {
+  margin: var(--td-comp-margin-l) 0 0;
+  color: var(--td-text-color-secondary);
+  font: var(--td-font-body-small);
+}
+
 :deep(.t-button) {
   font-weight: 500;
 }
 
 .client-auth-submit {
-  margin-top: 0.5rem;
+  margin-top: var(--td-comp-margin-s);
 }
 
 :deep(.t-button--variant-base.t-button--theme-primary) {
-  height: 3rem;
+  height: var(--td-comp-size-xxl);
   letter-spacing: 0.02em;
 }
 
 :deep(.t-form__error) {
-  margin-top: 0.375rem;
-  font-size: 0.75rem;
+  margin-top: calc(var(--td-comp-margin-s) - var(--td-comp-margin-xxs));
+  font-size: var(--td-font-size-body-small);
   line-height: 1.4;
 }
 
 /* ── 响应式 ── */
 @media (max-width: @screen-sm-max) {
   :deep(.t-form__item) {
-    margin-bottom: 1rem;
+    margin-bottom: var(--td-comp-margin-l);
   }
 
   .client-auth-form__links {
     justify-content: flex-start;
-    margin: 0 0 1.25rem;
+    margin: 0 0 var(--td-comp-margin-xl);
   }
 
   .client-auth-submit {
-    margin-top: 0.375rem;
+    margin-top: calc(var(--td-comp-margin-s) - var(--td-comp-margin-xxs));
   }
 }

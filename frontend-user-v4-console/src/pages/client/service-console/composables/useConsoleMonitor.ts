@@ -1,4 +1,4 @@
-import { computed, ref } from 'vue';
+import { computed, onBeforeUnmount, ref } from 'vue';
 
 import type { MonitorChartRecord, MonitorSummaryItem } from '@/types/client';
 
@@ -62,6 +62,11 @@ export const MONITOR_CHART_TOP = 14;
 export const MONITOR_CHART_BOTTOM = 116;
 export const MONITOR_AXIS_SEGMENTS = 3;
 
+// PR-02/SC-14：SVG 折线最多渲染这么多点。30 天区间上游可能回上千个点，
+// 每个点都要算坐标、拼 path、再参与指针命中比较，而 320 单位宽的图上
+// 超过这个数量后视觉已经无法分辨（相邻点水平间距小于 3 单位）。
+const MONITOR_MAX_RENDER_POINTS = 120;
+
 // 图表系列色严格取自 theme.css 官方 token 色值：brand-6 / success-6 / warning-6 / brand-4（裁决 2026-10-11：不引入体系外紫色）
 const monitorPalette = ['#165dff', '#12b76a', '#f59e0b', '#5f9eff'];
 
@@ -91,7 +96,8 @@ export function useConsoleMonitor(monitorState: { charts: MonitorChartRecord[] }
       xAxisLabels: buildMonitorXAxisLabels(firstSeriesPoints),
       series: series
         .map((item, seriesIndex) => {
-          const points = buildMonitorRenderPoints(item.rawPoints, range, item.key);
+          // 降采样只作用于绘制与指针命中，summary / 坐标轴仍取原始序列
+          const points = buildMonitorRenderPoints(downsampleMonitorPoints(item.rawPoints), range, item.key);
           return {
             key: item.key || `${index}-${seriesIndex}`,
             name: item.name,
@@ -145,11 +151,47 @@ export function useConsoleMonitor(monitorState: { charts: MonitorChartRecord[] }
       .flatMap((item) => item.rawPoints.map((point) => point.value))
       .filter((value) => Number.isFinite(value));
     if (!values.length) return { min: 0, max: 1, range: 1 };
-    const dataMin = Math.min(...values);
-    const dataMax = Math.max(...values);
+    // 用 reduce 而非 Math.min(...values)：监控区间点数多时展开传参会触发栈溢出
+    const dataMin = values.reduce((acc, value) => (value < acc ? value : acc), values[0]);
+    const dataMax = values.reduce((acc, value) => (value > acc ? value : acc), values[0]);
     const min = dataMin >= 0 ? 0 : dataMin;
     const max = dataMax === min ? min + 1 : buildNiceMonitorAxisMax(dataMax, min);
     return { min, max, range: max - min || 1 };
+  }
+
+  // PR-02/SC-14：渲染前降采样。每档保留该时间段内的最小值与最大值，
+  // 折线形态（尤其是尖峰）不会因为抽稀而消失；首尾点始终保留，
+  // 保证曲线两端仍然贴住图形区的左右边界。
+  function downsampleMonitorPoints(points: MonitorPoint[]): MonitorPoint[] {
+    if (points.length <= MONITOR_MAX_RENDER_POINTS) return points;
+    const bucketCount = Math.max(1, Math.floor(MONITOR_MAX_RENDER_POINTS / 2));
+    const stride = points.length / bucketCount;
+    const result: MonitorPoint[] = [];
+    let lastIndex = -1;
+    for (let bucket = 0; bucket < bucketCount; bucket += 1) {
+      const start = Math.floor(bucket * stride);
+      const end = bucket === bucketCount - 1 ? points.length : Math.floor((bucket + 1) * stride);
+      let minIndex = start;
+      let maxIndex = start;
+      for (let index = start + 1; index < end; index += 1) {
+        if (points[index].value < points[minIndex].value) minIndex = index;
+        if (points[index].value > points[maxIndex].value) maxIndex = index;
+      }
+      const lowIndex = Math.min(minIndex, maxIndex);
+      const highIndex = Math.max(minIndex, maxIndex);
+      if (lowIndex > lastIndex) {
+        result.push(points[lowIndex]);
+        lastIndex = lowIndex;
+      }
+      if (highIndex > lastIndex) {
+        result.push(points[highIndex]);
+        lastIndex = highIndex;
+      }
+    }
+    // 不用 Array.prototype.at：它要 Chrome 92 / Safari 15.4，超出仓库声明的浏览器基线
+    const lastPoint = points[points.length - 1];
+    if (result[result.length - 1] !== lastPoint) result.push(lastPoint);
+    return result;
   }
 
   function buildMonitorRenderPoints(
@@ -193,11 +235,12 @@ export function useConsoleMonitor(monitorState: { charts: MonitorChartRecord[] }
   function buildMonitorXAxisLabels(points: MonitorPoint[]) {
     if (!points.length) return { start: '--', middle: '--', end: '--' };
     const middle = points[Math.floor((points.length - 1) / 2)];
-    const sameDay = isSameMonitorDate(points[0], points.at(-1));
+    const last = points[points.length - 1];
+    const sameDay = isSameMonitorDate(points[0], last);
     return {
       start: formatMonitorAxisTime(points[0], sameDay),
       middle: formatMonitorAxisTime(middle, sameDay),
-      end: formatMonitorAxisTime(points.at(-1), sameDay),
+      end: formatMonitorAxisTime(last, sameDay),
     };
   }
 
@@ -247,17 +290,28 @@ export function useConsoleMonitor(monitorState: { charts: MonitorChartRecord[] }
       mode === 'average'
         ? values.reduce((sum, item) => sum + item, 0) / values.length
         : mode === 'peak'
-          ? Math.max(...values)
-          : Math.min(...values);
+          ? values.reduce((acc, item) => (item > acc ? item : acc), values[0])
+          : values.reduce((acc, item) => (item < acc ? item : acc), values[0]);
     return Number.isInteger(value) ? String(value) : value.toFixed(2);
   }
 
-  function handleMonitorPointerMove(event: MouseEvent, chart: MonitorChartView) {
-    const points = chart.series[0]?.points || [];
+  // 原实现每次 mousemove（浏览器可到 120Hz）都线性扫全部点并写响应式状态，
+  // 一张图 120 个点 × 3 条序列时每秒要做上万次比较，且每次都触发整块模板重渲染。
+  // 改为按帧合并：一帧内只处理最后一次指针位置，并在读取矩形前判空。
+  let pointerRafId = 0;
+  let pendingPointer: { clientX: number; target: SVGElement; chartKey: string } | null = null;
+
+  function applyMonitorPointer() {
+    pointerRafId = 0;
+    const pending = pendingPointer;
+    pendingPointer = null;
+    if (!pending) return;
+    const chart = monitorChartViews.value.find((item) => item.key === pending.chartKey);
+    const points = chart?.series[0]?.points || [];
     if (!points.length) return;
-    const bounds = (event.currentTarget as SVGElement).getBoundingClientRect();
+    const bounds = pending.target.getBoundingClientRect();
     if (!bounds.width) return;
-    const pointerX = ((event.clientX - bounds.left) / bounds.width) * MONITOR_CHART_WIDTH;
+    const pointerX = ((pending.clientX - bounds.left) / bounds.width) * MONITOR_CHART_WIDTH;
     let nearestIndex = 0;
     let nearestDistance = Number.POSITIVE_INFINITY;
     points.forEach((point, index) => {
@@ -267,10 +321,53 @@ export function useConsoleMonitor(monitorState: { charts: MonitorChartRecord[] }
         nearestIndex = index;
       }
     });
-    activeMonitorPoint.value = { chartKey: chart.key, index: nearestIndex };
+    const current = activeMonitorPoint.value;
+    if (current && current.chartKey === pending.chartKey && current.index === nearestIndex) return;
+    activeMonitorPoint.value = { chartKey: pending.chartKey, index: nearestIndex };
+  }
+
+  function queuePointerUpdate(clientX: number, target: SVGElement, chart: MonitorChartView) {
+    if (!chart.series[0]?.points?.length) return;
+    pendingPointer = { clientX, target, chartKey: chart.key };
+    if (pointerRafId) return;
+    pointerRafId = window.requestAnimationFrame(applyMonitorPointer);
+  }
+
+  function handleMonitorPointerMove(event: MouseEvent, chart: MonitorChartView) {
+    queuePointerUpdate(event.clientX, event.currentTarget as SVGElement, chart);
+  }
+
+  // 触屏没有 mousemove：手指按下/滑动时同样给出读数，否则移动端图表只能看不能读。
+  function handleMonitorPointerTouch(event: TouchEvent, chart: MonitorChartView) {
+    const touch = event.touches[0] || event.changedTouches[0];
+    if (!touch) return;
+    queuePointerUpdate(touch.clientX, event.currentTarget as SVGElement, chart);
+  }
+
+  // 键盘可达：聚焦图表后用左右方向键逐点移动读数（Home/End 跳到首尾）。
+  function stepMonitorPointer(chart: MonitorChartView, delta: number | 'start' | 'end') {
+    const points = chart.series[0]?.points || [];
+    if (!points.length) return;
+    const current = activeMonitorPoint.value;
+    const currentIndex = current && current.chartKey === chart.key ? current.index : 0;
+    let nextIndex: number;
+    if (delta === 'start') {
+      nextIndex = 0;
+    } else if (delta === 'end') {
+      nextIndex = points.length - 1;
+    } else {
+      nextIndex = Math.min(points.length - 1, Math.max(0, currentIndex + delta));
+    }
+    if (current && current.chartKey === chart.key && current.index === nextIndex) return;
+    activeMonitorPoint.value = { chartKey: chart.key, index: nextIndex };
   }
 
   function clearMonitorPointer() {
+    if (pointerRafId) {
+      window.cancelAnimationFrame(pointerRafId);
+      pointerRafId = 0;
+    }
+    pendingPointer = null;
     activeMonitorPoint.value = null;
   }
 
@@ -329,10 +426,20 @@ export function useConsoleMonitor(monitorState: { charts: MonitorChartRecord[] }
     };
   }
 
+  onBeforeUnmount(() => {
+    if (pointerRafId) {
+      window.cancelAnimationFrame(pointerRafId);
+      pointerRafId = 0;
+    }
+    pendingPointer = null;
+  });
+
   return {
     monitorChartViews,
     activeMonitorPoint,
     handleMonitorPointerMove,
+    handleMonitorPointerTouch,
+    stepMonitorPointer,
     clearMonitorPointer,
     resolveActiveMonitorPointCached,
     resolveMonitorTooltipStyle,

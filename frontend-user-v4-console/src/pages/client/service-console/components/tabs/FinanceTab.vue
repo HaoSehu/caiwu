@@ -55,6 +55,7 @@
           :page-size-options="[10, 20, 50]"
           show-total
           @change="loadFinanceLogs"
+          @page-size-change="handleFinancePageSizeChange"
         />
       </div>
     </t-card>
@@ -71,5 +72,5 @@ import {
 } from '../../composables/useConsoleTables';
 import { useServiceConsoleContext } from '../context';
 
-const { financeState, formatMoney, loadFinanceLogs } = useServiceConsoleContext();
+const { financeState, formatMoney, loadFinanceLogs, handleFinancePageSizeChange } = useServiceConsoleContext();
 </script>

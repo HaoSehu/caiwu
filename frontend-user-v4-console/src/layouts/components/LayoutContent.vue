@@ -13,7 +13,7 @@
     >
       <t-tab-panel
         v-for="(routeItem, index) in tabRouters"
-        :key="`${routeItem.path}_${index}`"
+        :key="routeItem.path"
         :value="routeItem.path"
         :removable="!routeItem.isHome"
         :draggable="!routeItem.isHome"
@@ -31,17 +31,17 @@
               </template>
               <t-icon v-else name="home" />
             </span>
-            <t-dropdown
-              trigger="click"
-              :min-column-width="128"
-              :popup-props="{
-                overlayClassName: 'route-tabs-dropdown',
-                onVisibleChange: (visible: boolean, ctx: PopupVisibleChangeContext) =>
-                  handleTabMenuClick(visible, ctx, routeItem.path),
-                visible: activeTabPath === routeItem.path,
-              }"
-            >
-              <span class="tab-item-more" @click.stop>
+            <t-dropdown trigger="click" :min-column-width="128" :popup-props="tabPopupPropsMap[routeItem.path]">
+              <span
+                class="tab-item-more"
+                role="button"
+                tabindex="0"
+                :aria-label="`${renderTitle(routeItem.title) || '首页'}标签页操作`"
+                :aria-expanded="activeTabPath === routeItem.path"
+                @click.stop
+                @keydown.enter.prevent.stop="openTabMenu(routeItem.path)"
+                @keydown.space.prevent.stop="openTabMenu(routeItem.path)"
+              >
                 <t-icon name="ellipsis" class="tab-item-more-icon" />
               </span>
               <template #dropdown>
@@ -98,43 +98,76 @@ const tabsRouterStore = useTabsRouterStore();
 const tabRouters = computed(() => tabsRouterStore.tabRouters.filter((route) => route.isAlive || route.isHome));
 const activeTabPath = ref('');
 
+// 每个标签的下拉配置预先生成并缓存对象引用：模板里写字面量会每次渲染产生新对象与新函数，
+// 让 t-dropdown 的 props 比较始终不相等，从而反复触发内部更新。
+const tabPopupPropsMap = computed<Record<string, Record<string, unknown>>>(() => {
+  const map: Record<string, Record<string, unknown>> = {};
+  for (const item of tabRouters.value) {
+    map[item.path] = {
+      overlayClassName: 'route-tabs-dropdown',
+      visible: activeTabPath.value === item.path,
+      onVisibleChange: (visible: boolean, ctx: PopupVisibleChangeContext) =>
+        handleTabMenuClick(visible, ctx, item.path),
+    };
+  }
+  return map;
+});
+
+// 模板 v-for 遍历的是过滤后的可见标签（isAlive || isHome），而 tabsRouterStore 的各
+// subtract*/toggle* 动作按 state.tabRouterList 的原始下标执行。两者在存在 isAlive=false
+// 的标签时不等长，因此所有入口都先用 path 反查 store 真实下标，禁止直接透传列表下标。
+const resolveStoreIdx = (path: string) => tabsRouterStore.tabRouters.findIndex((i) => i.path === path);
+
 const handleChangeCurrentTab = (path: string) => {
-  const { tabRouters } = tabsRouterStore;
-  const route = tabRouters.find((i) => i.path === path);
-  router.push({ path, query: route.query });
+  const target = tabsRouterStore.tabRouters.find((i) => i.path === path);
+  if (!target) return;
+  router.push({ path, query: target.query });
 };
 
 const handleRemove = (options: TTabRemoveOptions) => {
-  const { tabRouters } = tabsRouterStore;
-  const nextRouter = tabRouters[options.index + 1] || tabRouters[options.index - 1];
+  const removingPath = options.value as string;
+  const list = tabsRouterStore.tabRouters;
+  const storeIdx = list.findIndex((i) => i.path === removingPath);
+  if (storeIdx < 0) return;
+  const isRemovingActive = removingPath === route.path;
+  // 相邻标签同样按 store 原始列表取，且兜底到控制台，避免关闭最后一个非首页标签时读空对象
+  const nextRouter = list[storeIdx + 1] ?? list[storeIdx - 1] ?? list[0];
 
-  tabsRouterStore.subtractCurrentTabRouter({ path: options.value as string, routeIdx: options.index });
-  if ((options.value as string) === route.path) router.push({ path: nextRouter.path, query: nextRouter.query });
+  tabsRouterStore.subtractCurrentTabRouter({ path: removingPath, routeIdx: storeIdx });
+  if (isRemovingActive && nextRouter) router.push({ path: nextRouter.path, query: nextRouter.query });
 };
 
 const renderTitle = (title?: string) => title || '';
-const handleRefresh = (route: TRouterInfo, routeIdx: number) => {
-  tabsRouterStore.toggleTabRouterAlive(routeIdx);
+const handleRefresh = (tab: TRouterInfo, _routeIdx: number) => {
+  const storeIdx = resolveStoreIdx(tab.path);
+  if (storeIdx < 0) return;
+  tabsRouterStore.toggleTabRouterAlive(storeIdx);
   nextTick(() => {
-    tabsRouterStore.toggleTabRouterAlive(routeIdx);
-    router.replace({ path: route.path, query: route.query });
+    tabsRouterStore.toggleTabRouterAlive(storeIdx);
+    router.replace({ path: tab.path, query: tab.query });
   });
   activeTabPath.value = null;
 };
-const handleCloseAhead = (path: string, routeIdx: number) => {
-  tabsRouterStore.subtractTabRouterAhead({ path, routeIdx });
+const handleCloseAhead = (path: string, _routeIdx: number) => {
+  const storeIdx = resolveStoreIdx(path);
+  if (storeIdx < 0) return;
+  tabsRouterStore.subtractTabRouterAhead({ path, routeIdx: storeIdx });
 
-  handleOperationEffect('ahead', routeIdx);
+  handleOperationEffect('ahead', storeIdx);
 };
-const handleCloseBehind = (path: string, routeIdx: number) => {
-  tabsRouterStore.subtractTabRouterBehind({ path, routeIdx });
+const handleCloseBehind = (path: string, _routeIdx: number) => {
+  const storeIdx = resolveStoreIdx(path);
+  if (storeIdx < 0) return;
+  tabsRouterStore.subtractTabRouterBehind({ path, routeIdx: storeIdx });
 
-  handleOperationEffect('behind', routeIdx);
+  handleOperationEffect('behind', storeIdx);
 };
-const handleCloseOther = (path: string, routeIdx: number) => {
-  tabsRouterStore.subtractTabRouterOther({ path, routeIdx });
+const handleCloseOther = (path: string, _routeIdx: number) => {
+  const storeIdx = resolveStoreIdx(path);
+  if (storeIdx < 0) return;
+  tabsRouterStore.subtractTabRouterOther({ path, routeIdx: storeIdx });
 
-  handleOperationEffect('other', routeIdx);
+  handleOperationEffect('other', storeIdx);
 };
 
 // 处理非当前路由操作的副作用
@@ -152,11 +185,16 @@ const handleOperationEffect = (type: 'other' | 'ahead' | 'behind', routeIndex: n
   if (needRefreshRouter) {
     const nextRouteIdx = type === 'behind' ? tabRouters.length - 1 : 1;
     const nextRouter = tabRouters[nextRouteIdx];
-    router.push({ path: nextRouter.path, query: nextRouter.query });
+    if (nextRouter) router.push({ path: nextRouter.path, query: nextRouter.query });
   }
 
   activeTabPath.value = null;
 };
+// 键盘可达：把「更多」菜单按 Enter/Space 视为打开，等同鼠标点击
+const openTabMenu = (path: string) => {
+  activeTabPath.value = path;
+};
+
 const handleTabMenuClick = (visible: boolean, ctx: PopupVisibleChangeContext, path: string) => {
   if (ctx.trigger === 'document') activeTabPath.value = null;
   if (visible) activeTabPath.value = path;
@@ -180,12 +218,17 @@ const handleTabAuxClick = (e: MouseEvent, routeItem: TRouterInfo, index: number)
 };
 
 const handleDragend = (options: { currentIndex: number; targetIndex: number }) => {
-  const { tabRouters } = tabsRouterStore;
-
-  [tabRouters[options.currentIndex], tabRouters[options.targetIndex]] = [
-    tabRouters[options.targetIndex],
-    tabRouters[options.currentIndex],
-  ];
+  // 拖拽下标来自过滤后的可见列表，需先换成 store 真实下标再交换，否则 isAlive=false
+  // 的标签存在时会错位。home 标签在列表项上由 draggable={false} 直接禁掉拖拽，
+  // 这里不做二次保护 —— 补一句「交换后保证 home 在首位」的注释会与实现不符。
+  const currentPath = tabRouters.value[options.currentIndex]?.path;
+  const targetPath = tabRouters.value[options.targetIndex]?.path;
+  if (!currentPath || !targetPath) return;
+  const fromIdx = resolveStoreIdx(currentPath);
+  const toIdx = resolveStoreIdx(targetPath);
+  if (fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) return;
+  const list = tabsRouterStore.tabRouters;
+  [list[fromIdx], list[toIdx]] = [list[toIdx], list[fromIdx]];
 };
 </script>
 <style lang="less" scoped>
@@ -201,25 +244,42 @@ const handleDragend = (options: { currentIndex: number; targetIndex: number }) =
 }
 
 .tab-item-more {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  margin-left: 4px;
-  padding: 2px;
-  border-radius: 3px;
+  width: var(--td-comp-size-xxs);
+  height: var(--td-comp-size-xxs);
+  margin-left: var(--td-comp-margin-xs);
+  border-radius: var(--td-radius-small);
+  color: var(--td-text-color-secondary);
   cursor: pointer;
-  opacity: 0.6;
+  opacity: 0.75;
   transition:
     opacity 0.2s,
     background-color 0.2s;
+
+  /* 视觉尺寸受标签高度限制：盒宽高是 --td-comp-size-xxs（--td-size-7 = 20），
+     用伪元素四边各外扩 0.25rem 把命中区补到 28 见方 */
+  &::after {
+    content: '';
+    position: absolute;
+    inset: -0.25rem;
+  }
 
   &:hover {
     opacity: 1;
     background-color: var(--td-bg-color-container-hover);
   }
 
+  &:focus-visible {
+    opacity: 1;
+    outline: 0.125rem solid var(--td-brand-color);
+    outline-offset: 0.0625rem;
+  }
+
   .tab-item-more-icon {
-    font-size: 14px;
+    font-size: var(--td-font-size-body-medium);
   }
 }
 </style>

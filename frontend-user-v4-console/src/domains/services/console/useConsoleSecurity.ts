@@ -4,8 +4,7 @@ import { computed, reactive, ref } from 'vue';
 
 import clientApi from '@/api/client';
 import type { ConsoleSelectOption, SecurityGroupRecord, SecurityRuleRecord } from '@/types/client';
-
-import { resolveErrorMessage } from './useConsoleCore';
+import { getErrorMessage } from '@/utils/error';
 
 export interface UseConsoleSecurityOptions {
   serviceId: { value: number };
@@ -65,7 +64,9 @@ export function useConsoleSecurity(options: UseConsoleSecurityOptions) {
     ).toLowerCase();
 
     // 精确匹配 PROTOCOL_DEFAULT_PORT
-    if (Object.hasOwn(PROTOCOL_DEFAULT_PORT, raw)) {
+    // 用 hasOwnProperty.call 而非 Object.hasOwn：后者要 Chrome 93 / Safari 15.4，
+    // 超出仓库声明的浏览器基线（见 frontend-user-v3-www/package.json 的 browserslist）。
+    if (Object.prototype.hasOwnProperty.call(PROTOCOL_DEFAULT_PORT, raw)) {
       return PROTOCOL_DEFAULT_PORT[raw];
     }
 
@@ -133,7 +134,7 @@ export function useConsoleSecurity(options: UseConsoleSecurityOptions) {
       const current = viewableGroups.find((item) => Number(item.id || 0) === activeSecurityGroupId.value);
       const active = current || viewableGroups.find((item) => item.is_applied) || viewableGroups[0];
       if (active?.id) {
-        await selectSecurityGroup(active, true);
+        await selectSecurityGroup(active);
       } else {
         activeSecurityGroupId.value = 0;
         securityState.rules = [];
@@ -141,7 +142,7 @@ export function useConsoleSecurity(options: UseConsoleSecurityOptions) {
       return true;
     } catch (error: unknown) {
       if (requestSeq !== securityGroupsRequestSeq) return false;
-      securityState.error = resolveErrorMessage(error, '加载安全组失败');
+      securityState.error = getErrorMessage(error, '加载安全组失败');
       return false;
     } finally {
       if (requestSeq === securityGroupsRequestSeq) securityState.loading = false;
@@ -157,13 +158,14 @@ export function useConsoleSecurity(options: UseConsoleSecurityOptions) {
       securityState.rules = Array.isArray(res.data?.list) ? res.data.list : [];
     } catch (error: unknown) {
       if (requestSeq !== securityRulesRequestSeq) return;
-      MessagePlugin.error(resolveErrorMessage(error, '加载安全组规则失败'));
+      MessagePlugin.error(getErrorMessage(error, '加载安全组规则失败'));
     } finally {
       if (requestSeq === securityRulesRequestSeq) securityState.rulesLoading = false;
     }
   }
 
-  async function selectSecurityGroup(group: SecurityGroupRecord, silent = false) {
+  // 切换安全组只是查看动作，不提示成功：整卡与「查看」按钮都走这里，弹 toast 会变成噪声
+  async function selectSecurityGroup(group: SecurityGroupRecord) {
     const groupId = Number(group.id || 0);
     if (group.can_view === false) {
       activeSecurityGroupId.value = 0;
@@ -177,7 +179,6 @@ export function useConsoleSecurity(options: UseConsoleSecurityOptions) {
       return;
     }
     await loadSecurityGroupRules(groupId);
-    if (!silent) MessagePlugin.success('安全组规则已加载');
   }
 
   function openSecurityGroupDialog() {
@@ -197,6 +198,9 @@ export function useConsoleSecurity(options: UseConsoleSecurityOptions) {
   }
 
   async function submitSecurityGroup() {
+    // 重入守卫：按钮只受 :loading 约束，回车连击或双击仍会二次进入，
+    // 而 submitting 是异步才复位，这里必须自己在入口挡住（与 applySecurityGroup 同口径）。
+    if (securityState.submitting) return;
     if (!groupForm.name.trim()) {
       MessagePlugin.warning('请输入安全组名称');
       return;
@@ -211,21 +215,53 @@ export function useConsoleSecurity(options: UseConsoleSecurityOptions) {
       MessagePlugin.success(resolveActionMessage(res.data, '安全组创建成功'));
       await loadSecurityGroups();
     } catch (error: unknown) {
-      MessagePlugin.error(resolveErrorMessage(error, '创建安全组失败'));
+      MessagePlugin.error(getErrorMessage(error, '创建安全组失败'));
     } finally {
       securityState.submitting = false;
     }
   }
 
+  // 应用安全组会立即改变实例的可达性（可能一刀切断现网连接），
+  // 与同文件的删除组/删除规则一致，必须走二次确认，禁止单击直发。
+  // 应用组的二次确认也是异步等待：等待期间提交中标记必须占住，
+  // 否则连点会叠出多个确认框，每个确认后都各发一次应用请求。
+  let applyConfirming = false;
   async function applySecurityGroup(group: SecurityGroupRecord) {
-    if (!group.id) return;
+    if (!group.id || applyConfirming) return;
+    applyConfirming = true;
+    let confirmed = false;
+    try {
+      confirmed = await new Promise<boolean>((resolve) => {
+        const dialog = DialogPlugin.confirm({
+          header: '应用安全组',
+          body: `确定将安全组“${group.name || group.id}”应用到当前实例吗？应用后新的入站/出站规则立即生效，可能中断现有连接。`,
+          confirmBtn: '应用',
+          cancelBtn: '取消',
+          onConfirm: () => {
+            dialog.destroy();
+            resolve(true);
+          },
+          onCancel: () => {
+            dialog.destroy();
+            resolve(false);
+          },
+          onClose: () => {
+            dialog.destroy();
+            resolve(false);
+          },
+        });
+      });
+    } finally {
+      applyConfirming = false;
+    }
+    if (!confirmed) return;
     securityState.submitting = true;
     try {
       const res = await clientApi.applySecurityGroup(serviceId.value, group.id);
       MessagePlugin.success(resolveActionMessage(res.data, '安全组已应用'));
       await loadSecurityGroups();
     } catch (error: unknown) {
-      MessagePlugin.error(resolveErrorMessage(error, '应用安全组失败'));
+      MessagePlugin.error(getErrorMessage(error, '应用安全组失败'));
     } finally {
       securityState.submitting = false;
     }
@@ -248,7 +284,7 @@ export function useConsoleSecurity(options: UseConsoleSecurityOptions) {
           await loadSecurityGroups();
           dialog.hide();
         } catch (error: unknown) {
-          MessagePlugin.error(resolveErrorMessage(error, '删除安全组失败'));
+          MessagePlugin.error(getErrorMessage(error, '删除安全组失败'));
         } finally {
           securityState.submitting = false;
           dialog.setConfirmLoading(false);
@@ -258,6 +294,8 @@ export function useConsoleSecurity(options: UseConsoleSecurityOptions) {
   }
 
   async function submitSecurityRule() {
+    // 与 submitSecurityGroup 同口径：submitting 异步才复位，入口必须自己挡重入。
+    if (securityState.submitting) return;
     if (!activeSecurityGroupId.value) {
       MessagePlugin.warning('请先选择安全组');
       return;
@@ -287,7 +325,7 @@ export function useConsoleSecurity(options: UseConsoleSecurityOptions) {
       MessagePlugin.success(resolveActionMessage(res.data, '安全组规则创建成功'));
       await loadSecurityGroupRules(activeSecurityGroupId.value);
     } catch (error: unknown) {
-      MessagePlugin.error(resolveErrorMessage(error, '创建安全组规则失败'));
+      MessagePlugin.error(getErrorMessage(error, '创建安全组规则失败'));
     } finally {
       securityState.submitting = false;
     }
@@ -310,7 +348,7 @@ export function useConsoleSecurity(options: UseConsoleSecurityOptions) {
           await loadSecurityGroupRules(activeSecurityGroupId.value);
           dialog.hide();
         } catch (error: unknown) {
-          MessagePlugin.error(resolveErrorMessage(error, '删除安全组规则失败'));
+          MessagePlugin.error(getErrorMessage(error, '删除安全组规则失败'));
         } finally {
           securityState.submitting = false;
           dialog.setConfirmLoading(false);

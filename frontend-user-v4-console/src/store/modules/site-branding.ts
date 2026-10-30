@@ -60,6 +60,13 @@ function pickOptional(raw: Record<string, unknown> | undefined, keys: string[]) 
   return undefined;
 }
 
+/**
+ * 站点品牌状态。
+ *
+ * 历史上它放在 src/app/stores/，与本目录的 Pinia store 形成「两套 store 目录」；
+ * 现统一收进 src/store/modules/ 并从 @/store 根桶导出（职责边界：本 store 只放
+ * 站点品牌与布局外观，会话/权限/标签页仍由 user/permission/tabs-router 负责）。
+ */
 export const useSiteBrandingStore = defineStore('site-branding', () => {
   const sidebarCollapsed = ref(false);
   const siteName = ref(DEFAULT_SITE_NAME);

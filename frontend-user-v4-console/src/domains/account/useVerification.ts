@@ -1,5 +1,5 @@
 import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
-import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue';
+import { computed, onActivated, onBeforeUnmount, onDeactivated, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { clientAuthApi } from '@/api/auth';
@@ -53,7 +53,12 @@ export function useVerification() {
   const userStore = useUserStore();
 
   const loading = ref(false);
+  // C-04：加载失败要能在页面上重试，只在 toast 里报错会让页面停在空骨架
+  const loadError = ref('');
   const verificationLoading = ref(false);
+  // AC-06：刷新二维码与重新认证语义不同，必须各自独立 loading，避免互相变灰
+  const refreshLoading = ref(false);
+  const restartLoading = ref(false);
   const checkingStatus = ref(false);
   const showVerificationDialog = ref(false);
   const showVerifiedInfoDialog = ref(false);
@@ -127,8 +132,10 @@ export function useVerification() {
       } else {
         syncFromUserInfo(userStore.info);
       }
+      loadError.value = '';
     } catch (error: unknown) {
-      MessagePlugin.error(resolveMessage(error, '实名信息加载失败'));
+      loadError.value = resolveMessage(error, '实名信息加载失败');
+      MessagePlugin.error(loadError.value);
     } finally {
       loading.value = false;
     }
@@ -214,7 +221,8 @@ export function useVerification() {
       MessagePlugin.warning('二维码已失效，请重新提交认证');
       return;
     }
-    verificationLoading.value = true;
+    if (refreshLoading.value) return;
+    refreshLoading.value = true;
     try {
       const res = await clientAuthApi.verificationQrcode({ certify_id: certifyId.value });
       applyVerificationPayload(res.data);
@@ -223,7 +231,7 @@ export function useVerification() {
     } catch (error: unknown) {
       MessagePlugin.error(resolveMessage(error, '获取认证链接失败'));
     } finally {
-      verificationLoading.value = false;
+      refreshLoading.value = false;
     }
   }
 
@@ -258,6 +266,8 @@ export function useVerification() {
       certifyId.value = '';
       canRestartVerification.value = false;
       verificationMessage.value = '二维码已失效，请重新提交认证';
+      // AC-08：切回表单时提示一次，用户不会看到界面突变却不知道发生了什么
+      MessagePlugin.warning('二维码已失效，请重新填写信息提交认证');
     }
   }
 
@@ -326,7 +336,8 @@ export function useVerification() {
   }
 
   async function restartVerification() {
-    verificationLoading.value = true;
+    if (restartLoading.value) return;
+    restartLoading.value = true;
     canRestartVerification.value = false;
     stopPolling();
     try {
@@ -339,7 +350,7 @@ export function useVerification() {
       canRestartVerification.value = true;
       MessagePlugin.error(resolveMessage(error, '重新认证失败'));
     } finally {
-      verificationLoading.value = false;
+      restartLoading.value = false;
     }
   }
 
@@ -405,10 +416,28 @@ export function useVerification() {
     stopExpiryCountdown();
   });
 
+  // keep-alive 会把本页留在内存里，onBeforeUnmount 在切页签时不会触发。
+  // 认证页有两个常驻定时器（1s 二维码倒计时、3s 轮询结果），离开页签必须停掉，
+  // 否则用户在别的页面待着，后台仍在持续发请求、持续改倒计时。
+  onDeactivated(() => {
+    stopPolling();
+    stopExpiryCountdown();
+  });
+
+  // 回到本页时按当前状态恢复：startExpiryCountdown 会自己判「没有 url / 已过期」，
+  // startPolling 会自己判「对话框没开 / 没有 certifyId / 二维码已失效」，两者都可无条件调用。
+  onActivated(() => {
+    startExpiryCountdown();
+    startPolling();
+  });
+
   return {
     router,
     loading,
+    loadError,
     verificationLoading,
+    refreshLoading,
+    restartLoading,
     checkingStatus,
     closingSession,
     showVerificationDialog,

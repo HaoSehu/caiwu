@@ -29,6 +29,7 @@
           :page-size-options="[10, 20, 50]"
           show-total
           @change="loadLogs"
+          @page-size-change="handleLogsPageSizeChange"
         />
       </div>
     </t-card>
@@ -38,5 +39,5 @@
 import { logColumns } from '../../composables/useConsoleTables';
 import { useServiceConsoleContext } from '../context';
 
-const { logsState, loadLogs } = useServiceConsoleContext();
+const { logsState, loadLogs, handleLogsPageSizeChange } = useServiceConsoleContext();
 </script>

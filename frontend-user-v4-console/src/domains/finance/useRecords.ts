@@ -6,7 +6,7 @@ import {
   toSelectOptions,
 } from '@caiwu/shared/statusConfig';
 import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
-import { computed, onMounted, reactive, ref, shallowRef, watch } from 'vue';
+import { computed, onActivated, onMounted, reactive, ref, shallowRef, watch } from 'vue';
 import type { LocationQuery } from 'vue-router';
 import { useRoute, useRouter } from 'vue-router';
 
@@ -36,8 +36,6 @@ export const PAYMENT_GATEWAY_OPTIONS = [
 ];
 
 export const BALANCE_EVENT_OPTIONS = toSelectOptions(ACCOUNT_TRANSACTION_EVENT_MAP, false);
-
-export { formatMoney };
 
 export function fieldValue(value: unknown) {
   if (value === null || value === undefined || value === '') return '--';
@@ -266,6 +264,12 @@ export function resolveBalanceTheme(value: unknown) {
   return Number(value || 0) >= 0 ? 'success' : 'danger';
 }
 
+// 筛选项「未选」的统一判据：表单初值是空串，而 t-select 清空后是 undefined，
+// 两者语义相同（都是「不过滤」），任何单一比较都会漏掉其中一种。
+function isFieldEmpty(value: unknown): boolean {
+  return value === '' || value === undefined || value === null;
+}
+
 function compactParams(params: ClientFinanceListParams): ClientFinanceListParams {
   return Object.fromEntries(
     Object.entries(params)
@@ -313,14 +317,22 @@ export function useRecordList<T>(options: RecordListOptions<T>) {
 
   const hasRows = computed(() => list.value.length > 0);
 
-  // 是否存在生效筛选（关键词/状态/类型/日期）：用于空态区分“暂无数据”与“未找到匹配结果”（DESIGN.md §4.3）
+  // 是否存在生效筛选（关键词/状态/类型/日期/快捷标签）：用于空态区分“暂无数据”与“未找到匹配结果”（DESIGN.md §4.3）。
+  // quickFilter 必须单列：快捷标签当前都会物化成 status 或日期，但把判断挂在“物化结果”上是隐式耦合，
+  // 一旦某个标签只表达语义不落参数，空态就会错回「暂无记录」。
+  // 顺序说明：t-select 的 clearable 清空后值是 undefined 而非空串
+  // （node_modules/tdesign-vue-next/es/select/select.mjs:596-607 的 onClear 走 setInnerValue(void 0)）。
+  // 若只判 !== ''，用户点「清空」后 hasActiveFilters 仍是真，空态会错成「未找到匹配结果」
+  // 并多出一个「清除筛选条件」按钮——筛选早已清空，这个按钮点了什么也不会发生。
+  // status / type 走 isFieldEmpty，keyword 与日期由表单初值保证是字符串。
   const hasActiveFilters = computed(
     () =>
       filters.keyword.trim() !== '' ||
-      filters.status !== '' ||
-      filters.type !== '' ||
+      !isFieldEmpty(filters.status) ||
+      !isFieldEmpty(filters.type) ||
       filters.start_date !== '' ||
-      filters.end_date !== '',
+      filters.end_date !== '' ||
+      filters.quickFilter !== '',
   );
 
   // 筛选与页码同步到 URL，刷新/回退不丢状态
@@ -351,10 +363,12 @@ export function useRecordList<T>(options: RecordListOptions<T>) {
     }
     if (typeof query.type === 'string') filters.type = query.type;
     if (typeof query.quick === 'string' && query.quick) {
-      // 快捷标签与显式状态冲突时（标签 pending 但 status 已被手动改为其它值），以显式状态为准、熄灭标签
-      const pendingConflict = query.quick === 'pending' && filters.status !== '' && filters.status !== 0;
+      // 快捷标签与显式状态冲突时（标签 pending 但 status 已被手动改为其它值），以显式状态为准、熄灭标签。
+      // 「没选状态」既可能是空串（表单初值）也可能是 undefined（t-select 清空），两种都算未选，
+      // 此时标签负责物化 status=0；否则清空后刷新页面会让标签与参数脱节。
+      const pendingConflict = query.quick === 'pending' && !isFieldEmpty(filters.status) && filters.status !== 0;
       filters.quickFilter = pendingConflict ? '' : query.quick;
-      if (!pendingConflict && query.quick === 'pending' && filters.status === '') filters.status = 0;
+      if (!pendingConflict && query.quick === 'pending' && isFieldEmpty(filters.status)) filters.status = 0;
       // 显式日期优先：手选区间命中快捷折算时 URL 同时带 quick 与日期，跨天后再按 quick 重算会漂移，
       // 因此只要 URL 有合法日期就采纳之，标签选中态由区间匹配回写
       const hasExplicitDates =
@@ -463,7 +477,23 @@ export function useRecordList<T>(options: RecordListOptions<T>) {
     void loadList();
   }
 
+  // C-26：t-pagination 变更每页条数时会同时 emit page-size-change 与 change
+  // （node_modules/tdesign-vue-next/es/pagination/pagination.mjs:266-292 的 onSelectorChange 里
+  // setInnerPageSize 触发 page-size-change，nextTick 内再调 onChange），
+  // 两个事件里都发请求会打两次接口。这里只重置页码，翻页统一由 @change 负责。
   function handlePageSizeChange() {
+    filters.page = 1;
+  }
+
+  // W-17：筛选命中 0 条时原先只改文案不给出路，用户被困在「未找到匹配结果」上。
+  // 复位只清筛选、不动页码以外的语义，随后重发一次列表请求。
+  function resetFilters() {
+    filters.keyword = '';
+    filters.status = '';
+    filters.type = '';
+    filters.quickFilter = '';
+    filters.start_date = '';
+    filters.end_date = '';
     filters.page = 1;
     void loadList();
   }
@@ -514,6 +544,18 @@ export function useRecordList<T>(options: RecordListOptions<T>) {
     void loadList();
   });
 
+  // keep-alive 现在真的会缓存页面（Content.vue 按 route.name 做 key），onMounted 一生只跑一次，
+  // 从别的页签切回来会看到上次留下的旧数据。这里补一次重新拉取，只在非首次激活时触发，
+  // 避免刚挂载完紧跟着又来一次同样的请求。
+  let activatedOnce = false;
+  onActivated(() => {
+    if (!activatedOnce) {
+      activatedOnce = true;
+      return;
+    }
+    void loadList();
+  });
+
   return {
     loading,
     list,
@@ -527,6 +569,7 @@ export function useRecordList<T>(options: RecordListOptions<T>) {
     handleSearch,
     handlePageSizeChange,
     applyQuickFilter,
+    resetFilters,
     dateRange,
   };
 }

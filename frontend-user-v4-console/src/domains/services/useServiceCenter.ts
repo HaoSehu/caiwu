@@ -1,6 +1,6 @@
 import { SERVICE_STATUS, SERVICE_STATUS_MAP, toSelectOptions } from '@caiwu/shared/statusConfig';
 import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
-import { computed, onMounted, reactive, ref, shallowRef, watch } from 'vue';
+import { computed, onActivated, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import clientApi from '@/api/client';
@@ -39,8 +39,10 @@ export const OS_ICON_MAP: Record<string, string> = {
   xen: '/img/os/XenServer.svg',
 };
 
-const DEFAULT_SERVICE_STATUS_SCOPE = 'active_pending';
-const DEFAULT_SERVICE_STATUS = DEFAULT_SERVICE_STATUS_SCOPE;
+// 导出给页面做「当前是否有生效筛选」的判定：页面硬编码字面量的话，
+// 这里一改默认口径，页面的清除按钮与空态文案就会跟着失准。
+export const DEFAULT_SERVICE_STATUS_SCOPE = 'active_pending';
+export const DEFAULT_SERVICE_STATUS = DEFAULT_SERVICE_STATUS_SCOPE;
 const MOBILE_VIEW_MODE_QUERY = '(max-width: 48rem)';
 const DEFAULT_SERVICE_STATUS_OPTION = {
   label: '默认分类（运行中 / 开通中）',
@@ -71,8 +73,6 @@ export function createEmptyOverview(): ServiceOverview {
     catalog_types: [],
   };
 }
-
-export { formatMoney };
 
 export function resolveServiceName(item: ServiceLike | null | undefined) {
   return (
@@ -288,7 +288,13 @@ export function useServiceCenter() {
     }
   }
 
+  // S-07 / PR-08 同类：列表请求带序号。
+  // 三个筛选 select 直接绑 handleSearch，连续改筛选会连发请求；分页与筛选也会互相打断。
+  // 响应顺序没有保证，晚返回的旧条件结果会把新条件的列表覆盖掉。
+  let listRequestSeq = 0;
+
   async function loadList() {
+    const requestSeq = ++listRequestSeq;
     loading.value = true;
     try {
       const params: ServiceListParams = { page: filters.page, page_size: filters.page_size };
@@ -308,13 +314,15 @@ export function useServiceCenter() {
       if (filters.catalog_type) params.catalog_type = filters.catalog_type;
 
       const res = await clientApi.services(params);
+      if (requestSeq !== listRequestSeq) return;
       list.value = Array.isArray(res.data?.list) ? res.data.list : [];
       total.value = Number(res.data?.total || 0);
       error.value = null;
     } catch (requestError: unknown) {
+      if (requestSeq !== listRequestSeq) return;
       error.value = getErrorMessage(requestError, '服务列表加载失败，请稍后重试');
     } finally {
-      loading.value = false;
+      if (requestSeq === listRequestSeq) loading.value = false;
     }
   }
 
@@ -360,9 +368,45 @@ export function useServiceCenter() {
     void loadList();
   }
 
-  function handlePageSizeChange() {
+  // W-17：命中筛选后一条都没有时，空态要给出清除出口。
+  // 注意 status 回到的是「默认分类（运行中 / 开通中）」而不是空值：那是本页的默认视图，
+  // 清成空值会把已到期与已删除的服务也拉出来，不是用户点「清除筛选」想看的。
+  // 这里不写 URL：本 composable 与页面都不写 query（见 hydrateFiltersFromRoute 上方注释），
+  // quick_filter / catalog_type 由带参跳入的外部方负责。
+  function resetFilters() {
+    filters.keyword = '';
+    filters.catalog_type = '';
+    filters.status = DEFAULT_SERVICE_STATUS;
+    filters.auto_renew = '';
+    filters.quick_filter = '';
     filters.page = 1;
     void loadList();
+  }
+
+  // S-07：三个 select 的 @change 走这里，200ms 内连续改动只发一次请求。
+  // 下拉是「改完才离开」的控件，用户从「服务分类」切到「状态分类」时会产生两次 change。
+  const FILTER_CHANGE_DELAY_MS = 200;
+  let filterChangeTimer: number | null = null;
+
+  function clearFilterChangeTimer() {
+    if (filterChangeTimer === null) return;
+    window.clearTimeout(filterChangeTimer);
+    filterChangeTimer = null;
+  }
+
+  function handleFilterChange() {
+    clearFilterChangeTimer();
+    filterChangeTimer = window.setTimeout(() => {
+      filterChangeTimer = null;
+      handleSearch();
+    }, FILTER_CHANGE_DELAY_MS);
+  }
+
+  onBeforeUnmount(clearFilterChangeTimer);
+
+  // C-26：t-pagination 变更每页条数时同时 emit page-size-change 与 change，只重置页码避免双请求
+  function handlePageSizeChange() {
+    filters.page = 1;
   }
 
   function pickCategory(value: string) {
@@ -380,7 +424,14 @@ export function useServiceCenter() {
     router.push(`/client/invoices/${id}`);
   }
 
-  async function loadRenewPreview(serviceId: number) {
+  /**
+   * 加载续费预览。
+   * applyDefaults 仅用于首次打开弹窗：用服务端默认周期/默认券回填表单。
+   * 用户手动切换周期或优惠券时传 false，只刷新金额，否则服务端默认值会把用户的选择弹回。
+   */
+  async function loadRenewPreview(serviceId: number, options: { applyDefaults?: boolean } = {}) {
+    const { applyDefaults = true } = options;
+
     renewPreviewLoading.value = true;
     try {
       const res = await clientApi.serviceRenewPreview(serviceId, {
@@ -388,10 +439,12 @@ export function useServiceCenter() {
         user_coupon_id: renewForm.user_coupon_id || undefined,
       });
       renewData.value = res.data || null;
-      renewForm.billing_cycle = String(
-        res.data?.default_cycle || res.data?.billing_cycle || res.data?.cycles?.[0]?.billing_cycle || '',
-      );
-      renewForm.user_coupon_id = Number(res.data?.selected_user_coupon_id || 0);
+      if (applyDefaults) {
+        renewForm.billing_cycle = String(
+          res.data?.default_cycle || res.data?.billing_cycle || res.data?.cycles?.[0]?.billing_cycle || '',
+        );
+        renewForm.user_coupon_id = Number(res.data?.selected_user_coupon_id || 0);
+      }
     } catch (error: unknown) {
       if (!(error as { __handled?: boolean })?.__handled) {
         MessagePlugin.error(getErrorMessage(error, '加载续费信息失败'));
@@ -413,13 +466,13 @@ export function useServiceCenter() {
   async function handleRenewCycleChange(value: unknown) {
     renewForm.billing_cycle = String(value || '');
     if (!renewTarget.value?.id) return;
-    await loadRenewPreview(renewTarget.value.id);
+    await loadRenewPreview(renewTarget.value.id, { applyDefaults: false });
   }
 
   async function handleRenewCouponChange(value: unknown) {
     renewForm.user_coupon_id = Number(value || 0);
     if (!renewTarget.value?.id) return;
-    await loadRenewPreview(renewTarget.value.id);
+    await loadRenewPreview(renewTarget.value.id, { applyDefaults: false });
   }
 
   async function submitRenew() {
@@ -501,6 +554,17 @@ export function useServiceCenter() {
     await loadData();
   });
 
+  // keep-alive 现在真的会缓存页面（Content.vue 按 route.name 做 key），onMounted 一生只跑一次。
+  // 切回来只重拉数据，不重新水合筛选：用户在本页改过的筛选条件应当保留。
+  let activatedOnce = false;
+  onActivated(() => {
+    if (!activatedOnce) {
+      activatedOnce = true;
+      return;
+    }
+    void loadData();
+  });
+
   // URL 的 catalog_type / quick_filter 由外部改变时（例如从仪表盘带参跳入、或在同路由上换参），
   // 组件会被复用而不重新挂载，需要重新水合筛选并重载。
   //
@@ -546,6 +610,8 @@ export function useServiceCenter() {
     loadList,
     loadData,
     handleSearch,
+    handleFilterChange,
+    resetFilters,
     handlePageSizeChange,
     pickCategory,
     setViewMode,

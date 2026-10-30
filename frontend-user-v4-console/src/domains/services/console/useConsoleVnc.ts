@@ -3,17 +3,16 @@ import { ref } from 'vue';
 
 import clientApi from '@/api/client';
 import type { ServiceVncCredentials } from '@/types/client';
-
-import { resolveErrorMessage } from './useConsoleCore';
+import { getErrorMessage } from '@/utils/error';
 
 export interface UseConsoleVncOptions {
   serviceId: { value: number };
-  actionLoading: { value: boolean };
+  vncLoading: { value: boolean };
   activeTab: { value: string };
 }
 
 export function useConsoleVnc(options: UseConsoleVncOptions) {
-  const { serviceId, actionLoading, activeTab } = options;
+  const { serviceId, vncLoading, activeTab } = options;
 
   const vncUrl = ref('');
 
@@ -86,7 +85,7 @@ export function useConsoleVnc(options: UseConsoleVncOptions) {
       popup.opener = null;
     }
 
-    actionLoading.value = true;
+    vncLoading.value = true;
     try {
       const url = await requestVncUrl();
       activeTab.value = 'vnc';
@@ -99,9 +98,9 @@ export function useConsoleVnc(options: UseConsoleVncOptions) {
       }
     } catch (error: unknown) {
       if (popup) popup.close();
-      MessagePlugin.error(resolveErrorMessage(error, '获取 VNC 地址失败'));
+      MessagePlugin.error(getErrorMessage(error, '获取 VNC 地址失败'));
     } finally {
-      actionLoading.value = false;
+      vncLoading.value = false;
     }
   }
 

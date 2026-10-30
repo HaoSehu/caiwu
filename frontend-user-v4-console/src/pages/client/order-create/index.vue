@@ -26,7 +26,9 @@ function openProducts() {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: calc(100vh - var(--td-comp-size-xxxxxl));
+  // O-19：顶栏实际高度是 comp-size-xxxl（56，见 style/layout.less:131-132/195/217 与 FrameContent.vue:64），
+  // 这里原先多用了两个 x 的更大档令牌（72）会多减 16，页面底部凭空少一截。
+  min-height: calc(100vh - var(--td-comp-size-xxxl));
   // padding 由 Starter 布局层统一提供
 }
 

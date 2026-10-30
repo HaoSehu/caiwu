@@ -2,8 +2,10 @@
   <section class="order-detail-page">
     <!-- 面包屑导航 -->
     <t-breadcrumb class="order-breadcrumb">
-      <t-breadcrumb-item @click="router.push('/client/dashboard')">财务中心</t-breadcrumb-item>
-      <t-breadcrumb-item @click="router.push('/client/orders')">订单记录</t-breadcrumb-item>
+      <!-- O-23：用组件自带的 to 而不是 @click。@click 版渲染成 <span>，键盘不可聚焦、
+           读屏不当链接；t-breadcrumb-item 有 to 时会渲染 <a> 并自行 router.push。 -->
+      <t-breadcrumb-item to="/client/dashboard">财务中心</t-breadcrumb-item>
+      <t-breadcrumb-item to="/client/orders">订单记录</t-breadcrumb-item>
       <t-breadcrumb-item>订单详情</t-breadcrumb-item>
     </t-breadcrumb>
 
@@ -16,12 +18,14 @@
           刷新
         </t-button>
         <t-button
-          v-if="detail && Number(detail.status) === 0"
+          v-if="detail && canPayOrderRow(detail)"
           theme="primary"
           @click="router.push(`/client/invoices/${detail.invoice?.id}/pay`)"
         >
           去支付
         </t-button>
+        <span v-else-if="detail && isPayWindowClosedOrderRow(detail)" class="order-window-closed">支付窗口已关闭</span>
+        <span v-else-if="detail && isPayUnavailableOrderRow(detail)" class="order-window-closed">无可支付账单</span>
         <t-button
           v-if="detail && Number(detail.status) === 0"
           theme="danger"
@@ -130,9 +134,12 @@
                   </div>
                 </section>
               </div>
-              <div v-if="!configSnapshotView.length && !pricingSnapshotView.length" class="order-detail-empty">
-                暂无配置快照
-              </div>
+              <t-empty
+                v-if="!configSnapshotView.length && !pricingSnapshotView.length"
+                class="related-empty-state"
+                size="small"
+                description="暂无配置快照"
+              />
             </t-tab-panel>
 
             <t-tab-panel value="related" label="关联信息">
@@ -157,7 +164,7 @@
                   </div>
                 </div>
               </section>
-              <div v-else class="related-empty">暂无关联账单</div>
+              <t-empty v-else class="related-empty-state" size="small" description="暂无关联账单" />
 
               <!-- 关联服务 -->
               <section v-if="detail.service" class="related-section">
@@ -173,7 +180,7 @@
                   </div>
                 </div>
               </section>
-              <div v-else class="related-empty">暂无关联服务</div>
+              <t-empty v-else class="related-empty-state" size="small" description="暂无关联服务" />
 
               <!-- 优惠券 -->
               <section v-if="detail.coupon" class="related-section">
@@ -208,13 +215,20 @@ import { RefreshIcon } from 'tdesign-icons-vue-next';
 import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
-import { formatMoney, orderProductDisplay, useOrderDetail } from '@/domains/finance/useOrders';
+import {
+  canPayOrderRow,
+  isPayUnavailableOrderRow,
+  isPayWindowClosedOrderRow,
+  orderProductDisplay,
+  useOrderDetail,
+} from '@/domains/finance/useOrders';
 import {
   configValueLabelMap,
   flattenSnapshot,
   formatBillingCycle,
   pricingSnapshotItems,
 } from '@/domains/finance/useRecords';
+import { formatMoney } from '@/utils/format';
 
 const route = useRoute();
 const router = useRouter();
@@ -248,15 +262,29 @@ watch(
 );
 </script>
 <style scoped lang="less">
+.order-window-closed {
+  color: var(--td-text-color-placeholder);
+  font: var(--td-font-body-small);
+  white-space: nowrap;
+}
+
+// O-20：页面根类原先在 scoped 内没有任何规则，区块间距全靠零散 margin-bottom 拼接。
+// 改为根容器统一管纵向间距，子块不再各自带下边距（改一处间距只改一处）。
+.order-detail-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--td-comp-margin-m);
+}
+
 .order-breadcrumb {
-  margin-bottom: var(--td-comp-margin-m);
+  margin-bottom: 0;
 }
 
 .detail-toolbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: var(--td-comp-margin-m);
+  margin-bottom: 0;
 
   &__actions {
     display: flex;
@@ -296,7 +324,8 @@ watch(
     left: 0;
     width: 0.1875rem;
     background: var(--td-brand-color);
-    border-radius: 0.125rem;
+    // C-24：0.125rem 与 --td-radius-small 等值
+    border-radius: var(--td-radius-small);
     content: '';
   }
 }
@@ -365,7 +394,7 @@ watch(
 
 .related-section {
   padding: var(--td-comp-paddingTB-m) 0;
-  border-bottom: thin solid var(--td-border-level-1-color);
+  border-bottom: thin solid var(--td-component-stroke);
 
   &:last-of-type {
     border-bottom: none;
@@ -379,20 +408,14 @@ watch(
   }
 }
 
-.related-empty {
-  padding: var(--td-comp-paddingTB-xl) 0;
-  text-align: center;
-  color: var(--td-text-color-placeholder);
+// 空态统一交给 TDesign 的 t-empty（C-16），这里只补上下留白，不重绘视觉
+.related-empty-state {
+  padding: var(--td-comp-paddingTB-l) 0;
 }
 
-.order-detail-empty,
-.detail-empty {
-  padding: var(--td-comp-paddingTB-xl) 0;
-  text-align: center;
-  color: var(--td-text-color-placeholder);
-}
-
-@media (max-width: @screen-xs-rem) {
+// O-22：详情页原先用 @screen-xs-rem（40rem），40rem 到 @screen-mobile-max 之间
+// 仍排桌面版，与控制台其余页面的移动断点不一致。
+@media (max-width: @screen-mobile-max) {
   .detail-kv-grid {
     grid-template-columns: 1fr;
   }

@@ -5,9 +5,8 @@ import NProgress from 'nprogress';
 import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 
 import { getClientToken } from '@/app/runtime/session';
-import { useSiteBrandingStore } from '@/app/stores/siteBranding';
 import router from '@/router';
-import { getPermissionStore, useUserStore } from '@/store';
+import { getPermissionStore, useSiteBrandingStore, useUserStore } from '@/store';
 import { CLIENT_LOGIN_PATH, resolveLoginRedirectPath } from '@/utils/loginRedirect';
 
 const DYNAMIC_IMPORT_RELOAD_KEY = 'client-router-dynamic-import-reload';

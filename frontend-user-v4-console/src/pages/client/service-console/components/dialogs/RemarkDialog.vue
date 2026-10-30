@@ -1,5 +1,5 @@
 <template>
-  <t-dialog v-model:visible="remarkVisible" header="编辑备注" width="min(28rem, calc(100vw - 2rem))" destroy-on-close>
+  <t-dialog v-model:visible="remarkVisible" header="编辑备注" width="min(32rem, calc(100vw - 2rem))" destroy-on-close>
     <t-textarea
       v-model="remarkForm.remark"
       :autosize="{ minRows: 4, maxRows: 6 }"

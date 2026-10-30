@@ -65,8 +65,6 @@ function hasProductBinding(row: InvoiceRecord | null | undefined) {
   return Number(row?.product?.id || row?.product_id || 0) > 0;
 }
 
-export { formatMoney };
-
 export function normalizeMoney(value: unknown) {
   const amount = Number(value || 0);
   if (!Number.isFinite(amount)) return 0;
@@ -99,6 +97,23 @@ export function resolveInvoiceNo(row: InvoiceRecord | null | undefined) {
 export function isPayableInvoice(row: InvoiceRecord | null | undefined) {
   const status = Number(row?.status);
   return status === 0;
+}
+
+/**
+ * 续费账单判断：续费账单的支付窗口按账单 due_date 计（后端 CheckoutSecurityService::paymentSessionExpiresAt），
+ * 与 5 分钟支付会话窗口不同，过期后的重建入口也不同（服务控制台重新发起续费）。
+ */
+export function isRenewInvoiceRow(row: InvoiceRecord | null | undefined) {
+  return String(row?.type || '').toLowerCase() === 'renew';
+}
+
+/**
+ * 列表行是否还能发起支付：状态为待支付，且后端未标记支付窗口已关闭。
+ * 列表接口不下发支付会话凭证，窗口状态只能取后端 payment_window_expired（与详情页 can_pay 同一判据），
+ * 否则窗口已过的账单仍会显示「去支付」，点进去才被拦回详情页。
+ */
+export function canPayInvoiceRow(row: InvoiceRecord | null | undefined) {
+  return isPayableInvoice(row) && !row?.payment_window_expired;
 }
 
 /** 非待支付账单的引导文案：按 4 态值域（0 待支付/1 已支付/4 已取消/5 已退款）给出准确提示，避免一律提示"无需支付"。 */
@@ -136,6 +151,7 @@ export function useInvoiceList() {
     handleSearch,
     handlePageSizeChange,
     applyQuickFilter,
+    resetFilters,
     dateRange,
   } = useRecordList<InvoiceRecord>({
     fetcher: (params) => clientApi.invoices(params),
@@ -185,6 +201,7 @@ export function useInvoiceList() {
     handleSearch,
     handlePageSizeChange,
     applyQuickFilter,
+    resetFilters,
     dateRange,
     goToPay,
     cancelInvoice,
@@ -199,6 +216,8 @@ export function useInvoiceDetail() {
   const loading = ref(false);
   const canceling = ref(false);
   const paying = ref(false);
+  // 支付确认框占位：确认框打开或请求在途时不再接受新的支付点击
+  const payingConfirming = ref(false);
   const polling = ref(false);
   const detail = shallowRef<InvoiceRecord | null>(null);
   const selectedPayMethod = ref<PayMethodKey>('');
@@ -252,7 +271,17 @@ export function useInvoiceDetail() {
   const alipayPayableAmount = computed(() => alipayAmount.value || formatMoney(payableAmount.value));
   const showBalanceDeductionOption = computed(() => selectedIsAlipay.value && canDeductBalance.value);
   const showPayActions = computed(() => Boolean(detail.value && isPayableInvoice(detail.value)));
+  // 待支付却拿不到支付会话凭证 = 支付窗口已关闭（续费账单按 due_date 计，其余按 5 分钟）。
+  // 此时任何支付按钮都会失败，刷新页面也不会延长窗口，必须给出真正可行的下一步。
+  const payWindowClosed = computed(
+    () => Boolean(detail.value) && isPayableInvoice(detail.value) && !paySecurity.value.can_pay,
+  );
   const payTip = computed(() => {
+    if (payWindowClosed.value) {
+      return isRenewInvoiceRow(detail.value)
+        ? '支付窗口已关闭，该续费账单无法继续支付。请返回服务控制台重新发起续费，系统会生成一张新的续费账单。'
+        : '支付窗口已关闭，该账单无法继续支付。请联系客服协助处理。';
+    }
     if (!canPay.value) return '当前账单状态不支持继续支付。';
     if (selectedIsAlipay.value && allowBalanceDeduction.value) {
       return `将自动抵扣余额 ¥${autoDeductionAmountText.value}，支付宝支付剩余 ¥${estimatedAlipayAmountText.value}。`;
@@ -263,6 +292,10 @@ export function useInvoiceDetail() {
     if (selectedPayMethod.value === 'balance') return '余额支付会直接扣减账户余额并完成账单。';
     return '零元账单无需额外支付。';
   });
+
+  function warnPaymentSessionUnavailable() {
+    MessagePlugin.warning(payWindowClosed.value ? payTip.value : '支付会话已失效，请刷新页面后重试');
+  }
 
   function clearPollingTimer() {
     if (pollTimer.value !== null) {
@@ -487,7 +520,7 @@ export function useInvoiceDetail() {
   async function executeBalancePayment() {
     const sessionToken = String(paySecurity.value.session_token || '');
     if (!invoiceId.value || !sessionToken) {
-      MessagePlugin.warning('支付会话已失效，请刷新页面后重试');
+      warnPaymentSessionUnavailable();
       return;
     }
 
@@ -510,6 +543,8 @@ export function useInvoiceDetail() {
   }
 
   function handlePayByBalance() {
+    if (paying.value || payingConfirming.value) return;
+    payingConfirming.value = true;
     const dialog = DialogPlugin.confirm({
       header: '余额支付',
       body: `确认使用账户余额支付 ¥${formatMoney(payableAmount.value)} 吗？`,
@@ -522,16 +557,24 @@ export function useInvoiceDetail() {
           await executeBalancePayment();
           if (Number(detail.value?.status) === 1) dialog.hide();
         } finally {
+          payingConfirming.value = false;
           dialog.setConfirmLoading(false);
         }
+      },
+      onCancel: () => {
+        payingConfirming.value = false;
+      },
+      onClose: () => {
+        payingConfirming.value = false;
       },
     });
   }
 
   async function handlePayByAlipay() {
+    if (paying.value || payingConfirming.value) return;
     const sessionToken = String(paySecurity.value.session_token || '');
     if (!invoiceId.value || !sessionToken) {
-      MessagePlugin.warning('支付会话已失效，请刷新页面后重试');
+      warnPaymentSessionUnavailable();
       return;
     }
 
@@ -541,8 +584,40 @@ export function useInvoiceDetail() {
       return;
     }
 
+    // 支付宝 + 勾选余额抵扣 + 余额足额：实际会走全额余额扣款（按钮文案也从「生成二维码」变成「支付」），
+    // 资金用途与用户预期不同，必须先显式确认，不能静默切换支付方式。
     if (selectedIsAlipay.value && allowBalanceDeduction.value && balanceAmount.value >= payableAmount.value) {
-      handlePayByBalance();
+      // 从弹出确认框到用户做选择这段时间必须占住防重入标记：
+      // 否则连点「立即支付」会叠出多个确认框，每个确认后都会各自走一次 handlePayByBalance。
+      payingConfirming.value = true;
+      let confirmed = false;
+      try {
+        confirmed = await new Promise<boolean>((resolve) => {
+          const dialog = DialogPlugin.confirm({
+            header: '改用余额支付',
+            body: `当前账户余额足以覆盖账单 ¥${formatMoney(payableAmount.value)}，勾选余额抵扣后本次将直接从余额全额扣款，不再生成${selectedPayMethodName.value}二维码。是否继续？`,
+            confirmBtn: '使用余额支付',
+            cancelBtn: '取消',
+            theme: 'warning',
+            onConfirm: () => {
+              dialog.destroy();
+              resolve(true);
+            },
+            onCancel: () => {
+              dialog.destroy();
+              resolve(false);
+            },
+            onClose: () => {
+              dialog.destroy();
+              resolve(false);
+            },
+          });
+        });
+      } finally {
+        // 先释放占位，再交给 handlePayByBalance 自己加锁，避免两次加锁互相挡住。
+        payingConfirming.value = false;
+      }
+      if (confirmed) handlePayByBalance();
       return;
     }
 
@@ -649,8 +724,10 @@ export function useInvoiceDetail() {
     { immediate: true },
   );
 
-  // 注：keep-alive 暂停/恢复钩子已移除——当前工程 keep-alive include 按组件名匹配，
-  // 页面无组件名注入实际不会被缓存（2026-10-11 裁决 A）；页面离开走 onBeforeUnmount 清理 timer。
+  // 注：keep-alive 暂停/恢复钩子已移除，但页面现在是真的会被缓存的
+  // （Content.vue 按 route.name 做 key，2026-10-11 的「include 按组件名匹配、不会被缓存」结论已失效）；
+  // 这里用 onBeforeUnmount 清理 timer —— 定时器只在弹窗打开时启动，
+  // 而弹窗打开时用户切走页签，本页会在缓存里继续跑，故由各弹窗的开关负责停表（见 startXxx/stopXxx）。
   onBeforeUnmount(() => {
     clearPollingTimer();
   });

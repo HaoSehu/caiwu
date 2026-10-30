@@ -39,7 +39,12 @@ export const usePermissionStore = defineStore('permission', {
         await this.initRoutes();
         return this.asyncRoutes;
       } catch (error) {
-        throw new Error("Can't build routes", { cause: error });
+        // 不用 new Error(msg, { cause })：Error 的 cause 选项要 ES2022 运行时（Chrome 93 / Safari 15.4），
+        // 超出仓库声明的浏览器基线。改成挂属性语义等价；一旦把 tsconfig 的 lib 按基线降到 ES2020，
+        // 原写法就是这里的 tsc 挡点（TS2554），这样写才编得过。
+        const wrapped = new Error("Can't build routes") as Error & { cause?: unknown };
+        wrapped.cause = error;
+        throw wrapped;
       }
     },
     async restoreRoutes() {

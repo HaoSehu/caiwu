@@ -34,18 +34,27 @@ const getWrapStyle = computed((): CSSProperties => {
   };
 });
 
-const computedStyle = getComputedStyle(document.documentElement);
-const sizeXxxl = computedStyle.getPropertyValue('--td-comp-size-xxxl');
-const paddingTBXxl = computedStyle.getPropertyValue('--td-comp-paddingTB-xxl');
+// 令牌在每次 calcHeight 现取，而不是 setup 顶层读一次缓存住（L-29）：这两个令牌的值由
+// theme.css / 布局层样式决定，运行时可能被媒体查询或主题覆盖改写，缓存住的话重算时仍按旧值
+// 叠加，iframe 高度会一直偏大。目前布局层的 ≤991px 媒体查询只改写了 --td-comp-paddingTB-l
+// 等 -l 档，尚未触及这里用到的 --td-comp-size-xxxl（56）与 --td-comp-paddingTB-xxl（24），
+// 现取是为了不把「当前没有被改写」当成永久前提。
+function readTokenPx(name: string, fallback: number) {
+  const raw = getComputedStyle(document.documentElement).getPropertyValue(name);
+  const value = Number.parseFloat(raw);
+  return Number.isFinite(value) ? value : fallback;
+}
 
 function getOuterHeight(dom: Element) {
-  let height = dom.clientHeight;
   const computedStyle = window.getComputedStyle(dom);
-  height += Number.parseInt(computedStyle.marginTop, 10);
-  height += Number.parseInt(computedStyle.marginBottom, 10);
-  height += Number.parseInt(computedStyle.borderTopWidth, 10);
-  height += Number.parseInt(computedStyle.borderBottomWidth, 10);
-  return height;
+  const px = (value: string) => Number.parseFloat(value) || 0;
+  return (
+    dom.clientHeight +
+    px(computedStyle.marginTop) +
+    px(computedStyle.marginBottom) +
+    px(computedStyle.borderTopWidth) +
+    px(computedStyle.borderBottomWidth)
+  );
 }
 
 function calcHeight() {
@@ -53,20 +62,19 @@ function calcHeight() {
   if (!iframe) {
     return;
   }
-  let clientHeight = 0;
   const { showFooter, isUseTabsRouter, showBreadcrumb } = settingStore;
-  const headerHeight = Number.parseFloat(sizeXxxl);
+  // 令牌缺失时按 theme.css 的默认值兜底（56px / 24px），避免 NaN 让 iframe 高度变 auto
+  const headerHeight = readTokenPx('--td-comp-size-xxxl', 56);
   const navDom = document.querySelector('.t-tabs__nav');
   const navHeight = isUseTabsRouter && navDom ? getOuterHeight(navDom) : 0;
   const breadcrumbDom = document.querySelector('.t-breadcrumb');
   const breadcrumbHeight = showBreadcrumb && breadcrumbDom ? getOuterHeight(breadcrumbDom) : 0;
-  const contentPadding = Number.parseFloat(paddingTBXxl) * 2;
+  const contentPadding = readTokenPx('--td-comp-paddingTB-xxl', 24) * 2;
   const footerDom = document.querySelector('.t-layout__footer');
   const footerHeight = showFooter && footerDom ? getOuterHeight(footerDom) : 0;
   const top = headerHeight + navHeight + breadcrumbHeight + contentPadding + footerHeight + 2;
   heightRef.value = window.innerHeight - top;
-  clientHeight = document.documentElement.clientHeight - top;
-  iframe.style.height = `${clientHeight}px`;
+  iframe.style.height = `${document.documentElement.clientHeight - top}px`;
 }
 
 function hideLoading() {
@@ -99,7 +107,7 @@ watch(
     width: 100%;
     height: 100%;
     overflow: hidden;
-    background-color: #fff;
+    background-color: var(--td-bg-color-container);
     border: 0;
     box-sizing: border-box;
   }

@@ -3,14 +3,13 @@ import { computed, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 import clientApi from '@/api/client';
-import { formatMoney } from '@/domains/services/useServiceCenter';
 import type {
   ServiceTrafficPackageOption,
   ServiceTrafficPackagePreview,
   ServiceTrafficPackageQuote,
 } from '@/types/client';
-
-import { resolveErrorMessage } from './useConsoleCore';
+import { getErrorMessage } from '@/utils/error';
+import { formatMoney } from '@/utils/format';
 
 export interface UseConsoleTrafficPackagesOptions {
   serviceId: { value: number };
@@ -57,14 +56,19 @@ export function useConsoleTrafficPackages(options: UseConsoleTrafficPackagesOpti
       }
     } catch (error: unknown) {
       trafficData.value = null;
-      MessagePlugin.error(resolveErrorMessage(error, '加载流量包失败'));
+      MessagePlugin.error(getErrorMessage(error, '加载流量包失败'));
     } finally {
       trafficLoading.value = false;
     }
   }
 
+  // PR-31：报价请求带序号。切换档位的响应顺序没有保证，晚返回的旧档位报价会把新档位的价格覆盖掉，
+  // 而付款金额直接读 trafficQuote，属于会算错钱的路径。
+  let quoteRequestSeq = 0;
+
   async function quoteTrafficPackage(value?: unknown) {
     const targetValue = Number(value ?? trafficForm.target_value ?? 0);
+    const requestSeq = ++quoteRequestSeq;
     trafficForm.target_value = targetValue;
     trafficQuote.value = null;
 
@@ -77,11 +81,13 @@ export function useConsoleTrafficPackages(options: UseConsoleTrafficPackagesOpti
       const res = await clientApi.quoteTrafficPackage(serviceId.value, {
         target_value: targetValue,
       });
+      if (requestSeq !== quoteRequestSeq) return;
       trafficQuote.value = res.data || null;
     } catch (error: unknown) {
-      MessagePlugin.error(resolveErrorMessage(error, '获取流量包报价失败'));
+      if (requestSeq !== quoteRequestSeq) return;
+      MessagePlugin.error(getErrorMessage(error, '获取流量包报价失败'));
     } finally {
-      trafficQuoting.value = false;
+      if (requestSeq === quoteRequestSeq) trafficQuoting.value = false;
     }
   }
 
@@ -114,7 +120,7 @@ export function useConsoleTrafficPackages(options: UseConsoleTrafficPackagesOpti
       MessagePlugin.success('流量包账单已创建，正在跳转支付');
       await router.push(invoiceId > 0 ? `/client/invoices/${invoiceId}/pay` : '/client/invoices');
     } catch (error: unknown) {
-      MessagePlugin.error(resolveErrorMessage(error, '创建流量包账单失败'));
+      MessagePlugin.error(getErrorMessage(error, '创建流量包账单失败'));
     } finally {
       trafficSubmitting.value = false;
     }

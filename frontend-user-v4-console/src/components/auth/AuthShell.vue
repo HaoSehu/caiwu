@@ -19,7 +19,7 @@
           <span class="auth-brand__context">用户控制台</span>
         </a>
         <span class="auth-shell__header-spacer" />
-        <button class="auth-shell__back" type="button" @click="handleBack">
+        <button class="auth-shell__back" type="button" aria-label="返回上一页" @click="handleBack">
           <chevron-left-icon />
           <span>返回</span>
         </button>
@@ -29,7 +29,8 @@
         <div class="auth-card-column">
           <div class="auth-card">
             <div class="auth-card__head">
-              <h2 class="auth-card__title">{{ title }}</h2>
+              <!-- A-06：表单标题是本页唯一实质内容，用 h1；右侧营销文案降为 h2。 -->
+              <h1 class="auth-card__title">{{ title }}</h1>
               <div v-if="navText || navLinkText" class="auth-card__nav">
                 <span>{{ navText }}</span>
                 <router-link v-if="navLinkText" :to="navTo">{{ navLinkText }}</router-link>
@@ -43,7 +44,7 @@
         </div>
 
         <div class="auth-guide">
-          <h1 class="auth-guide__title">{{ heroTitle }}</h1>
+          <h2 class="auth-guide__title">{{ heroTitle }}</h2>
           <p class="auth-guide__description">{{ heroDescription }}</p>
           <router-link v-if="ctaText" class="auth-guide__cta" :to="ctaTo">{{ ctaText }}</router-link>
         </div>
@@ -59,7 +60,7 @@ import { computed, onMounted, ref, watch } from 'vue';
 import type { RouteLocationRaw } from 'vue-router';
 import { useRouter } from 'vue-router';
 
-import { useSiteBrandingStore } from '@/app/stores/siteBranding';
+import { useSiteBrandingStore } from '@/store';
 
 withDefaults(
   defineProps<{
@@ -114,6 +115,9 @@ onMounted(() => {
 </script>
 <style scoped lang="less">
 // 登录壳层严格走 TDesign 令牌，仅提供浅色一种形态（docs/DESIGN.md §2）。
+// C-21：间距、控件高度与可枚举的尺寸一律映射到 --td-* 令牌，令牌号段里没有的中间值
+// （28/30/26/22/18/14/6px）用相邻令牌相加减表达，数值与原 rem 完全等价；
+// 仍然保留 rem 的只有随视口缩放的栅格宽度与图标/文字的载荷宽度（minmax/clamp/min()/max-width 里的 85rem、26.25rem、28rem 等）。
 // 表单样式在 pages/client-auth/shared-auth.less 中直接引用 --td-* 令牌，不再经别名中转。
 .auth-shell {
   // dvh 兜底：移动端地址栏收缩时避免底部裁切（与 layout.less 的双写策略一致）
@@ -126,17 +130,19 @@ onMounted(() => {
 .auth-shell__stage {
   display: flex;
   flex-direction: column;
-  width: min(85rem, calc(100% - 4.5rem));
+  // 4.5rem(=72px) 是给两侧留白：56px 顶栏档 + 16px 间距
+  width: min(85rem, calc(100% - (var(--td-comp-size-xxxl) + var(--td-comp-margin-l))));
   min-height: 100vh;
   min-height: 100dvh;
   margin: 0 auto;
-  padding: 1.75rem 0 1.5rem;
+  padding: calc(var(--td-comp-margin-xxl) + var(--td-comp-margin-xs)) 0 var(--td-comp-margin-xxl);
 }
 
 .auth-shell__header {
   display: flex;
   align-items: center;
-  min-height: 2.75rem;
+  // 44px 触控基线：40 + 4
+  min-height: calc(var(--td-comp-size-xl) + var(--td-comp-margin-xs));
 }
 
 .auth-shell__header-spacer {
@@ -146,8 +152,8 @@ onMounted(() => {
 .auth-shell__back {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
-  padding: 0.375rem 0.75rem;
+  gap: var(--td-comp-margin-xs);
+  padding: calc(var(--td-comp-margin-s) - var(--td-comp-margin-xxs)) var(--td-comp-margin-m);
   border: none;
   border-radius: var(--td-radius-default);
   background: transparent;
@@ -165,7 +171,7 @@ onMounted(() => {
 .auth-brand {
   display: inline-flex;
   align-items: center;
-  gap: 0.875rem;
+  gap: calc(var(--td-comp-margin-l) - var(--td-comp-margin-xxs));
   min-width: 0;
   color: var(--td-text-color-primary);
   text-decoration: none;
@@ -175,7 +181,7 @@ onMounted(() => {
   display: block;
   width: auto;
   max-width: 15rem;
-  height: 2.5rem;
+  height: var(--td-comp-size-xl);
   object-fit: contain;
 }
 
@@ -184,8 +190,8 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  width: 2.5rem;
-  height: 2.5rem;
+  width: var(--td-comp-size-xl);
+  height: var(--td-comp-size-xl);
   border-radius: var(--td-radius-medium);
   background: var(--td-brand-color);
   color: var(--td-text-color-anti);
@@ -203,7 +209,7 @@ onMounted(() => {
 .auth-brand__divider {
   flex-shrink: 0;
   width: 1px;
-  height: 1.25rem;
+  height: var(--td-comp-size-xxs);
   background: var(--td-component-stroke);
 }
 
@@ -220,13 +226,14 @@ onMounted(() => {
   grid-template-columns: minmax(24rem, 26.25rem) minmax(20rem, 35rem);
   align-items: center;
   gap: clamp(3rem, 7vw, 7.5rem);
-  padding: clamp(3rem, 8vh, 5.5rem) 0 2.25rem;
+  padding: clamp(3rem, 8vh, 5.5rem) 0 calc(var(--td-comp-margin-xxxxl) - var(--td-comp-margin-xs));
 }
 
 .auth-card {
   width: 100%;
-  padding: 2rem 2rem 1.875rem;
-  border: 1px solid var(--td-component-stroke);
+  padding: var(--td-comp-margin-xxxl) var(--td-comp-margin-xxxl)
+    calc(var(--td-comp-margin-xxxl) - var(--td-comp-margin-xxs));
+  border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
   background: var(--td-bg-color-container);
   box-shadow: var(--td-shadow-1);
@@ -236,8 +243,8 @@ onMounted(() => {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 1.625rem;
+  gap: var(--td-comp-margin-l);
+  margin-bottom: calc(var(--td-comp-margin-xxl) + var(--td-comp-margin-xxs));
 }
 
 .auth-card__title {
@@ -254,7 +261,7 @@ onMounted(() => {
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
-  gap: 0.25rem;
+  gap: var(--td-comp-margin-xs);
   max-width: 12rem;
   color: var(--td-text-color-secondary);
   font-size: var(--td-font-size-body-small);
@@ -298,7 +305,7 @@ onMounted(() => {
 
 .auth-guide__description {
   max-width: 28rem;
-  margin: 1rem 0 0;
+  margin: var(--td-comp-margin-l) 0 0;
   color: var(--td-text-color-secondary);
   font-size: var(--td-font-size-body-medium);
   line-height: 1.86;
@@ -310,10 +317,11 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   min-width: 8.75rem;
-  height: 2.75rem;
-  margin-top: 2rem;
-  padding: 0 1.375rem;
-  border: 1px solid var(--td-component-stroke);
+  // 44px 触控基线：40 + 4
+  height: calc(var(--td-comp-size-xl) + var(--td-comp-margin-xs));
+  margin-top: var(--td-comp-margin-xxxl);
+  padding: 0 calc(var(--td-comp-margin-xl) + var(--td-comp-margin-xxs));
+  border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-default);
   background: var(--td-bg-color-container);
   color: var(--td-brand-color);
@@ -337,7 +345,7 @@ onMounted(() => {
 
 @media (max-width: @screen-lg-max) {
   .auth-shell__stage {
-    width: min(78rem, calc(100% - 3.5rem));
+    width: min(78rem, calc(100% - var(--td-comp-size-xxxl)));
   }
 
   .auth-shell__content {
@@ -348,18 +356,18 @@ onMounted(() => {
 
 @media (max-width: @screen-sm-max) {
   .auth-shell__stage {
-    width: calc(100% - 2rem);
-    padding: 1.25rem 0 1.5rem;
+    width: calc(100% - var(--td-comp-margin-xxxl));
+    padding: var(--td-comp-margin-xl) 0 var(--td-comp-margin-xxl);
   }
 
   .auth-shell__content {
     grid-template-columns: 1fr;
-    gap: 1.5rem;
-    padding: 2rem 0 1.5rem;
+    gap: var(--td-comp-margin-xxl);
+    padding: var(--td-comp-margin-xxxl) 0 var(--td-comp-margin-xxl);
   }
 
   .auth-brand {
-    gap: 0.75rem;
+    gap: var(--td-comp-margin-m);
   }
 
   .auth-brand__divider,
@@ -369,12 +377,12 @@ onMounted(() => {
 
   .auth-brand__logo {
     max-width: 12.5rem;
-    height: 2rem;
+    height: var(--td-comp-size-m);
   }
 
   .auth-brand__mark {
-    width: 2.25rem;
-    height: 2.25rem;
+    width: var(--td-comp-size-l);
+    height: var(--td-comp-size-l);
     font-size: var(--td-font-size-body-large);
   }
 
@@ -383,13 +391,14 @@ onMounted(() => {
   }
 
   .auth-card {
-    padding: 1.625rem 1.25rem 1.375rem;
+    padding: calc(var(--td-comp-margin-xxl) + var(--td-comp-margin-xxs)) var(--td-comp-margin-xl)
+      calc(var(--td-comp-margin-xl) + var(--td-comp-margin-xxs));
   }
 
   .auth-card__head {
     flex-direction: column;
-    gap: 0.5rem;
-    margin-bottom: 1.5rem;
+    gap: var(--td-comp-margin-s);
+    margin-bottom: var(--td-comp-margin-xxl);
   }
 
   .auth-card__title {
@@ -402,8 +411,21 @@ onMounted(() => {
     text-align: left;
   }
 
+  /* A-07 复核：原先这里整块 display:none，再靠页面外一份 .auth-guide__cta--mobile 副本
+     保住「查看产品目录」入口——同一段 CTA 在 DOM 里出现两次，读屏和 Tab 顺序都会遇到两遍。
+     现在不关整块，只关标题与描述：手机端只留 CTA，居中、去掉 desktop 的右内边距与上外边距。 */
   .auth-guide {
+    align-items: center;
+    padding-right: 0;
+  }
+
+  .auth-guide__title,
+  .auth-guide__description {
     display: none;
+  }
+
+  .auth-guide__cta {
+    margin-top: 0;
   }
 
   .auth-shell__footer {
@@ -413,7 +435,7 @@ onMounted(() => {
 
 @media (max-width: @screen-xxs-rem) {
   .auth-shell__stage {
-    width: calc(100% - 1.5rem);
+    width: calc(100% - var(--td-comp-margin-xxl));
   }
 
   .auth-brand__divider {
@@ -421,7 +443,7 @@ onMounted(() => {
   }
 
   .auth-card {
-    padding-inline: 1.125rem;
+    padding-inline: calc(var(--td-comp-margin-l) + var(--td-comp-margin-xxs));
   }
 
   .auth-card__title {

@@ -2,8 +2,16 @@
   <div v-if="!isRefreshing">
     <router-view v-if="!isFramePage" v-slot="{ Component }">
       <transition name="fade" mode="out-in">
-        <keep-alive :include="aliveViews" :max="10">
-          <component :is="Component" />
+        <!--
+          不能用 :include="aliveViews"：include 匹配组件 name，而本仓库页面组件全是
+          index.vue 的 <script setup>，推断出的 name 一律是 "index"，与路由 name 永不相等，
+          keep-alive 一个页面都缓存不到（等于关闭缓存）。改为按路由 name 做 key，
+          显式 keepAlive === false 的路由走不缓存旁路。
+        -->
+        <component :is="Component" v-if="route.meta.keepAlive === false" />
+        <!-- L-10：:max 与页签上限同源（tabs-router.ts 的 MAX_TAB_COUNT），避免缓存容量与页签数脱钩 -->
+        <keep-alive v-else :max="maxCachedViews">
+          <component :is="Component" :key="String(route.name ?? route.path)" />
         </keep-alive>
       </transition>
     </router-view>
@@ -13,12 +21,11 @@
   <t-loading v-else />
 </template>
 <script setup lang="ts">
-import type { ComputedRef } from 'vue';
 import { computed } from 'vue';
 import { useRoute } from 'vue-router';
 
 import FramePage from '@/layouts/frame/index.vue';
-import { useTabsRouterStore } from '@/store';
+import { MAX_TAB_COUNT, useTabsRouterStore } from '@/store';
 
 // <suspense>标签属于实验性功能，请谨慎使用
 // 如果存在需解决/page/1=> /page/2 刷新数据问题 请修改代码 使用activeRouteFullPath 作为key
@@ -32,24 +39,13 @@ import { useTabsRouterStore } from '@/store';
 //   return router.currentRoute.value.fullPath;
 // });
 
-const aliveViews = computed(() => {
-  const tabsRouterStore = useTabsRouterStore();
-  const { tabRouters } = tabsRouterStore;
-  return tabRouters
-    .filter((route) => {
-      const keepAliveConfig = route.meta?.keepAlive;
-      // 默认开启 keepalive：未显式配置或显式 true 时缓存
-      const isRouteKeepAlive = keepAliveConfig === undefined || keepAliveConfig === true;
-      return route.isAlive && isRouteKeepAlive;
-    })
-    .map((route) => route.name);
-}) as ComputedRef<string[]>;
-
 const isRefreshing = computed(() => {
   const tabsRouterStore = useTabsRouterStore();
   const { refreshing } = tabsRouterStore;
   return refreshing;
 });
+
+const maxCachedViews = MAX_TAB_COUNT;
 
 const route = useRoute(); // 这个不能放到computed中，切换页面时会导致被缓存
 const isFramePage = computed(() => {

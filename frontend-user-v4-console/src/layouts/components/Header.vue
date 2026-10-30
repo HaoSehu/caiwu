@@ -2,7 +2,17 @@
   <div :class="layoutCls">
     <t-head-menu :class="menuCls" :theme="menuTheme" expand-type="popup" :value="active">
       <template #logo>
-        <span v-if="showLogo" class="header-logo-container" @click="handleNav('/client/dashboard')">
+        <!-- 品牌位是页面内导航入口：与 SideNav 品牌位同口径，必须可聚焦并用键盘触发（L-15 同类） -->
+        <span
+          v-if="showLogo"
+          class="header-logo-container"
+          role="button"
+          tabindex="0"
+          :aria-label="`返回控制台首页（${siteBranding.siteName}）`"
+          @click="handleNav('/client/dashboard')"
+          @keydown.enter.self.prevent="handleNav('/client/dashboard')"
+          @keydown.space.self.prevent="handleNav('/client/dashboard')"
+        >
           <span class="header-logo-mark">{{ siteBranding.brandInitials }}</span>
           <span class="header-logo-name">{{ siteBranding.siteName }}</span>
         </span>
@@ -58,8 +68,10 @@
                       :class="{ 'inbox-item--unread': !item.read }"
                       role="button"
                       tabindex="0"
+                      :aria-label="`${item.read ? '' : '未读'}消息：${item.title}`"
                       @click="handleInboxItemClick(item)"
                       @keydown.enter.prevent="handleInboxItemClick(item)"
+                      @keydown.space.prevent="handleInboxItemClick(item)"
                     >
                       <div class="inbox-item__top">
                         <t-tag size="small" variant="light" :theme="resolveTagTheme(item.type)">{{
@@ -77,8 +89,10 @@
                   class="inbox-panel__foot"
                   role="button"
                   tabindex="0"
+                  aria-label="查看全部站内信"
                   @click="handleNav('/client/notices')"
                   @keydown.enter.prevent="handleNav('/client/notices')"
+                  @keydown.space.prevent="handleNav('/client/notices')"
                 >
                   查看全部
                 </div>
@@ -134,14 +148,14 @@ import type { PropType } from 'vue';
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
-import { useSiteBrandingStore } from '@/app/stores/siteBranding';
 import { useDeviceLayout } from '@/composables/useDeviceLayout';
 import { prefix } from '@/config/global';
 import type { InboxItem } from '@/domains/content/useInbox';
 import { useInbox } from '@/domains/content/useInbox';
 import { getActive } from '@/router';
-import { useSettingStore, useUserStore } from '@/store';
+import { useSettingStore, useSiteBrandingStore, useUserStore } from '@/store';
 import type { MenuRoute, ModeType } from '@/types/interface';
+import { getErrorMessage } from '@/utils/error';
 
 import MenuContent from './MenuContent.vue';
 
@@ -245,11 +259,21 @@ const handleNav = (url: string) => {
 };
 
 // 返回官网：站后台配置了官网地址则新窗口打开，否则走 public-redirect 的 /products 兜底
+// L-21：window.open 会被浏览器拦截（非用户手势、企业策略、弹窗白名单），原实现直接丢弃结果，
+// 用户点了「返回官网」什么都不发生且无提示，属静默失败。
+// 这里不在 features 里写 'noopener'：规范规定带 noopener 时 window.open 恒返回 null，
+// 无法区分「成功打开」与「被拦截」，检测会失真；改为打开后手动置 opener = null，
+// 安全效果相同而返回值可靠，被拦时退回同窗口导航，至少不让操作落空。
 const handleOpenWebsite = () => {
   inboxVisible.value = false;
   const siteUrl = String(siteBranding.frontendUrl || '').trim();
   if (/^https?:\/\//i.test(siteUrl)) {
-    window.open(siteUrl, '_blank', 'noopener,noreferrer');
+    const opened = window.open(siteUrl, '_blank');
+    if (opened) {
+      opened.opener = null;
+      return;
+    }
+    window.location.assign(siteUrl);
     return;
   }
   handleNav('/products');
@@ -257,18 +281,35 @@ const handleOpenWebsite = () => {
 
 const inboxVisible = ref(false);
 
-const handleInboxVisible = (visible: boolean) => {
-  if (visible) {
-    fetchFeed(10);
-  }
+// 打开面板不无条件重拉：每次点铃铛都打一次 /notifications/feed 属于纯浪费，
+// 但也不能一直吃旧数据（未读状态会被 markRead 之外的端改写）。
+// 折中口径：有缓存且 30s 内拉过就直接复用，过期或无缓存才请求。
+const INBOX_FEED_TTL_MS = 30_000;
+let lastFeedFetchedAt = 0;
+
+const handleInboxVisible = async (visible: boolean) => {
+  if (!visible) return;
+  const fresh = feedItems.value.length > 0 && Date.now() - lastFeedFetchedAt < INBOX_FEED_TTL_MS;
+  if (fresh) return;
+  await fetchFeed(10);
+  lastFeedFetchedAt = Date.now();
 };
 
-const handleInboxItemClick = (item: InboxItem) => {
-  markRead(item);
+// 先完成已读上报再导航：markRead 失败时（后端不可达 / 401）不能假装已读，
+// 服务端仍是未读，气泡数字会在下次拉取时回弹，所以这里 await 并显式提示。
+const handleInboxItemClick = async (item: InboxItem) => {
+  try {
+    await markRead(item);
+  } catch (error: unknown) {
+    MessagePlugin.error(getErrorMessage(error, '标记已读失败，请稍后重试'));
+  }
   inboxVisible.value = false;
   if (item.link) {
     router.push(item.link);
+    return;
   }
+  // 无跳转链接的消息（系统通知类）点开就是「已读」，不再静默留白
+  MessagePlugin.info('该消息无关联页面');
 };
 
 const handleMarkAllRead = async () => {
@@ -292,8 +333,13 @@ const handleMarkAllRead = async () => {
     });
   });
   if (!confirmed) return;
-  markAllRead();
-  MessagePlugin.success('已全部标记为已读');
+  try {
+    await markAllRead();
+    MessagePlugin.success('已全部标记为已读');
+  } catch (error: unknown) {
+    // 失败必须落到用户可见的错误提示上，不能沿用「成功」文案
+    MessagePlugin.error(getErrorMessage(error, '标记已读失败，请稍后重试'));
+  }
 };
 
 const handleMarkAllReadClick = () => {
@@ -370,7 +416,8 @@ onMounted(() => {
     }
 
     &-side {
-      left: 232px;
+      // 与 layout.less 的侧栏占位同一源变量，避免三处各写一份 232px / 64px（L-23）
+      left: @starter-sidebar-width;
       right: 0;
       z-index: 10;
       width: auto;
@@ -378,7 +425,7 @@ onMounted(() => {
       transition: left 0.3s cubic-bezier(0.38, 0, 0.24, 1);
 
       &-compact {
-        left: 64px;
+        left: @starter-sidebar-collapsed-width;
       }
     }
   }
@@ -424,6 +471,8 @@ onMounted(() => {
   line-height: var(--td-line-height-body-medium);
 }
 
+// 品牌位的宽度是布局几何（图标 36 + 间距 8 + 名称占位），TDesign 令牌号段没有对应值，
+// 保留 px 并在此说明；其余间距类属性已全部走令牌（C-23）
 .header-logo-container {
   min-width: 184px;
   height: var(--td-comp-size-l);
@@ -436,6 +485,12 @@ onMounted(() => {
 
   &:hover {
     cursor: pointer;
+  }
+
+  &:focus-visible {
+    outline: 0.125rem solid var(--td-brand-color);
+    outline-offset: 0.125rem;
+    border-radius: var(--td-radius-default);
   }
 }
 
@@ -484,7 +539,7 @@ onMounted(() => {
 }
 
 :deep(.t-head-menu__inner) {
-  border-bottom: 1px solid var(--td-component-stroke);
+  border-bottom: thin solid var(--td-component-stroke);
 }
 
 .t-menu--light {
@@ -514,8 +569,9 @@ onMounted(() => {
     align-items: center;
   }
 
+  // 原误用尺寸令牌 --td-comp-size-xxxs 当字号，改用等值(16px)的字号令牌
   .t-icon {
-    font-size: var(--td-comp-size-xxxs);
+    font-size: var(--td-font-size-body-large);
     margin-right: var(--td-comp-margin-s);
   }
 
@@ -526,11 +582,13 @@ onMounted(() => {
 
   &:last-child {
     :deep(.t-dropdown__item) {
-      margin-bottom: 8px;
+      margin-bottom: var(--td-comp-margin-s);
     }
   }
 }
 
+// 面板宽度与列表最大高度是弹层的几何尺寸（不是间距），TDesign 令牌号段里没有对应值，
+// 保留 px 并在此说明；间距类属性已全部改回令牌（L-24）。
 .inbox-panel {
   width: 340px;
   max-width: 88vw;
@@ -539,8 +597,8 @@ onMounted(() => {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 12px 16px;
-    border-bottom: 1px solid var(--td-component-stroke);
+    padding: var(--td-comp-margin-m) var(--td-comp-margin-l);
+    border-bottom: thin solid var(--td-component-stroke);
   }
 
   &__title {
@@ -554,18 +612,18 @@ onMounted(() => {
   }
 
   &__empty {
-    padding: 40px 16px;
+    padding: var(--td-comp-margin-xxxxl) var(--td-comp-margin-l);
     text-align: center;
     color: var(--td-text-color-placeholder);
     font: var(--td-font-body-small);
   }
 
   &__foot {
-    padding: 10px 16px;
+    padding: var(--td-comp-paddingTB-m) var(--td-comp-margin-l);
     text-align: center;
     color: var(--td-brand-color);
     font: var(--td-font-body-small);
-    border-top: 1px solid var(--td-component-stroke);
+    border-top: thin solid var(--td-component-stroke);
     cursor: pointer;
 
     &:hover {
@@ -575,8 +633,8 @@ onMounted(() => {
 }
 
 .inbox-item {
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--td-component-stroke);
+  padding: var(--td-comp-margin-m) var(--td-comp-margin-l);
+  border-bottom: thin solid var(--td-component-stroke);
   cursor: pointer;
   transition: background 0.2s;
 
@@ -595,14 +653,16 @@ onMounted(() => {
       font-weight: 600;
     }
 
+    // 6px / 18px 不在 TDesign 令牌号段内（margin 号段 2·4·8·12·16·20…），
+    // 用相邻令牌加减表达，既保持像素不变又守住「不得硬编码数值」的约束（L-24）
     &::before {
       content: '';
       position: absolute;
-      left: 6px;
-      top: 18px;
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
+      left: calc(var(--td-comp-margin-s) - var(--td-comp-margin-xxs));
+      top: calc(var(--td-comp-margin-l) + var(--td-comp-margin-xxs));
+      width: calc(var(--td-comp-margin-s) - var(--td-comp-margin-xxs));
+      height: calc(var(--td-comp-margin-s) - var(--td-comp-margin-xxs));
+      border-radius: var(--td-radius-circle);
       background: var(--td-error-color);
     }
   }
@@ -611,7 +671,7 @@ onMounted(() => {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 6px;
+    margin-bottom: calc(var(--td-comp-margin-s) - var(--td-comp-margin-xxs));
   }
 
   &__time {
@@ -622,7 +682,7 @@ onMounted(() => {
   &__title {
     color: var(--td-text-color-primary);
     font: var(--td-font-body-medium);
-    margin-bottom: 4px;
+    margin-bottom: var(--td-comp-margin-xs);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -658,10 +718,7 @@ onMounted(() => {
 @media (max-width: @screen-sm-max) {
   .t-popup.inbox-popup {
     position: fixed !important;
-    top: auto !important;
-    right: 8px !important;
-    bottom: 8px !important;
-    left: 8px !important;
+    inset: auto var(--td-comp-margin-s) var(--td-comp-margin-s) !important;
     transform: none !important;
   }
 
@@ -674,9 +731,9 @@ onMounted(() => {
     flex-direction: column;
     width: 100%;
     max-width: none;
-    max-height: calc(70dvh - 16px);
+    max-height: calc(70dvh - var(--td-comp-margin-l));
     border-radius: var(--td-radius-large) var(--td-radius-large) 0 0;
-    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0);
 
     .inbox-panel__list {
       flex: 1 1 auto;

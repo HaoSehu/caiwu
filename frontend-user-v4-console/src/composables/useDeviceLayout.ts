@@ -23,13 +23,18 @@ const BREAKPOINTS = {
   wide: 75 * 16, // 75rem → 1200px（@screen-lg）
 } as const;
 
-export function useDeviceLayout() {
-  const breakpoints = useBreakpoints(BREAKPOINTS);
-  const isMobile = breakpoints.smaller('mobile');
-  const isTablet = breakpoints.between('mobile', 'tablet');
-  const isDesktop = breakpoints.greaterOrEqual('tablet');
-  const isWide = breakpoints.greaterOrEqual('wide');
+// PR-40：断点探测在模块级只建一次。
+// useBreakpoints 内部为每个断点各建一份 matchMedia 监听，原来每个调用方（含后续每个页面）
+// 都会再建一整套；同一视口下这些监听器的结论必然相同，共享一个实例即可。
+// 当前调用方有 Header、SideNav、payments、recharge、profile、tickets、orders、invoices、
+// SecurityTab 共 9 处，共享后 matchMedia 监听数量不再随页面增长。
+const breakpoints = useBreakpoints(BREAKPOINTS);
+const isMobile = breakpoints.smaller('mobile');
+const isTablet = breakpoints.between('mobile', 'tablet');
+const isDesktop = breakpoints.greaterOrEqual('tablet');
+const isWide = breakpoints.greaterOrEqual('wide');
 
+export function useDeviceLayout() {
   return {
     isMobile,
     isTablet,

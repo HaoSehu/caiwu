@@ -91,6 +91,7 @@
           </div>
 
           <t-table
+            v-if="isDesktop"
             class="security-rules-table"
             row-key="id"
             :data="securityState.rules"
@@ -110,7 +111,7 @@
             </template>
           </t-table>
 
-          <div class="security-rules-cards">
+          <div v-else class="security-rules-cards">
             <div v-for="rule in securityState.rules" :key="rule.id" class="security-rule-card">
               <div class="security-rule-card__row">
                 <span class="security-rule-card__label">方向</span>
@@ -150,8 +151,12 @@
   </section>
 </template>
 <script setup lang="ts">
+import { useDeviceLayout } from '@/composables/useDeviceLayout';
+
 import { securityColumns } from '../../composables/useConsoleTables';
 import { useServiceConsoleContext } from '../context';
+
+const { isDesktop } = useDeviceLayout();
 
 const {
   securityState,

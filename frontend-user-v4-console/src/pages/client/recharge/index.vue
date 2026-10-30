@@ -64,33 +64,47 @@
               <label class="field-label recharge-mobile__label">支付方式</label>
               <div class="mobile-method-list">
                 <button
-                  v-for="method in paymentGateways"
-                  :key="paymentOptionKey(method)"
+                  v-for="gateway in gatewayViews"
+                  :key="gateway.key"
                   type="button"
                   class="pay-method-card pay-method-card--mobile"
-                  :class="{ 'is-active': selectedGateway === paymentOptionKey(method) }"
-                  :aria-pressed="selectedGateway === paymentOptionKey(method)"
-                  @click="selectPaymentGateway(paymentOptionKey(method))"
+                  :class="{ 'is-active': gateway.isActive }"
+                  :aria-pressed="gateway.isActive"
+                  :disabled="submitting || gatewaysBusy"
+                  :aria-busy="submitting || gatewaysBusy"
+                  @click="handleMobileGatewaySelect(gateway.key)"
                 >
                   <span class="pay-method-card__icon">
-                    <component :is="paymentMethodIcon(method)" />
+                    <component :is="gateway.icon" />
                   </span>
                   <span class="pay-method-card__text">
-                    <strong>{{ method.name || method.label }}</strong>
-                    <small>{{ method.label || '扫码支付' }}</small>
+                    <strong>{{ gateway.name }}</strong>
+                    <small>{{ gateway.label }}</small>
                   </span>
-                  <span v-if="selectedGateway === paymentOptionKey(method)" class="pay-method-card__check">
+                  <span v-if="gateway.isActive" class="pay-method-card__check">
                     <check-icon />
                   </span>
                 </button>
               </div>
             </section>
+            <!-- C-04：支付方式区补全三态。加载中只说明「正在加载」，失败给出失败原因 + 重试按钮，
+                 既没有支付方式又没有失败时才是真正的「暂无」。原先三种情况共用一句文案，用户无法判断该等还是该重试。 -->
             <t-alert
               v-else
               class="recharge-empty-payment"
-              theme="warning"
-              :message="paymentGatewaysLoading ? '支付方式加载中' : '暂无可用支付方式，请通过工单联系我们开通'"
-            />
+              :theme="paymentGatewaysError ? 'error' : 'info'"
+              :message="
+                paymentGatewaysLoading
+                  ? '支付方式加载中'
+                  : paymentGatewaysError || '暂无可用支付方式，请通过工单联系我们开通'
+              "
+            >
+              <template v-if="paymentGatewaysError && !paymentGatewaysLoading" #operation>
+                <t-button theme="primary" variant="outline" size="small" @click="loadPaymentGateways">
+                  重新加载
+                </t-button>
+              </template>
+            </t-alert>
 
             <div class="mobile-agreement">
               <t-checkbox v-model="mobileAgreementChecked">我已了解充值说明</t-checkbox>
@@ -105,7 +119,9 @@
               block
               class="mobile-submit-button"
               :loading="submitting"
-              :disabled="!mobileAgreementChecked || !hasPaymentGateways || paymentGatewaysLoading"
+              :disabled="
+                submitting || !mobileAgreementChecked || !hasPaymentGateways || paymentGatewaysLoading || confirmVisible
+              "
               @click="handleMobileSubmit"
             >
               {{ mobileSubmitText }}
@@ -176,31 +192,39 @@
               <label class="field-label">选择支付方式</label>
               <div class="pay-methods">
                 <t-button
-                  v-for="method in paymentGateways"
-                  :key="paymentOptionKey(method)"
-                  :theme="selectedGateway === paymentOptionKey(method) ? 'primary' : 'default'"
-                  :variant="selectedGateway === paymentOptionKey(method) ? 'base' : 'outline'"
-                  :aria-pressed="selectedGateway === paymentOptionKey(method)"
+                  v-for="gateway in gatewayViews"
+                  :key="gateway.key"
+                  :theme="gateway.isActive ? 'primary' : 'default'"
+                  :variant="gateway.isActive ? 'base' : 'outline'"
+                  :aria-pressed="gateway.isActive"
                   class="pay-method"
-                  :loading="submitting && selectedGateway === paymentOptionKey(method)"
+                  :loading="gateway.loading"
                   :disabled="submitting || paymentGatewaysLoading"
-                  @click="handleGatewayCreate(method)"
+                  @click="handleGatewayCreate(gateway)"
                 >
-                  <template #icon><component :is="paymentMethodIcon(method)" /></template>
-                  {{
-                    selectedGateway === paymentOptionKey(method)
-                      ? paymentButtonText
-                      : `生成${method.name || method.label || '支付'}二维码`
-                  }}
+                  <template #icon><component :is="gateway.icon" /></template>
+                  {{ gateway.buttonText }}
                 </t-button>
               </div>
             </div>
+            <!-- C-04：支付方式区补全三态。加载中只说明「正在加载」，失败给出失败原因 + 重试按钮，
+                 既没有支付方式又没有失败时才是真正的「暂无」。原先三种情况共用一句文案，用户无法判断该等还是该重试。 -->
             <t-alert
               v-else
               class="recharge-empty-payment"
-              theme="warning"
-              :message="paymentGatewaysLoading ? '支付方式加载中' : '暂无可用支付方式，请通过工单联系我们开通'"
-            />
+              :theme="paymentGatewaysError ? 'error' : 'info'"
+              :message="
+                paymentGatewaysLoading
+                  ? '支付方式加载中'
+                  : paymentGatewaysError || '暂无可用支付方式，请通过工单联系我们开通'
+              "
+            >
+              <template v-if="paymentGatewaysError && !paymentGatewaysLoading" #operation>
+                <t-button theme="primary" variant="outline" size="small" @click="loadPaymentGateways">
+                  重新加载
+                </t-button>
+              </template>
+            </t-alert>
           </div>
 
           <aside class="qrcode-panel">
@@ -265,15 +289,14 @@ import {
 import { DialogPlugin } from 'tdesign-vue-next/es/dialog/plugin';
 import { computed, defineAsyncComponent, onMounted, ref } from 'vue';
 
+import { useDeviceLayout } from '@/composables/useDeviceLayout';
 import { RECHARGE_PRESET_AMOUNTS, useRecharge } from '@/domains/finance/useRecharge';
 import type { RechargeGatewayOption } from '@/types/client';
 import { formatMoneyText } from '@/utils/format';
 
 const QrcodeVue = defineAsyncComponent(() => import('qrcode.vue'));
 
-import { useMediaQuery } from '@/composables/useMediaQuery';
-
-const isMobileScreen = useMediaQuery('(max-width: 47.98rem)');
+const { isMobile: isMobileScreen } = useDeviceLayout();
 const mobileCustomMode = ref(false);
 const mobileAgreementChecked = ref(true);
 
@@ -286,6 +309,8 @@ const {
   rechargePaid,
   rechargeCancelled,
   paymentGatewaysLoading,
+  paymentGatewaysError,
+  loadPaymentGateways,
   selectedGateway,
   paymentGateways,
   rechargeSummary,
@@ -300,12 +325,15 @@ const {
   selectPreset,
   selectPaymentGateway,
   handleAmountChange,
-  loadPaymentGateways,
   handleCreateOrder,
   copyPayUrl,
 } = useRecharge();
 
 const mobileCustomSelected = computed(() => mobileCustomMode.value || activePreset.value === null);
+// 确认框打开中：避免连点叠出多个确认框、或在下单过程中切换支付方式导致二维码与订单脱钩
+const confirmVisible = ref(false);
+// 下单或确认框打开期间冻结支付方式选择（移动端自绘 button 不走 t-button 的 loading 拦截）
+const gatewaysBusy = computed(() => submitting.value || confirmVisible.value);
 const mobileSubmitText = computed(() =>
   rechargePaid.value ? '继续充值' : rechargeCancelled.value ? '重新发起充值' : '立即充值',
 );
@@ -318,10 +346,7 @@ const mobilePayHelperText = computed(() => {
 });
 
 const balanceText = computed(() => {
-  if (rechargePaid.value) {
-    return formatMoneyText(rechargeSummary.cashBalance || userStore.info?.cash_balance || 0);
-  }
-
+  // 两处都是原始数值（元），只在此处格式化一次；混入已格式化字符串会被 Number() 解析成 NaN。
   const storeBalance = userStore.info?.cash_balance;
   if (storeBalance !== undefined && storeBalance !== null && String(storeBalance).trim() !== '') {
     return formatMoneyText(storeBalance);
@@ -335,17 +360,35 @@ function handleMobilePresetSelect(value: number) {
   selectPreset(value);
 }
 
+function handleMobileGatewaySelect(optionKey: string) {
+  // 下单/确认中切换支付方式会清空 paymentPayload，使已显示的二维码与最新订单脱钩，因此直接忽略
+  if (gatewaysBusy.value) return;
+  selectPaymentGateway(optionKey);
+}
+
 function handleMobileSubmit() {
-  if (submitting.value) return;
+  if (submitting.value || confirmVisible.value) return;
   const gatewayName = selectedPaymentGateway.value?.name || selectedPaymentGateway.value?.label || '在线支付';
+  confirmVisible.value = true;
   const dialog = DialogPlugin.confirm({
     header: '在线充值',
     body: `确认通过 ${gatewayName} 充值 ¥${amountText.value}？`,
     confirmBtn: '确定',
     cancelBtn: '取消',
-    onConfirm: () => {
-      dialog.destroy();
-      void handleCreateOrder(true);
+    async onConfirm() {
+      dialog.setConfirmLoading(true);
+      try {
+        await handleCreateOrder(true);
+      } finally {
+        confirmVisible.value = false;
+        dialog.destroy();
+      }
+    },
+    onCancel: () => {
+      confirmVisible.value = false;
+    },
+    onClose: () => {
+      confirmVisible.value = false;
     },
   });
 }
@@ -364,8 +407,44 @@ function paymentMethodIcon(method: RechargeGatewayOption) {
   return CreditcardIcon;
 }
 
+interface GatewayView {
+  key: string;
+  name: string;
+  label: string;
+  icon: typeof CreditcardIcon;
+  isActive: boolean;
+  loading: boolean;
+  buttonText: string;
+  method: RechargeGatewayOption;
+}
+
+/**
+ * 支付方式视图模型：原先模板对同一个 method 调 paymentOptionKey 11 次、
+ * 每次渲染都重新 String().trim() 并重复推导图标与按钮文案。
+ */
+const gatewayViews = computed<GatewayView[]>(() =>
+  paymentGateways.value.map((method) => {
+    const key = paymentOptionKey(method);
+    const isActive = selectedGateway.value === key;
+    const name = method.name || method.label || '支付';
+
+    return {
+      key,
+      name,
+      label: method.label || '扫码支付',
+      icon: paymentMethodIcon(method),
+      isActive,
+      loading: submitting.value && isActive,
+      buttonText: isActive ? paymentButtonText.value : `生成${name}二维码`,
+      method,
+    };
+  }),
+);
+
 async function handleGatewayCreate(method: RechargeGatewayOption) {
+  if (submitting.value || confirmVisible.value) return;
   selectPaymentGateway(paymentOptionKey(method));
+  confirmVisible.value = true;
   const confirmed = await new Promise<boolean>((resolve) => {
     const dialog = DialogPlugin.confirm({
       header: '在线充值',
@@ -386,8 +465,17 @@ async function handleGatewayCreate(method: RechargeGatewayOption) {
       },
     });
   });
-  if (!confirmed) return;
-  await handleCreateOrder(false);
+  // C-12：占位必须一直持有到下单结束。原来在 resolve 之后立刻把 confirmVisible 置回 false，
+  // handleCreateOrder 还没跑完，重入守卫就提前开了口子；只有用户取消时才立即释放。
+  if (!confirmed) {
+    confirmVisible.value = false;
+    return;
+  }
+  try {
+    await handleCreateOrder(false);
+  } finally {
+    confirmVisible.value = false;
+  }
 }
 
 onMounted(() => {

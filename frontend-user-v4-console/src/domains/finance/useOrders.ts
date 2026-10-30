@@ -6,7 +6,6 @@ import { ref, shallowRef } from 'vue';
 import clientApi from '@/api/client';
 import type { OrderRecord } from '@/types/client';
 import { getErrorMessage } from '@/utils/error';
-import { formatMoney } from '@/utils/format';
 
 import { useRecordList } from './useRecords';
 
@@ -17,16 +16,53 @@ export const ORDER_TYPE_OPTIONS = ['new', 'renew', 'upgrade'].map((value) => ({
   value,
 }));
 
-export { formatMoney };
-
 export function orderProductDisplay(row: Pick<OrderRecord, 'product_full_path' | 'product_name'> | null | undefined) {
   return String(row?.product_full_path || row?.product_name || '').trim() || '--';
+}
+
+type OrderPayabilityRow = Pick<OrderRecord, 'status' | 'invoice'> | null | undefined;
+
+/** 关联账单 id：缺失或脏数据（非正整数）一律视为没有可支付的账单。 */
+function linkedInvoiceId(row: OrderPayabilityRow): number {
+  const id = Number(row?.invoice?.id);
+  return Number.isInteger(id) && id > 0 ? id : 0;
+}
+
+/**
+ * 待支付订单是否还能进入支付页：订单待支付、关联账单存在且本身待支付、账单支付窗口未关闭。
+ * 窗口标记由后端按统一判据下发（续费账单与挂账单跟随 due_date，其余按 5 分钟窗口），
+ * 与账单列表的 payment_window_expired 同源，避免订单页给出必然被拦下的无效跳转。
+ * 管理端「只建订单不建账单」时后端下发 invoice=null，此时拼不出支付页地址，必须直接不给入口。
+ */
+export function canPayOrderRow(row: OrderPayabilityRow) {
+  if (Number(row?.status) !== 0) return false;
+  if (linkedInvoiceId(row) === 0 || Number(row?.invoice?.status) !== 0) return false;
+  return row?.invoice?.payment_window_expired !== true;
+}
+
+/** 订单待支付、关联账单也待支付，只是支付窗口已关闭：入口改为「支付窗口已关闭」提示。 */
+export function isPayWindowClosedOrderRow(row: OrderPayabilityRow) {
+  if (Number(row?.status) !== 0) return false;
+  if (linkedInvoiceId(row) === 0 || Number(row?.invoice?.status) !== 0) return false;
+  return row?.invoice?.payment_window_expired === true;
+}
+
+/**
+ * 订单待支付但没有任何可支付的关联账单（账单缺失，或账单已支付/已取消/已退款）：
+ * 不给支付入口，也不能谎报「支付窗口已关闭」。
+ */
+export function isPayUnavailableOrderRow(row: OrderPayabilityRow) {
+  if (Number(row?.status) !== 0) return false;
+  return !canPayOrderRow(row) && !isPayWindowClosedOrderRow(row);
 }
 
 export function useOrderList() {
   // 取消中的订单 id 集合：按行隔离 loading，避免取消某一行时所有行按钮同时转圈
   const cancelingIds = ref(new Set<number>());
-  const isCanceling = (id: number | string) => cancelingIds.value.has(Number(id));
+  // 已弹出取消确认框的订单 id 集合：确认框打开期间再次点击不再叠加第二个确认框
+  const confirmingIds = ref(new Set<number>());
+  const isCanceling = (id: number | string) =>
+    cancelingIds.value.has(Number(id)) || confirmingIds.value.has(Number(id));
   const {
     loading,
     list,
@@ -40,6 +76,7 @@ export function useOrderList() {
     handleSearch,
     handlePageSizeChange,
     applyQuickFilter,
+    resetFilters,
     dateRange,
   } = useRecordList<OrderRecord>({
     fetcher: (params) => clientApi.orders(params),
@@ -47,6 +84,13 @@ export function useOrderList() {
   });
 
   function cancelOrder(row: OrderRecord) {
+    const id = Number(row.id);
+    // 防重入：确认框已打开或取消请求在途时直接忽略，避免连点叠出多个确认框、逐个确认后并发取消
+    if (confirmingIds.value.has(id) || cancelingIds.value.has(id)) return;
+    confirmingIds.value.add(id);
+    const releaseConfirm = () => {
+      confirmingIds.value.delete(id);
+    };
     const dialog = DialogPlugin.confirm({
       header: '取消订单',
       body: '确定取消该订单？取消后不可恢复，关联账单将一并取消，使用的优惠券会退回账户；新产品购买的库存将被释放。',
@@ -55,7 +99,7 @@ export function useOrderList() {
       theme: 'warning',
       async onConfirm() {
         dialog.setConfirmLoading(true);
-        cancelingIds.value.add(Number(row.id));
+        cancelingIds.value.add(id);
         try {
           await clientApi.cancelOrder(row.id);
           MessagePlugin.success('订单已取消');
@@ -64,10 +108,13 @@ export function useOrderList() {
         } catch (error: unknown) {
           MessagePlugin.error(getErrorMessage(error, '取消订单失败'));
         } finally {
-          cancelingIds.value.delete(Number(row.id));
+          cancelingIds.value.delete(id);
+          releaseConfirm();
           dialog.setConfirmLoading(false);
         }
       },
+      onCancel: releaseConfirm,
+      onClose: releaseConfirm,
     });
   }
 
@@ -85,6 +132,7 @@ export function useOrderList() {
     handleSearch,
     handlePageSizeChange,
     applyQuickFilter,
+    resetFilters,
     dateRange,
     cancelOrder,
   };
@@ -93,6 +141,8 @@ export function useOrderList() {
 export function useOrderDetail() {
   const loading = ref(false);
   const canceling = ref(false);
+  // 确认框占位：确认框打开期间即上锁，连点不会叠出第二个确认框（不影响按钮自身的 loading 表现）
+  const confirming = ref(false);
   const detail = shallowRef<OrderRecord | null>(null);
   const loadError = ref(false);
   const loadErrorText = ref('');
@@ -141,8 +191,9 @@ export function useOrderDetail() {
   }
 
   function cancelOrder(onSuccess?: () => void) {
-    if (!detail.value) return;
+    if (!detail.value || canceling.value || confirming.value) return;
     const row = detail.value;
+    confirming.value = true;
     const dialog = DialogPlugin.confirm({
       header: '取消订单',
       body: '确定取消该订单？取消后不可恢复，关联账单将一并取消，使用的优惠券会退回账户；新产品购买的库存将被释放。',
@@ -162,8 +213,15 @@ export function useOrderDetail() {
           MessagePlugin.error(getErrorMessage(error, '取消订单失败'));
         } finally {
           canceling.value = false;
+          confirming.value = false;
           dialog.setConfirmLoading(false);
         }
+      },
+      onCancel: () => {
+        confirming.value = false;
+      },
+      onClose: () => {
+        confirming.value = false;
       },
     });
   }

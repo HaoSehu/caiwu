@@ -20,7 +20,18 @@
         @expand="onExpanded"
       >
         <template #logo>
-          <span v-if="showLogo" :class="`${prefix}-side-nav-logo-wrapper`" @click="goHome">
+          <!-- 品牌位是页面内的导航入口，必须可聚焦并用键盘触发（L-15） -->
+          <span
+            v-if="showLogo"
+            class="client-side-brand__trigger"
+            :class="[`${prefix}-side-nav-logo-wrapper`]"
+            role="button"
+            tabindex="0"
+            :aria-label="`返回首页（${siteBranding.siteName}）`"
+            @click="goHome"
+            @keydown.enter.self.prevent="goHome"
+            @keydown.space.self.prevent="goHome"
+          >
             <span :class="brandLogoCls">
               <img
                 class="client-side-brand__logo"
@@ -47,11 +58,10 @@ import type { PropType } from 'vue';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 
-import { useSiteBrandingStore } from '@/app/stores/siteBranding';
 import { useDeviceLayout } from '@/composables/useDeviceLayout';
 import { prefix } from '@/config/global';
 import { getActive } from '@/router';
-import { useSettingStore } from '@/store';
+import { useSettingStore, useSiteBrandingStore } from '@/store';
 import type { MenuRoute, ModeType } from '@/types/interface';
 
 import MenuContent from './MenuContent.vue';
@@ -72,10 +82,6 @@ const { menu, showLogo, isFixed, layout, theme, isCompact } = defineProps({
   layout: {
     type: String as PropType<string>,
     default: '',
-  },
-  headerHeight: {
-    type: String as PropType<string>,
-    default: '64px',
   },
   theme: {
     type: String as PropType<ModeType>,
@@ -159,17 +165,38 @@ const menuCls = computed(() => {
 
 const router = useRouter();
 
-// 响应式断点驱动侧边栏状态：平板自动收起，手机用抽屉，PC 保持展开
-watch(
-  [isMobile, isTablet],
-  ([mobile, tablet], [wasMobile]) => {
-    settingStore.updateConfig({
-      isSidebarCompact: tablet,
-      isMobileSidebarVisible: mobile ? (wasMobile ? settingStore.isMobileSidebarVisible : false) : false,
-    });
-  },
-  { immediate: true },
-);
+// 进入平板档自动收起；离开平板档时还原用户原来的折叠偏好。
+// 不能每轮断点变化都直接写 isSidebarCompact（原实现还带 immediate）：
+// 那会把 Header 折叠按钮写进 localStorage 的偏好覆盖掉，刷新后用户的手动折叠失效（L-14）。
+// 刻意不加 immediate：首帧就落在平板档（例如直接用平板竖屏尺寸打开控制台）时不会强制收起，
+// 用户看到的是自己上次的折叠偏好。这是取舍而不是遗漏 —— 要强制收起得先能区分
+// 「用户自己折叠的」和「上个平板会话替用户折叠的」，当前没有这个标记位。
+let compactBeforeTablet: boolean | null = null;
+watch(isTablet, (tablet) => {
+  if (tablet) {
+    if (compactBeforeTablet === null) {
+      compactBeforeTablet = settingStore.isSidebarCompact;
+    }
+    if (!settingStore.isSidebarCompact) {
+      settingStore.updateConfig({ isSidebarCompact: true });
+    }
+    return;
+  }
+  if (compactBeforeTablet !== null) {
+    const restore = compactBeforeTablet;
+    compactBeforeTablet = null;
+    if (settingStore.isSidebarCompact !== restore) {
+      settingStore.updateConfig({ isSidebarCompact: restore });
+    }
+  }
+});
+
+// 手机档用抽屉：离开手机档必须收起抽屉，否则回到桌面会残留遮罩
+watch(isMobile, (mobile) => {
+  if (!mobile && settingStore.isMobileSidebarVisible) {
+    settingStore.updateConfig({ isMobileSidebarVisible: false });
+  }
+});
 
 onMounted(() => {
   getExpanded();
@@ -268,18 +295,26 @@ onBeforeUnmount(() => {
     object-fit: contain;
   }
 
+  &__trigger:focus-visible {
+    outline: 0.125rem solid var(--td-brand-color);
+    outline-offset: 0.125rem;
+    border-radius: var(--td-radius-default);
+  }
+
+  // 高度与 Header 的品牌位同档（--td-comp-size-l = 36px），原来写死 34px 会让两处品牌标识差 2px（L-16）
+  // 展开态宽度 112px 是品牌图比例决定的固定几何，令牌号段无对应值（C-23）
   &__logo--expanded {
     width: 112px;
-    height: 34px;
+    height: var(--td-comp-size-l);
   }
 
   &__logo--collapsed {
-    width: 34px;
-    height: 34px;
+    width: var(--td-comp-size-l);
+    height: var(--td-comp-size-l);
   }
 
   &--collapsed {
-    width: 64px;
+    width: @starter-sidebar-collapsed-width;
     justify-content: center;
   }
 }

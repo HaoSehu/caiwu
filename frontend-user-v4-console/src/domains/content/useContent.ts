@@ -1,5 +1,5 @@
 import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import type { LocationQueryRaw, RouteLocationRaw } from 'vue-router';
 import { useRoute, useRouter } from 'vue-router';
 
@@ -161,12 +161,22 @@ export function useContentList(contentType: ContentType) {
     return matched?.name || config.allCategoryLabel;
   });
 
+  // 分类总览整页只拉一次（loadList 里同样只在 categories 为空时回填）。
+  // 原先每次切分类/翻页都重拉，把一次切换的请求数从 2 抬到 3。
+  // 失败不置位，下一次 syncPage 会自然重试。
+  let overviewLoaded = false;
   async function loadOverview() {
+    if (overviewLoaded) return;
     const response = await clientApi.contentOverview();
     categories.value = resolveCategories(response.data, config.overviewCategoryKey);
+    overviewLoaded = true;
   }
 
-  async function loadList() {
+  // 列表侧的竞态防护：连续改筛选/翻页时响应顺序没有保证，
+  // 晚返回的旧条件结果会把新结果覆盖掉。序号由 syncPage 递增后传进来，
+  // 每个写入 state 的 loader 自己判一次，避免在 await 之后统一判（那时已经写完了）。
+  let listRequestSeq = 0;
+  async function loadList(requestSeq: number) {
     const params: ListQueryParams = {
       page: page.value,
       page_size: pageSize,
@@ -175,6 +185,7 @@ export function useContentList(contentType: ContentType) {
     if (keyword.value) params.keyword = keyword.value;
 
     const response = await config.fetchList(params);
+    if (requestSeq !== listRequestSeq) return;
     const payload = response.data;
     articleList.value = resolveList(payload);
     total.value = Number(payload.total || 0);
@@ -183,28 +194,39 @@ export function useContentList(contentType: ContentType) {
     }
   }
 
-  async function loadSidebarContent() {
-    const response = await config.fetchList({ page: 1, page_size: 20 });
+  // N-11：侧栏「热门 / 最近更新」跟随当前分类。原先固定 page=1&page_size=20 且不带分类，
+  // 切换分类后侧栏仍是首次加载的结果，与主列表说的不是同一批内容。
+  // 不按分类做缓存：侧栏是「热门 / 最近更新」，浏览量与文章本身一直在变，
+  // 省下的那一次请求要拿「切回旧分类看到过期列表」来换，正确性优先。
+  async function loadSidebarContent(requestSeq: number) {
+    const response = await config.fetchList({
+      page: 1,
+      page_size: 20,
+      category_id: activeCategoryId.value || undefined,
+    });
+    if (requestSeq !== listRequestSeq) return;
     const list = resolveList(response.data);
     hotArticles.value = [...list].sort((a, b) => Number(b.view_count || 0) - Number(a.view_count || 0)).slice(0, 5);
     recentArticles.value = sortByPublishTime(list).slice(0, 5);
   }
 
   async function syncPage() {
+    const requestSeq = ++listRequestSeq;
     loading.value = true;
     loadError.value = '';
     try {
       keyword.value = parseQueryString(route.query.keyword);
       page.value = parseQueryNumber(route.query.page, 1);
       activeCategoryId.value = parseQueryNumber(route.query.category, 0);
-      await Promise.all([loadOverview(), loadList(), loadSidebarContent()]);
+      await Promise.all([loadOverview(), loadList(requestSeq), loadSidebarContent(requestSeq)]);
     } catch (error: unknown) {
+      if (requestSeq !== listRequestSeq) return;
       loadError.value = getErrorMessage(error, `${config.pageTitle}加载失败`);
       articleList.value = [];
       total.value = 0;
       MessagePlugin.error(loadError.value);
     } finally {
-      loading.value = false;
+      if (requestSeq === listRequestSeq) loading.value = false;
     }
   }
 
@@ -235,6 +257,15 @@ export function useContentList(contentType: ContentType) {
   function applyKeyword(value: string) {
     keyword.value = value;
     submitSearch();
+  }
+
+  // N-06：空态需要一条能立刻脱离「无结果」的出口。分类与关键词一起复位，
+  // 只发一次路由变更，避免 selectCategory + submitSearch 连写两次 replace 造成两条历史记录。
+  function resetFilters() {
+    keyword.value = '';
+    activeCategoryId.value = 0;
+    page.value = 1;
+    replaceListQuery({});
   }
 
   function buildDetailRoute(item: ContentArticleRecord): RouteLocationRaw {
@@ -277,6 +308,7 @@ export function useContentList(contentType: ContentType) {
     updatePage,
     submitSearch,
     applyKeyword,
+    resetFilters,
     buildDetailRoute,
   };
 }
@@ -291,7 +323,6 @@ export function useContentDetail(contentType: ContentType) {
   const detailLoadError = ref('');
   const currentCategoryId = ref<number | null>(null);
   const tocItems = ref<TocItem[]>([{ id: 'article-top', label: '全文', level: 1 }]);
-  const contentRef = ref<HTMLElement | null>(null);
 
   const backToListRoute = computed<RouteLocationRaw>(() => ({
     path: config.routeBasePath,
@@ -322,10 +353,31 @@ export function useContentDetail(contentType: ContentType) {
       currentArticle.value?.created_at ||
       '--',
   );
-  const articleContentHtml = computed(() =>
-    renderMarkdown(currentArticle.value?.content, {
-      imageAltFallback: currentArticle.value?.title || config.detailTitle || '相关文章配图',
-    }),
+  // PR-14 / N-10：目录不再回读 DOM。正文由 v-html 一次性注入后，原先要再
+  // querySelectorAll('h1, h2, h3, h4') 全量遍历一遍并逐节点写 heading.id，
+  // 长文首帧把「解析 + 注入 + 扫描 + 写属性」全压在同一帧。现在标题 id 与
+  // 目录清单由 markdown 渲染阶段顺带产出，一次渲染解决两件事。
+  // 渲染阶段把标题清单收进一个普通变量（非响应式），tocItems 的赋值放到 watch 里。
+  // 直接在 computed 求值体内写另一个 ref 是渲染期副作用：任何读取 articleContentHtml
+  // 的渲染都会触发 tocItems 变更通知，等于在渲染过程中修改状态。
+  let renderedHeadings: TocItem[] = [];
+  const articleContentHtml = computed(() => {
+    const article = currentArticle.value;
+    const headings: TocItem[] = [];
+    const html = renderMarkdown(article?.content, {
+      imageAltFallback: article?.title || config.detailTitle || '相关文章配图',
+      headingIdPrefix: `${contentType}-heading-${article?.id || 'current'}-`,
+      onHeadings: (items) => headings.push(...items),
+    });
+    renderedHeadings = headings;
+    return html;
+  });
+  watch(
+    articleContentHtml,
+    () => {
+      tocItems.value = [{ id: 'article-top', label: '全文', level: 1 }, ...renderedHeadings];
+    },
+    { immediate: true },
   );
 
   async function loadOverview() {
@@ -342,20 +394,26 @@ export function useContentDetail(contentType: ContentType) {
     currentCategoryId.value = Number(response.data?.category_id || 0) || null;
   }
 
+  // 详情侧的竞态防护：同路由快速切换文章 id 时，先发的请求可能后落地，
+  // 把新文章的正文与目录盖回旧文章。
+  let detailRequestSeq = 0;
   async function syncPage() {
+    const requestSeq = ++detailRequestSeq;
     loading.value = true;
     detailLoadError.value = '';
     try {
       await Promise.all([loadOverview(), loadArticleDetail(route.params.id)]);
+      if (requestSeq !== detailRequestSeq) return;
       if (!currentArticle.value) {
         detailLoadError.value = '内容不存在或已被删除';
       }
     } catch (error: unknown) {
+      if (requestSeq !== detailRequestSeq) return;
       currentArticle.value = null;
       detailLoadError.value = getErrorMessage(error, `${config.detailTitle}加载失败`);
       MessagePlugin.error(detailLoadError.value);
     } finally {
-      loading.value = false;
+      if (requestSeq === detailRequestSeq) loading.value = false;
     }
   }
 
@@ -373,43 +431,12 @@ export function useContentDetail(contentType: ContentType) {
     });
   }
 
-  function buildToc() {
-    const container = contentRef.value;
-    if (!container) {
-      tocItems.value = [{ id: 'article-top', label: '全文', level: 1 }];
-      return;
-    }
-
-    const headings = Array.from(container.querySelectorAll('h1, h2, h3, h4'));
-    const items: TocItem[] = [{ id: 'article-top', label: '全文', level: 1 }];
-    headings.forEach((heading, index) => {
-      const label = heading.textContent?.trim();
-      if (!label) return;
-      const id = `${contentType}-heading-${currentArticle.value?.id || 'current'}-${index + 1}`;
-      heading.id = id;
-      items.push({
-        id,
-        label,
-        level: Number.parseInt(heading.tagName.slice(1), 10) || 2,
-      });
-    });
-    tocItems.value = items;
-  }
-
   watch(
     () => route.params.id,
     () => {
       void syncPage();
     },
     { immediate: true },
-  );
-
-  watch(
-    () => articleContentHtml.value,
-    async () => {
-      await nextTick();
-      buildToc();
-    },
   );
 
   return {
@@ -420,7 +447,6 @@ export function useContentDetail(contentType: ContentType) {
     detailLoadError,
     currentCategoryId,
     tocItems,
-    contentRef,
     backToListRoute,
     timeLabel,
     currentCategoryName,

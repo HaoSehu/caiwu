@@ -19,7 +19,10 @@ const defaultRouterList: Array<RouteRecordRaw> = [
     path: '/:pathMatch(.*)*',
     name: '404Page',
     component: () => import('@/pages/result/404/index.vue'),
-    meta: { title: '页面不存在', robots: 'noindex,nofollow' },
+    // E-01：通配路由必须与其它控制台页同口径要求登录。此前它没有 requireAuth，
+    // 未登录用户把地址打错时会看到一张 404 卡片、却拿不到「先登录」这条提示，
+    // 也无法在登录后回到原本想去的地址（守卫会把 to.fullPath 放进 redirect）。
+    meta: { title: '页面不存在', robots: 'noindex,nofollow', requireAuth: true },
   },
 ];
 // 存放固定路由
