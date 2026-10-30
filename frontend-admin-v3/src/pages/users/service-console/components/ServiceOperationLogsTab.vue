@@ -13,6 +13,7 @@
         @clear="search"
       />
       <t-button variant="outline" @click="search">查询</t-button>
+      <t-button theme="default" variant="base" @click="resetFilters">重置</t-button>
     </div>
     <div class="console-table-scroll">
       <t-table
@@ -22,6 +23,7 @@
         :loading="state.loading"
         :pagination="pagination"
         table-layout="fixed"
+        aria-label="服务操作日志列表"
         @page-change="handlePageChange"
       >
         <template #empty>
@@ -44,7 +46,7 @@
       </t-table>
     </div>
 
-    <t-dialog v-model:visible="detailVisible" header="操作详情" width="560px" :footer="false">
+    <t-dialog v-model:visible="detailVisible" header="操作详情" width="min(560px, calc(100vw - 32px))" :footer="false">
       <div class="console-log-detail">
         <div class="console-log-detail__summary">{{ detailRow.summary || '-' }}</div>
         <div v-if="detailItems.length" class="console-log-detail__items">
@@ -161,6 +163,13 @@ async function load() {
 function search() {
   state.page = 1;
   load();
+}
+
+/** 重置筛选并重新拉取；提交式筛选必须成对提供「查询/重置」（docs/DESIGN.md §5.1） */
+function resetFilters() {
+  state.filters.category = '';
+  state.filters.keyword = '';
+  search();
 }
 
 function handlePageChange(pageInfo: PageInfo) {

@@ -198,12 +198,12 @@
     <t-dialog
       v-model:visible="resetPasswordVisible"
       header="重置登录密码"
-      width="420px"
+      width="min(420px, calc(100vw - 32px))"
       :confirm-btn="{ content: '确定', loading: actionLoading === 'reset-password' }"
       @cancel="resetPasswordVisible = false"
       @confirm="handleResetPassword"
     >
-      <t-form ref="resetPasswordFormRef" :data="resetPasswordForm" :rules="resetPasswordRules" label-align="top">
+      <t-form ref="resetPasswordFormRef" :data="resetPasswordForm" :rules="resetPasswordRules" label-align="right">
         <t-form-item label="新密码" name="password">
           <t-input v-model="resetPasswordForm.password" type="password" placeholder="至少 8 位" />
         </t-form-item>
@@ -213,12 +213,12 @@
     <t-dialog
       v-model:visible="upstreamVisible"
       header="上游绑定"
-      width="520px"
+      width="min(520px, calc(100vw - 32px))"
       :confirm-btn="{ content: '确定', loading: upstreamSubmitting }"
       @cancel="upstreamVisible = false"
       @confirm="submitUpstream"
     >
-      <t-form ref="upstreamFormRef" :data="upstreamForm" :rules="upstreamRules" label-align="top">
+      <t-form ref="upstreamFormRef" :data="upstreamForm" :rules="upstreamRules" label-align="right">
         <t-form-item label="上游接口" name="supplier_id">
           <t-select
             v-model="upstreamForm.supplier_id"
@@ -239,12 +239,12 @@
     <t-dialog
       v-model:visible="pricingVisible"
       header="调整价格"
-      width="620px"
+      width="min(620px, calc(100vw - 32px))"
       :confirm-btn="{ content: '确定', loading: pricingSubmitting }"
       @cancel="pricingVisible = false"
       @confirm="submitPricing"
     >
-      <t-form ref="pricingFormRef" :data="pricingForm" :rules="pricingRules" label-align="top">
+      <t-form ref="pricingFormRef" :data="pricingForm" :rules="pricingRules" label-align="right">
         <t-form-item label="购买价格" name="amount">
           <t-input-number v-model="pricingForm.amount" :min="0" :decimal-places="2" style="width: 100%" />
         </t-form-item>
@@ -270,13 +270,13 @@
     <t-dialog
       v-model:visible="nameVisible"
       header="编辑实例名称"
-      width="420px"
+      width="min(420px, calc(100vw - 32px))"
       :confirm-btn="{ content: '确定', loading: nameSubmitting }"
       @cancel="nameVisible = false"
       @confirm="submitName"
     >
-      <t-form :data="nameForm" label-align="top">
-        <t-form-item label="实例名称">
+      <t-form ref="nameFormRef" :data="nameForm" :rules="nameRules" label-align="right">
+        <t-form-item label="实例名称" name="service_name">
           <t-input v-model="nameForm.service_name" :maxlength="120" placeholder="填写便于识别的实例名称" />
         </t-form-item>
       </t-form>
@@ -310,6 +310,8 @@ import ServiceOperationLogsTab from './components/ServiceOperationLogsTab.vue';
 import ServiceOrdersTab from './components/ServiceOrdersTab.vue';
 import ServiceTrackingTab from './components/ServiceTrackingTab.vue';
 
+defineOptions({ name: 'AdminUserServiceConsole' });
+
 type Row = Record<string, any>;
 
 type TabName = 'overview' | 'orders' | 'invoices' | 'logs' | 'tracking';
@@ -327,6 +329,8 @@ const ready = ref(false);
 const loadError = ref('');
 const loaded = ref(false);
 const detail = ref<Row>(normalizeServiceDetail({}));
+// 竞态防护：重复点「刷新」或快速切换实例时只认最后一次请求的结果（docs/FRONTEND.md:27）
+let detailRequestSeq = 0;
 
 const activeTab = ref<TabName>('overview');
 const ordersTabRef = ref<InstanceType<typeof ServiceOrdersTab>>();
@@ -370,6 +374,11 @@ const pricingForm = reactive<{
 const nameVisible = ref(false);
 const nameSubmitting = ref(false);
 const nameForm = reactive({ service_name: '' });
+const nameFormRef = ref<FormInstanceFunctions>();
+// 必填由校验规则驱动（docs/DESIGN.md §4.4），避免空名称直接提交
+const nameRules: Record<string, FormRule[]> = {
+  service_name: [{ required: true, message: '请输入实例名称', type: 'error' }],
+};
 
 const serviceActions = computed<Row>(() => detail.value.actions || {});
 
@@ -489,11 +498,13 @@ async function loadDetail(options: { patchRemote?: boolean } = {}) {
     ready.value = true;
     return;
   }
+  const currentSeq = ++detailRequestSeq;
   loading.value = true;
   loadError.value = '';
   try {
     // 首屏只取本地快照，避免等待上游四段串行网络往返；远程状态随后异步补丁
     const payload = await userApi.serviceDetail(userId.value, serviceId.value, false);
+    if (currentSeq !== detailRequestSeq) return;
     detail.value = normalizeServiceDetail(payload);
     ready.value = true;
     loaded.value = true;
@@ -501,12 +512,13 @@ async function loadDetail(options: { patchRemote?: boolean } = {}) {
       void loadRemoteStatusPatch();
     }
   } catch (error) {
+    if (currentSeq !== detailRequestSeq) return;
     loadError.value = errorMessage(error, '加载实例详情失败');
     if (!loaded.value) {
       MessagePlugin.error(loadError.value);
     }
   } finally {
-    loading.value = false;
+    if (currentSeq === detailRequestSeq) loading.value = false;
   }
 }
 
@@ -679,10 +691,13 @@ async function submitPricing() {
 
 function openNameDialog() {
   nameForm.service_name = String(detail.value.custom_service_name || detail.value.name || '');
+  nameFormRef.value?.clearValidate?.();
   nameVisible.value = true;
 }
 
 async function submitName() {
+  const validateResult = await nameFormRef.value?.validate?.();
+  if (validateResult !== true) return;
   nameSubmitting.value = true;
   try {
     const response = await userApi.updateServiceMeta(userId.value, serviceId.value, {

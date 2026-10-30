@@ -25,7 +25,7 @@
         <div class="users-filter-actions">
           <t-button theme="primary" @click="handleSearch">查询</t-button>
           <t-button theme="default" variant="base" @click="resetFilters">重置</t-button>
-          <t-button v-if="canManage" size="medium" theme="primary" @click="openCreateDialog">
+          <t-button v-if="canManage" size="medium" theme="primary" variant="outline" @click="openCreateDialog">
             <template #icon><user-add-icon /></template>
             新建用户
           </t-button>
@@ -45,7 +45,11 @@
         :loading="loading"
         :hover="true"
         table-layout="fixed"
+        aria-label="用户列表"
       >
+        <template #empty>
+          <t-empty :description="loading ? '加载中…' : hasActiveFilters ? '未找到匹配结果' : '暂无用户'" />
+        </template>
         <template #account="{ row }">
           <button class="users-account" type="button" @click="openDetail(row.id)">
             <span>{{ row.phone || '未绑定手机号' }}</span>
@@ -82,7 +86,7 @@
           :current="pagination.page"
           :page-size="pagination.page_size"
           :total="total"
-          :page-size-options="[20, 50, 100]"
+          :page-size-options="pagination.pageSizeOptions"
           show-jumper
           @change="handlePaginationChange"
         />
@@ -132,7 +136,7 @@
           v-model:page-size="pagination.page_size"
           class="users-mobile-pagination"
           :total="total"
-          :page-size-options="[20, 50, 100]"
+          :page-size-options="pagination.pageSizeOptions"
           @change="handlePaginationChange"
         />
       </div>
@@ -141,11 +145,11 @@
     <t-dialog
       v-model:visible="createVisible"
       header="新增用户"
-      width="520px"
+      width="min(520px, calc(100vw - 32px))"
       :confirm-btn="{ content: '确定', loading: submitLoading }"
       @confirm="handleCreate"
     >
-      <t-form ref="createFormRef" class="users-dialog-form" :data="createForm" :rules="createRules" label-align="top">
+      <t-form ref="createFormRef" class="users-dialog-form" :data="createForm" :rules="createRules" label-align="right">
         <t-form-item label="邮箱" name="email" required-mark>
           <t-input v-model="createForm.email" />
         </t-form-item>

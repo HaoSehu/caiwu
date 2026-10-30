@@ -15,6 +15,7 @@
         :loading="state.loading"
         :pagination="pagination"
         table-layout="fixed"
+        aria-label="用户充值记录列表"
         @page-change="handlePageChange"
       >
         <template #empty>

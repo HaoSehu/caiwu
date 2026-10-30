@@ -22,7 +22,7 @@
   .users-filter-actions {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--td-comp-margin-s);
     margin-left: auto;
   }
 }
@@ -45,7 +45,7 @@
   gap: var(--td-comp-margin-m);
   margin: var(--td-comp-margin-m) 0;
   color: var(--td-text-color-secondary);
-  font-size: var(--td-font-size-size-2, 13px);
+  font-size: var(--td-font-size-size-3, 14px);
 }
 
 .users-account {
@@ -86,11 +86,11 @@
 }
 
 .users-verified {
-  color: var(--caiwu-text-success);
+  color: var(--td-success-color-9);
 }
 
 .users-balance {
-  color: var(--caiwu-text-success);
+  color: var(--td-success-color-9);
   font-weight: 600;
 }
 
@@ -116,7 +116,7 @@
   overflow: hidden;
   padding: 0;
   border: 1px solid var(--td-component-border);
-  border-radius: var(--td-radius-default, 4px);
+  border-radius: var(--td-radius-default);
   background: var(--td-bg-color-container);
 }
 
@@ -124,7 +124,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 8px;
+  gap: var(--td-comp-margin-s);
   min-height: 50px;
   border-bottom: 1px solid var(--td-component-border);
   padding: var(--td-comp-margin-s) var(--td-comp-margin-m);
@@ -213,7 +213,7 @@
   margin: 0;
   overflow: hidden;
   color: var(--td-text-color-primary);
-  font-size: var(--td-font-size-size-2, 13px);
+  font-size: var(--td-font-size-size-3, 14px);
   line-height: 20px;
   text-align: right;
   text-overflow: ellipsis;
@@ -275,11 +275,6 @@
   .users-mobile-list {
     display: block;
     margin-top: var(--td-comp-margin-l);
-  }
-
-  .users-mobile-card__actions {
-    flex-direction: column;
-    align-items: stretch;
   }
 
   .users-mobile-card__actions .t-button {

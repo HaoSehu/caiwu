@@ -1,71 +1,80 @@
 <template>
   <div class="user-detail-page">
-    <t-loading :loading="detailLoading" size="small">
-      <!-- 第一层：紧凑工具栏 (36px) -->
-      <div class="user-detail-toolbar">
-        <t-button variant="text" theme="default" class="user-detail-toolbar__back" @click="goBack">
-          <template #icon><chevron-left-icon /></template>
-          返回用户列表
+    <!-- 首屏只做「骨架」这一种加载表达：原先整块 t-loading 遮罩加载完成后才露出内容，
+         首次进入会先看到一整片遮罩再看到数据（审查条目 P2-12）。
+         刷新时改由工具栏「刷新」按钮自身的 loading 反馈，避免整块内容被遮罩盖住。 -->
+    <!-- 第一层：紧凑工具栏 (36px) -->
+    <div class="user-detail-toolbar">
+      <t-button variant="text" theme="default" class="user-detail-toolbar__back" @click="goBack">
+        <template #icon><chevron-left-icon /></template>
+        返回用户列表
+      </t-button>
+      <div class="user-detail-toolbar__actions">
+        <t-button
+          v-if="canLoginAs"
+          theme="primary"
+          :disabled="!user.id"
+          :loading="loginAsLoading"
+          @click="handleLoginAs"
+        >
+          代登录
         </t-button>
-        <div class="user-detail-toolbar__actions">
-          <t-button
-            v-if="canLoginAs"
-            theme="primary"
-            :disabled="!user.id"
-            :loading="loginAsLoading"
-            @click="handleLoginAs"
-          >
-            代登录
-          </t-button>
-          <t-button theme="default" :disabled="!user.id" @click="openEditDialog">编辑资料</t-button>
-          <t-button variant="outline" :loading="detailLoading" @click="loadDetail">刷新</t-button>
+        <t-button theme="default" :disabled="!user.id" @click="openEditDialog">编辑资料</t-button>
+        <t-button variant="outline" :loading="detailLoading" @click="loadDetail">刷新</t-button>
+      </div>
+    </div>
+
+    <!-- 第二层：实体概览与关键指标卡组；首屏未拿到用户数据时出骨架 -->
+    <section v-if="detailLoading && !user.id" class="user-detail-summary is-skeleton" aria-busy="true">
+      <t-skeleton :row-col="summarySkeletonRowCol" animation="gradient" />
+      <div class="user-detail-summary__metrics">
+        <t-skeleton
+          v-for="slot in 3"
+          :key="slot"
+          :row-col="metricSkeletonRowCol"
+          animation="gradient"
+          class="summary-metric-skeleton"
+        />
+      </div>
+    </section>
+    <section v-else class="user-detail-summary">
+      <div class="user-detail-summary__identity">
+        <span class="identity-eyebrow">用户档案</span>
+        <div class="identity-headline">
+          <strong class="identity-title">{{ user.nickname || user.email || `用户 #${user.id}` }}</strong>
+          <t-tooltip content="复制用户 ID" placement="top">
+            <t-button
+              v-if="user.id"
+              variant="text"
+              shape="square"
+              size="small"
+              class="copy-btn"
+              @click="copyField('用户 ID', user.id)"
+            >
+              <template #icon><file-copy-icon /></template>
+            </t-button>
+          </t-tooltip>
+          <t-tag :theme="Number(user.status) === 1 ? 'success' : 'danger'" variant="light" class="identity-status-tag">
+            {{ Number(user.status) === 1 ? '正常' : '禁用' }}
+          </t-tag>
+          <t-tag :theme="isVerified ? 'success' : 'warning'" variant="light" class="identity-status-tag">
+            {{ isVerified ? '已实名' : '未实名' }}
+          </t-tag>
+        </div>
+        <div class="identity-sub-row">
+          <span v-if="user.email" class="identity-description">邮箱：{{ user.email }}</span>
+          <span v-if="user.phone" class="identity-description">手机：{{ user.phone }}</span>
+          <span v-if="user.company" class="identity-description">公司：{{ user.company }}</span>
         </div>
       </div>
 
-      <!-- 第二层：实体概览与关键指标卡组 -->
-      <section class="user-detail-summary">
-        <div class="user-detail-summary__identity">
-          <span class="identity-eyebrow">用户档案</span>
-          <div class="identity-headline">
-            <strong class="identity-title">{{ user.nickname || user.email || `用户 #${user.id}` }}</strong>
-            <t-tooltip content="复制用户 ID" placement="top">
-              <t-button
-                v-if="user.id"
-                variant="text"
-                shape="square"
-                size="small"
-                class="copy-btn"
-                @click="copyField('用户 ID', user.id)"
-              >
-                <template #icon><file-copy-icon /></template>
-              </t-button>
-            </t-tooltip>
-            <t-tag
-              :theme="Number(user.status) === 1 ? 'success' : 'danger'"
-              variant="light"
-              class="identity-status-tag"
-            >
-              {{ Number(user.status) === 1 ? '正常' : '禁用' }}
-            </t-tag>
-            <t-tag :theme="isVerified ? 'success' : 'warning'" variant="light" class="identity-status-tag">
-              {{ isVerified ? '已实名' : '未实名' }}
-            </t-tag>
-          </div>
-          <div class="identity-sub-row">
-            <span v-if="user.email" class="identity-description">邮箱：{{ user.email }}</span>
-            <span v-if="user.phone" class="identity-description">手机：{{ user.phone }}</span>
-            <span v-if="user.company" class="identity-description">公司：{{ user.company }}</span>
-          </div>
+      <div class="user-detail-summary__metrics">
+        <div v-for="item in statCards" :key="item.key" class="summary-metric-card">
+          <span class="metric-label">{{ item.label }}</span>
+          <strong class="metric-value" :class="`is-${item.tone}`">{{ item.value }}</strong>
         </div>
-
-        <div class="user-detail-summary__metrics">
-          <div v-for="item in statCards" :key="item.key" class="summary-metric-card">
-            <span class="metric-label">{{ item.label }}</span>
-            <strong class="metric-value" :class="`is-${item.tone}`">{{ item.value }}</strong>
-          </div>
-        </div>
-      </section>
-    </t-loading>
+      </div>
+    </section>
 
     <t-card :bordered="false">
       <t-tabs :value="activeTab" @change="handleTabChange">
@@ -91,7 +100,12 @@
                   class="info-value"
                   :class="item.tone ? `text-${item.tone}` : ''"
                   :title="`点击复制 ${item.label}`"
+                  role="button"
+                  tabindex="0"
+                  :aria-label="`复制 ${item.label}：${item.value}`"
                   @click="copyField(item.label, item.value)"
+                  @keydown.enter.prevent="copyField(item.label, item.value)"
+                  @keydown.space.prevent="copyField(item.label, item.value)"
                 >
                   {{ item.value }}
                 </span>
@@ -143,7 +157,14 @@
             <strong :class="item.tone ? `text-${item.tone}` : ''">{{ item.value }}</strong>
           </div>
         </div>
-        <t-table row-key="id" :data="recentReferrals" :columns="recentReferralColumns" table-layout="fixed">
+        <t-table
+          row-key="id"
+          :data="recentReferrals"
+          :columns="recentReferralColumns"
+          :loading="detailLoading"
+          table-layout="fixed"
+          aria-label="推荐关系列表"
+        >
           <template #empty>
             <t-empty description="暂无数据" />
           </template>
@@ -174,7 +195,9 @@
               :value="option.value"
             />
           </t-select>
-          <t-button theme="primary" @click="openAddServiceDialog">新建实例</t-button>
+          <t-button theme="primary" @click="searchServices">查询</t-button>
+          <t-button theme="default" variant="base" @click="resetServicesFilters">重置</t-button>
+          <t-button theme="primary" variant="outline" @click="addServiceDialogRef?.open()">新建实例</t-button>
           <t-button theme="default" :loading="services.refreshingStatus" @click="handleRefreshServicesStatus"
             >批量刷新状态</t-button
           >
@@ -187,6 +210,7 @@
             :loading="services.loading"
             :pagination="paginationOf(services)"
             table-layout="fixed"
+            aria-label="用户服务列表"
             @page-change="handleServicesPageChange"
           >
             <template #empty>
@@ -213,7 +237,7 @@
                   variant="text"
                   theme="default"
                   size="small"
-                  :loading="services.refreshing"
+                  :loading="services.refreshingId === row.id"
                   @click="handleRefreshService(row)"
                   >刷新</t-button
                 >
@@ -254,6 +278,7 @@
             :loading="invoices.loading"
             :pagination="paginationOf(invoices)"
             table-layout="fixed"
+            aria-label="用户账单列表"
             @page-change="handleInvoicesPageChange"
           >
             <template #empty>
@@ -296,6 +321,7 @@
             :loading="tickets.loading"
             :pagination="paginationOf(tickets)"
             table-layout="fixed"
+            aria-label="用户工单列表"
             @page-change="handleTicketsPageChange"
           >
             <template #empty>
@@ -334,6 +360,8 @@
             <t-option value="web" label="Web" />
             <t-option value="api" label="API" />
           </t-select>
+          <t-button theme="primary" @click="searchLogs">查询</t-button>
+          <t-button theme="default" variant="base" @click="resetLogsFilters">重置</t-button>
         </div>
         <div class="table-scroll">
           <t-table
@@ -343,6 +371,7 @@
             :loading="logs.loading"
             :pagination="paginationOf(logs)"
             table-layout="fixed"
+            aria-label="用户操作日志列表"
             @page-change="handleLogsPageChange"
           >
             <template #empty>
@@ -368,6 +397,7 @@
             :loading="notices.loading"
             :pagination="paginationOf(notices)"
             table-layout="fixed"
+            aria-label="用户通知列表"
             @page-change="handleNoticesPageChange"
           >
             <template #empty>
@@ -405,12 +435,12 @@
     <t-dialog
       v-model:visible="editVisible"
       header="编辑资料"
-      width="560px"
+      width="min(560px, calc(100vw - 32px))"
       :confirm-btn="{ content: '确定', loading: saveLoading }"
       @cancel="editVisible = false"
       @confirm="handleSave"
     >
-      <t-form ref="editFormRef" :data="editForm" :rules="editRules" label-align="top">
+      <t-form ref="editFormRef" :data="editForm" :rules="editRules" label-align="right">
         <t-form-item label="邮箱">
           <t-input :value="user.email || '-'" disabled />
         </t-form-item>
@@ -462,12 +492,12 @@
     <t-dialog
       v-model:visible="rechargeVisible"
       header="资金管理"
-      width="480px"
+      width="min(480px, calc(100vw - 32px))"
       :confirm-btn="{ content: '确定', loading: rechargeLoading }"
       @cancel="rechargeVisible = false"
       @confirm="handleRecharge"
     >
-      <t-form ref="rechargeFormRef" :data="rechargeForm" :rules="rechargeRules" label-align="top">
+      <t-form ref="rechargeFormRef" :data="rechargeForm" :rules="rechargeRules" label-align="right">
         <t-form-item label="用户">
           <t-input :value="rechargeForm.email" disabled />
         </t-form-item>
@@ -492,118 +522,12 @@
       </t-form>
     </t-dialog>
 
-    <t-dialog
-      v-model:visible="addServiceVisible"
-      header="新建实例"
-      width="760px"
-      :confirm-btn="{ content: '确定', loading: addServiceSubmitting }"
-      @cancel="addServiceVisible = false"
-      @confirm="handleSubmitAddService"
-    >
-      <t-alert
-        theme="info"
-        message="确认后会创建本地服务；可按开关选择自动创建订单、账单和从余额扣款。余额扣款需同时创建账单，余额不足时会回滚本次创建。不会自动发起上游控制，需要时请在服务控制台绑定上游实例。"
-      />
-      <t-form
-        ref="addServiceFormRef"
-        :data="addServiceForm"
-        :rules="addServiceRules"
-        label-align="top"
-        class="dialog-form"
-      >
-        <div class="dialog-grid">
-          <t-form-item label="选择商品" name="product_id" class="form-item-full">
-            <product-binding-tree-select
-              v-model="addServiceProductIdArray"
-              mode="single"
-              @change="handleAddServiceProductChange"
-            />
-          </t-form-item>
-          <t-form-item label="计费周期" name="billing_cycle">
-            <t-select
-              v-model="addServiceForm.billing_cycle"
-              placeholder="请选择计费周期"
-              @change="syncAddServiceAmountFromCycle"
-            >
-              <t-option
-                v-for="item in addServiceBillingOptions"
-                :key="item.value"
-                :label="item.label"
-                :value="item.value"
-              />
-            </t-select>
-          </t-form-item>
-          <t-form-item label="系统类型">
-            <t-select
-              v-model="addServiceForm.os"
-              clearable
-              filterable
-              :loading="addServiceOsLoading"
-              placeholder="请选择系统"
-            >
-              <t-option
-                v-for="item in addServiceOsFlatOptions"
-                :key="item.value"
-                :label="item.label"
-                :value="item.value"
-              />
-            </t-select>
-          </t-form-item>
-          <t-form-item label="服务状态" name="status">
-            <t-select v-model="addServiceForm.status" placeholder="请选择状态">
-              <t-option
-                v-for="item in serviceStatusOptions"
-                :key="item.value"
-                :label="item.label"
-                :value="item.value"
-              />
-            </t-select>
-          </t-form-item>
-          <t-form-item label="服务金额" name="amount">
-            <t-input-number v-model="addServiceForm.amount" :min="0" :decimal-places="2" style="width: 100%" />
-          </t-form-item>
-          <t-form-item label="服务名称">
-            <t-input v-model="addServiceForm.name" placeholder="为空时默认使用配置名" />
-          </t-form-item>
-          <t-form-item class="form-item-full">
-            <div class="add-service-automation-switches">
-              <div class="add-service-automation-switch">
-                <span>自动续费</span>
-                <t-switch v-model="addServiceForm.auto_renew" :custom-value="[1, 0]" />
-              </div>
-              <div class="add-service-automation-switch">
-                <span>自动创建订单</span>
-                <t-switch v-model="addServiceForm.create_order" :custom-value="[1, 0]" />
-              </div>
-              <div class="add-service-automation-switch">
-                <span>自动创建账单</span>
-                <t-switch
-                  v-model="addServiceForm.create_invoice"
-                  :custom-value="[1, 0]"
-                  @change="handleAddServiceCreateInvoiceChange"
-                />
-              </div>
-              <div class="add-service-automation-switch">
-                <span>从余额扣款</span>
-                <t-switch
-                  v-model="addServiceForm.deduct_balance"
-                  :custom-value="[1, 0]"
-                  :disabled="!addServiceForm.create_invoice"
-                />
-              </div>
-            </div>
-          </t-form-item>
-        </div>
-        <t-form-item label="备注">
-          <t-textarea v-model="addServiceForm.remark" :maxlength="200" placeholder="记录手工开通说明或交付信息" />
-        </t-form-item>
-      </t-form>
-    </t-dialog>
+    <add-service-dialog ref="addServiceDialogRef" :user-id="userId" @created="handleAddServiceCreated" />
 
     <t-dialog
       v-model:visible="manualInvoiceVisible"
       header="补录账单"
-      width="560px"
+      width="min(560px, calc(100vw - 32px))"
       :confirm-btn="{ content: '确定', loading: manualInvoiceSubmitting }"
       @cancel="manualInvoiceVisible = false"
       @confirm="handleManualInvoiceSubmit"
@@ -612,7 +536,7 @@
         theme="info"
         message="补录用于登记系统外收付款，仅生成手工账单与支付记录，不改变用户余额、不产生资金流水。"
       />
-      <t-form ref="manualInvoiceFormRef" :data="manualInvoiceForm" :rules="manualInvoiceRules" label-align="top">
+      <t-form ref="manualInvoiceFormRef" :data="manualInvoiceForm" :rules="manualInvoiceRules" label-align="right">
         <t-form-item label="金额" name="amount">
           <t-input-number
             v-model="manualInvoiceForm.amount"
@@ -663,25 +587,29 @@ import {
 } from '@caiwu/shared/statusConfig';
 import dayjs from 'dayjs';
 import { ChevronLeftIcon, FileCopyIcon, SearchIcon } from 'tdesign-icons-vue-next';
-import type { FormInstanceFunctions, FormRule, PageInfo, PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
+import type {
+  FormInstanceFunctions,
+  FormRule,
+  PageInfo,
+  PrimaryTableCol,
+  SkeletonRowCol,
+  TableRowData,
+} from 'tdesign-vue-next';
 import { DialogPlugin } from 'tdesign-vue-next/es/dialog/plugin';
 import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
-import type { ProductBindingRecord } from '@/api/admin';
 import { adminApi } from '@/api/admin';
-import type { ProductRecord } from '@/api/product';
-import { productApi } from '@/api/product';
 import type { AdminUser, ManualPaymentGateway, PageParams } from '@/api/user';
 import { userApi } from '@/api/user';
-import ProductBindingTreeSelect from '@/components/product-binding-tree-select/index.vue';
 import { AdminPermissions } from '@/constants/permissions';
 import { copyToClipboard, fieldValue, formatDateTime, formatMoney } from '@/utils/format';
 import { phoneRule, required } from '@/utils/formRules';
 import { hasAdminPermission } from '@/utils/permission';
 import { errorMessage } from '@/utils/userMessage';
 
+import AddServiceDialog from './components/AddServiceDialog.vue';
 import OrdersTab from './components/OrdersTab.vue';
 import RechargesTab from './components/RechargesTab.vue';
 import { useLoginAs } from './composables/useLoginAs';
@@ -700,12 +628,15 @@ import {
   ticketStatusTheme,
 } from './statusDisplay';
 
+defineOptions({ name: 'AdminUserDetail' });
+
 type TabName = 'basic' | 'referral' | 'services' | 'invoices' | 'orders' | 'recharges' | 'tickets' | 'logs' | 'notices';
 type Row = Record<string, any>;
 
 interface PageState {
   loading: boolean;
-  refreshing?: boolean;
+  /** 行级「刷新」loading：只让被点的那一行转圈，避免整表所有刷新按钮同时 pending。 */
+  refreshingId?: number | string | null;
   refreshingStatus?: boolean;
   list: Row[];
   total: number;
@@ -722,7 +653,8 @@ const router = useRouter();
 let detailRequestSeq = 0;
 const pageStateRequestSeq: Record<string, number> = {};
 
-const detailLoading = ref(false);
+// 初值为 true：首帧直接出概览骨架，否则会先闪一帧空白概览卡再被骨架替换（审查条目 P2-12）
+const detailLoading = ref(true);
 const saveLoading = ref(false);
 const rechargeLoading = ref(false);
 const VALID_DETAIL_TABS: TabName[] = [
@@ -746,18 +678,24 @@ if (initialTab && !VALID_DETAIL_TABS.includes(initialTab as TabName)) {
 }
 const loadedTabs = reactive<Record<string, boolean>>({});
 const user = ref<AdminUser>({ id: 0, status: 1 });
+
+/* 概览骨架：尺寸对齐 .user-detail-summary 的身份区与指标卡，加载完成时不跳版 */
+const summarySkeletonRowCol: SkeletonRowCol = [
+  [{ width: '64px', height: '12px' }],
+  [{ width: '200px', height: '24px', margin: '12px 0 0' }],
+  [{ width: '280px', height: '12px', margin: '12px 0 0' }],
+];
+const metricSkeletonRowCol: SkeletonRowCol = [
+  [{ width: '56px', height: '12px' }],
+  [{ width: '80px', height: '20px', margin: '6px 0 0' }],
+];
 const stats = ref<Record<string, number | string>>({});
 const referral = ref<Record<string, any>>({});
 
 const editVisible = ref(false);
 const rechargeVisible = ref(false);
-const addServiceVisible = ref(false);
-const addServiceLoading = ref(false);
-const addServiceSubmitting = ref(false);
-const addServiceOsLoading = ref(false);
 const editFormRef = ref<FormInstanceFunctions>();
 const rechargeFormRef = ref<FormInstanceFunctions>();
-const addServiceFormRef = ref<FormInstanceFunctions>();
 const editForm = reactive({
   nickname: '',
   phone: '',
@@ -802,37 +740,15 @@ const manualInvoiceRules: Record<string, FormRule[]> = {
 // 付款日期选择上限（禁用未来日期），打开对话框时刷新，配合 paid_at 校验兜住具体时间
 const manualInvoicePaidAtLimit = ref({ after: dayjs().format('YYYY-MM-DD') });
 const paymentMethodOptions = toSelectOptions(MANUAL_PAYMENT_METHOD_MAP, false);
-const addServiceForm = reactive({
-  product_id: undefined as number | undefined,
-  billing_cycle: '',
-  status: 1,
-  name: '',
-  amount: 0,
-  auto_renew: 1,
-  create_order: 1,
-  create_invoice: 1,
-  deduct_balance: 1,
-  os: '',
-  remark: '',
-});
 const canLoginAs = computed(() => hasAdminPermission(AdminPermissions.USER_LOGIN_AS));
 const canManualInvoice = computed(() => hasAdminPermission(AdminPermissions.INVOICE_MANUAL_ENTRY));
 const ordersTabRef = ref<InstanceType<typeof OrdersTab>>();
 const rechargesTabRef = ref<InstanceType<typeof RechargesTab>>();
-const addServiceProductId = ref<number | undefined>();
-const addServiceProductIdArray = computed<(string | number)[]>({
-  get: () => (addServiceProductId.value ? [addServiceProductId.value] : []),
-  set: (val) => {
-    const values = normalizeSelectionArray(val);
-    addServiceProductId.value = values.length ? Number(values[0]) : undefined;
-  },
-});
-const addServiceProductDetail = ref<ProductRecord | null>(null);
-const addServiceOsOptions = ref<Row[]>([]);
+const addServiceDialogRef = ref<InstanceType<typeof AddServiceDialog>>();
 
 const services = reactive<PageState>({
   loading: false,
-  refreshing: false,
+  refreshingId: null,
   refreshingStatus: false,
   list: [],
   total: 0,
@@ -885,12 +801,6 @@ const editRules: Record<string, FormRule[]> = {
 const rechargeRules: Record<string, FormRule[]> = {
   amount: [required('请输入金额')],
   remark: [required('请填写操作备注')],
-};
-const addServiceRules: Record<string, FormRule[]> = {
-  product_id: [required('请选择商品')],
-  billing_cycle: [required('请选择计费周期')],
-  status: [required('请选择服务状态')],
-  amount: [required('请输入服务金额')],
 };
 
 const serviceStatusOptions = toSelectOptions(SERVICE_STATUS_MAP, false);
@@ -961,8 +871,6 @@ const isVerified = computed(
 const recentReferrals = computed(() =>
   Array.isArray(referral.value.recent_referrals) ? referral.value.recent_referrals : [],
 );
-const addServiceBillingOptions = computed(() => resolveBillingOptions(addServiceProductDetail.value));
-const addServiceOsFlatOptions = computed(() => flattenOptionTree(addServiceOsOptions.value));
 const statCards = computed(() => [
   { key: 'ticket_open', label: '在线工单', value: stats.value.ticket_open || 0, tone: 'warning' },
   { key: 'cash_balance', label: '余额', value: formatMoney(user.value.cash_balance), tone: 'success' },
@@ -1007,7 +915,7 @@ const infoItems = computed(() => [
   { label: '会员等级', value: memberLevelDisplay() },
   { label: '推荐大使等级', value: promotionAmbassadorDisplay() },
   { label: '实名认证', value: verificationText(), tone: isVerified.value ? 'success' : 'warning' },
-  { label: '证件号', value: fieldValue(user.value.id_card_masked) },
+  { label: '证件号', value: fieldValue(user.value.id_card || user.value.id_card_masked) },
   { label: '推荐人 ID', value: fieldValue(user.value.referrer_user_id) },
   { label: '最后登录时间', value: formatDateTime(user.value.last_login_at) },
   { label: '最后登录 IP', value: fieldValue(user.value.last_login_ip) },
@@ -1021,6 +929,7 @@ function copyField(label: string, value: unknown) {
 
 async function loadDetail() {
   if (!userId.value) {
+    detailLoading.value = false;
     await router.replace('/admin/users');
     return;
   }
@@ -1118,6 +1027,22 @@ function searchServices() {
   services.page = 1;
   loadServices();
 }
+/** 重置筛选并重新拉取；提交式筛选必须成对提供「查询/重置」（docs/DESIGN.md §5.1） */
+function resetServicesFilters() {
+  services.filters.keyword = '';
+  services.filters.status = '';
+  searchServices();
+}
+
+function resetLogsFilters() {
+  logs.filters.keyword = '';
+  logs.filters.start_date = '';
+  logs.filters.end_date = '';
+  logs.filters.ip_address = '';
+  logs.filters.source = '';
+  searchLogs();
+}
+
 function searchInvoices() {
   invoices.page = 1;
   loadInvoices();
@@ -1252,9 +1177,33 @@ function openRechargeDialog() {
   rechargeVisible.value = true;
 }
 
+/** 余额增减属不可逆资金操作，提交前必须确认金额与方向（docs/DESIGN.md §4.4）。 */
+function confirmRecharge(amount: number) {
+  return new Promise<boolean>((resolve) => {
+    const dialog = DialogPlugin.confirm({
+      header: rechargeForm.type === 'decrease' ? '确认扣减余额' : '确认增加余额',
+      body: `即将为用户「${rechargeForm.email}」${rechargeForm.type === 'decrease' ? '扣减' : '增加'} ${formatMoney(amount)}，操作提交后不可撤销。`,
+      theme: 'warning',
+      confirmBtn: { content: '确认提交', theme: 'danger' },
+      cancelBtn: '取消',
+      onConfirm() {
+        dialog.hide();
+        resolve(true);
+      },
+      onCancel() {
+        resolve(false);
+      },
+      onClose() {
+        resolve(false);
+      },
+    });
+  });
+}
+
 async function handleRecharge() {
   const result = await rechargeFormRef.value?.validate?.();
   if (!isValidationPass(result)) return;
+  if (!(await confirmRecharge(rechargeForm.amount))) return;
   rechargeLoading.value = true;
   try {
     const amount = rechargeForm.type === 'decrease' ? -rechargeForm.amount : rechargeForm.amount;
@@ -1313,116 +1262,14 @@ async function handleOrdersChanged() {
   if (loadedTabs.invoices) await loadInvoices();
 }
 
-async function openAddServiceDialog() {
-  resetAddServiceForm();
-  addServiceVisible.value = true;
-}
-
-function resetAddServiceForm() {
-  Object.assign(addServiceForm, {
-    product_id: undefined,
-    billing_cycle: '',
-    status: 1,
-    name: '',
-    amount: 0,
-    auto_renew: 1,
-    create_order: 1,
-    create_invoice: 1,
-    deduct_balance: 1,
-    os: '',
-    remark: '',
-  });
-  addServiceProductId.value = undefined;
-  addServiceProductDetail.value = null;
-  addServiceFormRef.value?.clearValidate?.();
-}
-
-async function handleAddServiceProductChange(
-  payload: { binding_ids?: unknown; bindings?: ProductBindingRecord[] } | string | number | Array<string | number>,
-) {
-  const bindingIds =
-    typeof payload === 'object' && !Array.isArray(payload) && payload !== null && 'binding_ids' in payload
-      ? normalizeSelectionArray(payload.binding_ids)
-      : normalizeSelectionArray(payload);
-  const productId = Number(bindingIds[0] || 0);
-  addServiceForm.product_id = productId || undefined;
-  addServiceProductDetail.value = null;
-  addServiceForm.billing_cycle = '';
-  addServiceForm.amount = 0;
-  addServiceForm.os = '';
-  addServiceOsOptions.value = [];
-  if (!productId) return;
-
-  addServiceLoading.value = true;
-  try {
-    const detail = await productApi.detail(productId);
-    addServiceProductDetail.value = detail;
-    addServiceForm.name = productLabel(detail);
-    const firstCycle = addServiceBillingOptions.value[0];
-    addServiceForm.billing_cycle = firstCycle?.value || '';
-    addServiceForm.amount = firstCycle?.amount || 0;
-    await fetchAddServiceOsOptions();
-  } catch (error) {
-    MessagePlugin.error(errorMessage(error, '加载商品详情失败'));
-  } finally {
-    addServiceLoading.value = false;
-  }
-}
-
-async function fetchAddServiceOsOptions() {
-  addServiceOsLoading.value = true;
-  try {
-    const response = await userApi.osOptions();
-    addServiceOsOptions.value = Array.isArray(response.groups) ? response.groups : [];
-  } catch {
-    addServiceOsOptions.value = [];
-  } finally {
-    addServiceOsLoading.value = false;
-  }
-}
-
-function syncAddServiceAmountFromCycle() {
-  const matched = addServiceBillingOptions.value.find((item) => item.value === addServiceForm.billing_cycle);
-  addServiceForm.amount = matched?.amount || 0;
-}
-
-function handleAddServiceCreateInvoiceChange(value: unknown) {
-  if (Number(value) !== 1) {
-    addServiceForm.deduct_balance = 0;
-  }
-}
-
-async function handleSubmitAddService() {
-  const result = await addServiceFormRef.value?.validate?.();
-  if (!isValidationPass(result)) return;
-  addServiceSubmitting.value = true;
-  try {
-    await userApi.storeService(userId.value, {
-      product_id: Number(addServiceForm.product_id || 0),
-      billing_cycle: addServiceForm.billing_cycle,
-      status: addServiceForm.status,
-      name: addServiceForm.name,
-      amount: toNumber(addServiceForm.amount),
-      auto_renew: Number(addServiceForm.auto_renew ? 1 : 0),
-      create_order: Number(addServiceForm.create_order ? 1 : 0),
-      create_invoice: Number(addServiceForm.create_invoice ? 1 : 0),
-      deduct_balance: Number(addServiceForm.deduct_balance ? 1 : 0),
-      os: addServiceForm.os,
-      remark: addServiceForm.remark,
-    });
-    MessagePlugin.success('实例已创建');
-    addServiceVisible.value = false;
-    await Promise.all([loadServices(), loadDetail(), ...(loadedTabs.invoices ? [loadInvoices()] : [])]);
-  } catch (error) {
-    MessagePlugin.error(errorMessage(error, '添加实例失败'));
-  } finally {
-    addServiceSubmitting.value = false;
-  }
+async function handleAddServiceCreated() {
+  // 子组件只负责表单与提交，创建成功后由父级刷新服务列表、概览与已加载的账单 tab
+  await Promise.all([loadServices(), loadDetail(), ...(loadedTabs.invoices ? [loadInvoices()] : [])]);
 }
 
 async function handleRefreshService(row: Row) {
   if (!row?.id) return;
-  services.refreshing = true;
+  services.refreshingId = row.id;
   try {
     const detail = await userApi.serviceRemoteStatus(userId.value, row.id);
     patchServiceListItem(detail);
@@ -1430,7 +1277,7 @@ async function handleRefreshService(row: Row) {
   } catch (error) {
     MessagePlugin.error(errorMessage(error, '刷新服务状态失败'));
   } finally {
-    services.refreshing = false;
+    services.refreshingId = null;
   }
 }
 
@@ -1457,7 +1304,8 @@ function handleDeleteServiceRow(row: Row) {
     cancelBtn: '取消',
     theme: 'warning',
     async onConfirm() {
-      services.refreshing = true;
+      // 行内删除走对话框自身的 confirmLoading，不再借用整表级的 loading 布尔（那会让整表刷新按钮一起转圈）。
+      dialog.setConfirmLoading(true);
       try {
         await userApi.serviceDelete(userId.value, row.id);
         MessagePlugin.success('实例记录已删除');
@@ -1466,7 +1314,7 @@ function handleDeleteServiceRow(row: Row) {
       } catch (error) {
         MessagePlugin.error(errorMessage(error, '删除服务记录失败'));
       } finally {
-        services.refreshing = false;
+        dialog.setConfirmLoading(false);
       }
     },
   });
@@ -1546,56 +1394,6 @@ function patchServiceListItem(detail: Row = {}) {
   services.list.splice(target.index, 1, target.item);
 }
 
-function productLabel(product: ProductRecord | null | undefined) {
-  if (!product) return '';
-  return String(
-    product.display_name || product.name || product.product_name || (product.id ? `商品 #${product.id}` : ''),
-  ).trim();
-}
-function resolveBillingOptions(product: ProductRecord | null) {
-  const pricing =
-    product && product.pricing && typeof product.pricing === 'object' && !Array.isArray(product.pricing)
-      ? product.pricing
-      : {};
-  return Object.entries(pricing)
-    .filter(([, amount]) => toNumber(amount) > 0)
-    .map(([value, amount]) => ({
-      value,
-      label: `${billingCycleLabel(value)} · ${formatMoney(amount)}`,
-      amount: toNumber(amount),
-    }));
-}
-function billingCycleLabel(value: unknown) {
-  return (
-    (
-      {
-        monthly: '月付',
-        quarterly: '季付',
-        semiannually: '半年付',
-        annually: '年付',
-        biennially: '两年付',
-        triennially: '三年付',
-        one_time: '一次性',
-      } as Record<string, string>
-    )[String(value)] || fieldValue(value)
-  );
-}
-function flattenOptionTree(items: Row[] = []) {
-  const result: Array<{ value: string | number; label: string }> = [];
-  const walk = (nodes: Row[]) => {
-    nodes.forEach((node) => {
-      const value = node.value ?? node.id ?? node.name;
-      const label = String(node.label || node.name || node.value || '').trim();
-      if (value !== undefined && value !== null && label) result.push({ value, label });
-      if (Array.isArray(node.children)) walk(node.children);
-    });
-  };
-  walk(items);
-  return result;
-}
-function normalizeSelectionArray(value: unknown): string[] {
-  return (Array.isArray(value) ? value : [value]).map((item) => String(item || '').trim()).filter(Boolean);
-}
 function isValidationPass(result: unknown) {
   return result === true || result === undefined;
 }
@@ -1604,10 +1402,6 @@ function verificationText() {
   if (Number(user.value.verification_status) === 3) return '实名认证失败';
   if ([1, 4].includes(Number(user.value.verification_status))) return '待实名认证';
   return '未实名认证';
-}
-function toNumber(value: unknown) {
-  const number = Number.parseFloat(String(value ?? 0));
-  return Number.isFinite(number) ? number : 0;
 }
 
 onMounted(() => {

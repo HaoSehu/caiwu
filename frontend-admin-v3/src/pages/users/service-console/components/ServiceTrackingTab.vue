@@ -40,7 +40,7 @@
         :current="state.page"
         :page-size="state.pageSize"
         :total="state.total"
-        :page-size-options="[10, 20, 50]"
+        :page-size-options="COMPACT_PAGE_SIZE_OPTIONS"
         show-jumper
         @change="handlePageChange"
       />
@@ -49,12 +49,12 @@
     <t-dialog
       v-model:visible="createVisible"
       header="新增跟踪记录"
-      width="620px"
+      width="min(620px, calc(100vw - 32px))"
       :confirm-btn="{ content: '确定', loading: submitting }"
       @cancel="createVisible = false"
       @confirm="handleSubmit"
     >
-      <t-form ref="formRef" :data="form" :rules="rules" label-align="top" class="dialog-form">
+      <t-form ref="formRef" :data="form" :rules="rules" label-align="right" class="dialog-form">
         <t-form-item label="记录时间" name="tracked_at">
           <t-date-picker
             v-model="form.tracked_at"
@@ -92,7 +92,7 @@
       </t-form>
     </t-dialog>
 
-    <t-dialog v-model:visible="previewVisible" header="图片预览" width="720px" :footer="false">
+    <t-dialog v-model:visible="previewVisible" header="图片预览" width="min(720px, calc(100vw - 32px))" :footer="false">
       <img v-if="previewUrl" :src="previewUrl" class="tracking-preview" alt="跟踪截图预览" />
     </t-dialog>
   </section>
@@ -105,6 +105,7 @@ import { onMounted, reactive, ref } from 'vue';
 
 import type { PageParams } from '@/api/user';
 import { userApi } from '@/api/user';
+import { COMPACT_PAGE_SIZE_OPTIONS } from '@/constants/pagination';
 import { fieldValue, formatDateTime } from '@/utils/format';
 import { required } from '@/utils/formRules';
 import { errorMessage } from '@/utils/userMessage';
@@ -120,8 +121,8 @@ interface UploadFileLike {
   name?: string;
   size?: number;
   type?: string;
-  rawFile?: File;
-  file?: File;
+  /** t-upload 把上传中的文件包成普通对象，原始 File 只挂在 raw 上。 */
+  raw?: File;
   response?: { url?: string; filename?: string; path?: string; [key: string]: unknown };
   url?: string;
   path?: string;
@@ -227,7 +228,12 @@ function beforeUpload(file: UploadFileLike) {
 
 async function handleUpload(files: UploadFileLike | UploadFileLike[]) {
   const file = Array.isArray(files) ? files[0] : files;
-  const rawFile = (file?.rawFile || file?.file || file) as File;
+  // 只能取 raw：UploadFile 本身是普通对象，直接塞进 FormData 会变成 "[object Object]"，
+  // 后端 image 规则随即判为「文件必须是图片」。
+  // 只能取 raw：UploadFile 本身是普通对象，直接塞进 FormData 会变成 "[object Object]",
+  // 后端 image 规则随即判为「文件必须是图片」。
+  const rawFile = file?.raw;
+  if (!rawFile) return { status: 'fail', error: '图片读取失败，请重新选择文件', response: {} };
   const formData = new FormData();
   formData.append('file', rawFile);
   try {
@@ -306,6 +312,7 @@ function handleDelete(record: Row) {
     cancelBtn: '取消',
     theme: 'warning',
     async onConfirm() {
+      dialog.setConfirmLoading(true);
       try {
         await userApi.serviceTrackingDelete(props.userId, props.serviceId, recordId);
         MessagePlugin.success('跟踪记录已删除');
@@ -313,6 +320,8 @@ function handleDelete(record: Row) {
         await load();
       } catch (error) {
         MessagePlugin.error(errorMessage(error, '删除跟踪记录失败'));
+      } finally {
+        dialog.setConfirmLoading(false);
       }
     },
   });

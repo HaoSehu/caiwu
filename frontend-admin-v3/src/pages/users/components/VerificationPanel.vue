@@ -37,9 +37,14 @@
         :loading="listLoading"
         :hover="true"
         table-layout="fixed"
+        aria-label="实名认证列表"
       >
+        <template #empty>
+          <t-empty :description="listLoading ? '加载中…' : hasActiveFilters ? '未找到匹配结果' : '暂无实名认证记录'" />
+        </template>
         <template #displayName="{ row }">{{ row.display_name || '-' }}</template>
         <template #realName="{ row }">{{ row.real_name || '-' }}</template>
+        <template #id_card="{ row }">{{ row.id_card || row.id_card_masked || '-' }}</template>
         <template #method="{ row }">{{ verificationMethodLabel(row) }}</template>
         <template #status="{ row }">
           <t-tag :theme="verificationStatusTheme(row)" variant="light">{{ verificationStatusLabel(row) }}</t-tag>
@@ -68,7 +73,7 @@
           :current="pagination.page"
           :page-size="pagination.page_size"
           :total="total"
-          :page-size-options="[20, 50, 100]"
+          :page-size-options="pagination.pageSizeOptions"
           show-jumper
           @change="handlePaginationChange"
         />
@@ -89,7 +94,7 @@
                 </div>
                 <div>
                   <dt>身份证号码</dt>
-                  <dd>{{ row.id_card_masked || '-' }}</dd>
+                  <dd>{{ row.id_card || row.id_card_masked || '-' }}</dd>
                 </div>
                 <div>
                   <dt>认证方式</dt>
@@ -116,7 +121,7 @@
           v-model:page-size="pagination.page_size"
           class="verification-mobile-pagination"
           :total="total"
-          :page-size-options="[20, 50, 100]"
+          :page-size-options="pagination.pageSizeOptions"
           @change="handlePaginationChange"
         />
       </div>
@@ -140,7 +145,7 @@
 
     <t-drawer
       v-model:visible="detailVisible"
-      size="560px"
+      size="min(560px, calc(100vw - 32px))"
       header="实名认证详情"
       :footer="false"
       @close="closeVerificationDetail"
@@ -182,13 +187,23 @@
 
     <t-drawer
       v-model:visible="historyVisible"
-      size="620px"
+      size="min(620px, calc(100vw - 32px))"
       :header="historyTitle"
       :footer="false"
       @close="closeVerificationHistory"
     >
       <t-loading :loading="historyLoading" size="small">
-        <t-table row-key="id" :data="historyList" :columns="historyColumns" table-layout="fixed">
+        <t-table
+          row-key="id"
+          :data="historyList"
+          :columns="historyColumns"
+          table-layout="fixed"
+          aria-label="认证历史列表"
+        >
+          <template #empty>
+            <t-empty description="暂无认证历史" />
+          </template>
+          <template #id_card="{ row }">{{ row.id_card || row.id_card_masked || '-' }}</template>
           <template #historyStatus="{ row }">
             <t-tag :theme="verificationStatusTheme(row)" variant="light">{{ verificationStatusLabel(row) }}</t-tag>
           </template>
@@ -206,7 +221,7 @@
     <t-dialog
       v-model:visible="rejectVisible"
       header="驳回实名"
-      width="460px"
+      width="min(460px, calc(100vw - 32px))"
       :confirm-btn="{ content: '确定', loading: Boolean(actionLoadingId) }"
       @confirm="handleReject"
     >
@@ -254,6 +269,7 @@ const {
   handleSearch,
   resetFilters: engineResetFilters,
   handlePaginationChange,
+  hasActiveFilters,
 } = useListPage<VerificationFilter, VerificationRecord>({
   defaultFilters: { keyword: '' },
   defaultPageSize: 20,
@@ -298,7 +314,7 @@ const columns: PrimaryTableCol<TableRowData>[] = [
   { title: 'ID', colKey: 'id', width: 80 },
   { title: '姓名', colKey: 'displayName', width: 140 },
   { title: '实名认证名称', colKey: 'realName', width: 160 },
-  { title: '身份证号码', colKey: 'id_card_masked', width: 180 },
+  { title: '身份证号码', colKey: 'id_card', width: 180 },
   { title: '认证方式', colKey: 'method', width: 120 },
   { title: '认证类型', colKey: 'verification_type_label', width: 120 },
   { title: '状态/原因', colKey: 'status', width: 220 },
@@ -308,7 +324,7 @@ const columns: PrimaryTableCol<TableRowData>[] = [
 
 const historyColumns: PrimaryTableCol<TableRowData>[] = [
   { title: '真实姓名', colKey: 'real_name', width: 150 },
-  { title: '身份证号码', colKey: 'id_card_masked', width: 180 },
+  { title: '身份证号码', colKey: 'id_card', width: 180 },
   { title: '状态', colKey: 'historyStatus', width: 150 },
   { title: '提交时间', colKey: 'submittedAt', width: 180 },
 ];
@@ -551,7 +567,7 @@ onMounted(() => {
   .verification-filter-actions {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--td-comp-margin-s);
     margin-left: auto;
   }
 }
@@ -571,7 +587,7 @@ onMounted(() => {
 .verification-help {
   margin: var(--td-comp-margin-s) 0 0;
   color: var(--td-text-color-secondary);
-  font-size: var(--td-font-size-size-2, 13px);
+  font-size: var(--td-font-size-size-3, 14px);
 }
 
 .verification-mobile-list {
@@ -587,7 +603,7 @@ onMounted(() => {
 .verification-mobile-card {
   overflow: hidden;
   border: 1px solid var(--td-component-border);
-  border-radius: var(--td-radius-default, 4px);
+  border-radius: var(--td-radius-default);
   background: var(--td-bg-color-container);
 }
 
@@ -595,7 +611,7 @@ onMounted(() => {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 8px;
+  gap: var(--td-comp-margin-s);
   min-height: 42px;
   border-bottom: 1px solid var(--td-component-border);
   padding: 9px 10px;
@@ -614,7 +630,7 @@ onMounted(() => {
 .verification-mobile-card__actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--td-comp-margin-s);
   border-top: 1px solid var(--td-component-border);
   padding: 8px 10px;
 }
@@ -664,7 +680,7 @@ onMounted(() => {
   margin: 0;
   overflow: hidden;
   color: var(--td-text-color-primary);
-  font-size: var(--td-font-size-size-2, 13px);
+  font-size: var(--td-font-size-size-3, 14px);
   line-height: 20px;
   text-align: right;
   text-overflow: ellipsis;

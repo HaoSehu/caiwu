@@ -17,6 +17,7 @@
         :loading="state.loading"
         :pagination="pagination"
         table-layout="fixed"
+        aria-label="用户订单列表"
         @page-change="handlePageChange"
       >
         <template #empty>
@@ -43,7 +44,7 @@
     <t-dialog
       v-model:visible="manualOrderVisible"
       header="补录订单"
-      width="560px"
+      width="min(560px, calc(100vw - 32px))"
       :confirm-btn="{ content: '确定', loading: submitting }"
       @cancel="manualOrderVisible = false"
       @confirm="handleManualOrderSubmit"
@@ -52,7 +53,7 @@
         theme="info"
         message="补录用于登记系统外收款的新购/续费/附加配置费用，仅生成已支付订单与账单记录，不会变更实例状态与到期时间。"
       />
-      <t-form ref="formRef" :data="form" :rules="rules" label-align="top" class="dialog-form">
+      <t-form ref="formRef" :data="form" :rules="rules" label-align="right" class="dialog-form">
         <t-form-item label="服务实例" name="service_id">
           <t-select
             v-model="form.service_id"

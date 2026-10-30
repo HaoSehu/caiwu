@@ -16,6 +16,7 @@
         :loading="state.loading"
         :pagination="pagination"
         table-layout="fixed"
+        aria-label="服务订单列表"
         @page-change="handlePageChange"
       >
         <template #empty>
