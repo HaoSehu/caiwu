@@ -596,8 +596,11 @@ export interface RechargeOrderPayload {
 export interface RechargeGatewayOption {
   key: string;
   option_key?: string;
+  // name = 插件名（仅管理端展示），label = 渠道名（兼容别名）；用户端展示名只能取 channel_name。
   name?: string;
   label?: string;
+  plugin_name?: string;
+  channel_name?: string;
   payment_type?: string;
 }
 
@@ -1046,8 +1049,11 @@ export interface InvoiceSummaryInfo {
 export interface InvoicePaymentMethod {
   key?: 'balance' | 'alipay' | 'free' | string;
   option_key?: string;
+  // name = 插件名（仅管理端展示），label = 渠道名（兼容别名）；用户端展示名只能取 channel_name。
   name?: string;
   label?: string;
+  plugin_name?: string;
+  channel_name?: string;
   payment_type?: string;
   [key: string]: unknown;
 }
@@ -1063,6 +1069,8 @@ export interface PaymentSummary {
   gateway?: string;
   gateway_key?: string;
   gateway_label?: string;
+  /** 支付渠道名（支付宝 / 微信支付 …）：用户端展示用；插件名不在用户端下发。 */
+  channel_name?: string;
   status?: number | string;
   payment_no?: string;
   trade_no?: string;
@@ -1084,6 +1092,8 @@ export interface InvoiceRecord {
   created_at?: string;
   updated_at?: string;
   paid_at?: string;
+  /** 结束时间：已支付=支付完成时间；已取消=账单过期日期；已退款=退款时间；待支付为空 */
+  finished_at?: string | null;
   billing_cycle?: string;
   combined_display_name?: string;
   product_display_name?: string;
@@ -1117,6 +1127,8 @@ export interface InvoiceOrderInfo {
   type?: string;
   type_label?: string;
   status?: number | string;
+  /** 订单的计费周期键（monthly / quarterly / semiannually / annually …），账单缺省时用它回落 */
+  billing_cycle?: string;
   [key: string]: unknown;
 }
 
@@ -1170,6 +1182,8 @@ export interface PaymentRecord {
   invoice_type?: string;
   invoice_status?: number | string;
   invoice?: PaymentInvoiceInfo | null;
+  /** 结束时间：已支付=支付完成时间；已取消=账单过期日期；已退款=退款时间；待支付为空 */
+  finished_at?: string | null;
   [key: string]: unknown;
 }
 
@@ -1205,6 +1219,15 @@ export interface OrderRecord {
   remark?: string;
   paid_at?: string;
   created_at?: string;
+  /**
+   * 支付渠道名（支付宝 / 微信支付 …），由后端按支付单快照解析；
+   * 未支付订单为空串。用户端只展示渠道，插件名属管理端与日志维度，不在此下发。
+   */
+  channel_name?: string;
+  /** 与 channel_name 同值的既有列名，保留兼容；新代码优先取 channel_name。 */
+  gateway_label?: string;
+  /** 结束时间：已支付=支付完成时间；已取消=账单过期日期；已退款=退款时间；待支付为空 */
+  finished_at?: string | null;
   invoice?: OrderInvoiceInfo | null;
   service?: OrderServiceInfo | null;
   coupon?: OrderCouponInfo | null;

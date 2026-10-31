@@ -17,8 +17,18 @@ test('充值：生成二维码后自动轮询支付状态，成功后停止轮�
   await page.route('**/api/v2/client/recharge/gateways', (route) => {
     return route.fulfill(
       jsonOk({
+        // 后端已拆分展示名：plugin_name 是插件名（只允许管理端展示），channel_name 才是渠道名（用户端唯一可见）。
+        // name/label 为兼容别名，分别等于 plugin_name / channel_name——用户端不得依赖它们作为展示名。
         list: [
-          { key: 'alipay', option_key: 'alipay:alipay', name: '支付宝', label: '支付宝扫码', payment_type: 'alipay' },
+          {
+            key: 'alipay',
+            option_key: 'alipay:alipay',
+            plugin_name: '易支付',
+            channel_name: '支付宝',
+            name: '易支付',
+            label: '支付宝',
+            payment_type: 'alipay',
+          },
         ],
       }),
     );
@@ -48,8 +58,20 @@ test('充值：生成二维码后自动轮询支付状态，成功后停止轮�
   await page.goto('/client/recharge', { waitUntil: 'domcontentloaded' });
 
   // 支付方式加载完成（金额输入框带 ¥ 前缀，快捷金额直接点选）
+  // 按钮文案必须由渠道名（channel_name）拼出，插件名不得参与。
   const gatewayButton = page.getByRole('button', { name: '生成支付宝二维码' });
   await expect(gatewayButton).toBeVisible();
+
+  // 移动端 / 桌面端布局由 isMobileScreen 二选一渲染，这里对当前渲染出的支付方式卡片断言：
+  // 主标题是渠道名（channel_name），副标题不再重复它。
+  const payMethodCard = page.locator('.pay-method-card--mobile');
+  if ((await payMethodCard.count()) > 0) {
+    await expect(payMethodCard.first().locator('strong')).toHaveText('支付宝');
+    await expect(payMethodCard.first().locator('small')).toHaveText('支付宝扫码支付');
+  }
+
+  // 用户端任何位置都不得出现插件名，也不得出现「易支付 - 支付宝」这类插件名与渠道名的拼接串。
+  await expect(page.locator('body')).not.toContainText('易支付');
 
   await page.getByRole('button', { name: '¥50', exact: true }).click();
   await gatewayButton.click();

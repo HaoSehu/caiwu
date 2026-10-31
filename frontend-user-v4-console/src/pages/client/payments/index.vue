@@ -53,6 +53,7 @@
           :data="list"
           :columns="columns"
           :pagination="null"
+          table-layout="auto"
           hover
         >
           <template #payment="{ row }">
@@ -81,7 +82,8 @@
           <template #status="{ row }">
             <status-tag :status-map="PAYMENT_STATUS_MAP" :status="Number(row.status)" />
           </template>
-          <template #time="{ row }">{{ vm(row).time }}</template>
+          <template #created_at="{ row }">{{ vm(row).createdAt }}</template>
+          <template #finished_at="{ row }">{{ vm(row).finishedAt }}</template>
           <template #operation="{ row }">
             <t-button size="small" theme="primary" variant="text" @click="goToDetail(row)">查看</t-button>
           </template>
@@ -109,7 +111,8 @@
             </div>
             <div class="record-mobile-card__meta">
               <span>第三方：{{ row.trade_no || '等待渠道回调' }}</span>
-              <span>{{ vm(row).time }}</span>
+              <span>创建时间：{{ vm(row).createdAt }}</span>
+              <span>结束时间：{{ vm(row).finishedAt }}</span>
             </div>
             <div v-if="row.invoice_no" class="record-mobile-card__meta">
               <span
@@ -150,7 +153,7 @@ import { useDeviceLayout } from '@/composables/useDeviceLayout';
 import { PAYMENT_GATEWAY_OPTIONS, PAYMENT_STATUS_OPTIONS, useRecordList } from '@/domains/finance/useRecords';
 import RecordQuickFilters from '@/pages/client/components/RecordQuickFilters.vue';
 import type { PaymentRecord } from '@/types/client';
-import { formatDateTime, formatMoney } from '@/utils/format';
+import { formatDateTime, formatFinishTime, formatMoney } from '@/utils/format';
 
 const router = useRouter();
 // 表格与移动卡片只渲染一套，切换点与 record-page.less 的平板断点保持一致
@@ -198,7 +201,10 @@ function gatewayDisplay(row: PaymentRecord) {
 interface PaymentRowViewModel {
   gateway: string;
   amount: string;
-  time: string;
+  /** 创建时间：支付单创建时间 */
+  createdAt: string;
+  /** 结束时间：支付完成时间，未完成显示占位符 */
+  finishedAt: string;
 }
 const rowViewModels = computed(() => {
   const map = new Map<number, PaymentRowViewModel>();
@@ -206,27 +212,28 @@ const rowViewModels = computed(() => {
     map.set(row.id, {
       gateway: gatewayDisplay(row),
       amount: formatMoney(row.amount),
-      time: formatDateTime(row.paid_at || row.created_at),
+      createdAt: formatDateTime(row.created_at),
+      finishedAt: formatFinishTime(row.finished_at),
     });
   }
   return map;
 });
-const EMPTY_PAYMENT_ROW: PaymentRowViewModel = { gateway: '--', amount: '--', time: '--' };
+const EMPTY_PAYMENT_ROW: PaymentRowViewModel = { gateway: '--', amount: '--', createdAt: '--', finishedAt: '--' };
 const vm = (row: { id: number }) => rowViewModels.value.get(row.id) ?? EMPTY_PAYMENT_ROW;
 
 /*
- * I-04 同类：原列宽合计 72rem，而 1366 笔记本在侧栏宽度 + 页面左右边距
- * 之后可用宽度约 68rem，横向必然溢出；fixed 的操作列被挤出可视区，用户要横滚才
- * 看得到「关联账单」。订单号与账单号都是长串，靠 ellipsis 截断 + title 悬浮查看，
- * 不给它们留最大宽度；金额、状态、操作是定长内容，给死宽度避免列宽抖动。
+ * 记录表内容要求完整展示：支付订单号、关联账单等长串不再截断，列宽只作下限，
+ * 表格随内容变宽后由表格容器横向滚动（用户可拖动滚动条查看完整单号）。
+ * 金额、状态、操作是定长内容，给死宽度避免列宽抖动。
  */
 const columns: PrimaryTableCol[] = [
-  { colKey: 'payment', title: '支付订单号', minWidth: '12rem', ellipsis: true },
+  { colKey: 'payment', title: '支付订单号', minWidth: '12rem' },
   { colKey: 'gateway', title: '支付渠道', width: '6.5rem' },
-  { colKey: 'invoice', title: '关联账单', minWidth: '12rem', ellipsis: true },
+  { colKey: 'invoice', title: '关联账单', minWidth: '12rem' },
   { colKey: 'amount', title: '支付金额', width: '7.5rem', align: 'right' },
   { colKey: 'status', title: '状态', width: '6.5rem' },
-  { colKey: 'time', title: '时间', minWidth: '10rem' },
+  { colKey: 'created_at', title: '创建时间', minWidth: '10rem' },
+  { colKey: 'finished_at', title: '结束时间', minWidth: '10rem' },
   { colKey: 'operation', title: '操作', width: '6rem', fixed: 'right', align: 'right' },
 ];
 </script>

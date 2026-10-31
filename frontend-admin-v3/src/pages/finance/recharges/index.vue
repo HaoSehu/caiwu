@@ -37,7 +37,7 @@
           :columns="columns"
           :loading="loading"
           hover
-          table-layout="fixed"
+          table-layout="auto"
           aria-label="充值记录列表"
         >
           <template #empty>
@@ -51,9 +51,8 @@
           </template>
           <template #channel="{ row }">
             <div class="stack-cell">
-              <strong>{{
-                fieldValue(row.gateway_label || row.gateway || toRecord(row.payment).gateway || '第三方支付')
-              }}</strong>
+              <strong>{{ fieldValue(rechargePluginName(row)) }}</strong>
+              <span>渠道：{{ fieldValue(rechargeChannelName(row)) }}</span>
               <span>{{ fieldValue(row.trade_no || toRecord(row.payment).trade_no) }}</span>
             </div>
           </template>
@@ -76,7 +75,7 @@
             <status-tag :status-map="PAYMENT_STATUS_MAP" :status="row.status" />
           </template>
           <template #createdAt="{ row }">{{ formatDateTime(row.created_at) }}</template>
-          <template #paidAt="{ row }">{{ formatDateTime(row.paid_at) }}</template>
+          <template #finishedAt="{ row }">{{ formatFinishTime(row.finished_at) }}</template>
           <template #operation="{ row }">
             <t-button size="small" variant="text" theme="primary" @click="openDetail(row)">详情</t-button>
           </template>
@@ -91,7 +90,7 @@
               :key="row.id"
               :title="fieldValue(row.payment_no)"
               eyebrow="充值管理"
-              :subtitle="fieldValue(row.gateway || '第三方支付')"
+              :subtitle="fieldValue(rechargeChannelName(row) || '第三方支付')"
               :description="paymentSummary(row.payment || paymentRecord(row))"
               highlight-label="充值金额"
               :highlight-value="formatMoney(row.amount)"
@@ -156,7 +155,7 @@ import type { InvoiceDetailPayload } from '@/hooks/useFinanceDetailDrawer';
 import { useFinanceDetailDrawer } from '@/hooks/useFinanceDetailDrawer';
 import { useListPage } from '@/hooks/useListPage';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { fieldValue, formatDateTime, formatMoney, toRecord } from '@/utils/format';
+import { fieldValue, formatDateTime, formatFinishTime, formatMoney, toRecord } from '@/utils/format';
 import { errorMessage } from '@/utils/userMessage';
 
 defineOptions({
@@ -239,7 +238,7 @@ const statusTypeMap = toTagTypeMap(PAYMENT_STATUS_MAP);
 const paymentStatusOptions = computed(() => Object.entries(statusLabelMap).map(([value, label]) => ({ value, label })));
 
 const columns: PrimaryTableCol<RechargeRecord>[] = [
-  { colKey: 'payment_no', title: '支付单号', minWidth: 190, ellipsis: true },
+  { colKey: 'payment_no', title: '支付单号', minWidth: 190 },
   { colKey: 'user', title: '用户', minWidth: 180 },
   { colKey: 'channel', title: '渠道 / 三方单号', minWidth: 200 },
   { colKey: 'invoice', title: '关联账单', minWidth: 180 },
@@ -247,7 +246,7 @@ const columns: PrimaryTableCol<RechargeRecord>[] = [
   { colKey: 'paid', title: '到账', width: 120, align: 'right' },
   { colKey: 'status', title: '状态', width: 110 },
   { colKey: 'createdAt', title: '创建时间', width: 170 },
-  { colKey: 'paidAt', title: '支付时间', width: 170 },
+  { colKey: 'finishedAt', title: '结束时间', width: 170 },
   { colKey: 'operation', title: '操作', width: 80, fixed: 'right' },
 ];
 
@@ -294,6 +293,9 @@ function paymentRecord(row: RechargeRecord): Record<string, unknown> {
     id: row.id,
     payment_no: row.payment_no,
     gateway: row.gateway,
+    gateway_label: row.gateway_label,
+    plugin_name: row.plugin_name,
+    channel_name: row.channel_name,
     trade_no: row.trade_no,
     amount: row.amount,
     status: row.status,
@@ -312,16 +314,33 @@ function mobileActionOptions() {
   return [{ content: '详情', value: 'detail' }];
 }
 
+function rechargePluginName(row: RechargeRecord) {
+  return row.plugin_name || toRecord(row.payment).plugin_name || '';
+}
+
+function rechargeChannelName(row: RechargeRecord) {
+  return (
+    row.channel_name ||
+    toRecord(row.payment).channel_name ||
+    row.gateway_label ||
+    toRecord(row.payment).gateway_label ||
+    row.gateway ||
+    toRecord(row.payment).gateway ||
+    ''
+  );
+}
+
 function rechargeMobileRows(row: RechargeRecord) {
   const invoiceNo = row.invoice_no || toRecord(row.invoice).invoice_no;
   return [
     { label: '用户', value: userName(row.user) },
-    { label: '渠道', value: fieldValue(row.gateway_label || row.gateway || '第三方支付') },
+    { label: '插件名称', value: fieldValue(rechargePluginName(row)) },
+    { label: '支付渠道', value: fieldValue(rechargeChannelName(row)) },
     { label: '到账', value: formatMoney(row.paid_amount), strong: true },
     { label: '账单', value: fieldValue(invoiceNo), show: Boolean(invoiceNo) },
     { label: '三方单', value: fieldValue(row.trade_no), show: Boolean(row.trade_no) },
-    { label: '创建', value: formatDateTime(row.created_at) },
-    { label: '支付时', value: formatDateTime(row.paid_at), show: Boolean(row.paid_at) },
+    { label: '创建时间', value: formatDateTime(row.created_at) },
+    { label: '结束时间', value: formatFinishTime(row.finished_at) },
   ];
 }
 
@@ -332,7 +351,9 @@ function userName(user: unknown) {
 
 function paymentSummary(payment: unknown) {
   const record = toRecord(payment);
-  return fieldValue([record.gateway, record.trade_no].filter(Boolean).join(' '));
+  const pluginName = record.plugin_name;
+  const channelName = record.channel_name || record.gateway_label || record.gateway;
+  return fieldValue([pluginName, channelName, record.trade_no].filter(Boolean).join(' '));
 }
 
 function invoiceStatusLabel(status: unknown) {

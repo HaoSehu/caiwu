@@ -79,7 +79,7 @@
                   </span>
                   <span class="pay-method-card__text">
                     <strong>{{ gateway.name }}</strong>
-                    <small>{{ gateway.label }}</small>
+                    <small>{{ gateway.hint }}</small>
                   </span>
                   <span v-if="gateway.isActive" class="pay-method-card__check">
                     <check-icon />
@@ -366,7 +366,7 @@ function handleMobileGatewaySelect(optionKey: string) {
 
 function handleMobileSubmit() {
   if (submitting.value || confirmVisible.value) return;
-  const gatewayName = selectedPaymentGateway.value?.name || selectedPaymentGateway.value?.label || '在线支付';
+  const gatewayName = selectedPaymentGateway.value?.channel_name || selectedPaymentGateway.value?.label || '在线支付';
   confirmVisible.value = true;
   const dialog = DialogPlugin.confirm({
     header: '在线充值',
@@ -408,12 +408,20 @@ function paymentMethodIcon(method: RechargeGatewayOption) {
 interface GatewayView {
   key: string;
   name: string;
-  label: string;
+  hint: string;
   icon: typeof CreditcardIcon;
   isActive: boolean;
   loading: boolean;
   buttonText: string;
   method: RechargeGatewayOption;
+}
+
+/** 支付类型 → 卡片副标题文案；不可识别时统一「扫码支付」，绝不回落到插件名。 */
+function paymentTypeHint(method: RechargeGatewayOption) {
+  const paymentType = String(method.payment_type || '').trim();
+  if (paymentType === 'alipay') return '支付宝扫码支付';
+  if (paymentType === 'wxpay' || paymentType === 'wechat') return '微信扫码支付';
+  return '扫码支付';
 }
 
 /**
@@ -424,12 +432,13 @@ const gatewayViews = computed<GatewayView[]>(() =>
   paymentGateways.value.map((method) => {
     const key = paymentOptionKey(method);
     const isActive = selectedGateway.value === key;
-    const name = method.name || method.label || '支付';
+    // 用户端只展示渠道名（channel_name），插件名（name）禁止上屏。
+    const name = method.channel_name || method.label || method.key || '支付';
 
     return {
       key,
       name,
-      label: method.label || '扫码支付',
+      hint: paymentTypeHint(method),
       icon: paymentMethodIcon(method),
       isActive,
       loading: submitting.value && isActive,
@@ -446,7 +455,7 @@ async function handleGatewayCreate(method: RechargeGatewayOption) {
   const confirmed = await new Promise<boolean>((resolve) => {
     const dialog = DialogPlugin.confirm({
       header: '在线充值',
-      body: `确认通过 ${method.name || method.label || '支付'} 充值 ¥${amountText.value}？`,
+      body: `确认通过 ${method.channel_name || method.label || '支付'} 充值 ¥${amountText.value}？`,
       confirmBtn: '确定',
       cancelBtn: '取消',
       onConfirm: () => {

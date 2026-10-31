@@ -302,7 +302,7 @@
                     :to="`/client/notices/${item.id}`"
                   >
                     <span class="message-row__title">{{ item.title }}</span>
-                    <span class="message-row__time">{{ formatDate(item.publish_at || item.created_at) }}</span>
+                    <span class="message-row__time">{{ formatDateTime(item.publish_at || item.created_at) }}</span>
                   </router-link>
                 </div>
                 <t-empty v-else description="暂无公告" />
@@ -316,7 +316,7 @@
                     :to="`/client/help/${item.id}`"
                   >
                     <span class="message-row__title">{{ item.title }}</span>
-                    <span class="message-row__time">{{ formatDate(item.publish_at || item.created_at) }}</span>
+                    <span class="message-row__time">{{ formatDateTime(item.publish_at || item.created_at) }}</span>
                   </router-link>
                 </div>
                 <t-empty v-else description="暂无帮助内容" />
@@ -445,7 +445,7 @@ import type {
   ServiceOverviewPayload,
 } from '@/types/client';
 import { getErrorMessage } from '@/utils/error';
-import { formatMoney, formatMoneyText, formatShortDateTime as formatDate } from '@/utils/format';
+import { formatDateTime, formatMoney, formatMoneyText } from '@/utils/format';
 
 import { resolvePagedList, toDateText, toNumber, useDashboardSecondary } from './composables/useDashboardSecondary';
 

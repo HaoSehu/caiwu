@@ -79,6 +79,8 @@ export interface InvoiceRecord {
   config_pricing_snapshot?: Record<string, unknown> | null;
   coupon_code?: string;
   coupon_name?: string;
+  /** 计费周期英文键（monthly / quarterly / semiannually / annually …），账单为空时后端已回落订单 */
+  billing_cycle?: string;
   paid_amount?: number | string;
   status?: number | string;
   // 退款投影（唯一通道=退回余额；refund_status 为派生态 0/1/2）
@@ -96,6 +98,8 @@ export interface InvoiceRecord {
   refunds?: Record<string, unknown>[];
   created_at?: string;
   paid_at?: string | null;
+  /** 结束时间：已支付=支付完成时间；已取消=账单过期日期；已退款=退款时间；待支付为空 */
+  finished_at?: string | null;
   due_date?: string | null;
   user?: Record<string, unknown>;
   order?: Record<string, unknown> | null;
@@ -149,6 +153,11 @@ export interface OrderRecord {
   member_discount_amount?: number | string;
   member_discount_snapshot?: Record<string, unknown> | null;
   coupon_code?: string;
+  /** 已支付入账金额：订单页唯一金额口径，三页同源（优惠金额展示规范 §2.1） */
+  paid_amount?: number | string;
+  paid_at?: string | null;
+  /** 计费周期英文键（monthly / quarterly / semiannually / annually …），由下单时的商品周期写入 */
+  billing_cycle?: string;
   quantity?: number | string;
   status?: number | string;
   // 退款投影（订单侧与账单同值，由 TradeLifecycleService 同步写）
@@ -157,6 +166,8 @@ export interface OrderRecord {
   refund_status?: number;
   invoice?: Record<string, unknown> | null;
   created_at?: string;
+  /** 结束时间：已支付=支付完成时间；已取消=账单过期日期；已退款=退款时间；待支付为空 */
+  finished_at?: string | null;
   [key: string]: unknown;
 }
 
@@ -173,6 +184,9 @@ export interface RechargeRecord {
   invoice_no?: string;
   invoice_id?: number | string | null;
   gateway?: string;
+  gateway_label?: string;
+  plugin_name?: string;
+  channel_name?: string;
   trade_no?: string;
   user?: Record<string, unknown>;
   payment?: Record<string, unknown> | null;
@@ -183,6 +197,8 @@ export interface RechargeRecord {
   status?: number | string;
   created_at?: string;
   paid_at?: string | null;
+  /** 结束时间：已支付=支付完成时间；已取消=账单过期日期；已退款=退款时间；待支付为空 */
+  finished_at?: string | null;
   [key: string]: unknown;
 }
 

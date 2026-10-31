@@ -145,8 +145,11 @@ test('账单支付宝扫码成功：轮询到已支付后仅保留一条成功�
               {
                 key: 'alipay',
                 option_key: 'alipay:alipay',
-                name: '支付宝',
-                label: '支付宝扫码',
+                // 用户端展示名只取 channel_name；name/label 为兼容别名（插件名/渠道名）。
+                plugin_name: '易支付',
+                channel_name: '支付宝',
+                name: '易支付',
+                label: '支付宝',
                 payment_type: 'alipay',
               },
             ]),
@@ -156,6 +159,10 @@ test('账单支付宝扫码成功：轮询到已支付后仅保留一条成功�
 
   await page.goto('/client/invoices/1/pay', { waitUntil: 'domcontentloaded' });
   await expect(page.getByText('E2E-INV-0001').first()).toBeVisible();
+
+  // 支付方式卡片主标题必须是渠道名（channel_name），插件名不得上屏。
+  await expect(page.locator('.pay-method-card strong').first()).toHaveText('支付宝');
+  await expect(page.locator('body')).not.toContainText('易支付');
 
   // 生成二维码，弹窗展示商家订单号
   await page.getByRole('button', { name: '生成支付宝二维码' }).click();

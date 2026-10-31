@@ -58,14 +58,17 @@ function normalizePaymentGatewayOption(item: RechargeGatewayOption): RechargeGat
 
   const paymentType = String(item.payment_type || '').trim();
   const optionKey = String(item.option_key || (paymentType ? `${key}:${paymentType}` : key)).trim();
-  const name = String(item.name || item.label || key).trim();
-  const label = String(item.label || name).trim();
+  // channel_name 是用户端唯一允许展示的名字（渠道/支付方式，如「支付宝」）；
+  // name 现在等于插件名（如「易支付」），只允许管理端展示，用户端任何位置都不得渲染。
+  const channelName = String(item.channel_name || item.label || item.name || key).trim() || key;
+  const pluginName = String(item.plugin_name || (item.name && item.name !== channelName ? item.name : '')).trim();
 
   return {
     key,
     option_key: optionKey || key,
-    name: name || key,
-    label: label || name || key,
+    channel_name: channelName,
+    label: channelName,
+    ...(pluginName ? { plugin_name: pluginName, name: pluginName } : {}),
     ...(paymentType ? { payment_type: paymentType } : {}),
   };
 }
@@ -114,8 +117,13 @@ export function useRecharge() {
   const selectedPaymentGateway = computed(
     () => paymentGateways.value.find((item) => gatewayOptionKey(item) === selectedGateway.value) || null,
   );
+  // 用户端展示名只能取渠道名：`name` 是插件名，禁止出现在用户可见文案里。
   const selectedPaymentGatewayName = computed(
-    () => selectedPaymentGateway.value?.name || selectedPaymentGateway.value?.label || '支付',
+    () =>
+      selectedPaymentGateway.value?.channel_name ||
+      selectedPaymentGateway.value?.label ||
+      String(selectedPaymentGateway.value?.key || '') ||
+      '支付',
   );
   const paymentButtonText = computed(() => {
     if (paymentGatewaysLoading.value) return '支付方式加载中…';
