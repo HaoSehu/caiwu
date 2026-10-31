@@ -59,6 +59,12 @@ test('充值：生成二维码后自动轮询支付状态，成功后停止轮�
   // 充值单创建成功：二维码区出现商家订单号
   await expect(page.getByText(PAYMENT_NO)).toBeVisible();
 
+  // 二维码区只保留一行标题：轮询在自动进行，但不再向用户渲染副标题说明，
+  // 二维码下方直接是订单号与应付金额（回归保护：副标题如被加回，此断言失败）。
+  await expect(page.locator('.qrcode-title')).toHaveCount(1);
+  await expect(page.locator('.qrcode-subtitle')).toHaveCount(0);
+  await expect(page.getByText('正在自动确认支付状态，请勿重复支付。')).toHaveCount(0);
+
   // 轮询成功：二维码区覆盖为成功态（useRecharge：paid → rechargePaid）
   await expect(page.locator('.qrcode-success')).toBeVisible({ timeout: 15_000 });
 

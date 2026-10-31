@@ -262,7 +262,6 @@
 
             <div class="qrcode-meta">
               <p class="qrcode-title">{{ qrCodeTitle }}</p>
-              <p v-if="qrCodeSubtitle" class="qrcode-subtitle">{{ qrCodeSubtitle }}</p>
               <div class="meta-row">
                 <span>商家订单号</span>
                 <strong>{{ paymentNo || '--' }}</strong>
@@ -319,7 +318,6 @@ const {
   paymentNo,
   paymentButtonText,
   qrCodeTitle,
-  qrCodeSubtitle,
   hasPaymentGateways,
   selectedPaymentGateway,
   selectPreset,

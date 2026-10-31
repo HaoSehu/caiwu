@@ -129,12 +129,6 @@ export function useRecharge() {
     if (rechargeCancelled.value) return '该充值单已失效';
     return qrCodeValue.value ? `请使用${selectedPaymentGatewayName.value}扫码支付` : '支付二维码待生成';
   });
-  const qrCodeSubtitle = computed(() => {
-    if (rechargePaid.value) return '到账完成后，可继续购买或续费服务。';
-    if (rechargeCancelled.value) return '支付单已取消，请重新发起充值。';
-    if (qrCodeValue.value && polling.value) return '正在自动确认支付状态，请勿重复支付。';
-    return qrCodeValue.value ? '' : '选择金额和支付方式后生成二维码。';
-  });
   const summaryCards = computed(() => [
     {
       key: 'balance',
@@ -484,7 +478,6 @@ export function useRecharge() {
     inputAmount,
     activePreset,
     submitting,
-    polling,
     rechargePaid,
     rechargeCancelled,
     summaryLoading,
@@ -500,7 +493,6 @@ export function useRecharge() {
     paymentNo,
     paymentButtonText,
     qrCodeTitle,
-    qrCodeSubtitle,
     hasPaymentGateways,
     selectedPaymentGateway,
     selectedPaymentGatewayName,
