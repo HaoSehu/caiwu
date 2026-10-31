@@ -11,8 +11,13 @@
  * 但后端返回的媒体地址是**绝对 URL**（如 `http://127.0.0.1:8000/media/logo.svg`），
  * 这类资源不由代理转发、也不在 `'self'` 覆盖范围内，需用 `VITE_CSP_API_ORIGIN` 精确声明。
  *
+ * script-src 与资源类指令不同：它没有 `https:` 兜底（放开 `https:` 等于允许任意第三方脚本），
+ * 而控制台会从 API 源站加载后端代理的极验 gt4.js（/api/v2/client/auth/captcha-script）。
+ * 四端是独立域名、浏览器直连 API，该脚本天然跨源，必须把 API 源站精确写进 script-src；
+ * 因此需要调用方显式传 `scriptDirective: "script-src"`，http/https 源站都要补。
+ *
  * @param {Record<string, string>} env loadEnv() 的结果
- * @param {{ placeholder?: string, directives?: string[] }} [options]
+ * @param {{ placeholder?: string, directives?: string[], scriptDirective?: string }} [options]
  * @returns {import('vite').Plugin}
  */
 const DEFAULT_DIRECTIVES = ["connect-src", "img-src", "media-src"];
@@ -20,6 +25,7 @@ const DEFAULT_DIRECTIVES = ["connect-src", "img-src", "media-src"];
 export function createApiConnectSrcPlugin(env, options = {}) {
   const placeholder = options.placeholder ?? "%VITE_API_BASE_URL%";
   const directives = options.directives ?? DEFAULT_DIRECTIVES;
+  const scriptDirective = String(options.scriptDirective || "").trim();
 
   return {
     name: "shared-api-connect-src",
@@ -58,8 +64,10 @@ export function createApiConnectSrcPlugin(env, options = {}) {
           }
         }
 
-        // 生产 https 源站已被 CSP 里的 `https:` 覆盖，无需注入。
-        if (!origin.startsWith("http://")) {
+        // 生产 https 源站已被 CSP 里的 `https:` 覆盖，资源类指令无需注入；
+        // script-src 没有该兜底，即使源站是 https 也要精确补一条。
+        const originIsHttp = origin.startsWith("http://");
+        if (!originIsHttp && !scriptDirective) {
           return html;
         }
 
@@ -80,19 +88,29 @@ export function createApiConnectSrcPlugin(env, options = {}) {
         }
 
         const policy = html.slice(valueStart, valueEnd);
-        if (policy.includes(origin)) {
-          return html;
-        }
 
         let patched = policy;
-        for (const directive of directives) {
-          if (!patched.includes(directive)) {
-            continue;
+        if (originIsHttp) {
+          for (const directive of directives) {
+            if (!patched.includes(directive)) {
+              continue;
+            }
+            patched = patched.replace(
+              new RegExp(`(^|;\\s*)${directive}([^;]*)`),
+              (match, lead, targets) => `${lead}${directive}${targets} ${origin}`,
+            );
           }
-          patched = patched.replace(
-            new RegExp(`(^|;\\s*)${directive}([^;]*)`),
-            (match, lead, targets) => `${lead}${directive}${targets} ${origin}`,
+        }
+
+        if (scriptDirective && patched.includes(scriptDirective)) {
+          const scriptPattern = new RegExp(`(^|;\\s*)${scriptDirective}([^;]*)`);
+          patched = patched.replace(scriptPattern, (match, lead, targets) =>
+            targets.split(/\s+/).includes(origin) ? match : `${lead}${scriptDirective}${targets} ${origin}`,
           );
+        }
+
+        if (patched === policy) {
+          return html;
         }
 
         return html.slice(0, valueStart) + patched + html.slice(valueEnd);

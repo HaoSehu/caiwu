@@ -275,6 +275,8 @@ export function useGeeTestCaptcha(options: Record<string, unknown> = {}) {
             captchaId: config.captcha_id,
             product: 'bind',
             language: 'zho',
+            // 固定 https：CSP 只放行极验的 https 域名，且本地 http 页面也不应触发 http 子资源
+            https: true,
             ...options,
           },
           (instance) => {

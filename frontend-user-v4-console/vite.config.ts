@@ -476,7 +476,9 @@ export default ({ mode }: ConfigEnv): UserConfig => {
         dts: false,
         resolvers: [createTDesignResolver()],
       }),
-      createApiConnectSrcPlugin(env),
+      // 控制台的极验脚本由后端代理（/api/v2/client/auth/captcha-script）下发，
+      // 四端独立域名下它来自 API 源站；script-src 没有 `https:` 兜底，必须精确放行。
+      createApiConnectSrcPlugin(env, { scriptDirective: 'script-src' }),
       createIndexNetworkHintsPlugin(assetBase),
       createPrecompressedAssetsPlugin(),
     ],

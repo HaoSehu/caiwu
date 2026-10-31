@@ -4,8 +4,14 @@
     <meta charset="UTF-8" />
     <!-- CSP 放在 head 最前，确保后续资源请求都受约束。meta 方式不支持 frame-ancestors/report-uri/sandbox，
          点击劫持防护仍需在 nginx 加 X-Frame-Options 与响应头 CSP（见 docs/参考资料/运维/前端Nginx伪静态配置.md）。
-         script-src 允 https://static.geetest.com：极验 gt4.js 的默认地址（src/composables/useGeeTestCaptcha.ts:39），
-         后端也会下发同源 /api/v2/client/auth/captcha-script 代理地址（backend/app/Services/Auth/GeeTestService.php:26）。
+         script-src 允 https://static.geetest.com：极验 gt4.js 的默认地址（src/composables/useGeeTestCaptcha.ts:39）。
+         后端实际下发的是 API 源站的 /api/v2/client/auth/captcha-script 代理地址（backend/app/Services/Auth/GeeTestService.php:26），
+         四端独立域名、浏览器直连 API，因此 script-src 还需由 vite 的 createApiConnectSrcPlugin
+         （scriptDirective: 'script-src'）在构建/开发期补上精确的 API 源站，不能只靠 'self'。
+         gt4.js 运行时还会用 JSONP/脚本标签加载 gcaptcha4.* 的验证库与 static.* 的降级脚本，
+         只放行 static.geetest.com 会在初始化阶段被 CSP 拦成「网络错误」，故六个极验官方域名全部列出；
+         客户端已固定 https（useGeeTestCaptcha 传 https: true），这里不放行 http 版本。
+         style-src 还需放行 static.geetest.com/static.geevisit.com：gt4.js 会动态插入 gcaptcha4.css。
          script-src 允 https://tdesign.gtimg.com：TDesign Icon 组件默认 loadDefaultIcons=true 会动态插入
          https://tdesign.gtimg.com/icon/0.4.5/fonts/index.js 的 SVG 雪碧图（Header/MenuContent 等处用到 t-icon）。
          frame-src 允 alipays:：移动端充值用隐藏 iframe 拉起支付宝 App（src/domains/finance/useRecharge.ts:407-427）。
@@ -13,7 +19,7 @@
          img-src/connect-src 用 https: 兜底：API 源站与支付宝二维码代理地址由 VITE_API_BASE_URL 配置，无法在静态 HTML 写死。 -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' https://static.geetest.com https://tdesign.gtimg.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https:; media-src 'self' https: blob:; frame-src 'self' https: alipays:; object-src 'none'; base-uri 'self'; form-action 'self'"
+      content="default-src 'self'; script-src 'self' https://static.geetest.com https://static.geevisit.com https://gcaptcha4.geetest.com https://gcaptcha4.geevisit.com https://gcaptcha4.gsensebot.com https://monitor.geetest.com https://tdesign.gtimg.com; style-src 'self' 'unsafe-inline' https://static.geetest.com https://static.geevisit.com; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https:; media-src 'self' https: blob:; frame-src 'self' https: alipays:; object-src 'none'; base-uri 'self'; form-action 'self'"
     />
     <!-- 单图 32×32：浏览器标签页的最大渲染尺寸就是 32px，
          原先是 64×64 单图未压缩 32bpp（16958 B），缩到 32×32 后 4286 B，首访省 12.6 KB（PB-21） -->
