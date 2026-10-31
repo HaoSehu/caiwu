@@ -160,14 +160,18 @@ class ClientInvoicePaymentWorkflowService
         );
         $payment = $this->findInvoicePayment($user, $invoice, (string) ($result['payment_no'] ?? ''), $gateway);
 
+        // 用户端只读 channel_name；plugin_name 仅供管理端与日志，两维度不得拼接成一个展示串。
+        $channelName = (string) ($selectedOption['channel_name'] ?? ($selectedOption['label'] ?? PaymentGatewayCode::channelLabel($gateway, $paymentType)));
         $payload = [
             'gateway' => $gateway,
             'gateway_key' => $gateway,
-            'gateway_label' => (string) ($selectedOption['name'] ?? PaymentGatewayCode::label($gateway)),
+            'gateway_label' => $channelName,
+            'channel_name' => $channelName,
+            'plugin_name' => (string) ($selectedOption['plugin_name'] ?? ''),
         ];
         if ($paymentType !== '') {
             $payload['payment_type'] = $paymentType;
-            $payload['payment_type_label'] = (string) ($selectedOption['label'] ?? '');
+            $payload['payment_type_label'] = $channelName;
         }
 
         return array_merge(
@@ -327,11 +331,11 @@ class ClientInvoicePaymentWorkflowService
     public function availablePaymentMethods(float $payableAmount): array
     {
         if ($payableAmount <= 0) {
-            return [['key' => 'free', 'name' => '确认支付', 'label' => '零元账单', 'option_key' => 'free']];
+            return [['key' => 'free', 'name' => '确认支付', 'label' => '零元账单', 'option_key' => 'free', 'plugin_name' => '', 'channel_name' => '确认支付']];
         }
 
         return [
-            ['key' => 'balance', 'name' => '余额支付', 'label' => '账户余额', 'option_key' => 'balance'],
+            ['key' => 'balance', 'name' => '余额支付', 'label' => '账户余额', 'option_key' => 'balance', 'plugin_name' => '', 'channel_name' => '余额支付'],
             ...$this->paymentGateways->availableThirdPartyGatewayOptions(),
         ];
     }

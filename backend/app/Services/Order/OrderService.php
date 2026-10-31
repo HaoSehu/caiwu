@@ -6,7 +6,6 @@ namespace App\Services\Order;
 
 use App\Constants\InvoiceStatus;
 use App\Constants\OrderStatus;
-use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
 use App\Exceptions\BusinessException;
 use App\Models\Invoice;
@@ -20,6 +19,7 @@ use App\Services\Finance\PaymentCallbackProjector;
 use App\Services\Finance\TradeLifecycleService;
 use App\Services\Order\Concerns\HandlesOrderCalculation;
 use App\Services\System\OperationLogService;
+use App\Support\PaymentChannelLabel;
 use Illuminate\Support\Facades\DB;
 
 class OrderService
@@ -265,30 +265,20 @@ class OrderService
         }
     }
 
-    private function resolvePaymentGatewayLabel(string $gateway): string
-    {
-        return match ($gateway) {
-            // 与 PaymentGatewayCode::LABELS 一致的词条统一走集中定义，避免多处文案漂移。
-            PaymentGatewayCode::ALIPAY,
-            PaymentGatewayCode::YIPAY,
-            PaymentGatewayCode::WECHAT,
-            PaymentGatewayCode::BALANCE => PaymentGatewayCode::label($gateway),
-            // 业务侧扩展口径与本地历史文案不属于集中 LABELS，保留原样。
-            'free' => '免支付',
-            'bank_transfer' => '银行转账',
-            'offline' => '线下支付',
-            default => '手动入账',
-        };
-    }
-
     private function loadAdminOrder(int $orderId): Order
     {
         $order = Order::query()
             ->with([
                 'user:id,email,nickname',
                 'product',
-                'payments' => fn ($query) => $query->orderByDesc('id'),
-                'invoice.payments' => fn ($query) => $query->orderByDesc('id'),
+                // 渠道名要走回调证据（历史支付单的 gateway_key 为空），预取避免逐行回查。
+                // 顺序必须保留：buildPaymentSummary 取 first()，倒序才是「最新一条」。
+                'payments' => fn ($query) => $query
+                    ->with('callbacks:payment_id,callback_type,payload_json')
+                    ->orderByDesc('id'),
+                'invoice.payments' => fn ($query) => $query
+                    ->with('callbacks:payment_id,callback_type,payload_json')
+                    ->orderByDesc('id'),
                 'service',
             ])
             ->findOrFail($orderId);
@@ -309,8 +299,10 @@ class OrderService
             $payments = $order->invoice->payments;
         }
 
+        // 判据是「渠道能否还原」而不是「是否第三方真实资金流入」：旧库 payments 没有渠道快照列，
+        // 真实渠道写在 callback_raw 里，只用 isThirdPartyGateway() 会让这批历史订单的支付方式为空。
         $payments = collect($payments)
-            ->filter(fn (Payment $payment) => $payment->isThirdPartyGateway())
+            ->filter(fn (Payment $payment) => PaymentChannelLabel::hasKnownChannel($payment))
             ->values();
 
         $payment = $payments
@@ -328,9 +320,11 @@ class OrderService
             'id' => (int) $payment->id,
             'payment_no' => (string) $payment->payment_no,
             'trade_no' => (string) ($payment->trade_no ?? ''),
-            'gateway' => $payment->gatewayKey(),
-            'gateway_key' => $payment->gatewayKey(),
-            'gateway_label' => $this->resolvePaymentGatewayLabel($payment->gatewayKey()),
+            'gateway' => PaymentChannelLabel::resolveGatewayKey($payment),
+            'gateway_key' => PaymentChannelLabel::resolveGatewayKey($payment),
+            'gateway_label' => PaymentChannelLabel::channelNameFromPayment($payment),
+            'plugin_name' => PaymentChannelLabel::pluginNameFromPayment($payment),
+            'channel_name' => PaymentChannelLabel::channelNameFromPayment($payment),
             'amount' => number_format((float) $payment->amount, 2, '.', ''),
             'status' => (int) $payment->status,
             'paid_at' => $payment->paid_at?->format('Y-m-d H:i:s'),

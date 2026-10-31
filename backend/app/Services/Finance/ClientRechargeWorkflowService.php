@@ -65,14 +65,18 @@ class ClientRechargeWorkflowService
             throw new BusinessException('充值支付记录不存在', 40400, 404);
         }
 
+        // 用户端只读 channel_name；plugin_name 仅供管理端与日志，两维度不得拼接成一个展示串。
+        $channelName = (string) ($selectedOption['channel_name'] ?? ($selectedOption['label'] ?? PaymentGatewayCode::channelLabel($gateway, $paymentType)));
         $gatewayPayload = [
             'gateway' => $gateway,
             'gateway_key' => $gateway,
-            'gateway_label' => (string) ($selectedOption['name'] ?? PaymentGatewayCode::label($gateway)),
+            'gateway_label' => $channelName,
+            'channel_name' => $channelName,
+            'plugin_name' => (string) ($selectedOption['plugin_name'] ?? ''),
         ];
         if ($paymentType !== '') {
             $gatewayPayload['payment_type'] = $paymentType;
-            $gatewayPayload['payment_type_label'] = (string) ($selectedOption['label'] ?? '');
+            $gatewayPayload['payment_type_label'] = $channelName;
         }
 
         return array_merge(

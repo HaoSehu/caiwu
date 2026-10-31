@@ -145,6 +145,9 @@ class YiPayClient
     }
 
     /**
+     * 只自报「支付渠道」，插件名称由宿主按插件清单补齐（plugin_name / name）：
+     * 两者是独立维度，禁止在此拼成「易支付 - 支付宝」这类单串。
+     *
      * @return array<int, array<string, string>>
      */
     public function paymentOptions(): array
@@ -152,7 +155,7 @@ class YiPayClient
         return collect($this->paymentTypes)
             ->map(fn (string $paymentType): array => [
                 'key' => PaymentGatewayCode::YIPAY,
-                'name' => '易支付 - '.self::PAYMENT_TYPE_LABELS[$paymentType],
+                'channel_name' => self::PAYMENT_TYPE_LABELS[$paymentType],
                 'label' => self::PAYMENT_TYPE_LABELS[$paymentType],
                 'option_key' => PaymentGatewayCode::YIPAY.':'.$paymentType,
                 'payment_type' => $paymentType,

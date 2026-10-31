@@ -8,7 +8,9 @@ use App\Constants\InvoiceType;
 use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
 use App\Models\FinanceLedgerEntry;
+use App\Models\Payment;
 use App\Support\AdminPrivacy;
+use App\Support\PaymentChannelLabel;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /** @mixin FinanceLedgerEntry */
@@ -24,7 +26,9 @@ class FinanceLedgerResource extends JsonResource
         $user = $this->whenLoaded('user');
         $display = $this->displayMeta($normalizedEventType, $amount, $invoice, $payment);
         $businessScene = $this->businessScene($normalizedEventType, $invoice, $payment);
-        $paymentGatewayKey = $payment && method_exists($payment, 'gatewayKey') ? $payment->gatewayKey() : '';
+        $paymentGatewayKey = $payment instanceof Payment ? PaymentChannelLabel::resolveGatewayKey($payment) : '';
+        $pluginName = $payment instanceof Payment ? PaymentChannelLabel::pluginNameFromPayment($payment) : '';
+        $channelName = $payment instanceof Payment ? PaymentChannelLabel::channelNameFromPayment($payment) : '';
 
         return [
             'ledger_id' => (int) $this->id,
@@ -66,6 +70,8 @@ class FinanceLedgerResource extends JsonResource
                 'gateway' => $paymentGatewayKey,
                 'gateway_key' => $paymentGatewayKey,
                 'gateway_label' => $display['channel_label'],
+                'plugin_name' => $pluginName,
+                'channel_name' => $channelName,
                 'status' => (int) $payment->status,
                 'status_label' => PaymentStatus::$labels[(int) $payment->status] ?? (string) $payment->status,
                 'trade_no' => (string) ($payment->trade_no ?? ''),
@@ -152,8 +158,11 @@ class FinanceLedgerResource extends JsonResource
     {
         $title = FinanceLedgerEventType::label($eventType);
         $subtitle = trim((string) ($this->remark ?? ''));
-        $paymentGatewayKey = $payment && method_exists($payment, 'gatewayKey') ? $payment->gatewayKey() : '';
-        $channelLabel = $this->gatewayLabel($paymentGatewayKey);
+        $paymentGatewayKey = $payment instanceof Payment ? PaymentChannelLabel::resolveGatewayKey($payment) : '';
+        // 有支付记录时以支付单上的渠道快照为准；无支付记录的流水（手动扣减等）回落到网关级历史文案。
+        $channelLabel = $payment instanceof Payment
+            ? PaymentChannelLabel::channelNameFromPayment($payment)
+            : $this->fallbackChannelLabel($paymentGatewayKey);
         $status = null;
         $statusLabel = '--';
 
@@ -212,7 +221,10 @@ class FinanceLedgerResource extends JsonResource
         };
     }
 
-    private function gatewayLabel(string $gateway): string
+    /**
+     * 无支付记录时的网关级历史文案兜底，不属于支付渠道快照口径。
+     */
+    private function fallbackChannelLabel(string $gateway): string
     {
         return match ($gateway) {
             // 与 PaymentGatewayCode::LABELS 一致的词条统一走集中定义，避免多处文案漂移。

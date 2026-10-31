@@ -6,6 +6,7 @@ use App\Constants\PaymentGatewayCode;
 use App\Http\Controllers\Controller;
 use App\Services\Finance\GatewayInvoicePaymentService;
 use App\Services\Integrations\Payments\PaymentGatewayManager;
+use App\Support\PaymentChannelLabel;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -26,19 +27,19 @@ class PaymentCallbackController extends Controller
         // 避免处理失败后再用未注册的别名解析网关，异常逃出控制器变成 500。
         $gateway = PaymentGatewayCode::normalize($gateway);
 
-        Log::info("[{$gateway}回调] 收到通知", [
+        Log::info("[{$gateway}回调] 收到通知", array_merge(PaymentChannelLabel::logContextForGateway($gateway), [
             'gateway' => $gateway,
             'payload_keys' => array_keys($request->all()),
-        ]);
+        ]));
 
         try {
             $success = $this->paymentService->handleGatewayNotify($gateway, $request->all());
         } catch (\Throwable $exception) {
-            Log::warning("[{$gateway}回调] 处理失败，已按 fail 响应", [
+            Log::warning("[{$gateway}回调] 处理失败，已按 fail 响应", array_merge(PaymentChannelLabel::logContextForGateway($gateway), [
                 'gateway' => $gateway,
                 'message' => $exception->getMessage(),
                 'exception' => $exception::class,
-            ]);
+            ]));
             $success = false;
         }
 
@@ -47,11 +48,11 @@ class PaymentCallbackController extends Controller
                 ->buildNotifyResponse($success);
         } catch (\Throwable $exception) {
             // 未注册网关等异常时按网关约定返回常量 fail 文本，保证该公开端点不产生 500
-            Log::warning("[{$gateway}回调] 构建回调响应失败，已按 fail 响应", [
+            Log::warning("[{$gateway}回调] 构建回调响应失败，已按 fail 响应", array_merge(PaymentChannelLabel::logContextForGateway($gateway), [
                 'gateway' => $gateway,
                 'message' => $exception->getMessage(),
                 'exception' => $exception::class,
-            ]);
+            ]));
 
             return response('fail', 200)->header('Content-Type', 'text/plain');
         }
@@ -62,21 +63,21 @@ class PaymentCallbackController extends Controller
      */
     public function alipayNotify(Request $request)
     {
-        Log::info('[支付宝回调] 收到通知', [
+        Log::info('[支付宝回调] 收到通知', array_merge(PaymentChannelLabel::logContextForGateway(PaymentGatewayCode::ALIPAY), [
             'payment_no' => (string) $request->input('out_trade_no', ''),
             'trade_no' => (string) $request->input('trade_no', ''),
             'trade_status' => (string) $request->input('trade_status', ''),
             'app_id' => (string) $request->input('app_id', ''),
-        ]);
+        ]));
 
         try {
             $success = $this->paymentService->handleGatewayNotify(PaymentGatewayCode::ALIPAY, $request->all());
         } catch (\Throwable $exception) {
-            Log::warning('[支付宝回调] 处理失败，已按 fail 响应', [
+            Log::warning('[支付宝回调] 处理失败，已按 fail 响应', array_merge(PaymentChannelLabel::logContextForGateway(PaymentGatewayCode::ALIPAY), [
                 'payment_no' => (string) $request->input('out_trade_no', ''),
                 'message' => $exception->getMessage(),
                 'exception' => $exception::class,
-            ]);
+            ]));
             $success = false;
         }
 

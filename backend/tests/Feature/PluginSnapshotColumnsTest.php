@@ -9,6 +9,7 @@ use App\Models\GatewayLog;
 use App\Models\Payment;
 use App\Models\User;
 use App\Models\VerificationHistory;
+use App\Support\PaymentChannelLabel;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
@@ -90,7 +91,7 @@ class PluginSnapshotColumnsTest extends TestCase
             'plugin_name' => '易支付',
             'payment_type' => 'wxpay',
             'option_key' => 'yipay:wxpay',
-            'option_name' => '易支付 - 微信',
+            'option_name' => '易支付 - 微信支付',
             'amount' => 1.00,
             'status' => 0,
         ]);
@@ -101,14 +102,20 @@ class PluginSnapshotColumnsTest extends TestCase
         $this->assertSame('易支付', $fresh->plugin_name);
         $this->assertSame('wxpay', $fresh->payment_type);
         $this->assertSame('yipay:wxpay', $fresh->option_key);
-        $this->assertSame('易支付 - 微信', $fresh->option_name);
+        $this->assertSame('易支付 - 微信支付', $fresh->option_name);
+
+        // 历史拼接串（插件名 - 渠道）在读取时还原为独立两维度：插件名照存、渠道名去前缀。
+        $labels = PaymentChannelLabel::fromPayment($fresh);
+        $this->assertSame('易支付', $labels['plugin_name']);
+        $this->assertSame('微信支付', $labels['channel_name']);
+        $this->assertSame('微信支付', PaymentChannelLabel::channelNameFromPayment($fresh));
 
         // 投影必须能直接还原「哪个插件、哪条通道」，无需再回查 integration_plugins。
         $projected = Payment::query()
             ->whereKey($fresh->id)
             ->first(Payment::gatewayProjectionColumns(['id', 'gateway']));
         $this->assertInstanceOf(Payment::class, $projected);
-        $this->assertSame('易支付 - 微信', $projected->option_name);
+        $this->assertSame('易支付 - 微信支付', $projected->option_name);
     }
 
     #[Test]

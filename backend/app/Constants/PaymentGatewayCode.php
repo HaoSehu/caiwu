@@ -50,18 +50,32 @@ final class PaymentGatewayCode
     }
 
     /**
-     * 面向用户的网关展示名：在集中 LABELS 之上叠加业务侧历史词条
-     * （支付宝 / 手动入账 / 银行转账为历史展示口径），供邮件等通知文案统一使用。
+     * 支付渠道（支付方式）展示名：区分同一插件下的不同渠道，用户端只读这一层。
+     * 传入 payment_type 时优先按渠道类型精确命中（如易支付 + wxpay → 微信支付），
+     * 未传或未收录时回落到网关级渠道名（如支付宝当面付 → 支付宝）。
      */
-    public static function displayLabel(string $gateway): string
+    public const CHANNEL_LABELS = [
+        self::ALIPAY => '支付宝',
+        'wxpay' => '微信支付',
+        self::WECHAT => '微信支付',
+    ];
+
+    public static function channelLabel(string $gateway, string $paymentType = ''): string
     {
+        $gateway = self::normalize($gateway);
+        $paymentType = trim($paymentType);
+
+        if ($paymentType !== '') {
+            return self::CHANNEL_LABELS[$paymentType] ?? $paymentType;
+        }
+
         return match ($gateway) {
-            'alipay' => '支付宝',
-            self::YIPAY,
-            self::BALANCE,
-            self::WECHAT => self::label($gateway),
-            'manual' => '手动入账',
-            'bank_transfer' => '银行转账',
+            self::ALIPAY => '支付宝',
+            self::WECHAT => '微信支付',
+            self::BALANCE => '余额支付',
+            self::FREE => '免费',
+            self::MANUAL => '手动入账',
+            self::YIPAY => '易支付',
             default => $gateway !== '' ? $gateway : '未知方式',
         };
     }

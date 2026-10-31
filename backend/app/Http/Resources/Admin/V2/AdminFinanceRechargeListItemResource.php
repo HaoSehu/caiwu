@@ -22,6 +22,8 @@ class AdminFinanceRechargeListItemResource extends JsonResource
             'gateway' => (string) ($item['gateway'] ?? ''),
             'gateway_key' => (string) ($item['gateway_key'] ?? ''),
             'gateway_label' => (string) ($item['gateway_label'] ?? ''),
+            'plugin_name' => (string) ($item['plugin_name'] ?? ''),
+            'channel_name' => (string) ($item['channel_name'] ?? ''),
             'trade_no' => (string) ($item['trade_no'] ?? ''),
             'user' => $this->user($item['user'] ?? null),
             'invoice_id' => $item['invoice_id'] ?? null,
@@ -34,6 +36,8 @@ class AdminFinanceRechargeListItemResource extends JsonResource
             'status_label' => (string) ($item['status_label'] ?? ''),
             'payment' => $this->payment($item['payment'] ?? null),
             'paid_at' => $item['paid_at'] ?? null,
+            // 结束时间：已支付=支付完成时间；已取消=账单过期（付款期限）；已退款=账单退款时间；待支付不下发
+            'finished_at' => $item['finished_at'] ?? null,
             'created_at' => $item['created_at'] ?? null,
         ];
     }
@@ -96,6 +100,8 @@ class AdminFinanceRechargeListItemResource extends JsonResource
             'gateway' => (string) ($payment['gateway'] ?? ''),
             'gateway_key' => (string) ($payment['gateway_key'] ?? ''),
             'gateway_label' => (string) ($payment['gateway_label'] ?? ''),
+            'plugin_name' => (string) ($payment['plugin_name'] ?? ''),
+            'channel_name' => (string) ($payment['channel_name'] ?? ''),
             'trade_no' => (string) ($payment['trade_no'] ?? ''),
             'amount' => (string) ($payment['amount'] ?? '0.00'),
             'status' => (int) ($payment['status'] ?? 0),

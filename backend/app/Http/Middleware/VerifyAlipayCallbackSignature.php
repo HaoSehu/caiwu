@@ -2,7 +2,9 @@
 
 namespace App\Http\Middleware;
 
+use App\Constants\PaymentGatewayCode;
 use App\Services\Integrations\Payments\PaymentGatewayManager;
+use App\Support\PaymentChannelLabel;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -19,12 +21,12 @@ class VerifyAlipayCallbackSignature
         $params = $request->all();
 
         if (! $this->paymentGatewayManager->alipay()->verifyNotify($params)) {
-            Log::warning('[支付宝回调] 路由层签名验证失败', [
+            Log::warning('[支付宝回调] 路由层签名验证失败', array_merge(PaymentChannelLabel::logContextForGateway(PaymentGatewayCode::ALIPAY), [
                 'payment_no' => (string) $request->input('out_trade_no', ''),
                 'trade_no' => (string) $request->input('trade_no', ''),
                 'trade_status' => (string) $request->input('trade_status', ''),
                 'params' => $params,
-            ]);
+            ]));
 
             return response('签名验证失败', 401)
                 ->header('Content-Type', 'text/plain; charset=UTF-8');

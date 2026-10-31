@@ -11,6 +11,7 @@ use App\Models\Order;
 use App\Models\Payment;
 use App\Services\ProductCatalog\ProductFullPathResolver;
 use App\Support\AdminPrivacy;
+use App\Support\PaymentChannelLabel;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -61,8 +62,26 @@ class AdminOrderSummaryResource extends JsonResource
             'billing_cycle' => (string) ($order->billing_cycle ?? ''),
             'quantity' => (int) ($order->quantity ?? 1),
             'paid_at' => $order->paid_at?->format('Y-m-d H:i:s'),
+            // 结束时间按状态取值：已支付=支付完成时间；已取消=最后更新时间；已退款=退款时间。
+            // 待支付仍在进行中，不下发（前端显示占位符）。
+            'finished_at' => $this->finishedAt($order),
             'created_at' => $order->created_at?->format('Y-m-d H:i:s'),
         ];
+    }
+
+    /**
+     * 订单「结束时间」：已取消没有独立取消时间列，取记录最后更新时间（手动取消 / 过期回收的处理时间）。
+     */
+    protected function finishedAt(Order $order): ?string
+    {
+        $time = match ((int) $order->status) {
+            OrderStatus::PAID => $order->paid_at,
+            OrderStatus::CANCELLED => $order->updated_at,
+            OrderStatus::REFUNDED => $order->refunded_at ?? $order->paid_at,
+            default => null,
+        };
+
+        return self::formatRefundTime($time);
     }
 
     /**
@@ -174,12 +193,17 @@ class AdminOrderSummaryResource extends JsonResource
         $payments = $order->invoice?->payments ?? collect();
 
         return collect($payments)
-            ->filter(fn (Payment $payment): bool => $payment->isThirdPartyGateway())
+            // 与账单/订单展示同口径：渠道能从快照或回调证据还原即可展示。
+            ->filter(fn (Payment $payment): bool => PaymentChannelLabel::hasKnownChannel($payment))
             ->map(fn (Payment $payment): array => [
                 'id' => (int) $payment->id,
                 'payment_no' => (string) $payment->payment_no,
-                'gateway' => $payment->gatewayKey(),
-                'gateway_key' => $payment->gatewayKey(),
+                'gateway' => PaymentChannelLabel::resolveGatewayKey($payment),
+                'gateway_key' => PaymentChannelLabel::resolveGatewayKey($payment),
+                // 管理端按「插件名称 / 支付渠道」两行展示，两维度分别下发，不再下发拼接串。
+                'gateway_label' => PaymentChannelLabel::channelNameFromPayment($payment),
+                'plugin_name' => PaymentChannelLabel::pluginNameFromPayment($payment),
+                'channel_name' => PaymentChannelLabel::channelNameFromPayment($payment),
                 'trade_no' => (string) ($payment->trade_no ?? ''),
                 'amount' => $this->money($payment->amount),
                 'status' => (int) $payment->status,

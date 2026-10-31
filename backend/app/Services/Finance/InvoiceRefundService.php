@@ -27,6 +27,7 @@ use App\Services\System\ActivityLogService;
 use App\Services\System\NotificationService;
 use App\Support\CacheKey;
 use App\Support\Money;
+use App\Support\PaymentChannelLabel;
 use App\Support\SchemaMetadataCache;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
@@ -239,9 +240,13 @@ class InvoiceRefundService
                                 'refund_amount' => number_format($refundAmount, 2, '.', ''),
                                 'refund_reason' => $refundReason,
                                 'trade_no' => (string) ($payment?->trade_no ?? ''),
-                                'original_gateway' => $payment?->gatewayKey() ?? 'balance',
+                                // 渠道快照与展示同口径：旧库支付单的渠道写在 callback_raw 里，
+                                // 直接读 gatewayKey() 会把它们记成「balance」，与账单上显示的渠道不一致。
+                                'original_gateway' => $payment === null
+                                    ? PaymentGatewayCode::BALANCE
+                                    : (PaymentChannelLabel::resolveGatewayKey($payment) ?: PaymentGatewayCode::BALANCE),
                                 'original_gateway_label' => $payment instanceof Payment
-                                    ? $this->resolvePaymentGatewayLabel($payment->gatewayKey())
+                                    ? PaymentChannelLabel::channelNameFromPayment($payment)
                                     : '余额支付',
                                 'operator_id' => (int) ($context['operator_id'] ?? 0),
                                 'operator_name' => (string) ($context['operator_name'] ?? ''),
@@ -545,20 +550,5 @@ class InvoiceRefundService
         foreach ($rows as $row) {
             DB::table('finance_refund_allocations')->insertOrIgnore($row);
         }
-    }
-
-    private function resolvePaymentGatewayLabel(string $gateway): string
-    {
-        return match ($gateway) {
-            // 与 PaymentGatewayCode::LABELS 一致的词条统一走集中定义，避免多处文案漂移。
-            PaymentGatewayCode::ALIPAY,
-            PaymentGatewayCode::YIPAY,
-            PaymentGatewayCode::WECHAT,
-            PaymentGatewayCode::BALANCE => PaymentGatewayCode::label($gateway),
-            // 业务侧扩展口径与本地历史文案不属于集中 LABELS，保留原样。
-            'bank_transfer' => '银行转账',
-            'offline' => '线下支付',
-            default => '手动入账',
-        };
     }
 }

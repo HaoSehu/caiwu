@@ -176,9 +176,14 @@ class PaymentGatewayOperationService
             $optionKey = $paymentType !== '' && $gatewayKey !== '' ? "{$gatewayKey}:{$paymentType}" : $gatewayKey;
         }
 
-        $optionName = trim((string) ($option['name'] ?? ''));
+        // option_name 记录「支付渠道」快照（如 支付宝 / 微信支付），插件名另有 plugin_name 列，
+        // 两者不得再合成一个字符串（历史数据里存在「易支付 - 微信」，仅作为旧记录保留）。
+        $optionName = trim((string) ($option['channel_name'] ?? ''));
         if ($optionName === '') {
-            $optionName = $pluginName !== null && $pluginName !== '' ? $pluginName : PaymentGatewayCode::label($gatewayKey);
+            $optionName = trim((string) ($option['label'] ?? ''));
+        }
+        if ($optionName === '') {
+            $optionName = PaymentGatewayCode::channelLabel($gatewayKey, $paymentType);
         }
 
         return [

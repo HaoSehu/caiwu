@@ -20,6 +20,7 @@ use App\Services\ProductCatalog\ProductFullPathResolver;
 use App\Support\AdminPrivacy;
 use App\Support\Concerns\FiltersDateRange;
 use App\Support\LikeEscape;
+use App\Support\PaymentChannelLabel;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
@@ -100,9 +101,12 @@ class AdminFinanceQueryService
             ]))
             ->with([
                 'user:id,email,nickname,phone',
-                'invoice:id,invoice_no,order_id,user_id,type,status,amount,paid_amount,paid_at,due_date,created_at',
+                'invoice:id,invoice_no,order_id,user_id,type,status,amount,paid_amount,paid_at,due_date,refunded_at,created_at',
                 'invoice.order:id,order_no,type,status',
                 'order:id,order_no,type,status',
+                // 渠道名要走回调证据（历史支付单的 gateway_key 为空），
+                // 不预取会让列表逐行回查 payment_callbacks（N+1）。
+                'callbacks:payment_id,callback_type,payload_json',
             ]);
         // 默认全渠道：充值单可属任意第三方网关（支付宝/易支付/微信/Stripe），
         // 此前硬编码 ALIPAY 导致其他渠道充值在管理端「充值记录」不可见（D1A-05）。
@@ -533,14 +537,18 @@ class AdminFinanceQueryService
         $privacy = AdminPrivacy::current();
         $invoice = $payment->invoice;
         $order = $payment->order ?? $invoice?->order;
-        $gateway = $payment->gatewayKey();
+        // 与展示名同源：空 gateway_key 的历史支付单从回调证据还原渠道，
+        // 否则会出现 gateway 为空、gateway_label 却有值的自相矛盾。
+        $gateway = PaymentChannelLabel::resolveGatewayKey($payment);
 
         return [
             'id' => (int) $payment->id,
             'payment_no' => (string) $payment->payment_no,
             'gateway' => $gateway,
             'gateway_key' => $gateway,
-            'gateway_label' => $this->paymentGatewayLabel($gateway),
+            'gateway_label' => PaymentChannelLabel::channelNameFromPayment($payment),
+            'plugin_name' => PaymentChannelLabel::pluginNameFromPayment($payment),
+            'channel_name' => PaymentChannelLabel::channelNameFromPayment($payment),
             'trade_no' => (string) ($payment->trade_no ?? ''),
             'user' => $payment->user ? [
                 'id' => (int) $payment->user->id,
@@ -575,7 +583,9 @@ class AdminFinanceQueryService
                 'payment_no' => (string) $payment->payment_no,
                 'gateway' => $gateway,
                 'gateway_key' => $gateway,
-                'gateway_label' => $this->paymentGatewayLabel($gateway),
+                'gateway_label' => PaymentChannelLabel::channelNameFromPayment($payment),
+                'plugin_name' => PaymentChannelLabel::pluginNameFromPayment($payment),
+                'channel_name' => PaymentChannelLabel::channelNameFromPayment($payment),
                 'trade_no' => (string) ($payment->trade_no ?? ''),
                 'amount' => $this->money($payment->amount),
                 'status' => (int) $payment->status,
@@ -583,8 +593,39 @@ class AdminFinanceQueryService
                 'trace_id' => (string) ($payment->trace_id ?? ''),
             ],
             'paid_at' => $payment->paid_at?->format('Y-m-d H:i:s'),
+            // 结束时间按状态取值：已支付=支付完成时间；已取消=关联账单过期（付款期限）；已退款=账单退款时间。
+            // 待支付仍在进行中，不下发（前端显示占位符）。
+            'finished_at' => $this->finishedAtForPayment($payment),
             'created_at' => $payment->created_at?->format('Y-m-d H:i:s'),
         ];
+    }
+
+    /**
+     * 充值支付单「结束时间」：支付单没有取消/过期时间列，
+     * 已取消取记录最后更新时间，已退款取账单退款时间（缺失时回落更新时间）。
+     */
+    private function finishedAtForPayment(Payment $payment): ?string
+    {
+        $time = match ((int) $payment->status) {
+            PaymentStatus::SUCCESS => $payment->paid_at,
+            PaymentStatus::CANCELLED => $payment->updated_at,
+            PaymentStatus::REFUNDED => $payment->invoice?->getAttribute('refunded_at') ?? $payment->updated_at,
+            default => null,
+        };
+
+        return $this->formatFinishedTime($time);
+    }
+
+    /**
+     * 时间统一输出（兼容 Carbon / 字符串，空值 null）。
+     */
+    private function formatFinishedTime(mixed $value): ?string
+    {
+        if ($value instanceof \DateTimeInterface) {
+            return $value->format('Y-m-d H:i:s');
+        }
+
+        return is_string($value) && $value !== '' ? $value : null;
     }
 
     private function resolveProductName(?Product $product, int $productId): string
@@ -645,16 +686,6 @@ class AdminFinanceQueryService
             PaymentStatus::REFUNDED => '已退款',
             PaymentStatus::CANCELLED => '已取消',
             default => (string) $status,
-        };
-    }
-
-    private function paymentGatewayLabel(string $gateway): string
-    {
-        return match ($gateway) {
-            // 「支付宝」是本列表的历史展示口径，与集中 LABELS 的「支付宝支付」不同，保留本地文案。
-            PaymentGatewayCode::ALIPAY => '支付宝',
-            // 其余渠道（含易支付/微信/Stripe）统一走集中 LABELS；全渠道放开后新网关无需在此登记。
-            default => $gateway !== '' ? PaymentGatewayCode::label($gateway) : '-',
         };
     }
 

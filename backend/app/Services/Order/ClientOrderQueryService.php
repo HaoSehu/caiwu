@@ -8,9 +8,11 @@ use App\Constants\InvoiceStatus;
 use App\Constants\InvoiceType;
 use App\Constants\OrderStatus;
 use App\Constants\OrderType;
+use App\Constants\PaymentStatus;
 use App\Models\Coupon;
 use App\Models\Invoice;
 use App\Models\Order;
+use App\Models\Payment;
 use App\Models\Product;
 use App\Services\Finance\CheckoutSecurityService;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
@@ -18,6 +20,7 @@ use App\Services\ProductCatalog\ProductFullPathResolver;
 use App\Support\Concerns\FiltersDateRange;
 use App\Support\LikeEscape;
 use App\Support\Pagination;
+use App\Support\PaymentChannelLabel;
 
 class ClientOrderQueryService
 {
@@ -40,6 +43,7 @@ class ClientOrderQueryService
 
         $query = Order::query()
             ->with($this->relations())
+            ->with($this->paymentRelations())
             ->where('user_id', $userId)
             ->orderByDesc('id');
 
@@ -144,6 +148,7 @@ class ClientOrderQueryService
     {
         return Order::query()
             ->with($this->relations())
+            ->with($this->paymentRelations())
             ->where('user_id', $userId)
             ->findOrFail($orderId);
     }
@@ -165,11 +170,32 @@ class ClientOrderQueryService
     }
 
     /**
+     * 列表与详情要展示支付渠道，但支付方式的唯一真源是 payments 表（orders 表无支付列）。
+     * 投影走 gatewayProjectionColumns() 而刻意不取 callback_raw：它含网关签名与买家标识。
+     * 但历史支付单的渠道只写在回调里（gateway_key 为空），因此随行预取 payment_callbacks
+     * 供渠道还原使用——该表只有渠道标记，不含网关签名与买家标识。
+     * 渠道口径与 InvoiceService::resolvePrimaryInvoicePayment 一致——成功/已退款里取最新一条。
+     *
+     * @return array<string, \Closure>
+     */
+    private function paymentRelations(): array
+    {
+        return [
+            'payments' => static fn ($query) => $query
+                ->select(Payment::gatewayProjectionColumns(['id', 'order_id', 'status', 'amount', 'paid_at']))
+                ->with('callbacks:payment_id,callback_type,payload_json')
+                ->whereIn('status', [PaymentStatus::SUCCESS, PaymentStatus::REFUNDED])
+                ->orderByDesc('id'),
+        ];
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function listItem(Order $order): array
     {
         $coupon = $order->coupon;
+        $paymentChannel = $this->paymentChannelLabel($order);
 
         return [
             'id' => (int) $order->id,
@@ -198,9 +224,59 @@ class ClientOrderQueryService
                 'amount' => number_format((float) $order->invoice->amount, 2, '.', ''),
                 'payment_window_expired' => $this->checkoutSecurityService->isPaymentSessionExpired($order->invoice),
             ] : null,
+            // 支付渠道（用户端只读渠道名）：gateway_label 是既有列名，channel_name 是与管理端/账单侧
+            // 同一语义的新字段。插件名（plugin_name）属于管理端与日志维度，不下发到用户端。
+            'gateway_label' => $paymentChannel,
+            'channel_name' => $paymentChannel,
             'paid_at' => $order->paid_at?->format('Y-m-d H:i:s'),
+            // 结束时间按状态取值：已支付=支付完成时间；已取消=账单过期（付款期限）；已退款=退款时间。
+            // 待支付仍在进行中，不下发（前端显示占位符）。
+            'finished_at' => $this->finishedAt($order),
             'created_at' => $order->created_at?->format('Y-m-d H:i:s'),
         ];
+    }
+
+    /**
+     * 订单「结束时间」：状态决定取值口径，未结束（待支付）返回 null。
+     * 已取消的订单没有独立的取消时间列，以记录最后更新时间（手动取消 / 过期回收的处理时间）作为结束时间。
+     */
+    private function finishedAt(Order $order): ?string
+    {
+        $time = match ((int) $order->status) {
+            OrderStatus::PAID => $order->paid_at,
+            OrderStatus::CANCELLED => $order->updated_at,
+            OrderStatus::REFUNDED => $order->refunded_at ?? $order->paid_at,
+            default => null,
+        };
+
+        return $this->formatTime($time);
+    }
+
+    /**
+     * 时间统一输出（兼容 Carbon / 字符串，空值 null），避免对可能为字符串的字段直接调 format()。
+     */
+    private function formatTime(mixed $value): ?string
+    {
+        if ($value instanceof \DateTimeInterface) {
+            return $value->format('Y-m-d H:i:s');
+        }
+
+        return is_string($value) && $value !== '' ? $value : null;
+    }
+
+    /**
+     * 订单的支付渠道名：只认第三方支付里成功/已退款的最新一条（与账单侧支付摘要同口径）。
+     * 未支付、或支付已关闭的订单返回空串，由前端统一兜底为占位符。
+     */
+    private function paymentChannelLabel(Order $order): string
+    {
+        $payment = $order->relationLoaded('payments') ? $order->payments->first() : null;
+
+        if (! $payment instanceof Payment) {
+            return '';
+        }
+
+        return PaymentChannelLabel::channelNameFromPayment($payment);
     }
 
     /**

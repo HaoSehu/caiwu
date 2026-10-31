@@ -41,6 +41,7 @@ use App\Services\User\Concerns\HandlesAdminUserServices;
 use App\Support\AccountIdentifier;
 use App\Support\LikeEscape;
 use App\Support\Money;
+use App\Support\PaymentChannelLabel;
 use App\Support\SchemaMetadataCache;
 use App\Support\TextSanitizer;
 use Illuminate\Database\Eloquent\Builder;
@@ -796,21 +797,6 @@ class UserService
             ->firstOrFail();
     }
 
-    private function resolvePaymentGatewayLabel(string $gateway): string
-    {
-        return match ($gateway) {
-            // 与 PaymentGatewayCode::LABELS 一致的词条统一走集中定义，避免多处文案漂移。
-            PaymentGatewayCode::ALIPAY,
-            PaymentGatewayCode::YIPAY,
-            PaymentGatewayCode::WECHAT,
-            PaymentGatewayCode::BALANCE => PaymentGatewayCode::label($gateway),
-            // 业务侧扩展口径与本地历史文案不属于集中 LABELS，保留原样。
-            'bank_transfer' => '银行转账',
-            'offline' => '线下支付',
-            default => '手动入账',
-        };
-    }
-
     /**
      * 按当页账单一次性预载展示名解析所需的商品数据（源商品 + custom_display_name）。
      *
@@ -878,9 +864,11 @@ class UserService
         return [
             'id' => (int) $payment->id,
             'payment_no' => (string) $payment->payment_no,
-            'gateway' => $payment->gatewayKey(),
-            'gateway_key' => $payment->gatewayKey(),
-            'gateway_label' => $this->resolvePaymentGatewayLabel($payment->gatewayKey()),
+            'gateway' => PaymentChannelLabel::resolveGatewayKey($payment),
+            'gateway_key' => PaymentChannelLabel::resolveGatewayKey($payment),
+            'gateway_label' => PaymentChannelLabel::channelNameFromPayment($payment),
+            'plugin_name' => PaymentChannelLabel::pluginNameFromPayment($payment),
+            'channel_name' => PaymentChannelLabel::channelNameFromPayment($payment),
             'trade_no' => (string) ($payment->trade_no ?? ''),
             'amount' => number_format((float) $payment->amount, 2, '.', ''),
             'status' => (int) $payment->status,
@@ -895,8 +883,10 @@ class UserService
 
     private function resolvePrimaryInvoicePayment(iterable $payments): ?Payment
     {
+        // 与 InvoiceService::channelPayments 同口径：渠道能从快照或回调证据还原即可展示，
+        // 不按「第三方真实资金流入」过滤，否则旧库迁入的历史账单会看不到支付方式。
         $collection = collect($payments)
-            ->filter(fn (Payment $payment) => $payment->isThirdPartyGateway())
+            ->filter(fn (Payment $payment) => PaymentChannelLabel::hasKnownChannel($payment))
             ->values();
 
         // 已转入余额的异常支付（重复支付/超额支付）不作为主支付单：

@@ -209,4 +209,46 @@ class PluginLifecycleCorePathTest extends TestCase
                 ->count(),
         );
     }
+
+    /**
+     * 上游能力解析同样是探测动作：供应商列表与表单渲染逐行调用一次，
+     * 返回本地插件的静态能力声明，成功结果落库只产生纯噪音。
+     * 2026-10-31 实库复核：这两个动作近 14 天写入 15703 行 / 7.94MB。
+     */
+    public function test_upstream_probe_actions_skip_success_runtime_log(): void
+    {
+        $installer = app(PluginInstaller::class);
+        $scanner = app(PluginScanner::class);
+        $repository = app(PluginConfigRepository::class);
+
+        $plugin = $installer->install('upstream', 'hosting_panel', allowDemo: true);
+        $manifest = $scanner->requireManifest('upstream', 'hosting_panel');
+        $repository->save($plugin, $manifest, [
+            'api_url' => 'https://panel.example.com',
+            'api_username' => 'demo',
+            'api_key' => 'demo-key',
+        ]);
+        $installer->enable($plugin->fresh() ?? $plugin, allowDemo: true);
+
+        $registry = app(PluginRuntimeRegistry::class);
+        $pluginId = (int) $plugin->id;
+
+        foreach (['server.resolve_capability', 'server.supplier_form_schema'] as $action) {
+            $first = $registry->execute('upstream', 'hosting_panel', $action, ['capability' => 'console']);
+            $this->assertTrue((bool) ($first['success'] ?? false), $action.' 首次调用应成功');
+
+            // 同请求第二次命中 memo，仍成功。
+            $second = $registry->execute('upstream', 'hosting_panel', $action, ['capability' => 'console']);
+            $this->assertTrue((bool) ($second['success'] ?? false), $action.' 第二次调用应成功');
+
+            $this->assertSame(
+                0,
+                DB::table('integration_plugin_runtime_logs')
+                    ->where('plugin_id', $pluginId)
+                    ->where('action', $action)
+                    ->count(),
+                $action.' 成功结果不应落运行日志',
+            );
+        }
+    }
 }

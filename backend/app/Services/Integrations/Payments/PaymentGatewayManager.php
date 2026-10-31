@@ -131,6 +131,12 @@ final readonly class PaymentGatewayManager
     }
 
     /**
+     * 选项字段契约（两端各取所需，禁止再用单一拼接串）：
+     * - plugin_name：插件名称，只允许管理端展示与日志使用，不得出现在用户端；
+     * - channel_name：支付渠道（支付方式）展示名，用户端只读这一个字段；
+     * - name / label：历史同义别名，name 恒等于 plugin_name、label 恒等于 channel_name，
+     *   供尚未迁移的旧消费方与历史记录回落，不得再承载「易支付 - 支付宝」这类拼接串。
+     *
      * @param  array<string, mixed>  $option
      * @return array<string, mixed>|null
      */
@@ -141,9 +147,6 @@ final readonly class PaymentGatewayManager
             return null;
         }
 
-        $gatewayName = $gateway->name();
-        $name = trim((string) ($option['name'] ?? ''));
-        $label = trim((string) ($option['label'] ?? ''));
         $paymentType = trim((string) ($option['payment_type'] ?? ''));
         $optionKey = trim((string) ($option['option_key'] ?? ''));
 
@@ -151,10 +154,29 @@ final readonly class PaymentGatewayManager
             $optionKey = $paymentType !== '' ? "{$key}:{$paymentType}" : $key;
         }
 
+        // 插件名只认 identity 或网关自报名，渠道名只认插件自报渠道，两者互不回落。
+        $identity = $this->pluginIdentityPayload($gateway);
+        $pluginName = $this->firstNonEmpty([
+            (string) $identity['plugin_name'],
+            trim((string) ($option['plugin_name'] ?? '')),
+            trim($gateway->name()),
+        ]);
+        $channelName = $this->firstNonEmpty([
+            trim((string) ($option['channel_name'] ?? '')),
+            trim((string) ($option['label'] ?? '')),
+            trim((string) ($option['name'] ?? '')),
+            PaymentGatewayCode::channelLabel($key, $paymentType),
+        ]);
+
         $payload = [
             'key' => $key,
-            'name' => $name !== '' ? $name : ($label !== '' ? $label : $gatewayName),
-            'label' => $label !== '' ? $label : ($name !== '' ? $name : PaymentGatewayCode::label($key)),
+            // name / label 为历史别名：name 跟随插件名，label 跟随渠道名，避免再次出现拼接串。
+            'name' => $pluginName,
+            'label' => $channelName,
+            'plugin_name' => $pluginName,
+            'channel_name' => $channelName,
+            'plugin_id' => $identity['plugin_id'],
+            'plugin_key' => $identity['plugin_key'],
             'option_key' => $optionKey,
         ];
 
@@ -162,7 +184,22 @@ final readonly class PaymentGatewayManager
             $payload['payment_type'] = $paymentType;
         }
 
-        return array_merge($payload, $this->pluginIdentityPayload($gateway));
+        return $payload;
+    }
+
+    /**
+     * @param  array<int, string|null>  $values
+     */
+    private function firstNonEmpty(array $values): string
+    {
+        foreach ($values as $value) {
+            $value = trim((string) $value);
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        return '';
     }
 
     /**
@@ -170,12 +207,25 @@ final readonly class PaymentGatewayManager
      */
     private function defaultGatewayOption(string $key, PaymentGatewayInterface $gateway): array
     {
-        return array_merge([
+        // 系统内网关（如支付宝当面付）没有渠道声明：name 即插件名，label 即渠道名，两者天然不同。
+        $identity = $this->pluginIdentityPayload($gateway);
+        $channelName = PaymentGatewayCode::channelLabel($key);
+        $pluginName = $this->firstNonEmpty([
+            (string) $identity['plugin_name'],
+            trim($gateway->name()),
+            $channelName,
+        ]);
+
+        return [
             'key' => $key,
-            'name' => $gateway->name(),
-            'label' => PaymentGatewayCode::label($key),
+            'name' => $pluginName,
+            'label' => $channelName,
+            'plugin_name' => $pluginName,
+            'channel_name' => $channelName,
+            'plugin_id' => $identity['plugin_id'],
+            'plugin_key' => $identity['plugin_key'],
             'option_key' => $key,
-        ], $this->pluginIdentityPayload($gateway));
+        ];
     }
 
     /**

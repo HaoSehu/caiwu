@@ -29,6 +29,8 @@ class ClientInvoiceSummaryResource extends AdminInvoiceSummaryResource
             'product_full_path' => (string) ($invoice['product_full_path'] ?? ''),
             'type' => (string) ($invoice['type'] ?? ''),
             'type_label' => (string) ($invoice['type_label'] ?? ''),
+            // 计费模式：账单自身的 billing_cycle 优先，历史账单为空时回落关联订单（下单时按商品周期写入）
+            'billing_cycle' => $this->resolveBillingCycle($invoice),
             'amount' => (string) ($invoice['amount'] ?? '0.00'),
             'discount' => (string) ($invoice['discount'] ?? '0.00'),
             'member_discount_amount' => (string) ($invoice['member_discount_amount'] ?? '0.00'),
@@ -46,7 +48,25 @@ class ClientInvoiceSummaryResource extends AdminInvoiceSummaryResource
             'due_date' => $invoice['due_date'] ?? null,
             'created_at' => $invoice['created_at'] ?? null,
             'paid_at' => $invoice['paid_at'] ?? null,
+            // 结束时间：已支付=支付完成时间；已取消=账单过期（付款期限）；已退款=退款时间；待支付不下发
+            'finished_at' => $invoice['finished_at'] ?? null,
         ];
+    }
+
+    /**
+     * 计费周期英文键（monthly / quarterly / semiannually / annually …）。
+     * 账单表在迁移前的老数据可能为空，此时回落到关联订单的周期——订单才是「按商品周期下单」的原始记录。
+     *
+     * @param  array<string, mixed>  $invoice
+     */
+    private function resolveBillingCycle(array $invoice): string
+    {
+        $cycle = trim((string) ($invoice['billing_cycle'] ?? ''));
+        if ($cycle !== '') {
+            return $cycle;
+        }
+
+        return trim((string) ($invoice['order']['billing_cycle'] ?? ''));
     }
 
     /**

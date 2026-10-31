@@ -7,6 +7,7 @@ namespace App\Http\Middleware;
 use App\Contracts\Integrations\Payments\PaymentGatewayInterface;
 use App\Services\Integrations\Payments\PaymentGatewayManager;
 use App\Services\Integrations\Plugins\PaymentGatewayBindingResolver;
+use App\Support\PaymentChannelLabel;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -29,23 +30,23 @@ class VerifyPaymentCallbackSignature
         try {
             $gateway = $this->paymentGatewayManager->gateway($gatewayKey);
         } catch (\Throwable $exception) {
-            Log::warning('[支付回调] 网关不可用，路由层签名验证失败', [
+            Log::warning('[支付回调] 网关不可用，路由层签名验证失败', array_merge(PaymentChannelLabel::logContextForGateway($gatewayKey), [
                 'gateway' => $gatewayKey,
                 'message' => $exception->getMessage(),
                 'params' => $params,
-            ]);
+            ]));
 
             return response('fail', 200)->header('Content-Type', 'text/plain');
         }
 
         if (! $gateway->verifyNotify($params)) {
-            Log::warning('[支付回调] 路由层签名验证失败', [
+            Log::warning('[支付回调] 路由层签名验证失败', array_merge(PaymentChannelLabel::logContextForGateway($gatewayKey), [
                 'gateway' => $gatewayKey,
                 'payment_no' => (string) $request->input('out_trade_no', ''),
                 'trade_no' => (string) $request->input('trade_no', ''),
                 'trade_status' => (string) $request->input('trade_status', ''),
                 'params' => $params,
-            ]);
+            ]));
 
             return $this->failureResponse($gateway);
         }

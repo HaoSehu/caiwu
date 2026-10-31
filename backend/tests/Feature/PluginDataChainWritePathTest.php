@@ -65,12 +65,15 @@ class PluginDataChainWritePathTest extends TestCase
 
         $wechat = $options[0];
         $this->assertSame('yipay', $wechat['key']);
-        $this->assertSame('易支付 - 微信', $wechat['name']);
+        // 插件名称与支付渠道必须是两个独立字段，不得再拼成「易支付 - 微信」。
+        $this->assertSame('易支付', $wechat['name']);
+        $this->assertSame('易支付', $wechat['plugin_name']);
+        $this->assertSame('微信支付', $wechat['channel_name']);
+        $this->assertSame('微信支付', $wechat['label']);
         $this->assertSame('yipay:wxpay', $wechat['option_key']);
         $this->assertSame('wxpay', $wechat['payment_type']);
         $this->assertSame(778, $wechat['plugin_id']);
         $this->assertSame('yi_pay', $wechat['plugin_key']);
-        $this->assertSame('易支付', $wechat['plugin_name']);
 
         $default = app(PaymentGatewayManager::class)->paymentOptionsFor(PaymentGatewayCode::ALIPAY);
         $this->assertCount(1, $default);
@@ -79,6 +82,9 @@ class PluginDataChainWritePathTest extends TestCase
         $this->assertSame(777, $default[0]['plugin_id']);
         $this->assertSame('ali_pay', $default[0]['plugin_key']);
         $this->assertSame('支付宝当面付', $default[0]['plugin_name']);
+        $this->assertSame('支付宝当面付', $default[0]['name']);
+        $this->assertSame('支付宝', $default[0]['channel_name']);
+        $this->assertSame('支付宝', $default[0]['label']);
     }
 
     #[Test]
@@ -103,7 +109,8 @@ class PluginDataChainWritePathTest extends TestCase
         $this->assertSame('易支付', $payload['plugin_name']);
         $this->assertSame('wxpay', $payload['payment_type']);
         $this->assertSame('yipay:wxpay', $payload['option_key']);
-        $this->assertSame('易支付 - 微信', $payload['option_name']);
+        // option_name 只记支付渠道，插件名单独落在 plugin_name 列。
+        $this->assertSame('微信支付', $payload['option_name']);
     }
 
     #[Test]
@@ -125,7 +132,7 @@ class PluginDataChainWritePathTest extends TestCase
         $this->assertSame('ali_pay', $payload['plugin_key']);
         $this->assertArrayNotHasKey('payment_type', $payload);
         $this->assertSame('alipay', $payload['option_key']);
-        $this->assertSame('支付宝当面付', $payload['option_name']);
+        $this->assertSame('支付宝', $payload['option_name']);
     }
 
     #[Test]
@@ -532,14 +539,14 @@ class PluginDataChainWritePathTest extends TestCase
                 return [
                     [
                         'key' => PaymentGatewayCode::YIPAY,
-                        'name' => '易支付 - 微信',
+                        'channel_name' => '微信支付',
                         'label' => '微信支付',
                         'option_key' => 'yipay:wxpay',
                         'payment_type' => 'wxpay',
                     ],
                     [
                         'key' => PaymentGatewayCode::YIPAY,
-                        'name' => '易支付 - 支付宝',
+                        'channel_name' => '支付宝',
                         'label' => '支付宝',
                         'option_key' => 'yipay:alipay',
                         'payment_type' => 'alipay',

@@ -53,6 +53,8 @@ class AdminInvoiceSummaryResource extends JsonResource
             'summary' => $this->summary($invoice['summary'] ?? null),
             'due_date' => $invoice['due_date'] ?? null,
             'paid_at' => $invoice['paid_at'] ?? null,
+            // 结束时间由 InvoiceService::transformAdminInvoiceListItem 按状态算好（待支付不下发）
+            'finished_at' => $invoice['finished_at'] ?? null,
             'created_at' => $invoice['created_at'] ?? null,
         ];
     }

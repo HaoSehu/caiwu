@@ -25,6 +25,7 @@ use App\Support\AdminPrivacy;
 use App\Support\Concerns\FiltersDateRange;
 use App\Support\LikeEscape;
 use App\Support\Money;
+use App\Support\PaymentChannelLabel;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -428,12 +429,14 @@ class InvoiceService
             'config_pricing_snapshot' => (array) ($invoice->config_pricing_snapshot ?? []),
             'coupon_snapshot' => (array) ($invoice->coupon_snapshot ?? []),
             'payment_summary' => $paymentSummary,
-            'payments' => $this->thirdPartyPayments($invoice->payments)->map(fn ($p) => [
+            'payments' => $this->channelPayments($invoice->payments)->map(fn ($p) => [
                 'id' => (int) $p->id,
                 'payment_no' => (string) $p->payment_no,
                 'gateway' => $this->paymentGatewayKey($p),
                 'gateway_key' => $this->paymentGatewayKey($p),
-                'gateway_label' => $this->resolvePaymentGatewayLabel($this->paymentGatewayKey($p)),
+                'gateway_label' => PaymentChannelLabel::channelNameFromPayment($p),
+                'plugin_name' => PaymentChannelLabel::pluginNameFromPayment($p),
+                'channel_name' => PaymentChannelLabel::channelNameFromPayment($p),
                 'amount' => number_format((float) $p->amount, 2, '.', ''),
                 'status' => (int) $p->status,
                 'status_label' => $this->resolvePaymentStatusLabel((int) $p->status),
@@ -480,7 +483,8 @@ class InvoiceService
             'product.productGroup.secondProductGroup:id,first_product_group_id,name',
             'product.productGroup.secondProductGroup.firstProductGroup:id,code,name',
             'service:id,name,status,expires_at',
-            'payments',
+            // 渠道名要走回调证据（历史账单的 gateway_key 为空），预取避免逐行回查。
+            'payments.callbacks:payment_id,callback_type,payload_json',
             'items',
         ]);
 
@@ -537,12 +541,14 @@ class InvoiceService
             'config_pricing_snapshot' => (array) ($invoice->config_pricing_snapshot ?? ($invoice->order?->config_pricing_snapshot ?? [])),
             'coupon_snapshot' => (array) ($invoice->coupon_snapshot ?? []),
             'payment_summary' => $paymentSummary,
-            'payments' => $this->thirdPartyPayments($invoice->payments)->map(fn ($p) => [
+            'payments' => $this->channelPayments($invoice->payments)->map(fn ($p) => [
                 'id' => (int) $p->id,
                 'payment_no' => (string) $p->payment_no,
                 'gateway' => $this->paymentGatewayKey($p),
                 'gateway_key' => $this->paymentGatewayKey($p),
-                'gateway_label' => $this->resolvePaymentGatewayLabel($this->paymentGatewayKey($p)),
+                'gateway_label' => PaymentChannelLabel::channelNameFromPayment($p),
+                'plugin_name' => PaymentChannelLabel::pluginNameFromPayment($p),
+                'channel_name' => PaymentChannelLabel::channelNameFromPayment($p),
                 'amount' => number_format((float) $p->amount, 2, '.', ''),
                 'status' => (int) $p->status,
                 'status_label' => $this->resolvePaymentStatusLabel((int) $p->status),
@@ -569,7 +575,8 @@ class InvoiceService
             'order.product.productGroup.secondProductGroup.firstProductGroup:id,code,name',
             'product:id,product_type,service_type_code,product_group_id,remark,purchase_requires',
             'service:id,name,status,expires_at',
-            'payments',
+            // 渠道名要走回调证据（历史账单的 gateway_key 为空），预取避免逐行回查。
+            'payments.callbacks:payment_id,callback_type,payload_json',
             // 列表路径不加载仅详情使用的 items
         ]);
 
@@ -636,14 +643,40 @@ class InvoiceService
             'refund_status' => $this->resolveRefundStatus($invoice),
             'refund_status_label' => RefundStatus::label($this->resolveRefundStatus($invoice)),
             'is_partially_refunded' => $this->resolveRefundStatus($invoice) === RefundStatus::PARTIAL,
-            'billing_cycle' => (string) ($invoice->billing_cycle ?? ''),
+            // 计费周期：账单自身优先，迁移前的老账单为空时回落关联订单（下单时按商品周期写入）
+            'billing_cycle' => (string) ($invoice->billing_cycle ?: $invoice->order?->billing_cycle ?: ''),
             'quantity' => (int) ($invoice->quantity ?? 1),
             'summary' => $this->buildInvoiceSummary($invoice, $scene),
             'due_date' => $invoice->due_date?->format('Y-m-d'),
             'paid_at' => $invoice->paid_at?->format('Y-m-d H:i:s'),
+            // 结束时间按状态取值：已支付=支付完成时间；已取消=账单过期（付款期限）；已退款=退款时间。
+            // 待支付仍在进行中，不下发（前端显示占位符）。
+            'finished_at' => $this->finishedAt($invoice),
             'created_at' => $invoice->created_at?->format('Y-m-d H:i:s'),
             'payment_summary' => $paymentSummary,
         ];
+    }
+
+    /**
+     * 账单「结束时间」：状态决定取值口径，待支付（含未收到任何付款）不下发。
+     * - 已支付 / 部分已付（paid_amount > 0 但状态仍为待支付）：支付完成时间；
+     * - 已取消：记录最后更新时间（手动取消 / 过期回收的处理时间）；
+     * - 已退款：退款时间，缺失时回落支付时间。
+     */
+    private function finishedAt(Invoice $invoice): ?string
+    {
+        $status = (int) $invoice->status;
+        $partialPaid = $status === InvoiceStatus::UNPAID && (float) ($invoice->paid_amount ?? 0) > 0;
+
+        if ($status === InvoiceStatus::PAID || $partialPaid) {
+            return $invoice->paid_at?->format('Y-m-d H:i:s');
+        }
+
+        return match ($status) {
+            InvoiceStatus::CANCELLED => $invoice->updated_at?->format('Y-m-d H:i:s'),
+            InvoiceStatus::REFUNDED => ($invoice->refunded_at ?? $invoice->paid_at)?->format('Y-m-d H:i:s'),
+            default => null,
+        };
     }
 
     /**
@@ -1005,7 +1038,9 @@ class InvoiceService
             'trade_no' => (string) ($payment->trade_no ?? ''),
             'gateway' => $this->paymentGatewayKey($payment),
             'gateway_key' => $this->paymentGatewayKey($payment),
-            'gateway_label' => $this->resolvePaymentGatewayLabel($this->paymentGatewayKey($payment)),
+            'gateway_label' => PaymentChannelLabel::channelNameFromPayment($payment),
+            'plugin_name' => PaymentChannelLabel::pluginNameFromPayment($payment),
+            'channel_name' => PaymentChannelLabel::channelNameFromPayment($payment),
             'amount' => number_format((float) $payment->amount, 2, '.', ''),
             'status' => (int) $payment->status,
             'status_label' => $this->resolvePaymentStatusLabel((int) $payment->status),
@@ -1019,7 +1054,7 @@ class InvoiceService
 
     private function resolvePrimaryInvoicePayment(iterable $payments): ?Payment
     {
-        $collection = $this->thirdPartyPayments($payments);
+        $collection = $this->channelPayments($payments);
 
         return $collection
             ->first(fn (Payment $payment) => ! (bool) data_get((array) ($payment->callback_raw ?? []), 'duplicate_paid', false)
@@ -1027,16 +1062,25 @@ class InvoiceService
             ?? $collection->first(fn (Payment $payment) => in_array((int) $payment->status, [PaymentStatus::SUCCESS, PaymentStatus::REFUNDED], true));
     }
 
-    private function thirdPartyPayments(iterable $payments): Collection
+    /**
+     * 可展示支付方式的支付单。
+     *
+     * 判据不是「是否第三方真实资金流入」（那是资金边界审计口径），
+     * 而是「渠道能否还原」：旧库的 payments 没有渠道快照列，真实渠道写在 callback_raw 里，
+     * 只用 isThirdPartyGateway() 会让这批历史账单的「支付方式」整行消失。
+     *
+     * @return Collection<int, Payment>
+     */
+    private function channelPayments(iterable $payments): Collection
     {
         return collect($payments)
-            ->filter(fn (Payment $payment) => $payment->isThirdPartyGateway())
+            ->filter(fn (Payment $payment) => PaymentChannelLabel::hasKnownChannel($payment))
             ->values();
     }
 
     private function paymentGatewayKey(Payment $payment): string
     {
-        return $payment->gatewayKey();
+        return PaymentChannelLabel::resolveGatewayKey($payment);
     }
 
     /**
@@ -1114,7 +1158,7 @@ class InvoiceService
     {
         $payment = null;
         if ($invoice->relationLoaded('payments')) {
-            $payment = $this->thirdPartyPayments($invoice->payments)
+            $payment = $this->channelPayments($invoice->payments)
                 ->first(fn (Payment $item) => (int) $item->status === PaymentStatus::REFUNDED
                     || is_array(data_get((array) ($item->callback_raw ?? []), 'refund')));
         }
@@ -1210,23 +1254,6 @@ class InvoiceService
             InvoiceType::REFERRAL_CREDIT => '推荐奖励账单',
             InvoiceType::MANUAL => '手工账单',
             default => ($invoice->order?->display_product_name ?? '') !== '' ? '产品账单' : '普通账单',
-        };
-    }
-
-    private function resolvePaymentGatewayLabel(string $gateway): string
-    {
-        return match ($gateway) {
-            // 与 PaymentGatewayCode::LABELS 一致的词条统一走集中定义，避免多处文案漂移。
-            PaymentGatewayCode::ALIPAY,
-            PaymentGatewayCode::YIPAY,
-            PaymentGatewayCode::WECHAT,
-            PaymentGatewayCode::BALANCE => PaymentGatewayCode::label($gateway),
-            // 业务侧扩展口径与本地历史文案不属于集中 LABELS，保留原样。
-            'free' => '免支付',
-            'manual' => '手动入账',
-            'bank_transfer' => '银行转账',
-            'offline' => '线下支付',
-            default => $gateway !== '' ? $gateway : '-',
         };
     }
 

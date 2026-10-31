@@ -12,6 +12,7 @@ use App\Models\Invoice;
 use App\Models\Payment;
 use App\Services\Finance\InvoicePaidOrchestrator;
 use App\Services\System\NotificationService;
+use App\Support\PaymentChannelLabel;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 
@@ -62,9 +63,13 @@ class SendInvoicePaidClientNotification
             return;
         }
 
+        // 渠道判据用「可还原」而不是「第三方网关键有值」：旧库迁入的支付单渠道写在
+        // callback_raw 里，只按网关过滤会让邮件回落到「未知方式」。
+        [$channelScopeSql, $channelScopeBindings] = PaymentChannelLabel::channelScopeSql();
+
         $payment = Payment::query()
             ->where('invoice_id', (int) $invoice->id)
-            ->whereGatewayKeyIn(PaymentGatewayCode::thirdPartyGateways())
+            ->whereRaw($channelScopeSql, $channelScopeBindings)
             ->where('status', 1)
             ->orderByDesc('paid_at')
             ->orderByDesc('id')
@@ -83,7 +88,10 @@ class SendInvoicePaidClientNotification
                 'order_no' => (string) ($invoice->order->order_no ?? ''),
                 'product_name' => (string) ($invoice->order->display_product_name ?: $invoice->display_product_name),
                 'paid_amount' => number_format((float) ($invoice->paid_amount ?? $invoice->amount ?? 0), 2, '.', ''),
-                'payment_method' => PaymentGatewayCode::displayLabel($payment?->gatewayKey() ?? ''),
+                // 用户侧只读支付渠道：插件名（如「易支付」）不得出现在任何面向用户的文案里。
+                'payment_method' => $payment instanceof Payment
+                    ? PaymentChannelLabel::channelNameFromPayment($payment)
+                    : PaymentGatewayCode::channelLabel(''),
                 'trade_no' => (string) ($payment->trade_no ?? ''),
                 'paid_at' => $invoice->paid_at instanceof Carbon
                     ? $invoice->paid_at->format('Y-m-d H:i:s')

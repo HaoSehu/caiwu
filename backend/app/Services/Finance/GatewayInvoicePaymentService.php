@@ -16,6 +16,7 @@ use App\Services\Integrations\Payments\PaymentGatewayOperationService;
 use App\Services\Integrations\Plugins\PaymentGatewayBindingResolver;
 use App\Support\CacheKey;
 use App\Support\Money;
+use App\Support\PaymentChannelLabel;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -149,12 +150,13 @@ class GatewayInvoicePaymentService
         $gatewayLabel = PaymentGatewayCode::label($gateway);
 
         if (! $resolvedGateway->verifyNotify($params)) {
-            Log::warning("[{$gatewayLabel}回调] 签名验证失败", [
+            // 验签未通过时回调载荷不可信，只用网关级插件身份留痕，不读载荷里的支付单
+            Log::warning("[{$gatewayLabel}回调] 签名验证失败", array_merge(PaymentChannelLabel::logContextForGateway($gateway), [
                 'gateway' => $gateway,
                 'payment_no' => (string) ($params['out_trade_no'] ?? ''),
                 'trade_no' => (string) ($params['trade_no'] ?? ''),
                 'trade_status' => (string) ($params['trade_status'] ?? ''),
-            ]);
+            ]));
             $this->recordNotifyRejection($gateway, $params, '签名验证失败');
 
             return false;
@@ -167,10 +169,10 @@ class GatewayInvoicePaymentService
         // 支付单必须属于本次回调的网关，否则任一网关都能确认其他网关的订单
         $payment = Payment::query()->whereGatewayKey($gateway)->where('payment_no', $paymentNo)->first();
         if (! $payment) {
-            Log::warning("[{$gatewayLabel}回调] 支付记录不存在或不属于该网关", [
+            Log::warning("[{$gatewayLabel}回调] 支付记录不存在或不属于该网关", array_merge(PaymentChannelLabel::logContextForGateway($gateway), [
                 'payment_no' => $paymentNo,
                 'gateway' => $gateway,
-            ]);
+            ]));
 
             return false;
         }
@@ -179,10 +181,10 @@ class GatewayInvoicePaymentService
         // 缺字段不得跳过：网关未配置商户号时回调直接拒绝，配置了就必须匹配
         $merchantId = $params['app_id'] ?? $params['mch_id'] ?? $params['pid'] ?? '';
         if (! $resolvedGateway->matchesMerchantId($merchantId)) {
-            Log::warning("[{$gatewayLabel}回调] 商户号不匹配", [
+            Log::warning("[{$gatewayLabel}回调] 商户号不匹配", array_merge(PaymentChannelLabel::logContextForGateway($gateway, $payment), [
                 'payment_no' => $paymentNo,
                 'merchant_id' => $merchantId,
-            ]);
+            ]));
             $this->recordNotifyRejection($gateway, $params, '商户号不匹配');
 
             return false;
@@ -191,11 +193,11 @@ class GatewayInvoicePaymentService
         $notifyAmount = round((float) ($params['total_amount'] ?? $params['amount'] ?? $params['money'] ?? 0), 2);
         $expectedAmount = round((float) $payment->amount, 2);
         if ($notifyAmount <= 0 || ! Money::equals($notifyAmount, $expectedAmount)) {
-            Log::warning("[{$gatewayLabel}回调] 金额校验失败", [
+            Log::warning("[{$gatewayLabel}回调] 金额校验失败", array_merge(PaymentChannelLabel::logContextForGateway($gateway, $payment), [
                 'payment_no' => $paymentNo,
                 'expected_amount' => $expectedAmount,
                 'notify_amount' => $notifyAmount,
-            ]);
+            ]));
             $this->recordNotifyRejection($gateway, $params, '金额校验失败');
 
             return false;
@@ -209,10 +211,10 @@ class GatewayInvoicePaymentService
 
         // 各网关成功状态不同，由 queryGatewayPayment 的结果判断
         if (! in_array($tradeStatus, ['TRADE_SUCCESS', 'TRADE_FINISHED', 'SUCCESS'], true)) {
-            Log::info("[{$gatewayLabel}回调] 非成功状态，已记录回调并跳过业务入账", [
+            Log::info("[{$gatewayLabel}回调] 非成功状态，已记录回调并跳过业务入账", array_merge(PaymentChannelLabel::logContextForGateway($gateway, $payment), [
                 'payment_no' => $paymentNo,
                 'trade_status' => $tradeStatus,
-            ]);
+            ]));
 
             return true;
         }
@@ -243,20 +245,20 @@ class GatewayInvoicePaymentService
                 '支付回调处理中，请稍后重试',
             );
         } catch (BusinessException $exception) {
-            Log::warning("[{$gatewayLabel}回调] 处理失败", [
+            Log::warning("[{$gatewayLabel}回调] 处理失败", array_merge(PaymentChannelLabel::logContextForGateway($gateway, $payment), [
                 'payment_no' => $paymentNo,
                 'trade_no' => $tradeNo,
                 'message' => $exception->getMessage(),
-            ]);
+            ]));
 
             return false;
         } catch (\Throwable $exception) {
-            Log::error("[{$gatewayLabel}回调] 处理异常", [
+            Log::error("[{$gatewayLabel}回调] 处理异常", array_merge(PaymentChannelLabel::logContextForGateway($gateway, $payment), [
                 'payment_no' => $paymentNo,
                 'trade_no' => $tradeNo,
                 'message' => $exception->getMessage(),
                 'exception' => $exception::class,
-            ]);
+            ]));
 
             return false;
         }
@@ -287,11 +289,11 @@ class GatewayInvoicePaymentService
         try {
             $this->callbackProjector->recordRejectedCallback($payment, $params, $reason);
         } catch (\Throwable $exception) {
-            Log::warning("[{$gateway}回调] 拒绝回调留痕失败", [
+            Log::warning("[{$gateway}回调] 拒绝回调留痕失败", array_merge(PaymentChannelLabel::logContextForGateway($gateway, $payment), [
                 'payment_no' => $paymentNo,
                 'reason' => $reason,
                 'message' => $exception->getMessage(),
-            ]);
+            ]));
         }
     }
 
@@ -352,11 +354,11 @@ class GatewayInvoicePaymentService
         // 消毒网关标签：防止特殊字符注入锁键和日志（gateway 值来自数据库，理论上可被直接修改）
         $safeGateway = preg_replace('/[^a-z0-9_-]/i', '', $gateway);
         if ($safeGateway === '' || $safeGateway !== $gateway) {
-            Log::error('网关标签包含非法字符', [
+            Log::error('网关标签包含非法字符', array_merge(PaymentChannelLabel::logContextForGateway($gateway, $payment), [
                 'payment_id' => $payment->id,
                 'raw_gateway' => $gateway,
                 'safe_gateway' => $safeGateway,
-            ]);
+            ]));
             throw new \RuntimeException('网关标签非法');
         }
 
@@ -364,11 +366,11 @@ class GatewayInvoicePaymentService
         $queryAmount = round((float) ($queryResult['total_amount'] ?? 0), 2);
         $expectedAmount = round((float) $payment->amount, 2);
         if ($queryAmount <= 0 || ! Money::equals($queryAmount, $expectedAmount)) {
-            Log::warning("[{$gatewayLabel}主动查询] 金额校验失败", [
+            Log::warning("[{$gatewayLabel}主动查询] 金额校验失败", array_merge(PaymentChannelLabel::logContextForGateway($gateway, $payment), [
                 'payment_no' => $payment->payment_no,
                 'expected' => $expectedAmount,
                 'query' => $queryAmount,
-            ]);
+            ]));
 
             return;
         }
@@ -409,11 +411,11 @@ class GatewayInvoicePaymentService
                 '支付处理中，请稍后重试',
             );
         } catch (\Throwable $exception) {
-            Log::error("[{$gatewayLabel}主动查询] 入账处理异常", [
+            Log::error("[{$gatewayLabel}主动查询] 入账处理异常", array_merge(PaymentChannelLabel::logContextForGateway($gateway, $payment), [
                 'payment_no' => $payment->payment_no,
                 'trade_no' => $tradeNo,
                 'message' => $exception->getMessage(),
-            ]);
+            ]));
 
             return;
         }

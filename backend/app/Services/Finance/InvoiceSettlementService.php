@@ -12,6 +12,7 @@ use App\Models\Invoice;
 use App\Models\Payment;
 use App\Services\System\ActivityLogService;
 use App\Support\Money;
+use App\Support\PaymentChannelLabel;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -92,11 +93,11 @@ class InvoiceSettlementService
                 if ((int) $invoice->status === InvoiceStatus::PAID) {
                     $this->mixPaymentService->creditCapturedPaymentToBalance($lockedPayment, $invoice, $tradeNo, $payload, 'invoice_already_paid');
 
-                    Log::warning("[{$logLabel}] 检测到重复支付，已拦截二次入账", [
+                    Log::warning("[{$logLabel}] 检测到重复支付，已拦截二次入账", array_merge(PaymentChannelLabel::logContextForGateway($lockedPayment->gatewayKey(), $lockedPayment), [
                         'payment_no' => $lockedPayment->payment_no,
                         'invoice_id' => $invoice->id,
                         'order_id' => $invoice->order?->id,
-                    ]);
+                    ]));
 
                     return ['dispatch' => false, 'invoice' => $invoice, 'payment_no' => (string) $lockedPayment->payment_no];
                 }
@@ -110,11 +111,11 @@ class InvoiceSettlementService
                     $lockedPayment->refresh();
                     $this->mixPaymentService->creditCapturedPaymentToBalance($lockedPayment, $invoice, $tradeNo, $payload, 'cancelled_invoice');
 
-                    Log::warning("[{$logLabel}] 已取消账单收到支付回调，已拦截入账", [
+                    Log::warning("[{$logLabel}] 已取消账单收到支付回调，已拦截入账", array_merge(PaymentChannelLabel::logContextForGateway($lockedPayment->gatewayKey(), $lockedPayment), [
                         'payment_no' => $lockedPayment->payment_no,
                         'invoice_id' => $invoice->id,
                         'order_id' => $invoice->order?->id,
-                    ]);
+                    ]));
 
                     return ['dispatch' => false, 'invoice' => $invoice, 'payment_no' => (string) $lockedPayment->payment_no];
                 }
@@ -129,11 +130,11 @@ class InvoiceSettlementService
                     $this->mixPaymentService->creditCapturedPaymentToBalance($lockedPayment, $invoice, $tradeNo, $payload, 'payment_window_expired');
                     $this->cancelExpiredInvoiceAfterCapturedPayment($invoice, $lockedPayment);
 
-                    Log::warning("[{$logLabel}] 账单支付窗口已过期，已取消账单并拦截入账", [
+                    Log::warning("[{$logLabel}] 账单支付窗口已过期，已取消账单并拦截入账", array_merge(PaymentChannelLabel::logContextForGateway($lockedPayment->gatewayKey(), $lockedPayment), [
                         'payment_no' => $lockedPayment->payment_no,
                         'invoice_id' => $invoice->id,
                         'order_id' => $invoice->order?->id,
-                    ]);
+                    ]));
 
                     return ['dispatch' => false, 'invoice' => $invoice, 'payment_no' => (string) $lockedPayment->payment_no];
                 }
@@ -153,12 +154,12 @@ class InvoiceSettlementService
                 if (! Money::equals($lockedPayment->amount, $invoice->payableAmount())) {
                     $this->mixPaymentService->creditCapturedPaymentToBalance($lockedPayment, $invoice, $tradeNo, $payload, 'payable_amount_mismatch');
 
-                    Log::warning("[{$logLabel}] 支付金额与账单当前应付不匹配，已转入余额", [
+                    Log::warning("[{$logLabel}] 支付金额与账单当前应付不匹配，已转入余额", array_merge(PaymentChannelLabel::logContextForGateway($lockedPayment->gatewayKey(), $lockedPayment), [
                         'payment_no' => $lockedPayment->payment_no,
                         'invoice_id' => $invoice->id,
                         'payment_amount' => number_format((float) $lockedPayment->amount, 2, '.', ''),
                         'payable_amount' => Money::format($invoice->payableAmount()),
-                    ]);
+                    ]));
 
                     return ['dispatch' => false, 'invoice' => $invoice, 'payment_no' => (string) $lockedPayment->payment_no];
                 }
@@ -252,6 +253,12 @@ class InvoiceSettlementService
             return;
         }
 
+        // 审计行的 channel 只是入口标签；插件名与支付渠道必须另行记录，便于按渠道追查
+        $payment = Payment::query()->where('payment_no', (string) ($settlement['payment_no'] ?? ''))->first();
+        $channelContext = $payment instanceof Payment
+            ? PaymentChannelLabel::fromPayment($payment)
+            : ['plugin_name' => '', 'channel_name' => ''];
+
         $this->activityLogService->logSystemSafely(
             'finance',
             'payment.callback.settled',
@@ -265,6 +272,8 @@ class InvoiceSettlementService
                 'amount' => number_format((float) $invoice->amount, 2, '.', ''),
                 'trace_id' => (string) ($payload['trace_id'] ?? ''),
                 'channel' => $logLabel,
+                'plugin_name' => $channelContext['plugin_name'],
+                'channel_name' => $channelContext['channel_name'],
             ],
         );
     }

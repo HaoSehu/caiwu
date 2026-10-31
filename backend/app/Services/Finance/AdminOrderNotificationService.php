@@ -18,6 +18,7 @@ use App\Services\ProductCatalog\ProductFullPathResolver;
 use App\Services\System\NotificationService;
 use App\Support\AdminPermissions;
 use App\Support\BillingCycleLabels;
+use App\Support\PaymentChannelLabel;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 
@@ -93,9 +94,13 @@ class AdminOrderNotificationService
             return;
         }
 
+        // 与账单/订单展示同一渠道判据（见 PaymentChannelLabel::channelScopeSql），
+        // 否则旧库迁入的支付单在通知里会显示为「未知方式」。
+        [$channelScopeSql, $channelScopeBindings] = PaymentChannelLabel::channelScopeSql();
+
         $payment = Payment::query()
             ->where('invoice_id', $invoice->id)
-            ->whereGatewayKeyIn(PaymentGatewayCode::thirdPartyGateways())
+            ->whereRaw($channelScopeSql, $channelScopeBindings)
             ->where('status', 1)
             ->orderByDesc('paid_at')
             ->orderByDesc('id')
@@ -134,7 +139,10 @@ class AdminOrderNotificationService
                         'product_name' => $this->resolveInvoiceProductDisplayText($invoice, $invoice->order),
                         'billing_cycle_label' => BillingCycleLabels::label((string) ($invoice->billing_cycle ?? '')),
                         'paid_amount' => number_format((float) ($invoice->paid_amount ?? $invoice->amount ?? 0), 2, '.', ''),
-                        'payment_method' => PaymentGatewayCode::displayLabel($payment?->gatewayKey() ?? ''),
+                        // 管理端按「插件名称-支付渠道」展示，插件名与渠道分别给出，不拼成单一展示串。
+                        'payment_method' => $payment instanceof Payment
+                            ? trim(PaymentChannelLabel::pluginNameFromPayment($payment).' / '.PaymentChannelLabel::channelNameFromPayment($payment), ' /')
+                            : PaymentGatewayCode::channelLabel(''),
                         'trade_no' => (string) ($payment?->trade_no ?? ''),
                         'paid_at' => $invoice->paid_at?->format('Y-m-d H:i:s')
                             ?? $payment?->paid_at?->format('Y-m-d H:i:s')

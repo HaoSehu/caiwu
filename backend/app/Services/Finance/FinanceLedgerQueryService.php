@@ -506,7 +506,8 @@ class FinanceLedgerQueryService
 
             $invoiceMap = Invoice::query()
                 ->with([
-                    'payments' => fn ($relation) => $relation->orderByDesc('id'),
+                    // 渠道名要走回调证据（历史支付单的 gateway_key 为空），预取避免逐行回查。
+                    'payments.callbacks:payment_id,callback_type,payload_json',
                     'service:id,name,domain,status,expires_at,provision_data',
                     'order:id,order_no,type,service_id,billing_cycle,quantity,remark,operator,trace_id,product_spec_snapshot',
                 ])
