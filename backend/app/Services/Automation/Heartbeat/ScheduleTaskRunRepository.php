@@ -9,6 +9,7 @@ use App\Models\ScheduleTick;
 use App\Services\Automation\Heartbeat\Contracts\ScheduledTask;
 use App\Services\Automation\Heartbeat\Contracts\TriggerRule;
 use App\Support\LikeEscape;
+use App\Support\PayloadLimiter;
 use Carbon\CarbonInterface;
 use DateTimeInterface;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -19,6 +20,16 @@ use Illuminate\Support\Facades\Schema;
 
 class ScheduleTaskRunRepository
 {
+    /**
+     * 运行台账 summary 的整体编码上限。
+     *
+     * 与审计镜像 ScheduleRunLogService::CRON_MIRROR_SUMMARY_MAX_BYTES 取同一数值：
+     * 同一次执行的同一份结果，落两张表时必须受同一约束，否则台账侧会单点失控。
+     * 2026-10-31 实库复核：近 14 天单行 summary 最大 2351 B，没有超限行；
+     * 该上限用于兜住「某个任务突然回传超大结果」这一类确定性风险，不改变现有行的可见内容。
+     */
+    private const SUMMARY_MAX_BYTES = 4096;
+
     public function markQueued(ScheduleTick $tick, ScheduledTask $task, TriggerRule $rule): ?ScheduleTaskRun
     {
         $run = ScheduleTaskRun::query()->firstOrCreate(
@@ -64,7 +75,7 @@ class ScheduleTaskRunRepository
                     'error_msg' => null,
                     // 重派等同新的队列生命周期，attempt 与 Job 尝试次数同口径。
                     'attempt' => 1,
-                    'summary' => $summary,
+                    'summary' => $this->limitSummary($summary),
                     'updated_at' => $now,
                 ]);
 
@@ -85,6 +96,64 @@ class ScheduleTaskRunRepository
             ->where('source', 'heartbeat')
             ->latest('id')
             ->first();
+    }
+
+    /**
+     * 把任务结果数组收敛到台账可接受的大小。
+     *
+     * 只做上限收敛，不删字段、不改字段语义：整体编码未超限时原样返回可 JSON 往返的数组，
+     * 超限时由 PayloadLimiter 降级为摘要结构（__truncated/__original_bytes/__sha256/__preview）。
+     * 后台列表与日志详情通过 AdminScheduleTaskRunResource::safeValue 展示，
+     * 该 Resource 本身已按 3 层/20 项/2000 字裁剪，收敛不会改变已呈现内容。
+     *
+     * @param  array<string, mixed>  $summary
+     * @return array<string, mixed>
+     */
+    private function limitSummary(array $summary): array
+    {
+        if ($summary === []) {
+            return $summary;
+        }
+
+        $limited = PayloadLimiter::limit(
+            $summary,
+            PayloadLimiter::DEFAULT_LEAF_MAX_BYTES,
+            self::SUMMARY_MAX_BYTES,
+            self::SUMMARY_MAX_BYTES,
+        );
+
+        // PayloadLimiter 的 totalMaxBytes 是「原文判定阈值」，超限后返回的摘要结构
+        // 还要额外承载 __truncated/__original_bytes/__sha256 三个键，整体编码会比
+        // totalMaxBytes 略大。这里做一次显式收口，保证落库编码严格不超上限。
+        return $this->shrinkLimitedSummary($limited);
+    }
+
+    /**
+     * 摘要结构整体编码超出上限时，按差额收缩 __preview，保证最终落库字节确定可控。
+     *
+     * @param  array<string, mixed>  $limited
+     * @return array<string, mixed>
+     */
+    private function shrinkLimitedSummary(array $limited): array
+    {
+        $encoded = json_encode($limited, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        if ($encoded === false) {
+            return [];
+        }
+
+        $overflow = strlen($encoded) - self::SUMMARY_MAX_BYTES;
+        if ($overflow <= 0) {
+            return $limited;
+        }
+
+        $preview = $limited['__preview'] ?? null;
+        if (! is_string($preview)) {
+            return $limited;
+        }
+
+        $limited['__preview'] = mb_strcut($preview, 0, max(0, strlen($preview) - $overflow), '8bit');
+
+        return $limited;
     }
 
     /**
@@ -392,7 +461,7 @@ class ScheduleTaskRunRepository
         return ScheduleTaskRun::query()
             ->whereKey($runId)
             ->update([
-                'summary' => $summary,
+                'summary' => $this->limitSummary($summary),
                 'updated_at' => now(),
             ]) === 1;
     }
@@ -412,7 +481,7 @@ class ScheduleTaskRunRepository
             ->update([
                 'status' => ScheduleTaskRun::STATUS_SUCCESS,
                 'duration_ms' => $durationMs,
-                'summary' => $summary,
+                'summary' => $this->limitSummary($summary),
                 'finished_at' => now(),
                 'updated_at' => now(),
             ]) === 1;

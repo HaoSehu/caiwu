@@ -32,6 +32,7 @@ class DatabaseArchiveLogsHealthCommand extends Command
         $config = (array) config('log_archive', []);
         $runtime = $settings->getLogArchiveConfig();
         $tables = (array) ($config['tables'] ?? []);
+        $excludedTables = (array) ($config['excluded_tables'] ?? []);
         $protocol = strtolower(trim((string) ($config['protocol'] ?? 'v1')));
         $retentionDays = max(1, (int) ($runtime['retention_days'] ?? $config['retention_days'] ?? 30));
         $archiveRoot = trim((string) ($config['archive_root'] ?? ''));
@@ -93,6 +94,57 @@ class DatabaseArchiveLogsHealthCommand extends Command
                     'table' => $table,
                     'reason' => $reason,
                 ];
+            }
+        }
+
+        // 被排除表不参与归档，但它们的超期行同样是库内真实占用。
+        // 历史缺陷：这里只统计 tables 白名单，被排除表即使积压到数十万行也不会
+        // 进入 total_eligible_rows，健康检查照样报 healthy，管理员看不到任何信号。
+        // 现在单独统计并输出，积压会显式降级健康状态，但不会被当成 critical
+        // （排除是刻意的审计/主数据决策，不是故障）。
+        $excludedStats = [];
+        $excludedEligible = 0;
+
+        // excluded_tables 是纯列表（0 基索引），必须取值而不是取键；
+        // 同时兼容运维改成「表名 => 说明」的关联写法。
+        $excludedTableNames = array_values(array_filter(
+            array_map(
+                static fn (int|string $key, mixed $value): string => is_string($key) ? $key : (string) $value,
+                array_keys($excludedTables),
+                array_values($excludedTables),
+            ),
+            static fn (string $name): bool => trim($name) !== '',
+        ));
+
+        foreach ($excludedTableNames as $excludedTable) {
+            $excludedTable = trim($excludedTable);
+            try {
+                if (! Schema::hasTable($excludedTable)) {
+                    continue;
+                }
+
+                $missingExcludedColumns = array_values(array_filter(
+                    ['id', 'created_at'],
+                    static fn (string $column): bool => ! Schema::hasColumn($excludedTable, $column),
+                ));
+                if ($missingExcludedColumns !== []) {
+                    continue;
+                }
+
+                $excludedTableEligible = (int) DB::table($excludedTable)
+                    ->whereRaw('created_at < DATE_SUB(NOW(), INTERVAL ? DAY)', [$retentionDays])
+                    ->count();
+                $excludedEligible += $excludedTableEligible;
+
+                if ($excludedTableEligible > 0) {
+                    $excludedStats[$excludedTable] = [
+                        'eligible' => $excludedTableEligible,
+                        'oldest_at' => DB::table($excludedTable)->min('created_at') ?: null,
+                    ];
+                }
+            } catch (\Throwable) {
+                // 被排除表只做可见性统计，读取失败不应改变归档链路的健康判定。
+                continue;
             }
         }
 
@@ -168,6 +220,7 @@ class DatabaseArchiveLogsHealthCommand extends Command
             $protocol === 'v1' && $latestReportUnknown => 'warning',
             $v2NeedsRecovery => 'critical',
             $orphanPartCount > 0 => 'warning',
+            $excludedEligible > 0 => 'warning',
             $v2InProgress => 'warning',
             $daysSinceSuccess === null => 'unknown',
             $daysSinceSuccess > 14 => 'critical',
@@ -183,6 +236,8 @@ class DatabaseArchiveLogsHealthCommand extends Command
             'tables' => $tableStats,
             'unavailable_tables' => $unavailableTables,
             'total_eligible_rows' => $totalEligible,
+            'excluded_eligible_rows' => $excludedEligible,
+            'excluded_tables_backlog' => $excludedStats,
             'audit' => $audit,
             'v2' => $v2,
             'unknown_archive_statuses' => $unknownArchiveStatuses,
@@ -205,6 +260,17 @@ class DatabaseArchiveLogsHealthCommand extends Command
                 $this->warn("发现 {$orphanPartCount} 个未完成归档 .part 文件");
             }
             $this->line('报告文件: '.$payload['reports']['file_count'].' 个 / '.$payload['reports']['bytes'].' bytes');
+            if ($excludedEligible > 0) {
+                $backlogDetail = array_map(
+                    static fn (string $table, array $stat): string => $table.'='.$stat['eligible'],
+                    array_keys($excludedStats),
+                    array_values($excludedStats),
+                );
+                $this->warn(
+                    "被排除归档表存在 {$excludedEligible} 行超期数据（不参与自动归档，需人工确认）："
+                    .implode(', ', $backlogDetail)
+                );
+            }
         }
 
         return $health === 'critical' ? self::FAILURE : self::SUCCESS;

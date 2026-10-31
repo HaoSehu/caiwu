@@ -549,7 +549,7 @@ const configs: Record<Exclude<SettingsTab, 'site_hero'>, SettingsConfig> = {
       {
         title: '保留策略',
         fields: [
-          { key: 'retention_days', label: '日志保留天数', type: 'number', default: 30, min: 1, max: 3650 },
+          { key: 'retention_days', label: '日志保留天数', type: 'number', default: 90, min: 1, max: 3650 },
           { key: 'file_retention_days', label: '归档文件保留天数', type: 'number', default: 180, min: 1, max: 3650 },
         ],
       },

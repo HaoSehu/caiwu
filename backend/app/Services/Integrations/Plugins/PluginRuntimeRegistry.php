@@ -30,11 +30,23 @@ class PluginRuntimeRegistry
     private const VERIFY_NOTIFY_ACTION = 'payment.verify_notify';
 
     /**
-     * 探测类动作：高频幂等，只服务列表/匹配判断（如结账页渲染一次可用网关列表，
-     * 就会对每个网关各执行一次 is_enabled）。请求内 memo 短路 + 成功结果不落运行日志；
-     * 失败照常落库保留诊断链路。
+     * 探测类动作：高频幂等，只服务列表渲染、匹配判断与能力解析。
+     *
+     * 两类来源：
+     * - 支付探测（payment.is_enabled / payment.matches_merchant）：结账页渲染一次可用网关列表，
+     *   就会对每个网关各执行一次；
+     * - 上游能力解析（server.resolve_capability / server.supplier_form_schema）：
+     *   供应商列表与表单渲染逐行调用，一次列表页即对每个绑定各执行一次，
+     *   且返回的是本地插件的静态能力声明，不含任何运行期状态。
+     *
+     * 共同治理：请求内 memo 短路 + 成功结果不落运行日志；失败照常落库保留诊断链路。
      */
-    private const PROBE_ACTIONS = ['payment.is_enabled', 'payment.matches_merchant'];
+    private const PROBE_ACTIONS = [
+        'payment.is_enabled',
+        'payment.matches_merchant',
+        'server.resolve_capability',
+        'server.supplier_form_schema',
+    ];
 
     /** 运行日志 meta 存储上限：叶子字符串与整体编码分别限宽，防止上游大报文撑爆日志表 */
     private const RUNTIME_META_MAX_BYTES = 16384;
