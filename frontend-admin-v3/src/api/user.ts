@@ -287,6 +287,17 @@ export const userApi = {
     }),
   serviceDelete: (id: number | string, serviceId: number | string) =>
     request.delete({ url: `/v2/admin/users/${id}/services/${serviceId}` }),
+  serviceTransfer: (
+    id: number | string,
+    serviceId: number | string,
+    data: { target_user_id: number; remark?: string },
+  ) =>
+    request
+      .post<UserServiceV2DetailPayload>({
+        url: `/v2/admin/users/${id}/services/${serviceId}/transfers`,
+        data,
+      })
+      .then(normalizeV2ServicePayload),
   serviceOperationLogs: (id: number | string, serviceId: number | string, params: PageParams) =>
     request.get<{
       list?: Record<string, unknown>[];

@@ -74,6 +74,9 @@ class AdminServiceTrackingService
         $record = DB::transaction(function () use ($service, $payload, $images, $context): ServiceTrackingRecord {
             $record = ServiceTrackingRecord::query()->create([
                 'service_id' => (int) $service->id,
+                // user_id 只记录「写入时这台实例的持有者」，是历史快照，归属转移时不回写：
+                // 列表按 service_id 读取（见本类 list()），旧记录跟着实例走；
+                // 回写反而会把「当时的持有人」抹掉，事后无法判断是谁留下的记录。
                 'user_id' => (int) $service->user_id,
                 'tracked_at' => (string) $payload['tracked_at'],
                 'content' => TextSanitizer::clean((string) $payload['content'], true),

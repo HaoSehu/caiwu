@@ -56,7 +56,6 @@
       <t-card :bordered="false">
         <t-tabs :value="activeTab" @change="handleTabChange">
           <t-tab-panel value="overview" label="概览" />
-          <t-tab-panel value="orders" label="相关订单" />
           <t-tab-panel value="invoices" label="相关账单" />
           <t-tab-panel value="logs" label="操作日志" />
           <t-tab-panel value="tracking" label="历史跟踪" />
@@ -113,7 +112,7 @@
               <t-button size="small" @click="openUpstreamDialog">上游绑定</t-button>
               <t-button size="small" @click="openPricingDialog">调价</t-button>
               <t-button size="small" @click="openNameDialog">改名称</t-button>
-              <t-tag v-if="isServiceRefunded" theme="danger" variant="light">已退款</t-tag>
+              <t-button v-if="canTransferService" size="small" @click="openTransferDialog">转移</t-button>
             </div>
           </section>
 
@@ -168,12 +167,6 @@
           </section>
         </section>
 
-        <service-orders-tab
-          v-else-if="activeTab === 'orders'"
-          ref="ordersTabRef"
-          :user-id="userId"
-          :service-id="serviceId"
-        />
         <service-invoices-tab
           v-else-if="activeTab === 'invoices'"
           ref="invoicesTabRef"
@@ -281,6 +274,66 @@
         </t-form-item>
       </t-form>
     </t-dialog>
+
+    <t-dialog
+      v-model:visible="transferVisible"
+      header="转移实例归属"
+      width="min(520px, calc(100vw - 32px))"
+      :confirm-btn="{ content: '确认转移', loading: transferSubmitting, theme: 'warning' }"
+      @cancel="transferVisible = false"
+      @confirm="submitTransfer"
+    >
+      <div class="transfer-picker">
+        <p class="transfer-picker__hint">
+          当前归属用户 ID
+          {{
+            userId
+          }}。转移后原用户不再持有该实例，历史订单与账单仍留在原账号；实例的自动续费会被关闭，接收方需要自行开启；双方操作日志都会记录本次变更。
+        </p>
+        <div class="transfer-picker__search">
+          <t-input
+            v-model="transferKeyword"
+            clearable
+            :loading="transferLoading"
+            placeholder="搜索用户 ID / 邮箱 / 手机号 / 昵称"
+            @input="scheduleTransferSearch"
+            @enter="searchTransferUsers"
+            @clear="searchTransferUsers"
+          />
+          <t-button size="small" variant="outline" :loading="transferLoading" @click="searchTransferUsers"
+            >搜索</t-button
+          >
+        </div>
+        <div class="transfer-picker__list">
+          <button
+            v-for="item in transferResults"
+            :key="item.value"
+            type="button"
+            :class="{ 'is-selected': transferTarget?.value === item.value }"
+            @click="selectTransferUser(item)"
+          >
+            <strong>{{ item.title }}</strong>
+            <span>{{ item.meta }}</span>
+            <em>{{ transferTarget?.value === item.value ? '已选' : '选择' }}</em>
+          </button>
+          <t-empty v-if="!transferResults.length" description="暂无搜索结果" />
+        </div>
+        <div v-if="transferHasMore" class="transfer-picker__more">
+          <t-button size="small" variant="text" :loading="transferLoadingMore" @click="loadMoreTransferUsers"
+            >加载更多（已显示 {{ transferResults.length }} / {{ transferTotal }}）</t-button
+          >
+        </div>
+        <div class="transfer-picker__target">
+          接收方：<strong>{{ transferTarget ? transferTarget.title : '未选择' }}</strong>
+        </div>
+        <t-input
+          v-model="transferRemark"
+          class="transfer-picker__remark"
+          :maxlength="200"
+          placeholder="转移备注（可选，最多 200 字）"
+        />
+      </div>
+    </t-dialog>
   </div>
 </template>
 <script setup lang="ts">
@@ -291,11 +344,13 @@ import { ChevronLeftIcon } from 'tdesign-icons-vue-next';
 import type { FormInstanceFunctions, FormRule } from 'tdesign-vue-next';
 import { DialogPlugin } from 'tdesign-vue-next/es/dialog/plugin';
 import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onActivated, onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { supplierApi } from '@/api/supplier';
+import type { AdminUser } from '@/api/user';
 import { userApi } from '@/api/user';
+import { AdminPermissions } from '@/constants/permissions';
 import {
   createLockedPricingForm,
   mergeServiceDetail,
@@ -303,26 +358,36 @@ import {
 } from '@/pages/users/detail/serviceDetailModel';
 import { serviceStatusLabel, serviceStatusTheme } from '@/pages/users/detail/statusDisplay';
 import { fieldValue, formatBillingCycle, formatDateTime, formatMoney } from '@/utils/format';
+import { hasAdminPermission } from '@/utils/permission';
 import { errorMessage } from '@/utils/userMessage';
 
 import ServiceInvoicesTab from './components/ServiceInvoicesTab.vue';
 import ServiceOperationLogsTab from './components/ServiceOperationLogsTab.vue';
-import ServiceOrdersTab from './components/ServiceOrdersTab.vue';
 import ServiceTrackingTab from './components/ServiceTrackingTab.vue';
 
 defineOptions({ name: 'AdminUserServiceConsole' });
 
 type Row = Record<string, any>;
 
-type TabName = 'overview' | 'orders' | 'invoices' | 'logs' | 'tracking';
+/** 转移弹窗的接收方候选项，标题与副标题都直接取用户档案原始字段 */
+interface TransferUserOption {
+  value: number;
+  title: string;
+  meta: string;
+  label: string;
+}
 
-const VALID_TABS: TabName[] = ['overview', 'orders', 'invoices', 'logs', 'tracking'];
+type TabName = 'overview' | 'invoices' | 'logs' | 'tracking';
+
+const VALID_TABS: TabName[] = ['overview', 'invoices', 'logs', 'tracking'];
 
 const route = useRoute();
 const router = useRouter();
 
 const userId = computed(() => String(route.params.id || ''));
 const serviceId = computed(() => Number(route.params.serviceId || 0));
+/** 实例标识：用户与被查看实例的组合，用于识别 keep-alive 复用后的参数变化 */
+const serviceConsoleKey = computed(() => `${userId.value}:${serviceId.value}`);
 
 const loading = ref(false);
 const ready = ref(false);
@@ -331,9 +396,11 @@ const loaded = ref(false);
 const detail = ref<Row>(normalizeServiceDetail({}));
 // 竞态防护：重复点「刷新」或快速切换实例时只认最后一次请求的结果（docs/FRONTEND.md:27）
 let detailRequestSeq = 0;
+// 已加载的实例标识：路由参数变化但组件被 keep-alive 复用时（见 Content.vue 的 :key="route.path"），
+// 只靠 onMounted 不会重新挂载，必须据此判断是否要重新拉取数据。
+let loadedServiceKey = '';
 
 const activeTab = ref<TabName>('overview');
-const ordersTabRef = ref<InstanceType<typeof ServiceOrdersTab>>();
 const invoicesTabRef = ref<InstanceType<typeof ServiceInvoicesTab>>();
 const logsTabRef = ref<InstanceType<typeof ServiceOperationLogsTab>>();
 const trackingTabRef = ref<InstanceType<typeof ServiceTrackingTab>>();
@@ -379,6 +446,35 @@ const nameFormRef = ref<FormInstanceFunctions>();
 const nameRules: Record<string, FormRule[]> = {
   service_name: [{ required: true, message: '请输入实例名称', type: 'error' }],
 };
+
+/**
+ * 转移归属是写操作，入口与 /v2/admin/users/{user}/services/{service}/transfers 的权限码保持一致。
+ * 只按权限判断、不按实例状态判断：运行中 / 暂停 / 已删除 / 异常都可转移，
+ * 与后端 assertServiceTransferable 只在账单维度拦截的口径一致。
+ */
+const canTransferService = computed(() => hasAdminPermission(AdminPermissions.USER_MANAGE));
+
+const transferVisible = ref(false);
+const transferLoading = ref(false);
+const transferLoadingMore = ref(false);
+const transferSubmitting = ref(false);
+const transferKeyword = ref('');
+const transferResults = ref<TransferUserOption[]>([]);
+const transferTarget = ref<TransferUserOption | null>(null);
+const transferRemark = ref('');
+const transferTotal = ref(0);
+
+/** 接收方搜索分页：默认 20 条一页，避免「只给最新 20 个用户」且无法继续找的情况 */
+const TRANSFER_PAGE_SIZE = 20;
+const transferPage = ref(1);
+const transferHasMore = computed(() => transferResults.value.length < transferTotal.value);
+
+/**
+ * 搜索请求序号：输入框连续触发时，只有最后一次请求的结果允许落地，
+ * 否则先发后至的旧响应会覆盖新关键字的结果。
+ */
+let transferSearchSeq = 0;
+let transferSearchTimer: ReturnType<typeof setTimeout> | null = null;
 
 const serviceActions = computed<Row>(() => detail.value.actions || {});
 
@@ -439,8 +535,6 @@ const canPowerOn = computed(() => availableActions.value.includes('power:on') &&
 const canPowerOff = computed(() => availableActions.value.includes('power:off') && powerState.value === 'running');
 const canReboot = computed(() => availableActions.value.includes('power:reboot') && powerState.value === 'running');
 
-const isServiceRefunded = computed(() => [5, 6].includes(Number(detail.value.status)));
-
 const summaryMetrics = computed(() => [
   { label: '金额', value: formatMoney(detail.value.amount) },
   { label: '计费周期', value: fieldValue(detail.value.billing_cycle_label) },
@@ -499,6 +593,7 @@ async function loadDetail(options: { patchRemote?: boolean } = {}) {
     return;
   }
   const currentSeq = ++detailRequestSeq;
+  const requestKey = serviceConsoleKey.value;
   loading.value = true;
   loadError.value = '';
   try {
@@ -506,6 +601,7 @@ async function loadDetail(options: { patchRemote?: boolean } = {}) {
     const payload = await userApi.serviceDetail(userId.value, serviceId.value, false);
     if (currentSeq !== detailRequestSeq) return;
     detail.value = normalizeServiceDetail(payload);
+    loadedServiceKey = requestKey;
     ready.value = true;
     loaded.value = true;
     if (patchRemote) {
@@ -713,6 +809,158 @@ async function submitName() {
   }
 }
 
+function normalizeTransferUser(row: AdminUser): TransferUserOption {
+  const id = Number(row.id || 0);
+  const email = String(row.email || '').trim();
+  const phone = String(row.phone || '').trim();
+  const nickname = String(row.nickname || row.display_name || '').trim();
+  return {
+    value: id,
+    title: `#${id}${email ? ` / ${email}` : ''}`,
+    meta: [phone, nickname].filter(Boolean).join(' / ') || '未填写联系方式',
+    label: `#${id} ${email || phone || nickname}`.trim(),
+  };
+}
+
+function toTransferOptions(list: AdminUser[] | undefined): TransferUserOption[] {
+  return (
+    (list || [])
+      // 禁用账号（status=0）不能作为接收方，提前过滤掉，避免选到提交才报错
+      .filter((item: AdminUser) => Number(item.status) !== 0)
+      .map((item: AdminUser) => normalizeTransferUser(item))
+      .filter((item: TransferUserOption) => item.value > 0)
+  );
+}
+
+async function fetchTransferUsers(page: number): Promise<void> {
+  const seq = ++transferSearchSeq;
+  if (page <= 1) {
+    transferLoading.value = true;
+  } else {
+    transferLoadingMore.value = true;
+  }
+
+  try {
+    const keyword = String(transferKeyword.value || '').trim();
+    // 统一走 keyword：后端 User::scopeSearch() 对纯数字已按 id OR 邮箱/手机号/昵称/公司/QQ
+    // 组合匹配，前端再按数字类型拆成 user_id 精确查会让手机号、QQ 号永远搜不到。
+    const response = await userApi.list({
+      keyword: keyword || undefined,
+      page,
+      page_size: TRANSFER_PAGE_SIZE,
+    });
+    // 期间又发起了新的搜索：丢弃本次结果，避免先发后至的旧响应覆盖新关键字。
+    if (seq !== transferSearchSeq) return;
+
+    const options = toTransferOptions(response.list);
+    transferPage.value = page;
+    transferTotal.value = Number(response.total || 0);
+    transferResults.value = page <= 1 ? options : [...transferResults.value, ...options];
+  } catch (error) {
+    if (seq !== transferSearchSeq) return;
+    MessagePlugin.error(errorMessage(error, '搜索用户失败'));
+  } finally {
+    if (seq === transferSearchSeq) {
+      transferLoading.value = false;
+      transferLoadingMore.value = false;
+    }
+  }
+}
+
+/**
+ * 关键字为空时不查：返回「整表最新 20 个用户」对「挑接收方」没有意义，
+ * 也容易误选。清空输入时只重置列表，等用户给出条件再搜。
+ */
+async function searchTransferUsers(): Promise<void> {
+  clearTransferSearchTimer();
+
+  if (String(transferKeyword.value || '').trim() === '') {
+    transferSearchSeq++;
+    transferResults.value = [];
+    transferTotal.value = 0;
+    transferPage.value = 1;
+    transferLoading.value = false;
+    transferLoadingMore.value = false;
+    return;
+  }
+
+  await fetchTransferUsers(1);
+}
+
+function loadMoreTransferUsers(): void {
+  if (transferLoading.value || transferLoadingMore.value) return;
+  void fetchTransferUsers(transferPage.value + 1);
+}
+
+/** 输入过程中的自动搜索：300ms 防抖，避免每敲一个字都打一次接口 */
+function scheduleTransferSearch(): void {
+  clearTransferSearchTimer();
+  transferSearchTimer = setTimeout(() => {
+    transferSearchTimer = null;
+    if (transferVisible.value) {
+      void searchTransferUsers();
+    }
+  }, 300);
+}
+
+function clearTransferSearchTimer(): void {
+  if (transferSearchTimer !== null) {
+    clearTimeout(transferSearchTimer);
+    transferSearchTimer = null;
+  }
+}
+
+function selectTransferUser(item: TransferUserOption) {
+  if (item.value === Number(userId.value)) {
+    MessagePlugin.warning('接收方不能是当前归属用户');
+    return;
+  }
+  transferTarget.value = item;
+}
+
+function openTransferDialog() {
+  clearTransferSearchTimer();
+  transferSearchSeq++;
+  transferKeyword.value = '';
+  transferResults.value = [];
+  transferTotal.value = 0;
+  transferPage.value = 1;
+  transferTarget.value = null;
+  transferRemark.value = '';
+  transferLoading.value = false;
+  transferLoadingMore.value = false;
+  transferVisible.value = true;
+}
+
+async function submitTransfer() {
+  const target = transferTarget.value;
+  if (!target) {
+    MessagePlugin.warning('请先选择接收方用户');
+    return;
+  }
+  if (target.value === Number(userId.value)) {
+    MessagePlugin.warning('接收方不能是当前归属用户');
+    return;
+  }
+  transferSubmitting.value = true;
+  try {
+    await userApi.serviceTransfer(userId.value, serviceId.value, {
+      target_user_id: target.value,
+      remark: transferRemark.value.trim() || undefined,
+    });
+    transferVisible.value = false;
+    MessagePlugin.success('实例归属已转移');
+  } catch (error) {
+    MessagePlugin.error(errorMessage(error, '转移实例归属失败'));
+    return;
+  } finally {
+    transferSubmitting.value = false;
+  }
+  // 归属变更后当前路径已不属于原用户，跳转到接收方控制台，避免详情接口 404。
+  // 跳转与写请求分开处理：路由异常不能显示成「转移失败」，此时数据已经落库。
+  await router.replace(`/admin/users/${target.value}/services/${serviceId.value}`).catch(() => {});
+}
+
 function goBack() {
   router.push(`/admin/users/${userId.value}?tab=services`);
 }
@@ -720,5 +968,17 @@ function goBack() {
 onMounted(async () => {
   applyTabFromRoute();
   await loadDetail();
+});
+
+// 标签页按 route.path 缓存组件实例（Content.vue 的 :key="route.path"），转移后 router.replace
+// 跳到接收方控制台时，若目标标签此前打开过就会命中 keep-alive 而不重新挂载，只剩旧快照。
+// 激活时比对实例标识：参数变了才重新拉取，一致则什么都不做，避免每次切标签都打接口。
+onActivated(() => {
+  // 首次挂载由 onMounted 负责拉取：keep-alive 组件会先 mounted 再 activated，
+  // 此时 loadedServiceKey 还是空串，若在这里也判定「标识变化」就会连发两次详情请求
+  // （首屏闪一次、远程补丁也跑两遍）。只有真正切换过实例（loadedServiceKey 非空且不同）才重拉。
+  if (loadedServiceKey === '' || serviceConsoleKey.value === loadedServiceKey) return;
+  applyTabFromRoute();
+  void loadDetail();
 });
 </script>

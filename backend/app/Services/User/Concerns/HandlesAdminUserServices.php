@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\User\Concerns;
 
 use App\Constants\FinanceLedgerEventType;
+use App\Constants\InvoiceStatus;
 use App\Constants\InvoiceType;
 use App\Constants\OrderStatus;
 use App\Constants\ServiceStatus;
@@ -943,6 +944,249 @@ trait HandlesAdminUserServices
         }
     }
 
+    /**
+     * 转移服务实例归属：把实例从当前持有用户转移到另一位用户名下。
+     *
+     * 归属变更只动 services.user_id，订单/账单/跟踪记录仍按原有语义挂原用户；
+     * 实例状态不构成转移障碍（运行中 / 暂停 / 已删除 / 异常都可转移），但转移前必须确认
+     * 没有待支付或已付未履约的账单，否则新用户查不到旧账单会造成重复收款。
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed> 接收方视角的实例详情
+     */
+    public function transferService(User $user, int $serviceId, array $payload, array $context = []): array
+    {
+        $targetUserId = (int) ($payload['target_user_id'] ?? 0);
+        $remark = trim((string) ($payload['remark'] ?? ''));
+
+        // 按当前持有者定位实例：路由参数是裸整数，必须显式带 user_id 约束，避免越权转移他人实例。
+        $service = Service::query()
+            ->with(['product', 'order'])
+            ->where('user_id', $user->id)
+            ->findOrFail($serviceId);
+
+        $operatorId = (int) (($context['operator_id'] ?? 0) ?: 0);
+        $operatorName = trim((string) ($context['operator_name'] ?? ''));
+        $traceId = trim((string) ($context['trace_id'] ?? ''));
+        $ipAddress = trim((string) ($context['ip_address'] ?? ''));
+
+        $fromUserId = (int) $service->user_id;
+        $product = $service->product;
+        $order = $service->order;
+        $productDisplayName = $product instanceof Product ? trim((string) $product->name) : '';
+        $orderNo = $order instanceof Order ? trim((string) data_get($order, 'order_no')) : '';
+        $serviceName = trim((string) $service->name) ?: $productDisplayName;
+
+        if ($targetUserId === $fromUserId) {
+            throw new BusinessException('接收方与当前归属用户相同，无需转移');
+        }
+
+        // 接收方必须是未软删且启用中的用户：禁用账号仍会被自动续费扣款，但不能承接新资产。
+        $targetUser = User::query()->active()->find($targetUserId);
+        if (! $targetUser instanceof User) {
+            throw new BusinessException('接收方用户不存在或已被禁用');
+        }
+
+        $fromUserEmail = trim((string) $user->email);
+        $toUserEmail = trim((string) $targetUser->email);
+
+        // 事务外先按内存快照校验一次，让常见失败尽早返回且不产生任何写入；
+        // 最终判定以事务内的锁后复查为准（见下方 assertServiceTransferable($locked, true)）。
+        $this->assertServiceTransferable($service);
+
+        // 不写 summary：交给 ServiceTransformService::resolveOperationSummary() 按
+        // 'service.console.transfer' 生成「实例归属已转移给{接收方邮箱}」，比固定文案信息量更高。
+        $logDetail = [
+            'category' => 'service',
+            'service_id' => (int) $service->id,
+            'service_name' => $serviceName,
+            'product_name' => $productDisplayName,
+            'order_no' => $orderNo,
+            'from_user_id' => $fromUserId,
+            'from_user_email' => $fromUserEmail,
+            'to_user_id' => (int) $targetUser->id,
+            'to_user_email' => $toUserEmail,
+            'remark' => $remark,
+            'operator_type' => 'admin',
+            'operator_id' => $operatorId,
+            'operator_name' => $operatorName,
+            'trace_id' => $traceId,
+        ];
+
+        $serviceIdValue = (int) $service->id;
+
+        // 事务内重锁实例并复核持有者，防并发双提交把同一实例转移到不同接收方；
+        // 账单必须在锁内再校验一次：续费建单同样锁 services 行，只在锁外判定
+        // 会让窗口内新落库的「待支付 / 已付未履约」账单被漏放行。
+        //
+        // 审计日志一并纳入本事务，并用 writeStrict()/strict 模式写入：归属变更是强审计
+        // 事件，日志没落库等于「改了归属但查不到是谁改的」，此时整笔转移必须回滚。
+        // 默认 write() 会吞掉写入异常（日志失败不拖垮业务），故这里不能用它。
+        $freshService = DB::transaction(function () use (
+            $targetUser,
+            $fromUserId,
+            $serviceIdValue,
+            $logDetail,
+            $operatorId,
+            $operatorName,
+            $traceId,
+            $ipAddress,
+        ): Service {
+            $locked = Service::query()->lockForUpdate()->find($serviceIdValue);
+
+            if (! $locked instanceof Service) {
+                throw new BusinessException('实例不存在或已被删除', 40400, 404);
+            }
+
+            // 归属已被并发修改：同一实例不能同时转给两个人，后到者按并发冲突处理。
+            // 「接收方等于当前持有者」在锁外已拦（此处再判是死代码），重复提交也只会
+            // 落到本分支——因为上一步的 $fromUserId 一定是转移前的持有者。
+            if ((int) $locked->user_id !== $fromUserId) {
+                throw new BusinessException('实例归属已被其他操作变更，请刷新后重试', 40900, 409);
+            }
+
+            // 锁内复查账单并对命中的账单行加锁，杜绝「校验通过 → 并发建单」的空窗。
+            $this->assertServiceTransferable($locked, true);
+
+            // 自动续费开关必须一起重置：AutoRenewService 按 $service->user 预览并从该账户扣款，
+            // 只换 user_id 会让新持有人在自己没有同意的情况下被扣费。
+            $autoRenewReset = (int) $locked->auto_renew === 1;
+
+            $locked->forceFill([
+                'user_id' => (int) $targetUser->id,
+                'auto_renew' => 0,
+            ])->save();
+
+            $loggedService = $locked->refresh()->loadMissing(['product', 'order']);
+
+            $auditDetail = $logDetail;
+            if ($autoRenewReset) {
+                $auditDetail['auto_renew_reset'] = true;
+            }
+
+            // 实例操作日志：显式声明 actor_type=admin，否则会被回落到服务当前持有者（新用户）身上。
+            $this->operationLogService->writeServiceConsoleLog(
+                $loggedService,
+                'service.console.transfer',
+                $auditDetail,
+                [
+                    'actor_type' => 'admin',
+                    'actor_user_id' => $operatorId,
+                    'actor_name' => $operatorName,
+                    'trace_id' => $traceId,
+                    'ip_address' => $ipAddress,
+                ],
+                strict: true,
+            );
+
+            // 客户侧流水会进入双方实例操作日志，裁剪运营侧身份与来源，避免把管理端账号名、IP 下发给客户。
+            // actor_type 显式写 client：留空虽会按 client 回落，但 ServiceTransformService 会继续
+            // 拿 operator_name 当客户名；而写成 admin 会被客户端可见性过滤（只保留非 admin 记录）。
+            $clientLogDetail = $auditDetail;
+            unset($clientLogDetail['operator_type'], $clientLogDetail['operator_id'], $clientLogDetail['operator_name'], $clientLogDetail['trace_id']);
+            $clientLogDetail['actor_type'] = 'client';
+
+            $this->operationLogService->writeStrict(
+                userId: $fromUserId,
+                userType: 'client',
+                action: 'service.record.transferred_out',
+                module: 'service',
+                targetId: $serviceIdValue,
+                detail: $clientLogDetail,
+                ipAddress: null,
+            );
+
+            $this->operationLogService->writeStrict(
+                userId: (int) $targetUser->id,
+                userType: 'client',
+                action: 'service.record.transferred_in',
+                module: 'service',
+                targetId: $serviceIdValue,
+                detail: $clientLogDetail,
+                ipAddress: null,
+            );
+
+            $this->operationLogService->writeStrict(
+                userId: $operatorId > 0 ? $operatorId : null,
+                userType: 'admin',
+                action: 'user.service.record.transferred',
+                module: 'service',
+                targetId: $serviceIdValue,
+                detail: $logDetail,
+                ipAddress: $ipAddress !== '' ? $ipAddress : null,
+            );
+
+            return $loggedService;
+        });
+
+        // 缓存键同时含 user_id 与 updated_at：此时 $service 仍是转移前的内存快照，
+        // 用它清掉旧持有者的详情/配置/远程状态缓存；再用事务内刷新后的实例清新键。
+        app(ServiceDetailService::class)->forgetDetailCaches($service);
+        app(ServiceDetailService::class)->forgetDetailCaches($freshService);
+
+        // 概览缓存按用户分组，新旧两个用户都要失效，否则列表仍显示旧归属。
+        ServiceOverviewService::forgetGroupedOverviewCacheFor($fromUserId);
+        ServiceOverviewService::forgetGroupedOverviewCacheFor((int) $targetUser->id);
+
+        // 双方都要收到通知：原持有者的实例凭空消失、接收方凭空多一台机器，
+        // 且接收方此后成为续费主体。邮件走队列（SendTemplateEmailJob 已 afterCommit），
+        // 发送失败不影响已提交的转移。
+        $this->notifyServiceTransferred($user, $targetUser, $serviceName, $remark);
+
+        // 事务已提交后只回本地快照：getDetailForUser() 在需要刷新时会同步请求上游，
+        // 超时会让「已经转移成功」显示成失败，重试又会因路径已不属于原用户而 404。
+        return $this->clientServiceConsoleService->getBaseDetailForUser($targetUser, $serviceIdValue);
+    }
+
+    /**
+     * 实例账务前置校验：存在未结清账单时拒绝转移。
+     *
+     * 不对实例状态做任何限制：运行中、暂停、已删除以及异常等状态下都允许转移归属。
+     * 状态限制只影响「这台机器当前能不能用」，不影响「这台机器归谁」，把它当成转移门槛
+     * 会让已删除实例永远卡在原用户名下。真正的资金风险来自账单，故只保留账单校验。
+     *
+     * @param  bool  $forUpdate  调用方已在事务内并锁住实例行时为 true：命中的账单行一并加锁，
+     *                           否则"校验通过 → 并发建单"之间仍有空窗。
+     */
+    private function assertServiceTransferable(Service $service, bool $forUpdate = false): void
+    {
+        $serviceId = (int) $service->id;
+
+        $unpaidQuery = Invoice::query()
+            ->where('service_id', $serviceId)
+            ->where('status', InvoiceStatus::UNPAID)
+            ->latest('id');
+
+        if ($forUpdate) {
+            $unpaidQuery->lockForUpdate();
+        }
+
+        $unpaid = $unpaidQuery->first();
+
+        if ($unpaid instanceof Invoice) {
+            throw new BusinessException('该实例存在待支付账单（'.trim((string) $unpaid->invoice_no).'），请先结清或作废后再转移');
+        }
+
+        // 已付未履约：账单归属仍在原用户名下，转移后新用户查不到这笔收款，同周期可再次下单造成双扣。
+        // 这里不能按 requires_refund=false 放行：标记人工退款只代表"将来要退"，钱已收、履约未完成，
+        // 放行会让续费履约直接落到新持有者名下，退款与权益归属分叉。
+        $paidPendingQuery = Invoice::query()
+            ->where('service_id', $serviceId)
+            ->where('status', InvoiceStatus::PAID)
+            ->where('fulfillment_pending', true)
+            ->latest('id');
+
+        if ($forUpdate) {
+            $paidPendingQuery->lockForUpdate();
+        }
+
+        $paidPending = $paidPendingQuery->first();
+
+        if ($paidPending instanceof Invoice) {
+            throw new BusinessException('该实例存在已支付但尚未履约完成的账单（'.trim((string) $paidPending->invoice_no).'），请待履约完成或退款到账后再转移');
+        }
+    }
+
     private function supportsManagedUpstream(?Product $product): bool
     {
         if (! $product instanceof Product) {
@@ -1135,6 +1379,46 @@ trait HandlesAdminUserServices
                 'user_id' => (int) $user->id,
                 'message' => $exception->getMessage(),
             ]);
+        }
+    }
+
+    /**
+     * 归属转移后通知双方（模板 100030）：原持有者失去实例，接收方获得实例并成为后续续费主体。
+     *
+     * 邮件走队列（SendTemplateEmailJob 构造内已 afterCommit），派发失败只告警，不影响已提交的转移。
+     */
+    private function notifyServiceTransferred(User $fromUser, User $toUser, string $serviceName, string $remark): void
+    {
+        $pairs = [
+            [$fromUser, $toUser, 'out', '转出'],
+            [$toUser, $fromUser, 'in', '转入'],
+        ];
+
+        foreach ($pairs as [$recipient, $counterparty, $direction, $directionLabel]) {
+            $email = trim((string) $recipient->email);
+            if ($email === '') {
+                continue;
+            }
+
+            try {
+                SendTemplateEmailJob::dispatch($email, NotificationService::TEMPLATE_SERVICE_TRANSFERRED, [
+                    'display_name' => trim((string) ($recipient->display_name ?? '')) !== '' ? (string) $recipient->display_name : $email,
+                    'service_name' => $serviceName !== '' ? $serviceName : '您的产品',
+                    'direction_label' => $directionLabel,
+                    'counterparty_email' => trim((string) $counterparty->email),
+                    'remark' => $remark,
+                    'transferred_at' => now()->format('Y-m-d H:i:s'),
+                    'notice_message' => $direction === 'out'
+                        ? '该实例已不在您的账号下，历史订单与账单仍保留在原账号；如需继续使用请重新下单。'
+                        : '该实例已转入您的账号，后续续费由您的账号承担；历史订单与账单仍保留在原持有人账号。',
+                ]);
+            } catch (\Throwable $exception) {
+                Log::warning('[管理员转移实例归属] 客户通知派发失败', [
+                    'user_id' => (int) $recipient->id,
+                    'direction' => $direction,
+                    'message' => $exception->getMessage(),
+                ]);
+            }
         }
     }
 }

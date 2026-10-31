@@ -183,6 +183,22 @@ class ServiceOverviewService
         Cache::forget($this->buildGroupedOverviewCacheKey($userId));
     }
 
+    /**
+     * 失效概览缓存的静态入口：给「只能 app() 延迟解析」的调用方用。
+     *
+     * ProvisionService / ServiceRenewService / 管理员转移归属三处都要在事务提交后
+     * 失效概览缓存，而它们的心智一致：userId 非正数（未归属/系统任务）时没有缓存可清。
+     * 把该判断收在这里，避免三处各自复制一份包装后口径漂移。
+     */
+    public static function forgetGroupedOverviewCacheFor(int $userId): void
+    {
+        if ($userId <= 0) {
+            return;
+        }
+
+        app(self::class)->forgetGroupedOverviewCache($userId);
+    }
+
     // ── 私有构建方法 ───────────────────────────────────────────────────
 
     private function buildGroupedOverview(User $user): array

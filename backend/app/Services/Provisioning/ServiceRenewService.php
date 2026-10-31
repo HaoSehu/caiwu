@@ -31,6 +31,7 @@ use App\Services\System\SettingService;
 use App\Services\Upstream\Contracts\ProvidesRenewal;
 use App\Services\Upstream\ProviderResolver;
 use App\Support\BillingCycle;
+use App\Support\CacheKey;
 use App\Support\Money;
 use App\Support\OrderInvoiceNoGenerator;
 use Carbon\Carbon;
@@ -624,7 +625,7 @@ class ServiceRenewService
     public function processPaidRenewInvoice(Invoice $invoice): ?Service
     {
         try {
-            return Cache::lock("lock:renew:invoice:{$invoice->id}", 300)
+            return Cache::lock(CacheKey::lock('lock:renew:invoice', (string) $invoice->id), 300)
                 ->block(3, fn () => $this->processPaidRenewInvoiceLocked($invoice));
         } catch (LockTimeoutException) {
             Log::info('[服务续费·账单] 同一账单正在处理，跳过本次重复履约', [
@@ -1329,8 +1330,9 @@ class ServiceRenewService
     {
         // 防双扣拦截不区分券选择：带券 A 的已付账单对换券 B / 去券请求同样生效，
         // 否则换券请求会绕过同周期防重造成并存扣款。
+        // 也不按 user_id 过滤：实例转移归属后，原用户名下的已付未履约账单仍属于这台实例，
+        // 按 user_id 过滤会让新持有者查不到该笔收款，同周期再次付款即双扣。
         $latestPaidInvoice = Invoice::query()
-            ->where('user_id', $user->id)
             ->where('service_id', $service->id)
             ->where('type', OrderType::RENEW)
             ->where('billing_cycle', $cycle)
@@ -1828,8 +1830,7 @@ class ServiceRenewService
      */
     private function forgetServiceOverviewCache(int $userId): void
     {
-        if ($userId > 0) {
-            app(ServiceOverviewService::class)->forgetGroupedOverviewCache($userId);
-        }
+        // 收敛到 ServiceOverviewService 的静态入口，口径与开通、转移两处保持一致。
+        ServiceOverviewService::forgetGroupedOverviewCacheFor($userId);
     }
 }

@@ -16,6 +16,7 @@ use App\Http\Requests\Admin\V2\UserService\ShowUserServiceRemoteStatusRequest;
 use App\Http\Requests\Admin\V2\UserService\ShowUserServiceRequest;
 use App\Http\Requests\Admin\V2\UserService\StoreUserServiceRequest;
 use App\Http\Requests\Admin\V2\UserService\StoreUserServiceTrackingRequest;
+use App\Http\Requests\Admin\V2\UserService\TransferUserServiceRequest;
 use App\Http\Requests\Admin\V2\UserService\UpdateUserServiceMetaRequest;
 use App\Http\Requests\Admin\V2\UserService\UploadUserServiceTrackingImageRequest;
 use App\Http\Resources\Admin\V2\AdminUserServiceListItemResource;
@@ -123,6 +124,18 @@ class UserServiceController extends Controller
         $this->users->deleteService($user, $service, $this->adminContext($request));
 
         return $this->success(null, '服务记录已删除');
+    }
+
+    /**
+     * 转移实例归属：把实例从当前持有用户转移到另一位用户名下。
+     */
+    public function transfer(TransferUserServiceRequest $request, User $user, int $service): JsonResponse
+    {
+        $detail = $this->users->transferService($user, $service, $request->payload(), $this->adminContext($request));
+
+        return $this->success([
+            'service' => ServiceDetailResource::make($detail)->resolve(),
+        ], '实例归属已转移');
     }
 
     /**

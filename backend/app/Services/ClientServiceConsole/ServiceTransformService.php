@@ -69,6 +69,7 @@ class ServiceTransformService
         'service.console.name.update' => '设置实例名称',
         'service.console.hostname.update' => '设置主机名',
         'service.console.meta.update' => '更新业务信息',
+        'service.console.transfer' => '转移归属',
         'service.console.password.reset' => '重置密码',
         'service.console.reinstall.submit' => '重装系统',
         'service.console.renew.order.create' => '创建续费订单',
@@ -1562,6 +1563,9 @@ class ServiceTransformService
                 ? '自定义主机名已设置为'.(string) $detail['hostname']
                 : '已清空自定义主机名',
             'service.console.meta.update' => '管理员已更新实例业务信息',
+            'service.console.transfer' => trim((string) ($detail['to_user_email'] ?? '')) !== ''
+                ? '实例归属已转移给'.(string) $detail['to_user_email']
+                : $actionLabel,
             'service.console.renew.auto_update' => trim((string) ($detail['auto_renew_label'] ?? '')) !== ''
                 ? '自动续费已切换为'.(string) $detail['auto_renew_label']
                 : $actionLabel,
@@ -1599,6 +1603,10 @@ class ServiceTransformService
         $this->pushDetailItem($items, '执行说明', $summary);
         $this->pushDetailItem($items, '操作类型', $actionLabel);
         $this->pushDetailItem($items, '实例名称', $detail['service_name'] ?? null);
+        // 归属转移：原持有者与接收方都要能看懂「从谁到谁」，优先展示邮箱。
+        $this->pushDetailItem($items, '原归属用户', $detail['from_user_email'] ?? ($detail['from_user_id'] ?? null));
+        $this->pushDetailItem($items, '接收方用户', $detail['to_user_email'] ?? ($detail['to_user_id'] ?? null));
+        $this->pushDetailItem($items, '自动续费已重置', array_key_exists('auto_renew_reset', $detail) ? (bool) $detail['auto_renew_reset'] : null);
         $this->pushDetailItem($items, '配置名称', $detail['product_display_name'] ?? $detail['product_name'] ?? null);
         $this->pushDetailItem($items, '上游实例 ID', $detail['host_id'] ?? null);
         $this->pushDetailItem($items, '账单号', $detail['invoice_no'] ?? null);
@@ -1618,7 +1626,7 @@ class ServiceTransformService
         $this->pushDetailItem($items, '方向', $detail['direction_label'] ?? ($detail['direction'] ?? null));
         $this->pushDetailItem($items, '端口范围', $detail['port'] ?? null);
         $this->pushDetailItem($items, '来源地址', $detail['ip'] ?? null);
-        $this->pushDetailItem($items, '备注', $detail['description'] ?? null);
+        $this->pushDetailItem($items, '备注', $detail['description'] ?? ($detail['remark'] ?? null));
         $this->pushDetailItem($items, '请求追踪', $detail['trace_id'] ?? null);
         $this->pushDetailItem($items, '操作消息', $detail['message'] ?? null);
 

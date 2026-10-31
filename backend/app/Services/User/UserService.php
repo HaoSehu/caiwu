@@ -625,7 +625,19 @@ class UserService
      */
     public function operationLogs(int $userId, array $filters, int $perPage = 20)
     {
-        $query = ActivityLog::where('actor_id', $userId)->where('actor_type', 'client');
+        // 客户本人发起的行为按 actor 归属；管理员代客操作（如转移实例归属）actor 是管理员，
+        // 只能按日志上下文里的 from_user_id/to_user_id 归属到涉及的用户，否则用户日志里查不到。
+        $query = ActivityLog::where(function ($inner) use ($userId): void {
+            $inner->where(function ($clientQuery) use ($userId): void {
+                $clientQuery->where('actor_id', $userId)->where('actor_type', 'client');
+            })->orWhere(function ($adminQuery) use ($userId): void {
+                $adminQuery->where('actor_type', 'admin')
+                    ->where(function ($scopeQuery) use ($userId): void {
+                        $scopeQuery->where('context->from_user_id', $userId)
+                            ->orWhere('context->to_user_id', $userId);
+                    });
+            });
+        });
 
         if (! empty($filters['keyword'])) {
             $query->where('action', 'like', LikeEscape::contains(trim((string) $filters['keyword'])));

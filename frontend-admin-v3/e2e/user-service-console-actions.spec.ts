@@ -8,12 +8,12 @@ import { collectConsoleErrors, envelope, expect, mockAuthenticatedSession, test 
  * 服务控制台独立页回归。
  *
  * 背景：服务控制台原先是用户详情页里的抽屉，现已重构为独立路由页
- * `/admin/users/:id/services/:serviceId`，页内用 tab 承载概览、相关订单、相关账单、
- * 操作日志与历史跟踪五个板块。本用例锁定四件事：
+ * `/admin/users/:id/services/:serviceId`，页内用 tab 承载概览、相关账单、操作日志与
+ * 历史跟踪四个板块。本用例锁定四件事：
  * 1. 用户详情页服务列表的「管理」跳转到独立页，URL 与页面标题正确；
  * 2. 首屏只等本地快照（sync_remote=0）就渲染，远程状态补丁放行后异步补齐运行状态；
- * 3. 概览页签的实例操作区恰好是需求约定的五项（电源能力为空时不出现开关机/重启）；
- * 4. 五个页签齐全，历史跟踪页签能新增带留言的记录并回显操作人；
+ * 3. 概览页签的实例操作区恰好是需求约定的六项（电源能力为空时不出现开关机/重启）；
+ * 4. 四个页签齐全，历史跟踪页签能新增带留言的记录并回显操作人；
  * 5. 历史跟踪上传图片必须把 t-upload 包装对象里的原始 File（raw）交给 FormData，
  *    否则后端收到 "[object Object]" 会回「文件必须是图片」；
  * 6. 全程无 console 报错。
@@ -45,7 +45,8 @@ const SERVICE_LIST_RESPONSE = {
       amount: '20.00',
       billing_cycle_label: '月付',
       created_at: '2026-08-25 09:28:30',
-      expires_at: '2026-10-25 09:28:40',
+      // 到期时间取远期：仅为展示稳定的到期日，转移入口与到期时间无关
+      expires_at: '2099-12-31 23:59:59',
       product: { type_label: '云服务器' },
       upstream: { dedicated_ip: '45.205.31.247' },
     },
@@ -64,7 +65,8 @@ const SERVICE_DETAIL_RESPONSE = {
   billing_cycle_label: '月付',
   amount: '20.00',
   created_at: '2026-08-25 09:28:30',
-  expires_at: '2026-10-25 09:28:40',
+  // 到期时间取远期：仅为展示稳定的到期日，转移入口与到期时间无关
+  expires_at: '2099-12-31 23:59:59',
   product: { display_name: '云服务器/美国/三网精品/gscs-2vcpu-2gib' },
   upstream: { provider_key: 'e2e-upstream', host_id: 89841 },
   // 本地快照没有上游运行状态：首屏应显示「运行状态未知」，等远程补丁到达后才变成运行中
@@ -73,6 +75,16 @@ const SERVICE_DETAIL_RESPONSE = {
   actions: { refresh: true, password_reset: true, available: [] as string[] },
   specs: [] as Record<string, unknown>[],
 };
+
+/**
+ * 三个响应刻意用不同名称，让 e2e 能区分页面到底用了哪一份数据：
+ * - TRANSFER_RESPONSE_NAME：转移接口临时返回的名称，页面不应展示它（它是「动作结果」，不是详情）；
+ * - RECEIVER_DETAIL_NAME：接收方（用户 2）详情接口的名称，跳转后标题必须是它。
+ * 若三者同名，用例只能证明 URL 变对了，证明不了数据换人、也证明不了没沿用旧快照。
+ */
+const TRANSFER_RESPONSE_NAME = '转移响应占位名称';
+
+const RECEIVER_DETAIL_NAME = 'E2E 云服务器（接收方）';
 
 /** 远程状态补丁只带上游才能提供的字段（运行状态、操作系统）。 */
 const SERVICE_REMOTE_STATUS_RESPONSE = {
@@ -128,6 +140,33 @@ const EMPTY_OPTIONS = envelope({ list: [] as Record<string, unknown>[] });
 let detailRequestUrls: string[] = [];
 
 /**
+ * 接收方（用户 2）控制台的详情请求地址。
+ * 转移成功后页面必须跳到接收方的控制台并按接收方重新拉详情，否则会拿着旧用户 ID 请求而 404。
+ */
+let receiverDetailRequestUrls: string[] = [];
+
+/** 转移弹窗用户搜索的请求地址，用于断言搜索走 keyword 模糊匹配而不是 user_id 精确匹配。 */
+let userSearchRequestUrls: string[] = [];
+
+/** 转移接口实际收到的请求体，用于断言提交的是接收方用户 ID 与备注。 */
+let transferRequestBodies: Array<Record<string, unknown>> = [];
+
+/**
+ * 转移弹窗的用户搜索结果：
+ * user 2 是合法接收方，user 1 是当前归属用户（用于校验拦截），user 3 已禁用（用于验证列表过滤）。
+ */
+const USER_SEARCH_RESPONSE = {
+  list: [
+    { id: 2, email: 'receiver@example.com', phone: '13900000002', nickname: '接收方用户', status: 1 },
+    { id: 1, email: 'user@example.com', phone: '13800000000', nickname: '测试用户', status: 1 },
+    { id: 3, email: 'disabled@example.com', phone: '13900000003', nickname: '禁用用户', status: 0 },
+  ],
+  total: 3,
+  page: 1,
+  page_size: 20,
+};
+
+/**
  * 用户维度与服务维度的接口共用 /v2/admin/users/1 前缀，统一按 pathname 分发。
  *
  * remoteStatusGate 用于把远程状态补丁拦在 pending 状态，让用例先断言首屏已经渲染、
@@ -135,12 +174,63 @@ let detailRequestUrls: string[] = [];
  */
 async function mockServiceConsolePage(
   page: Page,
-  options: { remoteStatusGate?: Promise<void>; remoteStatusFailure?: boolean } = {},
+  options: {
+    remoteStatusGate?: Promise<void>;
+    remoteStatusFailure?: boolean;
+    /** 覆盖实例状态与到期时间，用于验证「任何状态/任何到期时间都不影响转移入口」 */
+    serviceStatus?: number;
+    serviceExpiresAt?: string;
+    /** 让转移接口返回 409：验证后端拒绝时页面保留弹窗、只提示错误文案、不做跳转 */
+    transferConflict?: boolean;
+  } = {},
 ) {
+  const detailResponse = {
+    ...SERVICE_DETAIL_RESPONSE,
+    status: options.serviceStatus ?? SERVICE_DETAIL_RESPONSE.status,
+    expires_at: options.serviceExpiresAt ?? SERVICE_DETAIL_RESPONSE.expires_at,
+  };
+  // 接收方详情刻意用另一个名称：转移后标题若仍是原持有者快照，用例就能断出来。
+  const receiverDetailResponse = { ...detailResponse, name: RECEIVER_DETAIL_NAME };
   trackingRecords = [];
   detailRequestUrls = [];
+  receiverDetailRequestUrls = [];
+  userSearchRequestUrls = [];
+  transferRequestBodies = [];
   uploadImageBody = '';
   await mockAuthenticatedSession(page);
+  // 转移弹窗的用户搜索走用户列表接口（GET /v2/admin/users?keyword=…），与详情接口前缀不冲突。
+  // 按后端真实语义分流：带 keyword 走模糊匹配（User::scopeSearch 对纯数字也是 id OR 多字段 LIKE），
+  // 只有传 user_id 才命中精确过滤。前端若把纯数字短路成 user_id 精确查，这里只会回 0 条，用例立刻变红。
+  await page.route('**/v2/admin/users?**', (route) => {
+    const url = new URL(route.request().url());
+    userSearchRequestUrls.push(url.toString());
+    const keyword = (url.searchParams.get('keyword') || '').trim();
+    const userIdFilter = (url.searchParams.get('user_id') || '').trim();
+    if (!keyword || userIdFilter) {
+      return route.fulfill(jsonResponse(envelope({ list: [], total: 0, page: 1, page_size: 20 })));
+    }
+    const list = USER_SEARCH_RESPONSE.list.filter((item) =>
+      [String(item.id), item.email, item.phone, item.nickname].some((field) => field.includes(keyword)),
+    );
+    return route.fulfill(jsonResponse(envelope({ list, total: list.length, page: 1, page_size: 20 })));
+  });
+  // 转移成功后页面会跳到接收方（用户 2）的控制台，接收方详情复用同一份实例数据
+  await page.route('**/v2/admin/users/2**', async (route) => {
+    const { pathname } = new URL(route.request().url());
+    if (pathname.endsWith('/services/9/remote-status')) {
+      // 远程补丁会合并进详情，名称必须与接收方详情一致；否则补丁回来后标题被改回原持有者名称，
+      // 用「标题是否变成接收方名称」来验证数据换人的断言就会失效。
+      return route.fulfill(
+        jsonResponse(envelope({ service: { ...SERVICE_REMOTE_STATUS_RESPONSE, name: RECEIVER_DETAIL_NAME } })),
+      );
+    }
+    if (pathname.endsWith('/services/9')) {
+      // 记录接收方的详情请求：跳转后若命中 keep-alive 旧实例、或仍用旧用户 ID 请求，这里就断不到新请求
+      receiverDetailRequestUrls.push(route.request().url());
+      return route.fulfill(jsonResponse(envelope({ service: receiverDetailResponse })));
+    }
+    return route.fulfill(jsonResponse(envelope(USER_DETAIL_RESPONSE)));
+  });
   await page.route('**/media/**', serveTrackingImage);
   await page.route('**/v2/admin/member-levels*', (route) => route.fulfill(jsonResponse(EMPTY_OPTIONS)));
   await page.route('**/v2/admin/promotion-ambassadors*', (route) => route.fulfill(jsonResponse(EMPTY_OPTIONS)));
@@ -229,9 +319,27 @@ async function mockServiceConsolePage(
         ),
       );
     }
+    if (pathname.endsWith('/services/9/transfers')) {
+      if (method !== 'POST') {
+        return route.fulfill(jsonResponse({ code: 40500, message: '方法不允许', data: null }, 405));
+      }
+      transferRequestBodies.push(route.request().postDataJSON() as Record<string, unknown>);
+      if (options.transferConflict) {
+        return route.fulfill(
+          jsonResponse({ code: 40900, message: '实例归属已被其他操作变更，请刷新后重试', data: null }, 409),
+        );
+      }
+      // 转移响应必须与「原持有者详情」可区分，否则下面的用例证明不了页面真的用了接收方身份：
+      // 只改名称（名称来自 service.name，会直接渲染在标题区），id 保持不变。
+      return route.fulfill(
+        jsonResponse(
+          envelope({ service: { ...SERVICE_DETAIL_RESPONSE, name: TRANSFER_RESPONSE_NAME } }, 0, '实例归属已转移'),
+        ),
+      );
+    }
     if (pathname.endsWith('/services/9')) {
       detailRequestUrls.push(route.request().url());
-      return route.fulfill(jsonResponse(envelope({ service: SERVICE_DETAIL_RESPONSE })));
+      return route.fulfill(jsonResponse(envelope({ service: detailResponse })));
     }
     if (pathname.endsWith('/services')) {
       return route.fulfill(jsonResponse(envelope(SERVICE_LIST_RESPONSE)));
@@ -252,29 +360,6 @@ async function mockServiceConsolePage(
                 paid_at: '2026-08-25 09:30:00',
                 created_at: '2026-08-25 09:28:30',
                 payment_summary: { gateway: '支付宝' },
-              },
-            ],
-            total: 1,
-            page: 1,
-            page_size: 10,
-          }),
-        ),
-      );
-    }
-    if (pathname.endsWith('/orders')) {
-      return route.fulfill(
-        jsonResponse(
-          envelope({
-            list: [
-              {
-                id: 21,
-                order_no: 'ORD-E2E-0001',
-                product_full_path: '云服务器/美国/三网精品/gscs-2vcpu-2gib',
-                type: 'new',
-                status: 1,
-                amount: '20.00',
-                paid_at: '2026-08-25 09:30:00',
-                created_at: '2026-08-25 09:28:30',
               },
             ],
             total: 1,
@@ -308,7 +393,6 @@ test('服务控制台独立页：首屏先渲染本地快照，远程状态后�
   // 必须限定在页面自己的页签容器内：管理端已开启多标签页，全局标签栏也是 .t-tabs__nav-item
   await expect(page.locator('.service-console-page .t-tabs__nav-item')).toHaveText([
     '概览',
-    '相关订单',
     '相关账单',
     '操作日志',
     '历史跟踪',
@@ -329,15 +413,13 @@ test('服务控制台独立页：首屏先渲染本地快照，远程状态后�
   await page.locator('.console-actions').getByRole('button', { name: '刷新远程' }).click();
   await expect(page.locator('.t-message')).toContainText('远程状态已刷新');
 
-  // 实例操作区：没有电源能力时只应有需求约定的五个入口
+  // 实例操作区：没有电源能力时只应有需求约定的六个入口
   const actions = page.locator('.console-actions');
-  await expect(actions.getByRole('button')).toHaveText(['刷新远程', '重置密码', '上游绑定', '调价', '改名称']);
+  await expect(actions.getByRole('button')).toHaveText(['刷新远程', '重置密码', '上游绑定', '调价', '改名称', '转移']);
   await expect(page.locator('.service-console-page')).not.toContainText('绑定服务');
   await expect(page.locator('.service-console-page')).not.toContainText('重新提交上游开通');
 
-  // 相关订单 / 相关账单复用既有列表接口，按实例维度过滤
-  await page.locator('.t-tabs__nav-item', { hasText: '相关订单' }).click();
-  await expect(page.locator('.console-table-scroll .t-table')).toContainText('ORD-E2E-0001');
+  // 相关账单复用既有列表接口，按实例维度过滤
   await page.locator('.t-tabs__nav-item', { hasText: '相关账单' }).click();
   await expect(page.locator('.console-table-scroll .t-table')).toContainText('INV-E2E-0001');
 
@@ -379,6 +461,116 @@ test('服务控制台独立页：首屏先渲染本地快照，远程状态后�
   await expect(page.locator('.tracking-thumb img')).toHaveAttribute('src', UPLOADED_IMAGE.url);
 
   expect(errors).toEqual([]);
+});
+
+test('服务控制台独立页：把实例转移给接收方用户并跳转到接收方控制台', async ({ page }) => {
+  const errors = collectConsoleErrors(page);
+  await mockServiceConsolePage(page);
+
+  await page.goto('/admin/users/1/services/9', { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('.console-actions')).toBeVisible();
+
+  await page.locator('.console-actions').getByRole('button', { name: '转移' }).click();
+  const dialog = page.locator('.t-dialog').filter({ hasText: '转移实例归属' }).first();
+  await expect(dialog).toBeVisible();
+
+  // 未选接收方直接提交要被拦下，不能产生任何转移请求
+  await dialog.getByRole('button', { name: '确认转移' }).click();
+  await expect(page.locator('.t-message').last()).toContainText('请先选择接收方用户');
+  expect(transferRequestBodies).toHaveLength(0);
+
+  // 搜索接收方：一律走 keyword 模糊匹配。mock 只按 keyword 过滤（传 user_id 就回空列表），
+  // 前端若把关键字短路成 user_id 精确查，下面的 toHaveCount(2) 立刻失败，因此这条断言锁住了搜索行为本身。
+  await dialog.locator('.transfer-picker__search input').fill('example.com');
+  await dialog.getByRole('button', { name: '搜索' }).click();
+  // 三条命中都含该关键字，其中 status=0 的禁用账号不可承接资产被前端过滤，只剩两个可选用户
+  await expect(dialog.locator('.transfer-picker__list button')).toHaveCount(2);
+  await expect(dialog.locator('.transfer-picker__list')).not.toContainText('禁用用户');
+  // 请求只带 keyword，没有任何 user_id 精确过滤参数（后端 scopeSearch 已把 id 与多字段 LIKE 组合在一起）
+  expect(userSearchRequestUrls.length).toBeGreaterThan(0);
+  for (const url of userSearchRequestUrls) {
+    const decoded = decodeURIComponent(url.replace(/\+/g, ' '));
+    expect(decoded).toContain('keyword=example.com');
+    expect(decoded).not.toContain('user_id=');
+  }
+
+  // 当前归属用户不能被选成接收方
+  await dialog.locator('.transfer-picker__list button').filter({ hasText: '#1' }).click();
+  await expect(page.locator('.t-message').last()).toContainText('接收方不能是当前归属用户');
+  await expect(dialog.locator('.transfer-picker__target')).toContainText('未选择');
+
+  const receiver = dialog.locator('.transfer-picker__list button').filter({ hasText: '#2' });
+  await receiver.click();
+  // 接收方回显与结果列表同源：标题是「#ID / 邮箱」，联系信息在 meta
+  await expect(dialog.locator('.transfer-picker__target')).toContainText('#2 / receiver@example.com');
+
+  await dialog.locator('.transfer-picker__remark input').fill('客户要求把实例转到自己名下');
+  await dialog.getByRole('button', { name: '确认转移' }).click();
+
+  // 提交体只带接收方 ID 与备注，归属变更由后端裁决
+  await expect.poll(() => transferRequestBodies.length).toBe(1);
+  expect(transferRequestBodies[0]).toEqual({
+    target_user_id: 2,
+    remark: '客户要求把实例转到自己名下',
+  });
+
+  // 归属已变，页面必须落到接收方的控制台，否则按原用户拉详情会 404
+  await expect(page).toHaveURL(/\/admin\/users\/2\/services\/9$/);
+  await expect(page.locator('.t-message').last()).toContainText('实例归属已转移');
+
+  // 跳转后必须按接收方重新拉详情：命中 keep-alive 旧实例时这条记录不会出现
+  await expect.poll(() => receiverDetailRequestUrls.length).toBeGreaterThan(0);
+  expect(receiverDetailRequestUrls[0]).toContain('/v2/admin/users/2/services/9');
+  // 标题必须变成接收方详情返回的名称：转移响应与接收方详情刻意返回不同名称，
+  // 页面若沿用转移响应或 keep-alive 的旧快照，这里会停在原标题上。
+  await expect(page.locator('.identity-title')).toHaveText(RECEIVER_DETAIL_NAME);
+
+  expect(errors).toEqual([]);
+});
+
+test('服务控制台独立页：转移被后端拒绝时保留弹窗并提示错误文案', async ({ page }) => {
+  // 409 会在浏览器控制台留下一条资源加载错误（网络层日志，不是 JS 异常），下面只断言没有页面异常
+  const errors = collectConsoleErrors(page);
+  await mockServiceConsolePage(page, { transferConflict: true });
+
+  await page.goto('/admin/users/1/services/9', { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('.console-actions')).toBeVisible();
+
+  await page.locator('.console-actions').getByRole('button', { name: '转移' }).click();
+  const dialog = page.locator('.t-dialog').filter({ hasText: '转移实例归属' }).first();
+  await expect(dialog).toBeVisible();
+
+  await dialog.locator('.transfer-picker__search input').fill('receiver');
+  await dialog.getByRole('button', { name: '搜索' }).click();
+  await dialog.locator('.transfer-picker__list button').filter({ hasText: '#2' }).click();
+  await dialog.getByRole('button', { name: '确认转移' }).click();
+
+  // 409 冲突：只展示后端文案，弹窗保留让运营刷新后重试，且绝不跳转到接收方控制台
+  await expect(page.locator('.t-message').last()).toContainText('实例归属已被其他操作变更');
+  await expect(page).toHaveURL(/\/admin\/users\/1\/services\/9$/);
+  await expect(page.locator('.t-message').last()).not.toContainText('实例归属已转移');
+
+  // 只放行浏览器对 409 的资源加载日志，其余控制台错误与未捕获异常仍必须为零
+  expect(errors.filter((item) => !item.includes('Failed to load resource'))).toEqual([]);
+});
+
+test('服务控制台独立页：暂停与已删除的实例仍可点开转移入口', async ({ page }) => {
+  // 与后端 assertServiceTransferable 同口径：状态不参与转移资格判定，入口不得置灰或隐藏。
+  // 逐个状态独立构建页面：状态来自详情接口，同一页面内改状态无法证明首屏渲染用了新状态。
+  for (const status of [2, 3]) {
+    await mockServiceConsolePage(page, { serviceStatus: status, serviceExpiresAt: '2020-01-01 00:00:00' });
+
+    await page.goto('/admin/users/1/services/9', { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('.console-actions')).toBeVisible();
+
+    // 到期时间刻意设成过去：状态与到期都不再是拦截条件
+    const transferButton = page.locator('.console-actions').getByRole('button', { name: '转移' });
+    await expect(transferButton).toBeEnabled();
+
+    // 可点：弹窗必须真的打开（按钮存在但被禁用时这里永远等不到弹窗）
+    await transferButton.click();
+    await expect(page.locator('.t-dialog').filter({ hasText: '转移实例归属' }).first()).toBeVisible();
+  }
 });
 
 test('服务控制台独立页：远程补丁失败时保留本地快照且不报错', async ({ page }) => {

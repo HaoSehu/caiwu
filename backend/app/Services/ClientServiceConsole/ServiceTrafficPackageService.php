@@ -226,13 +226,21 @@ class ServiceTrafficPackageService
             ]));
         }
 
-        $invoice = DB::transaction(function () use ($service, $product, $quote, $context) {
+        $invoice = DB::transaction(function () use ($service, $user, $product, $quote, $context) {
+            // 归属复核：实例转移会先锁 services 行再改 user_id，这里对同一行加锁并复读当前持有人，
+            // 避免转移事务提交前按旧的 user_id 落下一张归原持有人所有的待付账单。
+            $lockedService = Service::query()->lockForUpdate()->find((int) $service->id);
+            throw_if(
+                ! $lockedService instanceof Service || (int) $lockedService->user_id !== (int) $user->id,
+                new BusinessException('服务不存在', 40400, 404)
+            );
+
             $displayPayload = app(ProductDisplayNameResolver::class)->resolveForProduct($product);
             $productSpecDisplay = (string) ($displayPayload['product_spec_display'] ?? $displayPayload['combined_display_name'] ?? '');
             $orderNo = Order::generateOrderNo();
             $invoice = Invoice::query()->create([
                 'invoice_no' => Invoice::generateInvoiceNoFromOrderNo($orderNo),
-                'user_id' => (int) $service->user_id,
+                'user_id' => (int) $lockedService->user_id,
                 'product_id' => (int) $product->id,
                 'product_spec_snapshot' => $productSpecDisplay,
                 'product_type_snapshot' => (string) $product->product_type,

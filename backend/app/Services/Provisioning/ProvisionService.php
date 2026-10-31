@@ -28,6 +28,7 @@ use App\Services\Upstream\Contracts\ProvidesProvisioning;
 use App\Services\Upstream\ProviderResolver;
 use App\Support\BillingCycle;
 use App\Support\BillingCycleLabels;
+use App\Support\CacheKey;
 use App\Support\Money;
 use App\Support\SchemaMetadataCache;
 use App\Support\ServiceHostname;
@@ -659,9 +660,9 @@ class ProvisionService
      */
     private function forgetServiceOverviewCache(int $userId): void
     {
-        if ($userId > 0) {
-            app(ServiceOverviewService::class)->forgetGroupedOverviewCache($userId);
-        }
+        // 收敛到 ServiceOverviewService 的静态入口：三处（开通、续费、管理员转移）
+        // 曾各写一份「$userId > 0 才失效」的包装，改判断口径时容易只改一处。
+        ServiceOverviewService::forgetGroupedOverviewCacheFor($userId);
     }
 
     /**
@@ -1750,10 +1751,10 @@ class ProvisionService
         $accountName = strtolower(trim((string) ($supplier->api_username ?? '')));
 
         if ($baseUrl === '' || $accountName === '') {
-            return "lock:supplier:cart:{$supplier->id}";
+            return CacheKey::lock('lock:supplier:cart', (string) $supplier->id);
         }
 
-        return 'lock:upstream:cart:'.hash('sha256', $baseUrl.'|'.$accountName);
+        return CacheKey::lock('lock:upstream:cart', hash('sha256', $baseUrl.'|'.$accountName));
     }
 
     private function normalizeUpstreamCartLockBaseUrl(string $baseUrl): string

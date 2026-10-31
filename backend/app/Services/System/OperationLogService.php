@@ -31,11 +31,45 @@ class OperationLogService
         );
     }
 
+    /**
+     * 写入 activity_logs，失败时向上抛出。
+     *
+     * 默认的 write() 会吞掉异常（日志失败不得拖垮业务），代价是调用方永远不知道
+     * 这条审计没落库。对"改资产归属""退款"这类强审计事件，调用方需要能感知失败
+     * 并回滚，因此提供本入口；只能包在业务事务内使用，否则抛出前已提交。
+     */
+    public function writeStrict(
+        ?int $userId,
+        string $userType,
+        string $action,
+        string $module,
+        ?int $targetId = null,
+        array $detail = [],
+        ?string $ipAddress = null,
+    ): void {
+        $this->writeActivityLog(
+            userId: $userId,
+            userType: $userType,
+            action: $action,
+            module: $module,
+            targetId: $targetId,
+            detail: $detail,
+            ipAddress: $ipAddress,
+            throwOnFailure: true,
+        );
+    }
+
+    /**
+     * 写服务实例维度的操作日志（自动补齐实例名/产品名/订单号/操作者字段）。
+     *
+     * $strict=true 时转入 writeStrict()：写入失败向上抛出，供强审计场景把业务一并回滚。
+     */
     public function writeServiceConsoleLog(
         Service $service,
         string $action,
         array $detail = [],
         array $context = [],
+        bool $strict = false,
     ): void {
         $service->loadMissing([
             'product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
@@ -61,7 +95,7 @@ class OperationLogService
 
         $ipAddress = trim((string) ($context['ip_address'] ?? ''));
 
-        $this->write(
+        ($strict ? $this->writeStrict(...) : $this->write(...))(
             userId: $actorUserId > 0 ? $actorUserId : null,
             userType: $actorType,
             action: $action,
@@ -76,6 +110,8 @@ class OperationLogService
      * 写入 activity_logs（唯一在线真源）。
      * 统一经 ActivityLogService::record 落库并生成 event_id；写入失败时记录告警并
      * 递增失败计数，便于容量/审计监控发现，但不阻断主流程（日志失败不影响业务事务）。
+     * $throwOnFailure 供 writeStrict() 使用：失败计数与告警照常执行后向上抛出，
+     * 让强审计事件的业务事务能整体回滚。
      */
     private function writeActivityLog(
         ?int $userId,
@@ -85,6 +121,7 @@ class OperationLogService
         ?int $targetId,
         array $detail,
         ?string $ipAddress,
+        bool $throwOnFailure = false,
     ): void {
         try {
             $actorName = trim((string) ($detail['actor_name'] ?? ''));
@@ -134,6 +171,10 @@ class OperationLogService
                 );
             } catch (\Throwable) {
                 // 日志后端故障同样不能阻断业务。
+            }
+
+            if ($throwOnFailure) {
+                throw $e;
             }
         }
     }

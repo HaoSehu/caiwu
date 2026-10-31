@@ -151,6 +151,10 @@ class FinanceDocumentService
             'invoice_no' => Invoice::generateInvoiceNo(),
             'user_id' => (int) $invoice->user_id,
             'origin_invoice_id' => (int) $invoice->id,
+            // 红字单继承原单的实例与订单归属：实例账单页签按 service_id 过滤，
+            // 不继承时退款在「相关账单」里永远查不到，账实对不上。
+            'order_id' => (int) ($invoice->order_id ?? 0) ?: null,
+            'service_id' => (int) ($invoice->service_id ?? 0) ?: null,
             'type' => InvoiceType::REFUND,
             'amount' => Money::format(-$refundAmount),
             'paid_amount' => Money::format(-$refundAmount),

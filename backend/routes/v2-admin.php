@@ -165,6 +165,9 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
         Route::post('/users/{user}/services', [UserServiceController::class, 'store']);
         Route::post('/users/{user}/services/refresh-statuses', [UserServiceController::class, 'refreshStatuses']);
         Route::put('/users/{user}/services/{service}/meta', [UserServiceController::class, 'updateMeta']);
+        // 转移归属会改变实例持有人，属重写口，单独限流；保留全局 api 兜底。
+        Route::post('/users/{user}/services/{service}/transfers', [UserServiceController::class, 'transfer'])
+            ->middleware('throttle:10,1,admin-user-service-transfer');
         Route::delete('/users/{user}/services/{service}', [UserServiceController::class, 'destroy']);
         Route::post('/users/{user}/services/{service}/power-actions', [UserController::class, 'servicePower']);
         Route::post('/users/{user}/services/{service}/password-resets', [UserController::class, 'resetServicePassword']);

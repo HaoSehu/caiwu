@@ -21,6 +21,7 @@ use App\Services\Integrations\Plugins\ServiceUpstreamBindingWriter;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Services\ProductCatalog\ProductSyncService;
 use App\Services\System\OperationLogService;
+use App\Support\CacheKey;
 use App\Support\OrderInvoiceNoGenerator;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
@@ -145,13 +146,21 @@ class ServiceUpgradeService
             ]));
         }
 
-        $invoice = DB::transaction(function () use ($service, $product, $context, $quotePayload, $productId, $billingCycle, $promoCode, $amount) {
+        $invoice = DB::transaction(function () use ($service, $user, $product, $context, $quotePayload, $productId, $billingCycle, $promoCode, $amount) {
+            // 归属复核：实例转移会先锁 services 行再改 user_id，这里对同一行加锁并复读当前持有人，
+            // 避免转移事务提交前按旧的 user_id 落下一张归原持有人所有的待付账单。
+            $lockedService = Service::query()->lockForUpdate()->find((int) $service->id);
+            throw_if(
+                ! $lockedService instanceof Service || (int) $lockedService->user_id !== (int) $user->id,
+                new BusinessException('服务不存在', 40400, 404)
+            );
+
             $displayPayload = app(ProductDisplayNameResolver::class)->resolveForProduct($product);
             $productSpecDisplay = (string) ($displayPayload['product_spec_display'] ?? '');
 
             $invoice = Invoice::query()->create([
                 'invoice_no' => Invoice::generateInvoiceNo(),
-                'user_id' => (int) $service->user_id,
+                'user_id' => (int) $lockedService->user_id,
                 'product_id' => (int) $product->id,
                 'product_spec_snapshot' => $productSpecDisplay,
                 'product_type_snapshot' => (string) $product->product_type,
@@ -328,7 +337,7 @@ class ServiceUpgradeService
     public function processPaidUpgradeOrder(Order $order): ?Service
     {
         try {
-            return Cache::lock("lock:host-upgrade:order:{$order->id}", 300)
+            return Cache::lock(CacheKey::lock('lock:host-upgrade:order', (string) $order->id), 300)
                 ->block(3, fn () => $this->processPaidUpgradeOrderLocked($order));
         } catch (LockTimeoutException) {
             Log::info('[产品升降级] 同一订单正在处理，跳过本次重复履约', [

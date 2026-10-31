@@ -90,6 +90,8 @@ class NotificationService
 
     public const TEMPLATE_SERVICE_UNSUSPEND_FAILED = '100029';
 
+    public const TEMPLATE_SERVICE_TRANSFERRED = '100030';
+
     public const TEMPLATE_LOGIN_FAILURE_ALERT = '100003';
 
     public const TEMPLATE_LOGIN_LOCATION_ALERT = '100003';

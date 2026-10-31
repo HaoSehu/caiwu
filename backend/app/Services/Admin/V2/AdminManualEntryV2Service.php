@@ -17,6 +17,7 @@ use App\Models\Service;
 use App\Models\User;
 use App\Services\Finance\InvoiceService;
 use App\Services\System\ActivityLogService;
+use App\Support\CacheKey;
 use App\Support\Money;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
@@ -34,6 +35,17 @@ class AdminManualEntryV2Service
      * 窗口取 120s 已覆盖双击与网络超时重试；更久的重复提交由管理员人工把关。
      */
     private const EMPTY_TRADE_NO_DUPLICATE_WINDOW_SECONDS = 120;
+
+    /**
+     * 补录链路三个互斥锁的顶层段：与收口前的硬编码前缀逐字一致。
+     *
+     * 键格式：TRADE '{用户ID}:{交易号md5或内容指纹}'、ORDER '{实例ID}'、REVERSAL '{账单ID}'。
+     */
+    private const TRADE_LOCK_TOP_SEGMENT = 'lock:admin:manual-trade';
+
+    private const ORDER_LOCK_TOP_SEGMENT = 'lock:admin:manual-order';
+
+    private const REVERSAL_LOCK_TOP_SEGMENT = 'lock:admin:manual-reversal';
 
     public function __construct(
         private readonly InvoiceService $invoices,
@@ -106,14 +118,14 @@ class AdminManualEntryV2Service
             ], JSON_UNESCAPED_UNICODE));
 
             try {
-                return Cache::lock('lock:admin:manual-trade:'.((int) $user->id).':'.$fingerprint, 10)->block(3, $entry);
+                return Cache::lock(CacheKey::lock(self::TRADE_LOCK_TOP_SEGMENT, ((int) $user->id).':'.$fingerprint), 10)->block(3, $entry);
             } catch (LockTimeoutException) {
                 throw new BusinessException('相同内容的补录正在处理中，请稍候重试');
             }
         }
 
         try {
-            return Cache::lock('lock:admin:manual-trade:'.((int) $user->id).':'.md5($tradeNo), 10)->block(3, $entry);
+            return Cache::lock(CacheKey::lock(self::TRADE_LOCK_TOP_SEGMENT, ((int) $user->id).':'.md5($tradeNo)), 10)->block(3, $entry);
         } catch (LockTimeoutException) {
             throw new BusinessException('相同交易号的补录正在处理中，请稍候重试');
         }
@@ -218,11 +230,11 @@ class AdminManualEntryV2Service
         });
 
         try {
-            return Cache::lock('lock:admin:manual-order:'.((int) $service->id), 10)->block(3, function () use ($user, $tradeNo, $entry) {
+            return Cache::lock(CacheKey::lock(self::ORDER_LOCK_TOP_SEGMENT, (string) ((int) $service->id)), 10)->block(3, function () use ($user, $tradeNo, $entry) {
                 // 与补录账单链路共享同一交易号锁：两条链路的查重都是事务内快照读，
                 // 不共享锁时并发提交同一交易号会互相看不到未提交的 Payment 行，造成双入账。
                 if ($tradeNo !== '') {
-                    return Cache::lock('lock:admin:manual-trade:'.((int) $user->id).':'.md5($tradeNo), 10)->block(3, $entry);
+                    return Cache::lock(CacheKey::lock(self::TRADE_LOCK_TOP_SEGMENT, ((int) $user->id).':'.md5($tradeNo)), 10)->block(3, $entry);
                 }
 
                 return $entry();
@@ -252,7 +264,7 @@ class AdminManualEntryV2Service
         throw_if($reason === '', new BusinessException('请填写红字冲抵原因'));
 
         try {
-            return Cache::lock('lock:admin:manual-reversal:'.$invoiceId, 15)->block(3, function () use ($user, $invoiceId, $payload, $context, $reason): array {
+            return Cache::lock(CacheKey::lock(self::REVERSAL_LOCK_TOP_SEGMENT, (string) $invoiceId), 15)->block(3, function () use ($user, $invoiceId, $payload, $context, $reason): array {
                 return DB::transaction(function () use ($user, $invoiceId, $payload, $context, $reason): array {
                     $original = Invoice::query()->lockForUpdate()->find($invoiceId);
                     throw_if(! $original instanceof Invoice, new BusinessException('账单不存在'));
@@ -303,6 +315,10 @@ class AdminManualEntryV2Service
                         'invoice_no' => Invoice::generateInvoiceNo(),
                         'user_id' => (int) $original->user_id,
                         'origin_invoice_id' => (int) $original->id,
+                        // 与余额退款红字单一致：继承原单的实例归属，否则实例账单页签按
+                        // service_id 过滤时看不到这张冲抵单。补录单必然没有 order_id
+                        // （入口已拒绝 order_id > 0 的账单），故无需继承订单归属。
+                        'service_id' => (int) ($original->service_id ?? 0) ?: null,
                         'type' => InvoiceType::REFUND,
                         'amount' => Money::format(-$reversalAmount),
                         'paid_amount' => Money::format(-$reversalAmount),
