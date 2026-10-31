@@ -29,9 +29,10 @@ const QUERY_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 export const PAYMENT_STATUS_OPTIONS = toSelectOptions(PAYMENT_STATUS_MAP, false);
 
+// 用户端只展示支付渠道，插件名（如「易支付」）不得出现在任何面向用户的位置。
+// 值是后端 ListPaymentsRequest 允许的网关 key，文案是渠道名，两者语义一致。
 export const PAYMENT_GATEWAY_OPTIONS = [
   { label: '支付宝', value: 'alipay' },
-  { label: '易支付', value: 'yipay' },
   { label: '微信支付', value: 'wechat' },
 ];
 
@@ -44,16 +45,21 @@ export function fieldValue(value: unknown) {
 
 export { formatDateTime } from '@/utils/format';
 
+// 计费周期英文键 → 用户端展示文案。列表「计费模式」列与详情页共用这一份映射：
+// 周期由商品定价决定（下单时按商品周期写进订单/账单），这里只负责把键翻译成人话。
+// semi_annual 是上游导入数据的另一种写法，与 semiannually 同义，必须一起映射，否则会漏出英文键。
 const BILLING_CYCLE_LABEL_MAP: Record<string, string> = {
-  monthly: '月付',
-  quarterly: '季付',
-  semiannually: '半年付',
-  biennially: '两年付',
-  triennially: '三年付',
-  annually: '年付',
-  yearly: '年付',
-  one_time: '一次性',
-  onetime: '一次性',
+  monthly: '一个月',
+  quarterly: '三个月',
+  semi_annual: '半年',
+  semi_annually: '半年',
+  semiannually: '半年',
+  biennially: '两年',
+  triennially: '三年',
+  annually: '一年',
+  yearly: '一年',
+  one_time: '按量',
+  onetime: '按量',
   free: '免费',
 };
 

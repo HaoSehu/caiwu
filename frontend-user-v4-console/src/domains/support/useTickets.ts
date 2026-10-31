@@ -20,6 +20,7 @@ import type {
   TicketServiceOption,
 } from '@/types/client';
 import { getErrorMessage } from '@/utils/error';
+import { formatDateTime } from '@/utils/format';
 
 type ServiceOption = TicketServiceOption;
 
@@ -69,13 +70,9 @@ function normalizeList(data: unknown): TicketRecord[] {
   return [];
 }
 
+// 工单时间统一走全站时间格式（YYYY-MM-DD HH:mm:ss，见 docs/DESIGN.md §6），不再本地另写一份
 export function formatTicketTime(value: unknown) {
-  const raw = String(value || '').trim();
-  if (!raw) return '--';
-  const date = new Date(raw);
-  if (Number.isNaN(date.getTime())) return raw.slice(0, 16).replace('T', ' ');
-  const pad = (num: number) => String(num).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  return formatDateTime(value);
 }
 
 export function resolveTicketStatusLabel(value: unknown) {

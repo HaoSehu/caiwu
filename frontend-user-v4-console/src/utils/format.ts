@@ -27,24 +27,25 @@ const pad = (num: number) => String(num).padStart(2, '0');
 const DASH_RE = /-/g;
 
 /**
- * 日期时间格式化为 `YYYY-MM-DD HH:mm`。
+ * 日期时间统一格式化为 `YYYY-MM-DD HH:mm:ss`（例：2026-10-24 02:12:43）。
+ * 全站唯一口径（docs/DESIGN.md §6）：不得再输出省略秒、斜杠分隔或 MM-DD HH:mm 的写法。
  * 兼容 `YYYY-MM-DD HH:mm:ss` 与带 `-` 分隔的字符串（Safari 友好）。
  */
 export function formatDateTime(value: unknown): string {
   if (!value) return '--';
   const date = new Date(String(value).replace(DASH_RE, '/'));
   if (Number.isNaN(date.getTime())) return String(value);
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(
+    date.getMinutes(),
+  )}:${pad(date.getSeconds())}`;
 }
 
 /**
- * 日期时间格式化为 `MM-DD HH:mm`（仪表盘等紧凑场景）。
+ * 结束时间：后端按状态下发——已支付 / 已退款 / 已取消都是完整时间，待支付不下发。
+ * 展示口径与全站时间一致（YYYY-MM-DD HH:mm:ss），空值占位。
  */
-export function formatShortDateTime(value: unknown): string {
-  if (!value) return '--';
-  const date = new Date(String(value).replace(DASH_RE, '/'));
-  if (Number.isNaN(date.getTime())) return '--';
-  return `${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+export function formatFinishTime(value: unknown): string {
+  return formatDateTime(value);
 }
 
 export interface CopyTextOptions {

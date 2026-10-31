@@ -17,6 +17,14 @@ export function formatDateTime(value?: unknown): string {
 }
 
 /**
+ * 结束时间：后端按状态下发——已支付 / 已退款 / 已取消都是完整时间，待支付不下发。
+ * 展示口径与全站时间一致（YYYY-MM-DD HH:mm:ss），空值占位。
+ */
+export function formatFinishTime(value?: unknown): string {
+  return formatDateTime(value);
+}
+
+/**
  * 金额格式化：¥X.XX（千分位分组，负数符号在 ¥ 之前）。
  *
  * 口径由 shared/finance/money 统一，管理端、用户控制台与官网共用同一实现（审查条目 A7）。
@@ -80,18 +88,19 @@ export function numberText(value: unknown): string {
   return Number.isFinite(number) ? number.toLocaleString('zh-CN') : fieldValue(value);
 }
 
-/** 计费周期中文映射 */
+/** 计费周期中文映射（与用户控制台同口径：一个月 / 三个月 / 半年 / 一年 / 按量） */
 const BILLING_CYCLE_LABELS: Record<string, string> = {
-  monthly: '月付',
-  quarterly: '季付',
-  semi_annually: '半年付',
-  semiannually: '半年付',
-  annually: '年付',
-  yearly: '年付',
-  biennially: '两年付',
-  triennially: '三年付',
-  onetime: '一次性',
-  one_time: '一次性',
+  monthly: '一个月',
+  quarterly: '三个月',
+  semi_annual: '半年',
+  semi_annually: '半年',
+  semiannually: '半年',
+  annually: '一年',
+  yearly: '一年',
+  biennially: '两年',
+  triennially: '三年',
+  onetime: '按量',
+  one_time: '按量',
   free: '免费',
 };
 
