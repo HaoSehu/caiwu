@@ -23,6 +23,15 @@
   }
 }
 
+.record-table {
+  // 记录表要求内容完整展示：单元格一律不换行、不省略，订单号 / 账单号 / 时间等长文本完整可见；
+  // 列宽只作下限，表格随内容变宽后由 TDesign 表格容器横向滚动，用户可拖动滚动条查看
+  :deep(th),
+  :deep(td) {
+    white-space: nowrap;
+  }
+}
+
 .stack-cell {
   display: flex;
   flex-direction: column;
@@ -31,8 +40,6 @@
 
   strong,
   span {
-    overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
