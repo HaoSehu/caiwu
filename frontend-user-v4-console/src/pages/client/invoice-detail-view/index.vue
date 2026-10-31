@@ -42,22 +42,18 @@
     >
       <template v-if="detail">
         <!-- I-03：账单详情与支付页是同一张单据的两个面，金额必须都站在同一个位置。
-             支付页有「本次应付」主视觉，详情页原先 12 个 kv 平铺、没有金额焦点，
-             用户从支付页返回后认不出是不是同一张单。这里补一条紧凑的金额摘要条
-             （不是统计卡、不是大 Hero，符合 DESIGN §5.2 对财务页的禁令）。 -->
+             金额口径按 docs/设计文档/前端/优惠金额展示规范-2026-10-31.md §1.3/§1.5：
+             账单只回答「付了多少钱、怎么付的、关联哪张账单与哪笔支付单」，摘要条只呈现
+             「实际支付金额」paid_amount，与订单页、账单列表页同源同值；
+             原价与逐项优惠属于订单详情的费用明细区块，账单侧不出现任何金额拆分。 -->
         <section class="invoice-amount-summary" aria-label="账单金额摘要">
           <div class="invoice-amount-summary__main">
-            <span class="invoice-amount-summary__label">本次应付</span>
-            <strong class="invoice-amount-summary__value">
-              <span class="invoice-amount-summary__currency">¥</span>{{ formatMoney(detail.payable_amount) }}
-            </strong>
+            <span class="invoice-amount-summary__label">实际支付金额</span>
+            <strong class="invoice-amount-summary__value">{{ formatMoneyText(detail.paid_amount) }}</strong>
           </div>
           <div class="invoice-amount-summary__meta">
             <status-tag :status-map="INVOICE_STATUS_MAP" :status="Number(detail.status)" />
             <span class="invoice-amount-summary__no">{{ detail.invoice_no || '--' }}</span>
-            <span v-if="detail.paid_amount" class="invoice-amount-summary__paid">
-              已付 ¥{{ formatMoney(detail.paid_amount) }}
-            </span>
           </div>
         </section>
 
@@ -79,40 +75,22 @@
                   <status-tag :status-map="INVOICE_STATUS_MAP" :status="Number(detail.status)" />
                 </div>
                 <div class="detail-kv-item">
-                  <span>账单金额</span>
-                  <strong>¥{{ formatMoney(detail.amount) }}</strong>
-                </div>
-                <div v-if="memberDiscountAmount > 0" class="detail-kv-item">
-                  <span>会员折扣{{ memberDiscountLevelName ? `（${memberDiscountLevelName}）` : '' }}</span>
-                  <strong>-¥{{ formatMoney(memberDiscountAmount) }}</strong>
-                </div>
-                <div v-if="couponDiscountAmount > 0" class="detail-kv-item">
-                  <span>优惠券减免{{ detail.coupon_name ? `（${detail.coupon_name}）` : '' }}</span>
-                  <strong>-¥{{ formatMoney(couponDiscountAmount) }}</strong>
-                </div>
-                <div class="detail-kv-item">
-                  <span>已付金额</span>
-                  <strong>¥{{ formatMoney(detail.paid_amount) }}</strong>
-                </div>
-                <div class="detail-kv-item">
-                  <span>待付金额</span>
-                  <strong>¥{{ formatMoney(detail.payable_amount) }}</strong>
-                </div>
-                <div class="detail-kv-item">
                   <span>计费周期</span>
                   <strong>{{ billingCycleLabel(detail.billing_cycle) }}</strong>
                 </div>
                 <div class="detail-kv-item">
                   <span>创建时间</span>
-                  <strong>{{ detail.created_at || '--' }}</strong>
+                  <strong>{{ formatDateTime(detail.created_at) }}</strong>
                 </div>
+                <!-- 截止时间取 invoices.due_date，是纯日期列（schema 注释「账单到期日」），
+                     不走 formatDateTime，否则会被补成 2026-11-07 00:00:00。 -->
                 <div v-if="detail.due_date" class="detail-kv-item">
                   <span>截止时间</span>
                   <strong>{{ detail.due_date }}</strong>
                 </div>
                 <div v-if="detail.paid_at" class="detail-kv-item">
                   <span>支付时间</span>
-                  <strong>{{ detail.paid_at }}</strong>
+                  <strong>{{ formatDateTime(detail.paid_at) }}</strong>
                 </div>
               </div>
             </t-tab-panel>
@@ -144,21 +122,6 @@
                 </div>
               </section>
               <t-empty v-else class="related-empty-state" size="small" description="暂无关联订单" />
-
-              <!-- 优惠券 -->
-              <section v-if="detail.coupon_code || detail.coupon_name" class="related-section">
-                <h4>使用优惠券</h4>
-                <div class="detail-kv-grid">
-                  <div v-if="detail.coupon_name" class="detail-kv-item">
-                    <span>优惠券名称</span>
-                    <strong>{{ detail.coupon_name }}</strong>
-                  </div>
-                  <div v-if="detail.coupon_code" class="detail-kv-item">
-                    <span>优惠券码</span>
-                    <strong>{{ detail.coupon_code }}</strong>
-                  </div>
-                </div>
-              </section>
             </t-tab-panel>
 
             <t-tab-panel value="payments" label="关联支付">
@@ -172,7 +135,7 @@
                   hover
                 >
                   <template #amount="{ row }">
-                    <span class="payment-money">¥{{ formatMoney(row.amount) }}</span>
+                    <span class="payment-money">{{ formatMoneyText(row.amount) }}</span>
                   </template>
                   <template #status="{ row }">
                     <status-tag :status-map="PAYMENT_STATUS_MAP" :status="Number(row.status)" />
@@ -207,22 +170,13 @@ import { isPayableInvoice, resolveNonPayableInvoiceMessage } from '@/domains/fin
 import { formatBillingCycle } from '@/domains/finance/useRecords';
 import type { InvoiceRecord } from '@/types/client';
 import { getErrorMessage } from '@/utils/error';
-import { formatMoney } from '@/utils/format';
+import { formatDateTime, formatMoneyText } from '@/utils/format';
 
 const route = useRoute();
 const router = useRouter();
 const loading = ref(false);
 const detail = ref<InvoiceRecord | null>(null);
 const activeTab = ref('basic');
-
-// 券减免与会员折扣分列展示，来源不同不合并
-const couponDiscountAmount = computed(() => Math.max(0, Number(detail.value?.discount || 0)));
-const memberDiscountAmount = computed(() => Math.max(0, Number(detail.value?.member_discount_amount || 0)));
-const memberDiscountLevelName = computed(() => {
-  const snapshot = detail.value?.member_discount_snapshot as Record<string, unknown> | null | undefined;
-  if (!snapshot || typeof snapshot !== 'object') return '';
-  return String(snapshot.member_level_name || snapshot.group_name || '').trim();
-});
 
 // 路由参数响应式：同路由换 id 时组件会被复用，必须靠 watch 重新拉取
 const invoiceId = computed(() => Number(route.params.id || 0));
@@ -262,7 +216,7 @@ const paymentColumns: PrimaryTableCol[] = [
   { colKey: 'payment_no', title: '商家订单号', minWidth: '10rem' },
   { colKey: 'trade_no', title: '第三方订单号', minWidth: '12rem' },
   { colKey: 'gateway', title: '渠道', width: '8rem' },
-  { colKey: 'amount', title: '金额', width: '8rem', align: 'right' },
+  { colKey: 'amount', title: '支付金额', width: '8rem', align: 'right' },
   { colKey: 'status', title: '状态', width: '8rem' },
   { colKey: 'paid_at', title: '支付时间', minWidth: '12rem' },
 ];
@@ -338,7 +292,9 @@ watch(
   align-items: baseline;
   justify-content: space-between;
   gap: var(--td-comp-margin-s) var(--td-comp-margin-l);
-  padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-l);
+  // 左右内边距取 24px 与下方卡片正文对齐：卡片正文左基线 = 卡片 1px 边框 + 24px 内边距 = 距页 25px，
+  // 摘要条用 --td-comp-paddingLR-l（20px）+ 1px 边框会落在 21px，上下两块文字左边缘差 4px。
+  padding: var(--td-comp-paddingTB-m) 24px;
   background: var(--td-bg-color-container);
   border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
@@ -360,12 +316,6 @@ watch(
     font-variant-numeric: tabular-nums;
   }
 
-  &__currency {
-    font-size: var(--td-font-size-title-large);
-    font-weight: 600;
-    margin-right: var(--td-comp-margin-xxs);
-  }
-
   &__meta {
     display: flex;
     flex-wrap: wrap;
@@ -376,10 +326,6 @@ watch(
   }
 
   &__no {
-    font-variant-numeric: tabular-nums;
-  }
-
-  &__paid {
     font-variant-numeric: tabular-nums;
   }
 }

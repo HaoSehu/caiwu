@@ -76,10 +76,6 @@
                   <strong>{{ detail.type_label || (detail.type === 'renew' ? '续费' : '新购') }}</strong>
                 </div>
                 <div class="order-kv-item">
-                  <span>账单金额</span>
-                  <strong>¥{{ formatMoney(detail.amount) }}</strong>
-                </div>
-                <div class="order-kv-item">
                   <span>计费周期</span>
                   <strong>{{ orderBillingCycle(detail) }}</strong>
                 </div>
@@ -128,7 +124,7 @@
                 </div>
                 <div>
                   <span>支付金额</span>
-                  <strong>¥{{ formatMoney(detail.payment_summary.amount) }}</strong>
+                  <strong>{{ formatMoneyText(detail.payment_summary.amount) }}</strong>
                 </div>
                 <div v-if="hasAppliedBalanceDeduction">
                   <span>余额抵扣</span>
@@ -144,9 +140,10 @@
               <div class="summary-amount">
                 <div class="summary-amount__header">
                   <span class="summary-amount__label">本次应付</span>
+                  <!-- 金额统一走 formatMoneyText：币符与负号的处理收敛在共享实现里，
+                       页面不再手写 ¥ 前缀（utils/format.ts 的注释口径）。 -->
                   <div class="summary-amount__price">
-                    <span class="currency">¥</span>
-                    <span class="amount">{{ formatMoney(detail.payable_amount) }}</span>
+                    <strong class="summary-amount__value">{{ formatMoneyText(detail.payable_amount) }}</strong>
                   </div>
                 </div>
                 <div v-if="sessionExpiresAt" class="summary-session">
@@ -188,27 +185,12 @@
 
                 <div class="summary-divider"></div>
 
-                <div v-if="hasPriceDiscount" class="summary-item summary-discount-row">
-                  <span class="summary-item__label">原价</span>
-                  <strong class="summary-item__value">¥{{ originalAmountText }}</strong>
-                </div>
-                <div class="summary-item">
-                  <span class="summary-item__label">账单金额</span>
-                  <strong class="summary-item__value">¥{{ formatMoney(detail.amount) }}</strong>
-                </div>
-                <div v-if="memberDiscountAmount > 0" class="summary-item summary-discount-row">
-                  <span class="summary-item__label"
-                    >会员折扣{{ memberDiscountLevelName ? `（${memberDiscountLevelName}）` : '' }}</span
-                  >
-                  <strong class="summary-item__value">-¥{{ formatMoney(memberDiscountAmount) }}</strong>
-                </div>
-                <div v-if="couponDiscountAmount > 0" class="summary-item summary-discount-row">
-                  <span class="summary-item__label">优惠券减免{{ couponLabel ? `（${couponLabel}）` : '' }}</span>
-                  <strong class="summary-item__value">-¥{{ formatMoney(couponDiscountAmount) }}</strong>
-                </div>
-                <div class="summary-item">
-                  <span class="summary-item__label">已支付</span>
-                  <strong class="summary-item__value">¥{{ formatMoney(detail.paid_amount) }}</strong>
+                <!-- 优惠金额展示规范 §1.3 / §1.5：账单只回答付了多少钱、怎么付的、关联哪张账单与哪笔支付单。
+                     原价与逐项优惠属于订单详情的费用明细区块，账单侧不出现任何金额拆分，
+                     这里只留实际支付金额一个金额位。 -->
+                <div class="summary-item summary-paid-row">
+                  <span class="summary-item__label">实际支付金额</span>
+                  <strong class="summary-item__value">{{ formatMoneyText(detail.paid_amount) }}</strong>
                 </div>
               </div>
             </t-card>
@@ -351,7 +333,7 @@ import StatusTag from '@caiwu/shared/user-v3/components/StatusTag.vue';
 
 import { resolveInvoiceNo, useInvoiceDetail } from '@/domains/finance/useInvoices';
 import { resolvePaymentStatusLabel } from '@/domains/finance/useRecords';
-import { formatMoney } from '@/utils/format';
+import { formatMoneyText } from '@/utils/format';
 
 import {
   isNewPurchaseInvoice,
@@ -412,12 +394,6 @@ const {
   renewInfoItemsView,
   pricingItemsView,
   productPathView,
-  memberDiscountAmount,
-  couponDiscountAmount,
-  couponLabel,
-  memberDiscountLevelName,
-  hasPriceDiscount,
-  originalAmountText,
 } = useInvoiceDetailHelpers(detail);
 
 /**
@@ -428,10 +404,12 @@ const payMethodViews = computed(() =>
   payMethods.value.map((method) => {
     const key = paymentOptionKey(method);
 
+    // 用户端只展示渠道名（channel_name），插件名（name）禁止上屏；
+    // 主标题已是渠道名，副标题不再重复它，统一为支付方式说明。
     return {
       key,
-      name: method.name || method.label || '支付',
-      subLabel: method.label || method.key || '扫码支付',
+      name: method.channel_name || method.label || method.key || '支付',
+      subLabel: '扫码支付',
       icon: paymentMethodIcon(method),
       isActive: selectedPayMethod.value === key,
     };

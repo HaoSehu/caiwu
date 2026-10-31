@@ -57,6 +57,7 @@
           :data="list"
           :columns="columns"
           :pagination="null"
+          table-layout="auto"
           hover
         >
           <template #order="{ row }">
@@ -71,8 +72,11 @@
               <span v-if="row.service_name">{{ row.service_name }}</span>
             </div>
           </template>
+          <template #billing_cycle="{ row }">
+            <span class="order-cycle">{{ vm(row).billingMode }}</span>
+          </template>
           <template #amount="{ row }">
-            <span class="order-money">¥{{ vm(row).amount }}</span>
+            <span class="order-money">{{ vm(row).paidAmount }}</span>
           </template>
           <template #status="{ row }">
             <status-tag :status-map="ORDER_STATUS_MAP" :status="Number(row.status)" />
@@ -81,6 +85,7 @@
             <span class="order-channel">{{ orderChannelLabel(row) }}</span>
           </template>
           <template #created_at="{ row }">{{ formatDateTime(row.created_at) }}</template>
+          <template #finished_at="{ row }">{{ vm(row).finishedAt }}</template>
           <template #operation="{ row }">
             <t-space>
               <t-button size="small" theme="primary" variant="text" @click="router.push(`/client/orders/${row.id}`)">
@@ -130,18 +135,14 @@
             <div class="stack-cell">
               <strong>{{ orderProductDisplay(row) }}</strong>
               <span>{{ row.type_label || '--' }}</span>
-              <span class="stack-money">¥{{ vm(row).amount }}</span>
-              <span v-if="vm(row).couponDiscount > 0" class="stack-money"
-                >优惠券减免：¥{{ vm(row).couponDiscountText
-                }}{{ row.coupon_name ? `（${row.coupon_name}）` : '' }}</span
-              >
-              <span v-if="vm(row).memberDiscount > 0" class="stack-money"
-                >会员折扣：¥{{ vm(row).memberDiscountText }}</span
-              >
+              <!-- 优惠金额展示规范 1.1 / 3.2：订单页不出现原价与任何优惠拆分，只留实付金额 -->
+              <span class="stack-money stack-money--paid">实付金额：{{ vm(row).paidAmount }}</span>
             </div>
             <div class="record-mobile-card__meta">
+              <span>计费模式：{{ vm(row).billingMode }}</span>
               <span>支付渠道：{{ orderChannelLabel(row) }}</span>
-              <span>{{ formatDateTime(row.created_at) }}</span>
+              <span>创建时间：{{ formatDateTime(row.created_at) }}</span>
+              <span>结束时间：{{ vm(row).finishedAt }}</span>
             </div>
             <div class="record-mobile-card__actions">
               <t-button
@@ -211,9 +212,10 @@ import {
   orderProductDisplay,
   useOrderList,
 } from '@/domains/finance/useOrders';
+import { formatBillingCycle } from '@/domains/finance/useRecords';
 import RecordQuickFilters from '@/pages/client/components/RecordQuickFilters.vue';
 import type { OrderRecord } from '@/types/client';
-import { formatDateTime, formatMoney } from '@/utils/format';
+import { formatDateTime, formatFinishTime, formatMoneyText } from '@/utils/format';
 
 const router = useRouter();
 // 表格与移动卡片只渲染一套，切换点与 record-page.less 的平板断点保持一致
@@ -238,26 +240,18 @@ const {
   cancelOrder,
 } = useOrderList();
 
-// 优惠券减免与会员折扣来源不同，手机卡片内分行展示，避免混成一个数字无法区分。
-function couponDiscountOf(row: Record<string, unknown>): number {
-  return Number(row.discount || 0);
-}
-
-function memberDiscountOf(row: Record<string, unknown>): number {
-  return Number(row.member_discount_amount || 0);
-}
-
 /**
  * 行视图模型：桌面表格与手机卡片共用同一份派生值。
- * 原先同一条订单的金额与折扣在模板里被反复格式化（券折扣一处就要格式化两次），
- * 支付/取消的可用状态也每行现算，列表换引用即全部重算。
+ * 优惠金额展示规范 2.1：三页金额同源于 paid_amount，由同一格式化函数输出，
+ * 列表不保留原价与优惠拆分字段，避免与账单详情页出现两套数字。
  */
 interface OrderRowViewModel {
-  amount: string;
-  couponDiscount: number;
-  memberDiscount: number;
-  couponDiscountText: string;
-  memberDiscountText: string;
+  /** 实付金额：已格式化并自带货币符号，列表唯一金额 */
+  paidAmount: string;
+  /** 计费模式文案（一个月 / 三个月 / 半年 / 一年 / 按量），由订单 billing_cycle 翻译 */
+  billingMode: string;
+  /** 结束时间：订单完成（支付）时间，未完成显示占位符 */
+  finishedAt: string;
   canPay: boolean;
   payWindowClosed: boolean;
   payUnavailable: boolean;
@@ -269,15 +263,10 @@ const rowViewModels = computed(() => {
   const map = new Map<number, OrderRowViewModel>();
 
   for (const row of list.value) {
-    const couponDiscount = couponDiscountOf(row);
-    const memberDiscount = memberDiscountOf(row);
-
     map.set(row.id, {
-      amount: formatMoney(row.amount),
-      couponDiscount,
-      memberDiscount,
-      couponDiscountText: formatMoney(couponDiscount),
-      memberDiscountText: formatMoney(memberDiscount),
+      paidAmount: formatMoneyText(row.paid_amount || 0),
+      billingMode: formatBillingCycle(row.billing_cycle),
+      finishedAt: formatFinishTime(row.finished_at),
       canPay: canPayOrderRow(row),
       payWindowClosed: isPayWindowClosedOrderRow(row),
       payUnavailable: isPayUnavailableOrderRow(row),
@@ -290,11 +279,9 @@ const rowViewModels = computed(() => {
 });
 
 const emptyRowViewModel: OrderRowViewModel = {
-  amount: '0.00',
-  couponDiscount: 0,
-  memberDiscount: 0,
-  couponDiscountText: '0.00',
-  memberDiscountText: '0.00',
+  paidAmount: '¥0.00',
+  billingMode: '--',
+  finishedAt: '--',
   canPay: false,
   payWindowClosed: false,
   payUnavailable: false,
@@ -315,17 +302,18 @@ function orderChannelLabel(row: OrderRecord): string {
   return row.channel_name || row.gateway_label || '--';
 }
 
-// I-04 同类：侧边布局下 1366 视口的可用宽度约 68rem
-// （1366 − 侧栏 232 − padding 48 − 常驻滚动条 8 像素 ≈ 1078 像素）。
-// 各列内容实际是等宽数字与短标签，7 列合计 60rem，不再横向滚动；
-// 账单记录页三张表的收口口径保持一致。
+// 列宽只作下限：表格用 table-layout="auto" 让长文本完整展示，
+// 内容超宽时由表格容器横向滚动（用户可拖动滚动条查看），不再靠 ellipsis 截断。
+// 金额 / 计费模式 / 状态 / 渠道是定长内容，给死宽度避免列宽抖动。
 const columns: PrimaryTableCol[] = [
   { colKey: 'order', title: '订单号', minWidth: '10rem' },
   { colKey: 'product', title: '产品/服务', minWidth: '10rem' },
-  { colKey: 'amount', title: '金额', width: '7.5rem', align: 'right' },
+  { colKey: 'billing_cycle', title: '计费模式', width: '6.5rem' },
+  { colKey: 'amount', title: '实付金额', width: '8.5rem', align: 'right' },
   { colKey: 'status', title: '状态', width: '6.5rem' },
   { colKey: 'channel', title: '支付渠道', width: '7rem' },
   { colKey: 'created_at', title: '创建时间', minWidth: '10rem' },
+  { colKey: 'finished_at', title: '结束时间', minWidth: '10rem' },
   { colKey: 'operation', title: '操作', width: '9rem', fixed: 'right', align: 'right' },
 ];
 </script>
@@ -339,7 +327,19 @@ const columns: PrimaryTableCol[] = [
   font-variant-numeric: tabular-nums;
 }
 
+// 优惠金额展示规范 1.2：窄屏卡片的实付金额与桌面列同为 14px、字重 600，
+// 不被 .stack-cell span 的次要文本字号压小。
+.stack-cell .stack-money--paid {
+  font-size: var(--td-font-size-body-medium);
+}
+
 .order-channel {
+  color: var(--td-text-color-primary);
+  font: var(--td-font-body-medium);
+  white-space: nowrap;
+}
+
+.order-cycle {
   color: var(--td-text-color-primary);
   font: var(--td-font-body-medium);
   white-space: nowrap;

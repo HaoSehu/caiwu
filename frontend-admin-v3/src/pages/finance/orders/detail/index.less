@@ -41,6 +41,64 @@
   }
 }
 
+/* 费用明细（优惠金额展示规范 §1.4/§3.5）：页面最下方独立区块，
+   优惠行左缩进 16px 形成从属关系，数值用成功色表示减项，金额右对齐同右基线 */
+.order-fee-detail {
+  padding: 16px 24px;
+  background: var(--td-bg-color-container);
+  border: 1px solid var(--td-component-border);
+  border-radius: var(--td-radius-large);
+  box-shadow: var(--td-shadow-1);
+
+  &__title {
+    margin: 0 0 var(--td-comp-margin-s);
+    color: var(--td-text-color-primary);
+    font-size: var(--td-font-size-body-medium);
+    font-weight: 600;
+    line-height: 1.4;
+  }
+
+  &__list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--td-comp-margin-xs);
+    margin: 0;
+    padding: 0;
+  }
+
+  &__row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--td-comp-margin-l);
+    min-height: 1.75rem;
+    color: var(--td-text-color-primary);
+    font-size: var(--td-font-size-body-medium);
+    font-weight: 400;
+
+    // 长计算式在窄屏要能换行，否则右侧金额被顶出可视区（用户端同口径）
+    dt {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+
+    dd {
+      flex-shrink: 0;
+      margin: 0;
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+    }
+  }
+
+  &__row--discount {
+    padding-left: 16px;
+
+    dd {
+      color: var(--td-success-color);
+    }
+  }
+}
+
 /* 现代化 4 列自适应网格 */
 .detail-kv-grid {
   display: grid;
@@ -77,11 +135,6 @@
     overflow-wrap: anywhere;
 
     &.is-money {
-      font-weight: 600;
-    }
-
-    &.is-discount {
-      color: var(--td-success-color);
       font-weight: 600;
     }
 

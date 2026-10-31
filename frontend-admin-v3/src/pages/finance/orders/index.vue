@@ -58,7 +58,7 @@
           :columns="columns"
           :loading="loading"
           hover
-          table-layout="fixed"
+          table-layout="auto"
           aria-label="订单列表"
         >
           <template #empty>
@@ -83,19 +83,11 @@
               <span>{{ fieldValue(row.upgrade_target_label || row.upgrade_mode) }}</span>
             </div>
           </template>
-          <template #amount="{ row }"
-            ><span class="t-num-strong">{{ formatMoney(row.amount) }}</span></template
+          <!-- 优惠金额展示规范 1.1 / 3.2：订单列表只展示实付金额，取 paid_amount 且不拆优惠 -->
+          <template #paid_amount="{ row }"
+            ><span class="t-num-strong">{{ formatMoney(row.paid_amount) }}</span></template
           >
-          <template #discount="{ row }">
-            <div class="stack-cell">
-              <strong v-if="couponDiscountOf(row) > 0" class="t-num-strong"
-                >券 {{ formatMoney(couponDiscountOf(row)) }}</strong
-              >
-              <span v-if="memberDiscountOf(row) > 0">会员 {{ formatMoney(memberDiscountOf(row)) }}</span>
-              <span v-if="couponDiscountOf(row) <= 0 && memberDiscountOf(row) <= 0">--</span>
-            </div>
-          </template>
-          <template #coupon="{ row }">{{ fieldValue(row.coupon_code) }}</template>
+          <template #billing_cycle="{ row }">{{ billingCycleLabel(row.billing_cycle) }}</template>
           <template #quantity="{ row }">{{ row.quantity || 1 }}</template>
           <template #status="{ row }">
             <status-tag :status-map="ORDER_STATUS_MAP" :status="row.status" />
@@ -110,6 +102,7 @@
             <span v-else>--</span>
           </template>
           <template #createdAt="{ row }">{{ formatDateTime(row.created_at) }}</template>
+          <template #finishedAt="{ row }">{{ formatFinishTime(row.finished_at) }}</template>
           <template #operation="{ row }">
             <t-button size="small" variant="text" theme="primary" @click="goDetail(row)">详情</t-button>
           </template>
@@ -126,8 +119,8 @@
               :eyebrow="mobileEyebrow"
               :subtitle="row.type_label || orderTypeLabel(row.type)"
               :description="fieldValue(row.product_full_path || row.product_name)"
-              highlight-label="订单金额"
-              :highlight-value="formatMoney(row.amount)"
+              highlight-label="实付金额"
+              :highlight-value="formatMoney(row.paid_amount)"
               :status-map="ORDER_STATUS_MAP"
               :status="row.status"
               :rows="orderMobileRows(row)"
@@ -171,7 +164,7 @@ import MobileRecordCard from '@/components/mobile-record-card/index.vue';
 import QuickFilterTags from '@/components/quick-filter-tags/index.vue';
 import { useListPage } from '@/hooks/useListPage';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { fieldValue, formatDateTime, formatMoney } from '@/utils/format';
+import { fieldValue, formatBillingCycle, formatDateTime, formatFinishTime, formatMoney } from '@/utils/format';
 import { errorMessage } from '@/utils/userMessage';
 
 defineOptions({
@@ -256,7 +249,7 @@ const {
 
 const columns = computed<PrimaryTableCol<OrderRecord>[]>(() => {
   const base: PrimaryTableCol<OrderRecord>[] = [
-    { colKey: 'order_no', title: '订单号', minWidth: 170, ellipsis: true },
+    { colKey: 'order_no', title: '订单号', minWidth: 170 },
     { colKey: 'user', title: '用户', minWidth: 180 },
     { colKey: 'product', title: '产品/服务', minWidth: 240 },
     { colKey: 'type', title: '类型', width: 110 },
@@ -265,13 +258,13 @@ const columns = computed<PrimaryTableCol<OrderRecord>[]>(() => {
     base.push({ colKey: 'upgrade', title: '配置', minWidth: 140 });
   }
   base.push(
-    { colKey: 'amount', title: '金额', width: 120, align: 'right' },
-    { colKey: 'discount', title: '优惠', width: 130, align: 'right' },
-    { colKey: 'coupon', title: '优惠券', minWidth: 150, ellipsis: true },
+    { colKey: 'billing_cycle', title: '计费周期', width: 110 },
+    { colKey: 'paid_amount', title: '实付金额', width: 130, align: 'right' },
     { colKey: 'quantity', title: '数量', width: 80 },
     { colKey: 'status', title: '状态', width: 110 },
     { colKey: 'invoice', title: '关联账单', minWidth: 170 },
-    { colKey: 'createdAt', title: '时间', width: 170 },
+    { colKey: 'createdAt', title: '创建时间', width: 170 },
+    { colKey: 'finishedAt', title: '结束时间', width: 170 },
     { colKey: 'operation', title: '操作', width: 80, fixed: 'right' },
   );
   return base;
@@ -320,10 +313,10 @@ function orderMobileRows(row: OrderRecord) {
     { label: '用户', value: userName(row) },
     { label: '数量', value: String(row.quantity || 1) },
     { label: '服务', value: serviceIdLabel(row.service) },
-    { label: '优惠', value: discountTextOf(row), show: hasDiscount(row) },
-    { label: '优惠券', value: String(row.coupon_code || ''), show: Boolean(row.coupon_code) },
+    { label: '计费周期', value: billingCycleLabel(row.billing_cycle) },
     { label: '账单', value: fieldValue(row.invoice?.invoice_no) },
-    { label: '时间', value: formatDateTime(row.created_at) },
+    { label: '创建时间', value: formatDateTime(row.created_at) },
+    { label: '结束时间', value: formatFinishTime(row.finished_at) },
   ];
 }
 
@@ -344,26 +337,9 @@ function orderTypeLabel(type: unknown) {
   return ORDER_TYPE_MAP[String(type || '')] || fieldValue(type);
 }
 
-// 优惠券减免与会员折扣来源不同，列表内分列展示，避免混成一个数字无法区分
-function couponDiscountOf(row: Record<string, unknown>): number {
-  return Number(row.discount || 0);
-}
-
-function memberDiscountOf(row: Record<string, unknown>): number {
-  return Number(row.member_discount_amount || 0);
-}
-
-function hasDiscount(row: Record<string, unknown>): boolean {
-  return couponDiscountOf(row) > 0 || memberDiscountOf(row) > 0;
-}
-
-// 移动端卡片只有单行位置，两类折扣合并为一行但保留来源前缀
-// 注意：管理端 formatMoney 自带 ￥，此处不再补币符
-function discountTextOf(row: Record<string, unknown>): string {
-  const parts: string[] = [];
-  if (couponDiscountOf(row) > 0) parts.push(`券 ${formatMoney(couponDiscountOf(row))}`);
-  if (memberDiscountOf(row) > 0) parts.push(`会员 ${formatMoney(memberDiscountOf(row))}`);
-  return parts.join(' / ');
+// 计费周期：英文键（monthly / quarterly / semiannually / annually …）翻成 一个月 / 三个月 / 半年 / 一年 / 按量
+function billingCycleLabel(cycle: unknown) {
+  return formatBillingCycle(cycle);
 }
 
 // 列表页只用这一个取对象的工具函数，本地实现即可，不依赖 @/utils/format 的额外导出

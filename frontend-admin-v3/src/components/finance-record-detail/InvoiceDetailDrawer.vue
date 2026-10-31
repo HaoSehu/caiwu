@@ -205,7 +205,11 @@
               </div>
               <span>第三方单号：{{ fieldValue(payment.trade_no) }}</span>
               <span>链路追踪：{{ fieldValue(payment.trace_id) }}</span>
-              <span>{{ fieldValue(payment.gateway) }} / {{ formatMoney(payment.amount) }}</span>
+              <span
+                >{{ fieldValue(payment.plugin_name) }} /
+                {{ fieldValue(payment.channel_name || payment.gateway_label) }} /
+                {{ formatMoney(payment.amount) }}</span
+              >
               <span>{{ formatDateTime(payment.paid_at || payment.created_at) }}</span>
             </div>
           </div>
@@ -351,10 +355,7 @@ const refundReasonOfLatest = computed(() => {
 });
 const hasRefundInfo = computed(() => refundStatusValue.value !== REFUND_STATUS.NONE || refundRecords.value.length > 0);
 
-// 折扣分列：券减免与会员折扣来源不同，分别展示（formatMoney 自带 ￥，勿再补币符）
-const couponDiscountAmount = computed(() => Number(invoice.value.discount || 0));
-const memberDiscountAmount = computed(() => Number(invoice.value.member_discount_amount || 0));
-const couponText = computed(() => String(invoice.value.coupon_name || invoice.value.coupon_code || '').trim());
+// 会员等级名仍用于基础信息区块的会员等级标签（账单侧只保留身份信息，不展示折扣金额）
 const memberLevelName = computed(() => {
   const snap = invoice.value.member_discount_snapshot as Record<string, unknown> | null | undefined;
   if (!snap || typeof snap !== 'object') return '';
@@ -390,20 +391,14 @@ function copyText(text: unknown) {
   void copyToClipboard(String(text || ''));
 }
 
+/**
+ * 指标区只保留「实际支付金额」一项金额指标（优惠金额展示规范 §1.3 / §1.5）。
+ * 账单只回答付了多少钱、怎么付的、关联哪张账单与哪笔支付单；账单侧不做任何金额拆分，
+ * 原价与逐项优惠属于订单详情的费用明细区块，故原「账单金额」「已付金额」「优惠券减免」
+ * 「会员折扣」等指标一并删除；非金额项保留创建时间。
+ */
 const summaryMetrics = computed<RecordDetailMetric[]>(() => [
-  { label: '账单金额', value: formatMoney(invoice.value.amount), primary: true },
-  {
-    label: '优惠券减免',
-    value: `-${formatMoney(couponDiscountAmount.value)}`,
-    show: couponDiscountAmount.value > 0,
-  },
-  {
-    label: memberLevelName.value ? `会员折扣（${memberLevelName.value}）` : '会员折扣',
-    value: `-${formatMoney(memberDiscountAmount.value)}`,
-    show: memberDiscountAmount.value > 0,
-  },
-  { label: '优惠券', value: couponText.value, show: couponText.value !== '' },
-  { label: '已付金额', value: formatMoney(invoice.value.paid_amount) },
+  { label: '实际支付金额', value: formatMoney(invoice.value.paid_amount), primary: true },
   { label: '创建时间', value: formatDateTime(invoice.value.created_at) },
 ]);
 

@@ -40,7 +40,7 @@
           :columns="columns"
           :loading="loading"
           hover
-          table-layout="fixed"
+          table-layout="auto"
           aria-label="账单列表"
         >
           <template #empty>
@@ -64,32 +64,16 @@
             </div>
           </template>
           <template #type="{ row }">{{ row.type_label || invoiceTypeLabel(row.type) }}</template>
-          <template #amount="{ row }"
-            ><span class="t-num-strong">{{ formatMoney(row.amount) }}</span></template
-          >
-          <template #discount="{ row }">
-            <div class="stack-cell">
-              <strong v-if="couponDiscountOf(row) > 0" class="t-num-strong"
-                >券 {{ formatMoney(couponDiscountOf(row)) }}</strong
-              >
-              <span v-if="memberDiscountOf(row) > 0">会员 {{ formatMoney(memberDiscountOf(row)) }}</span>
-              <span v-if="couponDiscountOf(row) <= 0 && memberDiscountOf(row) <= 0">--</span>
-            </div>
-          </template>
-          <template #coupon="{ row }">
-            <div class="stack-cell">
-              <strong>{{ fieldValue(row.coupon_name || row.coupon_code) }}</strong>
-              <span v-if="row.coupon_name && row.coupon_code">{{ row.coupon_code }}</span>
-            </div>
-          </template>
-          <template #paid="{ row }"
+          <!-- 优惠金额展示规范 1.3 / 2.3：账单列表唯一金额列「实付金额」，取 paid_amount，不展开优惠明细 -->
+          <template #paid_amount="{ row }"
             ><span class="t-num-strong">{{ formatMoney(row.paid_amount) }}</span></template
           >
+          <template #billing_cycle="{ row }">{{ billingCycleLabel(row.billing_cycle) }}</template>
           <template #status="{ row }">
             <status-tag :status-map="INVOICE_STATUS_MAP" :status="row.status" />
           </template>
           <template #createdAt="{ row }">{{ formatDateTime(row.created_at) }}</template>
-          <template #paidAt="{ row }">{{ formatDateTime(row.paid_at) }}</template>
+          <template #finishedAt="{ row }">{{ formatFinishTime(row.finished_at) }}</template>
           <template #operation="{ row }">
             <t-space v-if="!isMobile" size="small">
               <t-button size="small" variant="text" theme="primary" @click="goDetail(row)">详情</t-button>
@@ -121,8 +105,8 @@
               eyebrow="账单管理"
               :subtitle="row.type_label || invoiceTypeLabel(row.type)"
               :description="invoiceTitle(row)"
-              highlight-label="账单金额"
-              :highlight-value="formatMoney(row.amount)"
+              highlight-label="实付金额"
+              :highlight-value="formatMoney(row.paid_amount)"
               :status-map="INVOICE_STATUS_MAP"
               :status="row.status"
               :rows="invoiceMobileRows(row)"
@@ -167,7 +151,14 @@ import { AdminPermissions, hasPermissionInList } from '@/constants/permissions';
 import { useListPage } from '@/hooks/useListPage';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useUserStore } from '@/store';
-import { fieldValue, formatDateTime, formatMoney, toRecord } from '@/utils/format';
+import {
+  fieldValue,
+  formatBillingCycle,
+  formatDateTime,
+  formatFinishTime,
+  formatMoney,
+  toRecord,
+} from '@/utils/format';
 import { errorMessage } from '@/utils/userMessage';
 
 defineOptions({
@@ -224,18 +215,17 @@ const invoiceTypeOptions = Object.entries(INVOICE_TYPE_MAP)
   .map(([value, label]) => ({ value, label }));
 const invoiceStatusOptions = Object.entries(statusLabelMap).map(([value, label]) => ({ value, label }));
 
+// 优惠金额展示规范 1.3：账单列表只展示实付金额，金额列唯一且右对齐
 const columns: PrimaryTableCol<InvoiceRecord>[] = [
-  { colKey: 'invoice_no', title: '账单号', minWidth: 170, ellipsis: true },
+  { colKey: 'invoice_no', title: '账单号', minWidth: 170 },
   { colKey: 'user', title: '用户', minWidth: 180 },
   { colKey: 'item', title: '账单项目', minWidth: 240 },
   { colKey: 'type', title: '类型', width: 120 },
-  { colKey: 'amount', title: '金额', width: 120, align: 'right' },
-  { colKey: 'discount', title: '优惠', width: 130, align: 'right' },
-  { colKey: 'coupon', title: '优惠券', minWidth: 150, ellipsis: true },
-  { colKey: 'paid', title: '已付', width: 120, align: 'right' },
-  { colKey: 'status', title: '状态', width: 110 },
+  { colKey: 'billing_cycle', title: '计费周期', width: 110 },
   { colKey: 'createdAt', title: '创建时间', width: 170 },
-  { colKey: 'paidAt', title: '支付时间', width: 170 },
+  { colKey: 'paid_amount', title: '实付金额', width: 130, align: 'right' },
+  { colKey: 'status', title: '状态', width: 110 },
+  { colKey: 'finishedAt', title: '结束时间', width: 170 },
   { colKey: 'operation', title: '操作', width: 130, fixed: 'right' },
 ];
 
@@ -317,32 +307,14 @@ function handleMobileAction(action: unknown, row: InvoiceRecord) {
 }
 
 function invoiceMobileRows(row: InvoiceRecord) {
+  // 实付金额已在卡片 highlight 位展示，行视图不再重复，避免出现第二个金额口径
   return [
     { label: '用户', value: userName(row.user) },
-    { label: '优惠', value: discountTextOf(row), show: hasDiscount(row) },
-    { label: '优惠券', value: couponTextOf(row), show: Boolean(row.coupon_code || row.coupon_name) },
-    { label: '已付', value: formatMoney(row.paid_amount) },
+    { label: '计费周期', value: billingCycleLabel(row.billing_cycle) },
     { label: '订单', value: fieldValue(row.order?.order_no || row.order_no) },
-    { label: '创建', value: formatDateTime(row.created_at) },
-    { label: '支付', value: formatDateTime(row.paid_at), show: Boolean(row.paid_at) },
+    { label: '创建时间', value: formatDateTime(row.created_at) },
+    { label: '结束时间', value: formatFinishTime(row.finished_at) },
   ];
-}
-
-function hasDiscount(row: Record<string, unknown>): boolean {
-  return couponDiscountOf(row) > 0 || memberDiscountOf(row) > 0;
-}
-
-// 移动端卡片只有单行位置，两类折扣合并为一行但保留来源前缀
-// 注意：管理端 formatMoney 自带 ￥，此处不再补币符
-function discountTextOf(row: Record<string, unknown>): string {
-  const parts: string[] = [];
-  if (couponDiscountOf(row) > 0) parts.push(`券 ${formatMoney(couponDiscountOf(row))}`);
-  if (memberDiscountOf(row) > 0) parts.push(`会员 ${formatMoney(memberDiscountOf(row))}`);
-  return parts.join(' / ');
-}
-
-function couponTextOf(row: Record<string, unknown>): string {
-  return String(row.coupon_name || row.coupon_code || '');
 }
 
 function invoiceTitle(row: InvoiceRecord) {
@@ -360,13 +332,9 @@ function invoiceTypeLabel(type: unknown) {
   return INVOICE_TYPE_MAP[String(type || '')] || fieldValue(type);
 }
 
-// 优惠券减免与会员折扣来源不同，列表内分列展示，避免混成一个数字无法区分
-function couponDiscountOf(row: Record<string, unknown>): number {
-  return Number(row.discount || 0);
-}
-
-function memberDiscountOf(row: Record<string, unknown>): number {
-  return Number(row.member_discount_amount || 0);
+// 计费周期：英文键（monthly / quarterly / semiannually / annually …）翻成 一个月 / 三个月 / 半年 / 一年 / 按量
+function billingCycleLabel(cycle: unknown) {
+  return formatBillingCycle(cycle);
 }
 
 function userName(user: unknown) {

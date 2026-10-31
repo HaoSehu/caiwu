@@ -115,42 +115,14 @@
           </div>
         </section>
 
-        <!-- 金额与结算明细 -->
+        <!-- 支付信息：优惠金额展示规范 §1.1「概览指标卡……基本信息内不设金额区块」。
+             实付金额的唯一位置是页首概览指标卡，这里只放支付完成时间与支付状态说明，
+             不再重复金额，否则同一页出现两个金额位。 -->
         <section class="order-detail-section">
           <div class="order-detail-section__header">
-            <h4>金额与结算明细</h4>
+            <h4>支付信息</h4>
           </div>
           <div class="detail-kv-grid">
-            <div class="detail-kv-item">
-              <span class="detail-kv-item__label">订单应付金额</span>
-              <strong class="detail-kv-item__value is-money">{{ formatMoney(order.amount) }}</strong>
-            </div>
-            <div class="detail-kv-item">
-              <span class="detail-kv-item__label">优惠券减免</span>
-              <div class="detail-kv-item__value" :class="{ 'is-discount': hasCouponDiscount }">
-                <span v-if="hasCouponDiscount">-{{ formatMoney(order.discount) }}</span>
-                <span v-else class="is-dimmed">无</span>
-                <t-tag v-if="order.coupon_code" size="small" variant="light" theme="warning">
-                  {{ order.coupon_code }}
-                </t-tag>
-              </div>
-            </div>
-            <div class="detail-kv-item">
-              <span class="detail-kv-item__label">会员折扣</span>
-              <div class="detail-kv-item__value" :class="{ 'is-discount': hasMemberDiscount }">
-                <span v-if="hasMemberDiscount">-{{ formatMoney(order.member_discount_amount) }}</span>
-                <span v-else class="is-dimmed">无</span>
-                <t-tag v-if="memberDiscountLevelName" size="small" variant="light" theme="success">
-                  {{ memberDiscountLevelName }}
-                </t-tag>
-              </div>
-            </div>
-            <div class="detail-kv-item">
-              <span class="detail-kv-item__label">实付到账金额</span>
-              <strong class="detail-kv-item__value is-money" :style="{ color: isPaid ? 'var(--td-brand-color)' : '' }">
-                {{ formatMoney(order.paid_amount) }}
-              </strong>
-            </div>
             <div class="detail-kv-item detail-kv-item--span-2">
               <span class="detail-kv-item__label">支付完成时间</span>
               <strong class="detail-kv-item__value">{{ formatDateTime(order.paid_at) }}</strong>
@@ -327,8 +299,14 @@
               <div class="payment-item__body">
                 <div class="detail-kv-grid">
                   <div class="detail-kv-item">
+                    <span class="detail-kv-item__label">插件名称</span>
+                    <strong class="detail-kv-item__value">{{ fieldValue(payment.plugin_name) }}</strong>
+                  </div>
+                  <div class="detail-kv-item">
                     <span class="detail-kv-item__label">支付渠道</span>
-                    <strong class="detail-kv-item__value">{{ fieldValue(payment.gateway) }}</strong>
+                    <strong class="detail-kv-item__value">{{
+                      fieldValue(payment.channel_name || payment.gateway_label || payment.gateway)
+                    }}</strong>
                   </div>
                   <div class="detail-kv-item">
                     <span class="detail-kv-item__label">支付金额</span>
@@ -352,6 +330,27 @@
         </section>
       </template>
     </record-detail-page>
+
+    <!-- 费用明细：优惠金额展示规范 §1.4 固定为订单详情页面最下方一个区块，
+         不隶属任何页签、不随页签切换隐藏。行序固定为
+         原价（计算式）→ 优惠券 → 会员折扣；某项没有优惠时整行不渲染、行序顺延。 -->
+    <section v-if="order.id" class="order-fee-detail" aria-label="费用明细">
+      <h4 class="order-fee-detail__title">费用明细</h4>
+      <dl class="order-fee-detail__list">
+        <div class="order-fee-detail__row">
+          <dt>原价</dt>
+          <dd>{{ catalogPriceText }}</dd>
+        </div>
+        <div v-if="couponDiscountAmount > 0" class="order-fee-detail__row order-fee-detail__row--discount">
+          <dt>{{ couponDiscountLabel }}</dt>
+          <dd>{{ formatMoney(-couponDiscountAmount) }}</dd>
+        </div>
+        <div v-if="memberDiscountAmount > 0" class="order-fee-detail__row order-fee-detail__row--discount">
+          <dt>{{ memberDiscountLabel }}</dt>
+          <dd>{{ formatMoney(-memberDiscountAmount) }}</dd>
+        </div>
+      </dl>
+    </section>
 
     <!-- 关联账单详情抽屉 -->
     <invoice-detail-drawer
@@ -468,14 +467,6 @@ const invoiceDrawer = reactive({
 });
 
 const isPaid = computed(() => Number(order.value.status) === 1);
-const hasCouponDiscount = computed(() => Number(order.value.discount || 0) > 0);
-const hasMemberDiscount = computed(() => Number(order.value.member_discount_amount || 0) > 0);
-
-const memberDiscountLevelName = computed(() => {
-  const snap = order.value.member_discount_snapshot as Record<string, unknown> | null | undefined;
-  if (!snap || typeof snap !== 'object') return '';
-  return String(snap.member_level_name || snap.group_name || '').trim();
-});
 
 const serviceSubtitle = computed(() => {
   const service = order.value.service;
@@ -486,9 +477,11 @@ const serviceSubtitle = computed(() => {
   return order.value.service_id ? `关联服务：#${order.value.service_id}` : '未关联独立服务实例';
 });
 
+// 优惠金额展示规范 §1.1：订单详情只保留一个金额位（页首概览指标卡的「实付金额」），
+// 这里只说明支付所处的状态，不再把实付金额拼进文案，否则同一页出现两处金额。
 const paymentStateSummary = computed(() => {
   if (isPaid.value) {
-    return `已支付（实付 ${formatMoney(order.value.paid_amount)}）`;
+    return '已支付，款项已入账';
   }
   if (Number(order.value.status) === 4) {
     return '订单已取消，无需支付';
@@ -496,27 +489,14 @@ const paymentStateSummary = computed(() => {
   if (Number(order.value.status) === 5) {
     return '订单已全额退款';
   }
-  return `待支付（应付 ${formatMoney(order.value.amount)}）`;
+  return '待支付，等待用户完成付款';
 });
 
-const summaryMetrics = computed<RecordDetailMetric[]>(() => {
-  const metrics: RecordDetailMetric[] = [{ label: '订单金额', value: formatMoney(order.value.amount), primary: true }];
-
-  if (hasCouponDiscount.value || hasMemberDiscount.value) {
-    const totalDiscount = Number(order.value.discount || 0) + Number(order.value.member_discount_amount || 0);
-    metrics.push({
-      label: '优惠抵扣',
-      value: `-${formatMoney(totalDiscount)}`,
-    });
-  }
-
-  metrics.push(
-    { label: '实付金额', value: formatMoney(order.value.paid_amount) },
-    { label: '创建时间', value: formatDateTime(order.value.created_at) },
-  );
-
-  return metrics;
-});
+// 优惠金额展示规范 1.1：概览指标只保留一项金额指标「实付金额」，优惠构成在页面最下方费用明细区块
+const summaryMetrics = computed<RecordDetailMetric[]>(() => [
+  { label: '实付金额', value: formatMoney(order.value.paid_amount), primary: true },
+  { label: '创建时间', value: formatDateTime(order.value.created_at) },
+]);
 
 const payments = computed<Record<string, unknown>[]>(() => {
   const list = (order.value as Record<string, unknown>).payments;
@@ -539,6 +519,61 @@ const configItems = computed(() => {
   const snapshot = order.value.config_snapshot;
   if (!snapshot || typeof snapshot !== 'object') return [];
   return flattenSnapshot(snapshot as Record<string, unknown>, configValueLabelMap.value);
+});
+
+// 费用明细区块（docs/设计文档/前端/优惠金额展示规范-2026-10-31.md §1.4/§2.2）：
+// 原价是目录价，还原公式与后端 Money::catalogAmountOf 一致——应付价 + 优惠券减免 + 会员折扣减免。
+// 优惠只含优惠券与会员折扣两项，余额抵扣、积分、退款冲抵都不属于优惠，不进入本区块。
+const couponDiscountAmount = computed(() => Math.max(0, Number(order.value.discount || 0)));
+const memberDiscountAmount = computed(() => Math.max(0, Number(order.value.member_discount_amount || 0)));
+const catalogAmount = computed(
+  () => Number(order.value.amount || 0) + couponDiscountAmount.value + memberDiscountAmount.value,
+);
+
+// 计价周期词表：单价后缀与数量量词分开，拼出「单价/周期 × 数量 量词 = 原价」的计算式。
+// 月与年沿用规范给的「个月」「年」，其余周期统一用「期」，避免「个半年」这类不通顺的量词。
+const CYCLE_UNIT_WORDS: Record<string, { price: string; count: string }> = {
+  monthly: { price: '月', count: '个月' },
+  quarterly: { price: '季', count: '期' },
+  semiannually: { price: '半年', count: '期' },
+  semiannual: { price: '半年', count: '期' },
+  semi_annually: { price: '半年', count: '期' },
+  annually: { price: '年', count: '年' },
+  yearly: { price: '年', count: '年' },
+  one_time: { price: '', count: '项' },
+  onetime: { price: '', count: '项' },
+};
+
+// 原价行文案：单价取自下单时的计价快照 unit_total_amount，乘数量后必须与原价对得上才输出计算式；
+// 快照缺失或乘积对不上时只输出原价金额，宁可不给计算式也不拼一个自相矛盾的式子。
+const catalogPriceText = computed(() => {
+  const catalog = catalogAmount.value;
+  const catalogText = formatMoney(catalog);
+  const snapshot = order.value.config_pricing_snapshot;
+  if (!snapshot || typeof snapshot !== 'object') return catalogText;
+  const snap = snapshot as Record<string, unknown>;
+  const unitAmount = Number(snap.unit_total_amount);
+  const quantity = Number(snap.quantity ?? order.value.quantity ?? 1);
+  const cycle = String(order.value.billing_cycle || snap.billing_cycle || '').toLowerCase();
+  const words = CYCLE_UNIT_WORDS[cycle];
+  if (!words || !Number.isFinite(unitAmount) || !Number.isFinite(quantity) || quantity <= 0) return catalogText;
+  const expected = Math.round(unitAmount * quantity * 100) / 100;
+  if (Math.abs(expected - catalog) > 0.005) return catalogText;
+  const unitText = words.price ? `${formatMoney(unitAmount)}/${words.price}` : formatMoney(unitAmount);
+  return `${unitText} × ${quantity} ${words.count} = ${catalogText}`;
+});
+
+// 优惠券行左侧直接用具名券名（规范 §3.2）；没有券名时退回通用名，不留空标签。
+const couponDiscountLabel = computed(() => {
+  const coupon = toRecord(order.value.coupon);
+  return String(coupon.name || order.value.coupon_code || '').trim() || '优惠券';
+});
+
+// 会员折扣行左侧用会员等级名（需求口径「v1 -¥60.00」）；订单接口未下发快照时退回通用名。
+const memberDiscountLabel = computed(() => {
+  const snapshot = order.value.member_discount_snapshot;
+  if (!snapshot || typeof snapshot !== 'object') return '会员折扣';
+  return String(snapshot.member_level_name || snapshot.group_name || '').trim() || '会员折扣';
 });
 
 const isNewOrder = computed(() => order.value.type === 'new');

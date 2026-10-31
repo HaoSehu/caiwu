@@ -244,10 +244,12 @@ export function useInvoiceDetail() {
   );
   const selectedGatewayKey = computed(() => normalizeText(selectedPayMethodRecord.value?.key));
   const selectedPaymentType = computed(() => normalizeText(selectedPayMethodRecord.value?.payment_type));
+  // 用户端展示名只能取渠道名：`name` 是插件名，禁止出现在用户可见文案里。
   const selectedPayMethodName = computed(
     () =>
-      normalizeText(selectedPayMethodRecord.value?.name) ||
+      normalizeText(selectedPayMethodRecord.value?.channel_name) ||
       normalizeText(selectedPayMethodRecord.value?.label) ||
+      normalizeText(selectedPayMethodRecord.value?.key) ||
       '支付',
   );
   const paySecurity = computed<InvoicePaymentSecurity>(() => detail.value?.payment_security || {});

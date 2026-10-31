@@ -8,7 +8,6 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 import { formatBillingCycle, pricingSnapshotItems } from '@/domains/finance/useRecords';
 import type { InvoicePaymentMethod, InvoiceRecord } from '@/types/client';
-import { formatMoney } from '@/utils/format';
 
 export const renewFlowItems = [
   {
@@ -111,9 +110,9 @@ export function renewInfoItems(row: InvoiceRecord | null | undefined) {
     { label: '服务 ID', value: serviceId > 0 ? `#${serviceId}` : '--' },
     { label: '当前到期', value: currentExpiresAt(row) },
     { label: '续费周期', value: orderBillingCycle(row) },
-    { label: '续费金额', value: `¥${formatMoney(row?.amount)}` },
     { label: '续费后到期', value: renewedExpiresAt(row) },
-    { label: '本次应付', value: `¥${formatMoney(row?.payable_amount)}` },
+    // 优惠金额展示规范 §1.5：账单侧不出现任何金额拆分。续费金额与本次应付在摘要卡已有
+    // 唯一金额位，续费信息只描述续费对象与账期，不重复金额。
   ];
 }
 
@@ -161,20 +160,6 @@ export function useInvoiceDetailHelpers(detail: Ref<InvoiceRecord | null | undef
   const renewInfoItemsView = computed(() => renewInfoItems(detail.value));
   const pricingItemsView = computed(() => pricingItems(detail.value));
   const productPathView = computed(() => productPath(detail.value));
-  const memberDiscountAmount = computed(() => Math.max(0, Number(detail.value?.member_discount_amount || 0)));
-  const couponDiscountAmount = computed(() => Math.max(0, Number(detail.value?.discount || 0)));
-  // 券标识：优先券名（更易读），无券名回退券码
-  const couponLabel = computed(() => String(detail.value?.coupon_name || detail.value?.coupon_code || '').trim());
-  const memberDiscountLevelName = computed(() => {
-    const snapshot = detail.value?.member_discount_snapshot;
-    return snapshot && typeof snapshot === 'object'
-      ? String((snapshot as Record<string, unknown>).member_level_name || '')
-      : '';
-  });
-  const hasPriceDiscount = computed(() => memberDiscountAmount.value > 0 || couponDiscountAmount.value > 0);
-  const originalAmountText = computed(() =>
-    formatMoney(Number(detail.value?.amount || 0) + memberDiscountAmount.value + couponDiscountAmount.value),
-  );
   const formattedSessionExpiresAt = computed(() =>
     formatSessionExpiresAt(sessionExpiresTime.value, sessionExpiresAt.value),
   );
@@ -229,11 +214,5 @@ export function useInvoiceDetailHelpers(detail: Ref<InvoiceRecord | null | undef
     renewInfoItemsView,
     pricingItemsView,
     productPathView,
-    memberDiscountAmount,
-    couponDiscountAmount,
-    couponLabel,
-    memberDiscountLevelName,
-    hasPriceDiscount,
-    originalAmountText,
   };
 }

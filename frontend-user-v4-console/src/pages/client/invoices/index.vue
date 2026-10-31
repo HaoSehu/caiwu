@@ -57,26 +57,28 @@
           :data="list"
           :columns="columns"
           :pagination="null"
+          table-layout="auto"
           hover
         >
           <template #invoice="{ row }">
             <div class="stack-cell">
-              <strong :title="vm(row).no">{{ vm(row).no }}</strong>
-              <span>{{ row.type_label || '--' }}</span>
+              <!-- 优惠金额展示规范 1.2：首列是订单号，账单号同列次行；行主键仍是账单号 -->
+              <strong :title="vm(row).orderNo">{{ vm(row).orderNo }}</strong>
+              <span>{{ vm(row).no }}</span>
+            </div>
+          </template>
+          <template #item="{ row }">
+            <div class="stack-cell">
+              <strong>{{ vm(row).itemName }}</strong>
             </div>
           </template>
           <template #amount="{ row }">
-            <span class="invoice-money">¥{{ vm(row).amount }}</span>
-          </template>
-          <template #paid="{ row }">
-            <span class="invoice-money">¥{{ vm(row).paidAmount }}</span>
+            <span class="invoice-money">{{ vm(row).paidAmount }}</span>
           </template>
           <template #status="{ row }">
             <status-tag :status-map="INVOICE_STATUS_MAP" :status="Number(row.status)" />
           </template>
-          <template #channel="{ row }">
-            <span class="invoice-channel">{{ invoiceChannelLabel(row) }}</span>
-          </template>
+          <template #created_at="{ row }">{{ vm(row).createdAt }}</template>
           <template #operation="{ row }">
             <t-space>
               <t-button size="small" theme="primary" variant="text" @click="goToDetail(row)">查看</t-button>
@@ -106,21 +108,15 @@
             </div>
 
             <div class="stack-cell">
-              <strong>{{ row.type_label || '--' }}</strong>
-              <span class="stack-money">账单金额：¥{{ vm(row).amount }}</span>
-              <span v-if="vm(row).couponDiscount > 0" class="stack-money"
-                >优惠券减免：¥{{ vm(row).couponDiscountText
-                }}{{ row.coupon_name ? `（${row.coupon_name}）` : '' }}</span
-              >
-              <span v-if="vm(row).memberDiscount > 0" class="stack-money"
-                >会员折扣：¥{{ vm(row).memberDiscountText }}</span
-              >
-              <span class="stack-money">已付金额：¥{{ vm(row).paidAmount }}</span>
+              <strong>{{ vm(row).itemName }}</strong>
+              <span>订单号：{{ vm(row).orderNo }}</span>
+              <!-- 优惠金额展示规范 1.2 / 3.2：列表只展示实付金额，不展开优惠明细 -->
+              <span class="stack-money stack-money--paid">实付金额：{{ vm(row).paidAmount }}</span>
             </div>
 
             <div class="record-mobile-card__meta">
-              <span>支付渠道：{{ invoiceChannelLabel(row) }}</span>
-              <span>{{ formatDateTime(row.created_at) }}</span>
+              <span>下单时间：{{ vm(row).createdAt }}</span>
+              <span>{{ row.type_label || '--' }}</span>
             </div>
 
             <div class="record-mobile-card__actions">
@@ -164,11 +160,12 @@ import {
   INVOICE_TYPE_OPTIONS,
   isPayableInvoice,
   resolveInvoiceNo,
+  resolveInvoiceTitle,
   useInvoiceList,
 } from '@/domains/finance/useInvoices';
 import RecordQuickFilters from '@/pages/client/components/RecordQuickFilters.vue';
 import type { InvoiceRecord } from '@/types/client';
-import { formatDateTime, formatMoney } from '@/utils/format';
+import { formatDateTime, formatMoneyText } from '@/utils/format';
 
 const router = useRouter();
 // 表格与移动卡片只渲染一套，切换点与 record-page.less 的平板断点保持一致
@@ -202,28 +199,21 @@ function isPayWindowClosedRow(row: InvoiceRecord) {
   return isPayableInvoice(row) && Boolean(row.payment_window_expired);
 }
 
-// 优惠券减免与会员折扣来源不同，手机卡片内分行展示，避免混成一个数字无法区分
-function couponDiscountOf(row: Record<string, unknown>): number {
-  return Number(row.discount || 0);
-}
-
-function memberDiscountOf(row: Record<string, unknown>): number {
-  return Number(row.member_discount_amount || 0);
-}
-
 /**
  * 行视图模型：桌面表格与手机卡片共用同一份算好的派生值。
- * 原先同一条账单在模板里被 formatMoney / couponDiscountOf / memberDiscountOf / resolveInvoiceNo
- * 反复调用（桌面 8 次、手机 6 次），列表换一次引用就重算一遍且每个金额格式化两次。
+ * 优惠金额展示规范 2.1：列表金额只取 paid_amount，由同一格式化函数输出；
+ * 优惠构成只在账单详情页展开，列表不保留原价、优惠券与会员折扣字段。
  */
 interface InvoiceRowViewModel {
   no: string;
-  amount: string;
+  /** 订单号：账单与订单一一对应，列表必备字段，与账单号同列双层展示 */
+  orderNo: string;
+  /** 商品/服务名称：优惠前目录名，缺省回落账单类型文案 */
+  itemName: string;
+  /** 下单时间：订单创建时间格式化结果 */
+  createdAt: string;
+  /** 实付金额：已格式化并自带货币符号，列表唯一金额 */
   paidAmount: string;
-  couponDiscount: number;
-  memberDiscount: number;
-  couponDiscountText: string;
-  memberDiscountText: string;
   canPay: boolean;
   payWindowClosed: boolean;
 }
@@ -232,17 +222,12 @@ const rowViewModels = computed(() => {
   const map = new Map<number, InvoiceRowViewModel>();
 
   for (const row of list.value) {
-    const couponDiscount = couponDiscountOf(row);
-    const memberDiscount = memberDiscountOf(row);
-
     map.set(row.id, {
       no: resolveInvoiceNo(row),
-      amount: formatMoney(row.amount),
-      paidAmount: formatMoney(row.paid_amount),
-      couponDiscount,
-      memberDiscount,
-      couponDiscountText: formatMoney(couponDiscount),
-      memberDiscountText: formatMoney(memberDiscount),
+      orderNo: row.order?.order_no || '—',
+      itemName: resolveInvoiceTitle(row) || '—',
+      createdAt: formatDateTime(row.created_at),
+      paidAmount: formatMoneyText(row.paid_amount || 0),
       canPay: canPayInvoiceRow(row),
       payWindowClosed: isPayWindowClosedRow(row),
     });
@@ -253,12 +238,10 @@ const rowViewModels = computed(() => {
 
 const emptyRowViewModel: InvoiceRowViewModel = {
   no: '--',
-  amount: '0.00',
-  paidAmount: '0.00',
-  couponDiscount: 0,
-  memberDiscount: 0,
-  couponDiscountText: '0.00',
-  memberDiscountText: '0.00',
+  orderNo: '—',
+  itemName: '—',
+  createdAt: '—',
+  paidAmount: '¥0.00',
   canPay: false,
   payWindowClosed: false,
 };
@@ -267,35 +250,14 @@ function vm(row: { id: number }): InvoiceRowViewModel {
   return rowViewModels.value.get(row.id) ?? emptyRowViewModel;
 }
 
-/**
- * 账单的支付渠道名（支付宝 / 微信支付 …）。
- * 取 payment_summary.channel_name，回落既有的 gateway_label；
- * 插件名（易支付）属管理端与日志维度，用户端不得出现。
- */
-function invoiceChannelLabel(row: InvoiceRecord): string {
-  const payment = row.payment_summary;
-
-  return payment?.channel_name || payment?.gateway_label || '--';
-}
-
-// I-04：7 列宽度合计 57.5rem，配固定操作列后，1366 宽笔记本上不会横向滚动。
-// 横向滚动会把 fixed 列右侧的「查看 / 去支付」挤出可视区，所以列宽必须收进可用宽度内。
-// 可用宽度口径：1366 − 侧栏 232（variables.less 的 @starter-sidebar-width）− 内容区左右 padding 48
-// − 常驻滚动条 8 像素 ≈ 1078 像素 ≈ 67rem。
-// 金额与时间都是等宽数字，实际内容宽度远小于原列宽：金额 7.5rem（容得下 ¥12,345.67）、
-// 状态 6.5rem（三字标签）、渠道 7rem，账单号与创建时间用 minWidth 交给内容撑开。
-// 注意：1280 视口下可用宽度只剩约 62rem，仍会横向滚动——本收口只覆盖 1366 及以上。
-// 列序把渠道紧贴状态之后，先被挤出可视区的是创建时间，操作列 fixed 保证「查看 / 去支付」始终可见。
+// 优惠金额展示规范 1.2 列序：订单号、商品/服务名称、下单时间、实付金额、状态、操作。
+// 列宽只作下限，内容超宽时由表格容器横向滚动；实付金额是定长等宽数字，给死宽度避免列宽抖动。
 const columns: PrimaryTableCol[] = [
-  { colKey: 'invoice', title: '账单号', minWidth: '10rem', ellipsis: true },
-  { colKey: 'amount', title: '账单金额', width: '7.5rem', align: 'right' },
-  { colKey: 'paid', title: '已付金额', width: '7.5rem', align: 'right' },
+  { colKey: 'invoice', title: '订单号', minWidth: '10rem' },
+  { colKey: 'item', title: '商品/服务名称', minWidth: '10rem' },
+  { colKey: 'created_at', title: '下单时间', minWidth: '10rem' },
+  { colKey: 'amount', title: '实付金额', width: '8.5rem', align: 'right' },
   { colKey: 'status', title: '状态', width: '6.5rem' },
-  { colKey: 'channel', title: '支付渠道', width: '7rem' },
-  // created_at / invoice 在 fixed 布局（TDesign 默认 tableLayout='fixed'）下超出列宽会被直接裁掉，
-  // 且没有悬浮全文可看，因此统一开启 ellipsis。TDesign 的 ellipsis 会自动用 Tooltip
-  // 包住内容（node_modules/tdesign-vue-next/es/table/components/ellipsis.mjs），两列口径统一。
-  { colKey: 'created_at', title: '创建时间', minWidth: '10rem', ellipsis: true },
   { colKey: 'operation', title: '操作', width: '9rem', fixed: 'right', align: 'right' },
 ];
 </script>
@@ -309,10 +271,9 @@ const columns: PrimaryTableCol[] = [
   font-variant-numeric: tabular-nums;
 }
 
-.invoice-channel {
-  color: var(--td-text-color-primary);
-  font: var(--td-font-body-medium);
-  white-space: nowrap;
+// 优惠金额展示规范 1.2：窄屏卡片的实付金额与桌面列同为 14px、字重 600
+.stack-cell .stack-money--paid {
+  font-size: var(--td-font-size-body-medium);
 }
 
 .invoice-window-closed {
