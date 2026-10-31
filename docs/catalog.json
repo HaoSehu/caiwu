@@ -2,6 +2,12 @@
     "version": 1,
     "records": [
         {
+            "path": "执行计划/进行中/Redis专项审查整改-2026-10-30.md",
+            "status": "active",
+            "summary": "Redis 专项审查的文档与配置注释整改台账：部署与调度指南新增键空间小节（REDIS_PREFIX 与 CACHE_PREFIX 两套前缀分工、默认空值、多实例必须区分）与三层连接职责（default 锁/队列、cache 业务缓存 DB1、volatile 高频短 TTL DB2），并成文锁降级三档语义（幂等无锁执行 / 周期槽位跳过本轮 / 状态机与资金抛 409）附真实代码路径；修正宝塔指南 phpredis 用途过时表述、REDIS_QUEUE_RETRY_AFTER 改注释并绑定最长作业 timeout 约束、生产预检新增多实例前缀只读检查（判不出实例数只 warning）、登记 UpgradeLock 用 flock 与 site:home:4:50:4 两处已知例外及复核期限。",
+            "review_by": "2026-12-10"
+        },
+        {
             "path": "执行计划/进行中/媒体库远程存储插件-2026-10-28.md",
             "status": "active",
             "summary": "媒体库纯本地磁盘、无存储抽象层（app 全目录无 Storage:: 调用）：本计划书据实锚点给出可扩展点与 addons 域能力边界，设计 settings 驱动的本地/远程三层选择与 media_files 新增 disk/object_key 两列、仅改 upload()/delete() 两个分支点的共存方案，双向迁移（引用替换、进度、失败重试、默认不删源）由平台承载、插件只提供 storage.test/put/get/delete/exists 五动作，FTP/七牛/COS/OSS 四插件同构目录配置与签名外链方案，附四轮三环验证、迁移三轮验证与 10 项待确认。",
@@ -28,7 +34,7 @@
         {
             "path": "执行计划/进行中/管理端服务控制台独立页与历史跟踪-2026-10-25.md",
             "status": "active",
-            "summary": "管理端「服务控制台」由用户详情页抽屉重构为独立路由页 /admin/users/:id/services/:serviceId，五个页签（概览/相关订单/相关账单/操作日志/历史跟踪）；订单与账单复用既有列表接口并新增 service_id 过滤；操作日志改为服务维度并新增 includeAdminOperations 开关；历史跟踪新建 service_tracking_records 表与列表/新增/删除/图片上传四个接口，操作人由当前登录管理员注入；删除详情页抽屉与相关弹窗、脚本、样式，补管理端 e2e。",
+            "summary": "管理端「服务控制台」由用户详情页抽屉重构为独立路由页 /admin/users/:id/services/:serviceId，四个页签（概览/相关账单/操作日志/历史跟踪，原「相关订单」页签已按需求移除）；账单复用既有列表接口并新增 service_id 过滤；操作日志改为服务维度并新增 includeAdminOperations 开关；历史跟踪新建 service_tracking_records 表与列表/新增/删除/图片上传四个接口，操作人由当前登录管理员注入；删除详情页抽屉与相关弹窗、脚本、样式，补管理端 e2e。",
             "review_by": "2026-11-27"
         },
         {
@@ -36,6 +42,12 @@
             "status": "active",
             "summary": "管理端用户详情「服务控制台」实例操作区下线「绑定服务」：删除 PUT /v2/admin/users/{user}/services/{service}/manual-provision 路由、控制器动作、ManualProvisionUserServiceRequest、HandlesAdminUserServices::manualProvisionService、ServiceTransformService::canManualProvisionService 与 actions.manual_provision 能力位，前端删除按钮/弹窗/API 方法并补 e2e；保留上游绑定与电源操作，ProvisionService 两个重试方法因孤儿单补偿命令与既有测试仍调用而不动。",
             "review_by": "2026-11-27"
+        },
+        {
+            "path": "执行计划/进行中/管理端服务实例转移归属-2026-10-31.md",
+            "status": "active",
+            "summary": "管理端服务控制台实例操作区新增「转移」：POST /v2/admin/users/{user}/services/{service}/transfers 挂在 USER_MANAGE 写组并单独限流，锁内复核原归属后改写 services.user_id 并重置自动续费（跨账号自动扣费风险），转移前拦截不属于该用户、接收方不存在/软删/禁用、同用户、待支付账单、已付未履约账单（实例状态与到期时间不参与判定，任何状态均可转移），锁内发现归属已被变更返回 409/40900，强审计写失败整体回滚；新旧两个 userId 的详情与概览缓存同时失效，activity_logs 写管理员主体转移记录与三条旁路流水，补邮件模板 100030 通知原持有者与接收方；前端弹窗远程搜索接收方、成功后跳接收方控制台，补 Feature 21 例与 e2e 3 例。",
+            "review_by": "2026-12-31"
         },
         {
             "path": "执行计划/进行中/外部进程与被禁用函数依赖收敛-2026-10-22.md",
@@ -356,6 +368,12 @@
             "status": "current",
             "summary": "本地 IDC 数据迁移操作。",
             "review_by": "2027-09-30"
+        },
+        {
+            "path": "参考资料/数据库/IDC旧库dump数据迁移.md",
+            "status": "current",
+            "summary": "旧库 dump 到新库的合并式（upsert）数据迁移：脚本执行方式、新旧结构与字段映射、外键延迟写与回填、校验与回退口径。",
+            "review_by": "2027-10-31"
         },
         {
             "path": "参考资料/集成/本地对接说明.md",
