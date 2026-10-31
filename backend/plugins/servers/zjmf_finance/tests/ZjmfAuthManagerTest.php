@@ -34,12 +34,39 @@ class ZjmfAuthManagerTest extends TestCase
         return $supplier;
     }
 
-    private function manager(HostingPanelApiTransport $transport): ZjmfAuthManager
+    protected function setUp(): void
     {
+        parent::setUp();
+
         // 测试环境使用 array 缓存仓库，避免依赖真实 redis。
         config(['idc.hosting_panel_api.jwt_cache_store' => 'array']);
-        Cache::flush();
 
+        // 原先直接清空整个缓存 store，会波及共享同一 store 的其它用例；
+        // 这里只删除本插件自己写入的 JWT 与刷新防抖标记键（用例只涉及供应商 1、2）。
+        $store = Cache::store((string) config('idc.hosting_panel_api.jwt_cache_store', config('cache.default')));
+        foreach ($this->pluginCacheKeys() as $key) {
+            $store->forget($key);
+        }
+    }
+
+    /**
+     * 本插件会写入的供应商级缓存键（与 ZjmfAuthManager::jwtCacheKey()/refreshMarkerKey() 一致）。
+     *
+     * @return array<int, string>
+     */
+    private function pluginCacheKeys(): array
+    {
+        $keys = [];
+        foreach ([1, 2] as $supplierId) {
+            $keys[] = 'upstream:zjmf_finance_api:jwt:'.$supplierId;
+            $keys[] = 'upstream:zjmf_finance_api:refresh:'.$supplierId;
+        }
+
+        return $keys;
+    }
+
+    private function manager(HostingPanelApiTransport $transport): ZjmfAuthManager
+    {
         return new ZjmfAuthManager($transport);
     }
 

@@ -20,6 +20,7 @@ use App\Services\Integrations\Payments\PaymentGatewayManager;
 use App\Services\Integrations\Payments\PaymentGatewayOperationService;
 use App\Services\Integrations\Plugins\PaymentGatewayBindingResolver;
 use App\Services\Notification\UserNotificationService;
+use App\Support\CacheKey;
 use App\Support\Money;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -65,7 +66,7 @@ class MixPaymentService
         $traceId = $this->resolveTraceId($context, "mix:invoice:{$invoice->id}");
         $paymentType = trim((string) ($context['payment_type'] ?? ''));
         // 与余额支付、单独网关支付共用账单级支付锁，避免同一张账单被并发推进成交叉支付
-        $lockKey = "lock:pay:invoice:{$invoice->id}";
+        $lockKey = CacheKey::lock('lock:pay:invoice', (string) $invoice->id);
         $normalizedBalanceAmount = round(max($balanceAmount, 0), 2);
 
         $payload = $this->withLock($lockKey, 20, function () use ($invoice, $user, $traceId, $normalizedBalanceAmount, $context) {

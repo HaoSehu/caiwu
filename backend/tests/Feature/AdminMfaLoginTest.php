@@ -30,12 +30,7 @@ class AdminMfaLoginTest extends TestCase
 {
     use DatabaseTransactions;
 
-    protected function setUp(): void
-    {
-        parent::setUp();
-
-        config(['cache.stores.redis_volatile' => ['driver' => 'array']]);
-    }
+    // 无需再单独覆盖 redis_volatile：Tests\TestCase 已统一置为 array store。
 
     public function test_login_without_mfa_still_returns_token(): void
     {

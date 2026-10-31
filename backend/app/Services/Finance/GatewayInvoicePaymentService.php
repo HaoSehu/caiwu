@@ -14,6 +14,7 @@ use App\Models\User;
 use App\Services\Integrations\Payments\PaymentGatewayManager;
 use App\Services\Integrations\Payments\PaymentGatewayOperationService;
 use App\Services\Integrations\Plugins\PaymentGatewayBindingResolver;
+use App\Support\CacheKey;
 use App\Support\Money;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -28,6 +29,9 @@ use Illuminate\Support\Facades\Log;
 class GatewayInvoicePaymentService
 {
     use PaymentGatewayFlow;
+
+    /** 支付状态轮询微缓存（秒）：把前端按秒轮询收敛为对网关的低频主动查询。 */
+    private const PAYMENT_QUERY_CACHE_TTL_SECONDS = 3;
 
     private ?PaymentGatewayOperationService $gatewayOperations = null;
 
@@ -59,7 +63,7 @@ class GatewayInvoicePaymentService
         // 账单级支付锁与余额支付（BalanceInvoicePaymentService）、组合支付（MixPaymentService）共用同一键：
         // 同一张账单同一时刻只允许一个支付入口推进，否则并发「余额支付 + 扫码支付」会各建一笔支付单，
         // 后到付款方只能走异常入账转余额（用户视角：付了两次、账单仍只付清一次）。
-        $lockKey = "lock:pay:invoice:{$invoice->id}";
+        $lockKey = CacheKey::lock('lock:pay:invoice', (string) $invoice->id);
 
         $payload = $this->withLock($lockKey, 20, function () use ($invoice, $user, $traceId, $gateway, $paymentType) {
             return DB::transaction(function () use ($invoice, $user, $traceId, $gateway, $paymentType) {
@@ -232,7 +236,7 @@ class GatewayInvoicePaymentService
                 $payment,
                 $tradeNo,
                 $params,
-                "lock:{$gateway}:payment:{$payment->id}",
+                CacheKey::lock('lock:'.$gateway.':payment', (string) $payment->id),
                 "{$gatewayLabel}回调",
                 'invoice_paid_by_gateway',
                 '账单状态异常，无法处理支付回调',
@@ -314,7 +318,7 @@ class GatewayInvoicePaymentService
         $result = Cache::get($queryCacheKey);
         if (! is_array($result)) {
             $result = $this->queryGatewayPayment($gateway, $payment->payment_no);
-            Cache::put($queryCacheKey, $result, now()->addSeconds(3));
+            Cache::put($queryCacheKey, $result, now()->addSeconds(self::PAYMENT_QUERY_CACHE_TTL_SECONDS));
         }
 
         if (in_array($result['trade_status'], ['TRADE_SUCCESS', 'TRADE_FINISHED', 'SUCCESS'], true)) {
@@ -398,7 +402,7 @@ class GatewayInvoicePaymentService
                 $payment,
                 $tradeNo,
                 $queryPayload,
-                "lock:{$safeGateway}:payment:{$payment->id}",
+                CacheKey::lock('lock:'.$safeGateway.':payment', (string) $payment->id),
                 "{$gatewayLabel}主动查询",
                 'invoice_paid_by_gateway_query',
                 '账单状态异常，无法处理支付',

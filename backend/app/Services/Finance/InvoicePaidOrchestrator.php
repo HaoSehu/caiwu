@@ -21,6 +21,7 @@ use App\Services\Order\PaidOrderBusinessFlowDispatcher;
 use App\Services\Provisioning\ProvisionService;
 use App\Services\Provisioning\ServiceRenewService;
 use App\Services\Referral\ReferralService;
+use App\Support\CacheKey;
 use App\Support\SchemaMetadataCache;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -320,7 +321,7 @@ class InvoicePaidOrchestrator
         }
 
         try {
-            $lock = Cache::lock("lock:paid-order-fulfillment:{$orderId}", 1500);
+            $lock = Cache::lock(CacheKey::lock('lock:paid-order-fulfillment', (string) $orderId), 1500);
             $acquired = $lock->get();
         } catch (\Throwable $exception) {
             // 锁后端异常时不降级无锁履约，避免并发重复调用上游；抛错走队列重试

@@ -21,6 +21,7 @@ use App\Services\Integrations\Payments\PaymentGatewayOperationService;
 use App\Services\Integrations\Plugins\PaymentGatewayBindingResolver;
 use App\Services\System\ActivityLogService;
 use App\Services\System\OperationLogService;
+use App\Support\CacheKey;
 use App\Support\Money;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
@@ -241,11 +242,11 @@ class RechargePaymentService
 
         $normalizedAmount = round($amount, 2);
         $gatewayContext = $this->rechargeGatewayContext($context);
-        $lockKey = "lock:recharge:create:{$user->id}:".md5(implode('|', [
+        $lockKey = CacheKey::lock('lock:recharge:create', $user->id.':'.md5(implode('|', [
             $gateway,
             $this->rechargeGatewayContextKey($gatewayContext),
             number_format($normalizedAmount, 2, '.', ''),
-        ]));
+        ])));
 
         $payment = $this->withLock($lockKey, 20, function () use ($user, $normalizedAmount, $traceId, $gateway, $gatewayContext) {
             return DB::transaction(function () use ($user, $normalizedAmount, $traceId, $gateway, $gatewayContext) {
@@ -445,7 +446,7 @@ class RechargePaymentService
      */
     public function completeRechargePayment(Payment $payment, string $tradeNo, array $raw = []): void
     {
-        $lockKey = "lock:recharge:payment:{$payment->id}";
+        $lockKey = CacheKey::lock('lock:recharge:payment', (string) $payment->id);
 
         Cache::lock($lockKey, 30)->block(5, function () use ($payment, $tradeNo, $raw) {
             DB::transaction(function () use ($payment, $tradeNo, $raw) {
@@ -529,7 +530,7 @@ class RechargePaymentService
             return null;
         }
 
-        $lockKey = "lock:recharge:payment:{$payment->id}";
+        $lockKey = CacheKey::lock('lock:recharge:payment', (string) $payment->id);
 
         return Cache::lock($lockKey, 30)->block(5, function () use ($payment) {
             return DB::transaction(function () use ($payment) {

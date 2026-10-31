@@ -25,11 +25,11 @@ use App\Services\Upstream\Contracts\ProvidesConsoleCatalog;
 use App\Services\Upstream\Contracts\UpstreamDriver;
 use App\Services\Upstream\ProviderRegistry;
 use App\Services\Upstream\ProviderResolver;
+use App\Support\Cache\VolatileStore;
 use App\Support\CacheKey;
 use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfUpstreamResponse;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use ReflectionMethod;
 use Tests\TestCase;
@@ -57,9 +57,8 @@ class StockGateTest extends TestCase
     {
         parent::setUp();
 
-        // redis_volatile 切 array store：覆盖标记与前台库存缓存不落真实 redis，
-        // array store 随用例的应用实例重建，天然隔离无残留
-        config(['cache.stores.redis_volatile' => ['driver' => 'array']]);
+        // redis_volatile 已由 Tests\TestCase 统一切 array store：
+        // 覆盖标记与前台库存缓存不落真实 redis，且随用例的应用实例重建，天然隔离无残留。
 
         // 注册 fake 插件行：provider_key → plugin_id 解析依赖 integration_plugins；
         // 插入发生在测试事务内，由 DatabaseTransactions 统一回滚，不做手动清理
@@ -298,7 +297,7 @@ class StockGateTest extends TestCase
         [$product, $syncService] = $this->makeBoundProduct(remoteStock: 20, localStock: 20);
         $supplierId = $this->boundSupplierId($product);
 
-        $store = Cache::store('redis_volatile');
+        $store = VolatileStore::store();
         $siteKey = CacheKey::siteProductStock((int) $product->id);
         $store->put($siteKey, ['product_id' => (int) $product->id, 'stock' => 20], 60);
         $store->put($siteKey.':stale', ['product_id' => (int) $product->id, 'stock' => 20], 60);
@@ -318,7 +317,7 @@ class StockGateTest extends TestCase
         [$product, $syncService] = $this->makeBoundProduct(remoteStock: 20, localStock: 20);
         $supplierId = $this->boundSupplierId($product);
 
-        Cache::store('redis_volatile')->put(
+        VolatileStore::store()->put(
             CacheKey::upstreamStockShortage($supplierId, 11),
             true,
             now()->addSeconds(60)

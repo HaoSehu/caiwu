@@ -10,6 +10,7 @@ use App\Exceptions\BusinessException;
 use App\Models\Invoice;
 use App\Models\User;
 use App\Services\Finance\Core\FinanceAccountService;
+use App\Support\CacheKey;
 use App\Support\Money;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
@@ -35,7 +36,7 @@ class BalanceInvoicePaymentService
     public function payByBalance(Invoice $invoice, User $user, array $context = []): Invoice
     {
         $traceId = trim((string) ($context['trace_id'] ?? ''));
-        $lockKey = "lock:pay:invoice:{$invoice->id}";
+        $lockKey = CacheKey::lock('lock:pay:invoice', (string) $invoice->id);
 
         $paidInvoice = $this->withLock($lockKey, 30, function () use ($invoice, $user, $traceId, $context) {
             return DB::transaction(function () use ($invoice, $user, $traceId, $context) {

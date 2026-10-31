@@ -18,6 +18,7 @@ use App\Services\Verification\Data\VerificationInitializeResult;
 use App\Services\Verification\Data\VerificationScanUrlResult;
 use App\Services\Verification\Data\VerificationStatusResult;
 use App\Services\Verification\VerificationDriverManager;
+use App\Support\CacheKey;
 use App\Support\Money;
 use App\Support\PublicUrl;
 use App\Support\SchemaMetadataCache;
@@ -49,6 +50,12 @@ class VerificationService
     private const QR_CODE_URL_CACHE_PREFIX = 'verification:qrcode_url:';
 
     private const QR_CODE_URL_CACHE_TTL_SECONDS = 300;
+
+    /** 认证状态轮询微缓存（秒）：pending/失败结果只压住 1 秒一次的重复查询。 */
+    private const STATUS_CACHE_PENDING_TTL_SECONDS = 3;
+
+    /** 认证状态轮询微缓存（秒）：成功态已落库，延长缓存只是减少重复上游查询。 */
+    private const STATUS_CACHE_SUCCESS_TTL_SECONDS = 60;
 
     private VerificationDriverManager $driverManager;
 
@@ -176,7 +183,7 @@ class VerificationService
         // 已由 syncUserStatus 落库，延长缓存只是减少无意义的重复上游查询）。
         // 网络错误不缓存，且不再做请求内 3 次重试 + usleep——轮询本身就是重试机制，
         // 立即返回网络错误状态由前端下一轮轮询兜底，避免第三方抖动时单请求挂起 90 秒。
-        $cacheKey = 'verification:status:'.hash('sha256', $certifyId);
+        $cacheKey = CacheKey::verificationStatus($certifyId);
         $cached = Cache::get($cacheKey);
         if (is_array($cached)) {
             return $cached;
@@ -192,7 +199,9 @@ class VerificationService
         }
 
         $payload = $result->toArray();
-        $ttlSeconds = (int) ($payload['status'] ?? null) === self::RESULT_STATUS_SUCCESS ? 60 : 3;
+        $ttlSeconds = (int) ($payload['status'] ?? null) === self::RESULT_STATUS_SUCCESS
+            ? self::STATUS_CACHE_SUCCESS_TTL_SECONDS
+            : self::STATUS_CACHE_PENDING_TTL_SECONDS;
         Cache::put($cacheKey, $payload, now()->addSeconds($ttlSeconds));
 
         return $payload;

@@ -9,10 +9,11 @@ use App\Models\Service;
 use App\Models\User;
 use App\Services\Integrations\Plugins\PluginBindingResolver;
 use App\Services\System\OperationLogService;
+use App\Support\Cache\VolatileStore;
 use App\Support\CacheKey;
+use App\Support\CacheTtl;
+use App\Support\Logging\SafeLog;
 use App\Support\PublicUrl;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Log;
 
 /**
  * VNC 子服务
@@ -21,9 +22,9 @@ use Illuminate\Support\Facades\Log;
  */
 class ServiceVncService
 {
-    private const VNC_TOKEN_TTL_SECONDS = 600;
+    private const VNC_TOKEN_TTL_SECONDS = CacheTtl::VNC_TOKEN_SECONDS;
 
-    private const VNC_RELAY_TOKEN_TTL_SECONDS = 60;
+    private const VNC_RELAY_TOKEN_TTL_SECONDS = CacheTtl::VNC_RELAY_TOKEN_SECONDS;
 
     /** 单个公开 token 允许的最大兑换次数（刷新/重连的合理上限）。 */
     private const VNC_MAX_EXCHANGES_PER_TOKEN = 30;
@@ -93,7 +94,7 @@ class ServiceVncService
                 // Redis 不落明文 VNC 密码：密码仅经 vnc_credentials 返回给当前认证用户
                 // 供本地 noVNC 认证，token 载荷只承载 relay 建连所需参数。
                 unset($tokenPayload['password']);
-                Cache::store('redis_volatile')->put(CacheKey::vncToken($token), array_merge($tokenPayload, [
+                VolatileStore::store()->put(CacheKey::vncToken($token), array_merge($tokenPayload, [
                     'service_id' => $serviceId,
                     'allowed_origin' => $this->resolveAllowedVncOrigin(),
                     // 服务 + 用户绑定载荷：公开 token 仅由取链接接口签发给当前用户，
@@ -256,14 +257,14 @@ class ServiceVncService
             $relayPayload = $params;
             // relay 建连仅需 host/port/path/encrypt/origin，不落明文 VNC 密码到 Redis。
             unset($relayPayload['password']);
-            Cache::store('redis_volatile')->put(CacheKey::vncToken($relayToken), array_merge($relayPayload, [
+            VolatileStore::store()->put(CacheKey::vncToken($relayToken), array_merge($relayPayload, [
                 'token_scope' => 'relay',
                 'public_token_hash' => $publicTokenHash,
             ]), now()->addSeconds(self::VNC_RELAY_TOKEN_TTL_SECONDS));
 
             // 记录公开 token 与 relay token 的映射：同一公开 token 在其有效期内只派生一次 relay，
             // 页面刷新/重连/多页签重复兑换得到同一个 relay token，避免每次兑换都签发新凭证。
-            Cache::store('redis_volatile')->put(
+            VolatileStore::store()->put(
                 CacheKey::vncRelayHandle($publicTokenHash),
                 $relayToken,
                 now()->addSeconds(self::VNC_RELAY_TOKEN_TTL_SECONDS)
@@ -296,7 +297,7 @@ class ServiceVncService
      */
     private function assertVncExchangeQuota(string $publicTokenHash): void
     {
-        $cache = Cache::store('redis_volatile');
+        $cache = VolatileStore::store();
         $countKey = CacheKey::vncTokenExchangeCount($publicTokenHash);
 
         // add() 是原子的「键不存在才写入」，首次兑换即建键并带上 TTL。
@@ -319,7 +320,7 @@ class ServiceVncService
 
     private function reusableRelayToken(string $publicTokenHash): ?string
     {
-        $cache = Cache::store('redis_volatile');
+        $cache = VolatileStore::store();
         $relayToken = $cache->get(CacheKey::vncRelayHandle($publicTokenHash));
 
         if (! is_string($relayToken) || $relayToken === '') {
@@ -378,18 +379,20 @@ class ServiceVncService
         return $credentials;
     }
 
+    /**
+     * 旁路日志：日志通道故障不得影响 VNC 换取流程（体量见 App\Support\Logging\SafeLog）。
+     *
+     * @param  array<string, mixed>  $context
+     */
     private function safeLog(string $level, string $message, array $context = []): void
     {
-        try {
-            Log::log($level, $message, $context);
-        } catch (\Throwable) {
-        }
+        SafeLog::log($level, $message, $context);
     }
 
     private function loadVncTokenParams(string $token): array
     {
         $cacheKey = CacheKey::vncToken($token);
-        $params = Cache::store('redis_volatile')->get($cacheKey);
+        $params = VolatileStore::store()->get($cacheKey);
 
         if (! is_array($params) || empty($params)) {
             throw new BusinessException('VNC 链接已过期或无效，请重新获取', 40400, 404);
@@ -407,7 +410,7 @@ class ServiceVncService
     private function consumeVncLaunchToken(string $token): array
     {
         $cacheKey = CacheKey::vncToken($token);
-        $params = Cache::store('redis_volatile')->get($cacheKey);
+        $params = VolatileStore::store()->get($cacheKey);
 
         if (! is_array($params) || empty($params) || ($params['token_scope'] ?? 'public') !== 'public') {
             throw new BusinessException('VNC 链接已过期或无效，请重新获取', 40400, 404);

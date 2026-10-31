@@ -11,6 +11,7 @@ use App\Services\Integrations\Plugins\PluginDomain;
 use App\Services\Integrations\Plugins\PluginRuntimeRegistry;
 use App\Services\System\ActivityLogService;
 use App\Services\System\NotificationTemplateService;
+use App\Support\CacheKey;
 use App\Support\SchemaMetadataCache;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -39,6 +40,11 @@ class SmsProviderTemplateService
         SmsProviderTemplate::STATUS_REJECTED,
         SmsProviderTemplate::STATUS_DELETED,
     ];
+
+    /**
+     * 挂接业务码的互斥锁顶层段：与既有键 'lock:sms-provider-template-link:{业务码}' 逐字一致。
+     */
+    private const LINK_LOCK_TOP_SEGMENT = 'lock:sms-provider-template-link';
 
     public function __construct(
         private readonly PluginRuntimeRegistry $runtime,
@@ -527,7 +533,7 @@ class SmsProviderTemplateService
         // 会让业务码短暂无挂接（发送解析回落旧列/fallback 链），包事务保证原子切换。
         // 并发保护（同日审查 P2-1）：business_code 无唯一约束，事务本身只保证失败原子性，
         // 两个并发挂接仍可能各留一条；以业务码为粒度加互斥锁，串行化同一业务码的挂接。
-        $lock = Cache::lock('lock:sms-provider-template-link:'.$businessCode, 15);
+        $lock = Cache::lock(CacheKey::lock(self::LINK_LOCK_TOP_SEGMENT, $businessCode), 15);
         if (! $lock->get()) {
             throw new BusinessException('该业务码正在被其他挂接操作处理，请稍后重试', 40900, 409);
         }

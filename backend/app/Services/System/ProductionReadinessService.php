@@ -9,18 +9,21 @@ use App\Models\ScheduleTick;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Redis;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Throwable;
 
 class ProductionReadinessService
 {
-    /** @return array{ready: bool, checks: array<string, bool>} */
+    /** @return array{ready: bool, checks: array<string, bool>, reasons: array<string, string>} */
     public function check(): array
     {
         $schedulerLiveness = $this->schedulerIsReady();
         $taskReadiness = $this->taskReadiness();
         $queueReadiness = $this->queueIsReady();
+        // Redis 只读探针：未使用 Redis 时视为不适用直接通过，失败原因随 reasons 输出。
+        $redisProbe = $this->redisProbe();
         $checks = [
             'database' => $this->databaseIsReady(),
             'cache' => $this->cacheIsReady(),
@@ -30,11 +33,13 @@ class ProductionReadinessService
             'scheduler_liveness' => $schedulerLiveness,
             'task_readiness' => $taskReadiness,
             'queue' => $queueReadiness,
+            'redis' => $redisProbe['ready'],
         ];
 
         return [
             'ready' => ! in_array(false, $checks, true),
             'checks' => $checks,
+            'reasons' => $redisProbe['reason'] === null ? [] : ['redis' => $redisProbe['reason']],
         ];
     }
 
@@ -171,5 +176,88 @@ class ProductionReadinessService
         } catch (Throwable) {
             return false;
         }
+    }
+
+    /**
+     * Redis 连接只读探针：仅在缓存、会话或队列实际使用 redis 驱动时才执行。
+     *
+     * 只发送 PING —— 不写入任何键、不 flush、不读取积压指标，避免探针自身产生副作用或污染统计。
+     * 所有异常在此处收敛为失败原因返回，绝不向外抛出，以免连带其它健康项一起报错。
+     *
+     * 缓存、队列、会话可能落在不同连接上（例如缓存走 cache 连接、队列走 default 连接），
+     * 因此逐个连接探测并把原因拼在一起，只探第一个命中的连接会漏掉另一层的故障。
+     *
+     * @return array{applicable: bool, ready: bool, reason: string|null}
+     */
+    private function redisProbe(): array
+    {
+        $targets = $this->redisProbeTargets();
+        if ($targets === []) {
+            // 未使用 redis 的环境（例如测试固定为 array 缓存）视为不适用，直接通过，不出现在失败原因里。
+            return ['applicable' => false, 'ready' => true, 'reason' => null];
+        }
+
+        $reasons = [];
+        foreach ($targets as [$purpose, $connection]) {
+            try {
+                // PING 是 Redis 唯一的无状态只读命令，不会创建或修改任何键。
+                $pong = Redis::connection($connection)->ping();
+
+                // phpredis 返回 true，predis 返回状态对象（字符串化为 PONG），两种客户端都算通过。
+                $healthy = $pong === true || strtoupper(trim((string) $pong)) === 'PONG';
+
+                if (! $healthy) {
+                    $reasons[] = $purpose.'（'.$connection.'）连接已建立但 PING 返回异常';
+                }
+            } catch (Throwable $exception) {
+                $reasons[] = $purpose.'（'.$connection.'）连接不可用：'.$exception->getMessage();
+            }
+        }
+
+        return [
+            'applicable' => true,
+            'ready' => $reasons === [],
+            'reason' => $reasons === [] ? null : implode('；', $reasons),
+        ];
+    }
+
+    /**
+     * 解析需要探测的 Redis 连接：返回去重后的 [用途说明, 连接名] 列表，未使用 redis 时返回空数组。
+     *
+     * @return list<array{0: string, 1: string}>
+     */
+    private function redisProbeTargets(): array
+    {
+        $targets = [];
+        $seen = [];
+
+        $add = static function (string $purpose, string $connection) use (&$targets, &$seen): void {
+            $connection = $connection !== '' ? $connection : 'default';
+            // 同一连接被多层共用时只探一次，避免重复 PING 与重复原因文案。
+            if (isset($seen[$connection])) {
+                return;
+            }
+            $seen[$connection] = true;
+            $targets[] = [$purpose, $connection];
+        };
+
+        // 缓存：缓存驱动为 redis 时探测该 store 绑定的连接。
+        $cacheStore = (string) config('cache.default', '');
+        if ($cacheStore !== '' && (string) config("cache.stores.{$cacheStore}.driver", '') === 'redis') {
+            $add('缓存', trim((string) config("cache.stores.{$cacheStore}.connection", '')));
+        }
+
+        // 队列：队列驱动为 redis 时探测该队列连接对应的 Redis 连接。
+        $queueDriver = (string) config('queue.default', '');
+        if ($queueDriver !== '' && (string) config("queue.connections.{$queueDriver}.driver", '') === 'redis') {
+            $add('队列', trim((string) config("queue.connections.{$queueDriver}.connection", '')));
+        }
+
+        // 会话：会话落在 redis 上同样依赖该连接。
+        if ((string) config('session.driver', '') === 'redis') {
+            $add('会话', trim((string) config('session.connection', '')));
+        }
+
+        return $targets;
     }
 }

@@ -6,14 +6,11 @@ use App\Jobs\ProcessPaidOrderFulfillmentJob;
 use App\Jobs\ProcessPaidOrderReferralRewardJob;
 use App\Models\Invoice;
 use App\Services\Finance\InvoicePaidOrchestrator;
-use App\Support\SchemaMetadataCache;
+use App\Support\Queue\QueueDriverCapability;
 use Illuminate\Support\Facades\Log;
-use Predis\Client;
 
 class PaidOrderBusinessFlowDispatcher
 {
-    private ?bool $databaseQueueReady = null;
-
     /**
      * 支付入账后的业务流派发（2026-10-11 用户裁决：支付完成之后进行开通，不走队列）。
      *
@@ -189,44 +186,7 @@ class PaidOrderBusinessFlowDispatcher
 
     private function shouldUseQueue(): bool
     {
-        $driver = (string) config('queue.default', 'sync');
-
-        if ($driver === '' || $driver === 'sync') {
-            return false;
-        }
-
-        if ($driver === 'database') {
-            return $this->databaseQueueIsReady();
-        }
-
-        if ($driver === 'redis') {
-            return extension_loaded('redis') || class_exists(Client::class);
-        }
-
-        return true;
-    }
-
-    private function databaseQueueIsReady(): bool
-    {
-        if ($this->databaseQueueReady !== null) {
-            return $this->databaseQueueReady;
-        }
-
-        $table = (string) config('queue.connections.database.table', 'jobs');
-
-        try {
-            $this->databaseQueueReady = $table !== '' && SchemaMetadataCache::hasTable($table);
-        } catch (\Throwable $exception) {
-            Log::warning('[支付后业务流] 检查队列表失败，回退为 afterResponse', [
-                'table' => $table,
-                'message' => $exception->getMessage(),
-                'exception' => $exception::class,
-            ]);
-
-            $this->databaseQueueReady = false;
-        }
-
-        return $this->databaseQueueReady;
+        return QueueDriverCapability::shouldUseQueue('[支付后业务流]');
     }
 
     private function logFallbackDispatch(int $orderId): void

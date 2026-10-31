@@ -278,6 +278,20 @@ final class CacheKey
     }
 
     /**
+     * 上游库存单飞锁：与缓存键同前缀再加 `:lock` 后缀。
+     *
+     * 必须与缓存键严格同源（同一批 supplier/product 得到同一把锁），且键串与收口前
+     * 的 `productRemoteStock().':lock'` 逐字一致——滚动发布期间新旧实例会同时持锁，
+     * 键名一变就会短暂退化成两把不同的锁，单飞失效、上游被重复打满。
+     *
+     * @param  list<int>  $supplierProductIds
+     */
+    public static function productRemoteStockLock(int $supplierId, array $supplierProductIds): string
+    {
+        return self::productRemoteStock($supplierId, $supplierProductIds).':lock';
+    }
+
+    /**
      * 上游库存拉取失败日志节流键：stock_log:<原因>:<主体 ID>。
      */
     public static function stockLogThrottle(string $reason, int $subjectId): string
@@ -334,5 +348,45 @@ final class CacheKey
     public static function lock(string $topSegment, string $name): string
     {
         return $topSegment.':'.$name;
+    }
+
+    /**
+     * 实名认证状态查询的服务端微缓存键。
+     *
+     * 键字符串必须与收口前逐字一致：'verification:status:'.hash('sha256', $certifyId)。
+     */
+    public static function verificationStatus(string $certifyId): string
+    {
+        return 'verification:status:'.hash('sha256', $certifyId);
+    }
+
+    /**
+     * 供应商上游接口的商品配置项模板缓存键（供应商 + 上游商品）。
+     *
+     * 键字符串必须与收口前逐字一致：'upstream:hosting_panel_api:config_template:{supplierId}:{productId}'。
+     */
+    public static function upstreamProductConfigTemplate(int $supplierId, int $productId): string
+    {
+        return 'upstream:hosting_panel_api:config_template:'.$supplierId.':'.$productId;
+    }
+
+    /**
+     * 供应商上游接口的 DNS 解析正缓存键（主机名小写归一）。
+     *
+     * 键字符串必须与收口前逐字一致：'upstream:hosting_panel_api:dns:'.strtolower($host)。
+     */
+    public static function dnsResolutionCache(string $host): string
+    {
+        return 'upstream:hosting_panel_api:dns:'.strtolower($host);
+    }
+
+    /**
+     * 供应商上游接口的 DNS 解析负缓存键（正缓存键 + ':failed'）。
+     *
+     * 负缓存用于压住解析失败的重复探测，键字符串同样必须保持逐字一致。
+     */
+    public static function dnsResolutionFailure(string $host): string
+    {
+        return self::dnsResolutionCache($host).':failed';
     }
 }

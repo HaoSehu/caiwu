@@ -10,28 +10,29 @@ use App\Exceptions\BusinessException;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Payment;
+use App\Support\Cache\VolatileStore;
+use App\Support\CacheTtl;
 use App\Support\Money;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
 class CheckoutSecurityService
 {
-    private const QUOTE_TTL_SECONDS = 600;
+    private const QUOTE_TTL_SECONDS = CacheTtl::CHECKOUT_QUOTE_SECONDS;
 
-    private const ORDER_IDEMPOTENCY_TTL_SECONDS = 900;
+    private const ORDER_IDEMPOTENCY_TTL_SECONDS = CacheTtl::CHECKOUT_ORDER_IDEMPOTENCY_SECONDS;
 
-    private const ORDER_FINGERPRINT_TTL_SECONDS = 180;
+    private const ORDER_FINGERPRINT_TTL_SECONDS = CacheTtl::CHECKOUT_ORDER_FINGERPRINT_SECONDS;
 
-    private const PAYMENT_SESSION_TTL_SECONDS = 300;
+    private const PAYMENT_SESSION_TTL_SECONDS = CacheTtl::CHECKOUT_PAYMENT_SESSION_SECONDS;
 
     /**
      * 所有 checkout 临时数据使用 volatile store（Redis DB 2），与业务缓存隔离。
      */
     private function volatileStore()
     {
-        return Cache::store('redis_volatile');
+        return VolatileStore::store();
     }
 
     public function issueQuoteToken(

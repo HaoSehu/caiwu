@@ -26,13 +26,7 @@ class AdminLoginLogTest extends TestCase
 {
     use DatabaseTransactions;
 
-    protected function setUp(): void
-    {
-        parent::setUp();
-
-        // 登录失败计数与锁行走 redis_volatile，测试环境替换为 array store。
-        config(['cache.stores.redis_volatile' => ['driver' => 'array']]);
-    }
+    // 登录失败计数与锁行走 redis_volatile，其 array 覆盖已由 Tests\TestCase 统一提供。
 
     public function test_successful_login_writes_login_log_without_activity_log_duplicate(): void
     {

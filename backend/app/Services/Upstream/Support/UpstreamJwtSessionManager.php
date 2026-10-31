@@ -6,9 +6,9 @@ namespace App\Services\Upstream\Support;
 
 use App\Exceptions\BusinessException;
 use App\Models\Supplier;
+use App\Support\Logging\SafeLog;
 use Illuminate\Contracts\Cache\Repository as CacheRepository;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Log;
 
 /**
  * 上游面板 JWT 会话缓存管理器骨架。
@@ -261,16 +261,16 @@ abstract class UpstreamJwtSessionManager
     }
 
     /**
-     * 日志写入不得拖垮主流程，静默吞掉日志通道的任何异常。
+     * 日志写入不得拖垮主流程，实现与体量见 App\Support\Logging\SafeLog。
+     *
+     * 保留这个 protected 包装是为了让插件子类（如 ZjmfAuthManager）沿用同一入口，
+     * 不必各自再包一层 try/catch。
      *
      * @param  array<string, mixed>  $context
      */
     protected function safeLog(string $level, string $message, array $context = []): void
     {
-        try {
-            Log::log($level, $message, $context);
-        } catch (\Throwable) {
-        }
+        SafeLog::log($level, $message, $context);
     }
 
     /**

@@ -26,6 +26,8 @@ use App\Services\ProductCatalog\ProductFullPathResolver;
 use App\Services\System\NotificationService;
 use App\Services\System\OperationLogService;
 use App\Support\BillingCycleLabels;
+use App\Support\CacheKey;
+use App\Support\Logging\SafeLog;
 use App\Support\OrderInvoiceNoGenerator;
 use Carbon\Carbon;
 use Illuminate\Contracts\Cache\LockTimeoutException;
@@ -143,7 +145,7 @@ class CheckoutService
         throw_if($quoteToken === '', new BusinessException('报价凭证已失效，请刷新配置后重试'));
         throw_if($idempotencyKey === '', new BusinessException('请求缺少幂等标识，请刷新页面后重试'));
 
-        $lockKey = 'lock:invoice:create:'.$userId.':'.sha1($idempotencyKey);
+        $lockKey = CacheKey::lock('lock:invoice:create', $userId.':'.sha1($idempotencyKey));
 
         try {
             $invoice = Cache::lock($lockKey, 20)->block(5, function () use (
@@ -619,11 +621,13 @@ class CheckoutService
         );
     }
 
+    /**
+     * 旁路日志：日志通道故障不得影响下单主流程（体量见 App\Support\Logging\SafeLog）。
+     *
+     * @param  array<string, mixed>  $context
+     */
     private function safeLog(string $level, string $message, array $context = []): void
     {
-        try {
-            Log::log($level, $message, $context);
-        } catch (\Throwable) {
-        }
+        SafeLog::log($level, $message, $context);
     }
 }

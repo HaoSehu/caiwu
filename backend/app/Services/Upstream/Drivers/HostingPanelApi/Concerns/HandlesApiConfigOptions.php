@@ -7,7 +7,8 @@ namespace App\Services\Upstream\Drivers\HostingPanelApi\Concerns;
 use App\Exceptions\BusinessException;
 use App\Models\Supplier;
 use App\Services\Upstream\Support\UpstreamConfigOptionNormalizer;
-use Illuminate\Support\Facades\Cache;
+use App\Support\Cache\VolatileStore;
+use App\Support\CacheKey;
 use Illuminate\Support\Facades\Log;
 
 trait HandlesApiConfigOptions
@@ -19,8 +20,8 @@ trait HandlesApiConfigOptions
 
     public function getProductConfigTemplate(Supplier $supplier, int $productId, bool $bypassCache = false): array
     {
-        $cacheKey = 'upstream:hosting_panel_api:config_template:'.$supplier->id.':'.$productId;
-        $store = Cache::store('redis_volatile');
+        $cacheKey = CacheKey::upstreamProductConfigTemplate((int) $supplier->id, $productId);
+        $store = VolatileStore::store();
 
         if (! $bypassCache) {
             $cached = $store->get($cacheKey);

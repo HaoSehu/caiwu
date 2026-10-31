@@ -154,6 +154,91 @@ function validateRequiredValue(values, failures, key) {
   }
 }
 
+// 多实例部署时所有实例共用同一个 Redis：CACHE_PREFIX / REDIS_PREFIX 为空会让不同实例、
+// 不同项目的缓存键与锁键算成同一个名字，互相覆盖并误判锁占用。
+// 下面这些键都不是 Laravel 自带配置，只作为运维的显式声明；一个都没声明时无从判断实例数，
+// 只能给 warning，绝不伪造失败。
+const MULTI_INSTANCE_SWITCH_KEYS = [
+  "AUTO_SCALING",
+  "MULTI_INSTANCE",
+  "MULTI_INSTANCE_DEPLOYMENT",
+];
+const INSTANCE_COUNT_KEYS = [
+  "INSTANCE_COUNT",
+  "APP_INSTANCE_COUNT",
+  "CAIWU_INSTANCE_COUNT",
+];
+const REDIS_PREFIX_KEYS = ["CACHE_PREFIX", "REDIS_PREFIX"];
+
+function isTruthySwitch(rawValue) {
+  return /^(?:1|true|yes|on)$/i.test(String(rawValue ?? "").trim());
+}
+
+function readInstanceDeclaration(values) {
+  for (const key of MULTI_INSTANCE_SWITCH_KEYS) {
+    const rawValue = String(values[key] ?? "").trim();
+    if (rawValue !== "") {
+      return { label: key, multiInstance: isTruthySwitch(rawValue) };
+    }
+  }
+
+  for (const key of INSTANCE_COUNT_KEYS) {
+    const rawValue = String(values[key] ?? "").trim();
+    if (rawValue === "") {
+      continue;
+    }
+
+    const count = Number(rawValue);
+    if (Number.isInteger(count) && count > 0) {
+      return { label: `${key}=${count}`, multiInstance: count > 1 };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * 只读检查：多实例部署（由环境变量显式声明）时缓存前缀与 Redis 前缀不得为空。
+ * 返回的 failures 阻断发布，warnings 只提示；实例数无法判断时不报失败。
+ */
+export function checkSharedRedisPrefixes(values) {
+  const failures = [];
+  const warnings = [];
+
+  if (String(values.CACHE_STORE ?? "").trim().toLowerCase() !== "redis") {
+    return { failures, warnings };
+  }
+
+  const declaration = readInstanceDeclaration(values);
+  if (declaration === null) {
+    const emptyPrefixKeys = REDIS_PREFIX_KEYS.filter(
+      (key) => String(values[key] ?? "").trim() === "",
+    );
+    if (emptyPrefixKeys.length > 0) {
+      warnings.push({
+        check: "REDIS_PREFIX_SHARING",
+        message: `无法判定部署实例数；多实例共用一个 Redis 时 ${emptyPrefixKeys.join(" / ")} 必须非空，单实例可留空。请设置 AUTO_SCALING、MULTI_INSTANCE 或 INSTANCE_COUNT 之一以启用强制校验。`,
+      });
+    }
+    return { failures, warnings };
+  }
+
+  if (!declaration.multiInstance) {
+    return { failures, warnings };
+  }
+
+  for (const key of REDIS_PREFIX_KEYS) {
+    if (String(values[key] ?? "").trim() === "") {
+      failures.push({
+        check: key,
+        message: `${key} 在多实例部署（${declaration.label}）下不得为空，否则各实例的缓存键、锁键会互相覆盖。`,
+      });
+    }
+  }
+
+  return { failures, warnings };
+}
+
 function validateCredential(values, failures, key, minimumLength) {
   const value = String(values[key] ?? "").trim();
   if (isObviousPlaceholder(value) || value.length < minimumLength) {
@@ -180,6 +265,9 @@ export function validateProductionEnv(values) {
   validateRequiredValue(values, failures, "REDIS_HOST");
   validateCredential(values, failures, "DB_PASSWORD", 12);
   validateCredential(values, failures, "REDIS_PASSWORD", 12);
+
+  // 只读补充检查：多实例共用一个 Redis 时前缀不得为空；判定不出实例数只给 warning，不进 failures
+  failures.push(...checkSharedRedisPrefixes(values).failures);
 
   if (!isLaravelAppKey(values.APP_KEY)) {
     addFailure(
@@ -537,6 +625,9 @@ function loadEnvValues(envPath) {
   const values = { ...fileValues };
   const relevantKeys = [
     ...PUBLIC_URL_KEYS.map(([key]) => key),
+    ...MULTI_INSTANCE_SWITCH_KEYS,
+    ...INSTANCE_COUNT_KEYS,
+    ...REDIS_PREFIX_KEYS,
     "APP_DEBUG",
     "APP_ENV",
     "APP_KEY",
@@ -591,8 +682,11 @@ async function main() {
   const envValues = options.envPath ? loadEnvValues(options.envPath) : {};
   const results = [];
 
+  const warnings = [];
+
   if (options.envPath) {
     const failures = validateProductionEnv(envValues);
+    warnings.push(...checkSharedRedisPrefixes(envValues).warnings);
     if (failures.length === 0) {
       results.push({ check: "production-env", ok: true });
     } else {
@@ -615,7 +709,15 @@ async function main() {
 
   const failed = results.filter((result) => !result.ok);
   if (options.json) {
-    console.log(JSON.stringify({ ok: failed.length === 0, results }, null, 2));
+    console.log(
+      JSON.stringify(
+        warnings.length > 0
+          ? { ok: failed.length === 0, results, warnings }
+          : { ok: failed.length === 0, results },
+        null,
+        2,
+      ),
+    );
   } else {
     for (const result of results) {
       if (result.ok) {
@@ -623,6 +725,9 @@ async function main() {
       } else {
         console.error(`[FAIL] ${result.check}: ${result.message}`);
       }
+    }
+    for (const warning of warnings) {
+      console.warn(`[WARN] ${warning.check}: ${warning.message}`);
     }
   }
 

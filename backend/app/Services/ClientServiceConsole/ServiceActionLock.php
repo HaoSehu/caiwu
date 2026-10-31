@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\ClientServiceConsole;
 
 use App\Exceptions\BusinessException;
+use App\Support\CacheKey;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
 
@@ -15,7 +16,7 @@ class ServiceActionLock
      */
     public function execute(int $userId, int $serviceId, string $action, callable $callback): mixed
     {
-        $lockKey = sprintf('lock:client:service:%d:%d:%s', $userId, $serviceId, sha1($action));
+        $lockKey = CacheKey::lock('lock:client:service', sprintf('%d:%d:%s', $userId, $serviceId, sha1($action)));
 
         try {
             return Cache::lock($lockKey, 20)->block(3, $callback);

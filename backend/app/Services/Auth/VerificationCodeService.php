@@ -3,9 +3,9 @@
 namespace App\Services\Auth;
 
 use App\Models\User;
+use App\Support\Cache\VolatileStore;
 use App\Support\CacheKey;
 use App\Support\EmailNotificationTemplateDefaults;
-use Illuminate\Support\Facades\Cache;
 
 class VerificationCodeService
 {
@@ -22,6 +22,12 @@ class VerificationCodeService
      * 与阿里云 ValidTime=300 秒、短信正文 ${min} 相互咬合，勿并入邮件的 10 分钟。
      */
     private const PHONE_CODE_TTL_MINUTES = 5;
+
+    /**
+     * 验证码错误尝试计数的保留窗口（分钟）：覆盖一整轮人机交互的重试，
+     * 过期后计数归零，避免一次误输永久占掉上限。
+     */
+    private const VERIFY_ATTEMPT_TTL_MINUTES = 10;
 
     /**
      * 账号维度验证码校验：先按 guest 维度校验，未命中且用户存在时回退用户维度。
@@ -79,8 +85,8 @@ class VerificationCodeService
     private function storeCode(string $channel, int|string $userId, string $target, string $code, int $minutes): void
     {
         $cacheKey = CacheKey::verificationCode($this->targetKey($channel, $userId, $target));
-        Cache::store('redis_volatile')->put($cacheKey, $code, now()->addMinutes($minutes));
-        Cache::store('redis_volatile')->forget($this->attemptKey($channel, $userId, $target));
+        VolatileStore::store()->put($cacheKey, $code, now()->addMinutes($minutes));
+        VolatileStore::store()->forget($this->attemptKey($channel, $userId, $target));
     }
 
     /**
@@ -106,12 +112,12 @@ class VerificationCodeService
     {
         $cacheKey = CacheKey::verificationCode($this->targetKey($channel, $userId, $target));
         $attemptKey = $this->attemptKey($channel, $userId, $target);
-        $cached = Cache::store('redis_volatile')->get($cacheKey);
+        $cached = VolatileStore::store()->get($cacheKey);
 
         if ($cached !== null && $cached === $code) {
             if ($consume) {
-                Cache::store('redis_volatile')->forget($cacheKey);
-                Cache::store('redis_volatile')->forget($attemptKey);
+                VolatileStore::store()->forget($cacheKey);
+                VolatileStore::store()->forget($attemptKey);
             }
 
             return true;
@@ -125,12 +131,12 @@ class VerificationCodeService
      */
     private function recordFailedAttempt(string $attemptKey, string $cacheKey): bool
     {
-        $attempts = (int) Cache::store('redis_volatile')->increment($attemptKey, 1);
-        Cache::store('redis_volatile')->put($attemptKey, $attempts, now()->addMinutes(10));
+        $attempts = (int) VolatileStore::store()->increment($attemptKey, 1);
+        VolatileStore::store()->put($attemptKey, $attempts, now()->addMinutes(self::VERIFY_ATTEMPT_TTL_MINUTES));
 
         if ($attempts >= self::MAX_VERIFY_ATTEMPTS) {
-            Cache::store('redis_volatile')->forget($cacheKey);
-            Cache::store('redis_volatile')->forget($attemptKey);
+            VolatileStore::store()->forget($cacheKey);
+            VolatileStore::store()->forget($attemptKey);
         }
 
         return false;

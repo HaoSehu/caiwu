@@ -22,6 +22,7 @@ use App\Services\Upstream\ProviderKey;
 use App\Services\Upstream\Support\CloudConfigTemplate;
 use App\Services\Upstream\Support\UpstreamJwtSessionManager;
 use App\Services\Upstream\Support\WebSessionCookieParser;
+use App\Support\CacheKey;
 use Illuminate\Http\Client\Pool;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
@@ -1035,14 +1036,15 @@ class HostingPanelApiTransport extends UpstreamJwtSessionManager implements Prov
             return ['127.0.0.1'];
         }
 
-        // 域名本身是合法 Redis key 字符（允许 . 分隔），无需 md5
-        $cacheKey = 'upstream:hosting_panel_api:dns:'.strtolower($host);
+        // 域名本身是合法 Redis key 字符（允许 . 分隔），无需 md5；
+        // 键格式统一收口到 CacheKey，字符串与收口前逐字一致（小写归一在 CacheKey 内完成）。
+        $cacheKey = CacheKey::dnsResolutionCache($host);
         $cached = Cache::get($cacheKey);
         if (is_array($cached) && $cached !== []) {
             return $cached;
         }
 
-        $negativeCacheKey = $cacheKey.':failed';
+        $negativeCacheKey = CacheKey::dnsResolutionFailure($host);
         if (Cache::get($negativeCacheKey) === true) {
             // 负缓存命中：短时间内直接按解析失败处理，不再重付完整解析链的等待成本。
             throw new BusinessException('无法解析供应商接口域名', 42200);

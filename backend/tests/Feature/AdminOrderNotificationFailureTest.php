@@ -132,6 +132,26 @@ class AdminOrderNotificationFailureTest extends TestCase
         (new AdminOrderNotificationService($notificationService))->notifyInvoicePaidNow($invoiceId);
     }
 
+    /**
+     * 只取本用例自己造的管理员邮箱（@example.test 域）。
+     *
+     * resolveRecipients() 按「有订单/账单权限的在用管理员」取全表收件人，
+     * 本机测试库里可能已有真实管理员账号，它们同样会收到通知。
+     * 断言收件人时必须只看本用例创建的那几个，否则用例结果取决于库里有多少历史账号。
+     *
+     * @return list<string>
+     */
+    private function sentTestEmails(NotificationService $notificationService): array
+    {
+        $emails = array_values(array_filter(
+            array_column($notificationService->sent, 'email'),
+            static fn (string $email): bool => str_ends_with($email, '@example.test'),
+        ));
+        sort($emails);
+
+        return $emails;
+    }
+
     public function test_single_admin_failure_throws_aggregated_exception(): void
     {
         $admin = $this->makeAdmin('single-fail@example.test', '单发失败管理员');
@@ -148,7 +168,8 @@ class AdminOrderNotificationFailureTest extends TestCase
             $this->assertStringContainsString('邮件通知未启用', $exception->getMessage());
         }
 
-        $this->assertSame([], $notificationService->sent);
+        // 只看本用例自己造的管理员：库里若已有真实管理员账号，它们同样会被通知到且不会失败。
+        $this->assertSame([], $this->sentTestEmails($notificationService));
     }
 
     public function test_partial_failure_still_attempts_everyone_then_throws_aggregate(): void
@@ -175,7 +196,7 @@ class AdminOrderNotificationFailureTest extends TestCase
         }
 
         // 失败不得提前退出：第三位管理员仍要收到，否则重试永远不会补到他。
-        $this->assertSame(['partial-ok@example.test'], array_column($notificationService->sent, 'email'));
+        $this->assertSame(['partial-ok@example.test'], $this->sentTestEmails($notificationService));
         $this->assertSame(
             [NotificationService::TEMPLATE_ADMIN_ORDER_PAID],
             array_values(array_unique(array_column($notificationService->sent, 'template'))),
@@ -192,9 +213,7 @@ class AdminOrderNotificationFailureTest extends TestCase
 
         $this->notifyPaid($notificationService, (int) $invoice->id);
 
-        $emails = array_column($notificationService->sent, 'email');
-        sort($emails);
-        $this->assertSame(['all-ok-1@example.test', 'all-ok-2@example.test'], $emails);
+        $this->assertSame(['all-ok-1@example.test', 'all-ok-2@example.test'], $this->sentTestEmails($notificationService));
     }
 
     public function test_retry_only_resends_to_admins_without_delivery_record(): void
@@ -212,15 +231,15 @@ class AdminOrderNotificationFailureTest extends TestCase
             $this->assertStringContainsString('retry-fail@example.test', $exception->getMessage());
         }
 
-        $this->assertSame(['retry-ok@example.test'], array_column($notificationService->sent, 'email'));
+        $this->assertSame(['retry-ok@example.test'], $this->sentTestEmails($notificationService));
 
         // 重试：失败者恢复，已成功者必须被 AutomationLog 幂等跳过。
         $notificationService->failingEmails = [];
         $this->notifyPaid($notificationService, (int) $invoice->id);
 
         $this->assertSame(
-            ['retry-ok@example.test', 'retry-fail@example.test'],
-            array_column($notificationService->sent, 'email'),
+            ['retry-fail@example.test', 'retry-ok@example.test'],
+            $this->sentTestEmails($notificationService),
         );
         $this->assertTrue(AutomationLog::hasRecord(
             'admin-order-notification',

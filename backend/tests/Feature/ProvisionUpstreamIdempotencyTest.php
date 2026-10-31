@@ -18,9 +18,9 @@ use App\Services\Upstream\Contracts\ProvidesProvisioning;
 use App\Services\Upstream\Contracts\UpstreamDriver;
 use App\Services\Upstream\ProviderRegistry;
 use App\Services\Upstream\ProviderResolver;
+use App\Support\Cache\VolatileStore;
 use App\Support\CacheKey;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use ReflectionMethod;
 use Tests\TestCase;
@@ -354,7 +354,7 @@ class ProvisionUpstreamIdempotencyTest extends TestCase
         // 校准生效：本地快照归零 + 售罄覆盖标记写入
         $this->assertSame(0, (int) $product->fresh()->stock);
         $this->assertTrue(
-            Cache::store('redis_volatile')->has(CacheKey::upstreamStockShortage((int) $supplier->id, 11))
+            VolatileStore::store()->has(CacheKey::upstreamStockShortage((int) $supplier->id, 11))
         );
     }
 
@@ -462,9 +462,8 @@ class ProvisionUpstreamIdempotencyTest extends TestCase
     {
         parent::setUp();
 
-        // redis_volatile 切 array store：售罄覆盖标记不落真实 redis，
-        // array store 随用例的应用实例重建，天然隔离无残留
-        config(['cache.stores.redis_volatile' => ['driver' => 'array']]);
+        // redis_volatile 已由 Tests\TestCase 统一切 array store：
+        // 售罄覆盖标记不落真实 redis，且随用例的应用实例重建，天然隔离无残留。
 
         // 注册 fake 插件行：provider_key → plugin_id 解析依赖 integration_plugins；
         // 插入发生在测试事务内，由 DatabaseTransactions 统一回滚，不做手动清理

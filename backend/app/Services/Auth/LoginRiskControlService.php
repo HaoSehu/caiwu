@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Services\Auth;
 
+use App\Support\Cache\VolatileStore;
 use App\Support\CacheKey;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\RateLimiter;
 
 class LoginRiskControlService
@@ -130,8 +130,8 @@ class LoginRiskControlService
 
         if ($account !== '') {
             RateLimiter::clear(CacheKey::loginRiskAccount($account));
-            Cache::store('redis_volatile')->forget(CacheKey::loginRiskFailureAlert($account));
-            Cache::store('redis_volatile')->forget(CacheKey::loginRiskFailedIps($account));
+            VolatileStore::store()->forget(CacheKey::loginRiskFailureAlert($account));
+            VolatileStore::store()->forget(CacheKey::loginRiskFailedIps($account));
         }
 
         if ($ip !== '') {
@@ -146,7 +146,7 @@ class LoginRiskControlService
             return false;
         }
 
-        return Cache::store('redis_volatile')->add(
+        return VolatileStore::store()->add(
             CacheKey::loginRiskFailureAlert($account),
             1,
             now()->addSeconds(self::FAILURE_ALERT_DECAY_SECONDS)
@@ -155,7 +155,7 @@ class LoginRiskControlService
 
     private function recordFailedIpForAccount(string $account, string $ip): void
     {
-        $store = Cache::store('redis_volatile');
+        $store = VolatileStore::store();
         $key = CacheKey::loginRiskFailedIps($account);
         $ips = (array) $store->get($key, []);
         $ips[$ip] = true;
@@ -165,7 +165,7 @@ class LoginRiskControlService
     private function distinctFailedIpCount(string $account): int
     {
         try {
-            $ips = (array) Cache::store('redis_volatile')->get(CacheKey::loginRiskFailedIps($account), []);
+            $ips = (array) VolatileStore::store()->get(CacheKey::loginRiskFailedIps($account), []);
         } catch (\Throwable) {
             return 0;
         }

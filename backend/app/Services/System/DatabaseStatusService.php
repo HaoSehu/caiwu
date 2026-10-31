@@ -31,6 +31,7 @@ class DatabaseStatusService
 
     private const OPTIMIZE_MINIMUM_FREE_RATIO = 0.10;
 
+    /** 数据库优化互斥锁键：已是前缀式，与 cooldown 键同 system:database 顶层段。 */
     private const OPTIMIZE_LOCK_KEY = 'system:database:optimize:lock';
 
     private const OPTIMIZE_LOCK_SECONDS = 60 * 60;

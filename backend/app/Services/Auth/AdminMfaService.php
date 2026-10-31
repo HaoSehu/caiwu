@@ -7,9 +7,10 @@ namespace App\Services\Auth;
 use App\Exceptions\BusinessException;
 use App\Models\AdminUser;
 use App\Services\System\OperationLogService;
+use App\Support\Cache\VolatileStore;
 use App\Support\CacheKey;
+use App\Support\CacheTtl;
 use App\Support\Security\TotpService;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -32,7 +33,7 @@ use Throwable;
 class AdminMfaService
 {
     /** 绑定草稿有效期：够慢的人输完一次验证码，又不至于长期留一个未确认密钥。 */
-    private const SETUP_TTL_SECONDS = 600;
+    private const SETUP_TTL_SECONDS = CacheTtl::ADMIN_MFA_SETUP_SECONDS;
 
     /** 恢复码数量与长度：8 条足够救急，10 位随机字符不可枚举。 */
     private const RECOVERY_CODE_COUNT = 8;
@@ -56,7 +57,7 @@ class AdminMfaService
         }
 
         $secret = $this->totpService->generateSecret();
-        Cache::store('redis_volatile')->put(
+        VolatileStore::store()->put(
             CacheKey::adminMfaSetup((int) $admin->id),
             ['secret' => $secret, 'issued_at' => now()->toIso8601String()],
             now()->addSeconds(self::SETUP_TTL_SECONDS),
@@ -84,7 +85,7 @@ class AdminMfaService
         }
 
         $cacheKey = CacheKey::adminMfaSetup((int) $admin->id);
-        $draft = Cache::store('redis_volatile')->get($cacheKey);
+        $draft = VolatileStore::store()->get($cacheKey);
         $secret = is_array($draft) ? trim((string) ($draft['secret'] ?? '')) : '';
 
         if ($secret === '') {
@@ -104,7 +105,7 @@ class AdminMfaService
             'mfa_recovery_codes' => $hashedCodes,
         ])->save();
 
-        Cache::store('redis_volatile')->forget($cacheKey);
+        VolatileStore::store()->forget($cacheKey);
 
         $this->operationLogService->write(
             userId: (int) $admin->id,

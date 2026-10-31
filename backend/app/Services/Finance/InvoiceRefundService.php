@@ -25,6 +25,7 @@ use App\Services\Finance\Core\FinanceIdempotencyService;
 use App\Services\Referral\ReferralService;
 use App\Services\System\ActivityLogService;
 use App\Services\System\NotificationService;
+use App\Support\CacheKey;
 use App\Support\Money;
 use App\Support\SchemaMetadataCache;
 use Illuminate\Contracts\Cache\LockTimeoutException;
@@ -77,7 +78,7 @@ class InvoiceRefundService
      */
     public function refundInvoiceToBalance(User $user, Invoice $invoice, array $payload = [], array $context = []): array
     {
-        $lockKey = "lock:refund:invoice:{$invoice->id}";
+        $lockKey = CacheKey::lock('lock:refund:invoice', (string) $invoice->id);
         // 幂等键：管理端入口由请求层强制传入（payload 优先，直调方可放 context）；
         // 直调方（测试/内部）缺省自动生成。幂等记录在业务事务之外落库（约束见 FinanceIdempotencyService）。
         $idempotencyKey = trim((string) ($payload['idempotency_key'] ?? $context['idempotency_key'] ?? ''));

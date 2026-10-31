@@ -25,6 +25,7 @@ use App\Support\LikeEscape;
 use App\Support\MediaAssetTypes;
 use App\Support\Pagination;
 use App\Support\PublicUrl;
+use App\Support\Queue\QueueDriverCapability;
 use App\Support\SchemaMetadataCache;
 use App\Support\SecureAsset;
 use App\Support\ServiceHostname;
@@ -38,20 +39,10 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
-use Predis\Client;
 
 class TicketService
 {
     private const ADMIN_ASSIGNABLE_USERS_LIMIT = 100;
-
-    private static array $tableExistsCache = [];
-
-    private ?bool $databaseQueueReady = null;
-
-    private static function tableExists(string $table): bool
-    {
-        return self::$tableExistsCache[$table] ??= SchemaMetadataCache::hasTable($table);
-    }
 
     public const DEPARTMENTS = ['sales', 'support', 'billing', 'abuse'];
 
@@ -376,7 +367,7 @@ class TicketService
     {
         $query = Ticket::where('user_id', $userId);
 
-        if (self::tableExists('ticket_replies')) {
+        if (SchemaMetadataCache::hasTable('ticket_replies')) {
             $query->with(['replies' => fn ($q) => $q->latest('created_at')->limit(1)]);
         }
 
@@ -557,7 +548,7 @@ class TicketService
         $clientName = $ticket->user?->display_name ?: '客户';
         $perPage = Pagination::clamp($perPage);
 
-        if (self::tableExists('ticket_replies')) {
+        if (SchemaMetadataCache::hasTable('ticket_replies')) {
             $paginator = TicketReply::query()
                 ->where('ticket_id', (int) $ticket->id)
                 ->orderBy('created_at')
@@ -665,7 +656,7 @@ class TicketService
                     ->orWhere('domain', 'like', $likeKeyword)
                     ->orWhere('id', $keyword);
 
-                if (self::tableExists('service_connection_snapshots')) {
+                if (SchemaMetadataCache::hasTable('service_connection_snapshots')) {
                     $builder->orWhereExists(function ($subQuery) use ($likeKeyword): void {
                         $subQuery
                             ->selectRaw('1')
@@ -985,44 +976,7 @@ class TicketService
 
     private function shouldUseQueue(): bool
     {
-        $driver = (string) config('queue.default', 'sync');
-
-        if ($driver === '' || $driver === 'sync') {
-            return false;
-        }
-
-        if ($driver === 'database') {
-            return $this->databaseQueueIsReady();
-        }
-
-        if ($driver === 'redis') {
-            return extension_loaded('redis') || class_exists(Client::class);
-        }
-
-        return true;
-    }
-
-    private function databaseQueueIsReady(): bool
-    {
-        if ($this->databaseQueueReady !== null) {
-            return $this->databaseQueueReady;
-        }
-
-        $table = (string) config('queue.connections.database.table', 'jobs');
-
-        try {
-            $this->databaseQueueReady = $table !== '' && SchemaMetadataCache::hasTable($table);
-        } catch (\Throwable $exception) {
-            Log::warning('[工单通知] 检查队列表失败，回退为 afterResponse/同步执行', [
-                'table' => $table,
-                'message' => $exception->getMessage(),
-                'exception' => $exception::class,
-            ]);
-
-            $this->databaseQueueReady = false;
-        }
-
-        return $this->databaseQueueReady;
+        return QueueDriverCapability::shouldUseQueue('[工单通知]');
     }
 
     private function clientTicketsUrl(): string

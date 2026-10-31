@@ -11,18 +11,15 @@ use App\Services\Automation\Heartbeat\HeartbeatTaskRegistry;
 use App\Services\Automation\Heartbeat\ScheduleTaskRunRepository;
 use App\Services\System\OperationLogService;
 use App\Support\CacheKey;
+use App\Support\Queue\QueueDriverCapability;
 use Illuminate\Contracts\Cache\Lock;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Schema;
 use InvalidArgumentException;
-use Predis\Client;
 use RuntimeException;
 
 class ScheduleTaskTriggerService
 {
-    private ?bool $databaseQueueReady = null;
-
     public function __construct(
         private HeartbeatTaskRegistry $registry,
         private ScheduleTaskRunRepository $taskRuns,
@@ -392,47 +389,7 @@ class ScheduleTaskTriggerService
 
     private function shouldUseQueue(): bool
     {
-        $driver = (string) config('queue.default', 'sync');
-
-        if ($driver === '' || $driver === 'sync') {
-            return false;
-        }
-
-        if ($driver === 'database') {
-            return $this->databaseQueueIsReady();
-        }
-
-        if ($driver === 'redis') {
-            return extension_loaded('redis') || class_exists(Client::class);
-        }
-
-        return true;
-    }
-
-    private function databaseQueueIsReady(): bool
-    {
-        if ($this->databaseQueueReady !== null) {
-            return $this->databaseQueueReady;
-        }
-
-        $config = (array) config('queue.connections.database', []);
-        $connection = trim((string) ($config['connection'] ?? '')) ?: (string) config('database.default');
-        $table = (string) ($config['table'] ?? 'jobs');
-
-        try {
-            $this->databaseQueueReady = $table !== '' && Schema::connection($connection)->hasTable($table);
-        } catch (\Throwable $exception) {
-            Log::warning('[手动定时任务] 检查队列表失败，回退为 afterResponse', [
-                'connection' => $connection,
-                'table' => $table,
-                'message' => $exception->getMessage(),
-                'exception' => $exception::class,
-            ]);
-
-            $this->databaseQueueReady = false;
-        }
-
-        return $this->databaseQueueReady;
+        return QueueDriverCapability::shouldUseQueue('[手动定时任务]');
     }
 
     private function logFallbackDispatch(string $taskKey, ?int $adminUserId): void

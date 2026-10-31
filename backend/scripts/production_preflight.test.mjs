@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  checkSharedRedisPrefixes,
   isReadyPayload,
   loadNetworkOrigins,
   normalizePublicOrigin,
@@ -202,3 +203,81 @@ test("requires the API readiness response contract", () => {
     false,
   );
 });
+
+test("skips shared-Redis prefix check when the cache store is not redis", () => {
+  const values = validProductionEnv();
+  values.CACHE_STORE = "file";
+  values.MULTI_INSTANCE = "true";
+  values.CACHE_PREFIX = "";
+  values.REDIS_PREFIX = "";
+
+  assert.deepEqual(checkSharedRedisPrefixes(values), {
+    failures: [],
+    warnings: [],
+  });
+});
+
+test("accepts empty prefixes for a declared single instance", () => {
+  const values = validProductionEnv();
+  values.AUTO_SCALING = "false";
+  values.CACHE_PREFIX = "";
+  values.REDIS_PREFIX = "";
+
+  assert.deepEqual(checkSharedRedisPrefixes(values), {
+    failures: [],
+    warnings: [],
+  });
+});
+
+test("blocks empty prefixes for a declared multi-instance deployment", () => {
+  const values = validProductionEnv();
+  values.INSTANCE_COUNT = "3";
+  values.CACHE_PREFIX = "";
+  values.REDIS_PREFIX = "caiwu:";
+
+  const result = checkSharedRedisPrefixes(values);
+  assert.equal(result.failures.length, 1);
+  assert.equal(result.failures[0].check, "CACHE_PREFIX");
+  assert.deepEqual(result.warnings, []);
+});
+
+test("accepts non-empty prefixes for a declared multi-instance deployment", () => {
+  const values = validProductionEnv();
+  values.MULTI_INSTANCE_DEPLOYMENT = "on";
+  values.CACHE_PREFIX = "caiwu:";
+  values.REDIS_PREFIX = "caiwu:";
+
+  assert.deepEqual(checkSharedRedisPrefixes(values), {
+    failures: [],
+    warnings: [],
+  });
+});
+
+test("only warns when the instance count cannot be determined", () => {
+  const values = validProductionEnv();
+  values.CACHE_PREFIX = "";
+  values.REDIS_PREFIX = "";
+
+  const result = checkSharedRedisPrefixes(values);
+  assert.deepEqual(result.failures, []);
+  assert.equal(result.warnings.length, 1);
+  assert.equal(result.warnings[0].check, "REDIS_PREFIX_SHARING");
+});
+
+test("surfaces the shared-Redis prefix failure through validateProductionEnv", () => {
+  const values = validProductionEnv();
+  values.MULTI_INSTANCE = "true";
+  values.CACHE_PREFIX = "";
+  values.REDIS_PREFIX = "";
+
+  const failures = validateProductionEnv(values);
+  assert.equal(
+    failures.some((failure) => failure.check === "CACHE_PREFIX"),
+    true,
+  );
+  assert.equal(
+    failures.some((failure) => failure.check === "REDIS_PREFIX"),
+    true,
+  );
+});
+

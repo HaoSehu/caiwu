@@ -6,9 +6,9 @@ namespace Tests\Feature;
 
 use App\Exceptions\BusinessException;
 use App\Services\ClientServiceConsole\ServiceVncService;
+use App\Support\Cache\VolatileStore;
 use App\Support\CacheKey;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
-use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
 
 /**
@@ -26,12 +26,7 @@ class PublicVncTokenSecurityTest extends TestCase
 {
     use DatabaseTransactions;
 
-    protected function setUp(): void
-    {
-        parent::setUp();
-
-        config(['cache.stores.redis_volatile' => ['driver' => 'array']]);
-    }
+    // 无需再单独覆盖 redis_volatile：Tests\TestCase 已统一置为 array store。
 
     public function test_public_payload_hides_password_and_raw_token_and_is_idempotent(): void
     {
@@ -66,7 +61,7 @@ class PublicVncTokenSecurityTest extends TestCase
         $this->assertSame($first['token'], $second['token'], '同一公开 token 重复兑换应复用 relay token');
 
         // relay 缓存参数同样不落明文密码，仅以 hash 维系统计与溯源
-        $relayParams = Cache::store('redis_volatile')->get(CacheKey::vncToken((string) $first['token']));
+        $relayParams = VolatileStore::store()->get(CacheKey::vncToken((string) $first['token']));
         $this->assertIsArray($relayParams);
         $this->assertArrayNotHasKey('password', $relayParams, 'relay 参数不得落明文 VNC 密码');
         $this->assertSame(hash('sha256', $token), (string) ($relayParams['public_token_hash'] ?? ''));
@@ -135,7 +130,7 @@ class PublicVncTokenSecurityTest extends TestCase
      */
     private function putToken(string $token, array $params): void
     {
-        Cache::store('redis_volatile')->put(
+        VolatileStore::store()->put(
             CacheKey::vncToken($token),
             $params,
             now()->addMinutes(10),

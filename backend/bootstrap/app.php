@@ -12,6 +12,7 @@ use App\Http\Middleware\VerifyCallbackSignature;
 use App\Http\Middleware\VerifyPaymentCallbackSignature;
 use App\Support\ApiResponseBuilder;
 use Illuminate\Auth\AuthenticationException;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -143,6 +144,27 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->render(function (ThrottleRequestsException $exception, Request $request) {
             if ($request->is('api/*')) {
                 return ApiResponseBuilder::error(42900, '请求过于频繁，请稍后再试', null, 429);
+            }
+
+            return null;
+        });
+
+        // 拿不到分布式锁统一回 409，而不是让它落到兜底 500。
+        //
+        // Cache::lock()->block() 超时抛的是 LockTimeoutException，语义是「同一动作正在
+        // 处理中」——这是预期内的并发保护结果，不是服务端故障。此前只有在自己 catch
+        // 了它的调用点（如 ServiceActionLock）才能得到 409，资金路径（充值下单、返佣
+        // 结算）漏 catch 就会以 500 返回，前端只能提示「服务器内部错误」，用户会重试
+        // 并再次撞锁。统一在这里转换，同时保留原始消息便于排查，但不把锁内部细节
+        // （键名、owner）回给客户端。
+        //
+        // 业务码用 40901 而不是 40900：40900 在存量代码里承担了多种含义（邮箱已注册、
+        // 余额不足、账户余额被并发修改、操作处理中），其中 FinanceAccountService 还拿
+        // 40900 当乐观锁重试判据，锁超时挤进同一码会让「是不是并发写冲突」不可判定。
+        // 40901 与 ProvisionLeaseBusyException 一致，专指「资源状态冲突 / 处理中」。
+        $exceptions->render(function (LockTimeoutException $exception, Request $request) {
+            if ($request->is('api/*')) {
+                return ApiResponseBuilder::error(40901, '操作处理中，请稍后重试', null, 409);
             }
 
             return null;

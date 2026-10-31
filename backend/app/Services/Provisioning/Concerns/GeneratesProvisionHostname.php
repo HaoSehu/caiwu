@@ -19,6 +19,9 @@ use Illuminate\Support\Facades\Log;
  */
 trait GeneratesProvisionHostname
 {
+    /** 上游商品主机名规则缓存有效期（分钟）：规则变更低频，30 分钟足以避免每次开通都打上游。 */
+    private const UPSTREAM_HOSTNAME_RULE_TTL_MINUTES = 30;
+
     /**
      * 生成（或复用）订单主机名，并把结果回写进订单的 config_snapshot。
      */
@@ -140,7 +143,7 @@ trait GeneratesProvisionHostname
             return [];
         }
 
-        Cache::put($cacheKey, $rule, now()->addMinutes(30));
+        Cache::put($cacheKey, $rule, now()->addMinutes(self::UPSTREAM_HOSTNAME_RULE_TTL_MINUTES));
 
         return $rule;
     }

@@ -26,6 +26,7 @@ use App\Services\ProductCatalog\ProductFullPathResolver;
 use App\Services\System\OperationLogService;
 use App\Services\User\AccountService;
 use App\Support\AdminPrivacy;
+use App\Support\CacheKey;
 use App\Support\LikeEscape;
 use App\Support\Money;
 use App\Support\PublicUrl;
@@ -289,7 +290,7 @@ class ReferralService
      * 销量累计、费率解算与冻结落库流程。
      *
      * $sourceType 目前仅取 'order' 与 'invoice'，决定：
-     * - 锁键中段："lock:referral:reward:{$sourceType}:{$sourceId}"
+     * - 锁键中段：CacheKey::lock('lock:referral:reward', "{$sourceType}:{$sourceId}")
      * - ReferralReward 的幂等查询列与落库来源列：{$sourceType}_id（order_id/invoice_id
      *   两列在 create 时显式赋值，另一来源侧写 null，见 create 处注释）
      * - 账号日志 relatedType 与操作日志 detail 中 {$sourceType}_no / {$sourceType}_amount 键名
@@ -318,7 +319,7 @@ class ReferralService
             throw new \InvalidArgumentException("Invalid referral reward type: {$type}");
         }
 
-        $lockKey = "lock:referral:reward:{$sourceType}:{$sourceId}";
+        $lockKey = CacheKey::lock('lock:referral:reward', $sourceType.':'.$sourceId);
 
         return Cache::lock($lockKey, 30)->block(5, function () use ($sourceType, $sourceId, $productId, $buyer, $referrer, $amount, $logRemark, $sourceNoValue, $traceId, $type) {
             $existing = ReferralReward::query()->where("{$sourceType}_id", $sourceId)->first();
@@ -1008,7 +1009,7 @@ class ReferralService
      */
     public function reverseRewardForRefundedInvoice(Invoice $invoice, ?string $traceId = null): ?ReferralReward
     {
-        $lockKey = "lock:referral:reward:reverse:invoice:{$invoice->id}";
+        $lockKey = CacheKey::lock('lock:referral:reward:reverse:invoice', (string) $invoice->id);
 
         return Cache::lock($lockKey, 30)->block(5, function () use ($invoice, $traceId) {
             return DB::transaction(function () use ($invoice, $traceId) {

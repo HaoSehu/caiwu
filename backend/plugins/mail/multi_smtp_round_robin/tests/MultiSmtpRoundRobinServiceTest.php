@@ -29,8 +29,26 @@ class MultiSmtpRoundRobinServiceTest extends TestCase
     {
         parent::setUp();
 
-        // 游标与冷却是全局键：每个用例必须从干净缓存开始
-        Cache::flush();
+        // 游标与冷却是全局键：每个用例必须从干净缓存开始。
+        // 原先直接清空整个缓存 store，会把同一进程内共享该 store 的其它用例一起清掉；
+        // 这里只删除本插件自己写入的三个键（游标 + 两个账号的冷却）。
+        foreach ($this->pluginCacheKeys() as $key) {
+            Cache::forget($key);
+        }
+    }
+
+    /**
+     * 本插件会写入的全局缓存键（与 MultiSmtpRoundRobinService::cursorKey()/cooldownKey() 一致）。
+     *
+     * @return array<int, string>
+     */
+    private function pluginCacheKeys(): array
+    {
+        return [
+            'plugin:mail:multi_smtp_round_robin:cursor',
+            'plugin:mail:multi_smtp_round_robin:cooldown:0',
+            'plugin:mail:multi_smtp_round_robin:cooldown:1',
+        ];
     }
 
     /**

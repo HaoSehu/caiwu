@@ -22,6 +22,7 @@ use App\Services\ProductCatalog\Concerns\HandlesProductCatalogHelpers;
 use App\Services\ProductCatalog\Concerns\NormalizesImportedProductData;
 use App\Services\Upstream\Contracts\ProvidesConsoleCatalog;
 use App\Services\Upstream\ProviderResolver;
+use App\Support\Cache\VolatileStore;
 use App\Support\CacheKey;
 use App\Support\Concerns\ResolvesBinding;
 use App\Support\ProductGroupHierarchyFields;
@@ -42,6 +43,9 @@ class ProductSyncService
     use ResolvesBinding;
 
     private const REMOTE_STOCK_CACHE_TTL_SECONDS = 15;
+
+    /** 库存告警日志节流窗口（秒）：同一供应商/商品的告警最多每个窗口写一条。 */
+    private const STOCK_LOG_THROTTLE_TTL_SECONDS = 60;
 
     /** 上游商品配置定时同步整体时间预算（秒），需小于任务超时 3600s。 */
     private const UPSTREAM_SYNC_DEADLINE_SECONDS = 2700;
@@ -760,7 +764,7 @@ class ProductSyncService
 
     public function siteProductStock(int $productId): ?array
     {
-        $store = Cache::store('redis_volatile');
+        $store = VolatileStore::store();
         $cacheKey = CacheKey::siteProductStock($productId);
         $staleKey = $cacheKey.':stale';
 
@@ -795,7 +799,7 @@ class ProductSyncService
      */
     public function refreshSiteProductStock(int $productId): void
     {
-        $store = Cache::store('redis_volatile');
+        $store = VolatileStore::store();
         $cacheKey = CacheKey::siteProductStock($productId);
         $staleKey = $cacheKey.':stale';
 
@@ -862,7 +866,7 @@ class ProductSyncService
         $supplierId = $supplier instanceof Supplier ? (int) $supplier->id : 0;
 
         if ($supplierId > 0 && $supplierProductId > 0) {
-            Cache::store('redis_volatile')->put(
+            VolatileStore::store()->put(
                 CacheKey::upstreamStockShortage($supplierId, $supplierProductId),
                 true,
                 now()->addSeconds(self::UPSTREAM_STOCK_SHORTAGE_TTL_SECONDS)
@@ -874,7 +878,7 @@ class ProductSyncService
             $this->persistBrowseStockSnapshot($product, 0);
         }
 
-        $store = Cache::store('redis_volatile');
+        $store = VolatileStore::store();
         $cacheKey = CacheKey::siteProductStock($productId);
         $store->forget($cacheKey);
         $store->forget($cacheKey.':stale');
@@ -997,8 +1001,8 @@ class ProductSyncService
                 $remoteStocks = $this->resolveSupplierRemoteStocks($supplier, $supplierProductIds);
             } catch (\Throwable $exception) {
                 $throttleKey = CacheKey::stockLogThrottle('detail_fail', (int) $supplier->id);
-                if (! Cache::store('redis_volatile')->has($throttleKey)) {
-                    Cache::store('redis_volatile')->put($throttleKey, true, now()->addSeconds(60));
+                if (! VolatileStore::store()->has($throttleKey)) {
+                    VolatileStore::store()->put($throttleKey, true, now()->addSeconds(self::STOCK_LOG_THROTTLE_TTL_SECONDS));
                     Log::warning('[商品库存] 拉取上游明细库存失败', [
                         'supplier_id' => $supplier->id,
                         'supplier_name' => $supplier->name,
@@ -1018,8 +1022,8 @@ class ProductSyncService
 
                 if ($remoteStock === null) {
                     $notFoundThrottleKey = CacheKey::stockLogThrottle('not_found', (int) $product->id);
-                    if (! Cache::store('redis_volatile')->has($notFoundThrottleKey)) {
-                        Cache::store('redis_volatile')->put($notFoundThrottleKey, true, now()->addSeconds(60));
+                    if (! VolatileStore::store()->has($notFoundThrottleKey)) {
+                        VolatileStore::store()->put($notFoundThrottleKey, true, now()->addSeconds(self::STOCK_LOG_THROTTLE_TTL_SECONDS));
                         Log::warning('[商品库存] 未找到对应上游商品库存', [
                             'product_id' => (int) $product->id,
                             'supplier_id' => (int) $supplier->id,
@@ -1081,7 +1085,7 @@ class ProductSyncService
             return $remoteStocks;
         }
 
-        $store = Cache::store('redis_volatile');
+        $store = VolatileStore::store();
 
         foreach (array_keys($remoteStocks) as $supplierProductId) {
             if ($store->get(CacheKey::upstreamStockShortage($supplierId, (int) $supplierProductId)) !== null) {
@@ -1106,7 +1110,7 @@ class ProductSyncService
             return [];
         }
 
-        $store = Cache::store('redis_volatile');
+        $store = VolatileStore::store();
         $cacheKey = CacheKey::productRemoteStock((int) $supplier->id, $normalizedSupplierProductIds);
         $cached = $store->get($cacheKey);
 
@@ -1116,7 +1120,11 @@ class ProductSyncService
 
         // single-flight：目录/详情为公开接口且直连上游，缓存失效瞬间并发 miss 会形成
         // 对上游的请求风暴；同一 key 只放一个请求去拉，等锁者重读缓存，仍 miss 降级空集。
-        $lock = Cache::lock($cacheKey.':lock', 30);
+        // 锁键直接由库存缓存键派生（同源 + ':lock'），保证「同一批商品 → 同一把锁」。
+        $lock = Cache::lock(
+            CacheKey::productRemoteStockLock((int) $supplier->id, $normalizedSupplierProductIds),
+            30
+        );
 
         try {
             if ($lock->block(3)) {

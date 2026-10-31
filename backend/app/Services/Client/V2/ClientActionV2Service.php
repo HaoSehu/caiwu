@@ -19,6 +19,7 @@ use App\Services\Finance\CheckoutService;
 use App\Services\Notification\UserNotificationService;
 use App\Services\Order\OrderService;
 use App\Services\Ticket\TicketService;
+use App\Support\CacheKey;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -258,7 +259,7 @@ class ClientActionV2Service
     private function executeLockedServiceAction(Request $request, int $serviceId, string $action, callable $callback): mixed
     {
         $userId = (int) ($request->user()?->id ?? 0);
-        $lockKey = sprintf('lock:client:service:%d:%d:%s', $userId, $serviceId, sha1($action));
+        $lockKey = CacheKey::lock('lock:client:service', sprintf('%d:%d:%s', $userId, $serviceId, sha1($action)));
 
         try {
             return Cache::lock($lockKey, 20)->block(3, $callback);

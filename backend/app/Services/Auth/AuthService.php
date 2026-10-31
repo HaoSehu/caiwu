@@ -18,9 +18,10 @@ use App\Services\System\NotificationService;
 use App\Services\System\OperationLogService;
 use App\Services\User\AdminRoleBridgeService;
 use App\Support\AccountIdentifier;
+use App\Support\Cache\VolatileStore;
 use App\Support\CacheKey;
+use App\Support\CacheTtl;
 use App\Support\TextSanitizer;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
@@ -28,14 +29,17 @@ use Illuminate\Support\Str;
 
 class AuthService
 {
-    private const ADMIN_LOGIN_AS_CODE_TTL_SECONDS = 120;
+    private const ADMIN_LOGIN_AS_CODE_TTL_SECONDS = CacheTtl::ADMIN_LOGIN_AS_CODE_SECONDS;
+
+    /** 代登录换出的用户访问令牌有效期（分钟）：只够管理员完成一次问题复现。 */
+    private const ADMIN_LOGIN_AS_TOKEN_TTL_MINUTES = 30;
 
     /** 管理员双因素登录挑战凭证有效期：只够输完一次 6 位码。 */
-    private const ADMIN_MFA_CHALLENGE_TTL_SECONDS = 300;
+    private const ADMIN_MFA_CHALLENGE_TTL_SECONDS = CacheTtl::ADMIN_MFA_CHALLENGE_SECONDS;
 
     private const ADMIN_LOGIN_MAX_FAILED_ATTEMPTS = 5;
 
-    private const ADMIN_LOGIN_FAILED_WINDOW_SECONDS = 1800;
+    private const ADMIN_LOGIN_FAILED_WINDOW_SECONDS = CacheTtl::ADMIN_LOGIN_FAILED_WINDOW_SECONDS;
 
     private const PASSWORD_TIMING_GUARD_HASH = '$2y$10$9i4SuhzLa07GghDFTutcTeB5w1sRFYJhPguXpXxeSElBVdggfyff2';
 
@@ -709,7 +713,7 @@ class AuthService
 
         $cacheKey = CacheKey::adminMfaChallenge($challengeToken);
         /** @var array<string, mixed>|null $challenge */
-        $challenge = Cache::store('redis_volatile')->pull($cacheKey);
+        $challenge = VolatileStore::store()->pull($cacheKey);
 
         if (! is_array($challenge)) {
             throw new BusinessException('验证码已过期，请重新登录', 41000, 410);
@@ -823,7 +827,7 @@ class AuthService
     {
         $challengeToken = Str::random(64);
 
-        Cache::store('redis_volatile')->put(
+        VolatileStore::store()->put(
             CacheKey::adminMfaChallenge($challengeToken),
             [
                 'admin_id' => (int) $admin->id,
@@ -869,7 +873,7 @@ class AuthService
         $ipAddress = trim((string) ($context['ip_address'] ?? ''));
         $userAgentHash = $this->hashLoginAsUserAgent((string) ($context['user_agent'] ?? ''));
 
-        Cache::store('redis_volatile')->put($cacheKey, [
+        VolatileStore::store()->put($cacheKey, [
             'user_id' => (int) $user->id,
             'admin_id' => $adminId > 0 ? $adminId : null,
             'issued_ip' => $ipAddress !== '' ? $ipAddress : null,
@@ -985,7 +989,7 @@ class AuthService
             throw new BusinessException('代登录凭证不能为空', 42200, 422);
         }
 
-        $payload = Cache::store('redis_volatile')->pull(CacheKey::adminLoginAs($code));
+        $payload = VolatileStore::store()->pull(CacheKey::adminLoginAs($code));
         if (! is_array($payload)) {
             throw new BusinessException('代登录凭证已失效，请重新发起', 41000, 410);
         }
@@ -1010,7 +1014,11 @@ class AuthService
         $this->ensureClientAvailable($user);
 
         $user->tokens()->where('name', 'admin-login-as')->delete();
-        $token = $user->createToken('admin-login-as', ['client:read', 'client:service-actions'], now()->addMinutes(30));
+        $token = $user->createToken(
+            'admin-login-as',
+            ['client:read', 'client:service-actions'],
+            now()->addMinutes(self::ADMIN_LOGIN_AS_TOKEN_TTL_MINUTES)
+        );
 
         $this->operationLogService->write(
             userId: (int) $user->id,
@@ -1408,7 +1416,7 @@ class AuthService
 
     private function ensureAdminLoginNotLocked(string $normalizedUsername): void
     {
-        $attempts = (int) Cache::store('redis_volatile')->get(CacheKey::adminLoginFailure($normalizedUsername), 0);
+        $attempts = (int) VolatileStore::store()->get(CacheKey::adminLoginFailure($normalizedUsername), 0);
 
         if ($attempts >= self::ADMIN_LOGIN_MAX_FAILED_ATTEMPTS) {
             throw new BusinessException('登录失败次数过多，请 30 分钟后再试', 42900, 429);
@@ -1418,13 +1426,13 @@ class AuthService
     private function recordAdminLoginFailure(string $normalizedUsername): void
     {
         $key = CacheKey::adminLoginFailure($normalizedUsername);
-        $attempts = (int) Cache::store('redis_volatile')->increment($key, 1);
-        Cache::store('redis_volatile')->put($key, $attempts, now()->addSeconds(self::ADMIN_LOGIN_FAILED_WINDOW_SECONDS));
+        $attempts = (int) VolatileStore::store()->increment($key, 1);
+        VolatileStore::store()->put($key, $attempts, now()->addSeconds(self::ADMIN_LOGIN_FAILED_WINDOW_SECONDS));
     }
 
     private function clearAdminLoginFailures(string $normalizedUsername): void
     {
-        Cache::store('redis_volatile')->forget(CacheKey::adminLoginFailure($normalizedUsername));
+        VolatileStore::store()->forget(CacheKey::adminLoginFailure($normalizedUsername));
     }
 
     private function hashLoginAsUserAgent(string $userAgent): string

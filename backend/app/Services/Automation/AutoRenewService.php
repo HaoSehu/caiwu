@@ -8,6 +8,7 @@ use App\Models\Order;
 use App\Models\Service;
 use App\Services\Finance\BalanceInvoicePaymentService;
 use App\Services\Provisioning\ServiceRenewService;
+use App\Support\CacheKey;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -67,7 +68,7 @@ class AutoRenewService
                         continue;
                     }
 
-                    $lock = Cache::lock("lock:auto-renew:service:{$service->id}", 30);
+                    $lock = Cache::lock(CacheKey::lock('lock:auto-renew:service', (string) $service->id), 30);
 
                     $processed = $lock->get(function () use ($service, &$summary, $ruleKey, $expiresAt) {
                         if (! $service->user) {

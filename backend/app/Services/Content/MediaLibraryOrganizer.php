@@ -133,6 +133,7 @@ class MediaLibraryOrganizer
             Cache::forget(CacheKey::homeHero());
             // 旧版首页聚合键（早于版本号后缀的历史遗留格式）一并失效，
             // 目标字符串必须保持不变，否则升级部署后残留缓存无法清理。
+            // 历史键，需历史数据证据方可删除；复核期限 2027-05-31（与部署与调度指南 3.6 表一致）。
             Cache::forget('site:home:4:50:4');
         }
 
