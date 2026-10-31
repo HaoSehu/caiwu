@@ -1,8 +1,6 @@
 <template>
   <section class="client-tickets">
-    <header class="client-page-heading">
-      <h1>工单支持</h1>
-    </header>
+    <h1 class="sr-only">工单支持</h1>
     <t-card class="ticket-filter-card" :bordered="false">
       <div class="ticket-filter-bar">
         <t-input
@@ -305,14 +303,6 @@ onMounted(() => {
   flex-direction: column;
   gap: var(--td-comp-margin-m);
   // padding 由 Starter 布局层统一提供
-}
-
-.client-page-heading {
-  h1 {
-    margin: 0;
-    color: var(--td-text-color-primary);
-    font: var(--td-font-title-large);
-  }
 }
 
 .ticket-filter-card {

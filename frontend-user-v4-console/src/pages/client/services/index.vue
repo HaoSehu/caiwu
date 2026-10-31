@@ -1,8 +1,6 @@
 <template>
   <section class="client-services">
-    <header class="client-page-heading">
-      <h1>我的服务</h1>
-    </header>
+    <h1 class="sr-only">我的服务</h1>
     <t-card class="service-filter-card" :bordered="false">
       <div class="service-filter-bar">
         <t-input

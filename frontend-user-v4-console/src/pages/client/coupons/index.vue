@@ -1,8 +1,6 @@
 <template>
   <section class="coupon-page">
-    <header class="client-page-heading">
-      <h1>优惠券中心</h1>
-    </header>
+    <h1 class="sr-only">优惠券中心</h1>
 
     <t-card class="coupon-card-shell" :bordered="false">
       <div class="coupon-filter-bar">
@@ -362,14 +360,6 @@ function mergeCouponProductHierarchy(data: CouponHierarchyItem[]): MergedCouponH
   border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
   box-shadow: var(--td-shadow-1);
-}
-
-.client-page-heading {
-  h1 {
-    margin: 0;
-    color: var(--td-text-color-primary);
-    font: var(--td-font-title-large);
-  }
 }
 
 .coupon-filter-bar {

@@ -1,8 +1,6 @@
 <template>
   <section class="profile-page">
-    <header class="client-page-heading">
-      <h1>个人资料</h1>
-    </header>
+    <h1 class="sr-only">个人资料</h1>
 
     <!-- 账户中心导航只渲染一份（AC-24）：原先移动标签栏与桌面侧栏同时存在于 DOM，
          靠 CSS 二选一显示，读屏与 Tab 键顺序里会各出现一次同样的三个入口。
@@ -473,16 +471,6 @@ function handlePasswordDialogClose() {
   // padding 由 Starter 布局层统一提供
 }
 
-.client-page-heading {
-  grid-column: 1 / -1;
-
-  h1 {
-    margin: 0;
-    color: var(--td-text-color-primary);
-    font: var(--td-font-title-large);
-  }
-}
-
 .profile-card {
   background: var(--td-bg-color-container);
   border: thin solid var(--td-component-stroke);
@@ -600,12 +588,6 @@ function handlePasswordDialogClose() {
   .profile-page {
     grid-template-columns: 1fr;
     gap: var(--td-comp-margin-s);
-  }
-
-  .client-page-heading {
-    h1 {
-      font: var(--td-font-title-medium);
-    }
   }
 
   // 平板及以下（≤ @screen-sm-max，与布局层 padding 归零、isDesktop 判定同一档）改用顶部横向标签；

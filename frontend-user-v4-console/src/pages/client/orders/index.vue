@@ -74,21 +74,11 @@
           <template #amount="{ row }">
             <span class="order-money">¥{{ vm(row).amount }}</span>
           </template>
-          <template #discount="{ row }">
-            <div class="stack-cell">
-              <strong v-if="vm(row).couponDiscount > 0" class="order-money"
-                >券 ¥{{ vm(row).couponDiscountText
-                }}{{ row.coupon_name || row.coupon_code ? `（${row.coupon_name || row.coupon_code}）` : '' }}</strong
-              >
-              <span v-else-if="vm(row).hasCoupon" :title="row.coupon_name || row.coupon_code"
-                >优惠券：{{ row.coupon_name || row.coupon_code }}</span
-              >
-              <span v-if="vm(row).memberDiscount > 0">会员 ¥{{ vm(row).memberDiscountText }}</span>
-              <span v-if="vm(row).couponDiscount <= 0 && vm(row).memberDiscount <= 0 && !vm(row).hasCoupon">--</span>
-            </div>
-          </template>
           <template #status="{ row }">
             <status-tag :status-map="ORDER_STATUS_MAP" :status="Number(row.status)" />
+          </template>
+          <template #channel="{ row }">
+            <span class="order-channel">{{ orderChannelLabel(row) }}</span>
           </template>
           <template #created_at="{ row }">{{ formatDateTime(row.created_at) }}</template>
           <template #operation="{ row }">
@@ -150,6 +140,7 @@
               >
             </div>
             <div class="record-mobile-card__meta">
+              <span>支付渠道：{{ orderChannelLabel(row) }}</span>
               <span>{{ formatDateTime(row.created_at) }}</span>
             </div>
             <div class="record-mobile-card__actions">
@@ -221,6 +212,7 @@ import {
   useOrderList,
 } from '@/domains/finance/useOrders';
 import RecordQuickFilters from '@/pages/client/components/RecordQuickFilters.vue';
+import type { OrderRecord } from '@/types/client';
 import { formatDateTime, formatMoney } from '@/utils/format';
 
 const router = useRouter();
@@ -246,9 +238,7 @@ const {
   cancelOrder,
 } = useOrderList();
 
-// 优惠券减免与会员折扣来源不同，列表内分列展示，避免混成一个数字无法区分。
-// 2026-10-11 D-C1：优惠券名称并入"优惠"堆叠单元格（省一个独立列的横向宽度），
-// 释放约 10rem，1366 宽度笔记本上减少横向滚动概率。
+// 优惠券减免与会员折扣来源不同，手机卡片内分行展示，避免混成一个数字无法区分。
 function couponDiscountOf(row: Record<string, unknown>): number {
   return Number(row.discount || 0);
 }
@@ -268,7 +258,6 @@ interface OrderRowViewModel {
   memberDiscount: number;
   couponDiscountText: string;
   memberDiscountText: string;
-  hasCoupon: boolean;
   canPay: boolean;
   payWindowClosed: boolean;
   payUnavailable: boolean;
@@ -289,7 +278,6 @@ const rowViewModels = computed(() => {
       memberDiscount,
       couponDiscountText: formatMoney(couponDiscount),
       memberDiscountText: formatMoney(memberDiscount),
-      hasCoupon: Boolean(row.coupon_name || row.coupon_code),
       canPay: canPayOrderRow(row),
       payWindowClosed: isPayWindowClosedOrderRow(row),
       payUnavailable: isPayUnavailableOrderRow(row),
@@ -307,7 +295,6 @@ const emptyRowViewModel: OrderRowViewModel = {
   memberDiscount: 0,
   couponDiscountText: '0.00',
   memberDiscountText: '0.00',
-  hasCoupon: false,
   canPay: false,
   payWindowClosed: false,
   payUnavailable: false,
@@ -319,16 +306,25 @@ function vm(row: { id: number }): OrderRowViewModel {
   return rowViewModels.value.get(row.id) ?? emptyRowViewModel;
 }
 
-// I-04 同类：原列宽合计 77rem，侧边布局下 1366 视口的可用宽度约 68rem
-// （1366 − 侧栏 232 − padding 48 − 常驻滚动条 8 像素 ≈ 1078 像素），必横向滚动，
-// 且 fixed 的操作列会被挤出可视区。各列内容实际是等宽数字与短标签，
-// 收到 60.5rem 后不再滚动；账单记录页三张表的收口口径保持一致。
+/**
+ * 订单的支付渠道名（支付宝 / 微信支付 …）。
+ * 只读渠道字段：插件名（易支付）属于管理端与日志维度，用户端不得出现。
+ * 未支付订单后端返回空串，统一兜底为占位符。
+ */
+function orderChannelLabel(row: OrderRecord): string {
+  return row.channel_name || row.gateway_label || '--';
+}
+
+// I-04 同类：侧边布局下 1366 视口的可用宽度约 68rem
+// （1366 − 侧栏 232 − padding 48 − 常驻滚动条 8 像素 ≈ 1078 像素）。
+// 各列内容实际是等宽数字与短标签，7 列合计 60rem，不再横向滚动；
+// 账单记录页三张表的收口口径保持一致。
 const columns: PrimaryTableCol[] = [
   { colKey: 'order', title: '订单号', minWidth: '10rem' },
   { colKey: 'product', title: '产品/服务', minWidth: '10rem' },
   { colKey: 'amount', title: '金额', width: '7.5rem', align: 'right' },
-  { colKey: 'discount', title: '优惠', width: '7.5rem', align: 'right' },
   { colKey: 'status', title: '状态', width: '6.5rem' },
+  { colKey: 'channel', title: '支付渠道', width: '7rem' },
   { colKey: 'created_at', title: '创建时间', minWidth: '10rem' },
   { colKey: 'operation', title: '操作', width: '9rem', fixed: 'right', align: 'right' },
 ];
@@ -341,6 +337,12 @@ const columns: PrimaryTableCol[] = [
   font: var(--td-font-body-medium);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+}
+
+.order-channel {
+  color: var(--td-text-color-primary);
+  font: var(--td-font-body-medium);
+  white-space: nowrap;
 }
 
 .order-window-closed {

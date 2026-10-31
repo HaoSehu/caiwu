@@ -68,26 +68,14 @@
           <template #amount="{ row }">
             <span class="invoice-money">¥{{ vm(row).amount }}</span>
           </template>
-          <template #discount="{ row }">
-            <div class="stack-cell">
-              <strong v-if="vm(row).couponDiscount > 0" class="invoice-money"
-                >券 ¥{{ vm(row).couponDiscountText }}</strong
-              >
-              <span v-if="vm(row).memberDiscount > 0">会员 ¥{{ vm(row).memberDiscountText }}</span>
-              <span v-if="vm(row).couponDiscount <= 0 && vm(row).memberDiscount <= 0">--</span>
-            </div>
-          </template>
-          <template #coupon="{ row }">
-            <div class="stack-cell">
-              <strong>{{ row.coupon_name || row.coupon_code || '--' }}</strong>
-              <span v-if="row.coupon_name && row.coupon_code">{{ row.coupon_code }}</span>
-            </div>
-          </template>
           <template #paid="{ row }">
             <span class="invoice-money">¥{{ vm(row).paidAmount }}</span>
           </template>
           <template #status="{ row }">
             <status-tag :status-map="INVOICE_STATUS_MAP" :status="Number(row.status)" />
+          </template>
+          <template #channel="{ row }">
+            <span class="invoice-channel">{{ invoiceChannelLabel(row) }}</span>
           </template>
           <template #operation="{ row }">
             <t-space>
@@ -131,6 +119,7 @@
             </div>
 
             <div class="record-mobile-card__meta">
+              <span>支付渠道：{{ invoiceChannelLabel(row) }}</span>
               <span>{{ formatDateTime(row.created_at) }}</span>
             </div>
 
@@ -213,7 +202,7 @@ function isPayWindowClosedRow(row: InvoiceRecord) {
   return isPayableInvoice(row) && Boolean(row.payment_window_expired);
 }
 
-// 优惠券减免与会员折扣来源不同，列表内分列展示，避免混成一个数字无法区分
+// 优惠券减免与会员折扣来源不同，手机卡片内分行展示，避免混成一个数字无法区分
 function couponDiscountOf(row: Record<string, unknown>): number {
   return Number(row.discount || 0);
 }
@@ -278,23 +267,34 @@ function vm(row: { id: number }): InvoiceRowViewModel {
   return rowViewModels.value.get(row.id) ?? emptyRowViewModel;
 }
 
-// I-04：8 列宽度合计 66rem，配固定操作列后，1366 宽笔记本上不再横向滚动。
+/**
+ * 账单的支付渠道名（支付宝 / 微信支付 …）。
+ * 取 payment_summary.channel_name，回落既有的 gateway_label；
+ * 插件名（易支付）属管理端与日志维度，用户端不得出现。
+ */
+function invoiceChannelLabel(row: InvoiceRecord): string {
+  const payment = row.payment_summary;
+
+  return payment?.channel_name || payment?.gateway_label || '--';
+}
+
+// I-04：7 列宽度合计 57.5rem，配固定操作列后，1366 宽笔记本上不会横向滚动。
 // 横向滚动会把 fixed 列右侧的「查看 / 去支付」挤出可视区，所以列宽必须收进可用宽度内。
 // 可用宽度口径：1366 − 侧栏 232（variables.less 的 @starter-sidebar-width）− 内容区左右 padding 48
-// − 常驻滚动条 8 像素 ≈ 1078 像素 ≈ 67rem，66rem = 1056 像素，余量约 22 像素。
+// − 常驻滚动条 8 像素 ≈ 1078 像素 ≈ 67rem。
 // 金额与时间都是等宽数字，实际内容宽度远小于原列宽：金额 7.5rem（容得下 ¥12,345.67）、
-// 优惠 7.5rem（正文是「券 ¥x / 会员 ¥y」两行）、状态 6.5rem（三字标签），账单号与创建时间用 minWidth 交给内容撑开。
+// 状态 6.5rem（三字标签）、渠道 7rem，账单号与创建时间用 minWidth 交给内容撑开。
 // 注意：1280 视口下可用宽度只剩约 62rem，仍会横向滚动——本收口只覆盖 1366 及以上。
+// 列序把渠道紧贴状态之后，先被挤出可视区的是创建时间，操作列 fixed 保证「查看 / 去支付」始终可见。
 const columns: PrimaryTableCol[] = [
   { colKey: 'invoice', title: '账单号', minWidth: '10rem', ellipsis: true },
   { colKey: 'amount', title: '账单金额', width: '7.5rem', align: 'right' },
-  { colKey: 'discount', title: '优惠', width: '7.5rem', align: 'right' },
-  { colKey: 'coupon', title: '优惠券', minWidth: '8rem', ellipsis: true },
   { colKey: 'paid', title: '已付金额', width: '7.5rem', align: 'right' },
   { colKey: 'status', title: '状态', width: '6.5rem' },
+  { colKey: 'channel', title: '支付渠道', width: '7rem' },
   // created_at / invoice 在 fixed 布局（TDesign 默认 tableLayout='fixed'）下超出列宽会被直接裁掉，
-  // 且没有悬浮全文可看；原先只有 coupon 列开了 ellipsis。TDesign 的 ellipsis 会自动用 Tooltip
-  // 包住内容（node_modules/tdesign-vue-next/es/table/components/ellipsis.mjs），三列口径统一。
+  // 且没有悬浮全文可看，因此统一开启 ellipsis。TDesign 的 ellipsis 会自动用 Tooltip
+  // 包住内容（node_modules/tdesign-vue-next/es/table/components/ellipsis.mjs），两列口径统一。
   { colKey: 'created_at', title: '创建时间', minWidth: '10rem', ellipsis: true },
   { colKey: 'operation', title: '操作', width: '9rem', fixed: 'right', align: 'right' },
 ];
@@ -307,6 +307,12 @@ const columns: PrimaryTableCol[] = [
   font: var(--td-font-body-medium);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+}
+
+.invoice-channel {
+  color: var(--td-text-color-primary);
+  font: var(--td-font-body-medium);
+  white-space: nowrap;
 }
 
 .invoice-window-closed {

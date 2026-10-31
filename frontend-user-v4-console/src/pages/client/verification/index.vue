@@ -1,8 +1,6 @@
 <template>
   <section class="client-verification">
-    <header class="client-page-heading">
-      <h1>实名认证</h1>
-    </header>
+    <h1 class="sr-only">实名认证</h1>
     <data-state :loading="loading" :error="Boolean(loadError)" :error-text="loadError" @retry="handleRetry">
       <t-card class="verification-status-card" :bordered="false">
         <div class="verification-status-card__main">
@@ -219,14 +217,6 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: var(--td-comp-margin-m);
   // padding 由 Starter 布局层统一提供
-}
-
-.client-page-heading {
-  h1 {
-    margin: 0;
-    color: var(--td-text-color-primary);
-    font: var(--td-font-title-large);
-  }
 }
 
 // AC-07：二维码态只有「取消」，明确告知取消会结束会话

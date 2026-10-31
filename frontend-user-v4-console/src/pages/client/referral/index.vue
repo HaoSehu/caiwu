@@ -1,8 +1,6 @@
 <template>
   <section class="referral-page">
-    <header class="client-page-heading">
-      <h1>推广大使</h1>
-    </header>
+    <h1 class="sr-only">推广大使</h1>
 
     <data-state v-if="loadError && !loading" error error-text="推广大使数据加载失败，请重试" @retry="loadAll" />
     <t-loading v-else :loading="loading" text="数据加载中…">
@@ -380,14 +378,6 @@ const logVm = (row: { id: number }) => logRowViewModels.value.get(row.id) ?? EMP
   border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
   box-shadow: var(--td-shadow-1);
-}
-
-.client-page-heading {
-  h1 {
-    margin: 0;
-    color: var(--td-text-color-primary);
-    font: var(--td-font-title-large);
-  }
 }
 
 .referral-stat {

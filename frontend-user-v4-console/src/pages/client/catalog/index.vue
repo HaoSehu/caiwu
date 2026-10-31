@@ -1,8 +1,6 @@
 <template>
   <section class="catalog-page">
-    <header class="client-page-heading">
-      <h1>产品目录</h1>
-    </header>
+    <h1 class="sr-only">产品目录</h1>
     <t-card class="catalog-card" :bordered="false">
       <div class="catalog-result">
         <t-empty type="maintenance" description="统一使用官网产品目录" />
@@ -20,14 +18,6 @@ const router = useRouter();
 <style scoped lang="less">
 .catalog-page {
   // padding 由 Starter 布局层统一提供
-}
-
-.client-page-heading {
-  h1 {
-    margin: 0;
-    color: var(--td-text-color-primary);
-    font: var(--td-font-title-large);
-  }
 }
 
 .catalog-card {

@@ -25,8 +25,8 @@
             :aria-label="sidebarButtonTitle"
             @click="changeCollapsed"
           >
-            <!-- 移动端用标准汉堡图标（开关抽屉），桌面保留 view-list（折叠侧栏） -->
-            <t-icon class="collapsed-icon" :name="isMobile ? 'menu' : 'view-list'" />
+            <!-- 移动端与桌面统一用三道横杠（view-list）：menu 图标是带边框的窗口样式，易被误读为列表 -->
+            <t-icon class="collapsed-icon" name="view-list" />
           </t-button>
           <span class="header-page-brand">{{ siteBranding.siteName }}</span>
         </div>
@@ -463,6 +463,21 @@ onMounted(() => {
   align-items: center;
   line-height: 0;
   gap: var(--td-comp-margin-m);
+  // TDesign 的 .t-menu__logo > * 会给品牌位塞 24px 左边距：桌面刚好与内容区 padding 24px 对齐，
+  // 移动端内容区 padding 只有 12px，折叠按钮会被多缩进一截。改为自己控制左内边距，
+  // 两种断点下按钮的点击区左边缘都与下方内容左边缘对齐。
+  margin-left: 0;
+  padding-left: var(--td-comp-margin-xxl);
+
+  .collapsed-icon {
+    // 16px 的三道横杠放在小按钮里偏细，提到 18px 更清晰
+    font-size: var(--td-font-size-title-large);
+  }
+
+  @media (max-width: @screen-sm-max) {
+    gap: var(--td-comp-margin-s);
+    padding-left: var(--td-comp-margin-m);
+  }
 }
 
 .header-page-brand {

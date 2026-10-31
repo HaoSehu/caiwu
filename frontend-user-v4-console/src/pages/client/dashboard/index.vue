@@ -1,8 +1,7 @@
 <template>
   <section class="client-dashboard">
-    <header class="client-page-heading">
-      <h1>控制台</h1>
-    </header>
+    <!-- 页面标题只保留在无障碍树里：视觉上首屏已有问候语与账户卡说明当前位置，不再单独占一行 -->
+    <h1 class="sr-only">控制台</h1>
     <data-state v-if="loadError" error error-text="控制台数据加载失败，请重试" @retry="loadDashboard" />
     <template v-else>
       <div class="summary-grid">
