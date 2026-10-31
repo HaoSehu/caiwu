@@ -7,7 +7,6 @@ namespace TestsFeature;
 use App\Models\ActivityLog;
 use App\Models\AdminUser;
 use App\Models\Invoice;
-use App\Models\Order;
 use App\Models\Product;
 use App\Models\Role;
 use App\Models\Service;
@@ -19,54 +18,15 @@ use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 /**
- * 服务控制台「相关订单 / 相关账单 / 操作日志」三个页签的管理端接口：
- * 1. 订单、账单支持 service_id 过滤，只返回该实例的数据，不再退化为用户全量；
- * 2. 过滤不影响原有 status / type 维度；
- * 3. 实例级操作日志返回管理员操作（includeAdminOperations=true），
+ * 服务控制台「相关账单 / 操作日志」两个页签的管理端接口：
+ * 1. 账单支持 service_id 过滤，只返回该实例的数据，不再退化为用户全量；
+ * 2. 实例级操作日志返回管理员操作（includeAdminOperations=true），
  *    而客户端口径仍会过滤掉 actor_type=admin 的记录。
  * 使用 DatabaseTransactions，测试结束回滚。
  */
 class AdminServiceConsoleTabsTest extends TestCase
 {
     use DatabaseTransactions;
-
-    public function test_orders_can_be_filtered_by_service_id(): void
-    {
-        Sanctum::actingAs($this->makeAdmin([AdminPermissions::USER_DETAIL]));
-
-        $user = $this->makeUser('console-orders');
-        $service = $this->makeService($user, '目标实例');
-        $otherService = $this->makeService($user, '其它实例');
-
-        $serviceOrder = $this->makeOrder($user, (int) $service->id);
-        $this->makeOrder($user, (int) $otherService->id);
-
-        $this->getJson("/api/v2/admin/users/{$user->id}/orders?service_id={$service->id}")
-            ->assertOk()
-            ->assertJsonPath('data.total', 1)
-            ->assertJsonPath('data.list.0.order_no', (string) $serviceOrder->order_no);
-
-        // 不传 service_id 时保持用户维度全量，证明新参数是可选过滤而非强制收窄。
-        $this->getJson("/api/v2/admin/users/{$user->id}/orders")
-            ->assertOk()
-            ->assertJsonPath('data.total', 2);
-    }
-
-    public function test_orders_service_filter_combines_with_status(): void
-    {
-        Sanctum::actingAs($this->makeAdmin([AdminPermissions::USER_DETAIL]));
-
-        $user = $this->makeUser('console-orders-status');
-        $service = $this->makeService($user, '目标实例');
-
-        $paid = $this->makeOrder($user, (int) $service->id, 1);
-        $this->makeOrder($user, (int) $service->id, 0);
-
-        $this->getJson("/api/v2/admin/users/{$user->id}/orders?service_id={$service->id}&status=1")
-            ->assertOk()
-            ->assertJsonPath('data.total', 1)
-            ->assertJsonPath('data.list.0.order_no', (string) $paid->order_no);
-    }
 
     public function test_invoices_can_be_filtered_by_service_id(): void
     {
@@ -235,18 +195,6 @@ class AdminServiceConsoleTabsTest extends TestCase
             'amount' => 100.00,
             'status' => 1,
             'expires_at' => now()->addMonth(),
-        ]);
-    }
-
-    private function makeOrder(User $user, int $serviceId, int $status = 1): Order
-    {
-        return Order::query()->create([
-            'order_no' => 'SO'.date('YmdHis').mt_rand(100000, 999999),
-            'user_id' => $user->id,
-            'service_id' => $serviceId,
-            'type' => 'new',
-            'amount' => 100.00,
-            'status' => $status,
         ]);
     }
 
