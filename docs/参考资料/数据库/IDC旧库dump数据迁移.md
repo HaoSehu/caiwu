@@ -442,10 +442,55 @@ gunzip -c storage/backups/mysql/<库名>_<时间戳>.sql.gz | mysql -u<user> -p 
 - 单轮全量耗时约 68~115 秒（含 27~38 秒解析 dump，随机器负载波动）；`--verify-only` 约 55~60 秒。
 - 另有一次独立的交叉校验：绕过脚本自身的 `dump_keys`，用另一份解析结果对 62 张表直接执行 `COUNT(*)` 比对（全部一致），并对 8 张核心表各抽 41 行逐列比对（全部一致）。
 
+## 实测记录：第二份 dump 迁到本地 `idc`（分叉时间线）
+
+第二份转储 `idc_2026-10-31_16-12-07_mysql_data_UDP1U.sql`（256 MB、68 张表、366591 行）迁到本地 `idc` 时暴露出本流程最重要的适用边界，记录在此以免重复踩坑。
+
+### 现象
+
+直接对 `idc` 执行 upsert，报告给出 `failed_rows 10`、`missing_keys 8`、`sample_mismatch 2`、`unique_conflict 24`、`fk_unresolved 9`。逐条追查后结论是：**本地 `idc` 与这份 dump 不是同一条时间线的前后快照，而是两条并行时间线**。
+
+证据：
+
+- `invoices` 17 个、`orders` 16 个、`payments` 11 个主键在两边指向**不同业务实体**（同一 `id` 在 dump 是 `zd202608251707491923`，在本地是 `zd202608280208461641`）。
+- 这些本地实体是 2026-10-31 16:03、16:09（早于 dump 时刻 16:12:07）产生的真实业务行，各自带子表（`invoice_items`、`payment_callbacks`、`recharge_records`），**不能删**。
+- 子表污染实测：这 44 个分叉 id 的子表行里，`invoice_items` 29 行中 16 行内容等于 dump 值、13 行等于备份值；`invoices.order_id` 27 行中 16 行既非备份也非 dump。即 dump 的子表行被挂到了另一条时间线的父 id 上。
+
+### 为什么 upsert 单独解决不了
+
+`INSERT ... ON DUPLICATE KEY UPDATE` 同时受主键与业务唯一键约束。当「主键被另一个实体占用」且「业务键被第三行占用」时，会先按业务键改写第三行、随后又被后一条按主键的行改写回去，源行净丢失（第二份 dump 上 `payment_callbacks` 就是这样丢了 3 行，虽可由 `unique_conflict` 登记但行确实进不来）。不改主键、不删本地数据的前提下，这 44 个实体无法与本地共存。
+
+### 采用的口径：先备份，再清空重灌
+
+本地 `idc` 是开发/测试库，一致性优先于保留分叉数据，且此前已做整库备份可回滚，因此：
+
+1. 整库备份到系统临时目录（`mysqldump --single-transaction --routines --triggers --set-gtid-purged=OFF --no-tablespaces` 流式 gzip，凭据经临时 `.cnf` 传递）。
+2. `SET FOREIGN_KEY_CHECKS=0` 后 `TRUNCATE` 除 `migrations`、`system_installation`、`system_upgrade_runs` 外的全部表（这三张是新库自身的版本账本，不能由 dump 决定）。
+3. 用本脚本全量迁移。
+4. `DB_DATABASE=idc php artisan finance:rebuild --execute` 生成 `finance_*` 派生表。
+5. 再跑一次本脚本回填 `recharge_records` 的可空外键。
+
+实测结果：
+
+| 步骤 | 结果 |
+| --- | --- |
+| 首轮迁移 | `total_failed 0`、`missing_keys 0`、`sample_mismatch 0`、`unique_conflict 0`、`source_row_mismatch 0`、`fk_unresolved 19`；53 张表 `sent_rows` 合计 363821 = 源行数 |
+| `finance:rebuild --execute` | 七道闸门（G1~G7）全部 PASS |
+| 回填重跑 | `fk_unresolved` 由 19 降为 0，`recharge_records` 19 行非空、孤儿外键 0 |
+| 幂等复跑 | 53 张表业务行数与上一轮一致，`total_failed` 等五项校验仍全为 0 |
+| 结构比对 | 迁移前后 `COLUMNS` 1123 / `STATISTICS` 618 / `KEY_COLUMN_USAGE` 114，逐字节相同，79 张表不变 |
+| 独立交叉校验 | 绕过脚本 `dump_keys`，直接 `COUNT(*)` 比对 53 张表；每表前 40 行按主键回读逐列比对，不一致 0 条；全库外键孤儿 0 |
+
+回归时注意两点：
+
+- `activity_logs`、`message_logs`、`integration_plugin_runtime_logs` 三张日志表的 `COUNT(*)` 会略大于源行数，原因是迁移执行期间应用仍在写库（多出行的 `created_at` 全落在执行时间窗内，主键不在 dump 里）。这是目标库在动的正常表现，不是脚本重复插入；需要严格相等时应在停写窗口执行。
+- 只要目标库与 dump 来自不同时间线，就必须先做「同主键是否指向同一实体」的核对再决定口径；判断依据是一次 `--dry-run` 的 `unique_conflict` 加上按业务唯一键的抽样对照，而不是直接跑正式迁移。
+
 ## 未覆盖风险
 
 1. `invoices`/`orders`/`services` 共 18 行的软删除状态在迁移后丢失（逐行主键见上文“丢弃字段”的处置清单），脚本不做自动推断，需业务侧确认处置口径。
 2. 已识别但未修的已知限制：`--conflict keep-newer` 依赖 `updated_at` 非空比较，源或目标该列为 `NULL` 时会退化为覆盖；同一目标表存在多个 spec 时（`--merge-operation-logs` 场景下 `activity_logs`）两份统计会互相覆盖，故该参数与 `--tables` 同时使用时需分开执行两次。
-3. `finance_ledger_entries` 等新库派生表不由本脚本生成；`recharge_records` 的 19 行外键依赖 `php artisan finance:rebuild --execute` 才能回填（回填步骤已在 `idc_test` 上实测通过）。
+3. `finance_ledger_entries` 等新库派生表不由本脚本生成；`recharge_records` 的可空外键依赖 `php artisan finance:rebuild --execute` 才能回填（回填步骤已在 `idc_test` 与本地 `idc` 上实测通过，回填后 `fk_unresolved = 0`、孤儿外键 0）。
 4. 若生产库在 dump 之后又写入了同主键的更新行，默认 `--conflict overwrite` 会用 dump 的旧值覆盖；这类库应先评估是否改用 `--conflict keep-newer`。
-5. 全量验证只在 `idc_test`（空库）跑过；生产库因存在 dump 之外的新行，行数比对口径应改用“主键集合包含关系 + `expected_after`”。
+5. 全量验证在 `idc_test`（空库）与本地 `idc`（清空后重灌）上做过；目标库若已有 dump 之外的业务行，行数比对口径应改用“主键集合包含关系 + `expected_after`”，并先按上文“第二份 dump 迁到本地 `idc`”一节确认两条时间线的关系，再决定 upsert 合并还是清空重灌。
+6. `activity_logs`、`message_logs`、`integration_plugin_runtime_logs` 会随应用写入而变化，`COUNT(*)` 严格比对必须在停写窗口内做，否则只能比对“dump 主键是否全部存在”。
