@@ -8,6 +8,7 @@ use App\Models\ScheduleTaskRun;
 use App\Models\ScheduleTick;
 use App\Services\Automation\Heartbeat\Contracts\ScheduledTask;
 use App\Services\Automation\Heartbeat\Contracts\TriggerRule;
+use App\Support\CacheKey;
 use App\Support\LikeEscape;
 use App\Support\PayloadLimiter;
 use Carbon\CarbonInterface;
@@ -15,8 +16,10 @@ use DateTimeInterface;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Pagination\LengthAwarePaginator as ConcreteLengthAwarePaginator;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Throwable;
 
 class ScheduleTaskRunRepository
 {
@@ -467,6 +470,109 @@ class ScheduleTaskRunRepository
     }
 
     /**
+     * summary 去重指纹的缓存存活期：schedule:run 每分钟起一个新进程，
+     * 指纹必须跨进程共享（生产 redis / 本地 file）；过期后下一次成功
+     * 视为无前驱、原样落库，只是少省一行，无正确性影响。
+     */
+    private const SUMMARY_FINGERPRINT_TTL_SECONDS = 604800;
+
+    /**
+     * 与最近一次成功 summary 完全一致时，落紧凑引用而不是重复内容。
+     *
+     * 实库复核（2026-11-01）：7 天窗口内多数任务 582 行 success 只有 1 种
+     * summary（如 order-cleanup 的 {"orders_cancelled":0,...}），冗余占比 99%+。
+     * 行本身仍然逐次写入（timing/重试语义不动），只把「内容完全重复」的
+     * summary 收敛为指向上一行的引用，读取方展示引用即知重复。
+     *
+     * @param  array<string, mixed>  $limitedSummary
+     * @return array<string, mixed>
+     */
+    private function dedupeSummary(int $runId, string $taskKey, array $limitedSummary): array
+    {
+        if ($limitedSummary === []) {
+            return $limitedSummary;
+        }
+
+        $fingerprint = $this->summaryFingerprint($limitedSummary);
+
+        try {
+            $previous = Cache::get(CacheKey::scheduleTaskRunSummaryFingerprint($taskKey));
+        } catch (Throwable) {
+            // 缓存故障降级：视为无前驱，原样落库（去重是优化不是正确性依赖）。
+            return $limitedSummary;
+        }
+
+        // 指纹结构：['fp' => hash, 'run_id' => int]。任一缺失视为无前驱。
+        if (
+            is_array($previous)
+            && isset($previous['fp'], $previous['run_id'])
+            && (string) $previous['fp'] === $fingerprint
+            && (int) $previous['run_id'] !== $runId
+        ) {
+            return [
+                '__same_as_previous' => true,
+                '__previous_run_id' => (int) $previous['run_id'],
+            ];
+        }
+
+        return $limitedSummary;
+    }
+
+    /**
+     * 台账行确认落库成功后才写入指纹（审查 P1-②）：CAS 拒绝（行已被
+     * markTerminalFailed/markRetrying 抢先终态化）时不记忆，避免后续
+     * __previous_run_id 指向从未成功落库的 run。put 失败静默降级。
+     */
+    private function rememberSummaryFingerprint(int $runId, string $taskKey, array $limitedSummary): void
+    {
+        if ($limitedSummary === []) {
+            return;
+        }
+
+        try {
+            Cache::put(
+                CacheKey::scheduleTaskRunSummaryFingerprint($taskKey),
+                ['fp' => $this->summaryFingerprint($limitedSummary), 'run_id' => $runId],
+                self::SUMMARY_FINGERPRINT_TTL_SECONDS,
+            );
+        } catch (Throwable) {
+            // 缓存故障：放弃本轮指纹记忆，下一轮原样落库。
+        }
+    }
+
+    /**
+     * 失败打断前驱链（审查 P1-①）：retrying/failed 终态后清除成功指纹，
+     * 「失败后首次恢复成功」重新落完整 summary，引用不再跨过失败行。
+     */
+    private function forgetSummaryFingerprint(int $runId): void
+    {
+        if ($runId <= 0) {
+            return;
+        }
+
+        $taskKey = ScheduleTaskRun::query()->whereKey($runId)->value('task_key');
+        if (! is_string($taskKey) || $taskKey === '') {
+            return;
+        }
+
+        try {
+            Cache::forget(CacheKey::scheduleTaskRunSummaryFingerprint($taskKey));
+        } catch (Throwable) {
+            // 缓存故障：指纹残留至 TTL 过期，最坏影响是恢复成功延迟一轮紧凑化。
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $summary
+     */
+    private function summaryFingerprint(array $summary): string
+    {
+        $encoded = json_encode($summary, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+
+        return $encoded === false ? md5(serialize($summary)) : md5($encoded);
+    }
+
+    /**
      * @param  array<string, mixed>  $summary
      */
     public function markSucceeded(?int $runId, array $summary, int $durationMs): bool
@@ -475,16 +581,36 @@ class ScheduleTaskRunRepository
             return true;
         }
 
-        return ScheduleTaskRun::query()
+        $run = ScheduleTaskRun::query()->find($runId);
+        if ($run === null) {
+            return false;
+        }
+
+        $limited = $this->limitSummary($summary);
+        $taskKey = (string) $run->getAttribute('task_key');
+        $finalSummary = $this->dedupeSummary($runId, $taskKey, $limited);
+
+        $updated = ScheduleTaskRun::query()
             ->whereKey($runId)
             ->where('status', ScheduleTaskRun::STATUS_RUNNING)
             ->update([
                 'status' => ScheduleTaskRun::STATUS_SUCCESS,
                 'duration_ms' => $durationMs,
-                'summary' => $this->limitSummary($summary),
+                'summary' => $finalSummary,
                 'finished_at' => now(),
                 'updated_at' => now(),
             ]) === 1;
+
+        // 台账行确认落库成功后才记忆指纹（审查 P1-②）：CAS 拒绝时不记忆，
+        // 避免后续 __previous_run_id 指向从未成功落库的 run。
+        // 紧凑引用行（__same_as_previous）不刷新链头——链头只在「首行/内容
+        // 变化行」刷新，否则连续相同 summary 会形成 run3→run2→run1 的链式
+        // 引用，破坏「链深恒 1」设计（审查补发现）。
+        if ($updated && ! isset($finalSummary['__same_as_previous'])) {
+            $this->rememberSummaryFingerprint($runId, $taskKey, $limited);
+        }
+
+        return $updated;
     }
 
     public function markRetrying(?int $runId, string $message, int $durationMs): bool
@@ -493,7 +619,7 @@ class ScheduleTaskRunRepository
             return true;
         }
 
-        return ScheduleTaskRun::query()
+        $updated = ScheduleTaskRun::query()
             ->whereKey($runId)
             ->where('status', ScheduleTaskRun::STATUS_RUNNING)
             ->update([
@@ -503,6 +629,13 @@ class ScheduleTaskRunRepository
                 'finished_at' => null,
                 'updated_at' => now(),
             ]) === 1;
+
+        // 失败打断前驱链（审查 P1-①）：清除成功指纹，恢复成功后重新落完整 summary。
+        if ($updated) {
+            $this->forgetSummaryFingerprint((int) $runId);
+        }
+
+        return $updated;
     }
 
     public function markTerminalFailed(?int $runId, string $message, ?int $durationMs): bool
@@ -521,7 +654,7 @@ class ScheduleTaskRunRepository
             $attributes['duration_ms'] = $durationMs;
         }
 
-        return ScheduleTaskRun::query()
+        $updated = ScheduleTaskRun::query()
             ->whereKey($runId)
             ->whereIn('status', [
                 ScheduleTaskRun::STATUS_QUEUED,
@@ -530,6 +663,13 @@ class ScheduleTaskRunRepository
                 ScheduleTaskRun::STATUS_DISPATCH_FAILED,
             ])
             ->update($attributes) === 1;
+
+        // 失败打断前驱链（审查 P1-①）：清除成功指纹，恢复成功后重新落完整 summary。
+        if ($updated) {
+            $this->forgetSummaryFingerprint((int) $runId);
+        }
+
+        return $updated;
     }
 
     public function markDispatchFailed(?int $runId, string $message): bool
@@ -538,7 +678,7 @@ class ScheduleTaskRunRepository
             return false;
         }
 
-        return ScheduleTaskRun::query()
+        $updated = ScheduleTaskRun::query()
             ->whereKey($runId)
             ->where('status', ScheduleTaskRun::STATUS_QUEUED)
             ->update([
@@ -548,6 +688,13 @@ class ScheduleTaskRunRepository
                 'finished_at' => now(),
                 'updated_at' => now(),
             ]) === 1;
+
+        // 失败打断前驱链（审查 P1-①）：清除成功指纹，恢复成功后重新落完整 summary。
+        if ($updated) {
+            $this->forgetSummaryFingerprint((int) $runId);
+        }
+
+        return $updated;
     }
 
     /**
@@ -768,7 +915,7 @@ class ScheduleTaskRunRepository
                 && Schema::hasColumn('schedule_task_runs', 'attempt')
                 && Schema::hasColumn('schedule_task_runs', 'manual_retry_at')
                 && Schema::hasColumn('schedule_task_runs', 'manual_retry_by');
-        } catch (\Throwable) {
+        } catch (Throwable) {
             return false;
         }
     }
@@ -777,7 +924,7 @@ class ScheduleTaskRunRepository
     {
         try {
             return Schema::hasTable('schedule_task_runs');
-        } catch (\Throwable) {
+        } catch (Throwable) {
             return false;
         }
     }

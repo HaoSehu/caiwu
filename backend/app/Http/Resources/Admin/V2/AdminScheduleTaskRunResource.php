@@ -34,6 +34,13 @@ class AdminScheduleTaskRunResource extends JsonResource
             return [];
         }
 
+        $summary = $this->safeValue($run->summary, 0);
+        // 2P0-C 紧凑引用呈现层翻译（审查 P2-④）：台账库里 summary 只存
+        // {"__same_as_previous":true,"__previous_run_id":N} 两个内部哨兵键，
+        // 直接透传会让管理端看到裸 JSON。就地翻译为语义结构，保留可跳转的
+        // 引用运行 id，同时不改变库中原始 JSON（审计真源不受影响）。
+        $summary = $this->translateDeduplicationMarkers($summary);
+
         return [
             'id' => (int) $run->id,
             'task_key' => (string) ($this->text($run->task_key) ?? ''),
@@ -51,8 +58,27 @@ class AdminScheduleTaskRunResource extends JsonResource
             'finished_at' => $this->date($run->finished_at),
             'manual_retry_at' => $this->date($run->manual_retry_at),
             'manual_retry_by' => $run->manual_retry_by !== null ? (int) $run->manual_retry_by : null,
-            'summary' => $this->safeValue($run->summary, 0),
+            'summary' => $summary,
             'error_msg' => $this->text($run->error_msg),
+        ];
+    }
+
+    /**
+     * 紧凑引用呈现层翻译（2P0-C）：把台账内部的去重哨兵键翻译为语义结构，
+     * 让管理端展示「与运行 #N 摘要相同」而不是裸 JSON 键。非紧凑引用原样返回。
+     */
+    private function translateDeduplicationMarkers(mixed $summary): mixed
+    {
+        if (! is_array($summary) || ! isset($summary['__same_as_previous'])) {
+            return $summary;
+        }
+
+        $refRunId = isset($summary['__previous_run_id']) ? (int) $summary['__previous_run_id'] : null;
+
+        return [
+            'deduplicated' => true,
+            'note' => $refRunId !== null ? "与运行 #{$refRunId} 的摘要相同" : '与上一次运行的摘要相同',
+            'ref_run_id' => $refRunId,
         ];
     }
 

@@ -14,6 +14,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Mockery;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -24,6 +25,9 @@ use Tests\TestCase;
  * 2. 任务日志视图以「最后一条存量行 + 60 秒」为冻结边界：边界前的镜像行（存量重复记录）
  *    不展示，边界后的镜像行（停写后的真实新执行）必须展示，存量行本身保留只读展示；
  * 3. activity-{id} 形态的镜像条目在任务日志详情中可解析。
+ * 2P1-A（2026-11-01）：成功且 summary 与上一条成功镜像完全一致时跳过镜像行；
+ * 首行/内容变化行/失败行照常落库（冻结边界语义不受影响——跳过的行只是
+ * 不再产生，已存在行的展示逻辑不动）。
  * 使用 DatabaseTransactions，测试结束回滚。
  */
 class ScheduleLogConvergenceTest extends TestCase
@@ -156,6 +160,177 @@ class ScheduleLogConvergenceTest extends TestCase
         $this->assertSame('convergence-detail-probe', $detail['fields']['task_key']);
         $this->assertSame('success', $detail['fields']['status']);
         $this->assertSame('Cron_'.$taskName.'执行完成', $detail['message']);
+    }
+
+    /**
+     * 2P1-A 镜像去重：同 task_key 连续两次成功且 summary 一致 → 第二行跳过；
+     * summary 变化 → 照常落库；失败行无条件落库。
+     */
+    public function test_repeated_success_summary_skips_duplicate_mirror(): void
+    {
+        // description 只含 taskName 不含 task_key，统一用一个 taskName 计数。
+        $taskName = '镜像去重探针-'.uniqid();
+        $taskKey = 'convergence-dedupe-probe-'.uniqid();
+        $countMirrors = static fn (): int => ActivityLog::query()
+            ->where('module', 'cron')
+            ->where('description', 'like', '%'.$taskName.'%')
+            ->count();
+        $service = app(ScheduleRunLogService::class);
+        Cache::flush();
+
+        // 首次成功：必须落镜像。
+        $service->record(
+            $taskName,
+            static fn (): array => ['processed' => 2, 'state' => 'noop'],
+            ['task_key' => $taskKey, 'source' => 'test'],
+        );
+        $this->assertSame(1, $countMirrors(), '首次成功必须落审计镜像');
+
+        // 第二次成功且 summary 完全一致：跳过镜像行。
+        $service->record(
+            $taskName,
+            static fn (): array => ['processed' => 2, 'state' => 'noop'],
+            ['task_key' => $taskKey, 'source' => 'test'],
+        );
+        $this->assertSame(1, $countMirrors(), 'summary 与上一条成功镜像完全一致时不得新增镜像行');
+
+        // 第三次成功但 summary 变化：照常落镜像。
+        $service->record(
+            $taskName,
+            static fn (): array => ['processed' => 9, 'state' => 'changed'],
+            ['task_key' => $taskKey, 'source' => 'test'],
+        );
+        $this->assertSame(2, $countMirrors(), 'summary 变化后必须恢复落镜像');
+
+        // 失败行无条件落库（失败不参与指纹去重）。
+        try {
+            $service->record(
+                $taskName,
+                static function (): array {
+                    throw new RuntimeException('去重后的失败必须照常镜像');
+                },
+                ['task_key' => $taskKey, 'source' => 'test'],
+            );
+            $this->fail('任务异常必须向上抛出');
+        } catch (RuntimeException $exception) {
+            $this->assertSame('去重后的失败必须照常镜像', $exception->getMessage());
+        }
+        $this->assertSame(3, $countMirrors(), '失败行不参与指纹去重，必须无条件落库');
+    }
+
+    /**
+     * 审查 P1-① 失败打断前驱链（镜像侧）：成功→失败→相同 summary 成功时，
+     * 恢复成功的镜像行必须照常落库，不得因残留指纹被跳过。
+     */
+    public function test_failure_resets_mirror_fingerprint(): void
+    {
+        $taskName = '镜像指纹重置探针-'.uniqid();
+        $taskKey = 'mirror-fp-reset-probe-'.uniqid();
+        $countMirrors = static fn (): int => ActivityLog::query()
+            ->where('module', 'cron')
+            ->where('description', 'like', '%'.$taskName.'%')
+            ->count();
+        $service = app(ScheduleRunLogService::class);
+        Cache::flush();
+
+        // 首次成功：落镜像并记忆指纹。
+        $service->record(
+            $taskName,
+            static fn (): array => ['processed' => 2, 'state' => 'normal'],
+            ['task_key' => $taskKey, 'source' => 'test'],
+        );
+        $this->assertSame(1, $countMirrors(), '首次成功必须落审计镜像');
+
+        // 第二次相同 summary 成功：指纹命中跳过。
+        $service->record(
+            $taskName,
+            static fn (): array => ['processed' => 2, 'state' => 'normal'],
+            ['task_key' => $taskKey, 'source' => 'test'],
+        );
+        $this->assertSame(1, $countMirrors(), 'summary 一致时跳过镜像行');
+
+        // 失败执行：必须清除指纹（失败打断前驱链）。
+        try {
+            $service->record(
+                $taskName,
+                static function (): array {
+                    throw new RuntimeException('失败必须打断指纹前驱链');
+                },
+                ['task_key' => $taskKey, 'source' => 'test'],
+            );
+            $this->fail('任务异常必须向上抛出');
+        } catch (RuntimeException $exception) {
+            $this->assertSame('失败必须打断指纹前驱链', $exception->getMessage());
+        }
+        $this->assertSame(2, $countMirrors(), '失败行无条件落库');
+
+        // 失败后首次恢复成功（summary 与失败前完全一致）：指纹已被清除，
+        // 恢复确认必须落镜像行——读取方要能区分「连续成功」与「失败后恢复」。
+        $service->record(
+            $taskName,
+            static fn (): array => ['processed' => 2, 'state' => 'normal'],
+            ['task_key' => $taskKey, 'source' => 'test'],
+        );
+        $this->assertSame(3, $countMirrors(), '失败后的恢复成功必须重新落镜像行');
+    }
+
+    /**
+     * 审查 P1-③ 缓存故障降级（镜像侧）：指纹读写抛异常时不得影响执行链路，
+     * 成功任务照常落镜像、不被误判为失败。
+     */
+    public function test_cache_failure_degrades_to_full_mirror(): void
+    {
+        $taskName = '镜像缓存降级探针-'.uniqid();
+        $taskKey = 'mirror-cache-degrade-probe-'.uniqid();
+        $countMirrors = static fn (): int => ActivityLog::query()
+            ->where('module', 'cron')
+            ->where('description', 'like', '%'.$taskName.'%')
+            ->count();
+        $service = app(ScheduleRunLogService::class);
+        Cache::flush();
+
+        $cacheMock = Mockery::mock(Illuminate\Contracts\Cache\Repository::class);
+        $cacheMock->shouldReceive('get')->andThrow(new RuntimeException('redis 不可用'));
+        $cacheMock->shouldReceive('put')->andThrow(new RuntimeException('redis 不可用'));
+        $cacheMock->shouldReceive('forget')->andThrow(new RuntimeException('redis 不可用'));
+        Cache::swap($cacheMock);
+
+        try {
+            // 首次成功：get 抛异常 → 降级为不跳过 → 照常落库。
+            $result = $service->record(
+                $taskName,
+                static fn (): array => ['processed' => 3, 'state' => 'degraded'],
+                ['task_key' => $taskKey, 'source' => 'test'],
+            );
+            $this->assertSame(['processed' => 3, 'state' => 'degraded'], $result, '缓存故障不得影响任务返回值');
+            $this->assertSame(1, $countMirrors(), '缓存故障时成功镜像必须照常落库');
+
+            // 第二次相同 summary：get 仍抛异常 → 仍不跳过 → 逐行落库（宁多不漏）。
+            $service->record(
+                $taskName,
+                static fn (): array => ['processed' => 3, 'state' => 'degraded'],
+                ['task_key' => $taskKey, 'source' => 'test'],
+            );
+            $this->assertSame(2, $countMirrors(), '缓存故障期间不进入去重，逐行落库');
+
+            // 失败路径在缓存故障下也必须正常抛出并落失败镜像。
+            try {
+                $service->record(
+                    $taskName,
+                    static function (): array {
+                        throw new RuntimeException('缓存故障下的失败');
+                    },
+                    ['task_key' => $taskKey, 'source' => 'test'],
+                );
+                $this->fail('任务异常必须向上抛出');
+            } catch (RuntimeException $exception) {
+                $this->assertSame('缓存故障下的失败', $exception->getMessage());
+            }
+            $this->assertSame(3, $countMirrors(), '缓存故障下失败镜像必须照常落库');
+        } finally {
+            Mockery::close();
+            Cache::clearResolvedInstances();
+        }
     }
 
     private function insertCronMirror(string $taskKey, string $status, int $durationMs, Carbon $createdAt): void

@@ -198,6 +198,24 @@ final class CacheKey
     }
 
     /**
+     * 心跳台账 summary 去重指纹（2P0-C）：同一 task_key 连续两次成功且 summary
+     * 完全一致时，后一次落紧凑引用而不是完整重复内容。
+     */
+    public static function scheduleTaskRunSummaryFingerprint(string $taskKey): string
+    {
+        return 'schedule:task_run:summary_fp:'.sha1($taskKey);
+    }
+
+    /**
+     * cron 审计镜像 summary 去重指纹（2P1-A）：同一 task_key 连续两次成功镜像
+     * summary 一致时跳过整行镜像，首行/变化行/失败行照常落库。
+     */
+    public static function cronMirrorSummaryFingerprint(string $taskKey): string
+    {
+        return 'schedule:cron_mirror:summary_fp:'.sha1($taskKey);
+    }
+
+    /**
      * 登录风控：IP 维度失败计数。
      */
     public static function loginRiskIp(string $ip): string
