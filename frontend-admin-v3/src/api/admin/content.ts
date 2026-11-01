@@ -10,7 +10,9 @@ import type {
   HomeHeroPayload,
   HomeHeroSlide,
   MediaFileRecord,
+  MediaMigrationProgress,
   MediaReindexResult,
+  MediaStorageDriver,
 } from './types';
 
 interface PagedResult<T> {
@@ -66,11 +68,13 @@ export const mediaApi = {
       url: '/v2/admin/media-files',
       params,
     }),
-  upload: (data: FormData) =>
+  /** 上传媒体文件；onUploadProgress 透传 axios 进度回调（AdminRequestConfig extends AxiosRequestConfig） */
+  upload: (data: FormData, onUploadProgress?: (event: { loaded: number; total?: number }) => void) =>
     request.post<MediaFileRecord>({
       url: '/v2/admin/media-files',
       data,
       headers: { 'Content-Type': 'multipart/form-data' },
+      onUploadProgress,
     }),
   reindex: () =>
     request
@@ -85,6 +89,28 @@ export const mediaApi = {
   references: (id: number | string) =>
     request.get<{ references?: string[] }>({
       url: `/v2/admin/media-files/${id}/references`,
+    }),
+  /** 可用存储区列表（只含可用渠道） */
+  drivers: () =>
+    request.get<{ drivers?: MediaStorageDriver[] }>({
+      url: '/v2/admin/media-storage-drivers',
+    }),
+  /** 发起转存，返回进度快照（含 id） */
+  migrateCreate: (data: {
+    direction: 'to_remote' | 'to_local';
+    driver?: string;
+    scope: 'ids';
+    ids: Array<number | string>;
+    delete_source?: boolean;
+  }) =>
+    request.post<MediaMigrationProgress>({
+      url: '/v2/admin/media-migrations',
+      data,
+    }),
+  /** 查询转存进度 */
+  migrateProgress: (batchId: number | string) =>
+    request.get<MediaMigrationProgress>({
+      url: `/v2/admin/media-migrations/${batchId}`,
     }),
 };
 

@@ -434,6 +434,33 @@ export interface MediaFileRecord {
   created_at?: string;
   width?: number;
   height?: number;
+  /** 当前所在存储区（渠道 slug，如 local/ftp/qiniu）；旧数据可能缺失 */
+  disk?: string;
+  [key: string]: unknown;
+}
+
+/** 可用媒体存储区（GET /v2/admin/media-storage-drivers 返回的 data.drivers 元素） */
+export interface MediaStorageDriver {
+  slug?: string;
+  name?: string;
+  [key: string]: unknown;
+}
+
+/** 转存进度快照（GET /v2/admin/media-migrations/{batchId}） */
+export interface MediaMigrationProgress {
+  id?: number | string;
+  direction?: string;
+  driver?: string;
+  delete_source?: boolean;
+  status?: string;
+  total?: number;
+  done?: number;
+  failed?: number;
+  skipped?: number;
+  failures?: Array<{ media_file_id?: number | string; stage?: string; message?: string }>;
+  started_at?: string;
+  finished_at?: string | null;
+  error?: string | null;
   [key: string]: unknown;
 }
 

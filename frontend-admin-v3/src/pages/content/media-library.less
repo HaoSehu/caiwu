@@ -80,6 +80,194 @@
   display: none;
 }
 
+/* 上传对话框：两步制表单 */
+.media-upload-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--td-comp-margin-l);
+}
+
+.media-upload-form__row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--td-comp-margin-m);
+}
+
+.media-upload-form__label {
+  width: 56px;
+  flex-shrink: 0;
+  text-align: right;
+  color: var(--td-text-color-primary);
+  line-height: 32px;
+}
+
+.media-upload-form__control {
+  flex: 1;
+  min-width: 0;
+}
+
+.media-upload-form__hint {
+  margin: var(--td-comp-margin-xs) 0 0;
+  color: var(--td-text-color-secondary);
+  font-size: var(--td-font-size-size-1, 12px);
+}
+
+/* 已选文件列表：每文件状态可分辨，失败标红 */
+.media-upload-files {
+  display: flex;
+  flex-direction: column;
+  gap: var(--td-comp-margin-s);
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 12px;
+  background: var(--td-bg-color-secondarycontainer);
+  border-radius: var(--td-radius-medium);
+}
+
+.media-upload-files__item {
+  padding: var(--td-comp-margin-xs) 0;
+}
+
+.media-upload-files__item.is-failed .media-upload-files__name {
+  color: var(--td-error-color);
+}
+
+.media-upload-files__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--td-comp-margin-s);
+}
+
+.media-upload-files__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.media-upload-files__status {
+  flex-shrink: 0;
+  font-size: var(--td-font-size-size-1, 12px);
+  color: var(--td-text-color-secondary);
+}
+
+.media-upload-files__status.is-success {
+  color: var(--td-success-color);
+}
+
+.media-upload-files__status.is-failed {
+  color: var(--td-error-color);
+}
+
+.media-upload-files__status.is-uploading {
+  color: var(--td-brand-color);
+}
+
+.media-upload-files__error {
+  margin: var(--td-comp-margin-xs) 0 0;
+  color: var(--td-error-color);
+  font-size: var(--td-font-size-size-1, 12px);
+  word-break: break-all;
+}
+
+.media-upload-files__summary {
+  margin: 0;
+  color: var(--td-text-color-secondary);
+  font-size: var(--td-font-size-size-1, 12px);
+}
+
+.media-batch-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  margin-bottom: var(--td-comp-margin-m);
+  background: var(--td-bg-color-secondarycontainer);
+  border: 1px solid var(--td-component-border);
+  border-radius: var(--td-radius-medium);
+  color: var(--td-text-color-primary);
+  font-size: var(--td-font-size-size-3, 14px);
+}
+
+.media-migrate-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--td-comp-margin-l);
+}
+
+.media-migrate-form__summary {
+  margin: 0;
+  color: var(--td-text-color-secondary);
+}
+
+.media-migrate-form__row {
+  display: flex;
+  align-items: center;
+  gap: var(--td-comp-margin-m);
+}
+
+.media-migrate-form__label {
+  width: 84px;
+  flex-shrink: 0;
+  text-align: right;
+  color: var(--td-text-color-primary);
+}
+
+.media-migrate-form__control {
+  flex: 1;
+}
+
+.media-migrate-form__hint {
+  color: var(--td-text-color-secondary);
+  font-size: var(--td-font-size-size-1, 12px);
+}
+
+.media-migrate-progress p {
+  margin: 0 0 var(--td-comp-margin-s);
+}
+
+.media-migrate-progress__sub {
+  color: var(--td-text-color-secondary);
+}
+
+.media-migrate-result {
+  display: flex;
+  flex-direction: column;
+  gap: var(--td-comp-margin-s);
+}
+
+.media-migrate-result__summary {
+  margin: 0;
+}
+
+.media-migrate-result__hint {
+  margin: 0;
+  color: var(--td-text-color-secondary);
+}
+
+.media-migrate-result__failures {
+  padding: 12px;
+  background: var(--td-bg-color-secondarycontainer);
+  border-radius: var(--td-radius-medium);
+}
+
+.media-migrate-result__failures ul {
+  margin: var(--td-comp-margin-xs) 0 0;
+  padding-left: 18px;
+}
+
+.media-migrate-result__failures li {
+  margin-bottom: var(--td-comp-margin-xs);
+  word-break: break-all;
+}
+
+.media-migrate-result__failures-title {
+  margin: 0;
+  font-weight: 600;
+}
+
 @media (max-width: 1024px) {
   .media-toolbar {
     flex-wrap: wrap;
@@ -123,5 +311,22 @@
   .media-preview {
     width: 48px;
     height: 48px;
+  }
+
+  .media-batch-bar {
+    flex-direction: column;
+    gap: var(--td-comp-margin-s);
+    align-items: flex-start;
+  }
+
+  .media-migrate-form__row,
+  .media-upload-form__row {
+    flex-wrap: wrap;
+  }
+
+  .media-migrate-form__label,
+  .media-upload-form__label {
+    width: auto;
+    text-align: left;
   }
 }
