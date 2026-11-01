@@ -12,6 +12,7 @@ use App\Services\Integrations\Plugins\PluginConfigRepository;
 use App\Services\Integrations\Plugins\PluginInstaller;
 use App\Services\Integrations\Plugins\PluginRuntimeRegistry;
 use App\Services\Integrations\Plugins\PluginScanner;
+use App\Support\CacheKey;
 use Caiwu\Plugins\Certification\BaiduFace\Logic\BaiduFaceClient;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Cache;
@@ -239,6 +240,50 @@ class PluginLifecycleCorePathTest extends TestCase
 
             // 同请求第二次命中 memo，仍成功。
             $second = $registry->execute('upstream', 'hosting_panel', $action, ['capability' => 'console']);
+            $this->assertTrue((bool) ($second['success'] ?? false), $action.' 第二次调用应成功');
+
+            $this->assertSame(
+                0,
+                DB::table('integration_plugin_runtime_logs')
+                    ->where('plugin_id', $pluginId)
+                    ->where('action', $action)
+                    ->count(),
+                $action.' 成功结果不应落运行日志',
+            );
+        }
+    }
+
+    /**
+     * 验证码渲染（2P1-B）：captcha.config / captcha.script 登录页每次渲染各执行一次，
+     * 返回静态配置派生结构与固定脚本内容，成功结果跨请求完全重复。
+     * 实库复核（2026-11-01）：近 30 天两动作合计写入 1141 行 / 约 2.76MB。
+     */
+    public function test_captcha_probe_actions_skip_success_runtime_log(): void
+    {
+        $installer = app(PluginInstaller::class);
+        $scanner = app(PluginScanner::class);
+        $repository = app(PluginConfigRepository::class);
+
+        $plugin = $installer->install('captcha', 'geetest');
+        $manifest = $scanner->requireManifest('captcha', 'geetest');
+        $repository->save($plugin, $manifest, [
+            'captcha_id' => 'probe-id',
+            'captcha_key' => 'probe-key',
+        ]);
+        $installer->enable($plugin->fresh() ?? $plugin);
+
+        // 预置脚本缓存，避免测试环境外呼 GeeTest CDN。
+        Cache::put(CacheKey::geeTestScript(), '/* probe 脚本内容 */', 600);
+
+        $registry = app(PluginRuntimeRegistry::class);
+        $pluginId = (int) $plugin->id;
+
+        foreach (['captcha.config', 'captcha.script'] as $action) {
+            $first = $registry->execute('captcha', 'geetest', $action);
+            $this->assertTrue((bool) ($first['success'] ?? false), $action.' 首次调用应成功');
+
+            // 同请求第二次命中 memo，仍成功。
+            $second = $registry->execute('captcha', 'geetest', $action);
             $this->assertTrue((bool) ($second['success'] ?? false), $action.' 第二次调用应成功');
 
             $this->assertSame(
