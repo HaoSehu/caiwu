@@ -16,6 +16,8 @@ class MediaFile extends Model
         'height',
         'group',
         'uploaded_by',
+        'disk',
+        'object_key',
     ];
 
     protected function casts(): array

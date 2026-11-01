@@ -14,6 +14,7 @@ use App\Http\Resources\Admin\V2\AdminMediaFileResource;
 use App\Models\MediaFile;
 use App\Services\Admin\V2\AdminOperationalActionV2Service;
 use App\Services\Content\MediaFileService;
+use App\Services\Content\Storage\MediaStorageResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Pagination\LengthAwarePaginator;
 
@@ -22,7 +23,21 @@ class MediaFileController extends Controller
     public function __construct(
         private readonly AdminOperationalActionV2Service $actions,
         private readonly MediaFileService $mediaFileService,
+        private readonly MediaStorageResolver $storageResolver,
     ) {}
+
+    /**
+     * 媒体库可用的存储区列表（slug + 显示名）。
+     *
+     * 前端据此渲染存储区标签与上传目标选择；渠道增减只影响此列表，
+     * 不影响历史文件 disk 字段的展示（前端对未知 disk 回退显示原值）。
+     */
+    public function storageDrivers(): JsonResponse
+    {
+        return $this->success([
+            'drivers' => $this->storageResolver->availableDriverDetails(),
+        ]);
+    }
 
     public function index(ListMediaFilesRequest $request): JsonResponse
     {
@@ -47,6 +62,7 @@ class MediaFileController extends Controller
             file: $request->file('file'),
             adminId: (int) $request->user()->id,
             group: trim((string) $request->input('group', 'content')) ?: 'content',
+            driver: $request->has('driver') ? trim((string) $request->input('driver')) : null,
         );
 
         return $this->success(AdminMediaFileResource::make($mediaFile)->resolve(), '上传成功');

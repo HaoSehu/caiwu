@@ -30,6 +30,7 @@ class StoreMediaFileRequest extends AdminFormRequest
             'per_page' => ['prohibited'],
             'file' => ['required', 'file', 'mimetypes:'.implode(',', self::ALLOWED_MIME_TYPES), 'max:102400'],
             'group' => ['nullable', 'string', 'max:50', 'alpha_dash:ascii'],
+            'driver' => ['nullable', 'string', 'max:24', 'alpha_dash:ascii'],
         ];
     }
 

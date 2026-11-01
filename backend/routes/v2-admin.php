@@ -18,6 +18,7 @@ use App\Http\Controllers\Admin\V2\InvoiceController;
 use App\Http\Controllers\Admin\V2\LogController;
 use App\Http\Controllers\Admin\V2\MarketingProductGroupController;
 use App\Http\Controllers\Admin\V2\MediaFileController;
+use App\Http\Controllers\Admin\V2\MediaMigrationController;
 use App\Http\Controllers\Admin\V2\MemberLevelController;
 use App\Http\Controllers\Admin\V2\MemberLevelGroupDiscountController;
 use App\Http\Controllers\Admin\V2\OrderController;
@@ -350,6 +351,8 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
         Route::post('/media-files', [MediaFileController::class, 'store']);
         Route::delete('/media-files/{mediaFile}', [MediaFileController::class, 'destroy']);
         Route::post('/media-file-reindexes', [MediaFileController::class, 'reindex']);
+        Route::post('/media-migrations', [MediaMigrationController::class, 'store']);
+        Route::get('/media-migrations/{batchId}', [MediaMigrationController::class, 'show']);
     });
 
     Route::middleware(['permission:'.AdminPermissions::CONTENT_LIST])->group(function (): void {
@@ -359,6 +362,7 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
         Route::get('/content/articles/{article}', [ContentArticleController::class, 'show']);
         Route::get('/media-files', [MediaFileController::class, 'index']);
         Route::get('/media-files/{mediaFile}/references', [MediaFileController::class, 'references']);
+        Route::get('/media-storage-drivers', [MediaFileController::class, 'storageDrivers']);
     });
 
     Route::middleware(['permission:'.AdminPermissions::MEMBER_LEVEL_LIST])->group(function (): void {

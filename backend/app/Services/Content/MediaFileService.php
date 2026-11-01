@@ -3,6 +3,8 @@
 namespace App\Services\Content;
 
 use App\Models\MediaFile;
+use App\Services\Content\Storage\MediaStorageResolver;
+use App\Services\Content\Storage\RemoteMediaStorage;
 use App\Support\LikeEscape;
 use App\Support\UploadedImage;
 use App\Support\UploadUrl;
@@ -57,6 +59,11 @@ class MediaFileService
         'm4v' => 'video/x-m4v',
     ];
 
+    public function __construct(
+        private readonly MediaStorageResolver $storageResolver,
+        private readonly RemoteMediaStorage $remoteStorage,
+    ) {}
+
     public function list(array $filters, int $perPage = 24): LengthAwarePaginator
     {
         $query = MediaFile::query()->orderByDesc('id');
@@ -79,8 +86,15 @@ class MediaFileService
         return $query->paginate($perPage);
     }
 
-    public function upload(UploadedFile $file, int $adminId, string $group = 'content'): MediaFile
+    public function upload(UploadedFile $file, int $adminId, string $group = 'content', ?string $driver = null): MediaFile
     {
+        // 远程分支点：驱动解析放在方法最前，以下本地路径的语句顺序与行为保持不变。
+        $resolvedDriver = $this->storageResolver->resolve($group, $driver);
+
+        if ($resolvedDriver !== MediaStorageResolver::LOCAL_DRIVER) {
+            return $this->uploadToRemote($file, $adminId, $group, $resolvedDriver);
+        }
+
         $group = UploadedImage::group($group);
         $media = $this->detectMedia($file);
         $directory = public_path(self::MEDIA_ROOT);
@@ -116,6 +130,59 @@ class MediaFileService
             'height' => $height,
             'group' => $group,
             'uploaded_by' => $adminId,
+        ]);
+
+        $this->bustHeroVideoCache();
+
+        return $mediaFile;
+    }
+
+    /**
+     * 远程存储上传分支：先暂存到 storage/app/tmp，再交由插件上传，
+     * 外链同时写入 path 与 url（远程行 path===url 不变式）。
+     */
+    private function uploadToRemote(UploadedFile $file, int $adminId, string $group, string $driver): MediaFile
+    {
+        $group = UploadedImage::group($group);
+        $media = $this->detectMedia($file);
+
+        $filename = sprintf('%s_%s_%s.%s', $media['prefix'], now()->format('His'), Str::random(8), $media['extension']);
+        $originalName = UploadedImage::originalName($file, $filename);
+        $objectKey = ltrim(self::relativePath($filename), '/');
+        $size = (int) $file->getSize();
+
+        $stagedPath = $this->remoteStorage->stageUploadedFile($file, $filename);
+
+        $width = null;
+        $height = null;
+        if ($media['type'] === 'image' && function_exists('getimagesize') && @is_file($stagedPath)) {
+            $info = @getimagesize($stagedPath);
+            if ($info) {
+                $width = $info[0];
+                $height = $info[1];
+            }
+        }
+
+        try {
+            $result = $this->remoteStorage->put($driver, $stagedPath, $objectKey, $media['mime_type'], $size);
+        } finally {
+            @unlink($stagedPath);
+        }
+
+        $url = $result['url'];
+
+        $mediaFile = MediaFile::query()->create([
+            'filename' => $originalName,
+            'path' => $url,
+            'url' => $url,
+            'mime_type' => $media['mime_type'],
+            'size' => $size,
+            'width' => $width,
+            'height' => $height,
+            'group' => $group,
+            'uploaded_by' => $adminId,
+            'disk' => $driver,
+            'object_key' => $objectKey,
         ]);
 
         $this->bustHeroVideoCache();
@@ -174,6 +241,22 @@ class MediaFileService
 
     public function delete(MediaFile $mediaFile): void
     {
+        // 远程分支点：先删远程对象，成功后再删库行；失败抛异常保留库行以便重试。
+        $disk = trim((string) ($mediaFile->disk ?? '')) ?: MediaStorageResolver::LOCAL_DRIVER;
+
+        if ($disk !== MediaStorageResolver::LOCAL_DRIVER) {
+            $objectKey = trim((string) ($mediaFile->object_key ?? ''));
+            if ($objectKey === '') {
+                throw new \RuntimeException('远程媒体文件缺少对象键，已阻止删除；请先运行 media:storage-audit 核对数据');
+            }
+
+            $this->remoteStorage->delete($disk, $objectKey);
+            $mediaFile->delete();
+            $this->bustHeroVideoCache();
+
+            return;
+        }
+
         $diskPath = $this->resolvePublicUploadPath((string) $mediaFile->path);
 
         if ($diskPath !== null && @is_file($diskPath)) {
@@ -337,6 +420,7 @@ class MediaFileService
             'width' => $item->width,
             'height' => $item->height,
             'group' => $item->group,
+            'disk' => trim((string) ($item->disk ?? '')) !== '' ? trim((string) ($item->disk)) : 'local',
             'type' => $this->normalizeMediaType((string) $item->mime_type),
             'created_at' => optional($item->created_at)?->toDateTimeString(),
         ];
@@ -379,6 +463,7 @@ class MediaFileService
                     'width' => null,
                     'height' => null,
                     'group' => self::HERO_VIDEO_GROUP,
+                    'disk' => 'local',
                     'type' => 'video',
                     'created_at' => date('Y-m-d H:i:s', $file->getMTime()),
                 ]);
@@ -455,7 +540,7 @@ class MediaFileService
         return '/'.ltrim(substr($normalized, strlen($publicRoot) + 1), '/');
     }
 
-    private function resolvePublicUploadPath(string $path): ?string
+    public function resolvePublicUploadPath(string $path): ?string
     {
         $normalized = ltrim(str_replace('\\', '/', trim($path)), '/');
         $segments = explode('/', $normalized);
@@ -492,7 +577,7 @@ class MediaFileService
         return $realPath;
     }
 
-    private function guardDiskSpace(string $directory, int $fileSize): void
+    public function guardDiskSpace(string $directory, int $fileSize): void
     {
         $freeSpace = @disk_free_space($directory);
 

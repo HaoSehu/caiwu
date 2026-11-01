@@ -18,6 +18,7 @@ class AdminMediaFileResource extends JsonResource
     {
         $path = (string) $this->field('path', '');
         $mimeType = (string) $this->field('mime_type', '');
+        $disk = trim((string) $this->field('disk', ''));
 
         return [
             'id' => $this->normalizeId($this->field('id')),
@@ -29,6 +30,7 @@ class AdminMediaFileResource extends JsonResource
             'width' => $this->nullableInt($this->field('width')),
             'height' => $this->nullableInt($this->field('height')),
             'group' => (string) $this->field('group', ''),
+            'disk' => $disk !== '' ? $disk : 'local',
             'type' => str_starts_with($mimeType, 'video/') ? 'video' : 'image',
             'created_at' => $this->createdAt(),
         ];
