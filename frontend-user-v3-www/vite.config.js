@@ -7,7 +7,7 @@ import vue from "@vitejs/plugin-vue";
 import AutoImport from "unplugin-auto-import/vite";
 import Components from "unplugin-vue-components/vite";
 
-import { createElementPlusSubpathResolvers } from "./scripts/element-plus-subpath-resolver.mjs";
+import { createTDesignResolver } from "./scripts/tdesign-resolver.mjs";
 import { precompressAssets } from "./scripts/precompress-assets.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -36,12 +36,12 @@ function resolveManualChunk(id) {
       return "vendor-axios";
     }
 
-    // 注意：不要把 element-plus 及其子路径整体分桶。manualChunks 返回固定名字时，
+    // 注意：不要把 tdesign-vue-next 整体分桶。manualChunks 返回固定名字时，
     // 该名字下的所有模块会被合并成同一个 chunk；只要入口静态引用了其中一个模块
-    // （bootstrap.ts 就静态引用了 config-provider 与 message 样式），整个 chunk 都会被
-    // 提前到首屏，实测首屏 gzip 从约 106KB 涨到约 400KB。历史上试过
-    // /element-plus/ 与 /@element-plus/icons-vue/ 两条规则，构建通过但首屏超预算 3 倍，
-    // 已回退；要压缩 select/input 的体积应走按需 import 或 router 级拆分，不是整包分桶。
+    // （bootstrap.ts 就静态引用了基础样式），整个 chunk 都会被提前到首屏。
+    // 历史上试过给 UI 库与图标库各加一条整包规则，首屏 gzip 从约 106KB 涨到约 400KB
+    // 后回退；TDesign 同理，按需解析（scripts/tdesign-resolver.mjs）已经把组件拆成
+    // 独立子入口，这里不能再合桶。
 
     if (
       normalized.includes("/vue/") ||
@@ -127,13 +127,11 @@ export default defineConfig(({ mode }) => {
       Components({
         // 同上。
         dts: false,
-        // 用本地封装的子路径解析器替代原生 ElementPlusResolver：
-        // 原生实现一律生成 from "element-plus/es"（全量 barrel），会把 barrel 顶层
-        // 裸 import 的 dayjs 变成每个 chunk 的副作用依赖。详见 scripts/element-plus-subpath-resolver.mjs。
-        resolvers: createElementPlusSubpathResolvers({
-          importStyle: "sass",
-          directives: true,
-        }),
+        // 用本地封装的子路径解析器替代官方 TDesignResolver：
+        // 官方实现的 from 恒为 "tdesign-vue-next"（全量 barrel），会把全部组件入口与
+        // 样式拉进构建；这里解析到 es/<组件>/index 子入口，只带该组件样式。
+        // 详见 scripts/tdesign-resolver.mjs。
+        resolvers: [createTDesignResolver()],
       }),
       createPrecompressedAssetsPlugin(),
       createApiConnectSrcPlugin({
@@ -152,23 +150,6 @@ export default defineConfig(({ mode }) => {
           env.VITE_PREVIEW_API_TARGET ||
           (mode === "production" ? "" : "http://127.0.0.1:8000"),
       }),
-      {
-        // element-plus use-locale 用相对路径静态 import en 语言包作默认 fallback，
-        // 站点始终提供 zh-cn locale，用最小 stub 替代完整 en 语言包，消除入口 chunk 死代码。
-        // 用 resolveId 钩子返回绝对路径，避免 Vite alias 对相对路径 import 的拼接问题。
-        // enforce: 'pre' 保证先于内置 vite:resolve 运行，否则内置解析已返回 en.mjs 的结果。
-        name: "strip-element-plus-en-locale",
-        enforce: "pre",
-        resolveId(source) {
-          if (
-            source === "element-plus/es/locale/lang/en.mjs" ||
-            /(?:^|[\\/])locale[\\/]lang[\\/]en\.mjs$/.test(source)
-          ) {
-            return path.resolve(__dirname, "src/shims/en-locale.mjs");
-          }
-          return null;
-        },
-      },
       {
         name: "client-first-screen-hints",
         apply: "build",
@@ -268,11 +249,10 @@ export default defineConfig(({ mode }) => {
       },
     ],
     resolve: {
-      dedupe: ["vue", "element-plus"],
+      dedupe: ["vue"],
       alias: {
         "@": path.resolve(__dirname, "src"),
         "@caiwu/shared": path.resolve(__dirname, "../shared"),
-        "element-plus": path.resolve(__dirname, "../node_modules/element-plus"),
       },
     },
     server: {
@@ -305,7 +285,7 @@ export default defineConfig(({ mode }) => {
         "vue-router",
         "pinia",
         "axios",
-        "@element-plus/icons-vue",
+        "tdesign-icons-vue-next",
         "markdown-it",
       ],
     },
@@ -319,7 +299,8 @@ export default defineConfig(({ mode }) => {
       cssCodeSplit: true,
       reportCompressedSize: false,
       // 统一为 600：与 backend/scripts/frontend_budget.mjs 的首屏门禁同向（审查条目 D7）。
-      // www 当前构建最大分片实测 153,833 B（vendor-vue，原注释写的 165,257 B 是旧产物），
+      // www 当前构建最大分片实测 154,414 B（迁移到 TDesign 按需引入后是应用代码 index-*.js；
+      // 迁移前该位置是 vendor-vue 153,833 B，现降至 107,827 B），
       // 600 KB 只作异常放大的哨兵，不用于压体积。
       chunkSizeWarningLimit: 600,
       // 首屏门禁按 manifest 求静态闭包：www 的布局 chunk 与首页路由 chunk 都是入口 chunk 的
@@ -342,7 +323,7 @@ export default defineConfig(({ mode }) => {
     css: {
       preprocessorOptions: {
         scss: {
-          additionalData: `@use "@/assets/styles/element/index.scss"; @use "@/assets/styles/variables.scss" as *;`,
+          additionalData: `@use "@/assets/styles/variables.scss" as *;`,
         },
       },
     },

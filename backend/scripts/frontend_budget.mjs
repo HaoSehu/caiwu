@@ -24,9 +24,11 @@ export const FIRST_SCREEN_BUDGETS = {
 // console 没有同一 CDN 约束（frontend-user-v4-console/vite.config.ts 无相关注释），这里的 1,120KB 只是防膨胀哨兵：
 // 以 2026-10-23 实测 vendor-tdesign 972,583 B 为基线放宽 15%，越线说明桶又膨胀了，需要人工确认（审查条目 P2-1）。
 // www 过去没有这一条，导致 chunkChecks 被 .filter((check) => check.budget) 静默过滤掉，
-// 单分片膨胀只能在首屏汇总里吸收。基线取 2026 年修复后实测最大单文件 vendor-vue 153,833 B，放宽 17% 到 180,000 B：
-// 该桶内是 vue/vue-router/pinia/@vue 运行时，随框架小版本升级缓慢增长，正常不会逼近；越线通常意味着
-// manualChunks 误把业务代码并进 vendor（历史上整体分桶 element-plus 曾把首屏从约 106KB 顶到约 400KB）。
+// 单分片膨胀只能在首屏汇总里吸收。基线取 www 迁移到 TDesign 按需引入后的实测最大单文件：
+// 应用代码 index-*.js 154,414 B（迁移前该位置是 vendor-vue：2026-10-30 静态复算 153,833 B，
+// Vite 构建输出同批次报 153.70 kB，两个口径差 133 B 属四舍五入与取整差异），放宽后仍是 180,000 B：
+// vendor-vue 在按需引入后降到 107,827 B，随框架小版本升级缓慢增长，正常不会逼近；越线通常意味着
+// manualChunks 误把业务代码并进 vendor（历史上整体分桶某个 UI 库曾把首屏从约 106KB 顶到约 400KB）。
 export const CHUNK_BUDGETS = {
   admin: 950 * 1000,
   console: 1120 * 1000,
@@ -36,9 +38,9 @@ export const CHUNK_BUDGETS = {
 // 单分片 raw 预算（CSS）。JS 预算只能兜住「JS 膨胀」，样式一旦回退成全量引入，
 // 增量会落在 CSS 分片上：admin 的 vendor-tdesign 从 302,911 B 回退到 462,351 B 只多 159,440 B raw /
 // 16,316 B gzip，而首屏预算余量还有 36,161 B —— 首屏汇总拦不住这种组合，必须单独设限。
-// 基线取实测最大单文件：admin 302,911 B、console 264,090 B、www 54,902 B（原注释沿用旧产物
-// 的 56,866 B，已按当前 dist 实测量更正），统一放宽约 15%。
-// www 用 Element Plus 且未做按需样式拆分，基线低但同属防回退哨兵。
+// 基线取实测最大单文件：admin 302,911 B、console 264,090 B、www 45,961 B（迁移到 TDesign
+// 按需样式后实测；迁移前为 54,902 B），统一放宽约 15%。
+// www 用 TDesign Vue Next 按需子入口引入（scripts/tdesign-resolver.mjs），样式按组件拆分，基线低但同属防回退哨兵。
 export const CSS_CHUNK_BUDGETS = {
   admin: 350 * 1000,
   console: 305 * 1000,

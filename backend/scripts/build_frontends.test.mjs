@@ -64,13 +64,13 @@ for (const target of ['admin', 'www', 'console']) {
     '三端都必须配置单分片预算，否则该项检查会被 filter 静默跳过',
   );
   assert.ok(
-    budgetModule.CHUNK_BUDGETS.www > 153833,
-    'www 单分片预算必须高于当前实测最大分片 vendor-vue 153,833 B，否则门禁会在健康构建上误报',
+    budgetModule.CHUNK_BUDGETS.www > 154414,
+    'www 单分片预算必须高于当前实测最大分片（应用代码 index-*.js 154,414 B；迁移前该位置是 vendor-vue 153,833 B），否则门禁会在健康构建上误报',
   );
   assert.deepEqual(Object.keys(budgetModule.FIRST_SCREEN_BUDGETS).sort(), ['admin', 'console', 'www']);
   // CSS 分片预算：三端都要有，且必须高于当前实测最大单文件，否则健康构建会误报（审查条目 P3-4）。
   assert.deepEqual(Object.keys(budgetModule.CSS_CHUNK_BUDGETS).sort(), ['admin', 'console', 'www']);
-  const cssBaselines = { admin: 302911, console: 264090, www: 56866 };
+  const cssBaselines = { admin: 302911, console: 264090, www: 45961 };
   Object.entries(cssBaselines).forEach(([name, baseline]) => {
     assert.ok(
       budgetModule.CSS_CHUNK_BUDGETS[name] > baseline,

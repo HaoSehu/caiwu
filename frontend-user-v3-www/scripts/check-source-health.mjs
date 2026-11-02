@@ -13,6 +13,10 @@ const TEXT_FILE_EXTENSIONS = new Set([
   '.vue',
   '.js',
   '.mjs',
+  // src 下的应用入口与 router/store 都是 .ts，不纳入就会整类跳过本检查。
+  '.ts',
+  '.tsx',
+  '.jsx',
   '.json',
   '.scss',
   '.css',
@@ -83,7 +87,7 @@ async function walk(targetPath, issues) {
   }
 
   const extension = path.extname(absolutePath)
-  if (!TEXT_FILE_EXTENSIONS.has(extension) && path.basename(absolutePath) !== 'package.json') {
+  if (!TEXT_FILE_EXTENSIONS.has(extension)) {
     return
   }
 

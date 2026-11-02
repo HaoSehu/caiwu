@@ -47,8 +47,25 @@ jobs:
       - name: 类型检查
         run: npm run typecheck:frontends
 
+      - name: 官网组件体系守卫
+        # 官网从 Element Plus 迁到 TDesign Vue Next 后，旧组件体系的依赖、<el-xxx> 标签、
+        # --el-* 变量与旧命令式 API 若回流，构建不会失败（未注册标签只渲染成空元素），
+        # 必须显式拦截。这三个脚本挂在 npm run verify:refactor 里，但 CI 不走那条链，
+        # 故在这里单独执行；都只读源码，不依赖构建产物。
+        working-directory: frontend-user-v3-www
+        run: |
+          npm run check:source-health
+          node ./scripts/check-tdesign-resolver.mjs
+          node ./scripts/check-no-legacy-ui.mjs
+
       - name: 构建三端
         run: npm run build:frontends
+
+      - name: 官网构建产物残留守卫
+        # 源码层守卫看不到经 node_modules 间接路径打进 dist 的旧样式，
+        # 只有对产物本身检查才能证明「现网构建不含旧组件体系」。上一步已产出 dist。
+        working-directory: frontend-user-v3-www
+        run: node ./scripts/check-no-legacy-ui.mjs --dist
 
   # 三端 e2e（Playwright + Chromium）：管理端 → 官网 → 控制台，串行执行，全部阻断。
   # - 必须串行：三端 e2e 固定占用 127.0.0.1:4173（backend/scripts/e2e_runner.mjs 里 PORT = 4173，
@@ -62,8 +79,9 @@ jobs:
   #   本地实测三端均无后端可跑通（2026-10-27）：
   #   · 管理端 37 passed（page.route() 全 mock，见 frontend-admin-v3/e2e/fixtures.ts）
   #   · 控制台 35 passed（page.route() 全 mock，见 frontend-user-v4-console/e2e/fixtures.ts）
-  #   · 官网 25 passed（下面的命令行用 --grep-invert @needs-backend 排除依赖真实接口的用例；
-  #     全量 30 条，其中 5 条 @needs-backend 需要真实后端，口径变化时同步更新本行）
+  #   · 官网 32 passed（下面的命令行用 --grep-invert @needs-backend 排除依赖真实接口的用例；
+  #     全量 38 条，其中 6 条 @needs-backend 需要真实后端，口径变化时同步更新本行。
+  #     2026-11-02 TDesign 迁移收尾：本地起后端后全量 38 passed）
   # - 官网 e2e 的真实后端依赖仍在：smoke.spec.ts 的首屏/机型表/商品抽屉与 ux-fixes.spec.ts 的
   #   结算条用例走 vite preview 代理到 127.0.0.1:8000 的真实接口，本地需先起后端全量跑。
   #   CI 无后端，故用 --grep-invert @needs-backend 排除；这些用例已全部打上 @needs-backend 标签，
