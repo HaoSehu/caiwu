@@ -274,7 +274,7 @@
       <t-space class="video-drawer-url-mode__actions">
         <t-button theme="primary" @click="confirmVideoUrl">
           <template #icon><check-icon /></template>
-          确认使用该 URL
+          确定
         </t-button>
       </t-space>
     </div>
@@ -837,7 +837,7 @@ onBeforeUnmount(() => {
 
 .video-drawer-card {
   position: relative;
-  border-radius: 10px;
+  border-radius: var(--td-radius-large);
   border: 2px solid var(--td-component-border);
   background: var(--caiwu-media-canvas);
   overflow: hidden;
@@ -929,7 +929,7 @@ onBeforeUnmount(() => {
 }
 
 .video-drawer-url-mode__preview {
-  border-radius: 8px;
+  border-radius: var(--td-radius-medium);
   overflow: hidden;
   background: var(--caiwu-media-canvas);
 }

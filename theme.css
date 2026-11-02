@@ -515,7 +515,7 @@
     inset: 0;
     z-index: 1998;
     display: block;
-    background: rgb(0 0 0 / 42%);
+    background: var(--caiwu-mask-nav);
   }
 
   #app .tdesign-starter-sidebar-mobile {

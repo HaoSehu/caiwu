@@ -363,9 +363,9 @@ watch(
   display: flex;
   align-items: baseline;
   gap: var(--td-comp-margin-s);
-  padding: 14px 24px;
+  padding: var(--td-comp-paddingTB-l) var(--td-comp-paddingLR-xl);
   background: var(--td-bg-color-secondarycontainer);
-  border: 1px solid var(--td-component-border);
+  border: thin solid var(--td-component-border);
   border-radius: var(--td-radius-medium);
 
   &__label {
@@ -389,9 +389,9 @@ watch(
 .order-fee-detail {
   // 左右内边距固定 24px 而不是 --td-comp-paddingLR-l（20px）：
   // 上方卡片正文左基线 = 卡片 1px 边框 + 24px 内边距，区块要对齐同一条左基线，差 4px 肉眼可见
-  padding: 16px 24px;
+  padding: var(--td-comp-margin-l) var(--td-comp-paddingLR-xl);
   background: var(--td-bg-color-container);
-  border: 1px solid var(--td-component-border);
+  border: thin solid var(--td-component-border);
   border-radius: var(--td-radius-large);
   box-shadow: var(--td-shadow-1);
 

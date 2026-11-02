@@ -220,7 +220,7 @@
       class="config-option-edit-dialog"
       :header="configOptionEditingIndex >= 0 ? '编辑配置项' : '新增配置项'"
       width="min(760px, calc(100vw - 32px))"
-      :confirm-btn="{ content: '保存配置', loading: configOptionSubmitting }"
+      :confirm-btn="{ content: '确定', loading: configOptionSubmitting }"
       @confirm="submitConfigOption"
     >
       <t-form

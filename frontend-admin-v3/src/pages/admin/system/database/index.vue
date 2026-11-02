@@ -30,7 +30,9 @@
           >建议优化：{{ status.optimization.candidate_count }} 张，预计回收
           {{ formatSizeMb(status.optimization.estimated_reclaimable_mb) }}</span
         >
-        <span v-if="optimizationCoolingDown">上次优化：{{ status.optimization.last_optimized_at || '-' }}</span>
+        <span v-if="optimizationCoolingDown"
+          >上次优化：{{ formatDateTime(status.optimization.last_optimized_at) }}</span
+        >
       </div>
 
       <div class="database-optimization-candidates">
@@ -63,7 +65,7 @@
         </template>
         <template #rows="{ row }">{{ formatNumber(row.rows) }}</template>
         <template #size="{ row }">{{ formatSizeMb(row.size_mb) }}</template>
-        <template #updateTime="{ row }">{{ row.update_time || '-' }}</template>
+        <template #updateTime="{ row }">{{ formatDateTime(row.update_time) }}</template>
         <template #empty>
           <t-empty :description="loading ? '加载中…' : '暂无数据表'" />
         </template>
@@ -81,6 +83,7 @@ import type { DatabaseOptimizationCandidate, DatabaseStatus, DatabaseTableItem }
 import { databaseApi } from '@/api/admin/database';
 import { AdminPermissions, hasPermissionInList } from '@/constants/permissions';
 import { useUserStore } from '@/store';
+import { formatDateTime } from '@/utils/format';
 import { errorMessage } from '@/utils/userMessage';
 
 defineOptions({ name: 'AdminDatabaseStatus' });
@@ -112,8 +115,8 @@ const optimizationCoolingDown = computed(() => status.value.optimization.cooldow
 
 const columns = computed<PrimaryTableCol<TableRowData>[]>(() => [
   { title: '表名', colKey: 'name', minWidth: 220 },
-  { title: '行数', colKey: 'rows', width: 140 },
-  { title: '大小', colKey: 'size', width: 140 },
+  { title: '行数', colKey: 'rows', width: 140, align: 'right' },
+  { title: '大小', colKey: 'size', width: 140, align: 'right' },
   { title: '更新时间', colKey: 'updateTime', minWidth: 180 },
 ]);
 

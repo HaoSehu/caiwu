@@ -40,7 +40,7 @@
           <t-button theme="primary" @click="openCreateDialog">提交工单</t-button>
         </template>
         <div v-if="isDesktop" class="ticket-table-shell">
-          <t-table row-key="id" :data="list" :columns="columns" :pagination="null" hover>
+          <t-table row-key="id" :data="list" :columns="columns" :pagination="null" :loading="loading" hover>
             <template #subject="{ row }">
               <router-link class="ticket-link" :to="`/client/tickets/${row.id}`">
                 #{{ row.id }} {{ row.subject || '--' }}
@@ -103,7 +103,7 @@
       @confirm="submitTicket"
       @close="closeCreateDialog"
     >
-      <t-form label-align="top" class="ticket-create-form">
+      <t-form label-align="right" class="ticket-create-form">
         <t-form-item label="问题分类" required-mark>
           <t-select v-model="createForm.department">
             <t-option

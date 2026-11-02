@@ -142,7 +142,7 @@
       </p>
     </div>
 
-    <t-form class="supplier-batch-form" :data="supplierBatchForm" label-width="90px">
+    <t-form class="supplier-batch-form" :data="supplierBatchForm" label-align="right" label-width="90px">
       <div class="supplier-batch-settings">
         <t-form-item label="默认上架">
           <t-switch v-model="supplierBatchForm.default_status" :custom-value="[1, 0]" />
@@ -371,13 +371,14 @@
     v-model:visible="supplierDialogVisible"
     :header="editingSupplier ? '编辑提供商' : '新增提供商'"
     width="min(620px, calc(100vw - 32px))"
-    :confirm-btn="canManageSuppliers ? { content: '保存', loading: supplierSubmitting } : null"
+    :confirm-btn="canManageSuppliers ? { content: '确定', loading: supplierSubmitting } : null"
     @confirm="submitSupplier"
   >
     <t-form
       ref="supplierFormRef"
       :data="supplierForm"
       :rules="supplierRules"
+      label-align="right"
       label-width="110px"
       :disabled="!canManageSuppliers"
     >

@@ -237,7 +237,8 @@ const sidebarButtonTitle = computed(() => {
   if (isMobile.value) {
     return settingStore.isMobileSidebarVisible ? '关闭菜单' : '打开菜单';
   }
-  return settingStore.isSidebarCompact ? '展开侧边栏' : '收起侧边栏';
+  // R5：§6 禁用「侧边栏」，统一称「菜单」
+  return settingStore.isSidebarCompact ? '展开菜单' : '收起菜单';
 });
 
 const changeCollapsed = () => {

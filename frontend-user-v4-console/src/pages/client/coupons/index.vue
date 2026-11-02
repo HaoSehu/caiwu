@@ -77,7 +77,7 @@
                 </div>
               </div>
               <div class="coupon-item__foot">
-                <span>{{ item.validity_text || item.expires_at || '--' }}</span>
+                <span>{{ item.validity_text || formatDateTime(item.expires_at) }}</span>
               </div>
             </article>
           </div>
@@ -148,7 +148,7 @@
                 </div>
               </div>
               <div class="coupon-item__foot">
-                <span>{{ item.validity_text || item.expires_at || '--' }}</span>
+                <span>{{ item.validity_text || formatDateTime(item.expires_at) }}</span>
                 <t-button
                   size="small"
                   theme="primary"
@@ -237,6 +237,7 @@ import {
   useCoupons,
 } from '@/domains/marketing/useCoupons';
 import type { CouponProductScopeItem } from '@/types/client';
+import { formatDateTime } from '@/utils/format';
 
 const router = useRouter();
 

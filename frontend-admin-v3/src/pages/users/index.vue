@@ -144,7 +144,7 @@
 
     <t-dialog
       v-model:visible="createVisible"
-      header="新增用户"
+      header="新建用户"
       width="min(520px, calc(100vw - 32px))"
       :confirm-btn="{ content: '确定', loading: submitLoading }"
       @confirm="handleCreate"
@@ -228,7 +228,7 @@ const columns: PrimaryTableCol<TableRowData>[] = [
   { title: '手机号 / 邮箱', colKey: 'account', width: 220 },
   { title: '昵称', colKey: 'nickname', width: 180 },
   { title: '余额', colKey: 'balance', width: 120, align: 'right' },
-  { title: '已开通服务', colKey: 'openedServices', width: 130, align: 'center' },
+  { title: '已开通服务', colKey: 'openedServices', width: 130, align: 'right' },
   { title: '状态', colKey: 'status', width: 100 },
   { title: '注册时间', colKey: 'createdAt', width: 180 },
 ];

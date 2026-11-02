@@ -45,7 +45,7 @@
     <template #footer>
       <t-button variant="outline" @click="renewVisible = false">取消</t-button>
       <t-button theme="primary" :loading="renewSubmitting" :disabled="!renewForm.billing_cycle" @click="submitRenew"
-        >创建续费账单</t-button
+        >确定</t-button
       >
     </template>
   </t-dialog>

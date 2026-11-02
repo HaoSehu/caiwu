@@ -602,7 +602,7 @@ const configs: Record<Exclude<SettingsTab, 'site_hero'>, SettingsConfig> = {
             default: '',
             maxlength: 255,
             placeholder: '/branding/logo1.svg',
-            help: '用于用户控制台侧边栏与登录页 Logo，留空则使用站点 Favicon。',
+            help: '用于用户控制台导航菜单与登录页 Logo，留空则使用站点 Favicon。',
           },
           { key: 'service_phone', label: '官方QQ群', type: 'input', default: '', maxlength: 40 },
           { key: 'support_group_qr', label: '官方群聊二维码', type: 'image', default: '', maxlength: 255 },

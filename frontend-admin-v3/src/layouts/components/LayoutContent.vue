@@ -240,7 +240,7 @@ const handleDragend = (options: { currentIndex: number; targetIndex: number }) =
   justify-content: center;
   margin-left: var(--td-comp-margin-xs);
   padding: 2px;
-  border-radius: 3px;
+  border-radius: var(--td-radius-default);
   cursor: pointer;
   opacity: 0.6;
   transition:

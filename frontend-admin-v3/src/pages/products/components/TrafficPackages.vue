@@ -87,10 +87,16 @@
     v-model:visible="trafficGroupDialogVisible"
     :header="trafficGroupEditingId ? '编辑流量包分组' : '新增流量包分组'"
     width="min(560px, calc(100vw - 32px))"
-    :confirm-btn="{ content: '保存分组', loading: trafficGroupSubmitting }"
+    :confirm-btn="{ content: '确定', loading: trafficGroupSubmitting }"
     @confirm="submitTrafficGroup"
   >
-    <t-form ref="trafficGroupFormRef" :data="trafficGroupForm" :rules="trafficGroupRules" label-width="110px">
+    <t-form
+      ref="trafficGroupFormRef"
+      :data="trafficGroupForm"
+      :rules="trafficGroupRules"
+      label-align="right"
+      label-width="110px"
+    >
       <t-form-item label="分组名称" name="name">
         <t-input v-model="trafficGroupForm.name" placeholder="例如 基础流量包" maxlength="30" />
       </t-form-item>

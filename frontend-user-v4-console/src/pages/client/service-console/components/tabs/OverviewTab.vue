@@ -19,7 +19,7 @@
         />
         <info-cell label="实例 ID" :value="String(detail.id || '--')" copyable @copy="copyText" />
         <info-cell label="操作系统" :value="serviceOs" strong />
-        <info-cell label="创建时间" :value="detail.created_at || '--'" strong />
+        <info-cell label="创建时间" :value="formatDateTime(detail.created_at)" strong />
         <div class="detail-cell">
           <span>实例状态</span>
           <t-tag :theme="instanceStatusTheme" variant="light">{{ instanceStatusText }}</t-tag>
@@ -144,7 +144,12 @@
       <div class="detail-grid">
         <info-cell label="计费方式" :value="detail.billing_cycle_label || '--'" strong />
         <info-cell label="续费价格" :value="renewPriceText" strong />
-        <info-cell label="到期时间" :value="detail.expires_at || '长期有效'" strong warning />
+        <info-cell
+          label="到期时间"
+          :value="detail.expires_at ? formatDateTime(detail.expires_at) : '长期有效'"
+          strong
+          warning
+        />
         <info-cell label="订单号" :value="detail.invoice?.order_no || '--'" copyable @copy="copyText" />
       </div>
     </t-card>
@@ -154,6 +159,8 @@
 import { DEFAULT_SYSTEM_DISK_LABEL } from '@caiwu/shared/finance';
 import { BrowseIcon, BrowseOffIcon, CopyIcon } from 'tdesign-icons-vue-next';
 import { computed } from 'vue';
+
+import { formatDateTime } from '@/utils/format';
 
 import { useServiceConsoleContext } from '../context';
 import { InfoCell } from '../InfoCell';

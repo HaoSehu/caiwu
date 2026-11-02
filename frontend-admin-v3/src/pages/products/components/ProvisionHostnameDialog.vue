@@ -3,7 +3,7 @@
     v-model:visible="visible"
     header="批量主机名规则"
     width="min(620px, calc(100vw - 32px))"
-    :confirm-btn="{ content: '保存规则', loading: submitting }"
+    :confirm-btn="{ content: '确定', loading: submitting }"
     @confirm="submit"
   >
     <div class="split-dialog-intro">
@@ -18,7 +18,7 @@
 
     <t-alert v-if="hasMixedRules" theme="warning" message="当前选中的商品存在不同规则，保存后会统一覆盖为当前设置。" />
 
-    <t-form class="hostname-rule-form" :data="form" label-width="120px">
+    <t-form class="hostname-rule-form" :data="form" label-align="right" label-width="120px">
       <t-form-item label="开通策略" name="mode">
         <t-radio-group v-model="form.mode" variant="default-filled">
           <t-radio-button value="system">跟随上游</t-radio-button>

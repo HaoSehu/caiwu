@@ -8,7 +8,7 @@
     />
     <template #footer>
       <t-button variant="outline" @click="remarkVisible = false">取消</t-button>
-      <t-button theme="primary" :loading="remarkSubmitting" @click="submitRemark">保存备注</t-button>
+      <t-button theme="primary" :loading="remarkSubmitting" @click="submitRemark">确定</t-button>
     </template>
   </t-dialog>
 </template>

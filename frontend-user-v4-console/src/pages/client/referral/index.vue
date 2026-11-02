@@ -39,7 +39,7 @@
           <t-empty description="提现前需要先绑定支付宝，并完成该手机号的短信验证，无需上传支付宝图片。" />
           <t-button theme="primary" @click="openBindDialog">立即绑定</t-button>
         </div>
-        <t-form v-else class="withdraw-form" layout="inline">
+        <t-form v-else class="withdraw-form" layout="inline" label-align="right">
           <t-form-item label="收款账户">
             <span>{{ alipayAccount.real_name || '--' }} {{ alipayAccount.account || '--' }}</span>
           </t-form-item>
@@ -60,6 +60,7 @@
               :data="directReferrals"
               :columns="directColumns"
               :pagination="directReferralsTablePagination"
+              :loading="loading"
               @page-change="handleDirectReferralsPageChange"
             >
               <template #empty>
@@ -81,6 +82,7 @@
               :data="rewards"
               :columns="rewardColumns"
               :pagination="rewardsTablePagination"
+              :loading="loading"
               @page-change="handleRewardsPageChange"
             >
               <template #empty>
@@ -106,6 +108,7 @@
               :data="withdrawals"
               :columns="withdrawColumns"
               :pagination="withdrawalsTablePagination"
+              :loading="loading"
               @page-change="handleWithdrawalsPageChange"
             >
               <template #empty>
@@ -129,6 +132,7 @@
               :data="accountLogs"
               :columns="logColumns"
               :pagination="accountLogsTablePagination"
+              :loading="loading"
               @page-change="handleAccountLogsPageChange"
             >
               <template #empty>
@@ -145,7 +149,7 @@
     </t-loading>
 
     <t-dialog v-model:visible="bindDialogVisible" header="绑定提现支付宝" width="min(30rem, calc(100vw - 2rem))">
-      <t-form label-align="top">
+      <t-form label-align="right">
         <p class="bind-dialog-tip">请填写实名、支付宝绑定手机号、短信验证码与登录密码，用于提现打款。</p>
         <t-form-item label="真实姓名"
           ><t-input v-model="bindForm.real_name" placeholder="请输入支付宝实名姓名"
@@ -160,7 +164,7 @@
       </t-form>
       <template #footer>
         <t-button variant="outline" @click="bindDialogVisible = false">取消</t-button>
-        <t-button theme="primary" :loading="bindSubmitting" @click="submitBindAlipay">保存绑定</t-button>
+        <t-button theme="primary" :loading="bindSubmitting" @click="submitBindAlipay">确定</t-button>
       </template>
     </t-dialog>
   </section>

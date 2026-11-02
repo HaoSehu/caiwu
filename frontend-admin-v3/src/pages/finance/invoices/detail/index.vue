@@ -149,7 +149,7 @@ function handleCancel(): void {
     header: '取消账单',
     body: '取消后账单不可继续支付，确认取消？',
     confirmBtn: { content: '确定', theme: 'danger' },
-    cancelBtn: '再想想',
+    cancelBtn: '取消',
     async onConfirm() {
       // 对话框自身的确定按钮也要进入 loading，否则确认后界面无反馈、可被重复点击。
       dialog.setConfirmLoading(true);

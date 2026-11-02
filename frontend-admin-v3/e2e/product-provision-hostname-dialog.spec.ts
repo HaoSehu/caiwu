@@ -68,13 +68,13 @@ test('批量主机名：弹层打开、切到固定主机名后校验拦截、�
   await expect(dialog.getByText('固定主机名模式需要填写一个上游允许的 host 值。')).toBeVisible();
 
   // 缺值直接提交：子组件内部校验应拦截，且不发请求
-  await dialog.getByRole('button', { name: '保存规则' }).click();
+  await dialog.getByRole('button', { name: '确定' }).click();
   await expect(page.getByText('请输入固定主机名')).toBeVisible();
   await expect(dialog).toBeVisible();
 
   await dialog.getByPlaceholder('例如 hk-vps-core').fill('hk-vps-e2e');
   await expect(dialog.getByText('开通时将固定提交主机名：hk-vps-e2e。')).toBeVisible();
-  await dialog.getByRole('button', { name: '保存规则' }).click();
+  await dialog.getByRole('button', { name: '确定' }).click();
 
   await expect(page.getByText('商品开通主机名规则已更新')).toBeVisible();
   await expect(dialog).toBeHidden();

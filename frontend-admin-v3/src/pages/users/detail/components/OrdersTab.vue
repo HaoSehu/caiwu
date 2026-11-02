@@ -119,6 +119,7 @@ import { useRouter } from 'vue-router';
 
 import type { ManualPaymentGateway, PageParams } from '@/api/user';
 import { userApi } from '@/api/user';
+import { COMPACT_PAGE_SIZE_OPTIONS } from '@/constants/pagination';
 import { AdminPermissions } from '@/constants/permissions';
 import { fieldValue, formatDateTime, formatMoney } from '@/utils/format';
 import { required } from '@/utils/formRules';
@@ -184,7 +185,7 @@ const columns: PrimaryTableCol<TableRowData>[] = [
   { title: '订单号', colKey: 'order_no', width: 200 },
   { title: '产品', colKey: 'orderProduct', minWidth: 240 },
   { title: '类型', colKey: 'orderType', width: 110 },
-  { title: '金额', colKey: 'orderAmount', width: 120 },
+  { title: '金额', colKey: 'orderAmount', width: 120, align: 'right' },
   { title: '状态', colKey: 'orderStatus', width: 110 },
   { title: '支付时间', colKey: 'orderPaid', width: 180 },
   { title: '创建时间', colKey: 'orderCreated', width: 180 },
@@ -195,6 +196,7 @@ const pagination = computed(() => ({
   current: state.page,
   pageSize: state.pageSize,
   total: state.total,
+  pageSizeOptions: COMPACT_PAGE_SIZE_OPTIONS,
   showJumper: true,
 }));
 

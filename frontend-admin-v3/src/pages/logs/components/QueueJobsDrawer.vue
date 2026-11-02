@@ -121,7 +121,7 @@ const columns = computed<PrimaryTableCol<RecordRow>[]>(() => {
       { colKey: 'id', title: 'ID', width: 76 },
       { colKey: 'job', title: '任务 / 队列', minWidth: 260 },
       { colKey: 'state', title: '状态', width: 100 },
-      { colKey: 'attempts', title: '尝试', width: 76 },
+      { colKey: 'attempts', title: '尝试', width: 76, align: 'right' },
       { colKey: 'available_at', title: '可执行时间', width: 168 },
       { colKey: 'created_at', title: '入队时间', width: 168 },
       { colKey: 'actions', title: '操作', fixed: 'right', width: 88 },
@@ -132,7 +132,7 @@ const columns = computed<PrimaryTableCol<RecordRow>[]>(() => {
     { colKey: 'id', title: 'ID', width: 76 },
     { colKey: 'job', title: '任务 / 队列', minWidth: 220 },
     { colKey: 'exception', title: '异常摘要', minWidth: 320 },
-    { colKey: 'attempts', title: '尝试', width: 76 },
+    { colKey: 'attempts', title: '尝试', width: 76, align: 'right' },
     { colKey: 'failed_at', title: '失败时间', width: 168 },
     { colKey: 'actions', title: '操作', fixed: 'right', width: 88 },
   ];

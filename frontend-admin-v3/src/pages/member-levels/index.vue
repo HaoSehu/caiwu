@@ -13,7 +13,15 @@
       </template>
 
       <div v-if="!isMobile" class="table-scroll">
-        <t-table row-key="id" :data="levels" :columns="columns" hover table-layout="fixed" aria-label="会员等级列表">
+        <t-table
+          row-key="id"
+          :data="levels"
+          :columns="columns"
+          :loading="loading"
+          hover
+          table-layout="fixed"
+          aria-label="会员等级列表"
+        >
           <template #empty>
             <t-empty :description="loading ? '加载中…' : '暂无等级'" />
           </template>
@@ -75,7 +83,7 @@
       v-model:visible="dialogVisible"
       :header="form.id ? '编辑会员等级' : '新建会员等级'"
       width="min(720px, calc(100vw - 32px))"
-      :confirm-btn="{ content: '保存', theme: 'primary' }"
+      :confirm-btn="{ content: '确定', theme: 'primary' }"
       :confirm-loading="saving"
       @confirm="submitForm"
     >

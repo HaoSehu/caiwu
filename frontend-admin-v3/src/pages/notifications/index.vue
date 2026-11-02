@@ -19,6 +19,7 @@
             row-key="code"
             :data="filteredTemplates"
             :columns="templateColumns"
+            :loading="templatesLoading"
             hover
             table-layout="fixed"
             aria-label="邮件模板列表"
@@ -210,6 +211,7 @@
                 row-key="id"
                 :data="pagedApiItems"
                 :columns="apiColumns"
+                :loading="templatesLoading"
                 hover
                 table-layout="fixed"
                 aria-label="接口目录列表"
@@ -577,7 +579,7 @@ const templateColumns: PrimaryTableCol<TemplateRow>[] = [
   { colKey: 'code', title: '编号 / 对象', minWidth: 180 },
   { colKey: 'subject', title: '当前主题', minWidth: 220, ellipsis: true },
   { colKey: 'preview', title: '正文摘要', minWidth: 260, ellipsis: true },
-  { colKey: 'variables', title: '变量数', width: 90 },
+  { colKey: 'variables', title: '变量数', width: 90, align: 'right' },
   { colKey: 'templateType', title: '模板类型', width: 100 },
   { colKey: 'bodyType', title: '正文类型', width: 110 },
   { colKey: 'status', title: '发送状态', width: 130 },

@@ -345,7 +345,7 @@ function copyText(text: string) {
         font-size: var(--td-font-size-size-3, 14px);
         font-weight: 500;
         padding: 2px 10px;
-        border-radius: 4px;
+        border-radius: var(--td-radius-small);
       }
     }
 

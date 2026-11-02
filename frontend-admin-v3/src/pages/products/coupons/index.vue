@@ -576,7 +576,7 @@ const discountValueHelp = computed(() => {
     return '填 80 表示 8 折，用户实付为折后价的 80%；误填 8 则用户只需付 8%';
   }
   if (form.discount_type === 'override') {
-    return '覆盖价即用户实付一口价（如填 1 表示首月 1 元），最低 0.01 元，不产生 0 元账单';
+    return '覆盖价即用户实付一口价（如填 1 表示首月 ¥1），最低 ¥0.01，不产生 ¥0 账单';
   }
   return '';
 });

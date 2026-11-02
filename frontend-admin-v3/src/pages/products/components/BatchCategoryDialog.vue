@@ -7,7 +7,7 @@
     @confirm="submit"
   >
     <div class="batch-dialog-summary">将 {{ targetKeys.length }} 个商品移动到目标分类。</div>
-    <t-form :data="form" label-width="110px">
+    <t-form :data="form" label-align="right" label-width="110px">
       <t-form-item label="目标分类" name="target_product_group_key">
         <t-select v-model="form.target_product_group_key" filterable clearable placeholder="请选择目标分类">
           <t-option

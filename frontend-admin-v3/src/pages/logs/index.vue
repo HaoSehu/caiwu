@@ -247,7 +247,7 @@
                     <t-tag
                       v-else
                       size="small"
-                      variant="outline"
+                      variant="light"
                       class="log-message__id-tag"
                       :title="idSegmentTitle(seg)"
                       @click="copyId(seg.label, seg.id)"
@@ -306,7 +306,7 @@
                 </div>
                 <div class="log-mobile-card__body">{{ logCardMessage(row) }}</div>
                 <div class="log-mobile-card__meta">
-                  <t-tag v-if="row.method" variant="outline" size="small">{{ fieldValue(row.method) }}</t-tag>
+                  <t-tag v-if="row.method" variant="light" size="small">{{ fieldValue(row.method) }}</t-tag>
                   <span v-if="row.path" class="muted-text">{{ fieldValue(row.path) }}</span>
                   <span v-if="row.gateway" class="muted-text">网关: {{ gatewayLabel(row.gateway) }}</span>
                   <span v-if="row.gateway_key" class="muted-text">业务 key: {{ fieldValue(row.gateway_key) }}</span>
@@ -406,6 +406,7 @@
                   row-key="key"
                   :data="group.tasks"
                   :columns="scheduleColumns"
+                  :loading="scheduleLoading"
                   hover
                   table-layout="fixed"
                   aria-label="调度任务列表"
@@ -807,7 +808,7 @@ const baseLogColumns: Record<LogTab, PrimaryTableCol<RecordRow>[]> = {
     { colKey: 'primary', title: '任务', minWidth: 220 },
     { colKey: 'status', title: '状态', width: 110 },
     { colKey: 'level', title: '级别', width: 100 },
-    { colKey: 'duration_ms', title: '耗时(ms)', width: 110 },
+    { colKey: 'duration_ms', title: '耗时(ms)', width: 110, align: 'right' },
     { colKey: 'message', title: '摘要', minWidth: 360 },
     { colKey: 'actions', title: '操作', fixed: 'right', width: 90 },
   ],

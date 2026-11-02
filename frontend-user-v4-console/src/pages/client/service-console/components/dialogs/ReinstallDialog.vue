@@ -34,7 +34,7 @@
     <template #footer>
       <t-button variant="outline" :disabled="reinstallLoading" @click="reinstallVisible = false">取消</t-button>
       <t-button theme="primary" :loading="reinstallLoading" :disabled="!reinstallState.os_id" @click="submitReinstall"
-        >提交重装</t-button
+        >确定</t-button
       >
     </template>
   </t-dialog>

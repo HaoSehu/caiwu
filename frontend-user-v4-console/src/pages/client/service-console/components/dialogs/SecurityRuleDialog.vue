@@ -53,7 +53,7 @@
     </div>
     <template #footer>
       <t-button variant="outline" :disabled="securityState.submitting" @click="ruleVisible = false">取消</t-button>
-      <t-button theme="primary" :loading="securityState.submitting" @click="submitSecurityRule">创建规则</t-button>
+      <t-button theme="primary" :loading="securityState.submitting" @click="submitSecurityRule">确定</t-button>
     </template>
   </t-dialog>
 </template>

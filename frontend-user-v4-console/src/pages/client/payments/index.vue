@@ -53,6 +53,7 @@
           :data="list"
           :columns="columns"
           :pagination="null"
+          :loading="loading"
           table-layout="auto"
           hover
         >

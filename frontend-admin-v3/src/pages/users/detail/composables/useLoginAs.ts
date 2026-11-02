@@ -30,7 +30,7 @@ export function useLoginAs(options: LoginAsOptions) {
 
     const popup = window.open('about:blank', '_blank');
     if (!popup) {
-      MessagePlugin.error('浏览器拦截了代登录窗口，请允许弹窗后重试');
+      MessagePlugin.error('浏览器拦截了代登录窗口，请允许新窗口后重试');
       return;
     }
 

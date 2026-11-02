@@ -199,7 +199,7 @@
               </div>
               <div>
                 <span>到期时间</span>
-                <strong>{{ detail.service?.expires_at || '--' }}</strong>
+                <strong>{{ formatDateTime(detail.service?.expires_at) }}</strong>
               </div>
             </div>
 

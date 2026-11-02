@@ -15,13 +15,13 @@
           <logo-full class="t-logo" />
         </span>
         <div v-else-if="!isMobileSideHeader" class="header-operate-left">
-          <t-button theme="default" shape="square" variant="text" aria-label="折叠侧边栏" @click="changeCollapsed">
+          <t-button theme="default" shape="square" variant="text" aria-label="折叠菜单" @click="changeCollapsed">
             <t-icon class="collapsed-icon" name="view-list" />
           </t-button>
         </div>
         <!-- 手机端 side 布局：顶栏 logo + 菜单按钮 -->
         <div v-if="isMobileSideHeader" class="header-mobile-logo-bar">
-          <t-button theme="default" shape="square" variant="text" aria-label="切换侧边栏" @click="toggleMobileSidebar">
+          <t-button theme="default" shape="square" variant="text" aria-label="展开菜单" @click="toggleMobileSidebar">
             <t-icon name="view-list" />
           </t-button>
           <span
@@ -86,7 +86,7 @@
       v-model:visible="passwordVisible"
       header="修改密码"
       width="min(520px, calc(100vw - 32px))"
-      :confirm-btn="{ content: '保存', theme: 'primary' }"
+      :confirm-btn="{ content: '确定', theme: 'primary' }"
       :confirm-loading="passwordSaving"
       @confirm="submitPassword"
     >
@@ -405,7 +405,7 @@ const handleLogout = async () => {
   }
 
   .header-user-account {
-    color: rgb(255 255 255 / 55%);
+    color: var(--td-font-white-2);
   }
 }
 

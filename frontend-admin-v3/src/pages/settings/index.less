@@ -76,7 +76,6 @@
   font-weight: 600;
 }
 
-
 .required-mark {
   margin-right: var(--td-comp-margin-xs);
   color: var(--td-error-color);
@@ -98,7 +97,7 @@
 
 .mono-input :deep(.t-textarea__inner),
 .table-scroll :deep(.t-table) {
-  font-family: "SF Mono", Menlo, Consolas, monospace;
+  font-family: 'SF Mono', Menlo, Consolas, monospace;
 }
 
 .hidden-file-input {
@@ -152,7 +151,9 @@
   border-radius: var(--td-radius-default);
   background: var(--td-bg-color-page);
   cursor: pointer;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
   width: 100%;
 }
 
@@ -197,12 +198,14 @@
 
 .cover-drawer-card {
   position: relative;
-  border-radius: 8px;
+  border-radius: var(--td-radius-medium);
   border: 2px solid var(--td-component-border);
   background: var(--td-bg-color-container);
   overflow: hidden;
   cursor: pointer;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .cover-drawer-card:hover {

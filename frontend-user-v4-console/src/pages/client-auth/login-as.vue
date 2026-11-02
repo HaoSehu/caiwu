@@ -74,7 +74,7 @@ const resultTitle = computed(() => {
 const resultSubtitle = computed(() => {
   if (status.value === 'success') return '已完成身份切换，正在进入客户端控制台。';
   if (status.value === 'error') return '代登录链路无效、已过期，或当前请求已被拒绝。';
-  return '正在校验代登录凭证...';
+  return '正在校验代登录凭证…';
 });
 
 function resolveOpenerOrigin() {
@@ -161,7 +161,7 @@ function requestLoginAsCode() {
   loading.value = false;
   clearMessageTimer();
   messageTimer = window.setTimeout(() => {
-    handleMissingMessage('等待管理端返回代登录凭证超时，请确认弹窗未被拦截后重试。');
+    handleMissingMessage('等待管理端返回代登录凭证超时，请确认对话框未被拦截后重试。');
   }, LOGIN_AS_MESSAGE_TIMEOUT_MS);
   window.opener.postMessage({ type: LOGIN_AS_READY_EVENT }, openerOrigin);
 }

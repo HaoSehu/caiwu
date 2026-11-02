@@ -7,7 +7,9 @@
       <div class="log-summary">
         <span>共 {{ logsState.summary.total || logsState.total || 0 }} 条</span>
         <span>今日 {{ logsState.summary.today_total || 0 }} 条</span>
-        <span v-if="logsState.summary.latest_created_at">最近 {{ logsState.summary.latest_created_at }}</span>
+        <span v-if="logsState.summary.latest_created_at"
+          >最近 {{ formatDateTime(logsState.summary.latest_created_at) }}</span
+        >
       </div>
       <t-table
         row-key="id"
@@ -36,6 +38,8 @@
   </section>
 </template>
 <script setup lang="ts">
+import { formatDateTime } from '@/utils/format';
+
 import { logColumns } from '../../composables/useConsoleTables';
 import { useServiceConsoleContext } from '../context';
 

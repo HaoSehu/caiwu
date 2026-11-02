@@ -279,7 +279,7 @@
       v-model:visible="transferVisible"
       header="转移实例归属"
       width="min(520px, calc(100vw - 32px))"
-      :confirm-btn="{ content: '确认转移', loading: transferSubmitting, theme: 'warning' }"
+      :confirm-btn="{ content: '确定转移', loading: transferSubmitting, theme: 'warning' }"
       @cancel="transferVisible = false"
       @confirm="submitTransfer"
     >

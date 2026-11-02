@@ -260,7 +260,7 @@ const columns = computed<PrimaryTableCol<OrderRecord>[]>(() => {
   base.push(
     { colKey: 'billing_cycle', title: '计费周期', width: 110 },
     { colKey: 'paid_amount', title: '实付金额', width: 130, align: 'right' },
-    { colKey: 'quantity', title: '数量', width: 80 },
+    { colKey: 'quantity', title: '数量', width: 80, align: 'right' },
     { colKey: 'status', title: '状态', width: 110 },
     { colKey: 'invoice', title: '关联账单', minWidth: 170 },
     { colKey: 'createdAt', title: '创建时间', width: 170 },

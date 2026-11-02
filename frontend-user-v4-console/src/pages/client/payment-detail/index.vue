@@ -54,11 +54,11 @@
             </div>
             <div class="detail-kv-item">
               <span>创建时间</span>
-              <strong>{{ detail.created_at || '--' }}</strong>
+              <strong>{{ formatDateTime(detail.created_at) }}</strong>
             </div>
             <div v-if="detail.paid_at" class="detail-kv-item">
               <span>支付时间</span>
-              <strong>{{ detail.paid_at }}</strong>
+              <strong>{{ formatDateTime(detail.paid_at) }}</strong>
             </div>
           </div>
         </t-card>
@@ -116,7 +116,7 @@ import clientApi from '@/api/client';
 import { resolveInvoiceTypeLabel } from '@/domains/finance/constants';
 import type { PaymentRecord } from '@/types/client';
 import { getErrorMessage } from '@/utils/error';
-import { formatMoney } from '@/utils/format';
+import { formatDateTime, formatMoney } from '@/utils/format';
 
 const route = useRoute();
 const router = useRouter();

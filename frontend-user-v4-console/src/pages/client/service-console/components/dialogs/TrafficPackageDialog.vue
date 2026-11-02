@@ -51,7 +51,7 @@
         :disabled="trafficLoading || trafficQuoting || !trafficForm.target_value || !trafficPackages.length"
         @click="submitTrafficPackageOrder"
       >
-        创建账单
+        确定
       </t-button>
     </template>
   </t-dialog>

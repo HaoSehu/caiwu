@@ -7,7 +7,7 @@
             <h1>{{ config.pageTitle }}</h1>
             <p>{{ config.heroDescription }}</p>
             <div class="hero-keywords">
-              <span>热门搜索:</span>
+              <span>热门搜索：</span>
               <t-button
                 v-for="item in heroKeywords"
                 :key="item"
@@ -90,7 +90,7 @@
               <p v-if="item.excerpt">{{ item.excerpt }}</p>
               <div class="article-row__meta">
                 <span>{{ item.category_name || currentCategoryLabel }}</span>
-                <span>{{ item.publish_at || item.created_at || '--' }}</span>
+                <span>{{ formatDateTime(item.publish_at || item.created_at) }}</span>
                 <span>浏览量 {{ item.view_count || 0 }}</span>
               </div>
             </article>
@@ -98,7 +98,14 @@
         </t-card>
 
         <div v-if="total > pageSize" class="content-pagination">
-          <t-pagination v-model="page" :page-size="pageSize" :total="total" show-total @change="updatePage" />
+          <t-pagination
+            v-model="page"
+            :page-size="pageSize"
+            :page-size-options="[10, 20, 50]"
+            :total="total"
+            show-total
+            @change="updatePage"
+          />
         </div>
       </main>
 
@@ -124,7 +131,7 @@
           <div v-if="recentArticles.length" class="recent-list">
             <router-link v-for="item in recentArticles" :key="item.id" :to="buildDetailRoute(item)" class="recent-row">
               <strong>{{ item.title }}</strong>
-              <span>{{ item.publish_at || item.created_at || '--' }}</span>
+              <span>{{ formatDateTime(item.publish_at || item.created_at) }}</span>
             </router-link>
           </div>
           <t-empty v-else :description="hasActiveFilters ? '当前分类下暂无内容' : '暂无数据'" />
@@ -143,6 +150,7 @@ import SearchFieldButton from '@/components/common/SearchFieldButton.vue';
 import { useContentList } from '@/domains/content/useContent';
 import { useNoticeReadStatus } from '@/domains/content/useNoticeReadStatus';
 import { getErrorMessage } from '@/utils/error';
+import { formatDateTime } from '@/utils/format';
 
 const props = defineProps<{
   contentType: 'notice' | 'help';

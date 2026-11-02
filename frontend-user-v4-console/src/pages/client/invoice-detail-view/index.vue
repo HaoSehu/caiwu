@@ -129,6 +129,7 @@
                 <t-table
                   :data="paymentRecords"
                   :columns="paymentColumns"
+                  :loading="loading"
                   :pagination="null"
                   row-key="id"
                   size="small"
@@ -294,7 +295,7 @@ watch(
   gap: var(--td-comp-margin-s) var(--td-comp-margin-l);
   // 左右内边距取 24px 与下方卡片正文对齐：卡片正文左基线 = 卡片 1px 边框 + 24px 内边距 = 距页 25px，
   // 摘要条用 --td-comp-paddingLR-l（20px）+ 1px 边框会落在 21px，上下两块文字左边缘差 4px。
-  padding: var(--td-comp-paddingTB-m) 24px;
+  padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-xl);
   background: var(--td-bg-color-container);
   border: thin solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);

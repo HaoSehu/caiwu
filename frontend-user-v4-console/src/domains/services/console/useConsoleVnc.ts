@@ -77,7 +77,7 @@ export function useConsoleVnc(options: UseConsoleVncOptions) {
   async function handleOpenVnc(mode: 'embed' | 'window' = 'embed') {
     const popup = mode === 'window' ? window.open('about:blank', '_blank') : null;
     if (mode === 'window' && !popup) {
-      MessagePlugin.warning('浏览器已拦截新窗口，请允许弹窗后重试');
+      MessagePlugin.warning('浏览器已拦截新窗口，请允许新窗口后重试');
       return;
     }
 

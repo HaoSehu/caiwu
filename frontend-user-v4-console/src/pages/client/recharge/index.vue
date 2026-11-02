@@ -95,7 +95,7 @@
               :theme="paymentGatewaysError ? 'error' : 'info'"
               :message="
                 paymentGatewaysLoading
-                  ? '支付方式加载中'
+                  ? '支付方式加载中…'
                   : paymentGatewaysError || '暂无可用支付方式，请通过工单联系我们开通'
               "
             >
@@ -215,7 +215,7 @@
               :theme="paymentGatewaysError ? 'error' : 'info'"
               :message="
                 paymentGatewaysLoading
-                  ? '支付方式加载中'
+                  ? '支付方式加载中…'
                   : paymentGatewaysError || '暂无可用支付方式，请通过工单联系我们开通'
               "
             >

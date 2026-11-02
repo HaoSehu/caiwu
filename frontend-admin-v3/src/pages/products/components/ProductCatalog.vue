@@ -473,6 +473,7 @@
               class="product-drawer-form"
               :data="productForm"
               :rules="productRules"
+              label-align="right"
               label-width="120px"
             >
               <section v-show="activeProductDrawerSection === 'basic'" class="product-drawer-section" data-title="详情">
@@ -678,7 +679,7 @@
       class="config-option-edit-dialog"
       :header="configOptionEditingIndex >= 0 ? '编辑配置项' : '新增配置项'"
       width="min(760px, calc(100vw - 32px))"
-      :confirm-btn="{ content: '保存配置', loading: configOptionSubmitting }"
+      :confirm-btn="{ content: '确定', loading: configOptionSubmitting }"
       @confirm="submitConfigOption"
     >
       <t-form class="config-option-edit-form" :data="configOptionForm" label-align="right">
@@ -771,10 +772,10 @@
       v-model:visible="categoryDialogVisible"
       :header="categoryDialogHeader"
       width="min(560px, calc(100vw - 32px))"
-      :confirm-btn="{ content: '保存', loading: categorySubmitting }"
+      :confirm-btn="{ content: '确定', loading: categorySubmitting }"
       @confirm="submitCategory"
     >
-      <t-form ref="categoryFormRef" :data="categoryForm" :rules="categoryRules" label-width="110px">
+      <t-form ref="categoryFormRef" :data="categoryForm" :rules="categoryRules" label-align="right" label-width="110px">
         <t-form-item label="分类名称" name="name"><t-input v-model="categoryForm.name" /></t-form-item>
         <t-form-item label="一级分类" name="product_type">
           <t-select

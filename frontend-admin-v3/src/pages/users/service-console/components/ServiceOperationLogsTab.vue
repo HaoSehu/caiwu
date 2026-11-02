@@ -67,6 +67,7 @@ import { computed, onMounted, reactive, ref } from 'vue';
 
 import type { PageParams } from '@/api/user';
 import { userApi } from '@/api/user';
+import { COMPACT_PAGE_SIZE_OPTIONS } from '@/constants/pagination';
 import { fieldValue, formatDateTime } from '@/utils/format';
 import { errorMessage } from '@/utils/userMessage';
 
@@ -123,6 +124,7 @@ const pagination = computed(() => ({
   current: state.page,
   pageSize: state.pageSize,
   total: state.total,
+  pageSizeOptions: COMPACT_PAGE_SIZE_OPTIONS,
   showJumper: true,
 }));
 

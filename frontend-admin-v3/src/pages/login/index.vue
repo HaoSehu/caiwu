@@ -234,7 +234,7 @@ async function handleVerifyMfa() {
   &::after {
     content: '';
     position: absolute;
-    border-radius: 50%;
+    border-radius: var(--td-radius-circle);
     pointer-events: none;
     z-index: 0;
   }
@@ -244,7 +244,7 @@ async function handleVerifyMfa() {
     right: -120px;
     width: 520px;
     height: 520px;
-    background: radial-gradient(circle, rgb(22 93 255 / 10%), rgb(22 93 255 / 0%) 70%);
+    background: radial-gradient(circle, var(--td-brand-color-1), transparent 70%);
   }
 
   &::after {
@@ -252,7 +252,7 @@ async function handleVerifyMfa() {
     left: -100px;
     width: 440px;
     height: 440px;
-    background: radial-gradient(circle, rgb(22 93 255 / 7%), rgb(22 93 255 / 0%) 70%);
+    background: radial-gradient(circle, var(--td-brand-color-1), transparent 70%);
   }
 }
 
@@ -318,7 +318,7 @@ async function handleVerifyMfa() {
 
   .login-card {
     padding: 36px 24px 28px;
-    border-radius: 10px;
+    border-radius: var(--td-radius-large);
     box-shadow: var(--td-shadow-2);
   }
 

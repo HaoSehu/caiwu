@@ -188,7 +188,7 @@ async function handleSubmit(): Promise<void> {
   gap: var(--td-comp-margin-l);
   margin: 12px 0 16px;
   padding: 12px 16px;
-  border-radius: 6px;
+  border-radius: var(--td-radius-medium);
   background: var(--td-bg-color-container);
 }
 

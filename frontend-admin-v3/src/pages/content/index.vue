@@ -63,7 +63,15 @@
       <template #subtitle>共 {{ total }} 条</template>
 
       <div v-if="!isMobile" class="table-scroll">
-        <t-table row-key="id" :data="articles" :columns="columns" hover table-layout="fixed" aria-label="内容文章列表">
+        <t-table
+          row-key="id"
+          :data="articles"
+          :columns="columns"
+          :loading="loading"
+          hover
+          table-layout="fixed"
+          aria-label="内容文章列表"
+        >
           <template #empty>
             <t-empty :description="loading ? '加载中…' : hasActiveFilters ? '未找到匹配结果' : '暂无数据'" />
           </template>
@@ -218,6 +226,7 @@
             row-key="id"
             :data="categories"
             :columns="categoryColumns"
+            :loading="categoryLoading"
             hover
             table-layout="fixed"
             aria-label="内容分类列表"
@@ -362,8 +371,8 @@ const categoryColumns: PrimaryTableCol<ContentCategoryRecord>[] = [
   { colKey: 'name', title: '分类名称', minWidth: 150 },
   { colKey: 'slug', title: '别名', minWidth: 130 },
   { colKey: 'status', title: '状态', width: 100 },
-  { colKey: 'sort_order', title: '排序', width: 90 },
-  { colKey: 'articles_count', title: '文章数', width: 90 },
+  { colKey: 'sort_order', title: '排序', width: 90, align: 'right' },
+  { colKey: 'articles_count', title: '文章数', width: 90, align: 'right' },
   { colKey: 'actions', title: '操作', fixed: 'right', width: 130 },
 ];
 

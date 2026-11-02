@@ -7,6 +7,7 @@
           :data="formData"
           :rules="formRules"
           label-width="100px"
+          label-align="right"
           :disabled="!editing"
           @submit="handleSave"
         >
@@ -63,7 +64,13 @@
           <t-form-item label="otpauth" class="mfa-secret-item">
             <t-input :value="mfaSetupData.otpauth_uri" readonly />
           </t-form-item>
-          <t-form ref="mfaEnableFormRef" :data="mfaEnableForm" :rules="mfaEnableRules" label-width="100px">
+          <t-form
+            ref="mfaEnableFormRef"
+            :data="mfaEnableForm"
+            :rules="mfaEnableRules"
+            label-width="100px"
+            label-align="right"
+          >
             <t-form-item label="动态码" name="code">
               <t-input v-model="mfaEnableForm.code" placeholder="输入认证器生成的 6 位动态码" :maxlength="6" />
             </t-form-item>
@@ -100,7 +107,13 @@
 
         <!-- 已启用：解绑需要密码 + 动态码两因子 -->
         <template v-if="mfaEnabled">
-          <t-form ref="mfaDisableFormRef" :data="mfaDisableForm" :rules="mfaDisableRules" label-width="100px">
+          <t-form
+            ref="mfaDisableFormRef"
+            :data="mfaDisableForm"
+            :rules="mfaDisableRules"
+            label-width="100px"
+            label-align="right"
+          >
             <t-form-item label="当前密码" name="password">
               <t-input v-model="mfaDisableForm.password" type="password" placeholder="请输入当前登录密码" />
             </t-form-item>
@@ -279,7 +292,7 @@ function confirmDisableMfa() {
       header: '确认解绑双重验证',
       theme: 'warning',
       body: '解绑后该账号登录将不再校验动态口令，且恢复码全部失效。确认继续？',
-      confirmBtn: { content: '确认解绑', theme: 'danger' },
+      confirmBtn: { content: '确定解绑', theme: 'danger' },
       cancelBtn: '取消',
       onConfirm() {
         dialog.hide();

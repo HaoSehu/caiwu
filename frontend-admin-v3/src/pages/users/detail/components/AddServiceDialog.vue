@@ -216,7 +216,7 @@ function confirmDeduct() {
       header: '确认从余额扣款',
       theme: 'warning',
       body: `本次创建实例将从用户余额扣款 ${formatMoney(toNumber(form.amount))}，并同步生成账单。提交后不可撤销。`,
-      confirmBtn: { content: '确认提交', theme: 'danger' },
+      confirmBtn: { content: '确定提交', theme: 'danger' },
       cancelBtn: '取消',
       onConfirm() {
         dialog.hide();
@@ -255,7 +255,7 @@ async function submit() {
     visible.value = false;
     emit('created');
   } catch (error) {
-    MessagePlugin.error(errorMessage(error, '添加实例失败'));
+    MessagePlugin.error(errorMessage(error, '创建实例失败'));
   } finally {
     submitting.value = false;
   }

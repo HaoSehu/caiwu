@@ -114,7 +114,10 @@
               </div>
             </article>
           </div>
-          <t-empty v-else />
+          <t-empty
+            v-else
+            :description="listLoading ? '加载中…' : hasActiveFilters ? '未找到匹配结果' : '暂无实名认证记录'"
+          />
         </t-loading>
         <t-pagination
           v-model:current="pagination.page"
@@ -197,6 +200,7 @@
           row-key="id"
           :data="historyList"
           :columns="historyColumns"
+          :loading="historyLoading"
           table-layout="fixed"
           aria-label="认证历史列表"
         >

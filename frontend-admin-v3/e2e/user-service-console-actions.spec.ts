@@ -475,7 +475,7 @@ test('服务控制台独立页：把实例转移给接收方用户并跳转到�
   await expect(dialog).toBeVisible();
 
   // 未选接收方直接提交要被拦下，不能产生任何转移请求
-  await dialog.getByRole('button', { name: '确认转移' }).click();
+  await dialog.getByRole('button', { name: '确定转移' }).click();
   await expect(page.locator('.t-message').last()).toContainText('请先选择接收方用户');
   expect(transferRequestBodies).toHaveLength(0);
 
@@ -505,7 +505,7 @@ test('服务控制台独立页：把实例转移给接收方用户并跳转到�
   await expect(dialog.locator('.transfer-picker__target')).toContainText('#2 / receiver@example.com');
 
   await dialog.locator('.transfer-picker__remark input').fill('客户要求把实例转到自己名下');
-  await dialog.getByRole('button', { name: '确认转移' }).click();
+  await dialog.getByRole('button', { name: '确定转移' }).click();
 
   // 提交体只带接收方 ID 与备注，归属变更由后端裁决
   await expect.poll(() => transferRequestBodies.length).toBe(1);
@@ -543,7 +543,7 @@ test('服务控制台独立页：转移被后端拒绝时保留弹窗并提示�
   await dialog.locator('.transfer-picker__search input').fill('receiver');
   await dialog.getByRole('button', { name: '搜索' }).click();
   await dialog.locator('.transfer-picker__list button').filter({ hasText: '#2' }).click();
-  await dialog.getByRole('button', { name: '确认转移' }).click();
+  await dialog.getByRole('button', { name: '确定转移' }).click();
 
   // 409 冲突：只展示后端文案，弹窗保留让运营刷新后重试，且绝不跳转到接收方控制台
   await expect(page.locator('.t-message').last()).toContainText('实例归属已被其他操作变更');

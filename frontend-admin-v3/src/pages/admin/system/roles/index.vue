@@ -36,7 +36,7 @@
           <div class="role-cell">
             <strong>{{ row.label || row.name || '-' }}</strong>
             <span>{{ row.name || '-' }}</span>
-            <t-tag v-if="row.is_builtin" theme="primary" variant="light" size="small">系统默认</t-tag>
+            <t-tag v-if="row.is_builtin" variant="light" size="small">系统默认</t-tag>
           </div>
         </template>
         <template #permissions="{ row }">
@@ -48,7 +48,7 @@
           </div>
         </template>
         <template #adminCount="{ row }">{{ Number(row.admin_count || 0) }} 人</template>
-        <template #updatedAt="{ row }">{{ row.updated_at || '-' }}</template>
+        <template #updatedAt="{ row }">{{ formatDateTime(row.updated_at) }}</template>
         <template #actions="{ row }">
           <t-space size="small">
             <t-button theme="primary" variant="text" @click="openEditDialog(row)">{{
@@ -74,7 +74,7 @@
               :rows="[
                 { label: '权限', value: permissionSummary(row) },
                 { label: '高危', value: riskPermissionCount(row) > 0 ? `${riskPermissionCount(row)} 项` : '无' },
-                { label: '更新时间', value: row.updated_at || '-' },
+                { label: '更新时间', value: formatDateTime(row.updated_at) },
               ]"
               :action-options="rolesMobileActions(row)"
               @action="(value) => handleRolesMobileAction(value, row)"
@@ -205,6 +205,7 @@ import {
 import { useListPage } from '@/hooks/useListPage';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useUserStore } from '@/store';
+import { formatDateTime } from '@/utils/format';
 import { required } from '@/utils/formRules';
 import { errorMessage } from '@/utils/userMessage';
 
@@ -288,7 +289,7 @@ const canEditCurrentRole = computed(() => canManage.value && !currentRoleLocked.
 const selectedPermissionCount = computed(() =>
   hasAllPermissionSelected.value ? permissions.value.length : form.permissions.length,
 );
-const dialogConfirmBtn = computed(() => (canEditCurrentRole.value ? { content: '保存', theme: 'primary' } : null));
+const dialogConfirmBtn = computed(() => (canEditCurrentRole.value ? { content: '确定', theme: 'primary' } : null));
 const permissionMap = computed(() => new Map(permissions.value.map((item) => [item.key, item])));
 const filteredPermissions = computed(() => {
   const keywordValue = permissionKeyword.value.trim().toLowerCase();
@@ -326,7 +327,7 @@ const columns: PrimaryTableCol<TableRowData>[] = [
   { title: 'ID', colKey: 'id', width: 80 },
   { title: '角色', colKey: 'role', minWidth: 220 },
   { title: '权限', colKey: 'permissions', width: 180 },
-  { title: '员工数', colKey: 'adminCount', width: 110 },
+  { title: '员工数', colKey: 'adminCount', width: 110, align: 'right' },
   { title: '更新时间', colKey: 'updatedAt', width: 180 },
   { title: '操作', colKey: 'actions', fixed: 'right', width: 180 },
 ];

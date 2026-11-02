@@ -33,7 +33,7 @@
             <div class="security-group-card__main">
               <div class="security-row__name">
                 <strong>{{ group.name || `安全组 #${group.id}` }}</strong>
-                <t-tag size="small" variant="outline">ID {{ group.id }}</t-tag>
+                <t-tag size="small" variant="light">ID {{ group.id }}</t-tag>
                 <t-tag v-if="group.is_applied" size="small" theme="success" variant="light">已应用</t-tag>
                 <t-tag v-else size="small" variant="light">未应用</t-tag>
               </div>
@@ -100,6 +100,9 @@
             :loading="securityState.rulesLoading"
             size="small"
           >
+            <template #empty>
+              <t-empty description="暂无安全组规则" />
+            </template>
             <template #operation="{ row }">
               <t-button
                 theme="danger"

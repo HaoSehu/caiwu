@@ -17,7 +17,7 @@
     </div>
     <template #footer>
       <t-button variant="outline" :disabled="securityState.submitting" @click="groupVisible = false">取消</t-button>
-      <t-button theme="primary" :loading="securityState.submitting" @click="submitSecurityGroup">创建</t-button>
+      <t-button theme="primary" :loading="securityState.submitting" @click="submitSecurityGroup">确定</t-button>
     </template>
   </t-dialog>
 </template>

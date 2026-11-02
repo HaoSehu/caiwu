@@ -128,7 +128,7 @@
       v-model:visible="configVisible"
       size="min(560px, calc(100vw - 32px))"
       :header="currentPlugin ? `${currentPlugin.name} 管理` : '插件管理'"
-      :confirm-btn="canManagePlugins ? { content: '保存配置', loading: savingConfig } : null"
+      :confirm-btn="canManagePlugins ? { content: '确定', loading: savingConfig } : null"
       cancel-btn="关闭"
       @confirm="saveConfig"
     >
@@ -149,7 +149,7 @@
             </div>
             <div>
               <dt>安装时间</dt>
-              <dd>{{ currentPlugin.installed_at || '-' }}</dd>
+              <dd>{{ formatDateTime(currentPlugin.installed_at) }}</dd>
             </div>
           </dl>
         </div>
@@ -334,7 +334,7 @@
       v-model:visible="smtpAccountDialogVisible"
       :header="editingSmtpAccountIndex >= 0 ? '编辑 SMTP 账号' : '新建 SMTP 账号'"
       width="min(520px, calc(100vw - 32px))"
-      :confirm-btn="{ content: '保存账号', loading: savingConfig }"
+      :confirm-btn="{ content: '确定', loading: savingConfig }"
       @confirm="confirmSmtpAccount"
     >
       <t-form label-align="right" class="smtp-account-form">
@@ -416,6 +416,7 @@ import type {
 import { pluginsApi } from '@/api/admin/plugins';
 import SecretInput from '@/components/secret-input/index.vue';
 import { AdminPermissions } from '@/constants/permissions';
+import { formatDateTime } from '@/utils/format';
 import { hasAdminPermission } from '@/utils/permission';
 import { errorMessage } from '@/utils/userMessage';
 

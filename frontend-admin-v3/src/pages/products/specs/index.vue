@@ -340,7 +340,7 @@ async function handleSubmitSpec() {
     }
     dirty.value = true;
     MessagePlugin.success(
-      editingSpecId.value ? '实例规格已修改，请点「保存目录」生效' : '实例规格已添加，请点「保存目录」生效',
+      editingSpecId.value ? '实例规格已编辑，请点「保存目录」生效' : '实例规格已新建，请点「保存目录」生效',
     );
     specDialogVisible.value = false;
   } finally {
@@ -358,7 +358,7 @@ function handleDeleteSpec(row: SpecRecord) {
     onConfirm() {
       specs.value = specs.value.filter((item) => item.id !== row.id);
       dirty.value = true;
-      MessagePlugin.success('实例规格已移除，请点「保存目录」生效');
+      MessagePlugin.success('实例规格已删除，请点「保存目录」生效');
       dialog.hide();
     },
   });
@@ -388,7 +388,7 @@ function buildPayload(): InstanceSpecRecord[] {
 
 async function handleSave() {
   if (!specs.value.length) {
-    MessagePlugin.warning('请至少添加一个实例规格');
+    MessagePlugin.warning('请至少新建一个实例规格');
     return;
   }
   saving.value = true;

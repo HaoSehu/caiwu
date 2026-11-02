@@ -93,7 +93,7 @@
       v-model:visible="dialogVisible"
       :header="form.id ? '编辑大使档位' : '新建大使档位'"
       width="min(720px, calc(100vw - 32px))"
-      :confirm-btn="{ content: '保存', theme: 'primary' }"
+      :confirm-btn="{ content: '确定', theme: 'primary' }"
       :confirm-loading="saving"
       @confirm="submitForm"
     >
@@ -168,8 +168,8 @@ const rules: Record<string, FormRule[]> = {
 
 const columns: PrimaryTableCol<PromotionAmbassadorRecord>[] = [
   { colKey: 'name', title: '大使名称', minWidth: 220 },
-  { colKey: 'rate', title: '新购返利', width: 130 },
-  { colKey: 'renewalRate', title: '续费返利', width: 130 },
+  { colKey: 'rate', title: '新购返利', width: 130, align: 'right' },
+  { colKey: 'renewalRate', title: '续费返利', width: 130, align: 'right' },
   { colKey: 'status', title: '状态', width: 110 },
   { colKey: 'remark', title: '备注', minWidth: 180 },
   { colKey: 'updatedAt', title: '更新时间', width: 170 },

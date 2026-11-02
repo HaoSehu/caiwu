@@ -229,7 +229,7 @@
                     class="reply-textarea"
                     :autosize="{ minRows: 1, maxRows: 4 }"
                     maxlength="5000"
-                    placeholder="输入回复内容..."
+                    placeholder="输入回复内容…"
                     @keydown="handleReplyEnter"
                   />
                   <t-button

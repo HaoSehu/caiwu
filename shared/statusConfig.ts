@@ -29,7 +29,6 @@ export interface StatusConfig {
   label: string;
   color?: string;
   tagType?: string;
-  icon?: string;
   pulse?: boolean;
   direction?: string;
   [key: string]: unknown;
@@ -69,25 +68,21 @@ export const ORDER_STATUS_MAP: StatusMap = {
     label: "待支付",
     color: STATUS_COLORS.warning,
     tagType: "warning",
-    icon: "Clock",
   },
   [ORDER_STATUS.PAID]: {
     label: "已支付",
     color: STATUS_COLORS.blue,
     tagType: "primary",
-    icon: "CreditCard",
   },
   [ORDER_STATUS.CANCELLED]: {
     label: "已取消",
     color: STATUS_COLORS.info,
     tagType: "info",
-    icon: "CircleClose",
   },
   [ORDER_STATUS.REFUNDED]: {
     label: "已退款",
     color: STATUS_COLORS.danger,
     tagType: "danger",
-    icon: "RefreshLeft",
   },
 };
 
@@ -139,31 +134,26 @@ export const INVOICE_STATUS_MAP: StatusMap = {
     label: "待支付",
     color: STATUS_COLORS.warning,
     tagType: "warning",
-    icon: "Clock",
   },
   [INVOICE_STATUS.PAID]: {
     label: "已支付",
     color: STATUS_COLORS.blue,
     tagType: "primary",
-    icon: "CreditCard",
   },
   [INVOICE_STATUS.PARTIAL_PAID]: {
     label: "部分已付",
     color: STATUS_COLORS.warning,
     tagType: "warning",
-    icon: "MoneyCircle",
   },
   [INVOICE_STATUS.CANCELLED]: {
     label: "已取消",
     color: STATUS_COLORS.info,
     tagType: "info",
-    icon: "CircleClose",
   },
   [INVOICE_STATUS.REFUNDED]: {
     label: "已退款",
     color: STATUS_COLORS.danger,
     tagType: "danger",
-    icon: "RefreshLeft",
   },
 };
 
@@ -193,25 +183,21 @@ export const PAYMENT_STATUS_MAP: StatusMap = {
     label: "待支付",
     color: STATUS_COLORS.warning,
     tagType: "warning",
-    icon: "Clock",
   },
   [PAYMENT_STATUS.SUCCESS]: {
     label: "已支付",
     color: STATUS_COLORS.blue,
     tagType: "primary",
-    icon: "CreditCard",
   },
   [PAYMENT_STATUS.CANCELLED]: {
     label: "已取消",
     color: STATUS_COLORS.info,
     tagType: "info",
-    icon: "CircleClose",
   },
   [PAYMENT_STATUS.REFUNDED]: {
     label: "已退款",
     color: STATUS_COLORS.danger,
     tagType: "danger",
-    icon: "RefreshLeft",
   },
 };
 
@@ -245,31 +231,26 @@ export const SERVICE_STATUS_MAP: StatusMap = {
     label: "开通中",
     color: STATUS_COLORS.warning,
     tagType: "warning",
-    icon: "Clock",
   },
   [SERVICE_STATUS.ACTIVE]: {
     label: "运行中",
     color: STATUS_COLORS.success,
     tagType: "success",
-    icon: "CircleCheck",
   },
   [SERVICE_STATUS.SUSPENDED]: {
     label: "已暂停",
     color: STATUS_COLORS.purple,
     tagType: "purple",
-    icon: "Lock",
   },
   [SERVICE_STATUS.TERMINATED]: {
     label: "已删除",
     color: STATUS_COLORS.info,
     tagType: "info",
-    icon: "Delete",
   },
   [SERVICE_STATUS.ABNORMAL]: {
     label: "异常",
     color: STATUS_COLORS.danger,
     tagType: "danger",
-    icon: "WarningFilled",
   },
 };
 
@@ -287,26 +268,22 @@ export const TICKET_STATUS_MAP: StatusMap = {
     label: "开启",
     color: STATUS_COLORS.warning,
     tagType: "warning",
-    icon: "ChatDotRound",
   },
   [TICKET_STATUS.USER_REPLY]: {
     // 待处理类语义色统一为 warning（docs/DESIGN.md §4.2），与管理端、控制台口径一致
     label: "客户回复",
     color: STATUS_COLORS.warning,
     tagType: "warning",
-    icon: "Comment",
   },
   [TICKET_STATUS.STAFF_REPLY]: {
     label: "员工回复",
     color: STATUS_COLORS.success,
     tagType: "success",
-    icon: "ChatLineSquare",
   },
   [TICKET_STATUS.CLOSED]: {
     label: "已关闭",
     color: STATUS_COLORS.info,
     tagType: "info",
-    icon: "Finished",
   },
 };
 
@@ -325,19 +302,16 @@ export const REWARD_STATUS_MAP: StatusMap = {
     label: "冻结中",
     color: STATUS_COLORS.purple,
     tagType: "purple",
-    icon: "Lock",
   },
   [REWARD_STATUS.RELEASED]: {
     label: "已释放",
     color: STATUS_COLORS.success,
     tagType: "success",
-    icon: "CircleCheck",
   },
   [REWARD_STATUS.REVOKED]: {
     label: "已回退",
     color: STATUS_COLORS.info,
     tagType: "info",
-    icon: "CircleClose",
   },
 };
 
@@ -389,7 +363,7 @@ export const ACCOUNT_TRANSACTION_EVENT_MAP: StatusMap = {
  * 获取状态配置项
  * @param {object} statusMap - 状态映射对象（如 ORDER_STATUS_MAP）
  * @param {number|string} status - 状态值
- * @returns {{ label: string, color: string, tagType: string, icon: string, pulse?: boolean }}
+ * @returns {{ label: string, color: string, tagType: string, pulse?: boolean }}
  */
 export function getStatusConfig(
   statusMap: StatusMapInput,
@@ -400,7 +374,6 @@ export function getStatusConfig(
       label: "未知",
       color: STATUS_COLORS.info,
       tagType: "info",
-      icon: "QuestionFilled",
     }
   );
 }

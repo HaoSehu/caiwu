@@ -3,7 +3,7 @@
     <t-input v-model="nameForm.name" :maxlength="120" placeholder="填写便于识别的实例名称" />
     <template #footer>
       <t-button variant="outline" @click="nameVisible = false">取消</t-button>
-      <t-button theme="primary" :loading="nameSubmitting" @click="submitName">保存名称</t-button>
+      <t-button theme="primary" :loading="nameSubmitting" @click="submitName">确定</t-button>
     </template>
   </t-dialog>
 </template>

@@ -97,9 +97,11 @@
             </div>
           </template>
           <template #expires="{ row }">
-            <span :class="{ 'expiring-soon': isExpiringSoon(row.expires_at) }">{{ shortDate(row.expires_at) }}</span>
+            <span :class="{ 'expiring-soon': isExpiringSoon(row.expires_at) }">{{
+              formatDateTime(row.expires_at)
+            }}</span>
           </template>
-          <template #created="{ row }">{{ shortDate(row.created_at) }}</template>
+          <template #created="{ row }">{{ formatDateTime(row.created_at) }}</template>
         </t-table>
       </div>
 
@@ -130,7 +132,7 @@
               @action="(value) => handleMobileAction(value, row)"
             />
           </div>
-          <t-empty v-else description="暂无服务" />
+          <t-empty v-else :description="hasActiveFilters ? '未找到匹配结果' : '暂无服务'" />
         </t-loading>
       </div>
 
@@ -159,6 +161,7 @@
           row-key="service_id"
           :data="hostnameRows"
           :columns="hostnameColumns"
+          :loading="loading"
           table-layout="fixed"
           max-height="420"
           aria-label="主机名列表"
@@ -204,7 +207,7 @@ import { serviceApi } from '@/api/service';
 import MobileRecordCard from '@/components/mobile-record-card/index.vue';
 import { useListPage } from '@/hooks/useListPage';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { fieldValue, formatMoney, toRecord } from '@/utils/format';
+import { fieldValue, formatDateTime, formatMoney, toRecord } from '@/utils/format';
 import { errorMessage } from '@/utils/userMessage';
 
 defineOptions({ name: 'AdminServices' });
@@ -272,9 +275,9 @@ const columns: PrimaryTableCol<ServiceRecord>[] = [
   { colKey: 'user', title: '用户', minWidth: 180 },
   { colKey: 'product', title: '配置', minWidth: 180 },
   { colKey: 'status', title: '状态', width: 110 },
-  { colKey: 'billing', title: '计费/金额', width: 130 },
-  { colKey: 'expires', title: '到期时间', width: 130 },
-  { colKey: 'created', title: '开通时间', width: 120 },
+  { colKey: 'billing', title: '计费/金额', width: 130, align: 'right' },
+  { colKey: 'expires', title: '到期时间', width: 170 },
+  { colKey: 'created', title: '开通时间', width: 170 },
 ];
 
 const hostnameColumns: PrimaryTableCol<HostnameRow>[] = [
@@ -317,7 +320,7 @@ function confirmHostnameChanges() {
         cleared > 0
           ? `将更新 ${hostnameRows.value.length} 个服务，其中 ${cleared} 个主机名留空会被清空。`
           : `将更新 ${hostnameRows.value.length} 个服务的自定义主机名。`,
-      confirmBtn: { content: '确认提交', theme: cleared > 0 ? 'danger' : 'primary' },
+      confirmBtn: { content: '确定', theme: cleared > 0 ? 'danger' : 'primary' },
       cancelBtn: '取消',
       onConfirm() {
         dialog.hide();
@@ -390,8 +393,8 @@ function serviceMobileRows(row: ServiceRecord) {
     { label: '用户', value: userName(row.user) },
     { label: '主机', value: hostSummary(row) },
     { label: '周期', value: billingCycleLabel(row.billing_cycle) },
-    { label: '到期', value: shortDate(row.expires_at), strong: isExpiringSoon(row.expires_at) },
-    { label: '开通', value: shortDate(row.created_at) },
+    { label: '到期', value: formatDateTime(row.expires_at), strong: isExpiringSoon(row.expires_at) },
+    { label: '开通', value: formatDateTime(row.created_at) },
   ];
 }
 
@@ -436,10 +439,5 @@ function isExpiringSoon(value: unknown) {
   if (!value) return false;
   const diff = new Date(String(value).replace(/-/g, '/')).getTime() - Date.now();
   return diff > 0 && diff < 7 * 24 * 3600 * 1000;
-}
-
-function shortDate(value: unknown) {
-  if (!value) return '-';
-  return String(value).slice(0, 10);
 }
 </script>

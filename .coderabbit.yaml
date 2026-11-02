@@ -143,7 +143,7 @@ reviews:
         - XSS：禁止 v-html 直接渲染用户/上游内容，必须经 sanitizeRenderedHtml
         - 页面路由与按钮需校验权限码
         - 金额展示使用统一格式化工具
-        - admin-v3 / v4-console 用 TDesign Vue Next，v3-www 用 Element Plus，禁止混用
+        - 三端（admin-v3 / v4-console / v3-www）统一用 TDesign Vue Next，禁止引入 Element Plus 等其它 UI 框架
 
     - path: "shared/**"
       instructions: |

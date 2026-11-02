@@ -139,11 +139,24 @@ function assertNoPlaceholderRoute() {
   }
 }
 
+// 注释必须剥离后再匹配：源码里大量注释在解释「为什么不留 24px 的硬编码」
+// （如 order-detail 的实付金额条），裸扫全文会把说明文字当成违规，导致守卫长期红灯、
+// 开发者只能靠忽略它来推进——那等于门禁失效。剥离范围与源文件语法一致：
+// HTML 注释、CSS/JS 块注释、行注释（排除 http:// 这类协议前缀）。
+function stripCommentsForPxScan(source) {
+  return source
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n')
+    .map((line) => line.replace(/(^|[^:])\/\/.*$/, '$1'))
+    .join('\n');
+}
+
 function assertNoFixedPxInMigratedClientCode() {
   const files = listFiles(pxScanTargets);
   const pxPattern = /\b\d+(?:\.\d+)?px\b/;
   for (const file of files) {
-    const content = readFile(file);
+    const content = stripCommentsForPxScan(readFile(file));
     if (pxPattern.test(content)) {
       fail(`fixed px token in migrated code: ${path.relative(root, file)}`);
     }

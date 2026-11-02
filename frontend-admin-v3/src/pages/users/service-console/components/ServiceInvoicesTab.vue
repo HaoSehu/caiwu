@@ -57,6 +57,7 @@ import { useRouter } from 'vue-router';
 import { adminApi } from '@/api/admin';
 import type { PageParams } from '@/api/user';
 import { userApi } from '@/api/user';
+import { COMPACT_PAGE_SIZE_OPTIONS } from '@/constants/pagination';
 import { invoiceStatusLabel, invoiceStatusTheme, invoiceTypeLabel } from '@/pages/users/detail/statusDisplay';
 import { formatDateTime, formatMoney } from '@/utils/format';
 import { errorMessage } from '@/utils/userMessage';
@@ -123,7 +124,7 @@ const columns: PrimaryTableCol<TableRowData>[] = [
   { title: '生成时间', colKey: 'invoiceCreated', width: 180 },
   { title: '到期时间', colKey: 'due_date', width: 140 },
   { title: '支付时间', colKey: 'invoicePaid', width: 180 },
-  { title: '金额', colKey: 'invoiceAmount', width: 120 },
+  { title: '金额', colKey: 'invoiceAmount', width: 120, align: 'right' },
   { title: '支付方式', colKey: 'payment_summary.gateway', width: 140 },
   { title: '状态', colKey: 'invoiceStatus', width: 120 },
   { title: '账单类型', colKey: 'invoiceType', width: 140 },
@@ -134,6 +135,7 @@ const pagination = computed(() => ({
   current: state.page,
   pageSize: state.pageSize,
   total: state.total,
+  pageSizeOptions: COMPACT_PAGE_SIZE_OPTIONS,
   showJumper: true,
 }));
 
@@ -181,8 +183,8 @@ function handleCancelInvoice(row: TableRowData) {
   const dialog = DialogPlugin.confirm({
     header: '取消账单',
     body: '取消账单后将关闭关联流程，确认继续吗？',
-    confirmBtn: { content: '确定取消', theme: 'danger' },
-    cancelBtn: '再想想',
+    confirmBtn: { content: '确定', theme: 'danger' },
+    cancelBtn: '取消',
     theme: 'warning',
     async onConfirm() {
       try {

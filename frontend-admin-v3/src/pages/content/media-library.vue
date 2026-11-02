@@ -382,6 +382,8 @@ const pagination = computed(() => ({
   current: filters.page,
   pageSize: filters.page_size,
   total: total.value,
+  // 表格自带分页也要提供每页条数切换（docs/DESIGN.md §4.3）
+  pageSizeOptions: [PAGE_SIZE, PAGE_SIZE * 2, PAGE_SIZE * 4],
 }));
 
 function isVideo(row: MediaFileRecord) {

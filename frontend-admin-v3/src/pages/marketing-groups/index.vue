@@ -13,7 +13,15 @@
       </template>
 
       <div v-if="!isMobile" class="table-scroll">
-        <t-table row-key="id" :data="groups" :columns="columns" hover table-layout="fixed" aria-label="营销分组列表">
+        <t-table
+          row-key="id"
+          :data="groups"
+          :columns="columns"
+          :loading="loading"
+          hover
+          table-layout="fixed"
+          aria-label="营销分组列表"
+        >
           <template #empty>
             <t-empty description="暂无营销组" />
           </template>
@@ -72,7 +80,7 @@
       v-model:visible="dialogVisible"
       :header="form.id ? '编辑营销组' : '新建营销组'"
       width="min(560px, calc(100vw - 32px))"
-      :confirm-btn="{ content: '保存', theme: 'primary' }"
+      :confirm-btn="{ content: '确定', theme: 'primary' }"
       :confirm-loading="saving"
       @confirm="submitForm"
     >
@@ -90,7 +98,7 @@
       v-model:visible="pickVisible"
       header="圈选商品"
       width="min(760px, calc(100vw - 32px))"
-      :confirm-btn="{ content: '保存圈选', theme: 'primary' }"
+      :confirm-btn="{ content: '确定', theme: 'primary' }"
       :confirm-loading="picking"
       @confirm="submitPick"
     >
@@ -150,7 +158,7 @@ const rules: Record<string, FormRule[]> = {
 
 const columns: PrimaryTableCol<MarketingProductGroupRecord>[] = [
   { colKey: 'name', title: '营销组', minWidth: 240 },
-  { colKey: 'count', title: '商品数', width: 140 },
+  { colKey: 'count', title: '商品数', width: 140, align: 'right' },
   { colKey: 'actions', title: '操作', fixed: 'right', width: 180 },
 ];
 const mobileActionOptions: DropdownOption[] = [

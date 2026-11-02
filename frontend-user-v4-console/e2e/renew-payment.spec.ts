@@ -214,7 +214,7 @@ test('服务控制台续费入口：创建续费账单后直接跳转支付页',
   await page.getByRole('button', { name: '续费管理' }).click();
   await expect(page.getByText('服务续费')).toBeVisible();
   // 预览取回后默认周期已选中，确认按钮才可用（disabled 绑定 billing_cycle）
-  const submitButton = page.getByRole('button', { name: '创建续费账单' });
+  const submitButton = page.getByRole('button', { name: '确定' });
   await expect(submitButton).toBeEnabled();
   await submitButton.click();
 

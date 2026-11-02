@@ -24,7 +24,7 @@
     </div>
     <template #footer>
       <t-button variant="outline" @click="passwordVisible = false">取消</t-button>
-      <t-button theme="primary" :loading="passwordLoading" @click="submitResetPassword">提交</t-button>
+      <t-button theme="primary" :loading="passwordLoading" @click="submitResetPassword">确定</t-button>
     </template>
   </t-dialog>
 </template>

@@ -40,10 +40,10 @@
 
         <div class="service-filter-actions">
           <!-- S-03：手机端隐藏了视图切换（手机端本来就只有卡片视图，
-               见 useServiceCenter 的 restoreViewMode），但「清空筛选」的入口也被一起藏掉了，
+               见 useServiceCenter 的 restoreViewMode），但「重置筛选」的入口也被一起藏掉了，
                用户改完三个下拉后没有一键复位的地方。这里补一个只在窄屏出现的复位按钮。 -->
           <t-button v-if="hasActiveFilters" variant="text" class="service-filter-reset" @click="resetFilters">
-            清空筛选
+            重置筛选
           </t-button>
           <t-button
             variant="outline"
@@ -186,7 +186,7 @@
           </div>
 
           <div v-else class="service-table-card">
-            <t-table row-key="id" :data="list" :columns="columns" :pagination="null" hover>
+            <t-table row-key="id" :data="list" :columns="columns" :pagination="null" :loading="loading" hover>
               <template #service="{ row }">
                 <div class="service-table-service">
                   <div class="service-system-icon">
@@ -346,7 +346,7 @@
       <template #footer>
         <t-button variant="outline" @click="renewVisible = false">取消</t-button>
         <t-button theme="primary" :loading="renewSubmitting" :disabled="!renewForm.billing_cycle" @click="submitRenew">
-          创建续费账单
+          确定
         </t-button>
       </template>
     </t-dialog>
@@ -360,7 +360,7 @@
       />
       <template #footer>
         <t-button variant="outline" @click="remarkVisible = false">取消</t-button>
-        <t-button theme="primary" :loading="remarkSubmitting" @click="submitRemark">保存备注</t-button>
+        <t-button theme="primary" :loading="remarkSubmitting" @click="submitRemark">确定</t-button>
       </template>
     </t-dialog>
   </section>

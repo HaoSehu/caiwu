@@ -1,13 +1,13 @@
 <template>
   <t-alert v-if="isExpired" theme="error" class="console-alert">
-    实例已于 {{ detail.expires_at }} 到期，服务可能已中断，请立即续费。
+    实例已于 {{ formatDateTime(detail.expires_at) }} 到期，服务可能已中断，请立即续费。
     <template #operation>
       <t-button variant="text" theme="primary" @click="openRenewDialog">立即续费</t-button>
     </template>
   </t-alert>
 
   <t-alert v-else-if="isExpiringSoon" theme="warning" class="console-alert">
-    实例将于 {{ detail.expires_at }} 到期，建议提前续费避免服务中断。
+    实例将于 {{ formatDateTime(detail.expires_at) }} 到期，建议提前续费避免服务中断。
     <template #operation>
       <t-button variant="text" theme="primary" @click="openRenewDialog">立即续费</t-button>
     </template>
@@ -19,6 +19,8 @@
 </template>
 <script setup lang="ts">
 import { computed } from 'vue';
+
+import { formatDateTime } from '@/utils/format';
 
 import { useServiceConsoleContext } from './context';
 

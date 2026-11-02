@@ -631,7 +631,7 @@ function handleCancelOrder(): void {
     body: '取消后订单不可继续支付，关联账单会一并取消。确认取消？',
     theme: 'warning',
     confirmBtn: { content: '确定', theme: 'warning' },
-    cancelBtn: '再想想',
+    cancelBtn: '取消',
     async onConfirm() {
       cancelLoading.value = true;
       try {

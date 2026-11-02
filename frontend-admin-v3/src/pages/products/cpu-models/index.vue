@@ -411,7 +411,7 @@ async function handleSubmitGroup() {
     groupDialogVisible.value = false;
     dirty.value = true;
     MessagePlugin.success(
-      editingGroupId.value ? 'CPU 分组已修改，请点「保存目录」生效' : 'CPU 分组已添加，请点「保存目录」生效',
+      editingGroupId.value ? 'CPU 分组已编辑，请点「保存目录」生效' : 'CPU 分组已新建，请点「保存目录」生效',
     );
   } finally {
     groupSubmitting.value = false;
@@ -459,7 +459,7 @@ async function handleSubmitModel() {
     modelDialogVisible.value = false;
     dirty.value = true;
     MessagePlugin.success(
-      editingModelId.value ? 'CPU 型号已修改，请点「保存目录」生效' : 'CPU 型号已添加，请点「保存目录」生效',
+      editingModelId.value ? 'CPU 型号已编辑，请点「保存目录」生效' : 'CPU 型号已新建，请点「保存目录」生效',
     );
   } finally {
     modelSubmitting.value = false;
@@ -476,7 +476,7 @@ function handleDeleteGroup(group: CpuGroup) {
     onConfirm() {
       rebuildCatalogState(groups.value.filter((item) => item.id !== group.id));
       dirty.value = true;
-      MessagePlugin.success('CPU 分组已移除，请点「保存目录」生效');
+      MessagePlugin.success('CPU 分组已删除，请点「保存目录」生效');
       dialog.hide();
     },
   });
@@ -504,7 +504,7 @@ function handleDeleteModel(model: CpuModel) {
         };
       });
       dirty.value = true;
-      MessagePlugin.success('CPU 型号已移除，请点「保存目录」生效');
+      MessagePlugin.success('CPU 型号已删除，请点「保存目录」生效');
       dialog.hide();
     },
   });
@@ -539,7 +539,7 @@ function buildPayload(): CpuModelGroupRecord[] {
 
 async function handleSave() {
   if (!groups.value.length) {
-    MessagePlugin.warning('请至少添加一个 CPU 分组');
+    MessagePlugin.warning('请至少新建一个 CPU 分组');
     return;
   }
   saving.value = true;

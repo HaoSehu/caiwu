@@ -66,7 +66,7 @@
         </template>
         <template #lastLogin="{ row }">
           <div class="staff-login">
-            <span>{{ fieldValue(row.last_login_at) }}</span>
+            <span>{{ formatDateTime(row.last_login_at) }}</span>
             <em>{{ fieldValue(row.last_login_ip) }}</em>
           </div>
         </template>
@@ -119,7 +119,7 @@
                   label: '权限',
                   value: row.permissions?.includes('*') ? '全部权限' : `${row.permissions?.length || 0} 项`,
                 },
-                { label: '最近登录', value: fieldValue(row.last_login_at) },
+                { label: '最近登录', value: formatDateTime(row.last_login_at) },
                 { label: '登录IP', value: fieldValue(row.last_login_ip) },
               ]"
               :action-options="staffMobileActions(row)"
@@ -134,6 +134,7 @@
           v-model:page-size="pagination.page_size"
           class="staff-mobile-pagination"
           :total="total"
+          :page-size-options="pagination.pageSizeOptions"
           @change="handlePaginationChange"
         />
       </div>
@@ -143,7 +144,7 @@
       v-model:visible="formVisible"
       :header="form.id ? '编辑员工' : '新建员工'"
       width="min(720px, calc(100vw - 32px))"
-      :confirm-btn="{ content: '保存', theme: 'primary' }"
+      :confirm-btn="{ content: '确定', theme: 'primary' }"
       :confirm-loading="saving"
       @confirm="submitForm"
     >
@@ -212,6 +213,7 @@ import { AdminPermissions, hasPermissionInList } from '@/constants/permissions';
 import { useListPage } from '@/hooks/useListPage';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useUserStore } from '@/store';
+import { formatDateTime } from '@/utils/format';
 import { required } from '@/utils/formRules';
 import { errorMessage } from '@/utils/userMessage';
 

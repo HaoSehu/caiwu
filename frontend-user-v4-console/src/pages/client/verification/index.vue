@@ -70,7 +70,7 @@
       <p v-if="!verificationUrl && verificationMessage" class="verification-message">
         {{ verificationMessage }}
       </p>
-      <t-form v-if="!verificationUrl" label-align="top" class="verification-form">
+      <t-form v-if="!verificationUrl" label-align="right" class="verification-form">
         <t-form-item label="真实姓名" required-mark>
           <t-input v-model="verificationForm.realName" placeholder="请输入真实姓名" />
         </t-form-item>
@@ -82,7 +82,7 @@
       <div v-else class="verification-qrcode-panel">
         <qrcode-vue :value="verificationUrl" :size="qrcodeSize" level="H" render-as="svg" />
         <p>请使用手机扫描二维码完成认证</p>
-        <p class="verification-cancel-tip">关闭弹窗会结束本次认证会话，需要重新填写信息提交。</p>
+        <p class="verification-cancel-tip">关闭对话框会结束本次认证会话，需要重新填写信息提交。</p>
         <p class="verification-countdown" :class="{ expired: isVerificationQrExpired }">
           {{ isVerificationQrExpired ? '二维码已失效' : `二维码 ${verificationCountdownText} 后失效` }}
         </p>

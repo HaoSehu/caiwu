@@ -42,6 +42,7 @@ import { computed, onMounted, reactive } from 'vue';
 
 import type { PageParams, UserRechargeRecord } from '@/api/user';
 import { userApi } from '@/api/user';
+import { COMPACT_PAGE_SIZE_OPTIONS } from '@/constants/pagination';
 import { AdminPermissions } from '@/constants/permissions';
 import { formatDateTime, formatMoney } from '@/utils/format';
 import { hasAdminPermission } from '@/utils/permission';
@@ -87,7 +88,7 @@ const columns: PrimaryTableCol<TableRowData>[] = [
   { title: '时间', colKey: 'recordTime', width: 180 },
   { title: '充值单号', colKey: 'record_no', width: 220 },
   { title: '方式', colKey: 'recordEntryType', width: 120 },
-  { title: '金额', colKey: 'recordAmount', width: 140 },
+  { title: '金额', colKey: 'recordAmount', width: 140, align: 'right' },
   { title: '关联账单', colKey: 'recordInvoice', width: 200 },
   { title: '操作人', colKey: 'operator_name', width: 140 },
   { title: '备注', colKey: 'remark', ellipsis: true },
@@ -97,6 +98,7 @@ const pagination = computed(() => ({
   current: state.page,
   pageSize: state.pageSize,
   total: state.total,
+  pageSizeOptions: COMPACT_PAGE_SIZE_OPTIONS,
   showJumper: true,
 }));
 

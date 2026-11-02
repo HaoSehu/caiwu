@@ -466,7 +466,7 @@
               @change="handleMemberLevelChange"
             />
             <t-tag v-if="user.member_level_id" theme="success" variant="light">已指定</t-tag>
-            <t-tag v-else variant="light">未分级</t-tag>
+            <t-tag v-else theme="default" variant="light">未分级</t-tag>
           </div>
           <div class="member-level-edit-tip">
             会员等级由管理员直接指定（不再按销售额自动升级）；清空下拉即置为未分级。
@@ -482,7 +482,7 @@
               @change="handlePromotionAmbassadorChange"
             />
             <t-tag v-if="user.promotion_ambassador_id" theme="success" variant="light">已指派</t-tag>
-            <t-tag v-else variant="light">未指派</t-tag>
+            <t-tag v-else theme="default" variant="light">未指派</t-tag>
           </div>
           <div class="member-level-edit-tip">推广大使决定邀请返利比例；未指派时按系统设置的全局返利比例计算。</div>
         </t-form-item>
@@ -824,7 +824,7 @@ const serviceColumns: PrimaryTableCol<TableRowData>[] = [
   { title: 'ID', colKey: 'id', width: 80 },
   { title: '配置/服务', colKey: 'serviceName', width: 240 },
   { title: '公网 IP', colKey: 'upstream.dedicated_ip', width: 140 },
-  { title: '金额', colKey: 'serviceAmount', width: 120 },
+  { title: '金额', colKey: 'serviceAmount', width: 120, align: 'right' },
   { title: '产品类型', colKey: 'product.type_label', width: 120 },
   { title: '计费周期', colKey: 'billing_cycle_label', width: 120 },
   { title: '购买时间', colKey: 'serviceCreated', width: 180 },
@@ -837,7 +837,7 @@ const invoiceColumns: PrimaryTableCol<TableRowData>[] = [
   { title: '生成时间', colKey: 'invoiceCreated', width: 180 },
   { title: '到期时间', colKey: 'due_date', width: 140 },
   { title: '支付时间', colKey: 'invoicePaid', width: 180 },
-  { title: '金额', colKey: 'invoiceAmount', width: 120 },
+  { title: '金额', colKey: 'invoiceAmount', width: 120, align: 'right' },
   { title: '支付方式', colKey: 'payment_summary.gateway', width: 140 },
   { title: '状态', colKey: 'invoiceStatus', width: 120 },
   { title: '账单类型', colKey: 'invoiceType', width: 140 },
@@ -1184,7 +1184,7 @@ function confirmRecharge(amount: number) {
       header: rechargeForm.type === 'decrease' ? '确认扣减余额' : '确认增加余额',
       body: `即将为用户「${rechargeForm.email}」${rechargeForm.type === 'decrease' ? '扣减' : '增加'} ${formatMoney(amount)}，操作提交后不可撤销。`,
       theme: 'warning',
-      confirmBtn: { content: '确认提交', theme: 'danger' },
+      confirmBtn: { content: '确定提交', theme: 'danger' },
       cancelBtn: '取消',
       onConfirm() {
         dialog.hide();

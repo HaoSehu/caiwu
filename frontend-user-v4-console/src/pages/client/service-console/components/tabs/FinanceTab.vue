@@ -46,6 +46,9 @@
         <template #invoice_no="{ row }">
           {{ row.invoice?.invoice_no || '--' }}
         </template>
+        <template #empty>
+          <t-empty :description="financeState.total > 0 ? '未找到匹配结果' : '暂无财务日志'" />
+        </template>
       </t-table>
       <div v-if="financeState.total > 0" class="console-pagination">
         <t-pagination

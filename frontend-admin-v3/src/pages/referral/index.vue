@@ -15,6 +15,7 @@
             row-key="id"
             :data="overview.top_referrers"
             :columns="overviewColumns"
+            :loading="overviewLoading"
             hover
             table-layout="fixed"
             aria-label="推荐概览列表"
@@ -87,6 +88,7 @@
             row-key="id"
             :data="rewardList"
             :columns="rewardColumns"
+            :loading="rewardsLoading"
             hover
             table-layout="fixed"
             aria-label="推荐奖励记录列表"
@@ -116,9 +118,11 @@
             </template>
             <template #time="{ row }">
               <div class="stack-cell">
-                <strong>{{ fieldValue(row.rewarded_at) }}</strong>
+                <strong>{{ formatDateTime(row.rewarded_at) }}</strong>
                 <span>{{
-                  row.released_at ? `释放：${row.released_at}` : `可用：${fieldValue(row.available_at)}`
+                  row.released_at
+                    ? `释放：${formatDateTime(row.released_at)}`
+                    : `可用：${formatDateTime(row.available_at)}`
                 }}</span>
               </div>
             </template>
@@ -207,6 +211,7 @@
             row-key="id"
             :data="withdrawalList"
             :columns="withdrawalColumns"
+            :loading="withdrawalsLoading"
             hover
             table-layout="fixed"
             aria-label="提现记录列表"
@@ -488,7 +493,7 @@ const rewardColumns: PrimaryTableCol<ReferralRewardRecord>[] = [
   { colKey: 'relation', title: '推荐关系', minWidth: 220 },
   { colKey: 'order', title: '订单 / 配置', minWidth: 220 },
   { colKey: 'orderAmount', title: '订单金额', width: 120, align: 'right' },
-  { colKey: 'rate', title: '比例', width: 100 },
+  { colKey: 'rate', title: '比例', width: 100, align: 'right' },
   { colKey: 'amount', title: '奖励金额', width: 120, align: 'right' },
   { colKey: 'status', title: '状态', width: 110 },
   { colKey: 'time', title: '时间', minWidth: 190 },
@@ -544,7 +549,7 @@ function confirmApproveWithdrawal(remark: string) {
         fieldValue(row?.account_no) || '-'
       }。通过后资金即进入打款流程，无法撤销。${remark ? `备注：${remark}` : ''}`,
       theme: 'warning',
-      confirmBtn: { content: '确认通过', theme: 'danger' },
+      confirmBtn: { content: '确定', theme: 'danger' },
       cancelBtn: '取消',
       onConfirm() {
         dialog.hide();
