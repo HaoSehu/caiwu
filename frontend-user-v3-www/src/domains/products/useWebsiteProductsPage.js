@@ -47,6 +47,18 @@ export function useWebsiteProductsPage() {
     { immediate: true },
   );
 
+  // 切换产品目录（类型）要先拉 product-groups（实测 700ms）才能列出地区，
+  // 而首屏期间这么发会与详情/库存/报价抢带宽（实测被拖到 2s+）。
+  // 因此等首屏报价拿到（quoteToken 就绪，关键路径已结束）后再预取其余类型的目录。
+  const stopQuoteWatch = watch(
+    () => purchase.quoteToken.value,
+    (token) => {
+      if (!token) return;
+      stopQuoteWatch();
+      catalog.prefetchRootGroups();
+    },
+  );
+
   // 离开页面时必须撤销排队中的空闲预取：回调里持有 purchase.prefetchProductDetails，
   // 组件卸载后仍会发出详情请求并写已销毁的响应式状态。
   onBeforeUnmount(cancelIdlePrefetch);

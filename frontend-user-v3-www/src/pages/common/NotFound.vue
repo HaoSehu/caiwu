@@ -5,8 +5,8 @@
       <h1>页面不存在</h1>
       <p>你访问的页面可能已迁移，或者链接地址有误。</p>
       <div class="not-found-actions">
-        <el-button type="primary" @click="router.push('/')">返回首页</el-button>
-        <el-button @click="goBack">返回上一页</el-button>
+        <t-button theme="primary" @click="router.push('/')">返回首页</t-button>
+        <t-button @click="goBack">返回上一页</t-button>
       </div>
       <div class="not-found-alt-links">
         <router-link to="/products">浏览产品</router-link>

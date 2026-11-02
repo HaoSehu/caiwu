@@ -1,11 +1,11 @@
 import {
-  Bell,
-  Box,
-  Download,
-  Files,
-  Notification,
-  Reading,
-} from '@element-plus/icons-vue'
+  AlarmIcon,
+  AppIcon,
+  BookOpenIcon,
+  DownloadIcon,
+  FileCopyIcon,
+  NotificationIcon,
+} from 'tdesign-icons-vue-next'
 
 export const CONTENT_TYPE_NOTICE = 'notice'
 export const CONTENT_TYPE_HELP = 'help'
@@ -37,14 +37,14 @@ export function getContentConfig(contentType, scope = CONTENT_SCOPE_CLIENT) {
       keywordSuggestions: ['服务条款', '公告通知', '云服务器', '容器系统', '007ACS'],
       shortcuts: isSiteScope
         ? [
-          { key: 'notices', label: '新闻动态', icon: Notification, route: '/notices' },
-          { key: 'help', label: '文档中心', icon: Files, route: '/help' },
-          { key: 'products', label: '产品目录', icon: Box, route: '/products' },
+          { key: 'notices', label: '新闻动态', icon: NotificationIcon, route: '/notices' },
+          { key: 'help', label: '文档中心', icon: FileCopyIcon, route: '/help' },
+          { key: 'products', label: '产品目录', icon: AppIcon, route: '/products' },
         ]
         : [
-          { key: 'notices', label: '新闻动态', icon: Notification, route: '/client/notices' },
-          { key: 'help', label: '文档中心', icon: Files, route: '/client/help' },
-          { key: 'tools', label: '下载中心', icon: Download, route: '/client/tools' },
+          { key: 'notices', label: '新闻动态', icon: NotificationIcon, route: '/client/notices' },
+          { key: 'help', label: '文档中心', icon: FileCopyIcon, route: '/client/help' },
+          { key: 'tools', label: '下载中心', icon: DownloadIcon, route: '/client/tools' },
         ],
     },
     [CONTENT_TYPE_HELP]: {
@@ -69,14 +69,14 @@ export function getContentConfig(contentType, scope = CONTENT_SCOPE_CLIENT) {
       keywordSuggestions: ['新手入门', '支付账单', '服务管理', '续费说明', '实例控制台'],
       shortcuts: isSiteScope
         ? [
-          { key: 'help', label: '文档中心', icon: Reading, route: '/help' },
-          { key: 'notices', label: '新闻动态', icon: Bell, route: '/notices' },
-          { key: 'products', label: '产品目录', icon: Box, route: '/products' },
+          { key: 'help', label: '文档中心', icon: BookOpenIcon, route: '/help' },
+          { key: 'notices', label: '新闻动态', icon: AlarmIcon, route: '/notices' },
+          { key: 'products', label: '产品目录', icon: AppIcon, route: '/products' },
         ]
         : [
-          { key: 'help', label: '文档中心', icon: Reading, route: '/client/help' },
-          { key: 'notices', label: '新闻动态', icon: Bell, route: '/client/notices' },
-          { key: 'tools', label: '下载中心', icon: Download, route: '/client/tools' },
+          { key: 'help', label: '文档中心', icon: BookOpenIcon, route: '/client/help' },
+          { key: 'notices', label: '新闻动态', icon: AlarmIcon, route: '/client/notices' },
+          { key: 'tools', label: '下载中心', icon: DownloadIcon, route: '/client/tools' },
         ],
     },
   }

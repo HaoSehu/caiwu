@@ -1,7 +1,7 @@
 import { computed, ref } from 'vue'
 
 // 官网头部用户菜单（桌面下拉 + 移动端用户入口）的全部状态与交互。
-// 轻量自定义下拉，替代 el-dropdown，避免 element-plus popper 机制进首屏。
+// 轻量自定义下拉：不用 TDesign 的 Dropdown/Popup，避免浮层依赖进入首屏 chunk。
 export function useUserMenu(userStore) {
   const userMenuOpen = ref(false)
   const mobileUserMenuOpen = ref(false)

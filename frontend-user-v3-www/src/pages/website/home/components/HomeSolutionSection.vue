@@ -62,7 +62,7 @@
                 class="solution-panel__feature"
               >
                 <span class="solution-panel__feature-icon">
-                  <el-icon><Select /></el-icon>
+                  <check-icon />
                 </span>
                 <span>{{ point }}</span>
               </li>
@@ -97,8 +97,7 @@
 <script setup>
 import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
-import { ElIcon } from "element-plus/es/components/icon/index.mjs";
-import { Select } from "@element-plus/icons-vue";
+import { CheckIcon } from "tdesign-icons-vue-next";
 import { industrySolutions } from "@/data/homeSolutions";
 
 const router = useRouter();

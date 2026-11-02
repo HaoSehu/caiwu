@@ -1,10 +1,16 @@
 import { createApp } from "vue";
 import { createPinia } from "pinia";
-import { provideGlobalConfig } from "element-plus/es/components/config-provider/index.mjs";
-import zhCn from "element-plus/es/locale/lang/zh-cn";
-// 用 sass 版样式走 Vite scss 管线（经 additionalData 注入主题变量编译），
-// 避免引入 element-plus/theme-chalk 默认主题 base.css（含未覆盖的 --el-color-primary-rgb 死块）。
-import "element-plus/es/components/message/style/index";
+
+// TDesign 组件按需引入（见 vite.config.js 的 createTDesignResolver）：模板里的 <t-xxx>
+// 解析到 tdesign-vue-next/es/<组件>/index，子入口自带 import './style/css.mjs'。
+// 因此这里只需要补基础变量与函数式插件样式，顺序必须是：
+//   基础样式 → 站点设计令牌 → 函数式插件样式 → 站点全局样式。
+// 函数式插件（src/app/http/request.ts 的 MessagePlugin、商品域的 DialogPlugin）的入口
+// 不带样式，必须显式补 message/dialog 的 css.mjs，否则消息与二次确认框没有样式。
+import "tdesign-vue-next/es/style/index.css";
+import "../../../theme.css";
+import "tdesign-vue-next/es/message/style/css.mjs";
+import "tdesign-vue-next/es/dialog/style/css.mjs";
 
 import App from "@/App.vue";
 import { createClientRouter } from "@/app/router";
@@ -45,11 +51,8 @@ export function bootstrapClientApp() {
   const router = createClientRouter();
 
   app.use(pinia);
-  provideGlobalConfig(
-    { locale: zhCn, size: "default", zIndex: 3200 },
-    app,
-    true,
-  );
+  // TDesign 的默认全局配置已合并 zh_CN（es/config-provider/utils/context.mjs），
+  // 与 admin/console 一样不再 provideGlobalConfig，省掉一层 ConfigProvider 上下文。
   app.use(router);
 
   initClientRuntimeConnectionHints({

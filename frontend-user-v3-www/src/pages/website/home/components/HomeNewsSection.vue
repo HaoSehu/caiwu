@@ -7,7 +7,7 @@
           为您呈现行业动态、活动公告、产品发布
           <router-link to="/notices" class="news-section__more">
             查看更多
-            <el-icon><ArrowRight /></el-icon>
+            <chevron-right-icon />
           </router-link>
         </p>
       </header>
@@ -72,7 +72,7 @@
           >
             <strong class="news-list__title">{{ item.title }}</strong>
             <div class="news-list__meta">
-              <el-icon aria-hidden="true"><Calendar /></el-icon>
+              <calendar-icon aria-hidden="true" />
               <span>{{
                 formatNoticeDate(item.publish_at || item.updated_at)
               }}</span>
@@ -108,7 +108,7 @@
             </p>
           </div>
           <span class="news-promo__arrow" aria-hidden="true">
-            <el-icon><ArrowRight /></el-icon>
+            <chevron-right-icon />
           </span>
         </button>
       </div>
@@ -119,8 +119,7 @@
 <script setup>
 import { computed } from "vue";
 import { useRouter } from "vue-router";
-import { ElIcon } from "element-plus/es/components/icon/index.mjs";
-import { ArrowRight, Calendar } from "@element-plus/icons-vue";
+import { CalendarIcon, ChevronRightIcon } from "tdesign-icons-vue-next";
 
 const props = defineProps({
   notices: {
@@ -250,7 +249,7 @@ function openNotice(item) {
   color: $color-primary-hover;
 }
 
-.news-section__more .el-icon {
+.news-section__more .t-icon {
   font-size: 12px;
 }
 
@@ -462,7 +461,7 @@ function openNotice(item) {
   font-size: 12px;
 }
 
-.news-list__meta .el-icon {
+.news-list__meta .t-icon {
   font-size: 12px;
 }
 

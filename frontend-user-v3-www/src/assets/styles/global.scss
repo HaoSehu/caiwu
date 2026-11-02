@@ -1,40 +1,14 @@
+// 站点全局基础样式。
+//
+// 组件体系已迁移到 TDesign Vue Next（见 vite.config.js 的 createTDesignResolver）：
+// 变量来自根 theme.css 的 --td-* 设计令牌，组件样式由各组件子入口自带，
+// 因此本文件不再包含任何 UI 框架的组件覆盖，只保留站点自身的基线与可访问性兜底。
+
+// 显式声明浅色配色方案：迁移前该声明由旧组件库的 base.css 在 :root 上给出，
+// 迁移后无人再声明，浏览器会按 normal 处理，系统深色偏好下原生滚动条与原生表单
+// 控件（日期/文件选择器等）可能被渲染成深色，与站点固定浅色皮肤不一致。
 :root {
-  --el-color-primary: #{$color-primary};
-  // EP 派生变量：与 theme-chalk 的 set-color-mix-level 公式一致（$color-primary 与白/黑按层级混合）。
-  // 显式补齐可避免入口 CSS 混入默认主题 base.css 时 --el-color-primary-rgb 仍为默认蓝。
-  --el-color-primary-rgb: 22, 93, 255;
-  --el-color-primary-light-3: #5c8eff;
-  --el-color-primary-light-5: #8baeff;
-  --el-color-primary-light-7: #b9ceff;
-  --el-color-primary-light-8: #d0dfff;
-  --el-color-primary-light-9: #e8efff;
-  --el-color-primary-dark-2: #124acc;
-  --el-color-success: #{$color-success};
-  --el-color-warning: #{$color-warning};
-  --el-color-danger: #{$color-danger};
-  --el-color-info: #{$color-info};
-  --el-border-color: #{$border-color};
-  --el-border-color-light: #{$divider-color};
-  --el-text-color-primary: #{$text-color-primary};
-  --el-text-color-regular: #{$text-color-secondary};
-  --el-text-color-placeholder: #{$text-color-placeholder};
-  --el-bg-color: #{$bg-color-card};
-  --el-fill-color-blank: #{$bg-color-card};
-  --el-fill-color-light: #{$bg-color-soft};
-  --el-fill-color-lighter: #{$bg-color-hover};
-  --el-fill-color-extra-light: #{$bg-color-soft};
-  --el-bg-color-page: #{$bg-color};
-  --el-mask-color: rgba(15, 23, 42, 0.14);
-  --el-border-radius-base: #{$sm-border-radius};
-  --el-border-radius-small: #{$sm-border-radius};
-  --el-border-radius-round: 999px;
-  --el-box-shadow-light: #{$shadow-sm};
-  --el-box-shadow: #{$shadow-md};
-  --site-grain: radial-gradient(
-    circle at 1px 1px,
-    rgba(15, 23, 42, 0.045) 1px,
-    transparent 0
-  );
+  color-scheme: light;
 }
 
 .skip-to-content {
@@ -124,112 +98,6 @@ ul,
 ol {
   list-style: none;
 }
-
-.el-button {
-  border-radius: $sm-border-radius !important;
-  font-weight: 500 !important;
-  transition:
-    background-color $motion-fast ease,
-    border-color $motion-fast ease,
-    color $motion-fast ease !important;
-}
-
-.el-button--primary {
-  background: $color-primary !important;
-  border-color: $color-primary !important;
-  color: $text-color-inverse !important;
-  box-shadow: none !important;
-}
-
-.el-button--primary:hover {
-  background: $color-primary-hover !important;
-  border-color: $color-primary-hover !important;
-}
-// focus 不再复用 hover 深色底，避免点击后按钮"卡"在 hover 态；
-// 键盘可见焦点由全局 :focus-visible outline 兜底（WCAG 2.4.7）
-
-.el-button--default,
-.el-button.is-plain {
-  border-color: $border-color !important;
-  color: $text-color-secondary !important;
-  background: $bg-color-card !important;
-}
-
-.el-button--default:hover,
-.el-button.is-plain:hover {
-  border-color: $color-primary !important;
-  color: $color-primary !important;
-  background: $bg-color-card !important;
-}
-
-.el-drawer {
-  background: $bg-color-card !important;
-  color: $text-color-primary !important;
-  box-shadow: $shadow-lg !important;
-}
-
-.el-input__wrapper,
-.el-select__wrapper,
-.el-input-number .el-input__wrapper {
-  background: $bg-color-card !important;
-  box-shadow: 0 0 0 1px $border-color inset !important;
-  border-radius: $sm-border-radius !important;
-  color: $text-color-primary !important;
-  transition: box-shadow $motion-fast ease !important;
-}
-
-.el-input__wrapper:hover,
-.el-select__wrapper:hover,
-.el-input-number .el-input__wrapper:hover {
-  box-shadow: 0 0 0 1px $border-color-strong inset !important;
-}
-
-.el-input__wrapper.is-focus,
-.el-select__wrapper.is-focused,
-.el-input-number.is-controls-right .el-input__wrapper.is-focus {
-  box-shadow: 0 0 0 1px $color-primary inset !important;
-}
-
-.el-input__inner,
-.el-input-number__decrease,
-.el-input-number__increase {
-  color: $text-color-primary !important;
-}
-
-.el-select__placeholder,
-.el-input__inner::placeholder {
-  color: $text-color-placeholder !important;
-}
-
-// el-dialog 全站零使用（ElDialog 组件与 .el-dialog 类名在 src 下 0 命中），其样式块已删除；
-// .el-drawer 仍被 MobileSheet.vue 使用，故拆出单独保留在外层规则中，不随 dialog 一起删除。
-// el-form-item 同样零使用：全站没有 <el-form>，也没有任何 .el-form-item 类名（src 下 grep 0 命中），
-// 其 __label 配色覆盖已一并删除，避免把死样式当"在用"留着。
-// el-empty 仍在 5 个页面使用（ContentDetailPage/ContentListPage/products/ProductDetail/legal-document），保留。
-.el-empty__description p {
-  color: $text-color-primary !important;
-}
-
-// el-drawer 只由 MobileSheet.vue 使用，且它传 :with-header="false"（无头、无关闭按钮），
-// 故不保留 .el-drawer__close-btn 选择器；分页在 ContentListPage.vue:127 真实使用。
-.el-pagination,
-.el-pagination button,
-.el-pagination span {
-  color: $text-color-secondary !important;
-}
-
-.el-divider {
-  border-color: $divider-color !important;
-}
-
-// 原 @include meta.load-css("record-list") 已移除：_record-list.scss 内全部为 record- 前缀选择器，
-// 全仓（含 backend/ docs/ 三端 src）grep 零命中，属死样式，文件已一并删除。
-
-// 说明：原 @media (max-width: $breakpoint-mobile-max) 弹窗适配块随 el-dialog 样式一并移除，
-// 站点移动端弹层走 MobileSheet.vue（el-drawer）；ElDialog 仍零使用。
-// ElMessageBox 只在「移除优惠券」的二次确认里出现（useWebsiteProductCheckout.js 的 confirmClearCoupon），
-// 样式由该函数的动态 import 按需引入 message-box/style（与 message/style 在 app/bootstrap.ts 静态引入不同），
-// 这里不重复做全局覆盖。
 
 // ========== 全局减弱动效（prefers-reduced-motion） ==========
 // 用户系统开启"减少动态效果"时，压平全站过渡与循环动画；

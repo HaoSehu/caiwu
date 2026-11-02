@@ -12,7 +12,7 @@ import {
   readWebsiteProductRouteParams,
 } from "@/utils/productRoute";
 
-import { ElMessage } from "element-plus/es/components/message/index.mjs";
+import { MessagePlugin } from "tdesign-vue-next/es/message/plugin";
 
 import { useMobileBreakpoint } from "@/composables/useMobileBreakpoint";
 
@@ -20,6 +20,10 @@ import { useMobileBreakpoint } from "@/composables/useMobileBreakpoint";
 const catalogPendingMap = new Map();
 // 已访问类型的根分组缓存：切换类型时本地过滤，避免重复请求 productGroups
 const rootGroupsByType = new Map();
+// 可用区（三级分组）的先行缓存：catalog 聚合接口要把该地区全部商品一起返回才能渲染，
+// 而用户最先感知的是「可用区」标签是否出现。children 接口只查分组本身（服务端有
+// 15 分钟缓存，实测约 250ms），可先把标签渲染出来，商品随后由 catalog 补齐。
+const childGroupsCache = new Map();
 
 function groupMatchesType(group, typeValue) {
   if (!typeValue) {
@@ -223,7 +227,7 @@ export function useWebsiteProductsCatalog({
   function openMobileRegionDrawer() {
     if (!rootGroups.value.length) {
       // 地区目录还没加载出来时按钮点了毫无反应，用户无法判断是没数据还是坏了。
-      ElMessage.warning("地区列表尚未加载完成，请稍后重试");
+      MessagePlugin.warning("地区列表尚未加载完成，请稍后重试");
       return;
     }
 
@@ -259,7 +263,7 @@ export function useWebsiteProductsCatalog({
       // 不再静默：此前失败后可用区列永久空白，用户既不知道失败也没有重试理由。
       // 保留用户刚选的 tempGroupId，仅提示并可再次点选重试。
       tempChildGroups.value = [];
-      ElMessage.warning("可用区加载失败，请重新选择地区");
+      MessagePlugin.warning("可用区加载失败，请重新选择地区");
     }
   }
 
@@ -284,7 +288,7 @@ export function useWebsiteProductsCatalog({
       // 失败时保持抽屉打开：此前先关抽屉再请求，失败后抽屉已消失、页面无任何提示，
       // 用户以为「已切换」但数据仍是旧的。现在保留抽屉与失败提示，用户可重试或换地区。
       mobileRegionDrawer.value = true;
-      ElMessage.warning("切换地区失败，请重试");
+      MessagePlugin.warning("切换地区失败，请重试");
       return;
     }
 
@@ -310,7 +314,7 @@ export function useWebsiteProductsCatalog({
         // products/index.vue 的 openMobileProductGroupDrawer 用 void 丢弃 Promise，
         // 不在此消化会变成 unhandled rejection：用户点「规格」既没有抽屉也没有提示。
         // 补价只是让列表带上价格，失败不该阻断选规格，因此提示后继续打开抽屉。
-        ElMessage.warning("商品列表加载失败，请重试");
+        MessagePlugin.warning("商品列表加载失败，请重试");
       }
     }
 
@@ -332,7 +336,48 @@ export function useWebsiteProductsCatalog({
     activeChildId.value = 0;
     resetSelectedProduct({ syncRoute: false });
     mobileProductDrawer.value = false;
+    // 可用区标签先行：命中缓存同步渲染；未命中则与 catalog 并行请求，
+    // 只用于尽快把「可用区」这一行的按钮画出来，商品与选中仍由 catalog 决定。
+    primeChildGroups(id);
     await loadGroupPayload(id, options);
+  }
+
+  function primeChildGroups(groupId) {
+    const id = Number(groupId || 0);
+    if (!id) {
+      return;
+    }
+
+    const cached = childGroupsCache.get(id);
+    if (cached) {
+      childGroups.value = cached;
+      return;
+    }
+
+    // catalog 已在缓存或已发出时，它本身就会带回 children；再发 children 请求
+    // 纯属重复网络。只有 catalog 还要现拉时才值得为「先画出可用区」多付一跳。
+    if (getCachedCatalog(id) || catalogPendingMap.has(id)) {
+      return;
+    }
+
+    void siteApi
+      .productGroupChildren(id)
+      .then((res) => {
+        const list = res?.data?.list || res?.data || [];
+        if (!Array.isArray(list) || !list.length) {
+          return;
+        }
+
+        childGroupsCache.set(id, list);
+        // 用户可能已切到别处：只在当前仍停在该分组时回写，避免把旧分组的
+        // 可用区覆盖到新分组上。
+        if (activeGroupId.value === id) {
+          childGroups.value = list;
+        }
+      })
+      .catch(() => {
+        // 失败不影响主路径：catalog 仍会带回 children 并覆盖这里。
+      });
   }
 
   function switchChild(id, options = {}) {
@@ -387,6 +432,8 @@ export function useWebsiteProductsCatalog({
         );
         const nextGroupId = matchedGroup?.id || rootGroups.value[0].id;
         activeGroupId.value = nextGroupId;
+        // 切类型/首屏同样先画可用区标签，再等 catalog 带商品回来。
+        primeChildGroups(nextGroupId);
         await loadGroupPayload(nextGroupId, options);
       } else {
         activeGroupId.value = 0;
@@ -418,7 +465,13 @@ export function useWebsiteProductsCatalog({
 
     const cached = getCachedCatalog(groupId);
     if (cached) {
+      // 命中缓存是同步完成的一次「加载」，同样要清掉上一次切换留下的加载态：
+      // 切到未缓存地区后立刻切回已缓存地区时，未缓存那次的 finally 因
+      // token !== groupToken 直接 return，不会复位 pageLoading，这里不补就永久卡住。
       applyGroupPayload(cached, options);
+      if (token === groupToken) {
+        pageLoading.value = false;
+      }
       return;
     }
 
@@ -433,6 +486,12 @@ export function useWebsiteProductsCatalog({
         applyGroupPayload(data, options);
       } catch {
         // 由发起请求的调用方处理错误
+      } finally {
+        // 复用别人在途的请求同样是一次加载结束点，必须复位，
+        // 否则发起方被新切换取代后会留下永久加载态。
+        if (token === groupToken) {
+          pageLoading.value = false;
+        }
       }
 
       return;
@@ -479,6 +538,10 @@ export function useWebsiteProductsCatalog({
 
     const children = data.children || [];
     childGroups.value = children;
+    // 用 catalog 的权威结果回填先行缓存，下次切回该地区时标签可同步出现。
+    if (children.length && Number(data.effective_product_group_id || 0) > 0) {
+      childGroupsCache.set(Number(data.effective_product_group_id), children);
+    }
 
     const map = {};
     (data.items_by_group || []).forEach((item) => {
@@ -754,13 +817,79 @@ export function useWebsiteProductsCatalog({
     },
   );
 
+  // 切换产品目录（类型）时要先拉 product-groups（实测 700ms 左右）才能确定该类型下
+  // 的地区列表，用户点完侧栏要等这一跳。首屏稳定后利用空闲时间把其余类型的
+  // 地区列表预取进 rootGroupsByType，点目录即可同步命中。失败静默，走原路径。
+  let rootPrefetchIdle = 0;
+
+  function cancelRootPrefetch() {
+    if (typeof window !== "undefined" && rootPrefetchIdle) {
+      window.cancelIdleCallback?.(rootPrefetchIdle);
+      rootPrefetchIdle = 0;
+    }
+  }
+
+  function scheduleRootPrefetch() {
+    const types = productTypes.value.map((item) => item.value).filter(Boolean);
+    const pending = types.filter((value) => !rootGroupsByType.has(value));
+    if (
+      !pending.length ||
+      typeof window === "undefined" ||
+      typeof window.requestIdleCallback !== "function"
+    ) {
+      return;
+    }
+
+    cancelRootPrefetch();
+    // 串行预取：并发会让 3 个 product-groups 一起压住首屏的详情/报价请求，
+    // 实测并发时每个都要 2s+。串行后单个回到 200~400ms，且不会延长首屏关键路径。
+    const prefetchNext = (index) => {
+      if (index >= pending.length) {
+        rootPrefetchIdle = 0;
+        return;
+      }
+
+      const value = pending[index];
+      if (rootGroupsByType.has(value)) {
+        prefetchNext(index + 1);
+        return;
+      }
+
+      void siteApi
+        .productGroups({ first_product_group_code: value })
+        .then((res) => {
+          if (!rootGroupsByType.has(value)) {
+            rootGroupsByType.set(
+              value,
+              filterGroupsByType(res.data.list || [], value),
+            );
+          }
+        })
+        .catch(() => {
+          // 预取失败不影响正常切换：切过去时仍会按原路径请求。
+        })
+        .finally(() => {
+          prefetchNext(index + 1);
+        });
+    };
+
+    rootPrefetchIdle = window.requestIdleCallback(
+      () => {
+        prefetchNext(0);
+      },
+      // 首屏（目录→详情→库存→报价）优先，空闲回调至少等关键路径稳定后再触发
+      { timeout: 6000 },
+    );
+  }
+
   onMounted(() => {
     updateMobileState();
     window.addEventListener("resize", updateMobileState);
-    init();
+    void init();
   });
 
   onBeforeUnmount(() => {
+    cancelRootPrefetch();
     groupAbortController?.abort();
     window.removeEventListener("resize", updateMobileState);
   });
@@ -769,6 +898,9 @@ export function useWebsiteProductsCatalog({
     pageLoading,
     pageError,
     retryInit: init,
+    // 由页面层在首屏报价完成后调用：把其余类型的产品目录预取进缓存，
+    // 之后点左侧产品目录可直接命中，省掉 700ms 的 product-groups 往返。
+    prefetchRootGroups: scheduleRootPrefetch,
     sidebarCollapsed,
     isMobile,
     mobileProductDrawer,

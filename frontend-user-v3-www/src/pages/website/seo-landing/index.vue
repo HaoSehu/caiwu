@@ -33,7 +33,7 @@
               :to="page.cta.primaryTo"
             >
               <span>{{ page.cta.primaryText }}</span>
-              <el-icon><ArrowRight /></el-icon>
+              <ArrowRightIcon />
             </router-link>
             <a class="seo-action seo-action--plain" :href="secondaryCtaHref">
               <span>{{ page.cta.secondaryText }}</span>
@@ -158,7 +158,7 @@
                 v-for="(point, pointIndex) in activeScenarioPoints"
                 :key="`${activeScenario.title}-${pointIndex}`"
               >
-                <el-icon><Check /></el-icon>
+                <CheckIcon class="seo-point__icon" aria-hidden="true" />
                 <span>{{ point }}</span>
               </li>
             </ul>
@@ -213,7 +213,7 @@
         <div class="seo-faq-list">
           <article v-for="faq in page.faqs" :key="faq.question" class="seo-faq">
             <h3>
-              <el-icon><QuestionFilled /></el-icon>
+              <HelpCircleFilledIcon class="seo-faq__icon" aria-hidden="true" />
               {{ faq.question }}
             </h3>
             <p>{{ faq.answer }}</p>
@@ -240,7 +240,7 @@
           </router-link>
           <a class="seo-action seo-action--outline" :href="secondaryCtaHref">
             <span>{{ page.cta.secondaryText }}</span>
-            <el-icon><ArrowRight /></el-icon>
+            <ArrowRightIcon />
           </a>
         </div>
       </div>
@@ -250,7 +250,11 @@
 
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from "vue";
-import { ArrowRight, Check, QuestionFilled } from "@element-plus/icons-vue";
+import {
+  ArrowRightIcon,
+  CheckIcon,
+  HelpCircleFilledIcon,
+} from "tdesign-icons-vue-next";
 import { buildConsoleUrl } from "@/utils/consoleUrl";
 
 // 本组件只负责展示：文案由对应的落地页薄壳以 props 传入，
@@ -1069,7 +1073,7 @@ const processSteps = computed(() => {
   line-height: 1.55;
 }
 
-.seo-solution-content li .el-icon {
+.seo-solution-content li .seo-point__icon {
   flex: 0 0 auto;
   margin-top: 2px;
   color: $color-primary;
@@ -1151,7 +1155,7 @@ const processSteps = computed(() => {
   letter-spacing: 0;
 }
 
-.seo-faq h3 .el-icon {
+.seo-faq h3 .seo-faq__icon {
   flex: 0 0 auto;
   margin-top: 3px;
   color: $color-primary;

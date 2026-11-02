@@ -23,21 +23,18 @@
             </div>
 
             <div class="hero-search">
-              <el-input
-                v-model="keyword"
-                :placeholder="config.searchPlaceholder"
-                class="hero-search__input"
-                autocomplete="off"
-                @keyup.enter="submitSearch"
-                @clear="submitSearch"
-                clearable
-              >
-                <template #append>
-                  <el-button type="primary" @click="submitSearch"
-                    >搜索</el-button
-                  >
-                </template>
-              </el-input>
+              <t-input-group class="hero-search__group">
+                <t-input
+                  v-model="keyword"
+                  :placeholder="config.searchPlaceholder"
+                  class="hero-search__input"
+                  autocomplete="off"
+                  clearable
+                  @enter="submitSearch"
+                  @clear="submitSearch"
+                />
+                <t-button theme="primary" @click="submitSearch">搜索</t-button>
+              </t-input-group>
             </div>
           </div>
         </section>
@@ -66,78 +63,78 @@
           </button>
         </section>
 
-        <section v-loading="loading" class="list-panel">
-          <template v-if="articleList.length">
-            <article
-              v-for="item in articleList"
-              :key="item.id"
-              class="list-item"
-            >
-              <div class="list-item__head">
-                <router-link
-                  class="list-item__title"
-                  :to="buildDetailRoute(item)"
-                >
-                  {{ item.title }}
-                </router-link>
-
-                <span
-                  v-if="Number(item.is_pinned) === 1"
-                  class="list-item__badge"
-                  >置顶</span
-                >
-              </div>
-
-              <p v-if="item.excerpt" class="list-item__summary">
-                {{ item.excerpt }}
-              </p>
-
-              <div class="list-item__meta">
-                <span>{{ item.category_name || currentCategoryLabel }}</span>
-                <span>{{ item.publish_at || item.created_at || "--" }}</span>
-                <span>浏览量: {{ item.view_count || 0 }}</span>
-              </div>
-            </article>
-          </template>
-
-          <div v-else-if="loadError" class="list-error" role="alert">
-            <p class="list-error__text">内容加载失败，请检查网络后重试</p>
-            <el-button type="primary" @click="retryLoad">重新加载</el-button>
-          </div>
-
-          <!-- role=status：搜到空结果时读屏必须播报，否则用户以为还在加载 -->
-          <div v-else-if="!loading" class="list-empty">
-            <el-empty
-              role="status"
-              aria-live="polite"
-              :description="
-                keyword.trim()
-                  ? `未找到与“${keyword.trim()}”相关的内容`
-                  : config.emptyText
-              "
-            />
-            <div class="list-empty__actions">
-              <el-button v-if="keyword.trim()" @click="clearSearch"
-                >清除搜索</el-button
+        <t-loading :loading="loading">
+          <section class="list-panel">
+            <template v-if="articleList.length">
+              <article
+                v-for="item in articleList"
+                :key="item.id"
+                class="list-item"
               >
-              <el-button type="primary" @click="router.push('/products')"
-                >查看产品</el-button
-              >
+                <div class="list-item__head">
+                  <router-link
+                    class="list-item__title"
+                    :to="buildDetailRoute(item)"
+                  >
+                    {{ item.title }}
+                  </router-link>
+
+                  <span
+                    v-if="Number(item.is_pinned) === 1"
+                    class="list-item__badge"
+                    >置顶</span
+                  >
+                </div>
+
+                <p v-if="item.excerpt" class="list-item__summary">
+                  {{ item.excerpt }}
+                </p>
+
+                <div class="list-item__meta">
+                  <span>{{ item.category_name || currentCategoryLabel }}</span>
+                  <span>{{ item.publish_at || item.created_at || "--" }}</span>
+                  <span>浏览量: {{ item.view_count || 0 }}</span>
+                </div>
+              </article>
+            </template>
+
+            <div v-else-if="loadError" class="list-error" role="alert">
+              <p class="list-error__text">内容加载失败，请检查网络后重试</p>
+              <t-button theme="primary" @click="retryLoad">重新加载</t-button>
             </div>
-          </div>
 
-          <div v-if="total > 0" class="list-panel__pager">
-            <el-pagination
-              v-model:current-page="page"
-              :page-size="pageSize"
-              :page-sizes="PAGE_SIZE_OPTIONS"
-              :total="total"
-              :layout="pagerLayout"
-              @current-change="updatePage"
-              @size-change="updatePageSize"
-            />
-          </div>
-        </section>
+            <!-- role=status：搜到空结果时读屏必须播报，否则用户以为还在加载 -->
+            <div v-else-if="!loading" class="list-empty">
+              <t-empty
+                size="large"
+                role="status"
+                aria-live="polite"
+                :title="emptyText"
+              />
+              <div class="list-empty__actions">
+                <t-button v-if="keyword.trim()" @click="clearSearch"
+                  >清除搜索</t-button
+                >
+                <t-button theme="primary" @click="router.push('/products')"
+                  >查看产品</t-button
+                >
+              </div>
+            </div>
+
+            <div v-if="total > 0" class="list-panel__pager">
+              <t-pagination
+                v-model:current="page"
+                :page-size="pageSize"
+                :page-size-options="PAGE_SIZE_OPTIONS"
+                :total="total"
+                :show-page-size="hasMultiplePages"
+                :show-jumper="hasMultiplePages"
+                @current-change="updatePage"
+                @page-size-change="updatePageSize"
+              />
+            </div>
+          </section>
+        </t-loading>
       </section>
 
       <aside class="content-sidebar">
@@ -155,7 +152,7 @@
               @click="goShortcut(item.route)"
             >
               <span class="shortcut-item__icon">
-                <el-icon><component :is="item.icon" /></el-icon>
+                <component :is="item.icon" />
               </span>
               <span class="shortcut-item__label">{{ item.label }}</span>
             </button>
@@ -168,8 +165,8 @@
           <div v-if="sidebarLoading" class="sidebar-hint">加载中…</div>
           <div v-else-if="sidebarError" class="sidebar-hint">
             <span>加载失败</span>
-            <el-button link type="primary" @click="retrySidebar"
-              >重试</el-button
+            <t-button variant="text" theme="primary" @click="retrySidebar"
+              >重试</t-button
             >
           </div>
           <div v-else-if="hotArticles.length" class="ranking-list">
@@ -187,7 +184,12 @@
               <span class="ranking-item__title">{{ item.title }}</span>
             </router-link>
           </div>
-          <el-empty v-else role="status" aria-live="polite" description="暂无数据" />
+          <t-empty
+            v-else
+            role="status"
+            aria-live="polite"
+            title="暂无数据"
+          />
         </section>
 
         <section class="sidebar-card">
@@ -196,8 +198,8 @@
           <div v-if="sidebarLoading" class="sidebar-hint">加载中…</div>
           <div v-else-if="sidebarError" class="sidebar-hint">
             <span>加载失败</span>
-            <el-button link type="primary" @click="retrySidebar"
-              >重试</el-button
+            <t-button variant="text" theme="primary" @click="retrySidebar"
+              >重试</t-button
             >
           </div>
           <div v-else-if="recentArticles.length" class="recent-list">
@@ -213,7 +215,12 @@
               }}</span>
             </router-link>
           </div>
-          <el-empty v-else role="status" aria-live="polite" description="暂无数据" />
+          <t-empty
+            v-else
+            role="status"
+            aria-live="polite"
+            title="暂无数据"
+          />
         </section>
       </aside>
     </div>
@@ -263,11 +270,14 @@ const total = ref(0);
 const activeCategoryId = ref(0);
 
 // 只有一页时不需要「每页条数下拉」和「跳页输入框」：它们改变不了任何结果，
-// 却会占掉小屏分页条的整行宽度。多页时才放出完整布局。
-const pagerLayout = computed(() =>
-  total.value > pageSize.value
-    ? "total, sizes, prev, pager, next, jumper"
-    : "total, prev, pager, next",
+// 却会占掉小屏分页条的整行宽度。多页时才放出这两个控件。
+const hasMultiplePages = computed(() => total.value > pageSize.value);
+
+// 空态文案：搜到空结果时要说清是「没搜到」，否则用户会以为是还没加载完
+const emptyText = computed(() =>
+  keyword.value.trim()
+    ? `未找到与“${keyword.value.trim()}”相关的内容`
+    : config.value.emptyText,
 );
 
 const heroKeywords = computed(() => {
@@ -618,6 +628,14 @@ onBeforeUnmount(() => {
   justify-content: flex-end;
 }
 
+.hero-search__group {
+  width: 100%;
+  // 拼接组内输入框按 100% 撑开，按钮不能再被压缩，否则窄屏文案会溢出
+  :deep(.t-button) {
+    flex-shrink: 0;
+  }
+}
+
 .hero-search__input {
   width: 100%;
 }
@@ -744,6 +762,18 @@ onBeforeUnmount(() => {
   justify-content: flex-end;
   padding: 20px 24px;
 
+  // t-pagination 根节点默认 width:100% 且总条数 flex:1，会把「共 N 条数据」推到面板最左，
+  // 与迁移前「总条数与页码控件并排靠右」不一致。收成内容宽度保持原版式（仅本站命名空间内）。
+  //
+  // 收成 width:auto 之后，窄屏下 6 个子项（总条数/每页条数/上一页/页码/下一页/跳页）按内容宽度
+  // 撑到 740px，而 TDesign 根规则是 white-space:nowrap 且没有 flex-wrap，父级 .list-panel 又是
+  // overflow:hidden → 溢出部分被静默裁掉，总条数与跳页完全不可见、下一页按钮点在裁切外点不到。
+  // 因此这里必须允许换行；宽屏（≥815px）内容本来就装得下，换行不生效，版式不变。
+  :deep(.t-pagination) {
+    width: auto;
+    flex-wrap: wrap;
+  }
+
   @media (max-width: $breakpoint-compact) {
     flex-wrap: wrap;
     justify-content: center;
@@ -780,7 +810,8 @@ onBeforeUnmount(() => {
   display: flex;
   justify-content: center;
   gap: 12px;
-  margin-top: -12px;
+  // TDesign 的 t-empty 自身没有下外边距，此处补一档描述与操作区之间的间距
+  margin-top: 16px;
 }
 
 .content-sidebar {

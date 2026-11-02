@@ -10,7 +10,7 @@
           的技术积淀与交付实践，助力企业上云与产业互联网。
           <router-link to="/products" class="product-tabs__more">
             查看全部产品
-            <el-icon><ArrowRight /></el-icon>
+            <chevron-right-icon />
           </router-link>
         </p>
       </header>
@@ -48,7 +48,7 @@
           <p class="product-card__desc">{{ card.desc }}</p>
           <span class="product-card__cta">
             立即选购
-            <el-icon><ArrowRight /></el-icon>
+            <chevron-right-icon />
           </span>
         </button>
       </div>
@@ -59,8 +59,7 @@
 <script setup>
 import { computed, shallowRef, watch } from "vue";
 import { useRouter } from "vue-router";
-import { ElIcon } from "element-plus/es/components/icon/index.mjs";
-import { ArrowRight } from "@element-plus/icons-vue";
+import { ChevronRightIcon } from "tdesign-icons-vue-next";
 import { useAppStore } from "@/app/stores/app";
 import { buildWebsiteProductPath } from "@/utils/productRoute";
 import { resolveProductDisplayName } from "@/utils/websiteProductConfig";
@@ -369,7 +368,7 @@ watch(
   color: $color-primary-hover;
 }
 
-.product-tabs__more .el-icon {
+.product-tabs__more .t-icon {
   font-size: 12px;
 }
 

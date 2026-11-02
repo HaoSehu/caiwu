@@ -328,6 +328,14 @@
   }
 }
 
+/* ===== 目录空态 ===== */
+/* 文案走 TDesign 的 title 位（description 位会与 locale 的「暂无数据」标题叠成两行），插图按侧栏密度收小 */
+.catalog-empty {
+  :deep(.t-empty__image) {
+    font-size: 56px;
+  }
+}
+
 /* ===== 页面加载失败态 ===== */
 .catalog-error {
   padding: 48px 20px;
@@ -571,9 +579,8 @@
   word-break: break-word;
 }
 
-:deep(.spec-note-popper) {
-  max-width: min(320px, calc(100vw - 32px));
-}
+// 说明气泡的宽度上限改由组件的 overlayInnerStyle 下发：弹层被 Teleport 到 body，
+// scoped 选择器（含 :deep）都拿不到弹层根节点，写在这里不会命中。
 
 .mobile-picker-trigger .spec-note-inline--picker {
   flex: 1;
@@ -648,53 +655,72 @@
 .catalog-tabs {
   flex: 1;
   min-width: 0;
+  // TDesign Tabs 默认带容器底色与底部 1px 分隔线，目录 chip 组不需要
+  background: transparent;
 
-  :deep(.el-tabs__header) {
-    margin: 0;
-  }
-
-  :deep(.el-tabs__nav-wrap::after) {
+  :deep(.t-tabs__nav-container.t-is-top::after) {
     display: none;
   }
 
-  :deep(.el-tabs__item) {
+  // TDesign 默认 t-size-m 给条目 40px 高，目录 chip 行需要更紧凑的 30px
+  :deep(.t-tabs__nav-item.t-size-m) {
     height: 30px;
     margin-right: 6px;
-    padding: 0 16px !important;
-    border: 1px solid $border-color;
-    border-radius: 4px;
-    background: $bg-color-card;
     color: $text-color-secondary;
     font-size: 13px;
     line-height: 28px;
+  }
+
+  // chip 的边框/底色/内边距挂在 TDesign 的内层 wrapper 上
+  :deep(.t-tabs__nav-item-wrapper) {
+    height: 28px;
+    margin: 0;
+    padding: 0 16px;
+    border: 1px solid $border-color;
+    border-radius: 4px;
+    background: $bg-color-card;
     transition:
       border-color $motion-fast ease,
       background-color $motion-fast ease,
       color $motion-fast ease;
   }
 
-  :deep(.el-tabs__item:hover) {
+  :deep(.t-tabs__nav-item:not(.t-is-disabled):not(.t-is-active):hover) {
     color: $color-primary;
   }
 
-  :deep(.el-tabs__item.is-active) {
-    border-color: $color-primary;
-    background: $color-primary-soft;
+  :deep(
+    .t-tabs__nav-item:not(.t-is-disabled):not(.t-is-active):hover
+      .t-tabs__nav-item-wrapper
+  ) {
+    background: $bg-color-card;
+  }
+
+  :deep(.t-tabs__nav-item.t-is-active) {
     color: $color-primary;
     font-weight: 600;
+    text-shadow: none;
   }
 
-  :deep(.el-tabs__active-bar) {
+  :deep(.t-tabs__nav-item.t-is-active .t-tabs__nav-item-wrapper) {
+    border-color: $color-primary;
+    background: $color-primary-soft;
+  }
+
+  :deep(.t-tabs__bar) {
     display: none;
   }
 
-  :deep(.el-tabs__content) {
+  // :list 驱动时 TDesign 会为每个条目渲染一个空面板（es/tabs/tabs.mjs renderContent 的
+  // list 分支直接 map 出 TabPanel），但不会生成 __content 包裹层——那只在插槽面板分支才建，
+  // 故这里只需隐藏面板本身。
+  :deep(.t-tab-panel) {
     display: none;
   }
 }
 
 .catalog-tabs--child {
-  :deep(.el-tabs__item.is-active) {
+  :deep(.t-tabs__nav-item.t-is-active .t-tabs__nav-item-wrapper) {
     background: $bg-color-card;
     box-shadow: inset 0 0 0 1px $color-primary;
   }
@@ -917,10 +943,14 @@
 .desktop-machine-table-head,
 .desktop-machine-table-row {
   display: grid;
-  grid-template-columns: minmax(240px, 1.7fr) 100px 100px minmax(
-      150px,
-      1fr
-    ) minmax(140px, 1fr) minmax(180px, 1.1fr);
+  // 实测「Intel Xeon Platinum 8269CY」需 195px 才不被省略号截断，而 vCPU/内存
+  // 只放「16 vCPU / 32 GiB」这类短文本、价格列 180px 也偏宽松。
+  // 因此把处理器列从 150px 提到 210px，vCPU/内存各收窄到 84px、价格收到 150px，
+  // 总宽不变（950px 起）：既让处理器全名可读，又不至于让整表更容易横向滚动。
+  grid-template-columns: minmax(220px, 1.7fr) 84px 84px minmax(
+      210px,
+      1.2fr
+    ) minmax(130px, 0.9fr) minmax(150px, 1fr);
   align-items: center;
   min-width: 900px;
 }
@@ -975,33 +1005,48 @@
 .machine-spec-cell--sortable {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  // 数值列与表体一样右对齐：inline-flex 默认 flex-start，会把「标签 + 排序图标」
+  // 顶在单元格左端，而表体数字右对齐，两者基线对不上（截图里 vCPU 文字在左、
+  // 图标飘在右侧）。价格列同样右对齐，尾部左留白由 padding 统一承担。
+  justify-content: flex-end;
+  gap: 4px;
 }
 
 .machine-spec-sort-controls {
   display: inline-flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 0;
   flex-shrink: 0;
+  // 单个箭头按钮的命中区延伸到 20×14，但视觉上两枚箭头要靠得很近才像一个
+  // 排序整体；这里用负 margin 抵消按钮内的空白行高，避免中间裂开一条缝。
+  margin: -2px 0;
 }
 
 .machine-spec-sort-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  // 原 14×9 远低于最小可点尺寸，扩展到 24×24 并以图标自身尺寸保持视觉不变
-  width: 24px;
-  height: 24px;
+  // 视觉仍是 12px 图标，但可点区域 20×15：单个箭头全高 28px 会把
+  // 38px 表头行撑到 50px，且两个箭头上下叠放过于松散。
+  width: 20px;
+  height: 15px;
   padding: 0;
   border: 0;
+  border-radius: 2px;
   background: transparent;
-  color: $text-color-secondary;
+  color: $text-color-placeholder;
   font-size: 12px;
   line-height: 1;
   cursor: pointer;
-  transition: color $motion-fast ease;
+  transition:
+    color $motion-fast ease,
+    background $motion-fast ease;
 
-  &:hover,
+  &:hover {
+    color: $color-primary;
+    background: rgba($color-primary, 0.08);
+  }
+
   &.active {
     color: $color-primary;
   }
@@ -1149,21 +1194,6 @@
     // 原 #b8bec8 图形对比 1.87:1 不达 3:1，加深为次文本色
     color: $text-color-secondary;
   }
-}
-
-.num-input-wrap {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  :deep(.el-input-number) {
-    width: 130px;
-  }
-}
-
-.num-unit {
-  font-size: 13px;
-  color: $text-color-secondary;
-  font-weight: 500;
 }
 
 /* ===== 操作系统 ===== */
@@ -1402,8 +1432,31 @@
   margin-top: 4px;
 }
 
+// TDesign 提示条默认内边距 16/24、warning 底色为品牌暖橙，
+// 在本站 280px 侧栏里过于厚重，这里收回到站点既有的紧凑密度与柔和底色
 .purchase-requirements-alert {
   margin: 12px 0;
+  padding: 8px 12px;
+  border-radius: 2px;
+  background: $color-warning-soft;
+  color: $color-warning-text;
+  font-size: 12px;
+  line-height: 1.6;
+
+  :deep(.t-alert__icon) {
+    color: $color-warning;
+    font-size: 14px;
+  }
+
+  /* 文案走 #title 槽位渲染在 .t-alert__title 里（与商品详情页一致，迁移前同样是标题位），
+     它自带 color: var(--td-text-color-primary) 与 600 字重，会盖掉根节点的 color；
+     站点要的紧凑警示色必须显式下发到这一层，否则根节点的 color 是死声明。 */
+  :deep(.t-alert__title) {
+    color: $color-warning-text;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.6;
+  }
 }
 
 .cost-divider {
@@ -2103,7 +2156,7 @@
   padding: 16px 14px calc(18px + env(safe-area-inset-bottom, 0px));
 }
 
-// 移动端优惠券选项卡片：替代桌面式 el-select popper，触控目标 ≥52px
+// 移动端优惠券选项卡片：替代桌面下拉选择器弹层，触控目标 ≥52px
 .mobile-coupon-option {
   display: flex;
   align-items: center;
@@ -2235,11 +2288,6 @@
     svg {
       margin-right: -2px;
     }
-  }
-
-  .num-input-wrap {
-    width: 100%;
-    justify-content: flex-start;
   }
 
   .shop-cost {

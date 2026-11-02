@@ -16,7 +16,8 @@
           :aria-expanded="!sidebarCollapsed"
           @click="sidebarCollapsed = !sidebarCollapsed"
         >
-          <el-icon><Fold v-if="!sidebarCollapsed" /><Expand v-else /></el-icon>
+          <MenuUnfoldIcon v-if="sidebarCollapsed" />
+          <MenuFoldIcon v-else />
         </button>
       </div>
       <button
@@ -135,35 +136,23 @@
         <!-- 产品分类（二级，一级 Tab） -->
         <div class="filter-block" v-if="rootGroups.length && !isMobile">
           <span class="filter-label">地区</span>
-          <el-tabs
+          <t-tabs
             class="catalog-tabs"
-            :model-value="activeGroupId"
-            @tab-change="handleDesktopGroupChange"
-          >
-            <el-tab-pane
-              v-for="g in rootGroups"
-              :key="g.id"
-              :name="g.id"
-              :label="g.name"
-            />
-          </el-tabs>
+            :value="activeGroupId"
+            :list="rootGroupTabs"
+            @change="handleDesktopGroupChange"
+          />
         </div>
 
         <!-- 二级分类（三级，二级 Tab） -->
         <div class="filter-block" v-if="childGroups.length && !isMobile">
           <span class="filter-label">可用区</span>
-          <el-tabs
+          <t-tabs
             class="catalog-tabs catalog-tabs--child"
-            :model-value="activeChildId"
-            @tab-change="handleDesktopChildChange"
-          >
-            <el-tab-pane
-              v-for="c in childGroups"
-              :key="c.id"
-              :name="c.id"
-              :label="c.name"
-            />
-          </el-tabs>
+            :value="activeChildId"
+            :list="childGroupTabs"
+            @change="handleDesktopChildChange"
+          />
         </div>
 
         <div
@@ -175,241 +164,674 @@
         </div>
 
         <!-- 商品配置区 -->
-        <div
-          class="config-area"
+        <t-loading
           v-if="selectedProduct"
-          v-loading="configLoading"
+          :loading="configLoading"
+          size="small"
         >
-          <!-- 操作系统 -->
-          <div v-if="osGroups.length && isMobile" class="mobile-picker-row">
-            <h2 class="config-block-title">操作系统</h2>
-            <button
-              type="button"
-              class="mobile-picker-trigger"
-              @click="openMobileOsDrawer"
-            >
-              <span
-                >{{ currentOsGroup?.label || "请选择系统"
-                }}{{
-                  currentOsVersionLabel ? ` · ${currentOsVersionLabel}` : ""
-                }}</span
+          <div class="config-area">
+            <!-- 操作系统 -->
+            <div v-if="osGroups.length && isMobile" class="mobile-picker-row">
+              <h2 class="config-block-title">操作系统</h2>
+              <button
+                type="button"
+                class="mobile-picker-trigger"
+                @click="openMobileOsDrawer"
               >
-              <svg
-                viewBox="0 0 12 12"
-                fill="none"
-                width="12"
-                height="12"
-                aria-hidden="true"
-              >
-                <path
-                  d="M3 4.5l3 3 3-3"
-                  stroke="currentColor"
-                  stroke-width="1.5"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-              </svg>
-            </button>
-          </div>
-          <div
-            class="config-block"
-            v-if="osConfig && !isMobile && !machineConfigs.length"
-          >
-            <h2 class="config-block-title">系统安装</h2>
-            <div class="os-section">
-              <div v-if="osGroups.length" class="os-cards">
-                <button
-                  v-for="os in osGroups"
-                  :key="os.id"
-                  type="button"
-                  class="os-card"
-                  :class="{ active: configForm.os_group === os.id }"
-                  @click="selectOsGroup(os)"
+                <span
+                  >{{ currentOsGroup?.label || "请选择系统"
+                  }}{{
+                    currentOsVersionLabel ? ` · ${currentOsVersionLabel}` : ""
+                  }}</span
                 >
-                  <div class="os-card-head">
-                    <img
-                      v-if="os.icon"
-                      :src="os.icon"
-                      :alt="os.label"
-                      class="os-logo-img"
-                      width="28"
-                      height="28"
-                      loading="lazy"
-                      decoding="async"
-                    />
-                    <span v-else class="os-logo">{{
-                      os.label.slice(0, 2)
-                    }}</span>
-                    <span class="os-label-name">{{ os.label }}</span>
-                  </div>
-                  <div class="os-card-ver">
-                    <span v-if="configForm.os_group === os.id">{{
-                      currentOsVersionLabel
-                    }}</span>
-                    <span v-else class="os-placeholder">选择版本</span>
-                  </div>
-                  <span
-                    class="os-check-mark"
-                    v-if="configForm.os_group === os.id"
-                    >✓</span
-                  >
-                </button>
-              </div>
-              <div v-else class="spec-fixed">
-                当前商品未提供可切换的系统版本
-              </div>
-              <div class="os-ver-row" v-if="currentOsGroup?.versions?.length">
-                <span class="os-ver-label">版本</span>
-                <div class="os-ver-btns">
+                <svg
+                  viewBox="0 0 12 12"
+                  fill="none"
+                  width="12"
+                  height="12"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M3 4.5l3 3 3-3"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </button>
+            </div>
+            <div
+              class="config-block"
+              v-if="osConfig && !isMobile && !machineConfigs.length"
+            >
+              <h2 class="config-block-title">系统安装</h2>
+              <div class="os-section">
+                <div v-if="osGroups.length" class="os-cards">
                   <button
-                    v-for="ver in currentOsGroup.versions"
-                    :key="ver.id"
+                    v-for="os in osGroups"
+                    :key="os.id"
                     type="button"
-                    class="ver-btn"
-                    :class="{ active: configForm.os === ver.id }"
-                    @click="configForm.os = ver.id"
+                    class="os-card"
+                    :class="{ active: configForm.os_group === os.id }"
+                    @click="selectOsGroup(os)"
                   >
-                    {{ ver.label }}
+                    <div class="os-card-head">
+                      <img
+                        v-if="os.icon"
+                        :src="os.icon"
+                        :alt="os.label"
+                        class="os-logo-img"
+                        width="28"
+                        height="28"
+                        loading="lazy"
+                        decoding="async"
+                      />
+                      <span v-else class="os-logo">{{
+                        os.label.slice(0, 2)
+                      }}</span>
+                      <span class="os-label-name">{{ os.label }}</span>
+                    </div>
+                    <div class="os-card-ver">
+                      <span v-if="configForm.os_group === os.id">{{
+                        currentOsVersionLabel
+                      }}</span>
+                      <span v-else class="os-placeholder">选择版本</span>
+                    </div>
+                    <span
+                      class="os-check-mark"
+                      v-if="configForm.os_group === os.id"
+                      >✓</span
+                    >
                   </button>
+                </div>
+                <div v-else class="spec-fixed">
+                  当前商品未提供可切换的系统版本
+                </div>
+                <div class="os-ver-row" v-if="currentOsGroup?.versions?.length">
+                  <span class="os-ver-label">版本</span>
+                  <div class="os-ver-btns">
+                    <button
+                      v-for="ver in currentOsGroup.versions"
+                      :key="ver.id"
+                      type="button"
+                      class="ver-btn"
+                      :class="{ active: configForm.os === ver.id }"
+                      @click="configForm.os = ver.id"
+                    >
+                      {{ ver.label }}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          <!-- 机型配置 -->
-          <div
-            v-if="(machineConfigs.length || hasMobileProductGroups) && isMobile"
-          >
+            <!-- 机型配置 -->
             <div
-              v-if="hasMobileProductGroups"
-              class="mobile-picker-row mobile-picker-row--duo"
+              v-if="(machineConfigs.length || hasMobileProductGroups) && isMobile"
             >
-              <div class="mobile-picker-col">
-                <h2 class="config-block-title">CPU</h2>
-                <button
-                  type="button"
-                  class="mobile-picker-trigger"
-                  @click="openMobileGroupedCpuDrawer"
-                >
-                  <span>{{ selectedMobileCpuLabel || "请选择 CPU" }}</span>
-                  <svg
-                    viewBox="0 0 12 12"
-                    fill="none"
-                    width="12"
-                    height="12"
-                    aria-hidden="true"
+              <div
+                v-if="hasMobileProductGroups"
+                class="mobile-picker-row mobile-picker-row--duo"
+              >
+                <div class="mobile-picker-col">
+                  <h2 class="config-block-title">CPU</h2>
+                  <button
+                    type="button"
+                    class="mobile-picker-trigger"
+                    @click="openMobileGroupedCpuDrawer"
                   >
-                    <path
-                      d="M3 4.5l3 3 3-3"
-                      stroke="currentColor"
-                      stroke-width="1.5"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    />
-                  </svg>
-                </button>
+                    <span>{{ selectedMobileCpuLabel || "请选择 CPU" }}</span>
+                    <svg
+                      viewBox="0 0 12 12"
+                      fill="none"
+                      width="12"
+                      height="12"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M3 4.5l3 3 3-3"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      />
+                    </svg>
+                  </button>
+                </div>
+                <div class="mobile-picker-col">
+                  <h2 class="config-block-title">内存</h2>
+                  <button
+                    type="button"
+                    class="mobile-picker-trigger"
+                    @click="openMobileGroupedMemoryDrawer"
+                  >
+                    <span>{{ selectedMobileMemoryLabel || "请选择内存" }}</span>
+                    <svg
+                      viewBox="0 0 12 12"
+                      fill="none"
+                      width="12"
+                      height="12"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M3 4.5l3 3 3-3"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      />
+                    </svg>
+                  </button>
+                </div>
               </div>
-              <div class="mobile-picker-col">
-                <h2 class="config-block-title">内存</h2>
-                <button
-                  type="button"
-                  class="mobile-picker-trigger"
-                  @click="openMobileGroupedMemoryDrawer"
-                >
-                  <span>{{ selectedMobileMemoryLabel || "请选择内存" }}</span>
-                  <svg
-                    viewBox="0 0 12 12"
-                    fill="none"
-                    width="12"
-                    height="12"
-                    aria-hidden="true"
+              <div
+                v-else-if="cpuConfig || memConfig"
+                class="mobile-picker-row mobile-picker-row--duo"
+              >
+                <div v-if="cpuConfig" class="mobile-picker-col">
+                  <h2 class="config-block-title">{{ cpuConfig.label }}</h2>
+                  <button
+                    type="button"
+                    class="mobile-picker-trigger"
+                    @click="openMobileCpuDrawer"
                   >
-                    <path
-                      d="M3 4.5l3 3 3-3"
-                      stroke="currentColor"
-                      stroke-width="1.5"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
+                    <span>{{
+                      cpuConfig.options.find(
+                        (o) => o.id === configForm[cpuConfig.key],
+                      )?.label || "请选择"
+                    }}</span>
+                    <svg
+                      viewBox="0 0 12 12"
+                      fill="none"
+                      width="12"
+                      height="12"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M3 4.5l3 3 3-3"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      />
+                    </svg>
+                  </button>
+                </div>
+                <div v-if="memConfig" class="mobile-picker-col">
+                  <h2 class="config-block-title">{{ memConfig.label }}</h2>
+                  <button
+                    type="button"
+                    class="mobile-picker-trigger"
+                    @click="openMobileMemDrawer"
+                  >
+                    <span>{{
+                      memConfig.options.find(
+                        (o) => o.id === configForm[memConfig.key],
+                      )?.label || "请选择"
+                    }}</span>
+                    <svg
+                      viewBox="0 0 12 12"
+                      fill="none"
+                      width="12"
+                      height="12"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M3 4.5l3 3 3-3"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              <div v-if="otherMachineConfigs.length" class="config-block">
+                <div class="spec-list">
+                  <template v-for="cfg in otherMachineConfigs" :key="cfg.key">
+                    <MobileRangePicker
+                      v-if="isRangeConfig(cfg)"
+                      v-model="configForm[cfg.key + '_num']"
+                      :label="cfg.label"
+                      :min="cfg.min ?? 1"
+                      :max="cfg.max ?? 9999"
                     />
-                  </svg>
-                </button>
+                    <button
+                      v-else-if="cfg.options.length"
+                      type="button"
+                      class="mobile-config-select-row"
+                      @click="openMobileSingleConfigDrawer(cfg)"
+                    >
+                      <span class="mobile-config-select-label">{{
+                        cfg.label
+                      }}</span>
+                      <span class="mobile-config-select-value">
+                        {{ selectedOptionLabel(cfg) || "请选择" }}
+                        <svg
+                          viewBox="0 0 12 12"
+                          fill="none"
+                          width="12"
+                          height="12"
+                          aria-hidden="true"
+                        >
+                          <path
+                            d="M4.5 3l3 3-3 3"
+                            stroke="currentColor"
+                            stroke-width="1.5"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                          />
+                        </svg>
+                      </span>
+                    </button>
+                    <div v-else class="spec-row">
+                      <span class="spec-label">{{ cfg.label }}</span>
+                      <MobileRangePicker
+                        v-if="cfg.isNumber"
+                        v-model="configForm[cfg.key + '_num']"
+                        :label="cfg.label"
+                        :min="cfg.min ?? 1"
+                        :max="cfg.max ?? 9999"
+                      />
+                      <div class="opt-row" v-else-if="cfg.options.length > 1">
+                        <button
+                          v-for="opt in cfg.options"
+                          :key="opt.id"
+                          type="button"
+                          class="opt-btn"
+                          :class="{ active: configForm[cfg.key] === opt.id }"
+                          @click="configForm[cfg.key] = opt.id"
+                        >
+                          {{ opt.label }}
+                        </button>
+                      </div>
+                      <span v-else class="spec-fixed">{{
+                        cfg.options[0]?.label
+                      }}</span>
+                    </div>
+                  </template>
+                </div>
               </div>
             </div>
-            <div
-              v-else-if="cpuConfig || memConfig"
-              class="mobile-picker-row mobile-picker-row--duo"
-            >
-              <div v-if="cpuConfig" class="mobile-picker-col">
-                <h2 class="config-block-title">{{ cpuConfig.label }}</h2>
-                <button
-                  type="button"
-                  class="mobile-picker-trigger"
-                  @click="openMobileCpuDrawer"
-                >
-                  <span>{{
-                    cpuConfig.options.find(
-                      (o) => o.id === configForm[cpuConfig.key],
-                    )?.label || "请选择"
-                  }}</span>
-                  <svg
-                    viewBox="0 0 12 12"
-                    fill="none"
-                    width="12"
-                    height="12"
-                    aria-hidden="true"
+            <div class="config-block" v-if="machineConfigs.length && !isMobile">
+              <h2 class="config-block-title">机型配置</h2>
+              <div
+                v-if="desktopMachineSpecRows.length"
+                class="desktop-machine-spec-panel"
+              >
+                <div class="desktop-machine-table-scroll">
+                  <!-- 表格语义要成对：只有 role="row"/"columnheader" 而没有 role="table"
+                       容器时，读屏不会把它当表格，列标题也不会关联到单元格 -->
+                  <div
+                    class="desktop-machine-table"
+                    role="table"
+                    aria-label="机型规格"
                   >
-                    <path
-                      d="M3 4.5l3 3 3-3"
-                      stroke="currentColor"
-                      stroke-width="1.5"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    />
-                  </svg>
-                </button>
-              </div>
-              <div v-if="memConfig" class="mobile-picker-col">
-                <h2 class="config-block-title">{{ memConfig.label }}</h2>
-                <button
-                  type="button"
-                  class="mobile-picker-trigger"
-                  @click="openMobileMemDrawer"
-                >
-                  <span>{{
-                    memConfig.options.find(
-                      (o) => o.id === configForm[memConfig.key],
-                    )?.label || "请选择"
-                  }}</span>
-                  <svg
-                    viewBox="0 0 12 12"
-                    fill="none"
-                    width="12"
-                    height="12"
-                    aria-hidden="true"
+                    <div class="desktop-machine-table-head" role="row">
+                    <span
+                      class="machine-spec-cell machine-spec-cell--name"
+                      role="columnheader"
+                      >实例规格</span
+                    >
+                    <span
+                      class="machine-spec-cell machine-spec-cell--sortable"
+                      role="columnheader"
+                      :aria-sort="
+                        machineSpecSort.key === 'cpu'
+                          ? machineSpecSort.direction === 'asc'
+                            ? 'ascending'
+                            : 'descending'
+                          : 'none'
+                      "
+                    >
+                      <span>vCPU</span>
+                      <span
+                        class="machine-spec-sort-controls"
+                        aria-label="vCPU 排序"
+                      >
+                        <button
+                          type="button"
+                          class="machine-spec-sort-btn"
+                          :class="{
+                            active:
+                              machineSpecSort.key === 'cpu' &&
+                              machineSpecSort.direction === 'asc',
+                          }"
+                          aria-label="vCPU 从小到大排序"
+                          @click="setMachineSpecSort('cpu', 'asc')"
+                        >
+                          <CaretUpIcon />
+                        </button>
+                        <button
+                          type="button"
+                          class="machine-spec-sort-btn"
+                          :class="{
+                            active:
+                              machineSpecSort.key === 'cpu' &&
+                              machineSpecSort.direction === 'desc',
+                          }"
+                          aria-label="vCPU 从大到小排序"
+                          @click="setMachineSpecSort('cpu', 'desc')"
+                        >
+                          <CaretDownIcon />
+                        </button>
+                      </span>
+                    </span>
+                    <span
+                      class="machine-spec-cell machine-spec-cell--sortable"
+                      role="columnheader"
+                      :aria-sort="
+                        machineSpecSort.key === 'memory'
+                          ? machineSpecSort.direction === 'asc'
+                            ? 'ascending'
+                            : 'descending'
+                          : 'none'
+                      "
+                    >
+                      <span>内存</span>
+                      <span
+                        class="machine-spec-sort-controls"
+                        aria-label="内存排序"
+                      >
+                        <button
+                          type="button"
+                          class="machine-spec-sort-btn"
+                          :class="{
+                            active:
+                              machineSpecSort.key === 'memory' &&
+                              machineSpecSort.direction === 'asc',
+                          }"
+                          aria-label="内存从小到大排序"
+                          @click="setMachineSpecSort('memory', 'asc')"
+                        >
+                          <CaretUpIcon />
+                        </button>
+                        <button
+                          type="button"
+                          class="machine-spec-sort-btn"
+                          :class="{
+                            active:
+                              machineSpecSort.key === 'memory' &&
+                              machineSpecSort.direction === 'desc',
+                          }"
+                          aria-label="内存从大到小排序"
+                          @click="setMachineSpecSort('memory', 'desc')"
+                        >
+                          <CaretDownIcon />
+                        </button>
+                      </span>
+                    </span>
+                    <span
+                      class="machine-spec-cell machine-spec-cell--processor"
+                      role="columnheader"
+                      >处理器</span
+                    >
+                    <span class="machine-spec-cell" role="columnheader"
+                      >主频/睿频</span
+                    >
+                    <span
+                      class="machine-spec-cell machine-spec-cell--price machine-spec-cell--sortable"
+                      role="columnheader"
+                      :aria-sort="
+                        machineSpecSort.key === 'price'
+                          ? machineSpecSort.direction === 'asc'
+                            ? 'ascending'
+                            : 'descending'
+                          : 'none'
+                      "
+                    >
+                      <span>基础价格</span>
+                      <span
+                        class="machine-spec-sort-controls"
+                        aria-label="基础价格排序"
+                      >
+                        <button
+                          type="button"
+                          class="machine-spec-sort-btn"
+                          :class="{
+                            active:
+                              machineSpecSort.key === 'price' &&
+                              machineSpecSort.direction === 'asc',
+                          }"
+                          aria-label="基础价格从小到大排序"
+                          @click="setMachineSpecSort('price', 'asc')"
+                        >
+                          <CaretUpIcon />
+                        </button>
+                        <button
+                          type="button"
+                          class="machine-spec-sort-btn"
+                          :class="{
+                            active:
+                              machineSpecSort.key === 'price' &&
+                              machineSpecSort.direction === 'desc',
+                          }"
+                          aria-label="基础价格从大到小排序"
+                          @click="setMachineSpecSort('price', 'desc')"
+                        >
+                          <CaretDownIcon />
+                        </button>
+                      </span>
+                    </span>
+                  </div>
+                  <button
+                    v-for="row in desktopMachineSpecRows"
+                    :key="row.id"
+                    type="button"
+                    class="desktop-machine-table-row"
+                    role="row"
+                    :class="{ active: row.active }"
+                    :aria-selected="row.active"
+                    :aria-describedby="
+                      row.note ? `spec-note-${row.id}` : undefined
+                    "
+                    @click="selectDesktopMachineSpec(row)"
                   >
-                    <path
-                      d="M3 4.5l3 3 3-3"
-                      stroke="currentColor"
-                      stroke-width="1.5"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
+                    <span
+                      class="machine-spec-cell machine-spec-cell--name"
+                      role="cell"
+                    >
+                      <span class="machine-spec-radio" aria-hidden="true"></span>
+                      <span class="machine-spec-name-wrap">
+                        <span class="machine-spec-name">{{ row.name }}</span>
+                        <t-tooltip
+                          v-if="row.note"
+                          placement="top-left"
+                          :delay="120"
+                          theme="light"
+                          :overlay-inner-style="specNoteTooltipStyle"
+                        >
+                          <template #content>
+                            <div class="spec-note-content">{{ row.note }}</div>
+                          </template>
+                          <span
+                            class="spec-note-trigger"
+                            aria-hidden="true"
+                            @click.stop
+                            >?</span
+                          >
+                        </t-tooltip>
+                      </span>
+                    </span>
+                    <span class="machine-spec-cell" role="cell">{{
+                      row.cpuText
+                    }}</span>
+                    <span class="machine-spec-cell" role="cell">{{
+                      row.memoryText
+                    }}</span>
+                    <span
+                      class="machine-spec-cell machine-spec-cell--processor"
+                      role="cell"
+                      >{{ row.processorLabel }}</span
+                    >
+                    <span class="machine-spec-cell" role="cell">{{
+                      formatFrequencyPair(row.baseFrequency, row.turboFrequency)
+                    }}</span>
+                    <span
+                      class="machine-spec-cell machine-spec-cell--price"
+                      role="cell"
+                      >{{ row.basePriceText }}</span
+                    >
+                  </button>
+                  <div class="sr-only">
+                    <template
+                      v-for="row in desktopMachineSpecRows"
+                      :key="`note-${row.id}`"
+                    >
+                      <span v-if="row.note" :id="`spec-note-${row.id}`"
+                        >{{ row.name }}：{{ row.note }}</span
+                      >
+                    </template>
+                  </div>
+                  </div>
+                </div>
+                <div v-if="osConfig" class="desktop-machine-os-panel">
+                  <div class="desktop-machine-subtitle">系统安装</div>
+                  <div class="os-section">
+                    <div v-if="osGroups.length" class="os-cards">
+                      <button
+                        v-for="os in osGroups"
+                        :key="os.id"
+                        type="button"
+                        class="os-card"
+                        :class="{ active: configForm.os_group === os.id }"
+                        @click="selectOsGroup(os)"
+                      >
+                        <div class="os-card-head">
+                          <img
+                            v-if="os.icon"
+                            :src="os.icon"
+                            :alt="os.label"
+                            class="os-logo-img"
+                            width="28"
+                            height="28"
+                            loading="lazy"
+                            decoding="async"
+                          />
+                          <span v-else class="os-logo">{{
+                            os.label.slice(0, 2)
+                          }}</span>
+                          <span class="os-label-name">{{ os.label }}</span>
+                        </div>
+                        <div class="os-card-ver">
+                          <span v-if="configForm.os_group === os.id">{{
+                            currentOsVersionLabel
+                          }}</span>
+                          <span v-else class="os-placeholder">选择版本</span>
+                        </div>
+                        <span
+                          class="os-check-mark"
+                          v-if="configForm.os_group === os.id"
+                          >✓</span
+                        >
+                      </button>
+                    </div>
+                    <div v-else class="spec-fixed">
+                      当前商品未提供可切换的系统版本
+                    </div>
+                    <div
+                      class="os-ver-row"
+                      v-if="currentOsGroup?.versions?.length"
+                    >
+                      <span class="os-ver-label">版本</span>
+                      <div class="os-ver-btns">
+                        <button
+                          v-for="ver in currentOsGroup.versions"
+                          :key="ver.id"
+                          type="button"
+                          class="ver-btn"
+                          :class="{ active: configForm.os === ver.id }"
+                          @click="configForm.os = ver.id"
+                        >
+                          {{ ver.label }}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div
+                  v-if="desktopMachineExtraConfigs.length"
+                  class="desktop-machine-extra-list"
+                >
+                  <template
+                    v-for="cfg in desktopMachineExtraConfigs"
+                    :key="cfg.key"
+                  >
+                    <MobileRangePicker
+                      v-if="cfg.isNumber"
+                      v-model="configForm[cfg.key + '_num']"
+                      :label="cfg.label"
+                      :min="cfg.min ?? 1"
+                      :max="cfg.max ?? 9999"
                     />
-                  </svg>
-                </button>
+                    <div v-else class="spec-row spec-row--desktop-extra">
+                      <span class="spec-label">{{ cfg.label }}</span>
+                      <div class="opt-row" v-if="cfg.options.length > 1">
+                        <button
+                          v-for="opt in cfg.options"
+                          :key="opt.id"
+                          type="button"
+                          class="opt-btn"
+                          :class="{ active: configForm[cfg.key] === opt.id }"
+                          @click="configForm[cfg.key] = opt.id"
+                        >
+                          {{ opt.label }}
+                        </button>
+                      </div>
+                      <span v-else class="spec-fixed">{{
+                        cfg.options[0]?.label
+                      }}</span>
+                    </div>
+                  </template>
+                </div>
               </div>
-            </div>
-            <div v-if="otherMachineConfigs.length" class="config-block">
-              <div class="spec-list">
-                <template v-for="cfg in otherMachineConfigs" :key="cfg.key">
+              <div v-else class="spec-list">
+                <template v-for="cfg in machineConfigs" :key="cfg.key">
                   <MobileRangePicker
-                    v-if="isRangeConfig(cfg)"
+                    v-if="cfg.isNumber"
+                    v-model="configForm[cfg.key + '_num']"
+                    :label="cfg.label"
+                    :min="cfg.min ?? 1"
+                    :max="cfg.max ?? 9999"
+                  />
+                  <div v-else class="spec-row">
+                    <span class="spec-label">{{ cfg.label }}</span>
+                    <div class="opt-row" v-if="cfg.options.length > 1">
+                      <button
+                        v-for="opt in cfg.options"
+                        :key="opt.id"
+                        type="button"
+                        class="opt-btn"
+                        :class="{ active: configForm[cfg.key] === opt.id }"
+                        @click="configForm[cfg.key] = opt.id"
+                      >
+                        {{ opt.label }}
+                      </button>
+                    </div>
+                    <span v-else class="spec-fixed">{{
+                      cfg.options[0]?.label
+                    }}</span>
+                  </div>
+                </template>
+              </div>
+            </div>
+
+            <!-- 网络配置 -->
+            <div class="config-block" v-if="networkConfigs.length">
+              <h2 class="config-block-title">网络配置</h2>
+              <div class="spec-list">
+                <template v-for="cfg in networkConfigs" :key="cfg.key">
+                  <MobileRangePicker
+                    v-if="isMobile && isRangeConfig(cfg)"
                     v-model="configForm[cfg.key + '_num']"
                     :label="cfg.label"
                     :min="cfg.min ?? 1"
                     :max="cfg.max ?? 9999"
                   />
                   <button
-                    v-else-if="cfg.options.length"
+                    v-else-if="isMobile && cfg.options.length"
                     type="button"
                     class="mobile-config-select-row"
                     @click="openMobileSingleConfigDrawer(cfg)"
@@ -436,347 +858,14 @@
                       </svg>
                     </span>
                   </button>
-                  <div v-else class="spec-row">
-                    <span class="spec-label">{{ cfg.label }}</span>
-                    <MobileRangePicker
-                      v-if="cfg.isNumber"
-                      v-model="configForm[cfg.key + '_num']"
-                      :label="cfg.label"
-                      :min="cfg.min ?? 1"
-                      :max="cfg.max ?? 9999"
-                    />
-                    <div class="opt-row" v-else-if="cfg.options.length > 1">
-                      <button
-                        v-for="opt in cfg.options"
-                        :key="opt.id"
-                        type="button"
-                        class="opt-btn"
-                        :class="{ active: configForm[cfg.key] === opt.id }"
-                        @click="configForm[cfg.key] = opt.id"
-                      >
-                        {{ opt.label }}
-                      </button>
-                    </div>
-                    <span v-else class="spec-fixed">{{
-                      cfg.options[0]?.label
-                    }}</span>
-                  </div>
-                </template>
-              </div>
-            </div>
-          </div>
-          <div class="config-block" v-if="machineConfigs.length && !isMobile">
-            <h2 class="config-block-title">机型配置</h2>
-            <div
-              v-if="desktopMachineSpecRows.length"
-              class="desktop-machine-spec-panel"
-            >
-              <div class="desktop-machine-table-scroll">
-                <!-- 表格语义要成对：只有 role="row"/"columnheader" 而没有 role="table"
-                     容器时，读屏不会把它当表格，列标题也不会关联到单元格 -->
-                <div
-                  class="desktop-machine-table"
-                  role="table"
-                  aria-label="机型规格"
-                >
-                  <div class="desktop-machine-table-head" role="row">
-                  <span
-                    class="machine-spec-cell machine-spec-cell--name"
-                    role="columnheader"
-                    >实例规格</span
-                  >
-                  <span
-                    class="machine-spec-cell machine-spec-cell--sortable"
-                    role="columnheader"
-                    :aria-sort="
-                      machineSpecSort.key === 'cpu'
-                        ? machineSpecSort.direction === 'asc'
-                          ? 'ascending'
-                          : 'descending'
-                        : 'none'
-                    "
-                  >
-                    <span>vCPU</span>
-                    <span
-                      class="machine-spec-sort-controls"
-                      aria-label="vCPU 排序"
-                    >
-                      <button
-                        type="button"
-                        class="machine-spec-sort-btn"
-                        :class="{
-                          active:
-                            machineSpecSort.key === 'cpu' &&
-                            machineSpecSort.direction === 'asc',
-                        }"
-                        aria-label="vCPU 从小到大排序"
-                        @click="setMachineSpecSort('cpu', 'asc')"
-                      >
-                        <el-icon><CaretTop /></el-icon>
-                      </button>
-                      <button
-                        type="button"
-                        class="machine-spec-sort-btn"
-                        :class="{
-                          active:
-                            machineSpecSort.key === 'cpu' &&
-                            machineSpecSort.direction === 'desc',
-                        }"
-                        aria-label="vCPU 从大到小排序"
-                        @click="setMachineSpecSort('cpu', 'desc')"
-                      >
-                        <el-icon><CaretBottom /></el-icon>
-                      </button>
-                    </span>
-                  </span>
-                  <span
-                    class="machine-spec-cell machine-spec-cell--sortable"
-                    role="columnheader"
-                    :aria-sort="
-                      machineSpecSort.key === 'memory'
-                        ? machineSpecSort.direction === 'asc'
-                          ? 'ascending'
-                          : 'descending'
-                        : 'none'
-                    "
-                  >
-                    <span>内存</span>
-                    <span
-                      class="machine-spec-sort-controls"
-                      aria-label="内存排序"
-                    >
-                      <button
-                        type="button"
-                        class="machine-spec-sort-btn"
-                        :class="{
-                          active:
-                            machineSpecSort.key === 'memory' &&
-                            machineSpecSort.direction === 'asc',
-                        }"
-                        aria-label="内存从小到大排序"
-                        @click="setMachineSpecSort('memory', 'asc')"
-                      >
-                        <el-icon><CaretTop /></el-icon>
-                      </button>
-                      <button
-                        type="button"
-                        class="machine-spec-sort-btn"
-                        :class="{
-                          active:
-                            machineSpecSort.key === 'memory' &&
-                            machineSpecSort.direction === 'desc',
-                        }"
-                        aria-label="内存从大到小排序"
-                        @click="setMachineSpecSort('memory', 'desc')"
-                      >
-                        <el-icon><CaretBottom /></el-icon>
-                      </button>
-                    </span>
-                  </span>
-                  <span
-                    class="machine-spec-cell machine-spec-cell--processor"
-                    role="columnheader"
-                    >处理器</span
-                  >
-                  <span class="machine-spec-cell" role="columnheader"
-                    >主频/睿频</span
-                  >
-                  <span
-                    class="machine-spec-cell machine-spec-cell--price machine-spec-cell--sortable"
-                    role="columnheader"
-                    :aria-sort="
-                      machineSpecSort.key === 'price'
-                        ? machineSpecSort.direction === 'asc'
-                          ? 'ascending'
-                          : 'descending'
-                        : 'none'
-                    "
-                  >
-                    <span>基础价格</span>
-                    <span
-                      class="machine-spec-sort-controls"
-                      aria-label="基础价格排序"
-                    >
-                      <button
-                        type="button"
-                        class="machine-spec-sort-btn"
-                        :class="{
-                          active:
-                            machineSpecSort.key === 'price' &&
-                            machineSpecSort.direction === 'asc',
-                        }"
-                        aria-label="基础价格从小到大排序"
-                        @click="setMachineSpecSort('price', 'asc')"
-                      >
-                        <el-icon><CaretTop /></el-icon>
-                      </button>
-                      <button
-                        type="button"
-                        class="machine-spec-sort-btn"
-                        :class="{
-                          active:
-                            machineSpecSort.key === 'price' &&
-                            machineSpecSort.direction === 'desc',
-                        }"
-                        aria-label="基础价格从大到小排序"
-                        @click="setMachineSpecSort('price', 'desc')"
-                      >
-                        <el-icon><CaretBottom /></el-icon>
-                      </button>
-                    </span>
-                  </span>
-                </div>
-                <button
-                  v-for="row in desktopMachineSpecRows"
-                  :key="row.id"
-                  type="button"
-                  class="desktop-machine-table-row"
-                  role="row"
-                  :class="{ active: row.active }"
-                  :aria-selected="row.active"
-                  :aria-describedby="
-                    row.note ? `spec-note-${row.id}` : undefined
-                  "
-                  @click="selectDesktopMachineSpec(row)"
-                >
-                  <span
-                    class="machine-spec-cell machine-spec-cell--name"
-                    role="cell"
-                  >
-                    <span class="machine-spec-radio" aria-hidden="true"></span>
-                    <span class="machine-spec-name-wrap">
-                      <span class="machine-spec-name">{{ row.name }}</span>
-                      <el-tooltip
-                        v-if="row.note"
-                        placement="top-start"
-                        :show-after="120"
-                        effect="light"
-                        popper-class="spec-note-popper"
-                      >
-                        <template #content>
-                          <div class="spec-note-content">{{ row.note }}</div>
-                        </template>
-                        <span
-                          class="spec-note-trigger"
-                          aria-hidden="true"
-                          @click.stop
-                          >?</span
-                        >
-                      </el-tooltip>
-                    </span>
-                  </span>
-                  <span class="machine-spec-cell" role="cell">{{
-                    row.cpuText
-                  }}</span>
-                  <span class="machine-spec-cell" role="cell">{{
-                    row.memoryText
-                  }}</span>
-                  <span
-                    class="machine-spec-cell machine-spec-cell--processor"
-                    role="cell"
-                    >{{ row.processorLabel }}</span
-                  >
-                  <span class="machine-spec-cell" role="cell">{{
-                    formatFrequencyPair(row.baseFrequency, row.turboFrequency)
-                  }}</span>
-                  <span
-                    class="machine-spec-cell machine-spec-cell--price"
-                    role="cell"
-                    >{{ row.basePriceText }}</span
-                  >
-                </button>
-                <div class="sr-only">
-                  <template
-                    v-for="row in desktopMachineSpecRows"
-                    :key="`note-${row.id}`"
-                  >
-                    <span v-if="row.note" :id="`spec-note-${row.id}`"
-                      >{{ row.name }}：{{ row.note }}</span
-                    >
-                  </template>
-                </div>
-                </div>
-              </div>
-              <div v-if="osConfig" class="desktop-machine-os-panel">
-                <div class="desktop-machine-subtitle">系统安装</div>
-                <div class="os-section">
-                  <div v-if="osGroups.length" class="os-cards">
-                    <button
-                      v-for="os in osGroups"
-                      :key="os.id"
-                      type="button"
-                      class="os-card"
-                      :class="{ active: configForm.os_group === os.id }"
-                      @click="selectOsGroup(os)"
-                    >
-                      <div class="os-card-head">
-                        <img
-                          v-if="os.icon"
-                          :src="os.icon"
-                          :alt="os.label"
-                          class="os-logo-img"
-                          width="28"
-                          height="28"
-                          loading="lazy"
-                          decoding="async"
-                        />
-                        <span v-else class="os-logo">{{
-                          os.label.slice(0, 2)
-                        }}</span>
-                        <span class="os-label-name">{{ os.label }}</span>
-                      </div>
-                      <div class="os-card-ver">
-                        <span v-if="configForm.os_group === os.id">{{
-                          currentOsVersionLabel
-                        }}</span>
-                        <span v-else class="os-placeholder">选择版本</span>
-                      </div>
-                      <span
-                        class="os-check-mark"
-                        v-if="configForm.os_group === os.id"
-                        >✓</span
-                      >
-                    </button>
-                  </div>
-                  <div v-else class="spec-fixed">
-                    当前商品未提供可切换的系统版本
-                  </div>
-                  <div
-                    class="os-ver-row"
-                    v-if="currentOsGroup?.versions?.length"
-                  >
-                    <span class="os-ver-label">版本</span>
-                    <div class="os-ver-btns">
-                      <button
-                        v-for="ver in currentOsGroup.versions"
-                        :key="ver.id"
-                        type="button"
-                        class="ver-btn"
-                        :class="{ active: configForm.os === ver.id }"
-                        @click="configForm.os = ver.id"
-                      >
-                        {{ ver.label }}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div
-                v-if="desktopMachineExtraConfigs.length"
-                class="desktop-machine-extra-list"
-              >
-                <template
-                  v-for="cfg in desktopMachineExtraConfigs"
-                  :key="cfg.key"
-                >
                   <MobileRangePicker
-                    v-if="cfg.isNumber"
+                    v-else-if="cfg.isNumber"
                     v-model="configForm[cfg.key + '_num']"
                     :label="cfg.label"
                     :min="cfg.min ?? 1"
                     :max="cfg.max ?? 9999"
                   />
-                  <div v-else class="spec-row spec-row--desktop-extra">
+                  <div v-else class="spec-row">
                     <span class="spec-label">{{ cfg.label }}</span>
                     <div class="opt-row" v-if="cfg.options.length > 1">
                       <button
@@ -797,204 +886,111 @@
                 </template>
               </div>
             </div>
-            <div v-else class="spec-list">
-              <template v-for="cfg in machineConfigs" :key="cfg.key">
-                <MobileRangePicker
-                  v-if="cfg.isNumber"
-                  v-model="configForm[cfg.key + '_num']"
-                  :label="cfg.label"
-                  :min="cfg.min ?? 1"
-                  :max="cfg.max ?? 9999"
-                />
-                <div v-else class="spec-row">
-                  <span class="spec-label">{{ cfg.label }}</span>
-                  <div class="opt-row" v-if="cfg.options.length > 1">
-                    <button
-                      v-for="opt in cfg.options"
-                      :key="opt.id"
-                      type="button"
-                      class="opt-btn"
-                      :class="{ active: configForm[cfg.key] === opt.id }"
-                      @click="configForm[cfg.key] = opt.id"
-                    >
-                      {{ opt.label }}
-                    </button>
-                  </div>
-                  <span v-else class="spec-fixed">{{
-                    cfg.options[0]?.label
-                  }}</span>
-                </div>
-              </template>
-            </div>
-          </div>
 
-          <!-- 网络配置 -->
-          <div class="config-block" v-if="networkConfigs.length">
-            <h2 class="config-block-title">网络配置</h2>
-            <div class="spec-list">
-              <template v-for="cfg in networkConfigs" :key="cfg.key">
-                <MobileRangePicker
-                  v-if="isMobile && isRangeConfig(cfg)"
-                  v-model="configForm[cfg.key + '_num']"
-                  :label="cfg.label"
-                  :min="cfg.min ?? 1"
-                  :max="cfg.max ?? 9999"
-                />
-                <button
-                  v-else-if="isMobile && cfg.options.length"
-                  type="button"
-                  class="mobile-config-select-row"
-                  @click="openMobileSingleConfigDrawer(cfg)"
-                >
-                  <span class="mobile-config-select-label">{{
-                    cfg.label
-                  }}</span>
-                  <span class="mobile-config-select-value">
-                    {{ selectedOptionLabel(cfg) || "请选择" }}
-                    <svg
-                      viewBox="0 0 12 12"
-                      fill="none"
-                      width="12"
-                      height="12"
-                      aria-hidden="true"
-                    >
-                      <path
-                        d="M4.5 3l3 3-3 3"
-                        stroke="currentColor"
-                        stroke-width="1.5"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      />
-                    </svg>
-                  </span>
-                </button>
-                <MobileRangePicker
-                  v-else-if="cfg.isNumber"
-                  v-model="configForm[cfg.key + '_num']"
-                  :label="cfg.label"
-                  :min="cfg.min ?? 1"
-                  :max="cfg.max ?? 9999"
-                />
-                <div v-else class="spec-row">
-                  <span class="spec-label">{{ cfg.label }}</span>
-                  <div class="opt-row" v-if="cfg.options.length > 1">
-                    <button
-                      v-for="opt in cfg.options"
-                      :key="opt.id"
-                      type="button"
-                      class="opt-btn"
-                      :class="{ active: configForm[cfg.key] === opt.id }"
-                      @click="configForm[cfg.key] = opt.id"
-                    >
-                      {{ opt.label }}
-                    </button>
-                  </div>
-                  <span v-else class="spec-fixed">{{
-                    cfg.options[0]?.label
-                  }}</span>
-                </div>
-              </template>
-            </div>
-          </div>
-
-          <!-- 其他配置（兜底） -->
-          <div class="config-block" v-if="otherConfigs.length">
-            <h2 class="config-block-title">其他配置</h2>
-            <div class="spec-list">
-              <template v-for="cfg in otherConfigs" :key="cfg.key">
-                <MobileRangePicker
-                  v-if="isMobile && isRangeConfig(cfg)"
-                  v-model="configForm[cfg.key + '_num']"
-                  :label="cfg.label"
-                  :min="cfg.min ?? 1"
-                  :max="cfg.max ?? 9999"
-                />
-                <button
-                  v-else-if="isMobile && cfg.options.length"
-                  type="button"
-                  class="mobile-config-select-row"
-                  @click="openMobileSingleConfigDrawer(cfg)"
-                >
-                  <span class="mobile-config-select-label">{{
-                    cfg.label
-                  }}</span>
-                  <span class="mobile-config-select-value">
-                    {{ selectedOptionLabel(cfg) || "请选择" }}
-                    <svg
-                      viewBox="0 0 12 12"
-                      fill="none"
-                      width="12"
-                      height="12"
-                      aria-hidden="true"
-                    >
-                      <path
-                        d="M4.5 3l3 3-3 3"
-                        stroke="currentColor"
-                        stroke-width="1.5"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      />
-                    </svg>
-                  </span>
-                </button>
-                <MobileRangePicker
-                  v-else-if="cfg.isNumber"
-                  v-model="configForm[cfg.key + '_num']"
-                  :label="cfg.label"
-                  :min="cfg.min ?? 1"
-                  :max="cfg.max ?? 9999"
-                />
-                <div v-else class="spec-row">
-                  <span class="spec-label">{{ cfg.label }}</span>
-                  <div class="opt-row" v-if="cfg.options.length > 1">
-                    <button
-                      v-for="opt in cfg.options"
-                      :key="opt.id"
-                      type="button"
-                      class="opt-btn"
-                      :class="{ active: configForm[cfg.key] === opt.id }"
-                      @click="configForm[cfg.key] = opt.id"
-                    >
-                      {{ opt.label }}
-                    </button>
-                  </div>
-                </div>
-              </template>
-            </div>
-          </div>
-
-          <!-- 基础设置 -->
-          <div class="config-block">
-            <h2 class="config-block-title">基础设置</h2>
-            <div class="spec-list">
-              <!-- 计费周期 -->
-              <div class="spec-row">
-                <span class="spec-label">计费周期</span>
-                <div class="opt-row">
+            <!-- 其他配置（兜底） -->
+            <div class="config-block" v-if="otherConfigs.length">
+              <h2 class="config-block-title">其他配置</h2>
+              <div class="spec-list">
+                <template v-for="cfg in otherConfigs" :key="cfg.key">
+                  <MobileRangePicker
+                    v-if="isMobile && isRangeConfig(cfg)"
+                    v-model="configForm[cfg.key + '_num']"
+                    :label="cfg.label"
+                    :min="cfg.min ?? 1"
+                    :max="cfg.max ?? 9999"
+                  />
                   <button
-                    v-for="item in pricingEntries"
-                    :key="item.cycle"
+                    v-else-if="isMobile && cfg.options.length"
                     type="button"
-                    class="opt-btn cycle-btn"
-                    :class="{ active: selectedCycle === item.cycle }"
-                    @click="selectedCycle = item.cycle"
+                    class="mobile-config-select-row"
+                    @click="openMobileSingleConfigDrawer(cfg)"
                   >
-                    <span class="cycle-name">{{ item.label }}</span>
-                    <span class="cycle-amt">¥{{ item.amount }}</span>
+                    <span class="mobile-config-select-label">{{
+                      cfg.label
+                    }}</span>
+                    <span class="mobile-config-select-value">
+                      {{ selectedOptionLabel(cfg) || "请选择" }}
+                      <svg
+                        viewBox="0 0 12 12"
+                        fill="none"
+                        width="12"
+                        height="12"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M4.5 3l3 3-3 3"
+                          stroke="currentColor"
+                          stroke-width="1.5"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        />
+                      </svg>
+                    </span>
                   </button>
-                </div>
+                  <MobileRangePicker
+                    v-else-if="cfg.isNumber"
+                    v-model="configForm[cfg.key + '_num']"
+                    :label="cfg.label"
+                    :min="cfg.min ?? 1"
+                    :max="cfg.max ?? 9999"
+                  />
+                  <div v-else class="spec-row">
+                    <span class="spec-label">{{ cfg.label }}</span>
+                    <div class="opt-row" v-if="cfg.options.length > 1">
+                      <button
+                        v-for="opt in cfg.options"
+                        :key="opt.id"
+                        type="button"
+                        class="opt-btn"
+                        :class="{ active: configForm[cfg.key] === opt.id }"
+                        @click="configForm[cfg.key] = opt.id"
+                      >
+                        {{ opt.label }}
+                      </button>
+                    </div>
+                    <!-- 单选项必须显示固定值：没有 spec-fixed 兜底时整行只剩标签，
+                         用户看不到当前生效的值（网络配置块一直保留了同样的兜底）。 -->
+                    <span v-else class="spec-fixed">{{
+                      cfg.options[0]?.label
+                    }}</span>
+                  </div>
+                </template>
               </div>
+            </div>
 
-              <!-- 单笔订单仅支持创建一台服务实例，避免多台计价但仅开通一台。 -->
-              <div class="spec-row">
-                <span class="spec-label">购买数量</span>
-                <span>1 台（多台请分次下单）</span>
+            <!-- 基础设置 -->
+            <div class="config-block">
+              <h2 class="config-block-title">基础设置</h2>
+              <div class="spec-list">
+                <!-- 计费周期 -->
+                <div class="spec-row">
+                  <span class="spec-label">计费周期</span>
+                  <div class="opt-row">
+                    <button
+                      v-for="item in pricingEntries"
+                      :key="item.cycle"
+                      type="button"
+                      class="opt-btn cycle-btn"
+                      :class="{ active: selectedCycle === item.cycle }"
+                      @click="selectedCycle = item.cycle"
+                    >
+                      <span class="cycle-name">{{ item.label }}</span>
+                      <span class="cycle-amt">¥{{ item.amount }}</span>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- 单笔订单仅支持创建一台服务实例，避免多台计价但仅开通一台。 -->
+                <div class="spec-row">
+                  <span class="spec-label">购买数量</span>
+                  <span>1 台（多台请分次下单）</span>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        </t-loading>
 
-        <!-- 首屏加载态：此前只有 v-loading 遮罩，去掉后 main 区在加载期间是纯空白，
+        <!-- 首屏加载态：此前只有全屏遮罩，去掉后 main 区在加载期间是纯空白，
              慢网下用户看不到任何「正在加载」的反馈。 -->
         <div
           v-if="pageLoading"
@@ -1023,25 +1019,40 @@
           </button>
         </div>
 
-        <el-empty
+        <t-empty
           v-else-if="
             !configLoading && !selectedProduct && visibleProducts.length
           "
           role="status"
           aria-live="polite"
-          description="请选择商品后查看配置与报价"
+          class="catalog-empty"
+          title="请选择商品后查看配置与报价"
           style="padding: 60px 0"
         />
 
-        <el-empty
+        <t-empty
           v-else-if="
             !configLoading && !selectedProduct && !visibleProducts.length
           "
           role="status"
           aria-live="polite"
-          description="当前分类暂无商品，可切换其他分类查看"
+          class="catalog-empty"
+          title="当前分类暂无商品，可切换其他分类查看"
           style="padding: 60px 0"
         />
+
+        <!-- 商品详情加载中：此前 pageLoading 已结束、selectedProduct 还没回来时，
+             上面两个空态都被 !configLoading 挡掉，主区是一整片空白，用户无法
+             判断是在加载还是坏了。补一个与目录加载同款的状态位，配置区到达后自然消失。 -->
+        <div
+          v-else-if="configLoading && !selectedProduct"
+          class="catalog-loading"
+          role="status"
+          aria-live="polite"
+        >
+          <span class="catalog-loading__spinner" aria-hidden="true"></span>
+          <span class="catalog-loading__text">商品配置加载中…</span>
+        </div>
       </div>
 
       <!-- 右侧费用摘要 -->
@@ -1069,15 +1080,16 @@
           <div class="stock-hint">{{ stockHint }}</div>
         </div>
 
-        <el-alert
+        <t-alert
           v-if="purchaseRequirementList.length"
-          type="warning"
-          :closable="false"
-          show-icon
+          theme="warning"
+          role="alert"
           class="purchase-requirements-alert"
         >
-          <template #title>购买要求：{{ purchaseRequirementSummary }}</template>
-        </el-alert>
+          <template #title
+            >购买要求：{{ purchaseRequirementSummary }}</template
+          >
+        </t-alert>
 
         <div class="cost-divider"></div>
 
@@ -1153,19 +1165,13 @@
             </button>
           </div>
           <div class="coupon-panel-form">
-            <el-select
-              :model-value="selectedCouponId || undefined"
+            <t-select
+              :value="selectedCouponId || undefined"
               clearable
               placeholder="请选择优惠券"
+              :options="couponSelectOptions"
               @change="handleCouponChange"
-            >
-              <el-option
-                v-for="item in availableCoupons"
-                :key="item.id"
-                :label="`${item.name} · ${item.discount_label}`"
-                :value="item.id"
-              />
-            </el-select>
+            />
           </div>
           <div v-if="appliedCoupon" class="coupon-panel-tip">
             {{ appliedCoupon.name }}，{{
@@ -1276,9 +1282,7 @@
               class="allocation-footer-coupon-btn"
               @click="mobileCouponDrawer = true"
             >
-              <el-icon class="allocation-footer-coupon-icon"
-                ><Ticket
-              /></el-icon>
+              <TicketIcon class="allocation-footer-coupon-icon" />
               {{
                 appliedCoupon
                   ? `使用优惠券 -¥${appliedCoupon.discount_amount}`
@@ -1296,9 +1300,7 @@
               class="allocation-footer-detail-btn"
               @click="mobileIntroDrawer = true"
             >
-              <el-icon class="allocation-footer-detail-icon"
-                ><Document
-              /></el-icon>
+              <FileIcon class="allocation-footer-detail-icon" />
               商品介绍
             </button>
             <button
@@ -1306,9 +1308,7 @@
               class="allocation-footer-detail-btn"
               @click="mobileCostDrawer = true"
             >
-              <el-icon class="allocation-footer-detail-icon"
-                ><Document
-              /></el-icon>
+              <FileIcon class="allocation-footer-detail-icon" />
               费用明细
             </button>
           </div>
@@ -1351,15 +1351,16 @@
       @confirm="mobileCostDrawer = false"
     >
       <div class="mobile-cost-sheet-body">
-        <el-alert
+        <t-alert
           v-if="purchaseRequirementList.length"
-          type="warning"
-          :closable="false"
-          show-icon
+          theme="warning"
+          role="alert"
           class="purchase-requirements-alert purchase-requirements-alert--mobile"
         >
-          <template #title>购买要求：{{ purchaseRequirementSummary }}</template>
-        </el-alert>
+          <template #title
+            >购买要求：{{ purchaseRequirementSummary }}</template
+          >
+        </t-alert>
 
         <div class="mobile-cost-table-card">
           <div class="mobile-cost-table-head">
@@ -1544,23 +1545,22 @@
           >
             <span class="mobile-product-sheet-name-wrap">
               <span class="mobile-product-sheet-name">{{ group.label }}</span>
-              <el-popover
+              <t-popup
                 v-if="group.note"
-                placement="top-start"
+                placement="top-left"
                 trigger="click"
-                :width="260"
-                popper-class="spec-note-popper"
+                :overlay-inner-style="specNotePopupStyle"
               >
-                <template #reference>
-                  <span
-                    class="spec-note-trigger"
-                    aria-hidden="true"
-                    @click.stop
-                    >?</span
-                  >
+                <span
+                  class="spec-note-trigger"
+                  aria-hidden="true"
+                  @click.stop
+                  >?</span
+                >
+                <template #content>
+                  <div class="spec-note-content">{{ group.note }}</div>
                 </template>
-                <div class="spec-note-content">{{ group.note }}</div>
-              </el-popover>
+              </t-popup>
             </span>
             <span class="mobile-product-sheet-meta">{{ group.cpuText }}</span>
           </button>
@@ -1584,25 +1584,24 @@
               <span class="mobile-product-sheet-name">{{
                 resolveProductDisplayName(p)
               }}</span>
-              <el-popover
+              <t-popup
                 v-if="normalizeInstanceSpecNote(p.instance_spec_note)"
-                placement="top-start"
+                placement="top-left"
                 trigger="click"
-                :width="260"
-                popper-class="spec-note-popper"
+                :overlay-inner-style="specNotePopupStyle"
               >
-                <template #reference>
-                  <span
-                    class="spec-note-trigger"
-                    aria-hidden="true"
-                    @click.stop
-                    >?</span
-                  >
+                <span
+                  class="spec-note-trigger"
+                  aria-hidden="true"
+                  @click.stop
+                  >?</span
+                >
+                <template #content>
+                  <div class="spec-note-content">
+                    {{ normalizeInstanceSpecNote(p.instance_spec_note) }}
+                  </div>
                 </template>
-                <div class="spec-note-content">
-                  {{ normalizeInstanceSpecNote(p.instance_spec_note) }}
-                </div>
-              </el-popover>
+              </t-popup>
             </span>
             <span
               v-if="formatProductListPrice(p)"
@@ -1646,14 +1645,14 @@ import {
   watch,
 } from "vue";
 import {
-  CaretBottom,
-  CaretTop,
-  Document,
-  Expand,
-  Fold,
-  Ticket,
-} from "@element-plus/icons-vue";
-import { ElMessage } from "element-plus/es/components/message/index.mjs";
+  CaretDownIcon,
+  CaretUpIcon,
+  FileIcon,
+  MenuFoldIcon,
+  MenuUnfoldIcon,
+  TicketIcon,
+} from "tdesign-icons-vue-next";
+import { MessagePlugin } from "tdesign-vue-next/es/message/plugin";
 import { useWebsiteProductsPage } from "@/domains/products/useWebsiteProductsPage";
 import MobileRangePicker from "@/components/MobileRangePicker.vue";
 // 抽屉类移动组件只在移动端真正打开时才需要，桌面访问者永远用不到；
@@ -1768,7 +1767,7 @@ const allocationFooterAnchored = ref(false);
 let allocationFooterObserver = null;
 let allocationFooterResizeObserver = null;
 
-// 移动端优惠券改用底部抽屉内的选项卡片（替代 el-select 桌面 popper），
+// 移动端优惠券改用底部抽屉内的选项卡片（替代桌面下拉弹层），
 // 与地区/CPU/内存等选择器保持同一交互范式；点选即应用并收起抽屉
 function applyMobileCoupon(id) {
   handleCouponChange(id);
@@ -1789,6 +1788,29 @@ const totalDiscountAmount = computed(() => {
   return (member + coupon).toFixed(2);
 });
 const hasDiscount = computed(() => Number(totalDiscountAmount.value) > 0);
+
+// TDesign Tabs 用 list 驱动一级/二级目录，避免额外渲染空的 tab panel
+const rootGroupTabs = computed(() =>
+  rootGroups.value.map((group) => ({ value: group.id, label: group.name })),
+);
+const childGroupTabs = computed(() =>
+  childGroups.value.map((group) => ({ value: group.id, label: group.name })),
+);
+// 说明气泡最大宽度：弹层被 Teleport 到 body，scoped 里的类选择器命中不到，
+// 用 overlayInnerStyle 直接下发（等价于原 EP 的 popper-class max-width 意图）
+const specNoteTooltipStyle = { maxWidth: "min(320px, calc(100vw - 32px))" };
+// 移动端规格备注气泡（t-popup）：与桌面 t-tooltip 同口径，固定 260px 在 320px
+// 窄屏上会超出可视区；min() 在宽屏下仍取 260px，版式不变。
+const specNotePopupStyle = {
+  width: "min(260px, calc(100vw - 32px))",
+};
+// 优惠券下拉：TDesign TSelect 的 options 需显式 label/value
+const couponSelectOptions = computed(() =>
+  availableCoupons.value.map((item) => ({
+    value: item.id,
+    label: `${item.name} · ${item.discount_label}`,
+  })),
+);
 
 function cleanupAllocationFooterObserver() {
   allocationFooterObserver?.disconnect();
@@ -2676,7 +2698,7 @@ async function openMobileProductGroupDrawer() {
 function openMobileCpuDrawer() {
   if (!cpuConfig.value?.options?.length) {
     // 静默 return 会让用户点了毫无反应，误以为按钮坏了；明确告知当前无可选项。
-    ElMessage.warning("当前机型没有可选的 CPU 规格");
+    MessagePlugin.warning("当前机型没有可选的 CPU 规格");
     return;
   }
   mobileCpuDrawer.value = true;
@@ -2684,7 +2706,7 @@ function openMobileCpuDrawer() {
 
 function openMobileMemDrawer() {
   if (!memConfig.value?.options?.length) {
-    ElMessage.warning("当前机型没有可选的内存规格");
+    MessagePlugin.warning("当前机型没有可选的内存规格");
     return;
   }
   mobileMemDrawer.value = true;
@@ -2692,7 +2714,7 @@ function openMobileMemDrawer() {
 
 function openMobileGroupedCpuDrawer() {
   if (!mobileGroupedCpuOptions.value.length) {
-    ElMessage.warning("当前商品没有可选的 CPU 规格");
+    MessagePlugin.warning("当前商品没有可选的 CPU 规格");
     return;
   }
   mobileGroupedCpuDrawer.value = true;
@@ -2701,7 +2723,7 @@ function openMobileGroupedCpuDrawer() {
 function openMobileSpecPicker() {
   if (hasMobileProductGroups.value) {
     if (!mobileSpecFamilyOptions.value.length) {
-      ElMessage.warning("当前商品没有可选的规格");
+      MessagePlugin.warning("当前商品没有可选的规格");
       return;
     }
     mobileSpecFamilyDrawer.value = true;
@@ -2713,7 +2735,7 @@ function openMobileSpecPicker() {
 
 function openMobileGroupedMemoryDrawer() {
   if (!mobileGroupedMemoryOptions.value.length) {
-    ElMessage.warning("当前商品没有可选的内存规格");
+    MessagePlugin.warning("当前商品没有可选的内存规格");
     return;
   }
   mobileGroupedMemoryDrawer.value = true;
@@ -2844,7 +2866,7 @@ function selectedOptionLabel(cfg) {
 
 function openMobileSingleConfigDrawer(cfg) {
   if (!cfg?.options?.length) {
-    ElMessage.warning(`当前机型没有可选的${cfg?.label || "配置项"}`);
+    MessagePlugin.warning(`当前机型没有可选的${cfg?.label || "配置项"}`);
     return;
   }
   mobileSingleConfig.value = cfg;
@@ -2869,7 +2891,7 @@ function isRangeConfig(cfg) {
 
 function openMobileOsDrawer() {
   if (!osGroups.value.length) {
-    ElMessage.warning("当前商品没有可选的操作系统");
+    MessagePlugin.warning("当前商品没有可选的操作系统");
     return;
   }
   mobileOsDrawer.value = true;
@@ -2897,7 +2919,7 @@ async function handleDesktopGroupChange(value) {
   } catch {
     // 品类目录请求失败会 throw；桌面下拉切换此前是 void 调用，失败后
     // 下拉已切到新值但列表还是旧数据，且控制台只有 unhandled rejection。
-    ElMessage.warning("目录加载失败，请重新选择地区");
+    MessagePlugin.warning("目录加载失败，请重新选择地区");
   }
 }
 

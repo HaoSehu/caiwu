@@ -79,7 +79,7 @@
             {{ slide.ribbon }}
           </span>
           <span class="hero-rail__label">{{ slide.railTitle }}</span>
-          <el-icon class="hero-rail__arrow"><ArrowRight /></el-icon>
+          <chevron-right-icon class="hero-rail__arrow" />
         </button>
       </aside>
 
@@ -132,8 +132,8 @@
           :aria-label="rotationPaused ? '继续自动切换' : '暂停自动切换'"
           @click="toggleRotation"
         >
-          <el-icon v-if="rotationPaused"><VideoPlay /></el-icon>
-          <el-icon v-else><VideoPause /></el-icon>
+          <play-circle-icon v-if="rotationPaused" />
+          <pause-circle-icon v-else />
         </button>
       </div>
 
@@ -158,8 +158,8 @@
           :aria-label="rotationPaused ? '继续自动切换' : '暂停自动切换'"
           @click="toggleRotation"
         >
-          <el-icon v-if="rotationPaused"><VideoPlay /></el-icon>
-          <el-icon v-else><VideoPause /></el-icon>
+          <play-circle-icon v-if="rotationPaused" />
+          <pause-circle-icon v-else />
         </button>
       </div>
     </div>
@@ -202,8 +202,11 @@ import {
   watch,
 } from "vue";
 import { useRouter } from "vue-router";
-import { ElIcon } from "element-plus/es/components/icon/index.mjs";
-import { ArrowRight, VideoPause, VideoPlay } from "@element-plus/icons-vue";
+import {
+  ChevronRightIcon,
+  PauseCircleIcon,
+  PlayCircleIcon,
+} from "tdesign-icons-vue-next";
 import { resolveApiAssetUrl } from "@/utils/apiAssetUrl";
 
 const props = defineProps({

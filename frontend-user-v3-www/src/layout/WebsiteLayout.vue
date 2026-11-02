@@ -40,9 +40,7 @@
             :aria-controls="item.menuId ? 'mega-menu' : undefined"
           >
             <span>{{ item.label }}</span>
-            <el-icon v-if="item.menuId" class="main-nav__arrow"
-              ><ArrowDown
-            /></el-icon>
+            <chevron-down-icon v-if="item.menuId" class="main-nav__arrow" />
           </router-link>
         </nav>
 
@@ -248,7 +246,7 @@
             >
               <span class="user-avatar-initial">{{ userAvatarInitial }}</span>
               <span class="header-user-name">{{ userDisplayName }}</span>
-              <el-icon class="header-user-arrow"><ArrowDown /></el-icon>
+              <chevron-down-icon class="header-user-arrow" />
             </button>
             <transition name="user-menu-fade">
               <div v-if="userMenuOpen" class="user-menu-panel" role="menu">
@@ -258,7 +256,7 @@
                   class="user-menu-item"
                   @click="onUserMenuCommand(consoleUrl('/client/dashboard'))"
                 >
-                  <el-icon><Monitor /></el-icon>控制台
+                  <desktop-icon />控制台
                 </button>
                 <button
                   type="button"
@@ -266,7 +264,7 @@
                   class="user-menu-item"
                   @click="onUserMenuCommand(consoleUrl('/client/services'))"
                 >
-                  <el-icon><Box /></el-icon>我的服务
+                  <server-icon />我的服务
                 </button>
                 <div class="user-menu-divider"></div>
                 <button
@@ -275,7 +273,7 @@
                   class="user-menu-item"
                   @click="onUserMenuCommand(consoleUrl('/client/profile'))"
                 >
-                  <el-icon><User /></el-icon>个人资料
+                  <user-icon />个人资料
                 </button>
                 <button
                   type="button"
@@ -283,7 +281,7 @@
                   class="user-menu-item"
                   @click="onUserMenuCommand(consoleUrl('/client/recharge'))"
                 >
-                  <el-icon><Wallet /></el-icon>账户充值
+                  <wallet-icon />账户充值
                 </button>
                 <div class="user-menu-divider"></div>
                 <button
@@ -292,7 +290,7 @@
                   class="user-menu-item is-danger"
                   @click="onUserMenuCommand('logout')"
                 >
-                  <el-icon><CircleClose /></el-icon>退出登录
+                  <close-circle-icon />退出登录
                 </button>
               </div>
             </transition>
@@ -327,7 +325,7 @@
                 class="user-menu-item"
                 @click="onUserMenuCommand(consoleUrl('/client/dashboard'))"
               >
-                <el-icon><Monitor /></el-icon>控制台
+                <desktop-icon />控制台
               </button>
               <button
                 type="button"
@@ -335,7 +333,7 @@
                 class="user-menu-item"
                 @click="onUserMenuCommand(consoleUrl('/client/services'))"
               >
-                <el-icon><Box /></el-icon>我的服务
+                <server-icon />我的服务
               </button>
               <div class="user-menu-divider"></div>
               <button
@@ -344,7 +342,7 @@
                 class="user-menu-item"
                 @click="onUserMenuCommand(consoleUrl('/client/profile'))"
               >
-                <el-icon><User /></el-icon>个人资料
+                <user-icon />个人资料
               </button>
               <button
                 type="button"
@@ -352,7 +350,7 @@
                 class="user-menu-item"
                 @click="onUserMenuCommand(consoleUrl('/client/recharge'))"
               >
-                <el-icon><Wallet /></el-icon>账户充值
+                <wallet-icon />账户充值
               </button>
               <div class="user-menu-divider"></div>
               <button
@@ -361,13 +359,13 @@
                 class="user-menu-item is-danger"
                 @click="onUserMenuCommand('logout')"
               >
-                <el-icon><CircleClose /></el-icon>退出登录
+                <close-circle-icon />退出登录
               </button>
             </div>
           </transition>
         </div>
         <a v-else :href="consoleUrl('/client/login')" class="mobile-user-icon">
-          <el-icon :size="20"><User /></el-icon>
+          <user-icon size="20px" />
         </a>
         <button
           ref="mobileMenuToggleRef"
@@ -699,15 +697,14 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
-import { ElIcon } from "element-plus/es/components/icon/index.mjs";
 import {
-  ArrowDown,
-  Box,
-  CircleClose,
-  Monitor,
-  User,
-  Wallet,
-} from "@element-plus/icons-vue";
+  ChevronDownIcon,
+  CloseCircleIcon,
+  DesktopIcon,
+  ServerIcon,
+  UserIcon,
+  WalletIcon,
+} from "tdesign-icons-vue-next";
 import { useAppStore } from "@/app/stores/app";
 import { useUserStore } from "@/app/stores/user";
 import { buildConsoleUrl, isConsolePath } from "@/utils/consoleUrl";

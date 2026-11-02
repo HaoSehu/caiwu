@@ -5,19 +5,19 @@
       <p>{{ pageDescription }}</p>
 
       <div class="legal-actions">
-        <el-button v-if="targetUrl" type="primary" @click="openDocument"
-          >打开原文</el-button
+        <t-button v-if="targetUrl" theme="primary" @click="openDocument"
+          >打开原文</t-button
         >
-        <el-button @click="router.push('/')">返回首页</el-button>
+        <t-button @click="router.push('/')">返回首页</t-button>
       </div>
 
       <!-- role=status：文档地址来自异步配置，取到空值时需读屏播报 -->
-      <el-empty
+      <t-empty
         v-if="!targetUrl"
         role="status"
         aria-live="polite"
-        description="站点暂未配置该文档地址"
-        :image-size="72"
+        title="站点暂未配置该文档地址"
+        :image-style="{ fontSize: '72px' }"
       />
     </div>
   </div>
@@ -26,7 +26,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { ElMessage } from "element-plus/es/components/message/index.mjs";
+import { MessagePlugin } from "tdesign-vue-next/es/message/plugin";
 import { useAppStore } from "@/app/stores/app";
 
 const route = useRoute();
@@ -54,20 +54,20 @@ function openDocument() {
   try {
     const parsed = new URL(targetUrl.value);
     if (!["http:", "https:"].includes(parsed.protocol)) {
-      ElMessage.warning("文档地址配置无效");
+      MessagePlugin.warning("文档地址配置无效");
       return;
     }
   } catch {
-    ElMessage.warning("文档地址配置无效");
+    MessagePlugin.warning("文档地址配置无效");
     return;
   }
 
-  // 浏览器可能拦截弹窗：取返回值判空，为空时提示用户放行后重试。
+  // 浏览器可能拦截新窗口：取返回值判空，为空时提示用户放行后重试。
   // 注意不能在这里传 noopener/noreferrer 特性——按 HTML 规范这两种特性会让 window.open 恒定返回 null，
   // 导致每次点击都误报「被拦截」；改为打开后手动切断 opener 引用，达到同样的隔离效果。
   const opened = window.open(targetUrl.value, "_blank");
   if (!opened) {
-    ElMessage.warning("弹窗被浏览器拦截，请允许本站弹窗后重试");
+    MessagePlugin.warning("浏览器已拦截新窗口，请允许本站打开新窗口后重试");
     return;
   }
   opened.opener = null;

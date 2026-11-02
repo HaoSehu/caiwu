@@ -4,7 +4,7 @@
       <router-link class="reader-breadcrumb__link" :to="backToListRoute">
         {{ config.pageTitle }}
       </router-link>
-      <el-icon aria-hidden="true"><ArrowRight /></el-icon>
+      <ArrowRightIcon class="reader-breadcrumb__icon" aria-hidden="true" />
       <router-link
         v-if="currentCategoryId"
         class="reader-breadcrumb__link"
@@ -15,104 +15,106 @@
       <span v-else class="reader-breadcrumb__text">{{
         currentCategoryName
       }}</span>
-      <el-icon aria-hidden="true"><ArrowRight /></el-icon>
+      <ArrowRightIcon class="reader-breadcrumb__icon" aria-hidden="true" />
       <span class="reader-breadcrumb__current" aria-current="page">
         {{ currentArticle?.title || config.detailTitle }}
       </span>
     </nav>
 
-    <div v-loading="loading" class="reader-layout">
-      <section class="reader-main">
-        <article id="article-top" class="reader-article">
-          <header class="reader-article__header">
-            <h1>{{ currentArticle?.title || config.detailTitle }}</h1>
-            <div v-if="currentArticle" class="reader-meta">
-              <span>发布人：{{ currentPublisher }}</span>
-              <span>{{ timeLabel }}：{{ currentPublishTime }}</span>
-              <span>阅读量：{{ currentArticle.view_count || 0 }}</span>
+    <t-loading :loading="loading">
+      <div class="reader-layout">
+        <section class="reader-main">
+          <article id="article-top" class="reader-article">
+            <header class="reader-article__header">
+              <h1>{{ currentArticle?.title || config.detailTitle }}</h1>
+              <div v-if="currentArticle" class="reader-meta">
+                <span>发布人：{{ currentPublisher }}</span>
+                <span>{{ timeLabel }}：{{ currentPublishTime }}</span>
+                <span>阅读量：{{ currentArticle.view_count || 0 }}</span>
+              </div>
+            </header>
+
+            <template v-if="currentArticle">
+              <t-divider />
+
+              <div
+                ref="contentRef"
+                class="reader-content"
+                v-html="articleContentHtml"
+              />
+            </template>
+
+            <div v-else-if="!loading && loadFailed" class="reader-failed">
+              <p class="reader-failed__text">内容加载失败，请检查网络连接</p>
+              <div class="reader-failed__actions">
+                <t-button theme="primary" @click="retryLoadArticle"
+                  >重新加载</t-button
+                >
+                <t-button @click="router.push(backToListRoute)">{{
+                  config.pageTitle
+                }}</t-button>
+              </div>
             </div>
-          </header>
 
-          <template v-if="currentArticle">
-            <el-divider />
-
-            <div
-              ref="contentRef"
-              class="reader-content"
-              v-html="articleContentHtml"
+            <!-- role=status：异步加载完成后空态才出现，读屏需被告知结果 -->
+            <t-empty
+              v-else-if="!loading"
+              role="status"
+              aria-live="polite"
+              :title="config.emptyText"
+              class="reader-empty"
             />
-          </template>
+          </article>
+        </section>
 
-          <div v-else-if="!loading && loadFailed" class="reader-failed">
-            <p class="reader-failed__text">内容加载失败，请检查网络连接</p>
-            <div class="reader-failed__actions">
-              <el-button type="primary" @click="retryLoadArticle"
-                >重新加载</el-button
+        <aside class="reader-sidebar">
+          <section class="sidebar-card">
+            <div class="sidebar-card__title">{{ config.categoryTitle }}</div>
+            <div class="category-list">
+              <button
+                v-for="item in categories"
+                :key="item.id"
+                type="button"
+                class="category-item"
+                :class="{ 'is-active': currentCategoryId === item.id }"
+                :aria-current="currentCategoryId === item.id ? 'page' : undefined"
+                :aria-label="`${item.name}，共 ${item.articles_count || 0} 篇`"
+                @click="goCategoryList(item.id)"
               >
-              <el-button @click="router.push(backToListRoute)">{{
-                config.pageTitle
-              }}</el-button>
+                <span class="category-item__name">{{ item.name }}</span>
+                <span class="category-item__count">{{
+                  item.articles_count || 0
+                }}</span>
+              </button>
             </div>
-          </div>
+          </section>
 
-          <!-- role=status：异步加载完成后空态才出现，读屏需被告知结果 -->
-          <el-empty
-            v-else-if="!loading"
-            role="status"
-            aria-live="polite"
-            :description="config.emptyText"
-            class="reader-empty"
-          />
-        </article>
-      </section>
-
-      <aside class="reader-sidebar">
-        <section class="sidebar-card">
-          <div class="sidebar-card__title">{{ config.categoryTitle }}</div>
-          <div class="category-list">
-            <button
-              v-for="item in categories"
-              :key="item.id"
-              type="button"
-              class="category-item"
-              :class="{ 'is-active': currentCategoryId === item.id }"
-              :aria-current="currentCategoryId === item.id ? 'page' : undefined"
-              :aria-label="`${item.name}，共 ${item.articles_count || 0} 篇`"
-              @click="goCategoryList(item.id)"
-            >
-              <span class="category-item__name">{{ item.name }}</span>
-              <span class="category-item__count">{{
-                item.articles_count || 0
-              }}</span>
-            </button>
-          </div>
-        </section>
-
-        <section v-if="tocItems.length > 1" class="sidebar-card">
-          <div class="sidebar-card__title">目录结构</div>
-          <div class="toc-list">
-            <button
-              v-for="item in tocItems"
-              :key="item.id"
-              type="button"
-              class="toc-item"
-              :class="[`level-${item.level}`]"
-              :aria-label="`跳转到 ${item.label}`"
-              @click="scrollToAnchor(item.id)"
-            >
-              {{ item.label }}
-            </button>
-          </div>
-        </section>
-      </aside>
-    </div>
+          <section v-if="tocItems.length > 1" class="sidebar-card">
+            <div class="sidebar-card__title">目录结构</div>
+            <div class="toc-list">
+              <button
+                v-for="item in tocItems"
+                :key="item.id"
+                type="button"
+                class="toc-item"
+                :class="[`level-${item.level}`]"
+                :aria-label="`跳转到 ${item.label}`"
+                @click="scrollToAnchor(item.id)"
+              >
+                {{ item.label }}
+              </button>
+            </div>
+          </section>
+        </aside>
+      </div>
+    </t-loading>
   </div>
 </template>
 
 <script setup>
 import { computed, nextTick, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { ArrowRight } from "@element-plus/icons-vue";
+import { ArrowRightIcon } from "tdesign-icons-vue-next";
 import siteApi from "@/api/site";
 import { renderMarkdown } from "@/utils/markdown";
 import { rewriteApiAssetUrlsInHtml } from "@/utils/apiAssetUrl";
@@ -416,7 +418,7 @@ watch(
   font-size: 13px;
   line-height: 1.5;
 
-  .el-icon {
+  .reader-breadcrumb__icon {
     color: $text-color-disabled;
     font-size: 12px;
   }

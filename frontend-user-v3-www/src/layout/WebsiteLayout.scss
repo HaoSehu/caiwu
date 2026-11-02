@@ -419,7 +419,7 @@
   }
 }
 
-// 轻量自定义用户下拉（替代 el-dropdown，避免 element-plus popper 机制进首屏）
+// 轻量自定义用户下拉：不引入浮层组件（popup/dropdown 会额外拉首屏依赖），保持原生定位
 .user-menu,
 .mobile-user-menu {
   position: relative;
@@ -456,7 +456,7 @@
     background $motion-fast ease,
     color $motion-fast ease;
 
-  .el-icon {
+  .t-icon {
     font-size: 16px;
     color: $text-color-placeholder;
     transition: color $motion-fast ease;
@@ -466,7 +466,7 @@
     background: $color-primary-a06;
     color: $color-primary;
 
-    .el-icon {
+    .t-icon {
       color: $color-primary;
     }
   }
@@ -474,7 +474,7 @@
   &.is-danger {
     color: $color-danger;
 
-    .el-icon {
+    .t-icon {
       color: $color-danger;
     }
   }

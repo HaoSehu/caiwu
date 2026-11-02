@@ -1,5 +1,7 @@
 import { computed, onBeforeUnmount, ref, watch } from "vue";
-import { ElMessage } from "element-plus/es/components/message/index.mjs";
+import { MessagePlugin } from "tdesign-vue-next/es/message/plugin";
+// DialogPlugin 只在「移除优惠券」的二次确认里用，惰性加载避免把 dialog 整包并进
+// products 与 ProductDetail 共享分片（实测该分片曾因此达 196 KB，超 180 KB 单分片门禁）。
 import siteApi from "@/api/site";
 import {
   resolvePurchaseRequirementList,
@@ -22,6 +24,15 @@ import {
   getPendingWebsiteCouponId,
 } from "@/utils/websiteCoupon";
 import { createAbortController } from "@/utils/compat";
+
+// 二次确认弹层的惰性加载器：全模块共享一个 promise（首次点「移除」才拉 chunk），
+// 失败时由下面的 catch 清空，让下一次点击能重试，而不是永久缓存一个 rejected promise。
+let dialogPluginLoader = null;
+
+function reportConfirmUnavailable() {
+  // MessagePlugin 已在文件头静态引入，可直接用来兜底提示，无需再动态加载。
+  MessagePlugin.error("确认弹层加载失败，请刷新页面后重试");
+}
 
 export function useWebsiteProductCheckout({
   productDetail,
@@ -347,7 +358,7 @@ export function useWebsiteProductCheckout({
     // 配好 VITE_CONSOLE_SITE_URL 的正常环境反而被拦下报「控制台地址未配置」。
     const targetUrl = buildConsoleUrl(checkoutPath, checkoutQuery);
     if (isConsolePath(targetUrl)) {
-      ElMessage.error(
+      MessagePlugin.error(
         "控制台地址未配置（VITE_CONSOLE_SITE_URL），暂时无法继续创建账单，请联系客服",
       );
       return;
@@ -356,7 +367,7 @@ export function useWebsiteProductCheckout({
     // 先发起跳转再提示：navigateToConsole 内部同步执行 window.location.assign，
     // assign 之后的代码仍会执行，因此提示一定在跳转动作已提交后才出现。
     navigateToConsole(checkoutPath, checkoutQuery);
-    ElMessage.success("正在进入控制台继续创建账单");
+    MessagePlugin.success("正在进入控制台继续创建账单");
   }
 
   async function requestQuote(nextCouponId = selectedCouponId.value) {
@@ -495,24 +506,47 @@ export function useWebsiteProductCheckout({
       return false;
     }
 
+    // 惰性加载本身也可能失败（部署后旧 hash 失效、弱网中断）。旧实现外面有 try/catch，
+    // 失败时静默返回 false；迁移后若不加兜底，这里会抛未捕获 rejection，用户点「移除」
+    // 将没有任何反馈。用 ??= 缓存 promise：成功后复用，失败时清空以便下次重试。
+    dialogPluginLoader ||= import("tdesign-vue-next/es/dialog/plugin").catch(
+      (error) => {
+        dialogPluginLoader = null;
+        throw error;
+      },
+    );
+    let DialogPlugin;
     try {
-      // ElMessageBox 与它的样式只在用户真的点「移除」时才需要，静态引入会把
-      // base/input/button/overlay/message-box 五份样式合并进入口 CSS（实测首屏 +4.5KB gzip）。
-      const [{ ElMessageBox }] = await Promise.all([
-        import("element-plus/es/components/message-box/index.mjs"),
-        import("element-plus/es/components/message-box/style/index"),
-      ]);
-
-      await ElMessageBox.confirm(
-        "移除后优惠券将不再生效，费用会按原价重新计算。确定移除吗？",
-        "移除优惠券",
-        {
-          confirmButtonText: "移除",
-          cancelButtonText: "取消",
-          type: "warning",
-        },
-      );
+      ({ DialogPlugin } = await dialogPluginLoader);
     } catch {
+      reportConfirmUnavailable();
+      return false;
+    }
+
+    const confirmed = await new Promise((resolve) => {
+      // 三个回调需要去重：TDesign 点「取消」时会先触发 onCancel，随后 emitCloseEvent
+      // 再触发 onClose（es/dialog/dialog.mjs 的 cancelBtnAction），不去重会对同一个
+      // 弹层调用两次 destroy()，多排一个空转的 300ms 销毁定时器。
+      let settled = false;
+      let dialog = null;
+      const close = (result) => {
+        if (settled) return;
+        settled = true;
+        dialog?.destroy();
+        resolve(result);
+      };
+      dialog = DialogPlugin.confirm({
+        header: "移除优惠券",
+        body: "移除后优惠券将不再生效，费用会按原价重新计算。确定移除吗？",
+        theme: "warning",
+        confirmBtn: { content: "移除", theme: "danger" },
+        cancelBtn: "取消",
+        onConfirm: () => close(true),
+        onCancel: () => close(false),
+        onClose: () => close(false),
+      });
+    });
+    if (!confirmed) {
       // 用户取消或关闭弹层：保持当前优惠券不变
       return false;
     }
@@ -551,28 +585,28 @@ export function useWebsiteProductCheckout({
 
   async function submitOrder() {
     if (productStockLoading.value) {
-      ElMessage.warning("库存同步中，请稍候");
+      MessagePlugin.warning("库存同步中，请稍候");
       return;
     }
 
     if (productStockError.value) {
-      ElMessage.warning("库存同步失败，请稍后重试");
+      MessagePlugin.warning("库存同步失败，请稍后重试");
       return;
     }
 
     if (resolvedStock.value === 0) {
-      ElMessage.warning("当前库存不足，暂时无法购买");
+      MessagePlugin.warning("当前库存不足，暂时无法购买");
       return;
     }
 
     // 报价在途或防抖窗口内（配置已变、旧 token 已失效）：禁止提交，防止旧报价凭证配新配置
     if (quoteLoading.value || quoteSnapshotVersion !== quoteVersion) {
-      ElMessage.warning("价格计算中，请稍候");
+      MessagePlugin.warning("价格计算中，请稍候");
       return;
     }
 
     if (!quoteToken.value) {
-      ElMessage.warning("报价凭证已失效，请稍后重试");
+      MessagePlugin.warning("报价凭证已失效，请稍后重试");
       return;
     }
 
@@ -580,13 +614,13 @@ export function useWebsiteProductCheckout({
     // 首页/列表页停留久了再点购买，token 早已失效：跳转本身会成功（只是个 URL），
     // 但控制台建单必被拒，而那时用户已经离开官网、无法重新询价。所以这里就地拦截并自动重算。
     if (isQuoteExpired()) {
-      ElMessage.warning("报价已超时，正在重新计算价格，请稍候再提交");
+      MessagePlugin.warning("报价已超时，正在重新计算价格，请稍候再提交");
       void executeQuote(selectedCouponId.value, { fallbackInvalidCoupon: true });
       return;
     }
 
     if (!canSubmit.value) {
-      ElMessage.warning("请选择计费周期");
+      MessagePlugin.warning("请选择计费周期");
       return;
     }
 
@@ -598,7 +632,7 @@ export function useWebsiteProductCheckout({
 
       redirectToConsoleCheckout(orderPayload, idempotencyKey);
     } catch (error) {
-      ElMessage.error(
+      MessagePlugin.error(
         error?.response?.data?.message || "跳转控制台失败，请重试",
       );
     } finally {
@@ -856,6 +890,9 @@ export function useWebsiteProductCheckout({
     quoteLoading,
     quoteError,
     retryQuote,
+    // 供页面层判断「首屏报价已完成」：报价 token 非空代表关键路径（详情→库存→报价）
+    // 已跑完，此时再发非关键的预取请求不会抢带宽。
+    quoteToken,
     productStockLoading,
     productStockError,
     selectedProductDisplayName,

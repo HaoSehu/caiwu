@@ -1,5 +1,9 @@
 <template>
-  <div class="pd-page" v-loading="loading">
+  <!-- 加载遮罩用 t-loading 包裹而非指令：TDesign 的 v-loading 指令要 app.use(Loading) 才注册，
+       本端为保住首屏体积没有全量注册插件；t-loading 组件在本页 chunk 内按需引入，
+       包裹时渲染 .t-loading__parent 容器并在 loading 期间叠 .t-loading--full 遮罩，
+       与迁移前指令的视觉范围一致。pd-page 挂在包裹层上，min-height/背景等版式不变。 -->
+  <t-loading :loading="loading" class="pd-page">
     <div v-if="product">
       <!-- 顶部工具栏：分类 + 型号横向Tab -->
       <div class="pd-topbar">
@@ -171,33 +175,33 @@
               <div class="os-row" v-else>
                 <div class="os-col">
                   <div class="os-col-label">系统</div>
-                  <el-select
+                  <t-select
                     v-model="configForm.os_group"
                     placeholder="请选择系统"
                     @change="handleOsGroupChange"
                   >
-                    <el-option
+                    <t-option
                       v-for="os in osGroups"
                       :key="os.id"
                       :label="os.label"
                       :value="os.id"
                     />
-                  </el-select>
+                  </t-select>
                 </div>
                 <div class="os-col">
                   <div class="os-col-label">版本</div>
-                  <el-select
+                  <t-select
                     v-model="configForm.os"
                     placeholder="请选择版本"
                     :disabled="!currentOsGroup?.versions?.length"
                   >
-                    <el-option
+                    <t-option
                       v-for="ver in currentOsGroup?.versions"
                       :key="ver.id"
                       :label="ver.label"
                       :value="ver.id"
                     />
-                  </el-select>
+                  </t-select>
                 </div>
               </div>
             </div>
@@ -211,11 +215,12 @@
                 <div class="spec-label">{{ cfg.label }}</div>
                 <div class="spec-ctrl">
                   <template v-if="cfg.isNumber">
-                    <el-input-number
+                    <t-input-number
                       v-model="configForm[cfg.key + '_num']"
                       :min="cfg.min ?? 1"
                       :max="cfg.max ?? undefined"
-                      controls-position="right"
+                      :allow-input-over-limit="false"
+                      theme="column"
                     />
                   </template>
                   <div class="opt-wrap" v-else-if="cfg.options.length > 1">
@@ -248,11 +253,12 @@
                 <div class="spec-label">{{ cfg.label }}</div>
                 <div class="spec-ctrl">
                   <template v-if="cfg.isNumber">
-                    <el-input-number
+                    <t-input-number
                       v-model="configForm[cfg.key + '_num']"
                       :min="cfg.min ?? 1"
                       :max="cfg.max ?? undefined"
-                      controls-position="right"
+                      :allow-input-over-limit="false"
+                      theme="column"
                     />
                   </template>
                   <div class="opt-wrap" v-else-if="cfg.options.length > 1">
@@ -342,17 +348,16 @@
               <div class="stock-hint">{{ stockHint }}</div>
             </div>
 
-            <el-alert
+            <t-alert
               v-if="purchaseRequirementList.length"
-              type="warning"
-              :closable="false"
-              show-icon
+              theme="warning"
+              role="alert"
               class="purchase-guard-alert"
             >
               <template #title
                 >购买要求：{{ purchaseRequirementSummary }}</template
               >
-            </el-alert>
+            </t-alert>
 
             <div class="aside-divider"></div>
 
@@ -459,20 +464,20 @@
                     />
                   </svg>
                 </button>
-                <el-select
+                <t-select
                   v-else
                   :model-value="selectedCouponId || undefined"
                   clearable
                   placeholder="请选择优惠券"
                   @change="handleCouponChange"
                 >
-                  <el-option
+                  <t-option
                     v-for="item in availableCoupons"
                     :key="item.id"
                     :label="`${item.name} · ${item.discount_label}`"
                     :value="item.id"
                   />
-                </el-select>
+                </t-select>
               </div>
               <div v-if="appliedCoupon" class="coupon-panel-tip">
                 {{ appliedCoupon.name }}，{{
@@ -588,18 +593,22 @@
 
     <!-- role=status：加载失败与「商品不存在」必须被读屏播报，否则只剩视觉反差 -->
     <div class="pd-empty" v-else-if="!loading" role="status" aria-live="polite">
-      <el-empty
-        :description="
-          loadFailed ? '商品加载失败，请检查网络连接' : '商品不存在或已下架'
-        "
-      >
-        <div class="pd-empty__actions">
-          <el-button v-if="loadFailed" type="primary" @click="loadProduct"
-            >重新加载</el-button
-          >
-          <el-button @click="router.push('/products')">返回产品页</el-button>
-        </div>
-      </el-empty>
+      <!-- 文案绑 :title 而非 :description：TDesign 在不传 title 时会用 locale 默认
+           「暂无数据」顶在主文案位，等于凭空多一行；绑 title 后文案与读屏内容都与
+           迁移前一致，只是从 EP 的次要说明位换到主标题位。 -->
+      <t-empty :title="emptyTitle">
+        <template #action>
+          <div class="pd-empty__actions">
+            <t-button
+              v-if="loadFailed"
+              theme="primary"
+              @click="loadProduct"
+              >重新加载</t-button
+            >
+            <t-button @click="router.push('/products')">返回产品页</t-button>
+          </div>
+        </template>
+      </t-empty>
     </div>
 
     <!-- 移动专属抽屉用 isMobile 门控：异步组件只切 chunk 不阻止加载，
@@ -648,7 +657,7 @@
         </button>
       </div>
     </MobileSheet>
-  </div>
+  </t-loading>
 </template>
 
 <script setup>
@@ -701,7 +710,7 @@ const appStore = useAppStore();
 const publicSiteUrl = resolvePublicSiteUrl();
 
 // 移动布局断点与商品列表、站点头部共用 useMobileBreakpoint 的同一份 matchMedia：
-// 声明时即读取初始值，避免移动端首帧先渲染桌面分支（el-select 等）再切移动
+// 声明时即读取初始值，避免移动端首帧先渲染桌面分支（t-select 等）再切移动
 // picker 的一帧闪变；matchMedia change 监听也由该 composable 在挂载/卸载时成对
 // 注册与移除，本页不再各自维护 mobileMediaQuery / mobileMediaListener。
 const { isMobile, updateMobileState } = useMobileBreakpoint();
@@ -1039,6 +1048,12 @@ function switchProduct(id) {
 }
 
 const loadFailed = ref(false);
+
+// 空态文案绑 title（不是 description）：TDesign 在不传 title 时用 locale 的「暂无数据」
+// 占主文案位，会出现两行；绑 title 后文案与读屏内容都与迁移前一致。
+const emptyTitle = computed(() =>
+  loadFailed.value ? "商品加载失败，请检查网络连接" : "商品不存在或已下架",
+);
 
 async function loadProduct() {
   const pid = Number(route.params.id || 0);
@@ -1429,6 +1444,16 @@ onBeforeUnmount(() => {
 .spec-ctrl {
   flex: 1;
   min-width: 0;
+
+  // 数字步进器迁到 t-input-number 后改用 theme="column"（对应迁移前的右侧步进按钮），
+  // 而 TDesign 的 column 主题把组件宽度写死成 96px（node_modules/tdesign-vue-next/es/
+  // input-number/style/index.css 的 .t-input-number.t-is-controls-right { width: 96px }）。
+  // 96px 只是该主题的默认值、不是规范强制值，而迁移前步进器的默认宽度是 150px。
+  // 为满足「只换 UI 层、视觉不缩水」，在页面自有命名空间内把宽度拉回 150px；
+  // 不用 width:100%——.spec-ctrl 是 flex:1 满宽容器，撑满会让数字框比原来宽出近一倍。
+  :deep(.t-input-number) {
+    width: 150px;
+  }
 }
 
 /* ===== 步进器 ===== */
@@ -1501,7 +1526,7 @@ onBeforeUnmount(() => {
   flex: 1;
   min-width: 0;
 
-  :deep(.el-select) {
+  :deep(.t-select) {
     width: 100%;
   }
 }
@@ -1820,6 +1845,28 @@ onBeforeUnmount(() => {
 
 .purchase-guard-alert {
   margin: 12px 0;
+  // TDesign 提示条默认内边距 14/20、warning 底色为品牌暖橙，在 280px 侧栏里过于厚重；
+  // 收回到与商品列表页 .purchase-requirements-alert 一致的紧凑密度与柔和底色。
+  padding: 8px 12px;
+  border-radius: 2px;
+  background: $color-warning-soft;
+  color: $color-warning-text;
+  font-size: 12px;
+  line-height: 1.6;
+
+  :deep(.t-alert__icon) {
+    color: $color-warning;
+    font-size: 14px;
+  }
+
+  // 文案走 #title 槽位渲染在 .t-alert__title 里，它自带 color: var(--td-text-color-primary)
+  // 与 bold 字重，会盖掉根节点的 color，必须显式下发到这一层。
+  :deep(.t-alert__title) {
+    color: $color-warning-text;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.6;
+  }
 }
 
 .cost-total {
@@ -2156,7 +2203,7 @@ onBeforeUnmount(() => {
   justify-content: center;
 }
 
-/* ===== 移动端选择器（≤992px 替换 el-select） ===== */
+/* ===== 移动端选择器（≤992px 替换 t-select） ===== */
 .pd-mobile-picker-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
