@@ -138,6 +138,15 @@ backend/storage/app/archives/
 backend/storage/app/openapi.json
 # 私有存储整体不入库：含客户附件、备份与临时脚本，历史上曾误提交凭据与工单图片
 backend/storage/app/private/
+# 远程存储转存的中转目录：RemoteMediaStorage 每次上传都会在此落临时文件，
+# 属运行时中间产物，不入库（保留目录本身，Laravel 运行时自动创建）。
+backend/storage/app/tmp/
+# 媒体后台上传的图片/视频：文件名形如 img_HHMMSS_xxxxxxxx.jpg / vid_*，
+# 由 MediaFileService 写入并登记在数据库里，属运行数据不入库。
+# 站点静态资源（logo*.svg/png、演示视频 1-8.mp4 等）已在仓库中跟踪，不受本规则影响——
+# git 只忽略未跟踪文件。历史遗留的 img_*.{png,jpg} 保持原状，不在此批量移除。
+backend/public/media/img_*
+backend/public/media/vid_*
 backend/storage/framework/testing/*.sqlite
 frontend-user-v4-console/*.png
 
