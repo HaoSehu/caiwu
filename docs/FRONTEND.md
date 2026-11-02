@@ -11,7 +11,7 @@ owner: frontend-platform
 ## 1. 当前前端项目
 
 - `frontend-admin-v3`：管理端，Vue 3 + Vite + TypeScript + TDesign Vue Next。
-- `frontend-user-v3-www`：官网与用户入口，Vue 3 + Vite + Element Plus。
+- `frontend-user-v3-www`：官网与用户入口，Vue 3 + Vite + TDesign Vue Next。
 - `frontend-user-v4-console`：新版用户控制台，Vue 3 + Vite + TypeScript + TDesign Vue Next。
 - `shared`：跨端共享包，导出状态、runtime、content 和用户控制台基础组件。
 
@@ -52,7 +52,7 @@ owner: frontend-platform
 - UI 只用 TDesign Vue Next。
 - 图标只用 `tdesign-icons-vue-next`。
 - 权限码与后端 `App\Support\AdminPermissions` 对齐。
-- 页面不新增 Element Plus 组件、样式或图标。
+- 页面不新增非 TDesign 的 UI 组件、样式或图标，也不保留旧组件体系的兼容层。防回退守卫现状：官网有 `scripts/check-no-legacy-ui.mjs` + `check-tdesign-resolver.mjs`（已接入 CI 与 `verify:refactor`），控制台有 `scripts/verify-refactor.mjs` 的 `forbiddenTerms`；管理端从未引入过 Element Plus（`git log --all -S'"element-plus"'` 为空），故未设等价守卫，新增 UI 框架时需先在管理端补一条同等检查。
 - 管理列表页不做说明型页头大卡片，优先筛选区、指标区、工具栏、表格卡片。
 - 管理端页面禁止新增独立“头部说明卡片”。
 - **多标签页与页面缓存**：`src/config/style.ts` 的 `isUseTabsRouter` 默认开启，标签栏、页面缓存与「关闭标签刷新」都依赖它。
@@ -80,11 +80,15 @@ npm run build
 - `src/domains/`：产品、服务等领域逻辑。
 - `src/composables/`：跨页面组合逻辑。
 - `src/components/`：局部业务组件（没有 `src/features/` 目录）。
-- `src/assets/styles/`：Sass token、全局样式、Element Plus 样式入口。
+- `src/assets/styles/`：Sass token（`variables.scss`）与站点全局基线样式（`global.scss`）；TDesign 设计令牌来自仓库根 `theme.css`，本目录不再存 UI 框架主题入口。
 
 实现约束：
 
-- UI 使用 Element Plus 和 `@element-plus/icons-vue`。
+- UI 使用 TDesign Vue Next 与 `tdesign-icons-vue-next`；组件按需解析见 `frontend-user-v3-www/scripts/tdesign-resolver.mjs`，禁止从 `tdesign-vue-next` 包入口（全量 barrel）引入组件。
+- 图标一律显式 `import { XxxIcon } from "tdesign-icons-vue-next"`，不使用 `<t-icon name>`：后者走 svg-sprite，需从 `tdesign.gtimg.com` 拉取雪碧图脚本，本站 CSP 不放行且首屏不应引第三方脚本。
+- 函数式反馈走子路径插件：`MessagePlugin` 从 `tdesign-vue-next/es/message/plugin`、`DialogPlugin` 从 `tdesign-vue-next/es/dialog/plugin`；两者的样式已由 `src/app/bootstrap.ts` 补齐，业务文件不要再引 CSS。`tdesign-vue-next` 包入口与 `es/style/index.css` 之外的基础样式同样由该文件统一引。
+- 模板里的 `<t-xxx>` 必须收录进 `scripts/tdesign-resolver.mjs` 的 `TDESIGN_COMPONENT_DIRS`/`TDESIGN_PLUGIN_DIRS`，否则会静默渲染成空自定义元素且构建不报错；`npm run verify:refactor` 通过 `scripts/check-tdesign-resolver.mjs` 拦截。
+- 旧组件体系不得回流：依赖、`<el-xxx>` 标签、`--el-*` 变量、`.el-*` 选择器与旧命令式 API 任一出现即视为残留，`npm run verify:refactor` 通过 `scripts/check-no-legacy-ui.mjs` 拦截（扫 `src`/`scripts`/`e2e` 与构建配置，并断言 TDesign 两包在场）；构建后再以 `--dist` 模式复扫产物 `html`/`css`/`js`，覆盖经 `node_modules` 间接路径打进 `dist` 的旧样式。CI 的 `verify` job 也会在构建前后各执行一次（源码守卫在构建前、`--dist` 守卫在构建后），不依赖开发者本地是否跑过 `verify:refactor`。
 - 官网首页、产品页、登录页可以有更强视觉表现；用户中心业务页保持浅色控制台结构。
 - 购买、结算、优惠券、恢复下单优先复用 `src/domains/products/*` 与现有 composables。
 - SEO、sitemap、prerender 逻辑放脚本和构建流程，不在页面里硬拼。
@@ -179,4 +183,4 @@ npm run verify:frontends
 - `unplugin-vue-components` 三端统一锁 `^0.27.5`（当前 `frontend-user-v3-www` 仍声明 `^0.27.0`，属待对齐的漂移项，锁文件会 dedupe 到同一份实现）。`frontend-user-v4-console` 曾声明 `^28.8.0`，但该大版本改写了 `ComponentResolverObject` 契约与解析时机，与两端现有自定义 `createTDesignResolver()` 实现不匹配；两端各装一个主版本还会让 Vite 按 workspace 分别解析，出现「同一份 `vite.config.ts` 在 admin 生效、在 console 失效」的难查故障。降回 0.27.x 后三端 dedupe 到同一份实现，按需引入行为一致。
 - `vue-tsc` 锁 `3.3.11`（不写 `^`）。`vue-tsc` 的次版本会改变类型推导严格度，放开版本会让 CI 与本地在不同时间得出不同结果。
 - `@playwright/test` 三端统一 `^1.62.1`；e2e 产物目录（`dist-e2e/`、`test-results/`、`playwright-report/`）一律不入库。
-- 体积门禁预算在 `backend/scripts/frontend_budget.mjs`：首屏 gzip admin 560,000 B、www 115,000 B、console 420,000 B。改动构建配置（按需引入、manualChunks、依赖增删）后必须跑 `npm run build:frontends`，超预算即失败。
+- 体积门禁预算在 `backend/scripts/frontend_budget.mjs`：首屏 gzip admin 560,000 B、www 145,000 B（闭包口径）、console 420,000 B；单分片 raw www 180,000 B、样式分片 raw www 70,000 B。改动构建配置（按需引入、manualChunks、依赖增删）后必须跑 `npm run build:frontends`，超预算即失败。

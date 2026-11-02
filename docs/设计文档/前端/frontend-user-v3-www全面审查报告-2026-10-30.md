@@ -1,17 +1,19 @@
 ---
 status: needs-review
-updated: 2026-10-30
+updated: 2026-11-02
 owner: frontend-platform
 ---
 
 # frontend-user-v3-www 全面审查与修复报告 · 2026-10-30
 
+> **历史存档（勿按现状引用）**：本文档写于 2026-10-30，记录的是当时 `frontend-user-v3-www` 基于 Element Plus 的审查结论。该端已于 2026-11-01 迁移到 TDesign Vue Next（见 `docs/执行计划/进行中/www端TDesign组件体系迁移-2026-11-01.md`），文中 `El*`/`el-*`/`--el-*`/`element-plus` 均为审查当时的历史事实，不代表当前技术栈；少量标注「2026-11-01 迁移后修订」的行是迁移时对已失效现行断言的旁注，原始结论文字一律保留。
+
 ## 一、审查概况
 
-- **范围**：`frontend-user-v3-www/` 全量前端——`src/pages`（25 个 `.vue`，含 `home/components` 7 个与 `seo-landing/pages` 5 个）、`src/components`（6 个，含 `common/`）、`src/layout`（`WebsiteLayout.vue` + `WebsiteLayout.scss` + `components/WebsiteFooter.vue` + `composables/useMobileNav.js`）、`src/domains/products`（4 个 composable）、`src/app/router/routes.ts`（1 条布局壳 + 19 条子路由）、`src/assets/styles`（`variables.scss`、`global.scss`、`element/`）、`src/data`（首页 3 份 + SEO 落地页 5 份）、`vite.config.js` 与 `scripts/*`（10 个构建脚本）、根与前端 `package.json`、`backend/scripts/frontend_budget.mjs`、`shared/` 中被本站消费的模块。不含后端业务实现，仅作为依赖契约标注影响面。
+- **范围**：`frontend-user-v3-www/` 全量前端——`src/pages`（25 个 `.vue`，含 `home/components` 7 个与 `seo-landing/pages` 5 个）、`src/components`（6 个，含 `common/`）、`src/layout`（`WebsiteLayout.vue` + `WebsiteLayout.scss` + `components/WebsiteFooter.vue` + `composables/useMobileNav.js`）、`src/domains/products`（4 个 composable）、`src/app/router/routes.ts`（1 条布局壳 + 19 条子路由）、`src/assets/styles`（`variables.scss`、`global.scss`、`element/`〔该 EP 主题目录已于 2026-11-01 迁移时删除〕）、`src/data`（首页 3 份 + SEO 落地页 5 份）、`vite.config.js` 与 `scripts/*`（10 个构建脚本）、根与前端 `package.json`、`backend/scripts/frontend_budget.mjs`、`shared/` 中被本站消费的模块。不含后端业务实现，仅作为依赖契约标注影响面。
 - **方法**：按「设计 × 视觉 × 交互 × 性能」四维度拆分并行审查；逐页面检查到区块级——布局区块、按钮、链接、表单、弹窗、悬停/点击反馈、加载态与空态。每条发现强制附 `文件:行号`，无法核实的单列「待确认」不混入结论；全部高严重度条目由首席二次实读复核。
 - **证据口径**：行号取自 2026-10-30 工作区（`HEAD = d5750a78`）；体积数据取自 `npm run build` 实际输出；跨站 cookie 行为经三次 Playwright 探针定位（见 P12-06）。
-- **文档基线**：对齐 `docs/FRONTEND.md`（仅 Element Plus、优先复用 `shared/` 运行时与契约工具、构建必须过体积门禁）与 `docs/DESIGN.md`（颜色/字号/间距/圆角/阴影必须走 `variables.scss` 令牌，禁止页面私写重复容器公式）。
+- **文档基线（审查当时，即 2026-10-30）**：对齐 `docs/FRONTEND.md`（当时仅允许 Element Plus、优先复用 `shared/` 运行时与契约工具、构建必须过体积门禁）与 `docs/DESIGN.md`（颜色/字号/间距/圆角/阴影必须走 `variables.scss` 令牌，禁止页面私写重复容器公式）。本文的历史定位与当前技术栈见文首「历史存档」声明；下文所有 `El*`/`el-*`/`--el-*`/`element-plus` 均为审查当时的历史事实，不代表当前技术栈。
 
 ### 1.1 并行执行与失败披露
 
@@ -197,7 +199,7 @@ owner: frontend-platform
 
 | 编号 | 位置 | 维度 | 严重度 | 问题描述 | 修复方向 | 状态 |
 | --- | --- | --- | --- | --- | --- | --- |
-| P9-01 | `NotFound.vue:8-9` | 设计 | 低 | 404 页是全站唯一使用 `<el-button>` 承载业务动作的地方（其余 12 处 `el-button` 全在错误/空态兜底）。核实：错误页本就是 Element Plus 兜底语境的自然延续，改手写按钮收益为零。 | 保留，并在此登记为「刻意例外」，防止后续一致性清算误改。 | 决定不改 |
+| P9-01 | `NotFound.vue:8-9` | 设计 | 低 | 404 页是全站唯一使用 `<el-button>` 承载业务动作的地方（其余 12 处 `el-button` 全在错误/空态兜底）。核实：错误页本就是 Element Plus 兜底语境的自然延续，改手写按钮收益为零。 | 保留，并在此登记为「刻意例外」，防止后续一致性清算误改。**（2026-11-01 迁移后修订：该例外随组件体系迁移失效，`NotFound.vue:8-9` 现为 `<t-button theme="primary">` / `<t-button>`）** | 决定不改（迁移后已自然收敛） |
 | P9-02 | `NotFound.vue:3`（`.not-found-card` 20px 圆角） | 视觉 | 低 | 20px 大卡圆角与法律文档页 `legal-card` 同族（独立整页大卡），与内容卡（12px）、实心大卡（14px）区分。 | 保留（圆角体系按体量分层，不收档）。 | 决定不改 |
 
 ### P10　全局布局（`src/layout` + `src/App.vue`）
@@ -225,7 +227,7 @@ owner: frontend-platform
 | P11-01 | `MobileOptionPicker.vue:47`、`MobileOsPicker.vue:91`、`MobileRegionPicker.vue:23` | 交互 | 高 | 三个 Picker 的 `id` 全站硬编码（如 `os-option-0`），同页同时渲染两个 Picker 时 id 冲突，`aria-activedescendant` 指向错误元素，读屏报错位选项；RegionPicker 更是缺少 `aria-activedescendant`。 | 全部改 `useId()` 生成实例级 id 前缀，`aria-activedescendant` 按前缀拼接；OsPicker 另补 Home/End/Enter 键处理。 | 已修复 |
 | P11-02 | `MobileSheet.vue:32`（`confirmText`） | 交互 | 低 | 组件对外暴露 `confirmLoading` / `confirmDisabled` 两个 prop，全仓零调用方（唯一真实提交入口 `.buy-btn` 自带 disabled 三重守卫），是纯 API 冗余，会误导使用者自己管 loading。 | 删除两个 prop 与对应 `:disabled`/`:aria-busy`/`&:disabled` 样式，还原为普通确认按钮，并注释说明「本项目所有 confirm 都是同步本地选择」。 | 已修复 |
 | P11-03 | `MobileSheet.vue`（8 处调用方的 confirm 链路） | 交互 | 高 | 曾判「confirm 可连点造成重复提交」。复核：8 处 confirm 处理函数全同步、无网络请求（`products/index.vue:1298/1310/1357/1485`、`ProductDetail:614`、三个 Mobile Picker 的 `handleConfirm` 仅 emit），真实提交入口已有三重守卫。 | 撤回并降级为 P11-02 的 API 冗余（附录 A-01）。 | 已撤回 |
-| P11-04 | `MobileSheet.vue:210`（`.ms-drawer .el-drawer` `18px 18px 0 0`） | 视觉 | 低 | 移动抽屉顶角 18px 与「实心大卡 14px」不同档。 | 保留（抽屉顶角是独立形态档位）。 | 决定不改 |
+| P11-04 | `MobileSheet.vue:210`（`.ms-drawer .el-drawer` `18px 18px 0 0`） | 视觉 | 低 | 移动抽屉顶角 18px 与「实心大卡 14px」不同档。 | 保留（抽屉顶角是独立形态档位）。**（2026-11-01 迁移后修订：`18px 18px 0 0` 保留不变，但 `el-drawer` 已换成 TDesign 抽屉，选择器现为 `MobileSheet.vue:348` 的 `.ms-drawer .t-drawer__content-wrapper`，`:210` 是当年行号）** | 决定不改 |
 | P11-05 | `common/RouteLoadingFallback.vue:2` | 交互 | - | 路由加载占位 `role="status" aria-live="polite" aria-busy="true"`。 | 无需修改。 | 正例 |
 | P11-06 | `MobileOptionPicker.vue`、`MobileOsPicker.vue`、`MobileRegionPicker.vue` 的 `outline:none` | 交互 | - | 三处 `outline:none` 均紧跟 `&:focus-visible{box-shadow: inset 0 0 0 2px $color-primary}`——去轮廓必配替代焦点指示。 | 无需修改；新增交互组件须遵循同一配对规则。 | 正例 |
 
@@ -389,7 +391,7 @@ owner: frontend-platform
 
 | 排名 | 编号 | 位置 | 影响 | 触发条件 |
 | --- | --- | --- | --- | --- |
-| 1 | P12-02 | `scripts/element-plus-subpath-resolver.mjs:75` | 34 个 `El*` 导出回退 barrel，dayjs 等整包重回首屏 chunk | 任意新增/调整 Element Plus 组件后 |
+| 1 | P12-02 | `scripts/element-plus-subpath-resolver.mjs:75` | 34 个 `El*` 导出回退 barrel，dayjs 等整包重回首屏 chunk | 任意新增/调整 Element Plus 组件后 **（2026-11-01 迁移后本条已不可达：解析器与 Element Plus 均已删除，现行等效守卫见 `frontend-user-v3-www/scripts/check-tdesign-resolver.mjs`）** |
 | 2 | P12-03 | `backend/scripts/frontend_budget.mjs:15` | 体积门禁失真——超预算仍绿灯，等于没有门禁 | 每次构建（持续静默） |
 | 3 | P12-06 | `shared/runtime/session.ts:36` | 跨站进入的落地页请求不带会话 cookie | 从搜索引擎/邮件/外链点击进入 |
 | 4 | P8-04 | `src/app/router/routes.ts:30` | 任一落地页数据缺失即全站白屏（不只是该页 404） | 新增落地页漏配 view 时 |
@@ -480,13 +482,13 @@ owner: frontend-platform
 | P3-10 | `ProductDetail/index.vue` | `.pd-coupon-option` 6px 圆角 | 抽屉内次级控件，不与按钮族混编。 |
 | P7-04 | `ContentDetailPage.vue:42` | 全站唯一 `v-html` | 来源为 `articleContentHtml` computed，经 `sanitizeMarkdownSource` + `renderMarkdown` 处理，非裸 HTML 注入。后续新增富文本入口须复用同一链路。 |
 | P8-06 | `seo-landing/index.vue` | 1080px / 760px 断点 | 页面局部一次性断点，已登记。 |
-| P9-01 | `NotFound.vue:8-9` | 全站唯一用 `<el-button>` 承载业务动作 | 错误页本就是 Element Plus 兜底语境的自然延续，改手写按钮收益为零。登记为「刻意例外」，防后续一致性清算误改。 |
+| P9-01 | `NotFound.vue:8-9` | 全站唯一用 `<el-button>` 承载业务动作 | 错误页本就是 Element Plus 兜底语境的自然延续，改手写按钮收益为零。登记为「刻意例外」，防后续一致性清算误改。**（2026-11-01 迁移后：该例外已失效，现为 `<t-button>`）** |
 | P9-02 | `NotFound.vue:3` | `.not-found-card` 20px 圆角 | 与法律文档页 `legal-card` 同族（独立整页大卡），与内容卡（12px）、实心大卡（14px）分层。 |
-| P11-04 | `MobileSheet.vue:210` | `.ms-drawer` 顶角 `18px 18px 0 0` | 移动抽屉顶角是独立形态档位。 |
+| P11-04 | `MobileSheet.vue:210` | `.ms-drawer` 顶角 `18px 18px 0 0` | 移动抽屉顶角是独立形态档位。**（2026-11-01 迁移后：`18px 18px 0 0` 与 `.ms-drawer` 类名均未变，仅内层选择器改为 `.t-drawer__content-wrapper`，结论仍成立）** |
 | P12-16 | 全站 spacing | 38 个不同 px 值 | 高频值均为 4px 倍数且已稳定，离网值仅 11 处各有对齐理由。见 3.5。 |
 | P12-17 | 全站 border-radius | 13 档 | 可按体量完整解释，收档破坏层级。见 3.5。 |
 
-另：`global.scss:6-11` 的 `--el-color-primary-light-3..dark-2` 是 Element Plus `set-color-mix-level` 派生变量字面值（与 mix 公式一致），文件内 `:3-4` 已注释说明为何刻意写出，不作令牌化；`ContentDetailPage.vue:748/751` 的 `@media print` 内 `color: #000` 是打印必须纯黑，刻意保留。
+另：`global.scss:6-11` 的 `--el-color-primary-light-3..dark-2` 是 Element Plus `set-color-mix-level` 派生变量字面值（与 mix 公式一致），文件内 `:3-4` 已注释说明为何刻意写出，不作令牌化；**（2026-11-01 迁移后修订：该段 EP 派生变量已随组件体系迁移删除，`global.scss` 现零 `--el-*` 引用，本条仅作审查当时的历史记录）**`ContentDetailPage.vue:748/751` 的 `@media print` 内 `color: #000` 是打印必须纯黑，刻意保留。
 
 ## 附录 C　审查覆盖度声明
 

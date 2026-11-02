@@ -1,6 +1,6 @@
 ---
 status: current
-updated: 2026-10-24
+updated: 2026-11-02
 owner: frontend-platform
 ---
 
@@ -28,18 +28,18 @@ owner: frontend-platform
 
 ## 2. 总体定位与端划分
 
-本规范仅适用于使用 **TDesign Vue Next** 体系的控制台端（`frontend-admin-v3` 与 `frontend-user-v4-console`）。系统视觉基线为**浅色企业级云服务控制台**，专注于信息传达效率与业务处理：
+本规范适用于使用 **TDesign Vue Next** 体系的三端（`frontend-admin-v3`、`frontend-user-v4-console` 与 `frontend-user-v3-www`）。其中**交互与组件映射**条款对三端全部适用；**信息密度与页面结构**条款仅适用于管理端与控制台，官网端按下文第 2 节该端条目执行。系统视觉基线为**浅色企业级云服务控制台**，专注于信息传达效率与业务处理：
 
 - **主题模式约束**：**系统仅提供浅色（Light）模式，暂时不提供暗黑（Dark）主题**。严禁把控制台做成深色大屏仪表盘，严禁添加纯营销化发光渐变与玻璃拟态修饰。
 - **`frontend-admin-v3`（管理端）**：采用 `TDesign Vue Next`。服务于内部运营、财务及平台管理人员，侧重高密度数据处理、严谨的权限与状态呈现。
 - **`frontend-user-v4-console`（用户控制台）**：采用 `TDesign Vue Next`。服务于终端租户及开发者，重视资产与资源扫描效率、直观的实例管控与轻量清晰的账单呈现。
-- **`frontend-user-v3-www`（官网与用户入口）**：**暂不纳入本规范约束范围**，继续沿用独立的 Element Plus 视觉体系与规范，后续若有改造需求再另行对齐。
+- **`frontend-user-v3-www`（官网与用户入口）**：采用 `TDesign Vue Next` 组件体系（2026-11-01 完成迁移），组件样式由各组件子入口自带，并与两端共享根 `theme.css` 的浅色基线（`:root` 全局变量、`#app .t-*` 组件覆写）。官网保留营销化的视觉表现（大图 hero、更强的留白与投影），且页面样式仍走自有 SCSS 令牌（`src/assets/styles/variables.scss`，共定义 75 个变量；其中 `$color*` 系列颜色令牌 455 处引用）而非 `--td-*`（业务代码零直接消费，源码内唯一命中是 `pages/website/products/page.scss:1433` 的注释）。因此：本规范的**交互与组件映射**条款（组件选型、无障碍热区、状态与反馈形态）适用于它；**§3 设计令牌的取值口径与档位表**（颜色/字号/圆角/投影的具体数值）以及**信息密度与页面结构**条款（表格/卡片布局、控制台式紧凑间距）不适用于它，官网自有令牌即为该端的准绳。
 
 ---
 
 ## 3. 设计令牌 (Design Tokens)
 
-所有颜色、字体、间距、圆角与阴影必须严格映射至 TDesign 标准 CSS 变量体系（定义于 `theme.css`），严禁在页面或组件内编写非标硬编码数值。
+所有颜色、字体、间距、圆角与阴影必须严格映射至 TDesign 标准 CSS 变量体系（定义于 `theme.css`），严禁在页面或组件内编写非标硬编码数值。**本段与 §3.1–§3.4 的取值口径与档位表适用于管理端与控制台**；官网端按第 2 节该端条目执行自有 SCSS 令牌（`frontend-user-v3-www/src/assets/styles/variables.scss`），不属于本段的约束范围。
 
 ### 3.1 色彩体系 (Colors)
 
@@ -110,7 +110,7 @@ owner: frontend-platform
 
 ## 4. 组件规范与映射 (Components)
 
-所有管理端与控制台组件必须使用 TDesign Vue Next 官方组件与 `tdesign-icons-vue-next` 官方图标库，杜绝别名或第三方混用。
+所有管理端、控制台与官网组件必须使用 TDesign Vue Next 官方组件与 `tdesign-icons-vue-next` 官方图标库，杜绝别名或第三方混用。
 
 ### 4.1 按钮 (Button / `t-button`)
 

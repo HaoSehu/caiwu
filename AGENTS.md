@@ -22,7 +22,7 @@
 | --------------------------- | ----------------------------------------------- |
 | `backend/`                  | Laravel 12 API、业务服务、插件与 Artisan 命令。 |
 | `frontend-admin-v3/`        | 管理端，Vue 3 + TDesign Vue Next。              |
-| `frontend-user-v3-www/`     | 官网与用户入口，Vue 3 + Element Plus。          |
+| `frontend-user-v3-www/`     | 官网与用户入口，Vue 3 + TDesign Vue Next。      |
 | `frontend-user-v4-console/` | 用户控制台，Vue 3 + TDesign Vue Next。          |
 | `shared/`                   | 跨端状态、组件和运行时能力。                    |
 | `docs/`                     | 唯一的长期文档记录系统。                        |

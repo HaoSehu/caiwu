@@ -595,7 +595,7 @@ php vendor\bin\pint --test
 - 前端 API 封装新增 v2 方法，不直接在页面模板拼请求。
 - 管理端仍使用 TDesign Vue Next。
 - 用户控制台仍使用 TDesign Vue Next。
-- 官网仍使用 Element Plus。
+- 官网仍使用 TDesign Vue Next。
 - 状态展示继续复用 shared 状态配置。
 
 推荐顺序：

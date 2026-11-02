@@ -157,7 +157,7 @@
         {
             "path": "DESIGN.md",
             "status": "current",
-            "summary": "视觉 token 与交互边界。",
+            "summary": "视觉 token 与交互边界：适用于 TDesign Vue Next 三端（管理端/控制台/官网）；交互与组件映射条款全适用，§3 设计令牌取值口径与信息密度条款仅管理端与控制台，官网走自有 SCSS 令牌。",
             "review_by": "2026-12-15"
         },
         {
@@ -546,6 +546,18 @@
             "status": "needs-review",
             "summary": "订单只展示实付金额、账单列表每条只展示实付金额、账单只记录付了多少钱与怎么付的单一口径规范：费用明细区块归入订单详情并固定为页面最下方一个区块（行序 原价计算式→优惠券→会员折扣，缺项整行不渲染且行序顺延，行内左名右额、减项负号在货币符前），账单侧保留实际支付金额/支付方式/支付流水/关联账单与支付单、去掉一切金额拆分；含三页页面结构与视觉层级、字段表与空值处理、文案格式与四组完整核对序列。",
             "review_by": "2026-12-28"
+        },
+        {
+            "path": "执行计划/进行中/TDesign规范逐页对齐-2026-11-01.md",
+            "status": "active",
+            "summary": "管理端（62 页）与用户控制台（56 页）按 TDesign Vue Next 官方文档与 docs/DESIGN.md 逐页对齐：118 页全部给出结论（管理端改 40/对齐 22，控制台改 28/对齐 28），收敛对话框确认按钮为「确定」并同步 3 个 e2e 断言，表格补原生 :loading（20/20 与 14/14）、分页补每页条数（12/12 与 10/10）、空态区分暂无数据与未找到匹配结果（54/54 与 33/33）、表单补 label-align（34/34，client-auth 4 处 label-width=0 判定不适用）、数值列右对齐与 tabular-nums、时间统一 formatDateTime、硬编码色与像素圆角改 --td-* 令牌、用户可见「弹窗/侧边栏/元/三半角点」清零；逐条登记保留项与取舍依据（t-tag 缺 theme 属合规、具体名词空态保留、CouponLabelFormatter 少秒判后端）。两端 build 与 e2e（58 passed / 44 passed）全绿，共 85 文件 +283/-171。",
+            "review_by": "2026-12-20"
+        },
+        {
+            "path": "执行计划/进行中/www端TDesign组件体系迁移-2026-11-01.md",
+            "status": "active",
+            "summary": "frontend-user-v3-www 由 Vue 3 + Element Plus 迁移到 Vue 3 + TDesign Vue Next 的体系迁移计划：依赖与构建链路（自建 tdesign-resolver 子入口解析、暗色块剔除 postcss、入口样式顺序）、全局主题入口清理、布局首页/商品列表商品域/商品详情移动弹层/内容法务 404 SEO 四个页面域全部完成，Element Plus 组件、样式、依赖与生成物零残留（含删除根 node_modules 下由 `npm ls` 判为 extraneous 的 element-plus 孤立包 44.6 MB，以及把商品详情页的 EP `v-loading` 指令改为 `<t-loading>` 组件包裹）；含组件映射表、25 条无法直接对齐 TDesign 规范的视觉差异清单与处理方式（编号 1–18 含 13b/15b/15c 三条补充编号，再加 19–22；含移动端底部弹层的背景滚动锁与焦点陷阱补齐）、§5.2 无障碍语义（ARIA）差异比对（TDesign 整体不输出 ARIA 角色，键盘能力未退化，记录为组件库差异不自行补齐）、决策日志与验证记录（构建首屏 gzip 123,083 B 预算 145,000 B、verify:refactor 通过、e2e 38 passed（新增窄屏分页条换行用例）、docs:check 通过）。",
+            "review_by": "2026-12-22"
         }
     ]
 }

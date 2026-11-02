@@ -14,7 +14,7 @@ owner: backend-platform
 caiwu/
 ├── backend/                  Laravel 12 后端
 ├── frontend-admin-v3/        当前管理端，Vue 3 + TDesign
-├── frontend-user-v3-www/     官网与用户入口，Vue 3 + Element Plus
+├── frontend-user-v3-www/     官网与用户入口，Vue 3 + TDesign
 ├── frontend-user-v4-console/ 新版用户控制台，Vue 3 + TDesign
 ├── shared/                   跨前端共享包
 └── docs/                     项目长期开发文档
@@ -111,8 +111,8 @@ API 直接重构路由口径：
 ### 3.2 `frontend-user-v3-www`
 
 - 定位：官网、登录注册、用户入口与部分用户中心页面。
-- 技术：Vue 3、Vite、Element Plus、Pinia、Sass。
-- 入口：`src/main.js`、`src/app/`、`src/router/`。
+- 技术：Vue 3、Vite、TDesign Vue Next、Pinia、Sass。
+- 入口：`src/main.js`、`src/app/`；路由在 `src/app/router/`（`src/router/` 已于 112282e1 删除）。
 - 页面：`src/pages/website`、`src/pages/common`，页面视图全部收敛在 `src/pages/`（不再保留 `src/views`；用户中心页面由 `frontend-user-v4-console` 承担）。
 - 领域逻辑：`src/domains/`、`src/composables/`、`src/components/`（没有 `src/features/` 目录）。
 - 样式：`src/assets/styles/`。

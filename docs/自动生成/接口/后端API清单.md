@@ -1,14 +1,14 @@
 ---
 status: generated
-updated: 2026-10-31
+updated: 2026-11-01
 owner: backend-platform
 ---
 
 # 后端 API 清单
 
-- 生成时间: `2026-10-31 03:28:49`
-- API 总数: `395`
-- 分组统计: `公共 / 健康检查=1, 公共 / 其他=1, 公共 / 安全资源=1, 客户端 / VNC Token=1, 客户端 / 优惠券=5, 客户端 / 充值=3, 客户端 / 内容=8, 客户端 / 分销=6, 客户端 / 实名认证=8, 客户端 / 工单=10, 客户端 / 支付回调=2, 客户端 / 支付记录=3, 客户端 / 服务=37, 客户端 / 订单=4, 客户端 / 认证=18, 客户端 / 认证入口=3, 客户端 / 财务=6, 客户端 / 账单=9, 客户端 / 通知=5, 站点 / 产品=10, 站点 / 内容=5, 站点 / 首页=3, 管理端 / Integration Plugins=11, 管理端 / 产品=16, 管理端 / 产品分组=8, 管理端 / 产品类型=5, 管理端 / 仪表盘=3, 管理端 / 优惠券=17, 管理端 / 会员等级=6, 管理端 / 供应商=13, 管理端 / 其他=22, 管理端 / 内容=10, 管理端 / 分销=6, 管理端 / 员工=8, 管理端 / 媒体=5, 管理端 / 实名认证=5, 管理端 / 工单=11, 管理端 / 日志=5, 管理端 / 服务=3, 管理端 / 用户=37, 管理端 / 站点=2, 管理端 / 规格目录=4, 管理端 / 角色权限=7, 管理端 / 订单=4, 管理端 / 认证=9, 管理端 / 设置=15, 管理端 / 调度=2, 管理端 / 财务=8, 管理端 / 账单=4`
+- 生成时间: `2026-11-01 15:21:10`
+- API 总数: `398`
+- 分组统计: `公共 / 健康检查=1, 公共 / 其他=1, 公共 / 安全资源=1, 客户端 / VNC Token=1, 客户端 / 优惠券=5, 客户端 / 充值=3, 客户端 / 内容=8, 客户端 / 分销=6, 客户端 / 实名认证=8, 客户端 / 工单=10, 客户端 / 支付回调=2, 客户端 / 支付记录=3, 客户端 / 服务=37, 客户端 / 订单=4, 客户端 / 认证=18, 客户端 / 认证入口=3, 客户端 / 财务=6, 客户端 / 账单=9, 客户端 / 通知=5, 站点 / 产品=10, 站点 / 内容=5, 站点 / 首页=3, 管理端 / Integration Plugins=11, 管理端 / 产品=16, 管理端 / 产品分组=8, 管理端 / 产品类型=5, 管理端 / 仪表盘=3, 管理端 / 优惠券=17, 管理端 / 会员等级=6, 管理端 / 供应商=13, 管理端 / 其他=25, 管理端 / 内容=10, 管理端 / 分销=6, 管理端 / 员工=8, 管理端 / 媒体=5, 管理端 / 实名认证=5, 管理端 / 工单=11, 管理端 / 日志=5, 管理端 / 服务=3, 管理端 / 用户=37, 管理端 / 站点=2, 管理端 / 规格目录=4, 管理端 / 角色权限=7, 管理端 / 订单=4, 管理端 / 认证=9, 管理端 / 设置=15, 管理端 / 调度=2, 管理端 / 财务=8, 管理端 / 账单=4`
 
 > **自动生成**，由 `backend/scripts/export_api_inventory.php` 扫描 Laravel 路由表导出，**不要手工编辑**。
 >
@@ -256,6 +256,9 @@ owner: backend-platform
 | 管理端 / 其他 | `GET` | `/api/v2/admin/marketing-product-groups/{marketingProductGroup}` | `App\Http\Controllers\Admin\V2\MarketingProductGroupController@show` | `admin` | `api, auth:sanctum, ensure.admin, permission:product.manage` |
 | 管理端 / 其他 | `PUT` | `/api/v2/admin/marketing-product-groups/{marketingProductGroup}` | `App\Http\Controllers\Admin\V2\MarketingProductGroupController@update` | `admin` | `api, auth:sanctum, ensure.admin, permission:product.manage` |
 | 管理端 / 其他 | `PUT` | `/api/v2/admin/marketing-product-groups/{marketingProductGroup}/products` | `App\Http\Controllers\Admin\V2\MarketingProductGroupController@syncProducts` | `admin` | `api, auth:sanctum, ensure.admin, permission:product.manage` |
+| 管理端 / 其他 | `POST` | `/api/v2/admin/media-migrations` | `App\Http\Controllers\Admin\V2\MediaMigrationController@store` | `admin` | `api, auth:sanctum, ensure.admin, permission:content.manage` |
+| 管理端 / 其他 | `GET` | `/api/v2/admin/media-migrations/{batchId}` | `App\Http\Controllers\Admin\V2\MediaMigrationController@show` | `admin` | `api, auth:sanctum, ensure.admin, permission:content.manage` |
+| 管理端 / 其他 | `GET` | `/api/v2/admin/media-storage-drivers` | `App\Http\Controllers\Admin\V2\MediaFileController@storageDrivers` | `admin` | `api, auth:sanctum, ensure.admin, permission:content.list` |
 | 管理端 / 其他 | `GET` | `/api/v2/admin/promotion-ambassadors` | `App\Http\Controllers\Admin\V2\PromotionAmbassadorController@index` | `admin` | `api, auth:sanctum, ensure.admin, permission:promotion_ambassador.list` |
 | 管理端 / 其他 | `POST` | `/api/v2/admin/promotion-ambassadors` | `App\Http\Controllers\Admin\V2\PromotionAmbassadorController@store` | `admin` | `api, auth:sanctum, ensure.admin, permission:promotion_ambassador.manage, throttle:admin-privilege-write` |
 | 管理端 / 其他 | `DELETE` | `/api/v2/admin/promotion-ambassadors/{promotionAmbassador}` | `App\Http\Controllers\Admin\V2\PromotionAmbassadorController@destroy` | `admin` | `api, auth:sanctum, ensure.admin, permission:promotion_ambassador.manage, throttle:admin-privilege-write` |

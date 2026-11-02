@@ -14,7 +14,7 @@
 | 邮件发送      | `mail`         | `backend/plugins/mail`          | `PluginMailDriver` → `MailDriver`                  |
 | 短信发送      | `sms`          | `backend/plugins/sms`           | `PluginSmsDriver` → `SmsDriver`                    |
 | 上游开通/控制 | `upstream`     | `backend/plugins/servers`       | `PluginUpstreamDriver` → `UpstreamDriver`          |
-| 功能扩展      | `addons`       | `backend/plugins/addons`        | 调度任务和 hook（受控 addon action 通道未开放，不要声明 admin/client/public entry） |
+| 功能扩展      | `addons`       | `backend/plugins/addons`        | 调度任务、hook 与媒体库远程存储（`storage.test/put/get/delete/exists/url` 六个动作经 `PluginRuntimeRegistry::execute()` 直调；不要声明 admin/client/public entry） |
 
 `domain` 是后台 API 和数据库里使用的领域名；物理目录沿用ZJMF 财务的 `gateways/certification/mail/sms/servers` 风格，并按当前插件体系扩展了 `captcha/addons`。插件入口类不直接实现平台契约，入口类提供 `execute(array $request): array`，平台通过 `PluginRuntimeRegistry` 和领域 adapter 转换为内部契约。
 
@@ -686,6 +686,10 @@ php artisan schedule:list
 | 上游开通/控制 | `backend/plugins/servers/kanghostx`               | 康乐虚拟主机插件                |
 | 上游开通/控制 | `backend/plugins/servers/demo_servers`            | 模拟上游插件                    |
 | 功能扩展      | `backend/plugins/addons/demo_style`               | Addon、调度任务和 hook 示例插件 |
+| 功能扩展      | `backend/plugins/addons/ftp`                      | 媒体库 FTP 远程存储插件          |
+| 功能扩展      | `backend/plugins/addons/qiniu`                    | 媒体库七牛云对象存储插件         |
+| 功能扩展      | `backend/plugins/addons/tencent_cos`              | 媒体库腾讯云 COS 对象存储插件    |
+| 功能扩展      | `backend/plugins/addons/aliyun_oss`                | 媒体库阿里云 OSS 对象存储插件    |
 
 每个 demo 包都包含：
 

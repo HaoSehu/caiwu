@@ -1,18 +1,18 @@
 ---
 status: generated
-updated: 2026-10-28
+updated: 2026-11-01
 owner: backend-data
 ---
 
 # 当前数据库结构说明
 
-- 生成时间：`2026-10-28 00:28:30 +08:00`
+- 生成时间：`2026-11-01 03:51:01 +08:00`
 - 数据来源：Laravel 默认连接 `mysql` 直连 MySQL `information_schema` 与业务库 `idc`
 - 数据库：`idc`
 - MySQL 版本：`8.0.29`
 - 当前表数量：`79`
-- 字段数量：`1123`
-- 索引数量：`388`
+- 字段数量：`1125`
+- 索引数量：`390`
 - 外键约束数量：`114`
 - CHECK 约束数量：`0`
 - 说明：
@@ -29,85 +29,85 @@ owner: backend-data
 
 | 表名 | 类型 | 引擎 | 估算行数 | 数据大小 | 索引大小 | 自增值 | 排序规则 | 表注释 |
 | --- | --- | --- | ---: | ---: | ---: | ---: | --- | --- |
-| `account_transactions` | BASE TABLE | InnoDB | 676 | 160 KB | 304 KB | 1,782 | utf8mb4_unicode_ci | 账户流水表，记录现金账户、授信账户、推荐奖励账户的每一次余额变化 |
-| `activity_logs` | BASE TABLE | InnoDB | 5,225 | 4.52 MB | 2.06 MB | 1,102,704 | utf8mb4_unicode_ci | 操作审计流水表，按事件记录管理员、客户与系统的业务操作及上下文 |
-| `admin_login_logs` | BASE TABLE | InnoDB | 9 | 16 KB | 64 KB | 14 | utf8mb4_unicode_ci | 管理员登录尝试审计表，保留昵称、角色快照与失败原因、客户端环境 |
-| `admin_user_roles` | BASE TABLE | InnoDB | 2 | 16 KB | 32 KB | 345 | utf8mb4_unicode_ci | 管理员角色关联表，一行一条管理员与角色的绑定 |
-| `admin_users` | BASE TABLE | InnoDB | 3 | 16 KB | 48 KB | 355 | utf8mb4_unicode_ci | 管理员账号表，记录登录凭据、MFA 密钥、启用状态与最近登录信息 |
-| `archive_audit_logs` | BASE TABLE | InnoDB | 104 | 64 KB | 32 KB | 106 | utf8mb4_unicode_ci | 归档批次审计表，按批次记录归档表名、模式、行数、产出文件与校验值 |
-| `archive_items` | BASE TABLE | InnoDB | 0 | 16 KB | 64 KB | 59 | utf8mb4_unicode_ci | 归档明细表，按批次记录源数据边界、导出删除进度与各阶段时间戳 |
-| `automation_logs` | BASE TABLE | InnoDB | 187 | 64 KB | 80 KB | 2,602 | utf8mb4_unicode_ci | 自动化任务执行日志表，记录任务键、动作、操作对象与命中规则 |
-| `content_articles` | BASE TABLE | InnoDB | 14 | 96 KB | 96 KB | 35 | utf8mb4_unicode_ci | 公告与帮助文章表，记录正文、分类、发布状态与置顶推荐标记 |
-| `content_categories` | BASE TABLE | InnoDB | 4 | 16 KB | 48 KB | 11 | utf8mb4_unicode_ci | 文章分类表，按内容类型维护分类名称、排序与启用状态 |
-| `coupon_campaigns` | BASE TABLE | InnoDB | 0 | 16 KB | 48 KB | 15 | utf8mb4_unicode_ci | 发券活动表，按星期与触发时刻周期性向会员发放优惠券 |
-| `coupons` | BASE TABLE | InnoDB | 3 | 16 KB | 80 KB | 127 | utf8mb4_unicode_ci | 优惠券主体表，记录发放方式、门槛面额、适用范围与领取使用上限 |
-| `failed_jobs` | BASE TABLE | InnoDB | 4 | 96 KB | 16 KB | 5 | utf8mb4_unicode_ci | 框架失败队列作业表，保存执行失败作业的载荷与异常堆栈 |
-| `finance_accounts` | BASE TABLE | InnoDB | 416 | 80 KB | 64 KB | 2,545 | utf8mb4_unicode_ci | 会员现金账户表，按币种记录可用与冻结余额，是账户余额的唯一真源 |
-| `finance_consumptions` | BASE TABLE | InnoDB | 116 | 16 KB | 96 KB | 560 | utf8mb4_unicode_ci | 财务消费映射表，记录一笔出账从哪个资金批次扣减及回补追认金额 |
-| `finance_funding_lots` | BASE TABLE | InnoDB | 87 | 16 KB | 96 KB | 435 | utf8mb4_unicode_ci | 资金批次表，记录每笔入账形成的可核销来源及其剩余可核销金额 |
-| `finance_ledger_entries` | BASE TABLE | InnoDB | 709 | 176 KB | 352 KB | 1,933 | utf8mb4_unicode_ci | 资金台账表，只插不改地记录每次余额变动、变动后余额与来源凭据 |
-| `finance_operations` | BASE TABLE | InnoDB | 1 | 16 KB | 64 KB | 31 | utf8mb4_unicode_ci | 财务写操作幂等表，同 scope 与请求键只允许一行，记录执行结果与错误 |
-| `finance_reconciliation_diffs` | BASE TABLE | InnoDB | 12 | 16 KB | 32 KB | 37 | utf8mb4_unicode_ci | 财务对账差异表，一条对象一条记录，保存期望值、实际值与处理状态 |
+| `account_transactions` | BASE TABLE | InnoDB | 708 | 160 KB | 320 KB | 1,805 | utf8mb4_unicode_ci | 账户流水表，记录现金账户、授信账户、推荐奖励账户的每一次余额变化 |
+| `activity_logs` | BASE TABLE | InnoDB | 73,773 | 51.59 MB | 25.16 MB | 1,182,478 | utf8mb4_unicode_ci | 操作审计流水表，按事件记录管理员、客户与系统的业务操作及上下文 |
+| `admin_login_logs` | BASE TABLE | InnoDB | 0 | 16 KB | 64 KB | 2 | utf8mb4_unicode_ci | 管理员登录尝试审计表，保留昵称、角色快照与失败原因、客户端环境 |
+| `admin_user_roles` | BASE TABLE | InnoDB | 2 | 16 KB | 32 KB | 356 | utf8mb4_unicode_ci | 管理员角色关联表，一行一条管理员与角色的绑定 |
+| `admin_users` | BASE TABLE | InnoDB | 3 | 16 KB | 48 KB | 314 | utf8mb4_unicode_ci | 管理员账号表，记录登录凭据、MFA 密钥、启用状态与最近登录信息 |
+| `archive_audit_logs` | BASE TABLE | InnoDB | 476 | 160 KB | 96 KB | 478 | utf8mb4_unicode_ci | 归档批次审计表，按批次记录归档表名、模式、行数、产出文件与校验值 |
+| `archive_items` | BASE TABLE | InnoDB | 0 | 16 KB | 64 KB | 1 | utf8mb4_unicode_ci | 归档明细表，按批次记录源数据边界、导出删除进度与各阶段时间戳 |
+| `automation_logs` | BASE TABLE | InnoDB | 499 | 128 KB | 96 KB | 7,726 | utf8mb4_unicode_ci | 自动化任务执行日志表，记录任务键、动作、操作对象与命中规则 |
+| `content_articles` | BASE TABLE | InnoDB | 14 | 96 KB | 112 KB | 25 | utf8mb4_unicode_ci | 公告与帮助文章表，记录正文、分类、发布状态与置顶推荐标记 |
+| `content_categories` | BASE TABLE | InnoDB | 4 | 16 KB | 48 KB | 9 | utf8mb4_unicode_ci | 文章分类表，按内容类型维护分类名称、排序与启用状态 |
+| `coupon_campaigns` | BASE TABLE | InnoDB | 0 | 16 KB | 48 KB | 1 | utf8mb4_unicode_ci | 发券活动表，按星期与触发时刻周期性向会员发放优惠券 |
+| `coupons` | BASE TABLE | InnoDB | 3 | 16 KB | 80 KB | 6 | utf8mb4_unicode_ci | 优惠券主体表，记录发放方式、门槛面额、适用范围与领取使用上限 |
+| `failed_jobs` | BASE TABLE | InnoDB | 0 | 16 KB | 16 KB | 2 | utf8mb4_unicode_ci | 框架失败队列作业表，保存执行失败作业的载荷与异常堆栈 |
+| `finance_accounts` | BASE TABLE | InnoDB | 420 | 64 KB | 32 KB | 421 | utf8mb4_unicode_ci | 会员现金账户表，按币种记录可用与冻结余额，是账户余额的唯一真源 |
+| `finance_consumptions` | BASE TABLE | InnoDB | 126 | 16 KB | 96 KB | 127 | utf8mb4_unicode_ci | 财务消费映射表，记录一笔出账从哪个资金批次扣减及回补追认金额 |
+| `finance_funding_lots` | BASE TABLE | InnoDB | 91 | 16 KB | 96 KB | 92 | utf8mb4_unicode_ci | 资金批次表，记录每笔入账形成的可核销来源及其剩余可核销金额 |
+| `finance_ledger_entries` | BASE TABLE | InnoDB | 732 | 176 KB | 400 KB | 1,829 | utf8mb4_unicode_ci | 资金台账表，只插不改地记录每次余额变动、变动后余额与来源凭据 |
+| `finance_operations` | BASE TABLE | InnoDB | 0 | 16 KB | 64 KB | 2 | utf8mb4_unicode_ci | 财务写操作幂等表，同 scope 与请求键只允许一行，记录执行结果与错误 |
+| `finance_reconciliation_diffs` | BASE TABLE | InnoDB | 7 | 16 KB | 32 KB | 8 | utf8mb4_unicode_ci | 财务对账差异表，一条对象一条记录，保存期望值、实际值与处理状态 |
 | `finance_refund_allocations` | BASE TABLE | InnoDB | 0 | 16 KB | 64 KB | 1 | utf8mb4_unicode_ci | 退款分配证据表，记录退款进入新资金批次或追认原消费的明细 |
-| `finance_refunds` | BASE TABLE | InnoDB | 4 | 16 KB | 96 KB | 29 | utf8mb4_unicode_ci | 退款单表，记录退款金额、资金来源与退款到余额的唯一执行通道 |
+| `finance_refunds` | BASE TABLE | InnoDB | 3 | 16 KB | 96 KB | 4 | utf8mb4_unicode_ci | 退款单表，记录退款金额、资金来源与退款到余额的唯一执行通道 |
 | `first_product_groups` | BASE TABLE | InnoDB | 6 | 16 KB | 32 KB | 58 | utf8mb4_unicode_ci | 一级商品分组表，承载商品目录的顶层分类与展示配置 |
-| `gateway_logs` | BASE TABLE | InnoDB | 69 | 64 KB | 128 KB | 1,000,148 | utf8mb4_unicode_ci | 支付网关日志表，记录每次网关请求响应的交易号、处理结果与错误信息 |
+| `gateway_logs` | BASE TABLE | InnoDB | 129 | 64 KB | 128 KB | 1,000,222 | utf8mb4_unicode_ci | 支付网关日志表，记录每次网关请求响应的交易号、处理结果与错误信息 |
 | `integration_plugin_bindings` | BASE TABLE | InnoDB | 10 | 16 KB | 64 KB | 13 | utf8mb4_unicode_ci | 插件业务绑定表，把插件实例绑定到供应商、商品、服务等业务对象 |
 | `integration_plugin_configs` | BASE TABLE | InnoDB | 8 | 16 KB | 16 KB | 10 | utf8mb4_unicode_ci | 插件配置表，保存插件级配置与加密凭据及其可用标记 |
-| `integration_plugin_runtime_logs` | BASE TABLE | InnoDB | 4,042 | 6.52 MB | 992 KB | 1,048,794 | utf8mb4_unicode_ci | 插件运行时日志表，记录每次插件调用的入参摘要、耗时与结果状态 |
-| `integration_plugins` | BASE TABLE | InnoDB | 13 | 64 KB | 48 KB | 44 | utf8mb4_unicode_ci | 插件注册表，记录插件标识、版本、清单指纹、能力清单与安装启用状态 |
-| `invoice_items` | BASE TABLE | InnoDB | 2,857 | 528 KB | 96 KB | 2,978 | utf8mb4_unicode_ci | 账单明细表，记录账单内每个收费项目和快照信息 |
-| `invoices` | BASE TABLE | InnoDB | 3,096 | 1.52 MB | 1.45 MB | 3,238 | utf8mb4_unicode_ci | 账单主表，所有购买、续费、充值、扣款和退款流程以账单为财务入口 |
-| `jobs` | BASE TABLE | InnoDB | 1 | 16 KB | 16 KB | 5,621 | utf8mb4_unicode_ci | 框架队列作业表，保存待执行作业的载荷、重试次数与可见时间 |
-| `marketing_product_group_items` | BASE TABLE | InnoDB | 15 | 16 KB | 32 KB | 24 | utf8mb4_unicode_ci | 营销产品组成员表，记录营销组包含的商品 |
-| `marketing_product_groups` | BASE TABLE | InnoDB | 0 | 16 KB | 0 B | 3 | utf8mb4_unicode_ci | 营销产品组表，为会员等级折扣等营销规则提供商品分组 |
-| `media_files` | BASE TABLE | InnoDB | 15 | 16 KB | 48 KB | 65 | utf8mb4_unicode_ci | 媒体文件登记表，记录素材路径、类型、尺寸与所属分组 |
-| `member_level_group_discounts` | BASE TABLE | InnoDB | 0 | 16 KB | 32 KB | 3 | utf8mb4_unicode_ci | 会员等级与营销组折扣矩阵表，折扣类型为保留比例时 90 表示九折 |
-| `member_levels` | BASE TABLE | InnoDB | 3 | 16 KB | 0 B | 9 | utf8mb4_unicode_ci | 会员等级表，记录等级名称、启用状态与备注 |
-| `message_delivery_attempts` | BASE TABLE | InnoDB | 18 | 16 KB | 32 KB | 19 | utf8mb4_unicode_ci | 消息投递尝试表，同一逻辑投递可有多条尝试，记录结果与耗时 |
-| `message_logs` | BASE TABLE | InnoDB | 152 | 2.52 MB | 112 KB | 3,656 | utf8mb4_unicode_ci | 消息发送日志表，记录渠道、收件方、模板、投递状态与来源对象 |
-| `migrations` | BASE TABLE | InnoDB | 192 | 48 KB | 0 B | 294 | utf8mb4_unicode_ci | 框架迁移账本表，记录已执行迁移文件名与批次 |
-| `notice_reads` | BASE TABLE | InnoDB | 191 | 16 KB | 32 KB | 287 | utf8mb4_unicode_ci | 公告已读表，记录会员阅读公告的时间 |
-| `notification_templates` | BASE TABLE | InnoDB | 53 | 512 KB | 32 KB | 981 | utf8mb4_unicode_ci | 通知模板表，按渠道维护模板编码、正文、变量与运营商模板号 |
-| `orders` | BASE TABLE | InnoDB | 380 | 448 KB | 160 KB | 3,238 | utf8mb4_unicode_ci | 履约工单表，记录购买续费升降配的商品快照、金额、优惠与履约状态 |
+| `integration_plugin_runtime_logs` | BASE TABLE | InnoDB | 71,034 | 84.59 MB | 19.61 MB | 1,119,555 | utf8mb4_unicode_ci | 插件运行时日志表，记录每次插件调用的入参摘要、耗时与结果状态 |
+| `integration_plugins` | BASE TABLE | InnoDB | 12 | 64 KB | 48 KB | 23 | utf8mb4_unicode_ci | 插件注册表，记录插件标识、版本、清单指纹、能力清单与安装启用状态 |
+| `invoice_items` | BASE TABLE | InnoDB | 3,055 | 1.52 MB | 144 KB | 3,081 | utf8mb4_unicode_ci | 账单明细表，记录账单内每个收费项目和快照信息 |
+| `invoices` | BASE TABLE | InnoDB | 3,501 | 2.52 MB | 1.8 MB | 3,299 | utf8mb4_unicode_ci | 账单主表，所有购买、续费、充值、扣款和退款流程以账单为财务入口 |
+| `jobs` | BASE TABLE | InnoDB | 1 | 16 KB | 16 KB | 9 | utf8mb4_unicode_ci | 框架队列作业表，保存待执行作业的载荷、重试次数与可见时间 |
+| `marketing_product_group_items` | BASE TABLE | InnoDB | 0 | 16 KB | 32 KB | 1 | utf8mb4_unicode_ci | 营销产品组成员表，记录营销组包含的商品 |
+| `marketing_product_groups` | BASE TABLE | InnoDB | 0 | 16 KB | 32 KB | 1 | utf8mb4_unicode_ci | 营销产品组表，为会员等级折扣等营销规则提供商品分组 |
+| `media_files` | BASE TABLE | InnoDB | 20 | 16 KB | 48 KB | 71 | utf8mb4_unicode_ci | 媒体文件登记表，记录素材路径、类型、尺寸与所属分组 |
+| `member_level_group_discounts` | BASE TABLE | InnoDB | 0 | 16 KB | 32 KB | 1 | utf8mb4_unicode_ci | 会员等级与营销组折扣矩阵表，折扣类型为保留比例时 90 表示九折 |
+| `member_levels` | BASE TABLE | InnoDB | 3 | 16 KB | 0 B | 4 | utf8mb4_unicode_ci | 会员等级表，记录等级名称、启用状态与备注 |
+| `message_delivery_attempts` | BASE TABLE | InnoDB | 10 | 16 KB | 32 KB | 13 | utf8mb4_unicode_ci | 消息投递尝试表，同一逻辑投递可有多条尝试，记录结果与耗时 |
+| `message_logs` | BASE TABLE | InnoDB | 950 | 16.52 MB | 592 KB | 4,532 | utf8mb4_unicode_ci | 消息发送日志表，记录渠道、收件方、模板、投递状态与来源对象 |
+| `migrations` | BASE TABLE | InnoDB | 191 | 48 KB | 0 B | 294 | utf8mb4_unicode_ci | 框架迁移账本表，记录已执行迁移文件名与批次 |
+| `notice_reads` | BASE TABLE | InnoDB | 315 | 48 KB | 32 KB | 537 | utf8mb4_unicode_ci | 公告已读表，记录会员阅读公告的时间 |
+| `notification_templates` | BASE TABLE | InnoDB | 53 | 512 KB | 32 KB | 111 | utf8mb4_unicode_ci | 通知模板表，按渠道维护模板编码、正文、变量与运营商模板号 |
+| `orders` | BASE TABLE | InnoDB | 477 | 1.44 MB | 192 KB | 3,338 | utf8mb4_unicode_ci | 履约工单表，记录购买续费升降配的商品快照、金额、优惠与履约状态 |
 | `password_reset_tokens` | BASE TABLE | InnoDB | 0 | 16 KB | 0 B | — | utf8mb4_unicode_ci | 框架密码重置令牌表，按邮箱保存重置令牌与生成时间 |
-| `payment_callbacks` | BASE TABLE | InnoDB | 391 | 368 KB | 96 KB | 623 | utf8mb4_unicode_ci | 支付回调审计表，保存第三方通知、查询、退款等回调验签结果 |
-| `payments` | BASE TABLE | InnoDB | 346 | 368 KB | 160 KB | 478 | utf8mb4_unicode_ci | 第三方支付记录表，仅记录真实外部资金流入和退款状态，不记录余额/免费/手工开服 |
-| `personal_access_tokens` | BASE TABLE | InnoDB | 100 | 16 KB | 48 KB | 727 | utf8mb4_unicode_ci | Sanctum 访问令牌表，保存 API 令牌、能力清单与最近使用时间 |
-| `product_upstream_bindings` | BASE TABLE | InnoDB | 127 | 7.52 MB | 80 KB | 270 | utf8mb4_unicode_ci | 商品上游绑定表，记录商品对应的上游商品、开通策略与同步状态 |
-| `products` | BASE TABLE | InnoDB | 128 | 7.52 MB | 32 KB | 410 | utf8mb4_unicode_ci | 商品表，记录可售卖产品的分类、定价、库存、上游绑定和开通策略 |
-| `promotion_ambassadors` | BASE TABLE | InnoDB | 1 | 16 KB | 16 KB | 3 | utf8mb4_unicode_ci | 推广大使表，记录新购与续费返利比例及启用状态 |
-| `recharge_records` | BASE TABLE | InnoDB | 48 | 16 KB | 144 KB | 52 | utf8mb4_unicode_ci | 充值记录表，记录充值场景、方向、金额与关联订单支付流水 |
+| `payment_callbacks` | BASE TABLE | InnoDB | 476 | 1.52 MB | 128 KB | 652 | utf8mb4_unicode_ci | 支付回调审计表，保存第三方通知、查询、退款等回调验签结果 |
+| `payments` | BASE TABLE | InnoDB | 419 | 1.52 MB | 224 KB | 510 | utf8mb4_unicode_ci | 第三方支付记录表，仅记录真实外部资金流入和退款状态，不记录余额/免费/手工开服 |
+| `personal_access_tokens` | BASE TABLE | InnoDB | 2 | 16 KB | 48 KB | 5 | utf8mb4_unicode_ci | Sanctum 访问令牌表，保存 API 令牌、能力清单与最近使用时间 |
+| `product_upstream_bindings` | BASE TABLE | InnoDB | 134 | 8.52 MB | 80 KB | 277 | utf8mb4_unicode_ci | 商品上游绑定表，记录商品对应的上游商品、开通策略与同步状态 |
+| `products` | BASE TABLE | InnoDB | 134 | 9.52 MB | 48 KB | 386 | utf8mb4_unicode_ci | 商品表，记录可售卖产品的分类、定价、库存、上游绑定和开通策略 |
+| `promotion_ambassadors` | BASE TABLE | InnoDB | 0 | 16 KB | 16 KB | 2 | utf8mb4_unicode_ci | 推广大使表，记录新购与续费返利比例及启用状态 |
+| `recharge_records` | BASE TABLE | InnoDB | 126 | 64 KB | 144 KB | 127 | utf8mb4_unicode_ci | 充值记录表，记录充值场景、方向、金额与关联订单支付流水 |
 | `referral_account_logs` | BASE TABLE | InnoDB | 6 | 16 KB | 64 KB | 7 | utf8mb4_unicode_ci | 推荐账户流水表，记录奖励冻结释放与提现各事件后的余额快照 |
-| `referral_rewards` | BASE TABLE | InnoDB | 5 | 16 KB | 112 KB | 11 | utf8mb4_unicode_ci | 推荐奖励表，记录被推荐人订单金额、返利比例、奖励金额与发放状态 |
-| `referral_withdrawals` | BASE TABLE | InnoDB | 0 | 16 KB | 48 KB | 4 | utf8mb4_unicode_ci | 推荐提现表，记录提现金额、收款方式、处理状态与打款单号 |
-| `refunds` | BASE TABLE | InnoDB | 3 | 16 KB | 96 KB | 5 | utf8mb4_unicode_ci | 旧退款表，仅保留历史数据，退款功能已移除不再产生新行 |
-| `roles` | BASE TABLE | InnoDB | 4 | 16 KB | 16 KB | 451 | utf8mb4_unicode_ci | 角色表，记录角色标识、显示名与权限标识数组 |
-| `schedule_run_logs` | BASE TABLE | InnoDB | 3,743 | 1.52 MB | 592 KB | 177,198 | utf8mb4_unicode_ci | 调度任务执行日志表，记录任务名、执行结果、耗时与失败摘要 |
-| `schedule_task_runs` | BASE TABLE | InnoDB | 25,491 | 10.52 MB | 11.09 MB | 26,736 | utf8mb4_unicode_ci | 调度任务运行记录表，按节拍记录每次任务尝试的状态、重试与耗时 |
-| `schedule_ticks` | BASE TABLE | InnoDB | 2,568 | 176 KB | 368 KB | 2,586 | utf8mb4_unicode_ci | 调度节拍表，记录每个调度槽位的触发时间与全局当日序号 |
-| `second_product_groups` | BASE TABLE | InnoDB | 15 | 16 KB | 32 KB | 46 | utf8mb4_unicode_ci | 二级商品分组表，挂在一级分组下并承载展示配置 |
-| `service_connection_snapshots` | BASE TABLE | InnoDB | 192 | 304 KB | 64 KB | 235 | utf8mb4_unicode_ci | 服务连接快照表，记录上游连接地址、端口与加密凭据及探测时间 |
-| `service_provision_attempts` | BASE TABLE | InnoDB | 387 | 256 KB | 64 KB | 588 | utf8mb4_unicode_ci | 开通尝试表，记录每次开通续费调用的请求应答摘要与错误 |
-| `service_runtime_snapshots` | BASE TABLE | InnoDB | 192 | 304 KB | 64 KB | 235 | utf8mb4_unicode_ci | 服务运行态快照表，保存上游同步的状态、资源与指标数据 |
-| `service_tracking_records` | BASE TABLE | InnoDB | 0 | 16 KB | 0 B | 1 | utf8mb4_unicode_ci | 服务跟踪留言表，记录用户针对服务提交的跟踪内容与图片 |
-| `service_upstream_bindings` | BASE TABLE | InnoDB | 188 | 256 KB | 80 KB | 329 | utf8mb4_unicode_ci | 服务上游绑定表，记录服务实例对应的上游服务账号与同步状态 |
-| `services` | BASE TABLE | InnoDB | 146 | 1.52 MB | 128 KB | 352 | utf8mb4_unicode_ci | 服务实例表，记录用户已购买产品的生命周期、计费、上游和续费状态 |
+| `referral_rewards` | BASE TABLE | InnoDB | 6 | 16 KB | 112 KB | 12 | utf8mb4_unicode_ci | 推荐奖励表，记录被推荐人订单金额、返利比例、奖励金额与发放状态 |
+| `referral_withdrawals` | BASE TABLE | InnoDB | 0 | 16 KB | 48 KB | 1 | utf8mb4_unicode_ci | 推荐提现表，记录提现金额、收款方式、处理状态与打款单号 |
+| `refunds` | BASE TABLE | InnoDB | 3 | 16 KB | 96 KB | 4 | utf8mb4_unicode_ci | 旧退款表，仅保留历史数据，退款功能已移除不再产生新行 |
+| `roles` | BASE TABLE | InnoDB | 4 | 16 KB | 16 KB | 423 | utf8mb4_unicode_ci | 角色表，记录角色标识、显示名与权限标识数组 |
+| `schedule_run_logs` | BASE TABLE | InnoDB | 74,032 | 29.56 MB | 10.06 MB | 249,012 | utf8mb4_unicode_ci | 调度任务执行日志表，记录任务名、执行结果、耗时与失败摘要 |
+| `schedule_task_runs` | BASE TABLE | InnoDB | 95,152 | 44.58 MB | 31.17 MB | 98,735 | utf8mb4_unicode_ci | 调度任务运行记录表，按节拍记录每次任务尝试的状态、重试与耗时 |
+| `schedule_ticks` | BASE TABLE | InnoDB | 9,016 | 528 KB | 880 KB | 9,008 | utf8mb4_unicode_ci | 调度节拍表，记录每个调度槽位的触发时间与全局当日序号 |
+| `second_product_groups` | BASE TABLE | InnoDB | 15 | 16 KB | 32 KB | 44 | utf8mb4_unicode_ci | 二级商品分组表，挂在一级分组下并承载展示配置 |
+| `service_connection_snapshots` | BASE TABLE | InnoDB | 194 | 352 KB | 64 KB | 244 | utf8mb4_unicode_ci | 服务连接快照表，记录上游连接地址、端口与加密凭据及探测时间 |
+| `service_provision_attempts` | BASE TABLE | InnoDB | 5,395 | 4.52 MB | 1.19 MB | 5,324 | utf8mb4_unicode_ci | 开通尝试表，记录每次开通续费调用的请求应答摘要与错误 |
+| `service_runtime_snapshots` | BASE TABLE | InnoDB | 188 | 416 KB | 64 KB | 244 | utf8mb4_unicode_ci | 服务运行态快照表，保存上游同步的状态、资源与指标数据 |
+| `service_tracking_records` | BASE TABLE | InnoDB | 0 | 16 KB | 32 KB | 1 | utf8mb4_unicode_ci | 服务跟踪留言表，记录用户针对服务提交的跟踪内容与图片 |
+| `service_upstream_bindings` | BASE TABLE | InnoDB | 208 | 192 KB | 80 KB | 330 | utf8mb4_unicode_ci | 服务上游绑定表，记录服务实例对应的上游服务账号与同步状态 |
+| `services` | BASE TABLE | InnoDB | 161 | 1.52 MB | 128 KB | 350 | utf8mb4_unicode_ci | 服务实例表，记录用户已购买产品的生命周期、计费、上游和续费状态 |
 | `sessions` | BASE TABLE | InnoDB | 0 | 16 KB | 32 KB | — | utf8mb4_unicode_ci | 框架会话表，保存会话载荷、客户端信息与最后活跃时间 |
-| `settings` | BASE TABLE | InnoDB | 114 | 112 KB | 16 KB | 797 | utf8mb4_unicode_ci | 系统设置表，按分组键与条目键保存键值配置 |
-| `sms_provider_templates` | BASE TABLE | InnoDB | 12 | 16 KB | 32 KB | 72 | utf8mb4_unicode_ci | 短信运营商模板映射（插件同步运营商 API 审核状态，发送解析唯一有效态为 approved） |
-| `supplier_plugin_bindings` | BASE TABLE | InnoDB | 3 | 16 KB | 48 KB | 123 | utf8mb4_unicode_ci | 供应商插件绑定表，记录供应商接入的插件、环境、优先级与连通状态 |
-| `suppliers` | BASE TABLE | InnoDB | 3 | 16 KB | 32 KB | 111 | utf8mb4_unicode_ci | 供应商表，记录供应商编码、联系方式、启用状态与备注 |
+| `settings` | BASE TABLE | InnoDB | 114 | 144 KB | 16 KB | 797 | utf8mb4_unicode_ci | 系统设置表，按分组键与条目键保存键值配置 |
+| `sms_provider_templates` | BASE TABLE | InnoDB | 0 | 16 KB | 32 KB | 1 | utf8mb4_unicode_ci | 短信运营商模板映射（插件同步运营商 API 审核状态，发送解析唯一有效态为 approved） |
+| `supplier_plugin_bindings` | BASE TABLE | InnoDB | 2 | 16 KB | 48 KB | 3 | utf8mb4_unicode_ci | 供应商插件绑定表，记录供应商接入的插件、环境、优先级与连通状态 |
+| `suppliers` | BASE TABLE | InnoDB | 2 | 16 KB | 32 KB | 3 | utf8mb4_unicode_ci | 供应商表，记录供应商编码、联系方式、启用状态与备注 |
 | `system_installation` | BASE TABLE | InnoDB | 0 | 16 KB | 0 B | — | utf8mb4_unicode_ci | 系统安装版本账本：单行记录数据库最后成功升级到的代码版本 |
 | `system_upgrade_runs` | BASE TABLE | InnoDB | 8 | 16 KB | 32 KB | 9 | utf8mb4_unicode_ci | 系统升级执行记录：每次升级的来源/目标版本、状态、备份与失败摘要 |
-| `third_product_groups` | BASE TABLE | InnoDB | 24 | 16 KB | 32 KB | 50 | utf8mb4_unicode_ci | 三级商品分组表，挂在二级分组下并承载展示配置 |
-| `ticket_replies` | BASE TABLE | InnoDB | 191 | 48 KB | 32 KB | 280 | utf8mb4_unicode_ci | 工单回复表，记录回复正文、附件、员工标记与引用回复 |
-| `tickets` | BASE TABLE | InnoDB | 75 | 16 KB | 80 KB | 82 | utf8mb4_unicode_ci | 工单表，记录会员提交的问题、优先级、处理状态与关闭原因 |
-| `user_accounts` | BASE TABLE | InnoDB | 415 | 64 KB | 0 B | — | utf8mb4_unicode_ci | 用户账户余额源表，集中承载现金余额、授信和推荐奖励余额 |
-| `user_coupons` | BASE TABLE | InnoDB | 30 | 16 KB | 64 KB | 131 | utf8mb4_unicode_ci | 用户持券表，记录领取方式、持有使用回收状态与占用时间 |
-| `user_notifications` | BASE TABLE | InnoDB | 244 | 96 KB | 48 KB | 261 | utf8mb4_unicode_ci | 站内通知表，记录通知类型、标题正文、跳转链接与已读时间 |
-| `users` | BASE TABLE | InnoDB | 493 | 160 KB | 192 KB | 568 | utf8mb4_unicode_ci | 会员账号表，记录登录凭据、资料、等级、推荐关系与实名认证状态 |
-| `verification_histories` | BASE TABLE | InnoDB | 112 | 96 KB | 64 KB | 118 | utf8mb4_unicode_ci | 实名认证历史表，记录每次提交的证件信息、认证状态与完成时间 |
+| `third_product_groups` | BASE TABLE | InnoDB | 25 | 16 KB | 32 KB | 50 | utf8mb4_unicode_ci | 三级商品分组表，挂在二级分组下并承载展示配置 |
+| `ticket_replies` | BASE TABLE | InnoDB | 211 | 48 KB | 32 KB | 212 | utf8mb4_unicode_ci | 工单回复表，记录回复正文、附件、员工标记与引用回复 |
+| `tickets` | BASE TABLE | InnoDB | 82 | 16 KB | 80 KB | 89 | utf8mb4_unicode_ci | 工单表，记录会员提交的问题、优先级、处理状态与关闭原因 |
+| `user_accounts` | BASE TABLE | InnoDB | 420 | 64 KB | 0 B | — | utf8mb4_unicode_ci | 用户账户余额源表，集中承载现金余额、授信和推荐奖励余额 |
+| `user_coupons` | BASE TABLE | InnoDB | 36 | 16 KB | 64 KB | 101 | utf8mb4_unicode_ci | 用户持券表，记录领取方式、持有使用回收状态与占用时间 |
+| `user_notifications` | BASE TABLE | InnoDB | 493 | 160 KB | 80 KB | 509 | utf8mb4_unicode_ci | 站内通知表，记录通知类型、标题正文、跳转链接与已读时间 |
+| `users` | BASE TABLE | InnoDB | 507 | 160 KB | 192 KB | 508 | utf8mb4_unicode_ci | 会员账号表，记录登录凭据、资料、等级、推荐关系与实名认证状态 |
+| `verification_histories` | BASE TABLE | InnoDB | 123 | 80 KB | 64 KB | 129 | utf8mb4_unicode_ci | 实名认证历史表，记录每次提交的证件信息、认证状态与完成时间 |
 
 ### 1.2 字段类型分布
 
@@ -126,7 +126,7 @@ owner: backend-data
 | `text` | 21 |
 | `timestamp` | 205 |
 | `tinyint` | 62 |
-| `varchar` | 383 |
+| `varchar` | 385 |
 
 ### 1.3 JSON 字段
 
@@ -205,10 +205,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`676`
+- 估算行数：`708`
 - 数据大小：`160 KB`
-- 索引大小：`304 KB`
-- 自增值：`1782`
+- 索引大小：`320 KB`
+- 自增值：`1805`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：账户流水表，记录现金账户、授信账户、推荐奖励账户的每一次余额变化
 
@@ -237,13 +237,13 @@ owner: backend-data
 
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
-| `account_transactions_created_at_idx` | 否 | `BTREE` | `created_at` | 662 | — |
-| `account_transactions_origin_idx` | 否 | `BTREE` | `origin_type`, `origin_id` | 669 | — |
-| `account_transactions_source_idx` | 否 | `BTREE` | `source_type`, `source_id` | 629 | — |
-| `account_transactions_trace_id_idx` | 否 | `BTREE` | `trace_id` | 596 | — |
-| `account_transactions_user_account_created_idx` | 否 | `BTREE` | `user_id`, `account_type`, `created_at`, `id` | 676 | — |
-| `account_transactions_user_event_created_idx` | 否 | `BTREE` | `user_id`, `event_type`, `created_at` | 669 | — |
-| `PRIMARY` | 是 | `BTREE` | `id` | 676 | — |
+| `account_transactions_created_at_idx` | 否 | `BTREE` | `created_at` | 694 | — |
+| `account_transactions_origin_idx` | 否 | `BTREE` | `origin_type`, `origin_id` | 699 | — |
+| `account_transactions_source_idx` | 否 | `BTREE` | `source_type`, `source_id` | 661 | — |
+| `account_transactions_trace_id_idx` | 否 | `BTREE` | `trace_id` | 627 | — |
+| `account_transactions_user_account_created_idx` | 否 | `BTREE` | `user_id`, `account_type`, `created_at`, `id` | 708 | — |
+| `account_transactions_user_event_created_idx` | 否 | `BTREE` | `user_id`, `event_type`, `created_at` | 701 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 708 | — |
 
 #### 外键约束
 
@@ -255,10 +255,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`5,225`
-- 数据大小：`4.52 MB`
-- 索引大小：`2.06 MB`
-- 自增值：`1102704`
+- 估算行数：`73,773`
+- 数据大小：`51.59 MB`
+- 索引大小：`25.16 MB`
+- 自增值：`1182478`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：操作审计流水表，按事件记录管理员、客户与系统的业务操作及上下文
 
@@ -289,17 +289,17 @@ owner: backend-data
 
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
-| `activity_logs_actor_id_index` | 否 | `BTREE` | `actor_id` | 15 | — |
-| `activity_logs_context_request_id_idx` | 否 | `BTREE` | `context_request_id` | 3,443 | — |
-| `activity_logs_context_status_idx` | 否 | `BTREE` | `context_status` | 6 | — |
-| `activity_logs_created_at_index` | 否 | `BTREE` | `created_at` | 2,891 | — |
-| `activity_logs_event_id_unique` | 是 | `BTREE` | `event_id` | 2,463 | — |
-| `activity_logs_module_action_index` | 否 | `BTREE` | `module`, `action` | 389 | — |
-| `activity_logs_module_subject_id_index` | 否 | `BTREE` | `module`, `subject_id` | 81 | — |
-| `activity_logs_stream_created_at_index` | 否 | `BTREE` | `stream`, `created_at` | 3,020 | — |
-| `activity_logs_subject_type_subject_id_index` | 否 | `BTREE` | `subject_type`, `subject_id` | 80 | — |
-| `activity_logs_trace_id_index` | 否 | `BTREE` | `trace_id` | 1,631 | — |
-| `PRIMARY` | 是 | `BTREE` | `id` | 5,225 | — |
+| `activity_logs_actor_id_index` | 否 | `BTREE` | `actor_id` | 71 | — |
+| `activity_logs_context_request_id_idx` | 否 | `BTREE` | `context_request_id` | 10,206 | — |
+| `activity_logs_context_status_idx` | 否 | `BTREE` | `context_status` | 4 | — |
+| `activity_logs_created_at_index` | 否 | `BTREE` | `created_at` | 35,442 | — |
+| `activity_logs_event_id_unique` | 是 | `BTREE` | `event_id` | 73,767 | — |
+| `activity_logs_module_action_index` | 否 | `BTREE` | `module`, `action` | 498 | — |
+| `activity_logs_module_subject_id_index` | 否 | `BTREE` | `module`, `subject_id` | 198 | — |
+| `activity_logs_stream_created_at_index` | 否 | `BTREE` | `stream`, `created_at` | 36,435 | — |
+| `activity_logs_subject_type_subject_id_index` | 否 | `BTREE` | `subject_type`, `subject_id` | 197 | — |
+| `activity_logs_trace_id_index` | 否 | `BTREE` | `trace_id` | 8,937 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 73,767 | — |
 
 #### 外键约束
 
@@ -309,10 +309,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`9`
+- 估算行数：`0`
 - 数据大小：`16 KB`
 - 索引大小：`64 KB`
-- 自增值：`14`
+- 自增值：`2`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：管理员登录尝试审计表，保留昵称、角色快照与失败原因、客户端环境
 
@@ -338,11 +338,11 @@ owner: backend-data
 
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
-| `admin_login_logs_admin_user_logged_at_index` | 否 | `BTREE` | `admin_user_id`, `logged_at` | 9 | — |
-| `admin_login_logs_client_ip_logged_at_index` | 否 | `BTREE` | `client_ip`, `logged_at` | 9 | — |
-| `admin_login_logs_logged_at_id_index` | 否 | `BTREE` | `logged_at`, `id` | 9 | — |
-| `admin_login_logs_status_logged_at_index` | 否 | `BTREE` | `status`, `logged_at` | 9 | — |
-| `PRIMARY` | 是 | `BTREE` | `id` | 9 | — |
+| `admin_login_logs_admin_user_logged_at_index` | 否 | `BTREE` | `admin_user_id`, `logged_at` | 0 | — |
+| `admin_login_logs_client_ip_logged_at_index` | 否 | `BTREE` | `client_ip`, `logged_at` | 0 | — |
+| `admin_login_logs_logged_at_id_index` | 否 | `BTREE` | `logged_at`, `id` | 0 | — |
+| `admin_login_logs_status_logged_at_index` | 否 | `BTREE` | `status`, `logged_at` | 0 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 0 | — |
 
 #### 外键约束
 
@@ -355,7 +355,7 @@ owner: backend-data
 - 估算行数：`2`
 - 数据大小：`16 KB`
 - 索引大小：`32 KB`
-- 自增值：`345`
+- 自增值：`356`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：管理员角色关联表，一行一条管理员与角色的绑定
 
@@ -389,7 +389,7 @@ owner: backend-data
 - 估算行数：`3`
 - 数据大小：`16 KB`
 - 索引大小：`48 KB`
-- 自增值：`355`
+- 自增值：`314`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：管理员账号表，记录登录凭据、MFA 密钥、启用状态与最近登录信息
 
@@ -431,10 +431,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`104`
-- 数据大小：`64 KB`
-- 索引大小：`32 KB`
-- 自增值：`106`
+- 估算行数：`476`
+- 数据大小：`160 KB`
+- 索引大小：`96 KB`
+- 自增值：`478`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：归档批次审计表，按批次记录归档表名、模式、行数、产出文件与校验值
 
@@ -460,9 +460,9 @@ owner: backend-data
 
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
-| `archive_batch_idx` | 否 | `BTREE` | `batch_id` | 15 | — |
-| `archive_table_status_idx` | 否 | `BTREE` | `table_name`, `status`, `created_at` | 104 | — |
-| `PRIMARY` | 是 | `BTREE` | `id` | 104 | — |
+| `archive_batch_idx` | 否 | `BTREE` | `batch_id` | 77 | — |
+| `archive_table_status_idx` | 否 | `BTREE` | `table_name`, `status`, `created_at` | 476 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 476 | — |
 
 #### 外键约束
 
@@ -475,7 +475,7 @@ owner: backend-data
 - 估算行数：`0`
 - 数据大小：`16 KB`
 - 索引大小：`64 KB`
-- 自增值：`59`
+- 自增值：`1`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：归档明细表，按批次记录源数据边界、导出删除进度与各阶段时间戳
 
@@ -524,10 +524,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`187`
-- 数据大小：`64 KB`
-- 索引大小：`80 KB`
-- 自增值：`2602`
+- 估算行数：`499`
+- 数据大小：`128 KB`
+- 索引大小：`96 KB`
+- 自增值：`7726`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：自动化任务执行日志表，记录任务键、动作、操作对象与命中规则
 
@@ -550,9 +550,9 @@ owner: backend-data
 
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
-| `automation_logs_object_idx` | 否 | `BTREE` | `object_type`, `object_id` | 103 | — |
-| `automation_logs_unique_rule` | 是 | `BTREE` | `task_key`, `action`, `object_type`, `object_id`, `rule_key` | 187 | — |
-| `PRIMARY` | 是 | `BTREE` | `id` | 187 | — |
+| `automation_logs_object_idx` | 否 | `BTREE` | `object_type`, `object_id` | 207 | — |
+| `automation_logs_unique_rule` | 是 | `BTREE` | `task_key`, `action`, `object_type`, `object_id`, `rule_key` | 499 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 499 | — |
 
 #### 外键约束
 
@@ -564,8 +564,8 @@ owner: backend-data
 - 引擎：`InnoDB`
 - 估算行数：`14`
 - 数据大小：`96 KB`
-- 索引大小：`96 KB`
-- 自增值：`35`
+- 索引大小：`112 KB`
+- 自增值：`25`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：公告与帮助文章表，记录正文、分类、发布状态与置顶推荐标记
 
@@ -627,7 +627,7 @@ owner: backend-data
 - 估算行数：`4`
 - 数据大小：`16 KB`
 - 索引大小：`48 KB`
-- 自增值：`11`
+- 自增值：`9`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：文章分类表，按内容类型维护分类名称、排序与启用状态
 
@@ -667,7 +667,7 @@ owner: backend-data
 - 估算行数：`0`
 - 数据大小：`16 KB`
 - 索引大小：`48 KB`
-- 自增值：`15`
+- 自增值：`1`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：发券活动表，按星期与触发时刻周期性向会员发放优惠券
 
@@ -726,7 +726,7 @@ owner: backend-data
 - 估算行数：`3`
 - 数据大小：`16 KB`
 - 索引大小：`80 KB`
-- 自增值：`127`
+- 自增值：`6`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：优惠券主体表，记录发放方式、门槛面额、适用范围与领取使用上限
 
@@ -786,10 +786,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`4`
-- 数据大小：`96 KB`
+- 估算行数：`0`
+- 数据大小：`16 KB`
 - 索引大小：`16 KB`
-- 自增值：`5`
+- 自增值：`2`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：框架失败队列作业表，保存执行失败作业的载荷与异常堆栈
 
@@ -809,8 +809,8 @@ owner: backend-data
 
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
-| `failed_jobs_uuid_unique` | 是 | `BTREE` | `uuid` | 4 | — |
-| `PRIMARY` | 是 | `BTREE` | `id` | 4 | — |
+| `failed_jobs_uuid_unique` | 是 | `BTREE` | `uuid` | 0 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 0 | — |
 
 #### 外键约束
 
@@ -820,10 +820,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`416`
-- 数据大小：`80 KB`
-- 索引大小：`64 KB`
-- 自增值：`2545`
+- 估算行数：`420`
+- 数据大小：`64 KB`
+- 索引大小：`32 KB`
+- 自增值：`421`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：会员现金账户表，按币种记录可用与冻结余额，是账户余额的唯一真源
 
@@ -845,8 +845,8 @@ owner: backend-data
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
 | `finance_accounts_currency_index` | 否 | `BTREE` | `currency` | 1 | — |
-| `finance_accounts_user_currency_unique` | 是 | `BTREE` | `user_id`, `currency` | 416 | — |
-| `PRIMARY` | 是 | `BTREE` | `id` | 416 | — |
+| `finance_accounts_user_currency_unique` | 是 | `BTREE` | `user_id`, `currency` | 420 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 420 | — |
 
 #### 外键约束
 
@@ -858,10 +858,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`116`
+- 估算行数：`126`
 - 数据大小：`16 KB`
 - 索引大小：`96 KB`
-- 自增值：`560`
+- 自增值：`127`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：财务消费映射表，记录一笔出账从哪个资金批次扣减及回补追认金额
 
@@ -886,13 +886,13 @@ owner: backend-data
 
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
-| `finance_consumptions_account_id_foreign` | 否 | `BTREE` | `account_id` | 27 | — |
-| `finance_consumptions_entry_lot_unique` | 是 | `BTREE` | `entry_id`, `lot_id` | 116 | — |
-| `finance_consumptions_lot_index` | 否 | `BTREE` | `lot_id`, `id` | 116 | — |
+| `finance_consumptions_account_id_foreign` | 否 | `BTREE` | `account_id` | 35 | — |
+| `finance_consumptions_entry_lot_unique` | 是 | `BTREE` | `entry_id`, `lot_id` | 126 | — |
+| `finance_consumptions_lot_index` | 否 | `BTREE` | `lot_id`, `id` | 126 | — |
 | `finance_consumptions_restored_entry_id_foreign` | 否 | `BTREE` | `restored_entry_id` | 1 | — |
-| `finance_consumptions_source_index` | 否 | `BTREE` | `source_type`, `source_id` | 97 | — |
-| `finance_consumptions_user_index` | 否 | `BTREE` | `user_id`, `id` | 116 | — |
-| `PRIMARY` | 是 | `BTREE` | `id` | 116 | — |
+| `finance_consumptions_source_index` | 否 | `BTREE` | `source_type`, `source_id` | 109 | — |
+| `finance_consumptions_user_index` | 否 | `BTREE` | `user_id`, `id` | 126 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 126 | — |
 
 #### 外键约束
 
@@ -907,10 +907,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`87`
+- 估算行数：`91`
 - 数据大小：`16 KB`
 - 索引大小：`96 KB`
-- 自增值：`435`
+- 自增值：`92`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：资金批次表，记录每笔入账形成的可核销来源及其剩余可核销金额
 
@@ -936,13 +936,13 @@ owner: backend-data
 
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
-| `finance_funding_lots_account_fifo_index` | 否 | `BTREE` | `account_id`, `id` | 87 | — |
-| `finance_funding_lots_account_remaining_index` | 否 | `BTREE` | `account_id`, `remaining_amount` | 67 | — |
-| `finance_funding_lots_entry_id_unique` | 是 | `BTREE` | `entry_id` | 87 | — |
-| `finance_funding_lots_lot_no_unique` | 是 | `BTREE` | `lot_no` | 87 | — |
-| `finance_funding_lots_source_index` | 否 | `BTREE` | `source_type`, `source_id` | 42 | — |
-| `finance_funding_lots_user_index` | 否 | `BTREE` | `user_id`, `id` | 87 | — |
-| `PRIMARY` | 是 | `BTREE` | `id` | 87 | — |
+| `finance_funding_lots_account_fifo_index` | 否 | `BTREE` | `account_id`, `id` | 91 | — |
+| `finance_funding_lots_account_remaining_index` | 否 | `BTREE` | `account_id`, `remaining_amount` | 71 | — |
+| `finance_funding_lots_entry_id_unique` | 是 | `BTREE` | `entry_id` | 91 | — |
+| `finance_funding_lots_lot_no_unique` | 是 | `BTREE` | `lot_no` | 91 | — |
+| `finance_funding_lots_source_index` | 否 | `BTREE` | `source_type`, `source_id` | 50 | — |
+| `finance_funding_lots_user_index` | 否 | `BTREE` | `user_id`, `id` | 91 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 91 | — |
 
 #### 外键约束
 
@@ -956,10 +956,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`709`
+- 估算行数：`732`
 - 数据大小：`176 KB`
-- 索引大小：`352 KB`
-- 自增值：`1933`
+- 索引大小：`400 KB`
+- 自增值：`1829`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：资金台账表，只插不改地记录每次余额变动、变动后余额与来源凭据
 
@@ -992,16 +992,16 @@ owner: backend-data
 
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
-| `finance_ledger_entries_account_id_foreign` | 否 | `BTREE` | `account_id` | 210 | — |
-| `finance_ledger_entries_created_at_index` | 否 | `BTREE` | `created_at` | 671 | — |
-| `finance_ledger_entries_entry_no_unique` | 是 | `BTREE` | `entry_no` | 709 | — |
-| `finance_ledger_entries_funding_lot_unique` | 是 | `BTREE` | `funding_lot_id` | 88 | — |
-| `finance_ledger_entries_origin_index` | 否 | `BTREE` | `origin_type`, `origin_id` | 678 | — |
-| `finance_ledger_entries_source_index` | 否 | `BTREE` | `source_type`, `source_id` | 640 | — |
-| `finance_ledger_entries_trace_index` | 否 | `BTREE` | `trace_id` | 604 | — |
-| `finance_ledger_entries_user_event_time_index` | 否 | `BTREE` | `user_id`, `event_type`, `created_at` | 702 | — |
-| `finance_ledger_entries_user_type_time_index` | 否 | `BTREE` | `user_id`, `account_type`, `created_at` | 695 | — |
-| `PRIMARY` | 是 | `BTREE` | `id` | 709 | — |
+| `finance_ledger_entries_account_id_foreign` | 否 | `BTREE` | `account_id` | 216 | — |
+| `finance_ledger_entries_created_at_index` | 否 | `BTREE` | `created_at` | 695 | — |
+| `finance_ledger_entries_entry_no_unique` | 是 | `BTREE` | `entry_no` | 732 | — |
+| `finance_ledger_entries_funding_lot_unique` | 是 | `BTREE` | `funding_lot_id` | 92 | — |
+| `finance_ledger_entries_origin_index` | 否 | `BTREE` | `origin_type`, `origin_id` | 700 | — |
+| `finance_ledger_entries_source_index` | 否 | `BTREE` | `source_type`, `source_id` | 662 | — |
+| `finance_ledger_entries_trace_index` | 否 | `BTREE` | `trace_id` | 627 | — |
+| `finance_ledger_entries_user_event_time_index` | 否 | `BTREE` | `user_id`, `event_type`, `created_at` | 725 | — |
+| `finance_ledger_entries_user_type_time_index` | 否 | `BTREE` | `user_id`, `account_type`, `created_at` | 718 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 732 | — |
 
 #### 外键约束
 
@@ -1014,10 +1014,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`1`
+- 估算行数：`0`
 - 数据大小：`16 KB`
 - 索引大小：`64 KB`
-- 自增值：`31`
+- 自增值：`2`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：财务写操作幂等表，同 scope 与请求键只允许一行，记录执行结果与错误
 
@@ -1047,11 +1047,11 @@ owner: backend-data
 
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
-| `finance_operations_resource_index` | 否 | `BTREE` | `resource_type`, `resource_id` | 1 | — |
-| `finance_operations_scope_actor_key_unique` | 是 | `BTREE` | `scope`, `actor_type`, `actor_id`, `request_key` | 1 | — |
-| `finance_operations_status_time_index` | 否 | `BTREE` | `status`, `started_at` | 1 | — |
-| `finance_operations_trace_index` | 否 | `BTREE` | `trace_id` | 1 | — |
-| `PRIMARY` | 是 | `BTREE` | `id` | 1 | — |
+| `finance_operations_resource_index` | 否 | `BTREE` | `resource_type`, `resource_id` | 0 | — |
+| `finance_operations_scope_actor_key_unique` | 是 | `BTREE` | `scope`, `actor_type`, `actor_id`, `request_key` | 0 | — |
+| `finance_operations_status_time_index` | 否 | `BTREE` | `status`, `started_at` | 0 | — |
+| `finance_operations_trace_index` | 否 | `BTREE` | `trace_id` | 0 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 0 | — |
 
 #### 外键约束
 
@@ -1061,10 +1061,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`12`
+- 估算行数：`7`
 - 数据大小：`16 KB`
 - 索引大小：`32 KB`
-- 自增值：`37`
+- 自增值：`8`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：财务对账差异表，一条对象一条记录，保存期望值、实际值与处理状态
 
@@ -1090,9 +1090,9 @@ owner: backend-data
 
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
-| `finance_recon_diffs_object_unique` | 是 | `BTREE` | `check_type`, `scope_type`, `scope_id` | 12 | — |
+| `finance_recon_diffs_object_unique` | 是 | `BTREE` | `check_type`, `scope_type`, `scope_id` | 7 | — |
 | `finance_recon_diffs_status_time_index` | 否 | `BTREE` | `status`, `detected_at` | 1 | — |
-| `PRIMARY` | 是 | `BTREE` | `id` | 12 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 7 | — |
 
 #### 外键约束
 
@@ -1144,10 +1144,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`4`
+- 估算行数：`3`
 - 数据大小：`16 KB`
 - 索引大小：`96 KB`
-- 自增值：`29`
+- 自增值：`4`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：退款单表，记录退款金额、资金来源与退款到余额的唯一执行通道
 
@@ -1185,13 +1185,13 @@ owner: backend-data
 
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
-| `finance_refunds_invoice_status_index` | 否 | `BTREE` | `invoice_id`, `status`, `id` | 4 | — |
-| `finance_refunds_payment_id_foreign` | 否 | `BTREE` | `payment_id` | 4 | — |
+| `finance_refunds_invoice_status_index` | 否 | `BTREE` | `invoice_id`, `status`, `id` | 3 | — |
+| `finance_refunds_payment_id_foreign` | 否 | `BTREE` | `payment_id` | 3 | — |
 | `finance_refunds_refund_invoice_id_foreign` | 否 | `BTREE` | `refund_invoice_id` | 1 | — |
-| `finance_refunds_refund_no_unique` | 是 | `BTREE` | `refund_no` | 4 | — |
-| `finance_refunds_trace_index` | 否 | `BTREE` | `trace_id` | 4 | — |
-| `finance_refunds_user_time_index` | 否 | `BTREE` | `user_id`, `created_at` | 3 | — |
-| `PRIMARY` | 是 | `BTREE` | `id` | 4 | — |
+| `finance_refunds_refund_no_unique` | 是 | `BTREE` | `refund_no` | 3 | — |
+| `finance_refunds_trace_index` | 否 | `BTREE` | `trace_id` | 3 | — |
+| `finance_refunds_user_time_index` | 否 | `BTREE` | `user_id`, `created_at` | 2 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 3 | — |
 
 #### 外键约束
 
@@ -1247,10 +1247,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`69`
+- 估算行数：`129`
 - 数据大小：`64 KB`
 - 索引大小：`128 KB`
-- 自增值：`1000148`
+- 自增值：`1000222`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：支付网关日志表，记录每次网关请求响应的交易号、处理结果与错误信息
 
@@ -1281,15 +1281,15 @@ owner: backend-data
 
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
-| `gateway_logs_created_at_index` | 否 | `BTREE` | `created_at` | 69 | — |
-| `gateway_logs_gateway_action_index` | 否 | `BTREE` | `gateway`, `action` | 2 | — |
-| `gateway_logs_gateway_key_idx` | 否 | `BTREE` | `gateway_key`, `created_at` | 69 | — |
+| `gateway_logs_created_at_index` | 否 | `BTREE` | `created_at` | 129 | — |
+| `gateway_logs_gateway_action_index` | 否 | `BTREE` | `gateway`, `action` | 1 | — |
+| `gateway_logs_gateway_key_idx` | 否 | `BTREE` | `gateway_key`, `created_at` | 129 | — |
 | `gateway_logs_invoice_id_index` | 否 | `BTREE` | `invoice_id` | 1 | — |
-| `gateway_logs_out_trade_no_index` | 否 | `BTREE` | `out_trade_no` | 62 | — |
-| `gateway_logs_plugin_created_idx` | 否 | `BTREE` | `plugin_id`, `created_at` | 69 | — |
-| `gateway_logs_plugin_key_created_idx` | 否 | `BTREE` | `plugin_key`, `created_at` | 69 | — |
-| `gateway_logs_trace_idx` | 否 | `BTREE` | `trace_id` | 62 | — |
-| `PRIMARY` | 是 | `BTREE` | `id` | 69 | — |
+| `gateway_logs_out_trade_no_index` | 否 | `BTREE` | `out_trade_no` | 121 | — |
+| `gateway_logs_plugin_created_idx` | 否 | `BTREE` | `plugin_id`, `created_at` | 129 | — |
+| `gateway_logs_plugin_key_created_idx` | 否 | `BTREE` | `plugin_key`, `created_at` | 129 | — |
+| `gateway_logs_trace_idx` | 否 | `BTREE` | `trace_id` | 121 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 129 | — |
 
 #### 外键约束
 
@@ -1337,8 +1337,8 @@ owner: backend-data
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
 | `plugin_bindings_bindable_idx` | 否 | `BTREE` | `bindable_type`, `bindable_id`, `domain` | 9 | — |
-| `plugin_bindings_domain_provider_status_idx` | 否 | `BTREE` | `domain`, `provider_key`, `status` | 8 | — |
-| `plugin_bindings_plugin_status_idx` | 否 | `BTREE` | `plugin_id`, `status` | 7 | — |
+| `plugin_bindings_domain_provider_status_idx` | 否 | `BTREE` | `domain`, `provider_key`, `status` | 6 | — |
+| `plugin_bindings_plugin_status_idx` | 否 | `BTREE` | `plugin_id`, `status` | 6 | — |
 | `plugin_bindings_unique` | 是 | `BTREE` | `domain`, `binding_type`, `bindable_type`, `bindable_id`, `binding_key` | 10 | — |
 | `PRIMARY` | 是 | `BTREE` | `id` | 10 | — |
 
@@ -1389,10 +1389,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`4,042`
-- 数据大小：`6.52 MB`
-- 索引大小：`992 KB`
-- 自增值：`1048794`
+- 估算行数：`71,034`
+- 数据大小：`84.59 MB`
+- 索引大小：`19.61 MB`
+- 自增值：`1119555`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：插件运行时日志表，记录每次插件调用的入参摘要、耗时与结果状态
 
@@ -1424,12 +1424,12 @@ owner: backend-data
 
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
-| `plugin_runtime_bindable_idx` | 否 | `BTREE` | `bindable_type`, `bindable_id`, `created_at` | 2,932 | — |
-| `plugin_runtime_domain_action_created_idx` | 否 | `BTREE` | `domain`, `action`, `created_at` | 3,822 | — |
-| `plugin_runtime_plugin_created_idx` | 否 | `BTREE` | `plugin_id`, `created_at` | 2,947 | — |
-| `plugin_runtime_status_created_idx` | 否 | `BTREE` | `status`, `created_at` | 2,937 | — |
-| `plugin_runtime_trace_idx` | 否 | `BTREE` | `trace_id` | 4,042 | — |
-| `PRIMARY` | 是 | `BTREE` | `id` | 4,042 | — |
+| `plugin_runtime_bindable_idx` | 否 | `BTREE` | `bindable_type`, `bindable_id`, `created_at` | 54,886 | — |
+| `plugin_runtime_domain_action_created_idx` | 否 | `BTREE` | `domain`, `action`, `created_at` | 68,264 | — |
+| `plugin_runtime_plugin_created_idx` | 否 | `BTREE` | `plugin_id`, `created_at` | 53,183 | — |
+| `plugin_runtime_status_created_idx` | 否 | `BTREE` | `status`, `created_at` | 54,828 | — |
+| `plugin_runtime_trace_idx` | 否 | `BTREE` | `trace_id` | 71,032 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 71,032 | — |
 
 #### 外键约束
 
@@ -1441,10 +1441,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`13`
+- 估算行数：`12`
 - 数据大小：`64 KB`
 - 索引大小：`48 KB`
-- 自增值：`44`
+- 自增值：`23`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：插件注册表，记录插件标识、版本、清单指纹、能力清单与安装启用状态
 
@@ -1477,10 +1477,10 @@ owner: backend-data
 
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
-| `integration_plugins_domain_key_unique` | 是 | `BTREE` | `domain`, `plugin_key` | 13 | — |
-| `integration_plugins_domain_slug_unique` | 是 | `BTREE` | `domain`, `slug` | 13 | — |
-| `integration_plugins_domain_status_index` | 否 | `BTREE` | `domain`, `status` | 8 | — |
-| `PRIMARY` | 是 | `BTREE` | `id` | 13 | — |
+| `integration_plugins_domain_key_unique` | 是 | `BTREE` | `domain`, `plugin_key` | 12 | — |
+| `integration_plugins_domain_slug_unique` | 是 | `BTREE` | `domain`, `slug` | 12 | — |
+| `integration_plugins_domain_status_index` | 否 | `BTREE` | `domain`, `status` | 11 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 12 | — |
 
 #### 外键约束
 
@@ -1490,10 +1490,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`2,857`
-- 数据大小：`528 KB`
-- 索引大小：`96 KB`
-- 自增值：`2978`
+- 估算行数：`3,055`
+- 数据大小：`1.52 MB`
+- 索引大小：`144 KB`
+- 自增值：`3081`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：账单明细表，记录账单内每个收费项目和快照信息
 
@@ -1517,8 +1517,8 @@ owner: backend-data
 
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
-| `invoice_items_invoice_id_index` | 否 | `BTREE` | `invoice_id` | 2,857 | — |
-| `PRIMARY` | 是 | `BTREE` | `id` | 2,857 | — |
+| `invoice_items_invoice_id_index` | 否 | `BTREE` | `invoice_id` | 3,047 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 3,055 | — |
 
 #### 外键约束
 
@@ -1530,10 +1530,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`3,096`
-- 数据大小：`1.52 MB`
-- 索引大小：`1.45 MB`
-- 自增值：`3238`
+- 估算行数：`3,501`
+- 数据大小：`2.52 MB`
+- 索引大小：`1.8 MB`
+- 自增值：`3299`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：账单主表，所有购买、续费、充值、扣款和退款流程以账单为财务入口
 
@@ -1588,20 +1588,21 @@ owner: backend-data
 | --- | --- | --- | --- | ---: | --- |
 | `fk_invoices_user_coupon_id` | 否 | `BTREE` | `user_coupon_id` | 3 | — |
 | `idx_stage2_invoices_coupon_id` | 否 | `BTREE` | `coupon_id` | 3 | — |
-| `invoices_created_at_idx` | 否 | `BTREE` | `created_at` | 2,572 | — |
-| `invoices_fulfillment_pending_idx` | 否 | `BTREE` | `fulfillment_pending`, `fulfillment_pending_at` | 9 | — |
-| `invoices_invoice_no_unique` | 是 | `BTREE` | `invoice_no` | 2,935 | — |
-| `invoices_order_id_idx` | 否 | `BTREE` | `order_id` | 409 | — |
+| `invoices_created_at_idx` | 否 | `BTREE` | `created_at` | 2,707 | — |
+| `invoices_fulfillment_pending_idx` | 否 | `BTREE` | `fulfillment_pending`, `fulfillment_pending_at` | 1 | — |
+| `invoices_invoice_no_unique` | 是 | `BTREE` | `invoice_no` | 3,075 | — |
+| `invoices_order_id_idx` | 否 | `BTREE` | `order_id` | 538 | — |
 | `invoices_origin_invoice_id_foreign` | 否 | `BTREE` | `origin_invoice_id` | 1 | — |
-| `invoices_product_id_idx` | 否 | `BTREE` | `product_id` | 58 | — |
-| `invoices_requires_refund_idx` | 否 | `BTREE` | `requires_refund`, `id` | 2,935 | — |
-| `invoices_service_id_idx` | 否 | `BTREE` | `service_id` | 162 | — |
-| `invoices_status_due_date_index` | 否 | `BTREE` | `status`, `due_date` | 783 | — |
-| `invoices_status_paid_at_idx` | 否 | `BTREE` | `status`, `paid_at` | 1,028 | — |
-| `invoices_trace_id_idx` | 否 | `BTREE` | `trace_id` | 2,313 | — |
-| `invoices_user_status_created_idx` | 否 | `BTREE` | `user_id`, `status`, `created_at` | 2,790 | — |
-| `invoices_user_status_id_idx` | 否 | `BTREE` | `user_id`, `status`, `id` | 2,935 | — |
-| `PRIMARY` | 是 | `BTREE` | `id` | 3,096 | — |
+| `invoices_product_id_idx` | 否 | `BTREE` | `product_id` | 60 | — |
+| `invoices_requires_refund_idx` | 否 | `BTREE` | `requires_refund`, `id` | 3,075 | — |
+| `invoices_service_id_idx` | 否 | `BTREE` | `service_id` | 177 | — |
+| `invoices_service_status_id_idx` | 否 | `BTREE` | `service_id`, `status`, `id` | 3,076 | — |
+| `invoices_status_due_date_index` | 否 | `BTREE` | `status`, `due_date` | 866 | — |
+| `invoices_status_paid_at_idx` | 否 | `BTREE` | `status`, `paid_at` | 1,118 | — |
+| `invoices_trace_id_idx` | 否 | `BTREE` | `trace_id` | 2,453 | — |
+| `invoices_user_status_created_idx` | 否 | `BTREE` | `user_id`, `status`, `created_at` | 2,926 | — |
+| `invoices_user_status_id_idx` | 否 | `BTREE` | `user_id`, `status`, `id` | 3,075 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 3,501 | — |
 
 #### 外键约束
 
@@ -1622,7 +1623,7 @@ owner: backend-data
 - 估算行数：`1`
 - 数据大小：`16 KB`
 - 索引大小：`16 KB`
-- 自增值：`5621`
+- 自增值：`9`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：框架队列作业表，保存待执行作业的载荷、重试次数与可见时间
 
@@ -1653,10 +1654,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`15`
+- 估算行数：`0`
 - 数据大小：`16 KB`
 - 索引大小：`32 KB`
-- 自增值：`24`
+- 自增值：`1`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：营销产品组成员表，记录营销组包含的商品
 
@@ -1674,9 +1675,9 @@ owner: backend-data
 
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
-| `marketing_product_group_items_group_product_unique` | 是 | `BTREE` | `marketing_product_group_id`, `product_id` | 15 | — |
-| `marketing_product_group_items_product_idx` | 否 | `BTREE` | `product_id` | 15 | — |
-| `PRIMARY` | 是 | `BTREE` | `id` | 15 | — |
+| `marketing_product_group_items_group_product_unique` | 是 | `BTREE` | `marketing_product_group_id`, `product_id` | 0 | — |
+| `marketing_product_group_items_product_idx` | 否 | `BTREE` | `product_id` | 0 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 0 | — |
 
 #### 外键约束
 
@@ -1691,8 +1692,8 @@ owner: backend-data
 - 引擎：`InnoDB`
 - 估算行数：`0`
 - 数据大小：`16 KB`
-- 索引大小：`0 B`
-- 自增值：`3`
+- 索引大小：`32 KB`
+- 自增值：`1`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：营销产品组表，为会员等级折扣等营销规则提供商品分组
 
@@ -1722,10 +1723,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`15`
+- 估算行数：`20`
 - 数据大小：`16 KB`
 - 索引大小：`48 KB`
-- 自增值：`65`
+- 自增值：`71`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：媒体文件登记表，记录素材路径、类型、尺寸与所属分组
 
@@ -1742,18 +1743,21 @@ owner: backend-data
 | 7 | `width` | `int unsigned` | 是 | `NULL` | — | — | — | — | 图片宽度 |
 | 8 | `height` | `int unsigned` | 是 | `NULL` | — | — | — | — | 图片高度 |
 | 9 | `group` | `varchar(50)` | 否 | `content` | MUL | — | utf8mb4 | utf8mb4_unicode_ci | 分组: content, avatar, brand 等 |
-| 10 | `uploaded_by` | `bigint unsigned` | 否 | `0` | MUL | — | — | — | 上传管理员ID |
-| 11 | `created_at` | `timestamp` | 是 | `NULL` | MUL | — | — | — | — |
-| 12 | `updated_at` | `timestamp` | 是 | `NULL` | — | — | — | — | — |
+| 10 | `disk` | `varchar(24)` | 否 | `local` | MUL | — | utf8mb4 | utf8mb4_unicode_ci | 存储驱动标识：local 或远程存储插件 slug |
+| 11 | `object_key` | `varchar(500)` | 是 | `NULL` | — | — | utf8mb4 | utf8mb4_unicode_ci | 远程对象键（完整键，含 media/ 前缀段）；本地行为 NULL |
+| 12 | `uploaded_by` | `bigint unsigned` | 否 | `0` | MUL | — | — | — | 上传管理员ID |
+| 13 | `created_at` | `timestamp` | 是 | `NULL` | MUL | — | — | — | — |
+| 14 | `updated_at` | `timestamp` | 是 | `NULL` | — | — | — | — | — |
 
 #### 索引
 
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
 | `media_files_created_at_index` | 否 | `BTREE` | `created_at` | 2 | — |
+| `media_files_disk_index` | 否 | `BTREE` | `disk` | 1 | — |
 | `media_files_group_index` | 否 | `BTREE` | `group` | 2 | — |
 | `media_files_uploaded_by_index` | 否 | `BTREE` | `uploaded_by` | 1 | — |
-| `PRIMARY` | 是 | `BTREE` | `id` | 15 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 20 | — |
 
 #### 外键约束
 
@@ -1766,7 +1770,7 @@ owner: backend-data
 - 估算行数：`0`
 - 数据大小：`16 KB`
 - 索引大小：`32 KB`
-- 自增值：`3`
+- 自增值：`1`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：会员等级与营销组折扣矩阵表，折扣类型为保留比例时 90 表示九折
 
@@ -1804,7 +1808,7 @@ owner: backend-data
 - 估算行数：`3`
 - 数据大小：`16 KB`
 - 索引大小：`0 B`
-- 自增值：`9`
+- 自增值：`4`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：会员等级表，记录等级名称、启用状态与备注
 
@@ -1833,10 +1837,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`18`
+- 估算行数：`10`
 - 数据大小：`16 KB`
 - 索引大小：`32 KB`
-- 自增值：`19`
+- 自增值：`13`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：消息投递尝试表，同一逻辑投递可有多条尝试，记录结果与耗时
 
@@ -1858,9 +1862,9 @@ owner: backend-data
 
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
-| `message_delivery_attempts_log_time_index` | 否 | `BTREE` | `message_log_id`, `created_at` | 18 | — |
-| `message_delivery_attempts_unique` | 是 | `BTREE` | `message_log_id`, `attempt_no` | 18 | — |
-| `PRIMARY` | 是 | `BTREE` | `id` | 18 | — |
+| `message_delivery_attempts_log_time_index` | 否 | `BTREE` | `message_log_id`, `created_at` | 10 | — |
+| `message_delivery_attempts_unique` | 是 | `BTREE` | `message_log_id`, `attempt_no` | 10 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 10 | — |
 
 #### 外键约束
 
@@ -1872,10 +1876,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`152`
-- 数据大小：`2.52 MB`
-- 索引大小：`112 KB`
-- 自增值：`3656`
+- 估算行数：`950`
+- 数据大小：`16.52 MB`
+- 索引大小：`592 KB`
+- 自增值：`4532`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：消息发送日志表，记录渠道、收件方、模板、投递状态与来源对象
 
@@ -1908,15 +1912,15 @@ owner: backend-data
 
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
-| `message_logs_channel_driver_idx` | 否 | `BTREE` | `channel`, `driver_key`, `created_at` | 129 | — |
+| `message_logs_channel_driver_idx` | 否 | `BTREE` | `channel`, `driver_key`, `created_at` | 950 | — |
 | `message_logs_delivery_key_index` | 否 | `BTREE` | `delivery_key` | 1 | — |
-| `message_logs_driver_created_idx` | 否 | `BTREE` | `driver_key`, `created_at` | 129 | — |
-| `message_logs_origin_idx` | 否 | `BTREE` | `origin_type`, `origin_id` | 4 | — |
-| `message_logs_plugin_created_idx` | 否 | `BTREE` | `plugin_id`, `created_at` | 129 | — |
-| `message_logs_recipient_created_at_idx` | 否 | `BTREE` | `recipient`, `created_at` | 129 | — |
-| `message_logs_request_id_idx` | 否 | `BTREE` | `request_id` | 32 | — |
-| `message_logs_trace_idx` | 否 | `BTREE` | `trace_id` | 152 | — |
-| `PRIMARY` | 是 | `BTREE` | `id` | 152 | — |
+| `message_logs_driver_created_idx` | 否 | `BTREE` | `driver_key`, `created_at` | 950 | — |
+| `message_logs_origin_idx` | 否 | `BTREE` | `origin_type`, `origin_id` | 2 | — |
+| `message_logs_plugin_created_idx` | 否 | `BTREE` | `plugin_id`, `created_at` | 950 | — |
+| `message_logs_recipient_created_at_idx` | 否 | `BTREE` | `recipient`, `created_at` | 950 | — |
+| `message_logs_request_id_idx` | 否 | `BTREE` | `request_id` | 42 | — |
+| `message_logs_trace_idx` | 否 | `BTREE` | `trace_id` | 950 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 950 | — |
 
 #### 外键约束
 
@@ -1928,7 +1932,7 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`192`
+- 估算行数：`191`
 - 数据大小：`48 KB`
 - 索引大小：`0 B`
 - 自增值：`294`
@@ -1957,10 +1961,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`191`
-- 数据大小：`16 KB`
+- 估算行数：`315`
+- 数据大小：`48 KB`
 - 索引大小：`32 KB`
-- 自增值：`287`
+- 自增值：`537`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：公告已读表，记录会员阅读公告的时间
 
@@ -1979,8 +1983,8 @@ owner: backend-data
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
 | `notice_reads_article_id_index` | 否 | `BTREE` | `article_id` | 10 | — |
-| `notice_reads_user_id_article_id_unique` | 是 | `BTREE` | `user_id`, `article_id` | 191 | — |
-| `PRIMARY` | 是 | `BTREE` | `id` | 191 | — |
+| `notice_reads_user_id_article_id_unique` | 是 | `BTREE` | `user_id`, `article_id` | 315 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 315 | — |
 
 #### 外键约束
 
@@ -1996,7 +2000,7 @@ owner: backend-data
 - 估算行数：`53`
 - 数据大小：`512 KB`
 - 索引大小：`32 KB`
-- 自增值：`981`
+- 自增值：`111`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：通知模板表，按渠道维护模板编码、正文、变量与运营商模板号
 
@@ -2037,10 +2041,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`380`
-- 数据大小：`448 KB`
-- 索引大小：`160 KB`
-- 自增值：`3238`
+- 估算行数：`477`
+- 数据大小：`1.44 MB`
+- 索引大小：`192 KB`
+- 自增值：`3338`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：履约工单表，记录购买续费升降配的商品快照、金额、优惠与履约状态
 
@@ -2087,16 +2091,16 @@ owner: backend-data
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
 | `orders_coupon_id_idx` | 否 | `BTREE` | `coupon_id` | 3 | — |
-| `orders_created_at_idx` | 否 | `BTREE` | `created_at` | 376 | — |
-| `orders_order_no_unique` | 是 | `BTREE` | `order_no` | 380 | — |
-| `orders_product_id_idx` | 否 | `BTREE` | `product_id` | 56 | — |
+| `orders_created_at_idx` | 否 | `BTREE` | `created_at` | 477 | — |
+| `orders_order_no_unique` | 是 | `BTREE` | `order_no` | 477 | — |
+| `orders_product_id_idx` | 否 | `BTREE` | `product_id` | 58 | — |
 | `orders_projection_type_idx` | 否 | `BTREE` | `projection_type` | 1 | — |
-| `orders_service_status_id_idx` | 否 | `BTREE` | `service_id`, `status`, `id` | 380 | — |
-| `orders_status_type_created_at_idx` | 否 | `BTREE` | `status`, `type`, `created_at`, `id` | 380 | — |
-| `orders_trace_id_idx` | 否 | `BTREE` | `trace_id` | 166 | — |
+| `orders_service_status_id_idx` | 否 | `BTREE` | `service_id`, `status`, `id` | 477 | — |
+| `orders_status_type_created_at_idx` | 否 | `BTREE` | `status`, `type`, `created_at`, `id` | 477 | — |
+| `orders_trace_id_idx` | 否 | `BTREE` | `trace_id` | 222 | — |
 | `orders_user_coupon_id_idx` | 否 | `BTREE` | `user_coupon_id` | 3 | — |
-| `orders_user_status_id_idx` | 否 | `BTREE` | `user_id`, `status`, `id` | 380 | — |
-| `PRIMARY` | 是 | `BTREE` | `id` | 380 | — |
+| `orders_user_status_id_idx` | 否 | `BTREE` | `user_id`, `status`, `id` | 477 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 477 | — |
 
 #### 外键约束
 
@@ -2141,10 +2145,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`391`
-- 数据大小：`368 KB`
-- 索引大小：`96 KB`
-- 自增值：`623`
+- 估算行数：`476`
+- 数据大小：`1.52 MB`
+- 索引大小：`128 KB`
+- 自增值：`652`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：支付回调审计表，保存第三方通知、查询、退款等回调验签结果
 
@@ -2171,13 +2175,13 @@ owner: backend-data
 
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
-| `payment_callbacks_gateway_key_idx` | 否 | `BTREE` | `gateway_key`, `received_at` | 368 | — |
-| `payment_callbacks_gateway_trade_no_idx` | 否 | `BTREE` | `gateway_trade_no` | 249 | — |
-| `payment_callbacks_payment_type_unique` | 是 | `BTREE` | `payment_id`, `callback_type` | 391 | — |
-| `payment_callbacks_plugin_received_idx` | 否 | `BTREE` | `plugin_id`, `received_at` | 368 | — |
-| `payment_callbacks_trace_id_idx` | 否 | `BTREE` | `trace_id` | 175 | — |
-| `payment_callbacks_verified_received_idx` | 否 | `BTREE` | `is_verified`, `received_at` | 391 | — |
-| `PRIMARY` | 是 | `BTREE` | `id` | 391 | — |
+| `payment_callbacks_gateway_key_idx` | 否 | `BTREE` | `gateway_key`, `received_at` | 447 | — |
+| `payment_callbacks_gateway_trade_no_idx` | 否 | `BTREE` | `gateway_trade_no` | 322 | — |
+| `payment_callbacks_payment_type_unique` | 是 | `BTREE` | `payment_id`, `callback_type` | 476 | — |
+| `payment_callbacks_plugin_received_idx` | 否 | `BTREE` | `plugin_id`, `received_at` | 447 | — |
+| `payment_callbacks_trace_id_idx` | 否 | `BTREE` | `trace_id` | 254 | — |
+| `payment_callbacks_verified_received_idx` | 否 | `BTREE` | `is_verified`, `received_at` | 474 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 476 | — |
 
 #### 外键约束
 
@@ -2190,10 +2194,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`346`
-- 数据大小：`368 KB`
-- 索引大小：`160 KB`
-- 自增值：`478`
+- 估算行数：`419`
+- 数据大小：`1.52 MB`
+- 索引大小：`224 KB`
+- 自增值：`510`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：第三方支付记录表，仅记录真实外部资金流入和退款状态，不记录余额/免费/手工开服
 
@@ -2229,17 +2233,17 @@ owner: backend-data
 
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
-| `payments_invoice_gateway_status_id_idx` | 否 | `BTREE` | `invoice_id`, `status`, `id` | 346 | — |
-| `payments_invoice_status_created_at_idx` | 否 | `BTREE` | `invoice_id`, `status`, `created_at`, `id` | 346 | — |
-| `payments_order_status_idx` | 否 | `BTREE` | `order_id`, `status` | 212 | — |
-| `payments_payment_no_unique` | 是 | `BTREE` | `payment_no` | 346 | — |
-| `payments_plugin_status_paid_idx` | 否 | `BTREE` | `plugin_id`, `status`, `paid_at` | 301 | — |
-| `payments_plugin_trade_unique` | 是 | `BTREE` | `plugin_id`, `gateway_key`, `trade_no` | 252 | — |
-| `payments_status_paid_at_idx` | 否 | `BTREE` | `status`, `paid_at` | 298 | — |
-| `payments_trace_id_idx` | 否 | `BTREE` | `trace_id` | 191 | — |
-| `payments_trade_no_index` | 否 | `BTREE` | `trade_no` | 250 | — |
-| `payments_user_status_created_idx` | 否 | `BTREE` | `user_id`, `status`, `created_at` | 346 | — |
-| `PRIMARY` | 是 | `BTREE` | `id` | 346 | — |
+| `payments_invoice_gateway_status_id_idx` | 否 | `BTREE` | `invoice_id`, `status`, `id` | 419 | — |
+| `payments_invoice_status_created_at_idx` | 否 | `BTREE` | `invoice_id`, `status`, `created_at`, `id` | 419 | — |
+| `payments_order_status_idx` | 否 | `BTREE` | `order_id`, `status` | 281 | — |
+| `payments_payment_no_unique` | 是 | `BTREE` | `payment_no` | 419 | — |
+| `payments_plugin_status_paid_idx` | 否 | `BTREE` | `plugin_id`, `status`, `paid_at` | 371 | — |
+| `payments_plugin_trade_unique` | 是 | `BTREE` | `plugin_id`, `gateway_key`, `trade_no` | 323 | — |
+| `payments_status_paid_at_idx` | 否 | `BTREE` | `status`, `paid_at` | 370 | — |
+| `payments_trace_id_idx` | 否 | `BTREE` | `trace_id` | 262 | — |
+| `payments_trade_no_index` | 否 | `BTREE` | `trade_no` | 322 | — |
+| `payments_user_status_created_idx` | 否 | `BTREE` | `user_id`, `status`, `created_at` | 419 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 419 | — |
 
 #### 外键约束
 
@@ -2254,10 +2258,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`100`
+- 估算行数：`2`
 - 数据大小：`16 KB`
 - 索引大小：`48 KB`
-- 自增值：`727`
+- 自增值：`5`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：Sanctum 访问令牌表，保存 API 令牌、能力清单与最近使用时间
 
@@ -2280,10 +2284,10 @@ owner: backend-data
 
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
-| `personal_access_tokens_expires_at_index` | 否 | `BTREE` | `expires_at` | 3 | — |
-| `personal_access_tokens_token_unique` | 是 | `BTREE` | `token` | 100 | — |
-| `personal_access_tokens_tokenable_type_tokenable_id_index` | 否 | `BTREE` | `tokenable_type`, `tokenable_id` | 9 | — |
-| `PRIMARY` | 是 | `BTREE` | `id` | 100 | — |
+| `personal_access_tokens_expires_at_index` | 否 | `BTREE` | `expires_at` | 1 | — |
+| `personal_access_tokens_token_unique` | 是 | `BTREE` | `token` | 2 | — |
+| `personal_access_tokens_tokenable_type_tokenable_id_index` | 否 | `BTREE` | `tokenable_type`, `tokenable_id` | 1 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 2 | — |
 
 #### 外键约束
 
@@ -2293,10 +2297,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`127`
-- 数据大小：`7.52 MB`
+- 估算行数：`134`
+- 数据大小：`8.52 MB`
 - 索引大小：`80 KB`
-- 自增值：`270`
+- 自增值：`277`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：商品上游绑定表，记录商品对应的上游商品、开通策略与同步状态
 
@@ -2324,12 +2328,12 @@ owner: backend-data
 
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
-| `PRIMARY` | 是 | `BTREE` | `id` | 127 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 134 | — |
 | `product_upstream_bindings_supplier_plugin_binding_id_foreign` | 否 | `BTREE` | `supplier_plugin_binding_id` | 2 | — |
 | `product_upstream_plugin_status_idx` | 否 | `BTREE` | `plugin_id`, `status` | 2 | — |
-| `product_upstream_product_status_idx` | 否 | `BTREE` | `product_id`, `status` | 127 | — |
+| `product_upstream_product_status_idx` | 否 | `BTREE` | `product_id`, `status` | 134 | — |
 | `product_upstream_provider_status_idx` | 否 | `BTREE` | `provider_key`, `status` | 2 | — |
-| `product_upstream_unique` | 是 | `BTREE` | `product_id`, `supplier_plugin_binding_id`, `upstream_product_id` | 127 | — |
+| `product_upstream_unique` | 是 | `BTREE` | `product_id`, `supplier_plugin_binding_id`, `upstream_product_id` | 134 | — |
 
 #### 外键约束
 
@@ -2343,10 +2347,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`128`
-- 数据大小：`7.52 MB`
-- 索引大小：`32 KB`
-- 自增值：`410`
+- 估算行数：`134`
+- 数据大小：`9.52 MB`
+- 索引大小：`48 KB`
+- 自增值：`386`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：商品表，记录可售卖产品的分类、定价、库存、上游绑定和开通策略
 
@@ -2377,9 +2381,9 @@ owner: backend-data
 
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
-| `PRIMARY` | 是 | `BTREE` | `id` | 128 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 134 | — |
 | `products_deleted_at_idx` | 否 | `BTREE` | `deleted_at` | 8 | — |
-| `products_group_status_sort_id_idx` | 否 | `BTREE` | `product_group_id`, `status`, `sort_order`, `id` | 128 | — |
+| `products_group_status_sort_id_idx` | 否 | `BTREE` | `product_group_id`, `status`, `sort_order`, `id` | 134 | — |
 | `products_type_status_index` | 否 | `BTREE` | `product_type`, `status` | 9 | — |
 
 #### 外键约束
@@ -2392,10 +2396,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`1`
+- 估算行数：`0`
 - 数据大小：`16 KB`
 - 索引大小：`16 KB`
-- 自增值：`3`
+- 自增值：`2`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：推广大使表，记录新购与续费返利比例及启用状态
 
@@ -2416,8 +2420,8 @@ owner: backend-data
 
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
-| `idx_promotion_ambassador_status` | 否 | `BTREE` | `status` | 1 | — |
-| `PRIMARY` | 是 | `BTREE` | `id` | 1 | — |
+| `idx_promotion_ambassador_status` | 否 | `BTREE` | `status` | 0 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 0 | — |
 
 #### 外键约束
 
@@ -2427,10 +2431,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`48`
-- 数据大小：`16 KB`
+- 估算行数：`126`
+- 数据大小：`64 KB`
 - 索引大小：`144 KB`
-- 自增值：`52`
+- 自增值：`127`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：充值记录表，记录充值场景、方向、金额与关联订单支付流水
 
@@ -2464,16 +2468,16 @@ owner: backend-data
 
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
-| `PRIMARY` | 是 | `BTREE` | `id` | 48 | — |
-| `recharge_records_account_transaction_id_unique` | 是 | `BTREE` | `account_transaction_id` | 1 | — |
-| `recharge_records_invoice_id_id_index` | 否 | `BTREE` | `invoice_id`, `id` | 48 | — |
-| `recharge_records_order_id_id_index` | 否 | `BTREE` | `order_id`, `id` | 48 | — |
-| `recharge_records_origin_recharge_record_id_id_index` | 否 | `BTREE` | `origin_recharge_record_id`, `id` | 48 | — |
-| `recharge_records_payment_id_unique` | 是 | `BTREE` | `payment_id` | 45 | — |
-| `recharge_records_record_no_unique` | 是 | `BTREE` | `record_no` | 48 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 126 | — |
+| `recharge_records_account_transaction_id_unique` | 是 | `BTREE` | `account_transaction_id` | 16 | — |
+| `recharge_records_invoice_id_id_index` | 否 | `BTREE` | `invoice_id`, `id` | 126 | — |
+| `recharge_records_order_id_id_index` | 否 | `BTREE` | `order_id`, `id` | 126 | — |
+| `recharge_records_origin_recharge_record_id_id_index` | 否 | `BTREE` | `origin_recharge_record_id`, `id` | 126 | — |
+| `recharge_records_payment_id_unique` | 是 | `BTREE` | `payment_id` | 117 | — |
+| `recharge_records_record_no_unique` | 是 | `BTREE` | `record_no` | 126 | — |
 | `recharge_records_refund_id_foreign` | 否 | `BTREE` | `refund_id` | 1 | — |
-| `recharge_records_trace_id_index` | 否 | `BTREE` | `trace_id` | 48 | — |
-| `recharge_records_user_id_created_at_index` | 否 | `BTREE` | `user_id`, `created_at` | 45 | — |
+| `recharge_records_trace_id_index` | 否 | `BTREE` | `trace_id` | 126 | — |
+| `recharge_records_user_id_created_at_index` | 否 | `BTREE` | `user_id`, `created_at` | 123 | — |
 
 #### 外键约束
 
@@ -2537,10 +2541,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`5`
+- 估算行数：`6`
 - 数据大小：`16 KB`
 - 索引大小：`112 KB`
-- 自增值：`11`
+- 自增值：`12`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：推荐奖励表，记录被推荐人订单金额、返利比例、奖励金额与发放状态
 
@@ -2573,12 +2577,12 @@ owner: backend-data
 | --- | --- | --- | --- | ---: | --- |
 | `idx_referral_reward_referred_status` | 否 | `BTREE` | `referred_user_id`, `status` | 2 | — |
 | `idx_referral_reward_referrer_status` | 否 | `BTREE` | `referrer_user_id`, `status` | 1 | — |
-| `PRIMARY` | 是 | `BTREE` | `id` | 5 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 6 | — |
 | `referral_rewards_invoice_id_unique` | 是 | `BTREE` | `invoice_id` | 4 | — |
-| `referral_rewards_order_id_unique` | 是 | `BTREE` | `order_id` | 5 | — |
-| `referral_rewards_product_id_index` | 否 | `BTREE` | `product_id` | 4 | — |
-| `referral_rewards_rewarded_at_index` | 否 | `BTREE` | `rewarded_at` | 5 | — |
-| `referral_rewards_status_available_idx` | 否 | `BTREE` | `status`, `available_at` | 5 | — |
+| `referral_rewards_order_id_unique` | 是 | `BTREE` | `order_id` | 6 | — |
+| `referral_rewards_product_id_index` | 否 | `BTREE` | `product_id` | 5 | — |
+| `referral_rewards_rewarded_at_index` | 否 | `BTREE` | `rewarded_at` | 6 | — |
+| `referral_rewards_status_available_idx` | 否 | `BTREE` | `status`, `available_at` | 6 | — |
 
 #### 外键约束
 
@@ -2597,7 +2601,7 @@ owner: backend-data
 - 估算行数：`0`
 - 数据大小：`16 KB`
 - 索引大小：`48 KB`
-- 自增值：`4`
+- 自增值：`1`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：推荐提现表，记录提现金额、收款方式、处理状态与打款单号
 
@@ -2643,7 +2647,7 @@ owner: backend-data
 - 估算行数：`3`
 - 数据大小：`16 KB`
 - 索引大小：`96 KB`
-- 自增值：`5`
+- 自增值：`4`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：旧退款表，仅保留历史数据，退款功能已移除不再产生新行
 
@@ -2699,7 +2703,7 @@ owner: backend-data
 - 估算行数：`4`
 - 数据大小：`16 KB`
 - 索引大小：`16 KB`
-- 自增值：`451`
+- 自增值：`423`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：角色表，记录角色标识、显示名与权限标识数组
 
@@ -2729,10 +2733,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`3,743`
-- 数据大小：`1.52 MB`
-- 索引大小：`592 KB`
-- 自增值：`177198`
+- 估算行数：`74,032`
+- 数据大小：`29.56 MB`
+- 索引大小：`10.06 MB`
+- 自增值：`249012`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：调度任务执行日志表，记录任务名、执行结果、耗时与失败摘要
 
@@ -2755,11 +2759,11 @@ owner: backend-data
 
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
-| `PRIMARY` | 是 | `BTREE` | `id` | 3,743 | — |
-| `schedule_run_logs_created_at_index` | 否 | `BTREE` | `created_at` | 1,452 | — |
-| `schedule_run_logs_started_at_id_index` | 否 | `BTREE` | `started_at`, `id` | 3,743 | — |
-| `schedule_run_logs_status_created_at_index` | 否 | `BTREE` | `status`, `created_at` | 1,452 | — |
-| `schedule_run_logs_task_name_created_at_index` | 否 | `BTREE` | `task_name`, `created_at` | 3,743 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 74,032 | — |
+| `schedule_run_logs_created_at_index` | 否 | `BTREE` | `created_at` | 28,918 | — |
+| `schedule_run_logs_started_at_id_index` | 否 | `BTREE` | `started_at`, `id` | 74,032 | — |
+| `schedule_run_logs_status_created_at_index` | 否 | `BTREE` | `status`, `created_at` | 29,369 | — |
+| `schedule_run_logs_task_name_created_at_index` | 否 | `BTREE` | `task_name`, `created_at` | 73,774 | — |
 
 #### 外键约束
 
@@ -2769,10 +2773,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`25,491`
-- 数据大小：`10.52 MB`
-- 索引大小：`11.09 MB`
-- 自增值：`26736`
+- 估算行数：`95,152`
+- 数据大小：`44.58 MB`
+- 索引大小：`31.17 MB`
+- 自增值：`98735`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：调度任务运行记录表，按节拍记录每次任务尝试的状态、重试与耗时
 
@@ -2805,13 +2809,13 @@ owner: backend-data
 
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
-| `PRIMARY` | 是 | `BTREE` | `id` | 25,491 | — |
-| `schedule_task_runs_active_lookup_index` | 否 | `BTREE` | `task_key`, `status`, `queued_at` | 25,491 | — |
-| `schedule_task_runs_parent_created_at_index` | 否 | `BTREE` | `parent_run_id`, `created_at` | 2,775 | — |
-| `schedule_task_runs_source_created_at_index` | 否 | `BTREE` | `source`, `created_at` | 2,775 | — |
-| `schedule_task_runs_status_created_at_index` | 否 | `BTREE` | `status`, `created_at` | 2,777 | — |
-| `schedule_task_runs_task_key_created_at_index` | 否 | `BTREE` | `task_key`, `created_at` | 21,609 | — |
-| `schedule_task_runs_tick_task_source_unique` | 是 | `BTREE` | `schedule_tick_id`, `task_key`, `source` | 25,491 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 95,152 | — |
+| `schedule_task_runs_active_lookup_index` | 否 | `BTREE` | `task_key`, `status`, `queued_at` | 95,152 | — |
+| `schedule_task_runs_parent_created_at_index` | 否 | `BTREE` | `parent_run_id`, `created_at` | 11,884 | — |
+| `schedule_task_runs_source_created_at_index` | 否 | `BTREE` | `source`, `created_at` | 12,171 | — |
+| `schedule_task_runs_status_created_at_index` | 否 | `BTREE` | `status`, `created_at` | 11,583 | — |
+| `schedule_task_runs_task_key_created_at_index` | 否 | `BTREE` | `task_key`, `created_at` | 88,863 | — |
+| `schedule_task_runs_tick_task_source_unique` | 是 | `BTREE` | `schedule_tick_id`, `task_key`, `source` | 78,624 | — |
 
 #### 外键约束
 
@@ -2823,10 +2827,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`2,568`
-- 数据大小：`176 KB`
-- 索引大小：`368 KB`
-- 自增值：`2586`
+- 估算行数：`9,016`
+- 数据大小：`528 KB`
+- 索引大小：`880 KB`
+- 自增值：`9008`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：调度节拍表，记录每个调度槽位的触发时间与全局当日序号
 
@@ -2846,11 +2850,11 @@ owner: backend-data
 
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
-| `PRIMARY` | 是 | `BTREE` | `id` | 2,568 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 9,016 | — |
 | `schedule_ticks_daily_index_index` | 否 | `BTREE` | `daily_index` | 96 | — |
-| `schedule_ticks_global_number_unique` | 是 | `BTREE` | `global_number` | 2,568 | — |
-| `schedule_ticks_slot_started_at_unique` | 是 | `BTREE` | `slot_started_at` | 2,568 | — |
-| `schedule_ticks_triggered_at_index` | 否 | `BTREE` | `triggered_at` | 2,568 | — |
+| `schedule_ticks_global_number_unique` | 是 | `BTREE` | `global_number` | 8,991 | — |
+| `schedule_ticks_slot_started_at_unique` | 是 | `BTREE` | `slot_started_at` | 8,991 | — |
+| `schedule_ticks_triggered_at_index` | 否 | `BTREE` | `triggered_at` | 8,991 | — |
 
 #### 外键约束
 
@@ -2863,7 +2867,7 @@ owner: backend-data
 - 估算行数：`15`
 - 数据大小：`16 KB`
 - 索引大小：`32 KB`
-- 自增值：`46`
+- 自增值：`44`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：二级商品分组表，挂在一级分组下并承载展示配置
 
@@ -2900,10 +2904,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`192`
-- 数据大小：`304 KB`
+- 估算行数：`194`
+- 数据大小：`352 KB`
 - 索引大小：`64 KB`
-- 自增值：`235`
+- 自增值：`244`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：服务连接快照表，记录上游连接地址、端口与加密凭据及探测时间
 
@@ -2931,11 +2935,11 @@ owner: backend-data
 
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
-| `PRIMARY` | 是 | `BTREE` | `id` | 192 | — |
-| `service_connection_plugin_checked_idx` | 否 | `BTREE` | `plugin_id`, `checked_at` | 121 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 194 | — |
+| `service_connection_plugin_checked_idx` | 否 | `BTREE` | `plugin_id`, `checked_at` | 150 | — |
 | `service_connection_provider_type_idx` | 否 | `BTREE` | `provider_key`, `connection_type` | 1 | — |
-| `service_connection_service_type_unique` | 是 | `BTREE` | `service_id`, `connection_type` | 192 | — |
-| `service_connection_snapshots_service_upstream_binding_id_foreign` | 否 | `BTREE` | `service_upstream_binding_id` | 188 | — |
+| `service_connection_service_type_unique` | 是 | `BTREE` | `service_id`, `connection_type` | 194 | — |
+| `service_connection_snapshots_service_upstream_binding_id_foreign` | 否 | `BTREE` | `service_upstream_binding_id` | 194 | — |
 
 #### 外键约束
 
@@ -2949,10 +2953,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`387`
-- 数据大小：`256 KB`
-- 索引大小：`64 KB`
-- 自增值：`588`
+- 估算行数：`5,395`
+- 数据大小：`4.52 MB`
+- 索引大小：`1.19 MB`
+- 自增值：`5324`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：开通尝试表，记录每次开通续费调用的请求应答摘要与错误
 
@@ -2980,11 +2984,11 @@ owner: backend-data
 
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
-| `PRIMARY` | 是 | `BTREE` | `id` | 387 | — |
-| `service_attempt_plugin_status_idx` | 否 | `BTREE` | `plugin_id`, `attempt_status`, `attempted_at` | 341 | — |
-| `service_attempt_service_action_idx` | 否 | `BTREE` | `service_id`, `action`, `attempted_at` | 387 | — |
-| `service_attempt_trace_idx` | 否 | `BTREE` | `trace_id` | 121 | — |
-| `service_provision_attempts_service_upstream_binding_id_foreign` | 否 | `BTREE` | `service_upstream_binding_id` | 173 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 5,395 | — |
+| `service_attempt_plugin_status_idx` | 否 | `BTREE` | `plugin_id`, `attempt_status`, `attempted_at` | 2,608 | — |
+| `service_attempt_service_action_idx` | 否 | `BTREE` | `service_id`, `action`, `attempted_at` | 5,123 | — |
+| `service_attempt_trace_idx` | 否 | `BTREE` | `trace_id` | 167 | — |
+| `service_provision_attempts_service_upstream_binding_id_foreign` | 否 | `BTREE` | `service_upstream_binding_id` | 195 | — |
 
 #### 外键约束
 
@@ -2998,10 +3002,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`192`
-- 数据大小：`304 KB`
+- 估算行数：`188`
+- 数据大小：`416 KB`
 - 索引大小：`64 KB`
-- 自增值：`235`
+- 自增值：`244`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：服务运行态快照表，保存上游同步的状态、资源与指标数据
 
@@ -3027,10 +3031,10 @@ owner: backend-data
 
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
-| `PRIMARY` | 是 | `BTREE` | `id` | 192 | — |
-| `service_runtime_plugin_synced_idx` | 否 | `BTREE` | `plugin_id`, `synced_at` | 117 | — |
-| `service_runtime_provider_status_idx` | 否 | `BTREE` | `provider_key`, `status_key` | 3 | — |
-| `service_runtime_service_unique` | 是 | `BTREE` | `service_id` | 192 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 188 | — |
+| `service_runtime_plugin_synced_idx` | 否 | `BTREE` | `plugin_id`, `synced_at` | 146 | — |
+| `service_runtime_provider_status_idx` | 否 | `BTREE` | `provider_key`, `status_key` | 5 | — |
+| `service_runtime_service_unique` | 是 | `BTREE` | `service_id` | 188 | — |
 | `service_runtime_snapshots_service_upstream_binding_id_foreign` | 否 | `BTREE` | `service_upstream_binding_id` | 188 | — |
 
 #### 外键约束
@@ -3047,7 +3051,7 @@ owner: backend-data
 - 引擎：`InnoDB`
 - 估算行数：`0`
 - 数据大小：`16 KB`
-- 索引大小：`0 B`
+- 索引大小：`32 KB`
 - 自增值：`1`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：服务跟踪留言表，记录用户针对服务提交的跟踪内容与图片
@@ -3083,10 +3087,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`188`
-- 数据大小：`256 KB`
+- 估算行数：`208`
+- 数据大小：`192 KB`
 - 索引大小：`80 KB`
-- 自增值：`329`
+- 自增值：`330`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：服务上游绑定表，记录服务实例对应的上游服务账号与同步状态
 
@@ -3114,12 +3118,12 @@ owner: backend-data
 
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
-| `PRIMARY` | 是 | `BTREE` | `id` | 188 | — |
-| `service_upstream_bindings_product_upstream_binding_id_foreign` | 否 | `BTREE` | `product_upstream_binding_id` | 51 | — |
-| `service_upstream_bindings_supplier_plugin_binding_id_foreign` | 否 | `BTREE` | `supplier_plugin_binding_id` | 3 | — |
-| `service_upstream_plugin_sync_idx` | 否 | `BTREE` | `plugin_id`, `last_synced_at` | 117 | — |
-| `service_upstream_provider_status_idx` | 否 | `BTREE` | `provider_key`, `status_snapshot` | 4 | — |
-| `service_upstream_unique` | 是 | `BTREE` | `service_id`, `plugin_id`, `upstream_service_id` | 188 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 208 | — |
+| `service_upstream_bindings_product_upstream_binding_id_foreign` | 否 | `BTREE` | `product_upstream_binding_id` | 53 | — |
+| `service_upstream_bindings_supplier_plugin_binding_id_foreign` | 否 | `BTREE` | `supplier_plugin_binding_id` | 2 | — |
+| `service_upstream_plugin_sync_idx` | 否 | `BTREE` | `plugin_id`, `last_synced_at` | 145 | — |
+| `service_upstream_provider_status_idx` | 否 | `BTREE` | `provider_key`, `status_snapshot` | 5 | — |
+| `service_upstream_unique` | 是 | `BTREE` | `service_id`, `plugin_id`, `upstream_service_id` | 208 | — |
 
 #### 外键约束
 
@@ -3134,10 +3138,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`146`
+- 估算行数：`161`
 - 数据大小：`1.52 MB`
 - 索引大小：`128 KB`
-- 自增值：`352`
+- 自增值：`350`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：服务实例表，记录用户已购买产品的生命周期、计费、上游和续费状态
 
@@ -3175,15 +3179,15 @@ owner: backend-data
 
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
-| `PRIMARY` | 是 | `BTREE` | `id` | 146 | — |
-| `services_expires_at_index` | 否 | `BTREE` | `expires_at` | 146 | — |
-| `services_invoice_id_idx` | 否 | `BTREE` | `invoice_id` | 56 | — |
-| `services_order_id_idx` | 否 | `BTREE` | `order_id` | 146 | — |
-| `services_product_id_idx` | 否 | `BTREE` | `product_id` | 50 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 161 | — |
+| `services_expires_at_index` | 否 | `BTREE` | `expires_at` | 161 | — |
+| `services_invoice_id_idx` | 否 | `BTREE` | `invoice_id` | 76 | — |
+| `services_order_id_idx` | 否 | `BTREE` | `order_id` | 161 | — |
+| `services_product_id_idx` | 否 | `BTREE` | `product_id` | 54 | — |
 | `services_provision_lease_until_index` | 否 | `BTREE` | `provision_lease_until` | 1 | — |
-| `services_status_expires_at_id_idx` | 否 | `BTREE` | `status`, `expires_at`, `id` | 146 | — |
-| `services_trace_id_idx` | 否 | `BTREE` | `trace_id` | 89 | — |
-| `services_user_status_id_idx` | 否 | `BTREE` | `user_id`, `status`, `id` | 146 | — |
+| `services_status_expires_at_id_idx` | 否 | `BTREE` | `status`, `expires_at`, `id` | 161 | — |
+| `services_trace_id_idx` | 否 | `BTREE` | `trace_id` | 114 | — |
+| `services_user_status_id_idx` | 否 | `BTREE` | `user_id`, `status`, `id` | 161 | — |
 
 #### 外键约束
 
@@ -3235,7 +3239,7 @@ owner: backend-data
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
 - 估算行数：`114`
-- 数据大小：`112 KB`
+- 数据大小：`144 KB`
 - 索引大小：`16 KB`
 - 自增值：`797`
 - 排序规则：`utf8mb4_unicode_ci`
@@ -3265,10 +3269,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`12`
+- 估算行数：`0`
 - 数据大小：`16 KB`
 - 索引大小：`32 KB`
-- 自增值：`72`
+- 自增值：`1`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：短信运营商模板映射（插件同步运营商 API 审核状态，发送解析唯一有效态为 approved）
 
@@ -3296,9 +3300,9 @@ owner: backend-data
 
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
-| `PRIMARY` | 是 | `BTREE` | `id` | 12 | — |
-| `sms_provider_templates_lookup_index` | 否 | `BTREE` | `plugin_key`, `business_code`, `status` | 3 | — |
-| `sms_provider_templates_plugin_template_unique` | 是 | `BTREE` | `plugin_key`, `provider_template_id` | 3 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 0 | — |
+| `sms_provider_templates_lookup_index` | 否 | `BTREE` | `plugin_key`, `business_code`, `status` | 0 | — |
+| `sms_provider_templates_plugin_template_unique` | 是 | `BTREE` | `plugin_key`, `provider_template_id` | 0 | — |
 
 #### 外键约束
 
@@ -3308,10 +3312,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`3`
+- 估算行数：`2`
 - 数据大小：`16 KB`
 - 索引大小：`48 KB`
-- 自增值：`123`
+- 自增值：`3`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：供应商插件绑定表，记录供应商接入的插件、环境、优先级与连通状态
 
@@ -3343,10 +3347,10 @@ owner: backend-data
 
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
-| `PRIMARY` | 是 | `BTREE` | `id` | 3 | — |
-| `supplier_plugin_plugin_status_idx` | 否 | `BTREE` | `plugin_id`, `status` | 2 | — |
-| `supplier_plugin_provider_status_idx` | 否 | `BTREE` | `provider_key`, `status` | 2 | — |
-| `supplier_plugin_unique` | 是 | `BTREE` | `supplier_id`, `plugin_id`, `environment` | 3 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 2 | — |
+| `supplier_plugin_plugin_status_idx` | 否 | `BTREE` | `plugin_id`, `status` | 1 | — |
+| `supplier_plugin_provider_status_idx` | 否 | `BTREE` | `provider_key`, `status` | 1 | — |
+| `supplier_plugin_unique` | 是 | `BTREE` | `supplier_id`, `plugin_id`, `environment` | 2 | — |
 
 #### 外键约束
 
@@ -3359,10 +3363,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`3`
+- 估算行数：`2`
 - 数据大小：`16 KB`
 - 索引大小：`32 KB`
-- 自增值：`111`
+- 自增值：`3`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：供应商表，记录供应商编码、联系方式、启用状态与备注
 
@@ -3387,8 +3391,8 @@ owner: backend-data
 
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
-| `PRIMARY` | 是 | `BTREE` | `id` | 3 | — |
-| `suppliers_code_unique` | 是 | `BTREE` | `code` | 3 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 2 | — |
+| `suppliers_code_unique` | 是 | `BTREE` | `code` | 2 | — |
 | `suppliers_status_sort_order_index` | 否 | `BTREE` | `status`, `sort_order` | 1 | — |
 
 #### 外键约束
@@ -3474,7 +3478,7 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`24`
+- 估算行数：`25`
 - 数据大小：`16 KB`
 - 索引大小：`32 KB`
 - 自增值：`50`
@@ -3500,8 +3504,8 @@ owner: backend-data
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
 | `idx_third_second_visible_sort` | 否 | `BTREE` | `second_product_group_id`, `is_visible`, `sort_order` | 18 | — |
-| `PRIMARY` | 是 | `BTREE` | `id` | 24 | — |
-| `uq_third_second_slug` | 是 | `BTREE` | `second_product_group_id`, `slug` | 24 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 25 | — |
+| `uq_third_second_slug` | 是 | `BTREE` | `second_product_group_id`, `slug` | 25 | — |
 
 #### 外键约束
 
@@ -3513,10 +3517,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`191`
+- 估算行数：`211`
 - 数据大小：`48 KB`
 - 索引大小：`32 KB`
-- 自增值：`280`
+- 自增值：`212`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：工单回复表，记录回复正文、附件、员工标记与引用回复
 
@@ -3539,8 +3543,8 @@ owner: backend-data
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
 | `idx_stage2_ticket_replies_quote_reply_id` | 否 | `BTREE` | `quote_reply_id` | 2 | — |
-| `PRIMARY` | 是 | `BTREE` | `id` | 191 | — |
-| `ticket_replies_ticket_created_id_idx` | 否 | `BTREE` | `ticket_id`, `created_at`, `id` | 191 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 211 | — |
+| `ticket_replies_ticket_created_id_idx` | 否 | `BTREE` | `ticket_id`, `created_at`, `id` | 211 | — |
 
 #### 外键约束
 
@@ -3553,10 +3557,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`75`
+- 估算行数：`82`
 - 数据大小：`16 KB`
 - 索引大小：`80 KB`
-- 自增值：`82`
+- 自增值：`89`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：工单表，记录会员提交的问题、优先级、处理状态与关闭原因
 
@@ -3581,11 +3585,11 @@ owner: backend-data
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
 | `idx_stage2_tickets_assignee_id` | 否 | `BTREE` | `assignee_id` | 2 | — |
-| `PRIMARY` | 是 | `BTREE` | `id` | 75 | — |
-| `tickets_service_id_idx` | 否 | `BTREE` | `service_id` | 35 | — |
-| `tickets_status_updated_at_idx` | 否 | `BTREE` | `status`, `updated_at` | 73 | — |
-| `tickets_user_status_updated_at_idx` | 否 | `BTREE` | `user_id`, `status`, `updated_at` | 75 | — |
-| `tickets_user_updated_at_idx` | 否 | `BTREE` | `user_id`, `updated_at`, `id` | 75 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 82 | — |
+| `tickets_service_id_idx` | 否 | `BTREE` | `service_id` | 39 | — |
+| `tickets_status_updated_at_idx` | 否 | `BTREE` | `status`, `updated_at` | 80 | — |
+| `tickets_user_status_updated_at_idx` | 否 | `BTREE` | `user_id`, `status`, `updated_at` | 82 | — |
+| `tickets_user_updated_at_idx` | 否 | `BTREE` | `user_id`, `updated_at`, `id` | 82 | — |
 
 #### 外键约束
 
@@ -3599,7 +3603,7 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`415`
+- 估算行数：`420`
 - 数据大小：`64 KB`
 - 索引大小：`0 B`
 - 自增值：—
@@ -3625,7 +3629,7 @@ owner: backend-data
 
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
-| `PRIMARY` | 是 | `BTREE` | `user_id` | 415 | — |
+| `PRIMARY` | 是 | `BTREE` | `user_id` | 420 | — |
 
 #### 外键约束
 
@@ -3637,10 +3641,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`30`
+- 估算行数：`36`
 - 数据大小：`16 KB`
 - 索引大小：`64 KB`
-- 自增值：`131`
+- 自增值：`101`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：用户持券表，记录领取方式、持有使用回收状态与占用时间
 
@@ -3670,11 +3674,11 @@ owner: backend-data
 
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
-| `PRIMARY` | 是 | `BTREE` | `id` | 30 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 36 | — |
 | `user_coupons_coupon_status_idx` | 否 | `BTREE` | `coupon_id`, `status` | 4 | — |
-| `user_coupons_coupon_user_unique` | 是 | `BTREE` | `coupon_id`, `user_id` | 30 | — |
-| `user_coupons_uid_unique` | 是 | `BTREE` | `uid` | 30 | — |
-| `user_coupons_user_status_idx` | 否 | `BTREE` | `user_id`, `status` | 28 | — |
+| `user_coupons_coupon_user_unique` | 是 | `BTREE` | `coupon_id`, `user_id` | 36 | — |
+| `user_coupons_uid_unique` | 是 | `BTREE` | `uid` | 36 | — |
+| `user_coupons_user_status_idx` | 否 | `BTREE` | `user_id`, `status` | 34 | — |
 
 #### 外键约束
 
@@ -3687,10 +3691,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`244`
-- 数据大小：`96 KB`
-- 索引大小：`48 KB`
-- 自增值：`261`
+- 估算行数：`493`
+- 数据大小：`160 KB`
+- 索引大小：`80 KB`
+- 自增值：`509`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：站内通知表，记录通知类型、标题正文、跳转链接与已读时间
 
@@ -3713,10 +3717,10 @@ owner: backend-data
 
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
-| `PRIMARY` | 是 | `BTREE` | `id` | 244 | — |
-| `user_notifications_type_index` | 否 | `BTREE` | `type` | 7 | — |
-| `user_notifications_user_id_created_at_index` | 否 | `BTREE` | `user_id`, `created_at` | 243 | — |
-| `user_notifications_user_id_read_at_index` | 否 | `BTREE` | `user_id`, `read_at` | 78 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 493 | — |
+| `user_notifications_type_index` | 否 | `BTREE` | `type` | 9 | — |
+| `user_notifications_user_id_created_at_index` | 否 | `BTREE` | `user_id`, `created_at` | 492 | — |
+| `user_notifications_user_id_read_at_index` | 否 | `BTREE` | `user_id`, `read_at` | 120 | — |
 
 #### 外键约束
 
@@ -3728,10 +3732,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`493`
+- 估算行数：`507`
 - 数据大小：`160 KB`
 - 索引大小：`192 KB`
-- 自增值：`568`
+- 自增值：`508`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：会员账号表，记录登录凭据、资料、等级、推荐关系与实名认证状态
 
@@ -3780,19 +3784,19 @@ owner: backend-data
 
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
-| `PRIMARY` | 是 | `BTREE` | `id` | 493 | — |
-| `users_created_at_idx` | 否 | `BTREE` | `created_at` | 493 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 507 | — |
+| `users_created_at_idx` | 否 | `BTREE` | `created_at` | 507 | — |
 | `users_deleted_at_idx` | 否 | `BTREE` | `deleted_at` | 1 | — |
-| `users_email_unique` | 是 | `BTREE` | `email` | 339 | — |
+| `users_email_unique` | 是 | `BTREE` | `email` | 347 | — |
 | `users_member_level_id_index` | 否 | `BTREE` | `member_level_id` | 2 | — |
-| `users_phone_unique` | 是 | `BTREE` | `phone` | 184 | — |
-| `users_promotion_ambassador_id_index` | 否 | `BTREE` | `promotion_ambassador_id` | 2 | — |
-| `users_referral_code_unique` | 是 | `BTREE` | `referral_code` | 161 | — |
+| `users_phone_unique` | 是 | `BTREE` | `phone` | 190 | — |
+| `users_promotion_ambassador_id_index` | 否 | `BTREE` | `promotion_ambassador_id` | 1 | — |
+| `users_referral_code_unique` | 是 | `BTREE` | `referral_code` | 178 | — |
 | `users_referrer_referred_idx` | 否 | `BTREE` | `referrer_user_id`, `referred_at` | 7 | — |
-| `users_status_id_idx` | 否 | `BTREE` | `status`, `id` | 493 | — |
-| `users_verification_certify_id_idx` | 否 | `BTREE` | `verification_certify_id` | 117 | — |
-| `users_verification_mix_idx` | 否 | `BTREE` | `is_verified`, `verification_status`, `id` | 493 | — |
-| `users_verification_status_id_idx` | 否 | `BTREE` | `verification_status`, `id` | 493 | — |
+| `users_status_id_idx` | 否 | `BTREE` | `status`, `id` | 507 | — |
+| `users_verification_certify_id_idx` | 否 | `BTREE` | `verification_certify_id` | 126 | — |
+| `users_verification_mix_idx` | 否 | `BTREE` | `is_verified`, `verification_status`, `id` | 507 | — |
+| `users_verification_status_id_idx` | 否 | `BTREE` | `verification_status`, `id` | 507 | — |
 
 #### 外键约束
 
@@ -3806,10 +3810,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`112`
-- 数据大小：`96 KB`
+- 估算行数：`123`
+- 数据大小：`80 KB`
 - 索引大小：`64 KB`
-- 自增值：`118`
+- 自增值：`129`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：实名认证历史表，记录每次提交的证件信息、认证状态与完成时间
 
@@ -3839,11 +3843,11 @@ owner: backend-data
 
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
-| `PRIMARY` | 是 | `BTREE` | `id` | 112 | — |
-| `verification_histories_plugin_submitted_idx` | 否 | `BTREE` | `plugin_id`, `submitted_at` | 20 | — |
-| `verification_histories_user_id_id_idx` | 否 | `BTREE` | `user_id`, `id` | 112 | — |
-| `verification_histories_user_id_submitted_at_index` | 否 | `BTREE` | `user_id`, `submitted_at` | 79 | — |
-| `verification_histories_verification_certify_id_index` | 否 | `BTREE` | `verification_certify_id` | 107 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 123 | — |
+| `verification_histories_plugin_submitted_idx` | 否 | `BTREE` | `plugin_id`, `submitted_at` | 31 | — |
+| `verification_histories_user_id_id_idx` | 否 | `BTREE` | `user_id`, `id` | 123 | — |
+| `verification_histories_user_id_submitted_at_index` | 否 | `BTREE` | `user_id`, `submitted_at` | 90 | — |
+| `verification_histories_verification_certify_id_index` | 否 | `BTREE` | `verification_certify_id` | 118 | — |
 
 #### 外键约束
 

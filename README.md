@@ -26,7 +26,7 @@
 | ---------- | ----------------------------------------------------------------------------------------- |
 | 后端       | PHP 8.2+、Laravel 12、Sanctum Token 鉴权、MySQL 8、Redis（缓存与分布式锁）                |
 | 管理后台   | Vue 3 + TypeScript + TDesign Vue Next + Vite（`frontend-admin-v3`，开发端口 5174）        |
-| 官网门户   | Vue 3 + Element Plus + Vite（`frontend-user-v3-www`，开发端口 5175）                      |
+| 官网门户   | Vue 3 + TDesign Vue Next + Vite（`frontend-user-v3-www`，开发端口 5175）                  |
 | 用户控制台 | Vue 3 + TypeScript + TDesign Vue Next + Vite（`frontend-user-v4-console`，开发端口 5173） |
 | 共享包     | `shared`（跨端会话、HTTP、状态、组件与状态枚举）                                          |
 
