@@ -122,24 +122,30 @@ const summaryMetrics = computed(() => {
   ];
 });
 
+// 请求竞态防护：日期快捷键可连续点击，旧响应不得覆盖新数据
+let loadRequestSeq = 0;
+
 async function loadData() {
   if (!dateRange.value || dateRange.value.length !== 2 || !dateRange.value[0] || !dateRange.value[1]) {
     MessagePlugin.warning('请选择完整的日期范围');
     return;
   }
 
+  const currentSeq = ++loadRequestSeq;
   loading.value = true;
   try {
     const response = await adminApi.financeMenu.newCustomerDailySummary({
       start_date: dateRange.value[0],
       end_date: dateRange.value[1],
     });
+    if (currentSeq !== loadRequestSeq) return;
     dailyList.value = response.list || [];
     summaryData.value = (response.summary as Record<string, number | string>) || {};
   } catch (error) {
+    if (currentSeq !== loadRequestSeq) return;
     MessagePlugin.error(errorMessage(error, '加载新客户日报失败'));
   } finally {
-    loading.value = false;
+    if (currentSeq === loadRequestSeq) loading.value = false;
   }
 }
 

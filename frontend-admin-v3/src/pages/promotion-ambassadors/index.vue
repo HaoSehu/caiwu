@@ -191,15 +191,21 @@ function createDefaultForm(): AmbassadorForm {
   };
 }
 
+// 请求竞态防护：保存/删除后的静默刷新可能与首次加载并发，旧响应不得覆盖新数据
+let loadRequestSeq = 0;
+
 async function loadAmbassadors() {
+  const currentSeq = ++loadRequestSeq;
   loading.value = true;
   try {
     const response = await adminApi.promotionAmbassadors.list();
+    if (currentSeq !== loadRequestSeq) return;
     ambassadors.value = response || [];
   } catch (error) {
+    if (currentSeq !== loadRequestSeq) return;
     MessagePlugin.error(errorMessage(error, '加载推广大使失败'));
   } finally {
-    loading.value = false;
+    if (currentSeq === loadRequestSeq) loading.value = false;
   }
 }
 

@@ -175,14 +175,21 @@ function createDefaultForm(): GroupForm {
   };
 }
 
+// 请求竞态防护：删除/新建后的静默刷新可能与首次加载并发，旧响应不得覆盖新数据
+let loadRequestSeq = 0;
+
 async function loadGroups() {
+  const currentSeq = ++loadRequestSeq;
   loading.value = true;
   try {
-    groups.value = await adminApi.marketingProductGroups.list();
+    const response = await adminApi.marketingProductGroups.list();
+    if (currentSeq !== loadRequestSeq) return;
+    groups.value = response;
   } catch (error) {
+    if (currentSeq !== loadRequestSeq) return;
     MessagePlugin.error(errorMessage(error, '加载产品营销组失败'));
   } finally {
-    loading.value = false;
+    if (currentSeq === loadRequestSeq) loading.value = false;
   }
 }
 

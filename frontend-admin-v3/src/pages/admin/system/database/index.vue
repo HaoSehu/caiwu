@@ -148,10 +148,15 @@ async function resumePendingBackup() {
   }
 }
 
+// 请求竞态防护：手动刷新与优化后的回读可能并发，旧响应不得覆盖新数据
+let loadRequestSeq = 0;
+
 async function loadStatus() {
+  const currentSeq = ++loadRequestSeq;
   loading.value = true;
   try {
     const payload = await databaseApi.status();
+    if (currentSeq !== loadRequestSeq) return;
     status.value = {
       database: String(payload.database || ''),
       list: Array.isArray(payload.list) ? payload.list.map(normalizeTable) : [],
@@ -161,9 +166,10 @@ async function loadStatus() {
       optimization: normalizeOptimization(payload.optimization),
     };
   } catch (error) {
+    if (currentSeq !== loadRequestSeq) return;
     MessagePlugin.error(errorMessage(error, '加载数据库状态失败'));
   } finally {
-    loading.value = false;
+    if (currentSeq === loadRequestSeq) loading.value = false;
   }
 }
 
