@@ -204,6 +204,13 @@ docs/_local/
 .devin_tmp/
 .mimosa/
 
+# MCP 服务器配置：每台机器的令牌与环境各自不同，随仓库分发会让换机后整份失效，
+# 也无法避免把凭据写进共享文件。需要共享的示例配置请另建 .mcp.example.json 并显式放行。
+.mcp.json
+
+# 会话遗留的临时审查脚本（根目录误生成，含本机绝对路径，不得入库）
+.tmp_review/
+
 backend/.env.testing
 backend/storage/app/installer/
 
