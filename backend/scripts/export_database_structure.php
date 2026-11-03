@@ -21,6 +21,8 @@ $connection = DB::connection($connectionName);
 $database = (string) $connection->getDatabaseName();
 $serverInfo = $connection->selectOne('SELECT VERSION() AS version, DATABASE() AS database_name');
 $mysqlVersion = (string) ($serverInfo->version ?? 'unknown');
+$appEnv = (string) config('app.env', 'local');
+$databaseScope = str_starts_with($appEnv, 'prod') ? '生产库' : '开发环境库';
 
 $tables = $connection->select(<<<'SQL'
     SELECT
@@ -197,6 +199,7 @@ $lines = [
     '',
     '- 生成时间：`'.date('Y-m-d H:i:s P').'`',
     '- 数据来源：Laravel 默认连接 `'.$connectionName.'` 直连 MySQL `information_schema` 与业务库 `'.$database.'`',
+    '- 数据来源环境：`'.$appEnv.'`（'.$databaseScope.'）。本地开发环境默认连接开发环境库，不是生产库；需要对照生产结构时，在指向生产库的 `.env` 下重跑本脚本，禁止手工编辑本文。',
     '- 数据库：`'.$database.'`',
     '- MySQL 版本：`'.escapeInlineCode($mysqlVersion).'`',
     '- 当前表数量：`'.$tableCount.'`',
