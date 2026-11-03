@@ -14,6 +14,8 @@
       --safe-right: env(safe-area-inset-right, 0px);
       --safe-bottom: env(safe-area-inset-bottom, 0px);
       --safe-left: env(safe-area-inset-left, 0px);
+      /* 软键盘高度，由 visualViewport 同步（默认 0） */
+      --kb-height: 0px;
     }
 
     *, *::before, *::after { box-sizing: border-box; }
@@ -27,12 +29,18 @@
       overflow: hidden;
       overscroll-behavior: none;
       -webkit-text-size-adjust: 100%;
+      /* 手机端禁用长按选中/呼出系统菜单：远程桌面里长按应是右键，而不是弹出「复制/翻译」 */
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
     }
 
     /* ---- 主容器 ---- */
     #noVNC_container {
       width: 100%;
       height: 100%;
+      /* dvh 随移动端地址栏与软键盘动态收缩，避免画面被裁掉底部 */
+      height: 100dvh;
       background: var(--container-bg);
       position: relative;
       touch-action: none;
@@ -260,6 +268,24 @@
       font-family: monospace;
       font-size: 16px; /* 避免 iOS 聚焦输入框时自动放大页面 */
     }
+    /* html,body 的 user-select:none 会继承到表单控件，iOS Safari 上长按选择/粘贴菜单会失效；
+       剪贴板面板与错误详情需要可选中，这里显式回补 */
+    #clipboard_text,
+    #noVNC_error_message {
+      -webkit-user-select: text;
+      user-select: text;
+      -webkit-touch-callout: default;
+    }
+
+    /* ---- 伪全屏（iPhone Safari 无 Fullscreen API 时的降级） ---- */
+    body.novnc-pseudo-fullscreen #noVNC_container {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+    }
+    body.novnc-pseudo-fullscreen #noVNC_control_bar_anchor {
+      z-index: 30;
+    }
 
     /* ---- 过渡遮罩（连接中） ---- */
     #noVNC_transition {
@@ -355,15 +381,17 @@
         font-size: 13px;
       }
 
-      /* 锚点横跨整个底部，控制栏由左侧滑入改为底部滑入 */
+      /* 锚点横跨整个底部，控制栏由左侧滑入改为底部滑入；
+         --kb-height 由 visualViewport 同步，软键盘弹出时整条控制栏上移到键盘之上 */
       #noVNC_control_bar_anchor {
         top: auto;
-        bottom: 0;
+        bottom: var(--kb-height, 0px);
         left: 0;
         width: 100%;
         height: auto;
         align-items: flex-end;
         justify-content: center;
+        transition: bottom 0.2s ease;
       }
 
       #noVNC_control_bar {
@@ -432,15 +460,16 @@
         height: 22px;
       }
 
-      /* 面板从底部弹出，宽度铺满 */
+      /* 面板从底部弹出，宽度铺满；同样让开软键盘高度，否则输入框会被键盘盖住 */
       .panel_wrap {
         top: auto;
-        bottom: 0;
+        bottom: var(--kb-height, 0px);
         left: 0;
         width: 100%;
         height: auto;
         align-items: flex-end;
         justify-content: center;
+        transition: bottom 0.2s ease;
       }
       .noVNC_panel,
       .noVNC_panel.open {
@@ -600,6 +629,25 @@
 
   let rfb = null
   let statusTimer = null
+  let focusTimer = null
+
+  // 被父页面以 iframe 嵌入时，把真实连接状态回传，供外层展示「连接中/已连接/已断开/失败」。
+  // 独立窗口打开时 window.parent === window，不上报。
+  // targetOrigin 取父页面通过 parent_origin 参数显式传来的值：控制台可能经别名域/预览域访问，
+  // 与 CLIENT_CONSOLE_URL 不一致时用 location.origin 会让浏览器静默丢弃消息。
+  // 非法值（非 http/https）一律回退同源；父页面侧另有 source + origin 双重校验。
+  function resolveParentOrigin() {
+    const raw = String(new URLSearchParams(location.search).get('parent_origin') || '').trim()
+    if (/^https?:\/\/[^/]+$/i.test(raw)) return raw
+    return location.origin
+  }
+
+  function notifyParent(status, message = '') {
+    if (window.parent === window) return
+    try {
+      window.parent.postMessage({ source: 'caiwu-vnc', status, message }, resolveParentOrigin())
+    } catch {}
+  }
 
   // ---- 移动端软键盘支持 ----
   const isTouchDevice = (() => {
@@ -672,10 +720,24 @@
   keyboardProxy.addEventListener('blur', () => focusDesktop())
 
   // 移动端软键盘弹出时浏览器会压缩可视高度，重新触发 noVNC 的画面缩放计算。
+  // 同时把键盘高度写进 --kb-height：底部控制栏与剪贴板面板据此上移，避免被键盘遮住。
+  // visualViewport 的 scroll 在键盘动画期间会高频触发，只在数值真正变化时才广播 resize，
+  // 避免每帧让 noVNC 重算一次缩放。
   if (window.visualViewport) {
-    window.visualViewport.addEventListener('resize', () => {
+    let lastInset = -1
+    const syncKeyboardInset = () => {
+      const vv = window.visualViewport
+      const inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop)
+      // 桌面端窗口缩放也可能产生几十像素差值，超过 120px 才认定为软键盘
+      const normalized = inset > 120 ? Math.round(inset) : 0
+      if (normalized === lastInset) return
+      lastInset = normalized
+      document.documentElement.style.setProperty('--kb-height', `${normalized}px`)
       window.dispatchEvent(new Event('resize'))
-    })
+    }
+    window.visualViewport.addEventListener('resize', syncKeyboardInset)
+    window.visualViewport.addEventListener('scroll', syncKeyboardInset)
+    syncKeyboardInset()
   }
 
   // ---- 状态条 ----
@@ -704,15 +766,97 @@
     }
   })
 
-  btnClipboard.addEventListener('click', (e) => { e.stopPropagation(); togglePanel(panelClipboard) })
+  btnClipboard.addEventListener('click', (e) => {
+    e.stopPropagation()
+    togglePanel(panelClipboard)
+    // 手机端点开剪贴板通常就是要粘贴：自动聚焦面板输入框，省一次点击。
+    // 用 setTimeout 让面板完成 transition 再聚焦，避免 iOS 在元素不可见时拒绝聚焦。
+    // 定时器先清掉上一次的：快速开关面板时旧定时器不能再去抢键盘/画布的焦点。
+    if (focusTimer !== null) { clearTimeout(focusTimer); focusTimer = null }
+    if (isTouchDevice && panelClipboard.classList.contains('open')) {
+      focusTimer = setTimeout(() => {
+        focusTimer = null
+        if (!panelClipboard.classList.contains('open')) return
+        try { clipboardText.focus({ preventScroll: true }) } catch {}
+      }, 400)
+    }
+  })
+
+  // 剪贴板只在内容真正变化时同步（change 监听在本文件「剪贴板同步」段），不再叠加 blur：
+  // 浏览器规定编辑后失焦会先 change 再 blur，双监听会让同一内容向远端发送两次；
+  // 且「只看不改」失焦还会把远端 clipboard 事件填充的旧内容回送远端。
+  // 移动端键盘「完成」引发的失焦同样会先触发 change，无需额外监听。
 
   // ---- 全屏 ----
-  btnFullscreen.addEventListener('click', () => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen?.()
-    } else {
-      document.exitFullscreen?.()
+  // iPhone Safari 不支持元素级 Fullscreen API；退化为 CSS 伪全屏（fixed 铺满）保证可用。
+  function isNativeFullscreen() {
+    return Boolean(document.fullscreenElement || document.webkitFullscreenElement)
+  }
+
+  function toggleFullscreen() {
+    if (isNativeFullscreen()) {
+      const exit = document.exitFullscreen || document.webkitExitFullscreen
+      const result = exit?.call(document)
+      if (result && typeof result.catch === 'function') result.catch(() => {})
+      return
     }
+
+    const el = document.documentElement
+    const request = el.requestFullscreen || el.webkitRequestFullscreen
+    if (typeof request === 'function' && (document.fullscreenEnabled || document.webkitFullscreenEnabled)) {
+      const result = request.call(el)
+      // 旧 WebKit 返回 undefined 且失败走 fullscreenerror 事件，不能只依赖 Promise 拒绝
+      if (result && typeof result.catch === 'function') {
+        result.catch(() => document.body.classList.add('novnc-pseudo-fullscreen'))
+        return
+      }
+    }
+
+    document.body.classList.toggle('novnc-pseudo-fullscreen')
+  }
+
+  function enterPseudoFullscreen() {
+    document.body.classList.add('novnc-pseudo-fullscreen')
+  }
+
+  document.addEventListener('fullscreenchange', () => {
+    document.body.classList.remove('novnc-pseudo-fullscreen')
+  })
+  document.addEventListener('webkitfullscreenchange', () => {
+    document.body.classList.remove('novnc-pseudo-fullscreen')
+  })
+  // 原生全屏失败（旧 WebKit 经事件上报）时回退伪全屏
+  document.addEventListener('fullscreenerror', () => {
+    if (!isNativeFullscreen()) enterPseudoFullscreen()
+  })
+  document.addEventListener('webkitfullscreenerror', () => {
+    if (!isNativeFullscreen()) enterPseudoFullscreen()
+  })
+
+  btnFullscreen.addEventListener('click', toggleFullscreen)
+
+  function exitPseudoFullscreen() {
+    document.body.classList.remove('novnc-pseudo-fullscreen')
+    window.dispatchEvent(new Event('resize'))
+  }
+
+  // 伪全屏下按 Esc 退出（外接键盘场景）。
+  // 必须用捕获阶段：noVNC 的 Keyboard 把 keydown 挂在 canvas 上并无条件
+  // stopEvent（stopPropagation + preventDefault），冒泡阶段到不了 document，
+  // 远程桌面聚焦时 Esc 永远退不出伪全屏。捕获阶段只处理伪全屏期间，不影响正常按键转发。
+  document.addEventListener(
+    'keydown',
+    (e) => {
+      if (e.key === 'Escape' && document.body.classList.contains('novnc-pseudo-fullscreen')) {
+        exitPseudoFullscreen()
+      }
+    },
+    true,
+  )
+
+  // 横竖屏切换后通知 noVNC 重算缩放；部分浏览器 orientationchange 早于尺寸更新，故延迟一拍
+  window.addEventListener('orientationchange', () => {
+    setTimeout(() => window.dispatchEvent(new Event('resize')), 300)
   })
 
   // ---- Ctrl+Alt+Del ----
@@ -740,6 +884,7 @@
     errorMsgEl.textContent = msg || '未知错误'
     errorEl.classList.add('show')
     setConnected(false)
+    notifyParent('error', String(msg || '未知错误'))
   }
 
   function hideError() {
@@ -1014,6 +1159,7 @@
     if (rfb) { try { rfb.disconnect() } catch (_) {} rfb = null }
     hideError()
     setConnected(false)
+    notifyParent('connecting')
     transText.textContent = '正在连接远程桌面...'
     transEl.classList.add('show')
 
@@ -1037,12 +1183,14 @@
         showStatus('已连接', 'normal', 3000)
         controlBar.classList.remove('open')
         window.dispatchEvent(new Event('resize'))
+        notifyParent('connected')
       })
 
       rfb.addEventListener('disconnect', (e) => {
         setConnected(false)
         if (e.detail?.clean) {
           showStatus('已断开连接', 'normal', 4000)
+          notifyParent('disconnected')
         } else {
           showError('VNC 连接已中断，请重新尝试\n\n目标地址：' + url)
         }

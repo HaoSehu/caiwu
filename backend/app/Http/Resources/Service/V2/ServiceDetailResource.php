@@ -197,9 +197,13 @@ class ServiceDetailResource extends JsonResource
             'refresh' => (bool) ($actions['refresh'] ?? false),
             'power' => (bool) ($actions['power'] ?? false),
             'module_status' => (bool) ($actions['module_status'] ?? false),
+            // 前端 refreshHostStatus 依据该键决定是否刷新上游电源状态
+            'power_status' => (bool) ($actions['power_status'] ?? false),
             'password_reset' => (bool) ($actions['password_reset'] ?? false),
             'reinstall' => (bool) ($actions['reinstall'] ?? false),
             'traffic_package' => (bool) ($actions['traffic_package'] ?? false),
+            // 用户端据此隐藏 VNC 标签；缺失时按 false 下发（ServiceTransformService 总会给出该键）
+            'vnc' => (bool) ($actions['vnc'] ?? false),
             'available' => array_values(array_filter(
                 array_map('strval', (array) ($actions['available'] ?? [])),
                 fn (string $action): bool => $action !== ''

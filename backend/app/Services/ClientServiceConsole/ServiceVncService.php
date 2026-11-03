@@ -43,7 +43,27 @@ class ServiceVncService
             'product.supplier',
             'order:id,order_no,status,paid_at,created_at',
         ]);
+        // 先按本地快照快速拒绝（未开通上游、业务状态不可操作等），避免为必然失败的请求打上游；
+        // 通过后再用与详情接口同一来源的远程快照复判一次，保证「详情下发 vnc=true」与
+        // 「取链接放行」使用同一份状态，不会因 provision_data 过期而出现标签可点但点击 422。
         throw_if(! $this->transformService->canExecuteConsoleActions($service), new BusinessException('当前实例状态不支持该操作', 42200));
+
+        try {
+            $remote = $this->detailService->fetchRemoteState($service);
+        } catch (\Throwable) {
+            // 远程状态拉取失败不阻断取链接：本地快照已放行，继续走上游 VNC 接口，
+            // 由上游响应决定成败（避免上游临时抖动导致用户完全无法打开控制台）。
+            $remote = [];
+        }
+
+        if ($remote !== []) {
+            $hostStatus = trim((string) ($remote['host']['domainstatus'] ?? ''));
+            $runtimeStatus = trim((string) ($remote['runtime']['status'] ?? ''));
+            throw_if(
+                ! $this->transformService->canExecuteConsoleActions($service, $hostStatus, $runtimeStatus),
+                new BusinessException('当前实例状态不支持该操作', 42200)
+            );
+        }
 
         try {
             [$runtime, $supplier, $hostId, $jwt] = $this->detailService->resolveUpstreamContext($service);

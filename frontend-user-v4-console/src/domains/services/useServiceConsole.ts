@@ -145,7 +145,7 @@ export function useServiceConsole() {
   });
 
   // VNC 远程
-  const { vncUrl, handleOpenVnc } = useConsoleVnc({
+  const { vncUrl, vncStatus, vncStatusMessage, handleOpenVnc, handleDisconnectVnc } = useConsoleVnc({
     serviceId,
     vncLoading,
     activeTab,
@@ -357,6 +357,14 @@ export function useServiceConsole() {
     }, wait);
   });
 
+  // 标签集合收缩（actions.vnc 变为 false）时，VncTab 在 v-show 下继续存在、iframe 与 WebSocket
+  // 仍是活的，但侧栏已没有入口，用户既回不到该标签也无法从 UI 断开。这里主动断开并切回总览。
+  watch(availableTabs, (tabs) => {
+    if (tabs.includes(activeTab.value)) return;
+    if (activeTab.value === 'vnc') handleDisconnectVnc(true);
+    activeTab.value = DEFAULT_TAB;
+  });
+
   onUnmounted(() => {
     clearStatusSyncTimer();
     clearActiveTabTimer();
@@ -376,6 +384,8 @@ export function useServiceConsole() {
     showPassword,
     activeTab,
     vncUrl,
+    vncStatus,
+    vncStatusMessage,
     renewVisible,
     renewLoading,
     renewSubmitting,
@@ -492,6 +502,7 @@ export function useServiceConsole() {
     handleLogsPageSizeChange,
     handleFinancePageSizeChange,
     handleOpenVnc,
+    handleDisconnectVnc,
   };
 }
 

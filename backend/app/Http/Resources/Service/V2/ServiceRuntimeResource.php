@@ -100,9 +100,14 @@ class ServiceRuntimeResource extends JsonResource
             'refresh' => (bool) ($actions['refresh'] ?? false),
             'power' => (bool) ($actions['power'] ?? false),
             'module_status' => (bool) ($actions['module_status'] ?? false),
+            // 与 ServiceDetailResource 保持同键集：前端 mergeConsoleDetail 对 actions 做浅合并，
+            // 这里漏掉的键会永久停在首屏值（power_status 缺失会让 refreshHostStatus 少刷一次电源状态）
+            'power_status' => (bool) ($actions['power_status'] ?? false),
             'password_reset' => (bool) ($actions['password_reset'] ?? false),
             'reinstall' => (bool) ($actions['reinstall'] ?? false),
             'traffic_package' => (bool) ($actions['traffic_package'] ?? false),
+            // 运行态刷新同样下发 VNC 能力，否则实例进入中间态后标签不会随之隐藏
+            'vnc' => (bool) ($actions['vnc'] ?? false),
             'available' => array_values(array_filter(
                 array_map('strval', (array) ($actions['available'] ?? [])),
                 fn (string $action): bool => $action !== ''

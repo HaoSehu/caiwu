@@ -91,6 +91,8 @@ interface V2ServiceConnectionPayload {
 
 interface V2ServiceRuntimePayload {
   runtime?: Partial<ConsoleServiceDetail> | null;
+  // 运行态刷新同时携带 actions（含 vnc 能力标记），否则实例进入中间态后标签不会隐藏
+  actions?: Record<string, unknown> | null;
 }
 
 interface V2TicketDetailPayload {
@@ -224,7 +226,13 @@ function v2ServiceRuntime(id: number | string) {
   return getEnvelope<V2ServiceRuntimePayload>(
     `/v2/client/services/${id}/runtime`,
     SILENT_LONG_RUNNING_REQUEST_CONFIG,
-  ).then((response) => dataEnvelope(response, (response.data?.runtime || {}) as Partial<ConsoleServiceDetail>));
+  ).then((response) =>
+    dataEnvelope(response, {
+      ...((response.data?.runtime || {}) as Partial<ConsoleServiceDetail>),
+      // actions 单独合并：运行态接口的 runtime 负载不含该键，丢掉它会让能力标记停在首屏值
+      ...(response.data?.actions ? { actions: response.data.actions as ConsoleServiceDetail['actions'] } : {}),
+    }),
+  );
 }
 
 function v2TicketDetail(id: number | string) {

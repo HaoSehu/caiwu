@@ -250,6 +250,8 @@ export interface ConsoleActionFlags {
   password_reset?: boolean;
   reinstall?: boolean;
   traffic_package?: boolean;
+  /** false 表示当前实例不允许打开 VNC 控制台（隐藏标签）；未下发按原行为展示。 */
+  vnc?: boolean;
   available?: string[];
   [key: string]: unknown;
 }

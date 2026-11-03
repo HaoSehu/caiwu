@@ -47,7 +47,12 @@ export function useConsoleDetail(_options?: UseConsoleDetailOptions) {
     return Number.isFinite(id) && id > 0 ? id : 0;
   });
 
-  const availableTabs = computed(() => (isNatConsole(detail.value) ? NAT_TABS : CLOUD_TABS));
+  // 后端 actions.vnc 为 false 时隐藏 VNC 标签：与取链接接口的准入判据同源，
+  // 避免「标签可点但一点必失败」。未下发该键（旧后端）时保持原行为展示。
+  const availableTabs = computed(() => {
+    const tabs = isNatConsole(detail.value) ? NAT_TABS : CLOUD_TABS;
+    return detail.value.actions?.vnc === false ? tabs.filter((tab) => tab !== 'vnc') : tabs;
+  });
   const canManageConsole = computed(
     () => Boolean(detail.value.actions?.module_status) || Number(detail.value.upstream?.host_id || 0) > 0,
   );

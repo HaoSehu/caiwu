@@ -322,6 +322,9 @@ class ServiceTransformService
                 'password_reset' => $this->canResetPassword($service, $serviceStatus),
                 'reinstall' => $canExecuteConsoleActions,
                 'traffic_package' => $this->canManageService($service) && $trafficPackageEnabled,
+                // 用户端据此隐藏 VNC 标签：与 GET /v2/client/services/{id}/vnc 的准入判据保持同源，
+                // 避免「标签可点但取链接必失败」。旧前端不识别该键时按原行为展示。
+                'vnc' => $canExecuteConsoleActions,
                 'available' => array_keys(self::POWER_ACTIONS),
             ],
         ];

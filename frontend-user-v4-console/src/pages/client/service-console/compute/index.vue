@@ -20,10 +20,10 @@
 </template>
 <script setup lang="ts">
 import DataState from '@caiwu/shared/user-v3/components/DataState.vue';
-import { watch } from 'vue';
+import { computed, watch } from 'vue';
 import { useRouter } from 'vue-router';
 
-import { CLOUD_TABS, isNatConsole } from '@/domains/services/console/useConsoleCore';
+import { isNatConsole } from '@/domains/services/console/useConsoleCore';
 import { useServiceConsole } from '@/domains/services/useServiceConsole';
 
 import ConsoleAlerts from '../components/ConsoleAlerts.vue';
@@ -38,8 +38,9 @@ const router = useRouter();
 const serviceConsole = useServiceConsole();
 provideServiceConsoleContext(serviceConsole);
 
-const { detail, detailError, detailLoading, bootstrap } = serviceConsole;
-const consoleNavItems = resolveConsoleNavItems(CLOUD_TABS);
+const { detail, detailError, detailLoading, availableTabs, bootstrap } = serviceConsole;
+// 标签集合随详情动态变化（actions.vnc=false 时隐藏 VNC），不能再用构建期常量
+const consoleNavItems = computed(() => resolveConsoleNavItems(availableTabs.value));
 
 function handleRetry() {
   void bootstrap();

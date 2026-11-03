@@ -984,6 +984,29 @@
     }
   }
 
+  .vnc-toolbar-status {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+    min-width: 0;
+
+    p {
+      font-size: var(--td-font-size-body-small);
+      line-height: 1.5;
+      overflow-wrap: break-word;
+    }
+  }
+
+  .vnc-toolbar-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+  }
+
+  // 画面区按视口高度自适应：桌面端至少 35rem，屏幕更高时用 calc 吃掉剩余空间，
+  // 避免固定 35rem 在大屏上留白、小屏上挤压；手机端按 60dvh 见下方媒体查询。
   .vnc-frame-shell {
     position: relative;
     overflow: hidden;
@@ -996,29 +1019,139 @@
   .vnc-frame {
     display: block;
     width: 100%;
-    height: 35rem;
+    height: clamp(35rem, calc(100vh - 24rem), 60rem);
+
+    /* dvh 随移动端地址栏收起/软键盘弹出动态收缩，vh 在 iOS 上始终按最大视口计算会溢出；
+       上一行 vh 作为不支持 dvh 的浏览器回退 */
+    height: clamp(35rem, calc(100dvh - 24rem), 60rem);
     border: 0;
     background: var(--td-bg-color-container);
   }
 
   .vnc-empty {
     display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
     align-items: center;
     justify-content: center;
     min-height: 35rem;
     color: var(--td-text-color-placeholder);
     font-size: var(--td-font-size-body-medium);
+    border-radius: var(--td-radius-default);
+    background: var(--td-bg-color-container);
+  }
+
+  // ---- 全屏 ----
+  // 原生全屏由浏览器铺满；伪全屏（iPhone Safari 无 Fullscreen API）用 fixed 覆盖视口。
+  // z-index 低于 TDesign 弹层（2000+），保证全屏中弹窗仍可见。
+  // 只需要 :fullscreen：旧 WebKit 前缀选择器由 stylelint 禁止，旧内核回退走伪全屏分支。
+  .vnc-frame-shell:fullscreen {
+    border: 0;
+    border-radius: 0;
+    background: #000;
+
+    .vnc-frame {
+      height: 100%;
+    }
+  }
+
+  .vnc-frame-shell.is-pseudo-fullscreen {
+    position: fixed;
+    inset: 0;
+    z-index: 1500;
+    border: 0;
+    border-radius: 0;
+    background: #000;
+    // 适配刘海屏：画面铺满，但内容与退出按钮避开安全区
+    padding: env(safe-area-inset-top, 0) env(safe-area-inset-right, 0) env(safe-area-inset-bottom, 0)
+      env(safe-area-inset-left, 0);
+
+    .vnc-frame {
+      height: 100dvh;
+      height: calc(100dvh - env(safe-area-inset-top, 0) - env(safe-area-inset-bottom, 0));
+    }
+  }
+
+  .vnc-fullscreen-exit {
+    position: fixed;
+    top: calc(0.75rem + env(safe-area-inset-top, 0px));
+    right: calc(0.75rem + env(safe-area-inset-right, 0px));
+    z-index: 1600;
+    padding: 0.5rem 1rem;
+    border: 0;
+    border-radius: var(--td-radius-round);
+    background: rgb(0 0 0 / 60%);
+    color: #fff;
+    font-size: var(--td-font-size-body-small);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+
+    &:active {
+      background: rgb(0 0 0 / 80%);
+    }
   }
 
   @media (max-width: @screen-mobile-max) {
+    .vnc-panel {
+      // 移动端卡片内边距收窄，让远程桌面获得更多宽度
+      padding: 0.5rem;
+      gap: 0.5rem;
+    }
+
+    .vnc-toolbar {
+      align-items: flex-start;
+      gap: 0.5rem;
+    }
+
+    .vnc-toolbar-actions {
+      // 窄屏按钮满宽两列：主操作独占一行，其余平分一行，手指可点
+      display: grid;
+      width: 100%;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.5rem;
+
+      .t-button {
+        width: 100%;
+        min-width: 0;
+        height: 2.75rem;
+        margin-left: 0 !important;
+        justify-content: center;
+      }
+
+      .vnc-action-primary {
+        grid-column: 1 / span 2;
+      }
+
+      // 手机上新开标签页难返回，且全屏已能铺满，隐藏「新窗口打开」
+      .vnc-action-window {
+        display: none;
+      }
+    }
+
     .vnc-frame-shell,
-    .vnc-frame,
     .vnc-empty {
-      min-height: 26.25rem;
+      min-height: 60dvh;
+    }
+
+    // 手机竖屏用 60dvh：兼顾虚拟键盘弹出时不把画面挤没，又不至于只剩一条窄带
+    .vnc-frame {
+      height: 60dvh;
+      min-height: 20rem;
+    }
+  }
+
+  // 手机横屏：远程桌面铺满屏幕高度，避免横屏下只有半屏画面。
+  // shell 必须一起缩：横屏宽度通常 > 767.98px，不命中上面的移动断点，
+  // 只改 iframe 高度会让 shell 保持 35rem 的桌面 min-height，画面下方留出大片空白。
+  @media (max-height: 500px) and (pointer: coarse) {
+    .vnc-frame-shell,
+    .vnc-empty {
+      min-height: 12rem;
     }
 
     .vnc-frame {
-      height: 26.25rem;
+      height: calc(100dvh - 8rem);
+      min-height: 12rem;
     }
   }
 
@@ -1372,4 +1505,11 @@
       flex-direction: column;
     }
   }
+}
+
+// 伪全屏期间锁住真正的滚动容器（body 不够，见 VncTab 的 setPseudoFullscreen 注释）。
+// 必须写在 .service-console 之外：.tdesign-starter-layout 是控制台的祖先，
+// 嵌进去会编译成 `.service-console .tdesign-starter-layout...`，选择器永不命中。
+.tdesign-starter-layout.vnc-pseudo-fullscreen-lock {
+  overflow: hidden !important;
 }
