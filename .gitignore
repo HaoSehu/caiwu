@@ -177,9 +177,9 @@ howstack-bos-main/
 # 唯一基线是 backend/phpstan-baseline.neon（随仓库入库）；曾误生成的根基线含 E:\ 绝对路径，已删除
 /phpstan-baseline.neon
 
-# Claude
+# Claude：.claude/ 是个人配置目录，整体不入库；但 CLAUDE.md 是项目规则入口，
+# 与 AGENTS.md 共享同一套规则，必须入库（曾整条忽略导致新克隆没有任何项目规则）。
 .claude/
-CLAUDE.md
 
 # Local-only docs（短期文档，本地保留不上传）
 docs/_local/
@@ -204,9 +204,11 @@ docs/_local/
 .devin_tmp/
 .mimosa/
 
-# MCP 服务器配置：每台机器的令牌与环境各自不同，随仓库分发会让换机后整份失效，
-# 也无法避免把凭据写进共享文件。需要共享的示例配置请另建 .mcp.example.json 并显式放行。
-.mcp.json
+# 项目级 MCP 配置 .mcp.json 随仓库入库：它是 Claude Code 唯一识别的项目级位置，
+# 内容只有公开包（memory/context7/fetch/time/tdesign），不含凭据。
+# 注意：npx 类依赖 Node，uvx 类（fetch/time）依赖本机安装 uv；缺 uv 时这两项启动失败，
+# 但不影响其余服务与 Claude Code 本身。首次打开仓库会提示是否信任这些服务器。
+# 本机如需覆盖或禁用，请用用户级 ~/.claude.json 或 .claude/settings.local.json。
 
 # 会话遗留的临时审查脚本（根目录误生成，含本机绝对路径，不得入库）
 .tmp_review/
