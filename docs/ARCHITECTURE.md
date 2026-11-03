@@ -1,6 +1,6 @@
 ---
 status: current
-updated: 2026-10-10
+updated: 2026-11-03
 owner: backend-platform
 ---
 
@@ -156,7 +156,7 @@ npm run dev:user-v4-console
 ## 5. 生产运行
 
 - 后端生产入口：PHP-FPM 指向 `backend/public`。
-- 业务队列与定时队列：由宝塔每分钟 `php artisan schedule:run` 并行启动四个独立 `queue:work`，分别消费 `provision`、`referral,notification,coupon,default`、`automation` 与 `backup`（队列组定义见 `backend/config/queue.php` 的 `caiwu_provision_queues` / `caiwu_business_queues` / `caiwu_schedule_queue` / `caiwu_backup_queue`）；`provision` 单独成组，避免上游开通类长任务（`timeout` 可达 1200s）阻塞其余业务队列。各 Worker 使用独立互斥锁，任一队列的长任务不阻塞其余队列的下一轮消费。
+- 业务队列与定时队列：宝塔每分钟执行一次 `php artisan schedule:run`，它触发 `queue:drain`；由 `QueueDrainService` 在后台各起一个 `queue:work --once`，分别消费 `provision`、`referral,notification,coupon,default`、`automation` 与 `backup`（队列组定义见 `backend/config/queue.php` 的 `caiwu_provision_queues` / `caiwu_business_queues` / `caiwu_schedule_queue` / `caiwu_backup_queue`）；`provision` 单独成组，避免上游开通类长任务（`timeout` 可达 1200s）阻塞其余业务队列。各 Worker 使用独立互斥锁，任一队列的长任务不阻塞其余队列的下一轮消费。**不要再额外配置覆盖同一队列的常驻 `queue:work`**，否则会重复消费（详见[部署与调度指南](参考资料/运维/部署与调度指南.md) §2.1）。
 - VNC Relay：独立运行 `php artisan vnc:relay`，由宝塔守护或进程管理器自动重启，不由心跳任务拉起。
 - 异步任务可能有 0-60 秒延迟。
 - 前端分别构建后按站点静态发布：

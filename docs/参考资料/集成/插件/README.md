@@ -621,11 +621,12 @@ php artisan schedule:list
 
 ## 跨插件共享的平台传输层（已知取舍）
 
-`backend/plugins/servers/hosting_panel` 与 `backend/plugins/servers/zjmf_finance` 共用同一套上游 HTTP 传输层
+`backend/plugins/servers/zjmf_finance` 复用系统侧上游 HTTP 传输层
 `backend/app/Services/Upstream/Drivers/HostingPanelApi/HostingPanelApiTransport.php`（实现 9 个 `Provides*` 能力接口）。
 
-- 为什么留在系统侧：两个插件的能力语义（主机、数据库、域名、SSL 等）几乎相同，若各自复制一份传输层，会产生两份需要同步维护的签名、重试与错误映射实现，这是更大的耦合风险。
-- 代价：插件目录不再完全自包含，`HostingPanel.php:18` 与 `ZjmfAuthManager.php:8` 直接 `use` 系统侧类。插件安装/卸载/迁移时必须同步确认该传输层存在且签名未变。
+- 历史背景：该传输层原本同时服务 `hosting_panel` 插件与 `zjmf_finance` 插件；`hosting_panel` 插件已于 2026-11-03 按产品裁决移除（上游域只保留 `zjmf_finance` 与 `kanghostx`），传输层因被 ZJMF 的 `ZjmfAuthManager` / `ZjmfFinanceAdapter` 依赖而保留在系统侧。
+- 为什么留在系统侧：ZJMF 的能力语义与主机面板协议高度重合，若随插件复制一份传输层，会产生两份需要同步维护的签名、重试与错误映射实现，这是更大的耦合风险。
+- 代价：插件目录不再完全自包含，`ZjmfAuthManager.php` 直接 `use` 系统侧类。插件安装/卸载/迁移时必须同步确认该传输层存在且签名未变。
 - 边界约束：新增共享传输层必须在 `HostingPanelApi/` 目录内提供能力接口实现，不得让插件引用该目录之外的系统类；`plugins:audit-registrations` 不覆盖此类依赖，靠 code review 把关。
 
 ## 运行时调用模型

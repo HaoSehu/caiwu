@@ -146,8 +146,9 @@
         },
         {
             "path": "BACKEND.md",
-            "status": "needs-review",
-            "summary": "后端工程治理基线，需持续与实现核对。"
+            "status": "current",
+            "summary": "后端工程治理基线；2026-11-03 全量审查已对照当前代码复核。",
+            "review_by": "2027-05-03"
         },
         {
             "path": "DATABASE.md",
@@ -441,20 +442,20 @@
         {
             "path": "参考资料/运维/本地启动指南.md",
             "status": "current",
-            "summary": "本地启动与构建命令。",
-            "review_by": "2026-10-31"
+            "summary": "本地启动与环境要求。补数据库连接口径（本地连开发环境库，非生产库），导出脚本文案同步。",
+            "review_by": "2027-05-03"
         },
         {
             "path": "参考资料/运维/测试指南.md",
             "status": "current",
             "summary": "测试环境和验证方法。",
-            "review_by": "2026-10-31"
+            "review_by": "2027-05-03"
         },
         {
             "path": "参考资料/运维/部署与调度指南.md",
             "status": "current",
             "summary": "生产部署、调度与队列规则。",
-            "review_by": "2026-10-31"
+            "review_by": "2027-05-03"
         },
         {
             "path": "自动生成/接口/后端API清单.md",

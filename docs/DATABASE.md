@@ -1,13 +1,14 @@
 ---
 status: generated
-updated: 2026-11-01
+updated: 2026-11-03
 owner: backend-data
 ---
 
 # 当前数据库结构说明
 
-- 生成时间：`2026-11-01 03:51:01 +08:00`
+- 生成时间：`2026-11-03 15:56:13 +08:00`
 - 数据来源：Laravel 默认连接 `mysql` 直连 MySQL `information_schema` 与业务库 `idc`
+- 数据来源环境：`local`（开发环境库）。本地开发环境默认连接开发环境库，不是生产库；需要对照生产结构时，在指向生产库的 `.env` 下重跑本脚本，禁止手工编辑本文。
 - 数据库：`idc`
 - MySQL 版本：`8.0.29`
 - 当前表数量：`79`
@@ -30,9 +31,9 @@ owner: backend-data
 | 表名 | 类型 | 引擎 | 估算行数 | 数据大小 | 索引大小 | 自增值 | 排序规则 | 表注释 |
 | --- | --- | --- | ---: | ---: | ---: | ---: | --- | --- |
 | `account_transactions` | BASE TABLE | InnoDB | 708 | 160 KB | 320 KB | 1,805 | utf8mb4_unicode_ci | 账户流水表，记录现金账户、授信账户、推荐奖励账户的每一次余额变化 |
-| `activity_logs` | BASE TABLE | InnoDB | 73,773 | 51.59 MB | 25.16 MB | 1,182,478 | utf8mb4_unicode_ci | 操作审计流水表，按事件记录管理员、客户与系统的业务操作及上下文 |
-| `admin_login_logs` | BASE TABLE | InnoDB | 0 | 16 KB | 64 KB | 2 | utf8mb4_unicode_ci | 管理员登录尝试审计表，保留昵称、角色快照与失败原因、客户端环境 |
-| `admin_user_roles` | BASE TABLE | InnoDB | 2 | 16 KB | 32 KB | 356 | utf8mb4_unicode_ci | 管理员角色关联表，一行一条管理员与角色的绑定 |
+| `activity_logs` | BASE TABLE | InnoDB | 73,776 | 51.59 MB | 25.16 MB | 1,182,738 | utf8mb4_unicode_ci | 操作审计流水表，按事件记录管理员、客户与系统的业务操作及上下文 |
+| `admin_login_logs` | BASE TABLE | InnoDB | 0 | 16 KB | 64 KB | 4 | utf8mb4_unicode_ci | 管理员登录尝试审计表，保留昵称、角色快照与失败原因、客户端环境 |
+| `admin_user_roles` | BASE TABLE | InnoDB | 2 | 16 KB | 32 KB | 358 | utf8mb4_unicode_ci | 管理员角色关联表，一行一条管理员与角色的绑定 |
 | `admin_users` | BASE TABLE | InnoDB | 3 | 16 KB | 48 KB | 314 | utf8mb4_unicode_ci | 管理员账号表，记录登录凭据、MFA 密钥、启用状态与最近登录信息 |
 | `archive_audit_logs` | BASE TABLE | InnoDB | 476 | 160 KB | 96 KB | 478 | utf8mb4_unicode_ci | 归档批次审计表，按批次记录归档表名、模式、行数、产出文件与校验值 |
 | `archive_items` | BASE TABLE | InnoDB | 0 | 16 KB | 64 KB | 1 | utf8mb4_unicode_ci | 归档明细表，按批次记录源数据边界、导出删除进度与各阶段时间戳 |
@@ -53,27 +54,27 @@ owner: backend-data
 | `first_product_groups` | BASE TABLE | InnoDB | 6 | 16 KB | 32 KB | 58 | utf8mb4_unicode_ci | 一级商品分组表，承载商品目录的顶层分类与展示配置 |
 | `gateway_logs` | BASE TABLE | InnoDB | 129 | 64 KB | 128 KB | 1,000,222 | utf8mb4_unicode_ci | 支付网关日志表，记录每次网关请求响应的交易号、处理结果与错误信息 |
 | `integration_plugin_bindings` | BASE TABLE | InnoDB | 10 | 16 KB | 64 KB | 13 | utf8mb4_unicode_ci | 插件业务绑定表，把插件实例绑定到供应商、商品、服务等业务对象 |
-| `integration_plugin_configs` | BASE TABLE | InnoDB | 8 | 16 KB | 16 KB | 10 | utf8mb4_unicode_ci | 插件配置表，保存插件级配置与加密凭据及其可用标记 |
-| `integration_plugin_runtime_logs` | BASE TABLE | InnoDB | 71,034 | 84.59 MB | 19.61 MB | 1,119,555 | utf8mb4_unicode_ci | 插件运行时日志表，记录每次插件调用的入参摘要、耗时与结果状态 |
-| `integration_plugins` | BASE TABLE | InnoDB | 12 | 64 KB | 48 KB | 23 | utf8mb4_unicode_ci | 插件注册表，记录插件标识、版本、清单指纹、能力清单与安装启用状态 |
+| `integration_plugin_configs` | BASE TABLE | InnoDB | 8 | 16 KB | 16 KB | 11 | utf8mb4_unicode_ci | 插件配置表，保存插件级配置与加密凭据及其可用标记 |
+| `integration_plugin_runtime_logs` | BASE TABLE | InnoDB | 71,032 | 84.59 MB | 19.61 MB | 1,119,627 | utf8mb4_unicode_ci | 插件运行时日志表，记录每次插件调用的入参摘要、耗时与结果状态 |
+| `integration_plugins` | BASE TABLE | InnoDB | 12 | 64 KB | 48 KB | 25 | utf8mb4_unicode_ci | 插件注册表，记录插件标识、版本、清单指纹、能力清单与安装启用状态 |
 | `invoice_items` | BASE TABLE | InnoDB | 3,055 | 1.52 MB | 144 KB | 3,081 | utf8mb4_unicode_ci | 账单明细表，记录账单内每个收费项目和快照信息 |
 | `invoices` | BASE TABLE | InnoDB | 3,501 | 2.52 MB | 1.8 MB | 3,299 | utf8mb4_unicode_ci | 账单主表，所有购买、续费、充值、扣款和退款流程以账单为财务入口 |
-| `jobs` | BASE TABLE | InnoDB | 1 | 16 KB | 16 KB | 9 | utf8mb4_unicode_ci | 框架队列作业表，保存待执行作业的载荷、重试次数与可见时间 |
+| `jobs` | BASE TABLE | InnoDB | 327 | 208 KB | 16 KB | 356 | utf8mb4_unicode_ci | 框架队列作业表，保存待执行作业的载荷、重试次数与可见时间 |
 | `marketing_product_group_items` | BASE TABLE | InnoDB | 0 | 16 KB | 32 KB | 1 | utf8mb4_unicode_ci | 营销产品组成员表，记录营销组包含的商品 |
 | `marketing_product_groups` | BASE TABLE | InnoDB | 0 | 16 KB | 32 KB | 1 | utf8mb4_unicode_ci | 营销产品组表，为会员等级折扣等营销规则提供商品分组 |
-| `media_files` | BASE TABLE | InnoDB | 20 | 16 KB | 48 KB | 71 | utf8mb4_unicode_ci | 媒体文件登记表，记录素材路径、类型、尺寸与所属分组 |
+| `media_files` | BASE TABLE | InnoDB | 25 | 16 KB | 64 KB | 100 | utf8mb4_unicode_ci | 媒体文件登记表，记录素材路径、类型、尺寸与所属分组 |
 | `member_level_group_discounts` | BASE TABLE | InnoDB | 0 | 16 KB | 32 KB | 1 | utf8mb4_unicode_ci | 会员等级与营销组折扣矩阵表，折扣类型为保留比例时 90 表示九折 |
 | `member_levels` | BASE TABLE | InnoDB | 3 | 16 KB | 0 B | 4 | utf8mb4_unicode_ci | 会员等级表，记录等级名称、启用状态与备注 |
-| `message_delivery_attempts` | BASE TABLE | InnoDB | 10 | 16 KB | 32 KB | 13 | utf8mb4_unicode_ci | 消息投递尝试表，同一逻辑投递可有多条尝试，记录结果与耗时 |
-| `message_logs` | BASE TABLE | InnoDB | 950 | 16.52 MB | 592 KB | 4,532 | utf8mb4_unicode_ci | 消息发送日志表，记录渠道、收件方、模板、投递状态与来源对象 |
-| `migrations` | BASE TABLE | InnoDB | 191 | 48 KB | 0 B | 294 | utf8mb4_unicode_ci | 框架迁移账本表，记录已执行迁移文件名与批次 |
+| `message_delivery_attempts` | BASE TABLE | InnoDB | 10 | 16 KB | 32 KB | 16 | utf8mb4_unicode_ci | 消息投递尝试表，同一逻辑投递可有多条尝试，记录结果与耗时 |
+| `message_logs` | BASE TABLE | InnoDB | 950 | 16.52 MB | 592 KB | 4,535 | utf8mb4_unicode_ci | 消息发送日志表，记录渠道、收件方、模板、投递状态与来源对象 |
+| `migrations` | BASE TABLE | InnoDB | 191 | 48 KB | 0 B | 297 | utf8mb4_unicode_ci | 框架迁移账本表，记录已执行迁移文件名与批次 |
 | `notice_reads` | BASE TABLE | InnoDB | 315 | 48 KB | 32 KB | 537 | utf8mb4_unicode_ci | 公告已读表，记录会员阅读公告的时间 |
-| `notification_templates` | BASE TABLE | InnoDB | 53 | 512 KB | 32 KB | 111 | utf8mb4_unicode_ci | 通知模板表，按渠道维护模板编码、正文、变量与运营商模板号 |
+| `notification_templates` | BASE TABLE | InnoDB | 53 | 512 KB | 32 KB | 112 | utf8mb4_unicode_ci | 通知模板表，按渠道维护模板编码、正文、变量与运营商模板号 |
 | `orders` | BASE TABLE | InnoDB | 477 | 1.44 MB | 192 KB | 3,338 | utf8mb4_unicode_ci | 履约工单表，记录购买续费升降配的商品快照、金额、优惠与履约状态 |
 | `password_reset_tokens` | BASE TABLE | InnoDB | 0 | 16 KB | 0 B | — | utf8mb4_unicode_ci | 框架密码重置令牌表，按邮箱保存重置令牌与生成时间 |
 | `payment_callbacks` | BASE TABLE | InnoDB | 476 | 1.52 MB | 128 KB | 652 | utf8mb4_unicode_ci | 支付回调审计表，保存第三方通知、查询、退款等回调验签结果 |
 | `payments` | BASE TABLE | InnoDB | 419 | 1.52 MB | 224 KB | 510 | utf8mb4_unicode_ci | 第三方支付记录表，仅记录真实外部资金流入和退款状态，不记录余额/免费/手工开服 |
-| `personal_access_tokens` | BASE TABLE | InnoDB | 2 | 16 KB | 48 KB | 5 | utf8mb4_unicode_ci | Sanctum 访问令牌表，保存 API 令牌、能力清单与最近使用时间 |
+| `personal_access_tokens` | BASE TABLE | InnoDB | 2 | 16 KB | 48 KB | 10 | utf8mb4_unicode_ci | Sanctum 访问令牌表，保存 API 令牌、能力清单与最近使用时间 |
 | `product_upstream_bindings` | BASE TABLE | InnoDB | 134 | 8.52 MB | 80 KB | 277 | utf8mb4_unicode_ci | 商品上游绑定表，记录商品对应的上游商品、开通策略与同步状态 |
 | `products` | BASE TABLE | InnoDB | 134 | 9.52 MB | 48 KB | 386 | utf8mb4_unicode_ci | 商品表，记录可售卖产品的分类、定价、库存、上游绑定和开通策略 |
 | `promotion_ambassadors` | BASE TABLE | InnoDB | 0 | 16 KB | 16 KB | 2 | utf8mb4_unicode_ci | 推广大使表，记录新购与续费返利比例及启用状态 |
@@ -82,7 +83,7 @@ owner: backend-data
 | `referral_rewards` | BASE TABLE | InnoDB | 6 | 16 KB | 112 KB | 12 | utf8mb4_unicode_ci | 推荐奖励表，记录被推荐人订单金额、返利比例、奖励金额与发放状态 |
 | `referral_withdrawals` | BASE TABLE | InnoDB | 0 | 16 KB | 48 KB | 1 | utf8mb4_unicode_ci | 推荐提现表，记录提现金额、收款方式、处理状态与打款单号 |
 | `refunds` | BASE TABLE | InnoDB | 3 | 16 KB | 96 KB | 4 | utf8mb4_unicode_ci | 旧退款表，仅保留历史数据，退款功能已移除不再产生新行 |
-| `roles` | BASE TABLE | InnoDB | 4 | 16 KB | 16 KB | 423 | utf8mb4_unicode_ci | 角色表，记录角色标识、显示名与权限标识数组 |
+| `roles` | BASE TABLE | InnoDB | 4 | 16 KB | 16 KB | 432 | utf8mb4_unicode_ci | 角色表，记录角色标识、显示名与权限标识数组 |
 | `schedule_run_logs` | BASE TABLE | InnoDB | 74,032 | 29.56 MB | 10.06 MB | 249,012 | utf8mb4_unicode_ci | 调度任务执行日志表，记录任务名、执行结果、耗时与失败摘要 |
 | `schedule_task_runs` | BASE TABLE | InnoDB | 95,152 | 44.58 MB | 31.17 MB | 98,735 | utf8mb4_unicode_ci | 调度任务运行记录表，按节拍记录每次任务尝试的状态、重试与耗时 |
 | `schedule_ticks` | BASE TABLE | InnoDB | 9,016 | 528 KB | 880 KB | 9,008 | utf8mb4_unicode_ci | 调度节拍表，记录每个调度槽位的触发时间与全局当日序号 |
@@ -94,7 +95,7 @@ owner: backend-data
 | `service_upstream_bindings` | BASE TABLE | InnoDB | 208 | 192 KB | 80 KB | 330 | utf8mb4_unicode_ci | 服务上游绑定表，记录服务实例对应的上游服务账号与同步状态 |
 | `services` | BASE TABLE | InnoDB | 161 | 1.52 MB | 128 KB | 350 | utf8mb4_unicode_ci | 服务实例表，记录用户已购买产品的生命周期、计费、上游和续费状态 |
 | `sessions` | BASE TABLE | InnoDB | 0 | 16 KB | 32 KB | — | utf8mb4_unicode_ci | 框架会话表，保存会话载荷、客户端信息与最后活跃时间 |
-| `settings` | BASE TABLE | InnoDB | 114 | 144 KB | 16 KB | 797 | utf8mb4_unicode_ci | 系统设置表，按分组键与条目键保存键值配置 |
+| `settings` | BASE TABLE | InnoDB | 115 | 144 KB | 16 KB | 804 | utf8mb4_unicode_ci | 系统设置表，按分组键与条目键保存键值配置 |
 | `sms_provider_templates` | BASE TABLE | InnoDB | 0 | 16 KB | 32 KB | 1 | utf8mb4_unicode_ci | 短信运营商模板映射（插件同步运营商 API 审核状态，发送解析唯一有效态为 approved） |
 | `supplier_plugin_bindings` | BASE TABLE | InnoDB | 2 | 16 KB | 48 KB | 3 | utf8mb4_unicode_ci | 供应商插件绑定表，记录供应商接入的插件、环境、优先级与连通状态 |
 | `suppliers` | BASE TABLE | InnoDB | 2 | 16 KB | 32 KB | 3 | utf8mb4_unicode_ci | 供应商表，记录供应商编码、联系方式、启用状态与备注 |
@@ -255,10 +256,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`73,773`
+- 估算行数：`73,776`
 - 数据大小：`51.59 MB`
 - 索引大小：`25.16 MB`
-- 自增值：`1182478`
+- 自增值：`1182738`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：操作审计流水表，按事件记录管理员、客户与系统的业务操作及上下文
 
@@ -293,7 +294,7 @@ owner: backend-data
 | `activity_logs_context_request_id_idx` | 否 | `BTREE` | `context_request_id` | 10,206 | — |
 | `activity_logs_context_status_idx` | 否 | `BTREE` | `context_status` | 4 | — |
 | `activity_logs_created_at_index` | 否 | `BTREE` | `created_at` | 35,442 | — |
-| `activity_logs_event_id_unique` | 是 | `BTREE` | `event_id` | 73,767 | — |
+| `activity_logs_event_id_unique` | 是 | `BTREE` | `event_id` | 73,778 | — |
 | `activity_logs_module_action_index` | 否 | `BTREE` | `module`, `action` | 498 | — |
 | `activity_logs_module_subject_id_index` | 否 | `BTREE` | `module`, `subject_id` | 198 | — |
 | `activity_logs_stream_created_at_index` | 否 | `BTREE` | `stream`, `created_at` | 36,435 | — |
@@ -312,7 +313,7 @@ owner: backend-data
 - 估算行数：`0`
 - 数据大小：`16 KB`
 - 索引大小：`64 KB`
-- 自增值：`2`
+- 自增值：`4`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：管理员登录尝试审计表，保留昵称、角色快照与失败原因、客户端环境
 
@@ -355,7 +356,7 @@ owner: backend-data
 - 估算行数：`2`
 - 数据大小：`16 KB`
 - 索引大小：`32 KB`
-- 自增值：`356`
+- 自增值：`358`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：管理员角色关联表，一行一条管理员与角色的绑定
 
@@ -1355,7 +1356,7 @@ owner: backend-data
 - 估算行数：`8`
 - 数据大小：`16 KB`
 - 索引大小：`16 KB`
-- 自增值：`10`
+- 自增值：`11`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：插件配置表，保存插件级配置与加密凭据及其可用标记
 
@@ -1389,10 +1390,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`71,034`
+- 估算行数：`71,032`
 - 数据大小：`84.59 MB`
 - 索引大小：`19.61 MB`
-- 自增值：`1119555`
+- 自增值：`1119627`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：插件运行时日志表，记录每次插件调用的入参摘要、耗时与结果状态
 
@@ -1444,7 +1445,7 @@ owner: backend-data
 - 估算行数：`12`
 - 数据大小：`64 KB`
 - 索引大小：`48 KB`
-- 自增值：`23`
+- 自增值：`25`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：插件注册表，记录插件标识、版本、清单指纹、能力清单与安装启用状态
 
@@ -1620,10 +1621,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`1`
-- 数据大小：`16 KB`
+- 估算行数：`327`
+- 数据大小：`208 KB`
 - 索引大小：`16 KB`
-- 自增值：`9`
+- 自增值：`356`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：框架队列作业表，保存待执行作业的载荷、重试次数与可见时间
 
@@ -1644,7 +1645,7 @@ owner: backend-data
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
 | `jobs_queue_index` | 否 | `BTREE` | `queue` | 1 | — |
-| `PRIMARY` | 是 | `BTREE` | `id` | 1 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 296 | — |
 
 #### 外键约束
 
@@ -1723,10 +1724,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`20`
+- 估算行数：`25`
 - 数据大小：`16 KB`
-- 索引大小：`48 KB`
-- 自增值：`71`
+- 索引大小：`64 KB`
+- 自增值：`100`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：媒体文件登记表，记录素材路径、类型、尺寸与所属分组
 
@@ -1753,11 +1754,11 @@ owner: backend-data
 
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
-| `media_files_created_at_index` | 否 | `BTREE` | `created_at` | 2 | — |
-| `media_files_disk_index` | 否 | `BTREE` | `disk` | 1 | — |
+| `media_files_created_at_index` | 否 | `BTREE` | `created_at` | 7 | — |
+| `media_files_disk_index` | 否 | `BTREE` | `disk` | 2 | — |
 | `media_files_group_index` | 否 | `BTREE` | `group` | 2 | — |
 | `media_files_uploaded_by_index` | 否 | `BTREE` | `uploaded_by` | 1 | — |
-| `PRIMARY` | 是 | `BTREE` | `id` | 20 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 25 | — |
 
 #### 外键约束
 
@@ -1840,7 +1841,7 @@ owner: backend-data
 - 估算行数：`10`
 - 数据大小：`16 KB`
 - 索引大小：`32 KB`
-- 自增值：`13`
+- 自增值：`16`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：消息投递尝试表，同一逻辑投递可有多条尝试，记录结果与耗时
 
@@ -1879,7 +1880,7 @@ owner: backend-data
 - 估算行数：`950`
 - 数据大小：`16.52 MB`
 - 索引大小：`592 KB`
-- 自增值：`4532`
+- 自增值：`4535`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：消息发送日志表，记录渠道、收件方、模板、投递状态与来源对象
 
@@ -1935,7 +1936,7 @@ owner: backend-data
 - 估算行数：`191`
 - 数据大小：`48 KB`
 - 索引大小：`0 B`
-- 自增值：`294`
+- 自增值：`297`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：框架迁移账本表，记录已执行迁移文件名与批次
 
@@ -2000,7 +2001,7 @@ owner: backend-data
 - 估算行数：`53`
 - 数据大小：`512 KB`
 - 索引大小：`32 KB`
-- 自增值：`111`
+- 自增值：`112`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：通知模板表，按渠道维护模板编码、正文、变量与运营商模板号
 
@@ -2261,7 +2262,7 @@ owner: backend-data
 - 估算行数：`2`
 - 数据大小：`16 KB`
 - 索引大小：`48 KB`
-- 自增值：`5`
+- 自增值：`10`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：Sanctum 访问令牌表，保存 API 令牌、能力清单与最近使用时间
 
@@ -2285,9 +2286,9 @@ owner: backend-data
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
 | `personal_access_tokens_expires_at_index` | 否 | `BTREE` | `expires_at` | 1 | — |
-| `personal_access_tokens_token_unique` | 是 | `BTREE` | `token` | 2 | — |
-| `personal_access_tokens_tokenable_type_tokenable_id_index` | 否 | `BTREE` | `tokenable_type`, `tokenable_id` | 1 | — |
-| `PRIMARY` | 是 | `BTREE` | `id` | 2 | — |
+| `personal_access_tokens_token_unique` | 是 | `BTREE` | `token` | 6 | — |
+| `personal_access_tokens_tokenable_type_tokenable_id_index` | 否 | `BTREE` | `tokenable_type`, `tokenable_id` | 2 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 6 | — |
 
 #### 外键约束
 
@@ -2703,7 +2704,7 @@ owner: backend-data
 - 估算行数：`4`
 - 数据大小：`16 KB`
 - 索引大小：`16 KB`
-- 自增值：`423`
+- 自增值：`432`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：角色表，记录角色标识、显示名与权限标识数组
 
@@ -3238,10 +3239,10 @@ owner: backend-data
 
 - 类型：`BASE TABLE`
 - 引擎：`InnoDB`
-- 估算行数：`114`
+- 估算行数：`115`
 - 数据大小：`144 KB`
 - 索引大小：`16 KB`
-- 自增值：`797`
+- 自增值：`804`
 - 排序规则：`utf8mb4_unicode_ci`
 - 表注释：系统设置表，按分组键与条目键保存键值配置
 
@@ -3258,8 +3259,8 @@ owner: backend-data
 
 | 索引名 | 唯一 | 类型 | 字段 | 基数 | 注释 |
 | --- | --- | --- | --- | ---: | --- |
-| `PRIMARY` | 是 | `BTREE` | `id` | 114 | — |
-| `settings_group_key_unique` | 是 | `BTREE` | `group_key`, `item_key` | 114 | — |
+| `PRIMARY` | 是 | `BTREE` | `id` | 115 | — |
+| `settings_group_key_unique` | 是 | `BTREE` | `group_key`, `item_key` | 115 | — |
 
 #### 外键约束
 
