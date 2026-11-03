@@ -521,6 +521,10 @@ function handleDomainChange(value: unknown) {
 watch(
   () => [route.path, route.query.domain, route.meta.pluginDomain],
   () => {
+    // keep-alive 缓存后本 watch 依然生效：限定本页路由组，避免离开后按其它页 meta 重算域并 loadPlugins()。
+    // 用 meta.keepAliveName 判断而非路由名前缀：七个域的路由名是 AdminCaptchaPlugins /
+    // AdminPaymentPlugins 等，并不以 AdminIntegrationPlugins 开头。
+    if (route.meta?.keepAliveName !== 'AdminIntegrationPlugins') return;
     const nextDomain = resolveRouteDomain();
     if (nextDomain === activeDomain.value) return;
     activeDomain.value = nextDomain;

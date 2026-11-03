@@ -372,6 +372,11 @@ function resolveRouteTab(): ReferralTab {
 watch(
   () => [route.path, route.query.tab, route.meta.referralTab],
   () => {
+    // keep-alive 缓存后本 watch 依然生效：限定本页路由，避免离开后按其它页 meta 重算 tab
+    // 并 refreshCurrentTab()，把本页三个接口带到其它页面上重复请求。
+    // 用 meta.keepAliveName 判断而非路由名：同组三条路由（AdminReferral / AdminReferralRewards /
+    // AdminReferralWithdrawals）共用一个 keepAliveName，按路由名写死会漏掉后两者。
+    if (route.meta?.keepAliveName !== 'AdminReferral') return;
     const next = resolveRouteTab();
     if (activeTab.value !== next) {
       activeTab.value = next;

@@ -792,6 +792,10 @@ function fieldValue(value: unknown) {
 watch(
   () => [route.path, route.query.tab, route.meta.notificationTab],
   () => {
+    // 本页被 keep-alive 缓存后这个 watch 仍然生效：若不加这个判断，离开本页后每次切到
+    // 别处都会按「当前路由」重新解析 tab，进而 loadTemplates() 打出
+    // /notification-templates 与 /settings 两个与目标页无关的请求（实测每页都多 2 个）。
+    if (!isOwnRoute()) return;
     const audience = normalizeTemplateAudience(route.query.tab);
     if (audience) templateAudience.value = audience;
     activeTab.value = resolveRouteTab();
@@ -799,6 +803,10 @@ watch(
   },
 );
 
+/** 当前路由是否落在本页：三条列表路由共用 keepAliveName=AdminNotificationList */
+function isOwnRoute(): boolean {
+  return route.meta?.keepAliveName === 'AdminNotificationList';
+}
 onMounted(() => {
   refreshCurrentTab();
 });

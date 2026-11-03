@@ -199,7 +199,17 @@ function syncTabFromRoute() {
 }
 
 onMounted(syncTabFromRoute);
-watch(() => [route.path, route.query.tab, route.meta.orderTab], syncTabFromRoute);
+// 本页被 keep-alive 缓存后 watch 仍然生效，必须限定在本页路由组内，
+// 否则离开后会按其它页面的 meta 反复改写 activeTab（触发 resetFilters → 重新拉列表）。
+// 用 meta.keepAliveName 判断而非路由名前缀：同组含 AdminFinanceOrders / NormalOrders /
+// RenewalOrders / UpgradeOrders 与旧入口 AdminOrdersRedirect，按名称前缀写会漏掉多数分支。
+watch(
+  () => [route.path, route.query.tab, route.meta.orderTab],
+  () => {
+    if (route.meta?.keepAliveName !== 'AdminFinanceOrders') return;
+    syncTabFromRoute();
+  },
+);
 
 const orderTypeOptions = Object.entries(ORDER_TYPE_MAP).map(([value, label]) => ({ value, label }));
 const mode = computed<FinanceOrderMode>(() => activeTab.value);

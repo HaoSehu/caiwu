@@ -1501,6 +1501,11 @@ function formatScheduleCycle(row: RecordRow) {
 watch(
   () => [route.path, route.query.tab, route.meta.logTab],
   () => {
+    // 本页 meta.keepAlive === false 不参与缓存，但仍会被其它页面的路由变化唤醒：
+    // 不限定在本模块路由内时，离开日志后会按目标页 meta 解析出另一个 tab 并重新拉日志。
+    // 日志各 tab 都落在 /admin/logs* 路径下（含 AdminScheduleTasks 的 /admin/logs/schedules），
+    // 用路径前缀判断，避免再维护一份路由名白名单。
+    if (!String(route.path || '').startsWith('/admin/logs')) return;
     const nextTab = resolveRouteTab();
     if (nextTab === activeTab.value) return;
     activeTab.value = nextTab;

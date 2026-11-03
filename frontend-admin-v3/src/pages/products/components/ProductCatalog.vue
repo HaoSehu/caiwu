@@ -1846,9 +1846,14 @@ function handleDeleteCategory(row: ProductCategoryRecord) {
 }
 
 // --- Init ---
+// 顺序不能变成并发：loadProductTypes 会回填 catalogFilters.product_type，而
+// loadCategories 末尾的 ensureCatalogSelection 要基于这个值派生 product_group_key。
+// 两者并发时谁先返回不确定，先返回的分类树会按空 product_type 算出空的分组键，
+// 首屏商品列表可能按错误分类过滤。列表则必须等这两个都完成后才能请求。
 async function loadCatalog() {
   await loadProductTypes();
-  await reloadCatalogData();
+  await loadCategories();
+  await loadProducts();
 }
 
 onMounted(() => {

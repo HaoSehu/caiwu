@@ -519,7 +519,15 @@ function syncTabFromRoute() {
 }
 
 onMounted(syncTabFromRoute);
-watch(() => [route.path, route.query.tab, route.meta.couponTab], syncTabFromRoute);
+// keep-alive 缓存后本 watch 依然生效：限定在优惠券路由组内，否则离开后会把 activeTab
+// 改回 coupons，导致异步子组件（优惠活动）重新挂载并重复请求商品树。
+watch(
+  () => [route.path, route.query.tab, route.meta.couponTab],
+  () => {
+    if (route.meta?.keepAliveName !== 'AdminCouponList') return;
+    syncTabFromRoute();
+  },
+);
 
 const saving = ref(false);
 const actionLoading = ref<number | string | null>(null);

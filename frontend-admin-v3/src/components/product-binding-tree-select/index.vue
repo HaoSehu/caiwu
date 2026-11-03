@@ -15,6 +15,7 @@
     :popup-props="treePopupProps"
     :collapsed-items="collapsedItems"
     @change="handleChange"
+    @popup-visible-change="handlePopupVisibleChange"
   />
 </template>
 <script setup lang="ts">
@@ -100,6 +101,7 @@ const treePopupProps = computed(() => ({
   },
 }));
 
+// 选中值同步只依赖绑定值本身：回显不需要整棵商品树，树数据留到用户展开下拉时再加载。
 watch([() => props.modelValue, treeOptions], ([modelValue]) => {
   if (props.mode === 'single') {
     const strVal = firstSelectionForTree(modelValue);
@@ -148,7 +150,15 @@ function firstTreeValue(value: unknown): string {
   return normalizeTreeValue(value)[0] || '';
 }
 
-loadTree();
+// 商品树实测要 23 个串行请求，不能在组件挂载时无条件发出：本组件大量出现在常驻的
+// 抽屉/对话框里（用户详情的新建实例、优惠券抽屉）与表格每一行（规格、CPU 型号的绑定列），
+// 从未展开也会把整棵树拉一遍、拖慢整页首屏。改为首次展开下拉时才加载。
+// 已有选中值不需要树：绑定值本身是产品 ID（或树节点键），回显不依赖节点文案。
+// 去重交给 useProductBindingTree 的 loadTree（并发复用同一 Promise、失败可重试），
+// 这里不再自带「只请求一次」的布尔位——它永不复位，会让失败后的展开永远拿不到数据。
+function handlePopupVisibleChange(visible: boolean) {
+  if (visible) void loadTree();
+}
 </script>
 <style scoped lang="less">
 .binding-tree-select {

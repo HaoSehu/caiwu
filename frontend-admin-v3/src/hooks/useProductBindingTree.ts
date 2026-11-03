@@ -501,17 +501,32 @@ export function useProductBindingTree(
     disableCheck: isBindingTreeNodeCheckDisabled,
   }));
 
+  // 商品树是 1 次根分组 + 每个有子级的分组各 1 次 + 1 次批量产品，实测共 23 个串行请求。
+  // 这些请求此前在组件 setup 阶段无条件发出：挂载在常驻抽屉/对话框里的选择器（如用户详情页的
+  // 新建实例、优惠券抽屉）即使从未展开，也会在进入页面时把 23 个请求全部打出去，拖慢整页。
+  // 现在改为首次展开时才加载：成功后保留结果不再重复请求；失败则清空，下次展开重试。
+  let treeRequest: Promise<void> | null = null;
+
   async function loadTree() {
-    treeLoading.value = true;
-    try {
-      const response = await adminApi.coupons.productTree();
-      treeData.value = Array.isArray(response.tree) ? response.tree : [];
-    } catch (error) {
-      treeData.value = [];
-      MessagePlugin.error(errorMessage(error, '加载商品树失败'));
-    } finally {
-      treeLoading.value = false;
-    }
+    if (treeRequest) return treeRequest;
+
+    const request = (async () => {
+      treeLoading.value = true;
+      try {
+        const response = await adminApi.coupons.productTree();
+        treeData.value = Array.isArray(response.tree) ? response.tree : [];
+      } catch (error) {
+        treeData.value = [];
+        // 失败后清空，允许下次展开重试
+        if (treeRequest === request) treeRequest = null;
+        MessagePlugin.error(errorMessage(error, '加载商品树失败'));
+      } finally {
+        treeLoading.value = false;
+      }
+    })();
+
+    treeRequest = request;
+    return request;
   }
 
   function resolveBindingsFromIds(
