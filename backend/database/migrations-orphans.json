@@ -1,7 +1,7 @@
 {
     "description": "迁移账本中保留、但代码包中已无对应文件的已知历史迁移。这些是 2026-04 至 2026-08 期间被直接删除且未归档的历史迁移文件，在 idc / idc_test 的 migrations 表里仍保留执行记录。只允许人工确认后追加，禁止脚本自动写入；新增条目会削弱升级守卫的拦截能力。",
     "generated_by": "backend/scripts/export_orphan_manifest.php",
-    "recorded_at": "2026-10-21",
+    "recorded_at": "2026-11-03",
     "orphans": [
         {
             "migration": "0001_01_01_000000_create_users_table",
@@ -272,6 +272,11 @@
             "migration": "2026_08_26_000001_add_activity_logs_module_subject_index",
             "reason": "历史迁移文件已删除且未归档，属于固定存量事实",
             "recorded_at": "2026-10-21"
+        },
+        {
+            "migration": "2026_10_12_000001_install_hosting_panel_plugin",
+            "reason": "hosting_panel 上游插件于 2026-11-03 按产品裁决移除（上游域只保留 zjmf_finance 与 kanghostx），安装迁移随之删除；开发库 migrations 表保留该执行记录",
+            "recorded_at": "2026-11-03"
         }
     ]
 }

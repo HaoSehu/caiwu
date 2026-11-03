@@ -18,7 +18,6 @@ use App\Services\Upstream\Contracts\ProvidesStatusSync;
 use App\Services\Upstream\Contracts\ProvidesUpstreamLoginEndpoints;
 use App\Services\Upstream\Drivers\HostingPanelApi\Concerns\HandlesApiConfigOptions;
 use App\Services\Upstream\Drivers\HostingPanelApi\Concerns\HandlesCatalogNormalization;
-use App\Services\Upstream\ProviderKey;
 use App\Services\Upstream\Support\CloudConfigTemplate;
 use App\Services\Upstream\Support\UpstreamJwtSessionManager;
 use App\Services\Upstream\Support\WebSessionCookieParser;
@@ -1300,10 +1299,14 @@ class HostingPanelApiTransport extends UpstreamJwtSessionManager implements Prov
 
     /**
      * JWT 缓存键：provider_key 优先（插件派生驱动共享本面板协议时按来源隔离）。
+     *
+     * 保留 hosting_panel_api 字面量作为兜底：该传输层现由 zjmf_finance 插件复用，
+     * 其供应商绑定总会注入 provider_key；兜底只为兼容历史无绑定缓存键，
+     * 键串与收口前逐字一致，不得改写。
      */
     protected function jwtCacheKey(Supplier $supplier): string
     {
-        $providerKey = trim((string) ($supplier->provider_key ?? '')) ?: ProviderKey::HOSTING_PANEL_API;
+        $providerKey = trim((string) ($supplier->provider_key ?? '')) ?: 'hosting_panel_api';
 
         return "upstream:{$providerKey}:jwt:".$supplier->id;
     }

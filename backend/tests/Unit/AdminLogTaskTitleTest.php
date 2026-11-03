@@ -28,7 +28,27 @@ class AdminLogTaskTitleTest extends TestCase
             }
         });
 
+        $this->assertSame('服务自动续费', $this->invokeTaskTitle('service-auto-renew'));
+    }
+
+    /**
+     * 任务下线后历史日志仍要可读：refresh-hosting-panel-auth 已随 hosting_panel 插件
+     * 移除（2026-11-03），但 activity_logs 仍保留 6517 行该 task_key，
+     * 静态元数据必须继续提供标题，不能退化成原始 key。
+     */
+    public function test_retired_task_keeps_readable_title_from_static_meta(): void
+    {
+        $this->bindRegistry(new class($this->app) extends HeartbeatTaskRegistry
+        {
+            // 与真实注册表一致：已下线任务查不到，抛异常
+            public function get(string $taskKey): CallbackScheduledTask
+            {
+                throw new \InvalidArgumentException('不支持的任务：'.$taskKey);
+            }
+        });
+
         $this->assertSame('接口认证刷新', $this->invokeTaskTitle('refresh-hosting-panel-auth'));
+        $this->assertArrayHasKey('refresh-hosting-panel-auth', $this->invokeTaskKeywordIndex());
     }
 
     public function test_dynamic_registry_supplements_titles(): void
@@ -86,7 +106,7 @@ class AdminLogTaskTitleTest extends TestCase
 
         // 注册表故障时仅保留静态核心条目，反查不得崩溃
         $index = $this->invokeTaskKeywordIndex();
-        $this->assertArrayHasKey('refresh-hosting-panel-auth', $index);
+        $this->assertArrayHasKey('service-auto-renew', $index);
         $this->assertArrayNotHasKey('refresh-zjmf-finance-auth', $index);
     }
 

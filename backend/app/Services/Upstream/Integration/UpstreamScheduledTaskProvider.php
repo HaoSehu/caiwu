@@ -15,10 +15,9 @@ use Throwable;
  * 上游集成任务来源：向心跳注册表提供商品同步、上游开通与服务状态类任务。
  *
  * 这些任务从系统核心任务清单（CoreScheduledTaskProvider）迁入上游集成模块，
- * 在管理端任务来源中不再显示为"系统任务"，而是与插件任务同类的集成来源任务；
- * 供应商接口类任务（refresh-hosting-panel-auth）已进一步随 hosting_panel 插件
- * 插件化（config.php scheduled_tasks 声明），后续其余上游驱动彻底插件化时，
- * 可由对应插件清单接管注册。
+ * 在管理端任务来源中不再显示为"系统任务"，而是与插件任务同类的集成来源任务。
+ * 供应商接口类任务（如认证刷新）由对应插件的 config.php scheduled_tasks 声明注册；
+ * 2026-11-03 起上游域只保留 zjmf_finance 与 kanghostx，hosting_panel 插件已移除。
  *
  * 隔离粒度与插件 Provider 对齐：逐任务容器解析并独立捕获异常，单个任务类
  * 实例化失败只隔离该任务，不影响其余上游集成任务的注册。

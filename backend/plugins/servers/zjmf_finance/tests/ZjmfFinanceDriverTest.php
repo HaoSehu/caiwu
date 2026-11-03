@@ -51,8 +51,11 @@ class ZjmfFinanceDriverTest extends TestCase
 
     public function test_driver_key_is_independent_zjmf_finance_api(): void
     {
+        // 上游域只保留 zjmf_finance 与 kanghostx；hosting_panel 插件已移除，
+        // 但共享 transport 的 JWT 缓存键仍保留 hosting_panel_api 字面量作历史兜底，
+        // 这里断言驱动 key 与它不相等，防止未来被折叠。
         $this->assertSame(ProviderKey::ZJMF_FINANCE_API, $this->driver()->key());
-        $this->assertNotSame(ProviderKey::HOSTING_PANEL_API, $this->driver()->key());
+        $this->assertNotSame('hosting_panel_api', $this->driver()->key());
     }
 
     #[DataProvider('capabilityProvider')]
@@ -104,10 +107,9 @@ class ZjmfFinanceDriverTest extends TestCase
         $reflection = new ReflectionClass(ProviderKey::class);
 
         $this->assertSame('zjmf_finance_api', (string) $reflection->getConstant('ZJMF_FINANCE_API'));
-        $this->assertSame('hosting_panel_api', (string) $reflection->getConstant('HOSTING_PANEL_API'));
-        $this->assertNotSame(
-            (string) $reflection->getConstant('ZJMF_FINANCE_API'),
-            (string) $reflection->getConstant('HOSTING_PANEL_API')
-        );
+        // hosting_panel 插件移除后该 key 不再是可用 provider（2026-11-03）。
+        // 这里只断言 ZJMF 未被折叠成它；不禁止常量本身——共享 transport 的 JWT 缓存键
+        // 仍在用同名字面量兜底，将来若把它提回常量属于合理重构，不该被这条测试挡下。
+        $this->assertNotSame('hosting_panel_api', (string) $reflection->getConstant('ZJMF_FINANCE_API'));
     }
 }

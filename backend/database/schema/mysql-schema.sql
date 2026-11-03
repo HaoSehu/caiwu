@@ -33,7 +33,7 @@ CREATE TABLE `account_transactions` (
   KEY `account_transactions_created_at_idx` (`created_at`),
   KEY `account_transactions_source_idx` (`source_type`,`source_id`),
   CONSTRAINT `fk_stage2_account_transactions_user_id` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE RESTRICT
-) ENGINE=InnoDB AUTO_INCREMENT=1782 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='账户流水表，记录现金账户、授信账户、推荐奖励账户的每一次余额变化';
+) ENGINE=InnoDB AUTO_INCREMENT=1805 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='账户流水表，记录现金账户、授信账户、推荐奖励账户的每一次余额变化';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `activity_logs`;
@@ -69,7 +69,7 @@ CREATE TABLE `activity_logs` (
   KEY `activity_logs_module_subject_id_index` (`module`,`subject_id`),
   KEY `activity_logs_context_status_idx` (`context_status`),
   KEY `activity_logs_context_request_id_idx` (`context_request_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=1102704 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='操作审计流水表，按事件记录管理员、客户与系统的业务操作及上下文';
+) ENGINE=InnoDB AUTO_INCREMENT=1182816 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='操作审计流水表，按事件记录管理员、客户与系统的业务操作及上下文';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `admin_login_logs`;
@@ -94,7 +94,7 @@ CREATE TABLE `admin_login_logs` (
   KEY `admin_login_logs_admin_user_logged_at_index` (`admin_user_id`,`logged_at`),
   KEY `admin_login_logs_client_ip_logged_at_index` (`client_ip`,`logged_at`),
   KEY `admin_login_logs_status_logged_at_index` (`status`,`logged_at`)
-) ENGINE=InnoDB AUTO_INCREMENT=14 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='管理员登录尝试审计表，保留昵称、角色快照与失败原因、客户端环境';
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='管理员登录尝试审计表，保留昵称、角色快照与失败原因、客户端环境';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `admin_user_roles`;
@@ -109,7 +109,7 @@ CREATE TABLE `admin_user_roles` (
   KEY `admin_user_roles_role_id_idx` (`role_id`),
   CONSTRAINT `fk_stage2_admin_user_roles_admin_user_id` FOREIGN KEY (`admin_user_id`) REFERENCES `admin_users` (`id`) ON DELETE CASCADE,
   CONSTRAINT `fk_stage2_admin_user_roles_role_id` FOREIGN KEY (`role_id`) REFERENCES `roles` (`id`) ON DELETE RESTRICT
-) ENGINE=InnoDB AUTO_INCREMENT=345 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='管理员角色关联表，一行一条管理员与角色的绑定';
+) ENGINE=InnoDB AUTO_INCREMENT=358 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='管理员角色关联表，一行一条管理员与角色的绑定';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `admin_users`;
@@ -135,7 +135,7 @@ CREATE TABLE `admin_users` (
   KEY `admin_users_role_id_index` (`role_id`),
   KEY `admin_users_email_index` (`email`),
   CONSTRAINT `fk_stage2_admin_users_role_id` FOREIGN KEY (`role_id`) REFERENCES `roles` (`id`) ON DELETE RESTRICT
-) ENGINE=InnoDB AUTO_INCREMENT=355 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='管理员账号表，记录登录凭据、MFA 密钥、启用状态与最近登录信息';
+) ENGINE=InnoDB AUTO_INCREMENT=314 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='管理员账号表，记录登录凭据、MFA 密钥、启用状态与最近登录信息';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `archive_audit_logs`;
@@ -158,7 +158,7 @@ CREATE TABLE `archive_audit_logs` (
   PRIMARY KEY (`id`),
   KEY `archive_batch_idx` (`batch_id`),
   KEY `archive_table_status_idx` (`table_name`,`status`,`created_at`)
-) ENGINE=InnoDB AUTO_INCREMENT=106 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='归档批次审计表，按批次记录归档表名、模式、行数、产出文件与校验值';
+) ENGINE=InnoDB AUTO_INCREMENT=478 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='归档批次审计表，按批次记录归档表名、模式、行数、产出文件与校验值';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `archive_items`;
@@ -192,7 +192,7 @@ CREATE TABLE `archive_items` (
   KEY `archive_items_table_status_idx` (`table_name`,`status`),
   KEY `archive_items_status_idx` (`status`),
   KEY `archive_items_created_idx` (`created_at`)
-) ENGINE=InnoDB AUTO_INCREMENT=59 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='归档明细表，按批次记录源数据边界、导出删除进度与各阶段时间戳';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='归档明细表，按批次记录源数据边界、导出删除进度与各阶段时间戳';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `automation_logs`;
@@ -212,7 +212,7 @@ CREATE TABLE `automation_logs` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `automation_logs_unique_rule` (`task_key`,`action`,`object_type`,`object_id`,`rule_key`),
   KEY `automation_logs_object_idx` (`object_type`,`object_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=2602 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='自动化任务执行日志表，记录任务键、动作、操作对象与命中规则';
+) ENGINE=InnoDB AUTO_INCREMENT=7726 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='自动化任务执行日志表，记录任务键、动作、操作对象与命中规则';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `content_articles`;
@@ -255,7 +255,7 @@ CREATE TABLE `content_articles` (
   KEY `idx_article_category_published` (`category_id`,`status`,`publish_at`),
   KEY `content_articles_deleted_at_idx` (`deleted_at`),
   CONSTRAINT `fk_stage2_content_articles_category_id` FOREIGN KEY (`category_id`) REFERENCES `content_categories` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=35 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='公告与帮助文章表，记录正文、分类、发布状态与置顶推荐标记';
+) ENGINE=InnoDB AUTO_INCREMENT=25 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='公告与帮助文章表，记录正文、分类、发布状态与置顶推荐标记';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `content_categories`;
@@ -277,7 +277,7 @@ CREATE TABLE `content_categories` (
   UNIQUE KEY `uniq_content_category_type_name` (`content_type`,`name`),
   UNIQUE KEY `uniq_content_category_type_slug` (`content_type`,`slug`),
   KEY `idx_content_category_type_status_sort` (`content_type`,`status`,`sort_order`)
-) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='文章分类表，按内容类型维护分类名称、排序与启用状态';
+) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='文章分类表，按内容类型维护分类名称、排序与启用状态';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `coupon_campaigns`;
@@ -317,7 +317,7 @@ CREATE TABLE `coupon_campaigns` (
   KEY `coupon_campaigns_trigger_status_idx` (`trigger_time`,`status`),
   KEY `idx_stage2_coupon_campaigns_last_coupon_id` (`last_coupon_id`),
   CONSTRAINT `fk_stage2_coupon_campaigns_last_coupon_id` FOREIGN KEY (`last_coupon_id`) REFERENCES `coupons` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=15 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='发券活动表，按星期与触发时刻周期性向会员发放优惠券';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='发券活动表，按星期与触发时刻周期性向会员发放优惠券';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `coupons`;
@@ -361,7 +361,7 @@ CREATE TABLE `coupons` (
   KEY `coupons_status_expires_idx` (`status`,`expires_at`),
   KEY `coupons_deleted_status_idx` (`deleted_at`,`status`),
   CONSTRAINT `fk_stage2_coupons_coupon_campaign_id` FOREIGN KEY (`coupon_campaign_id`) REFERENCES `coupon_campaigns` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=127 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='优惠券主体表，记录发放方式、门槛面额、适用范围与领取使用上限';
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='优惠券主体表，记录发放方式、门槛面额、适用范围与领取使用上限';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `failed_jobs`;
@@ -377,7 +377,7 @@ CREATE TABLE `failed_jobs` (
   `failed_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `failed_jobs_uuid_unique` (`uuid`)
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='框架失败队列作业表，保存执行失败作业的载荷与异常堆栈';
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='框架失败队列作业表，保存执行失败作业的载荷与异常堆栈';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `finance_accounts`;
@@ -396,7 +396,7 @@ CREATE TABLE `finance_accounts` (
   UNIQUE KEY `finance_accounts_user_currency_unique` (`user_id`,`currency`),
   KEY `finance_accounts_currency_index` (`currency`),
   CONSTRAINT `finance_accounts_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE RESTRICT
-) ENGINE=InnoDB AUTO_INCREMENT=2545 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='会员现金账户表，按币种记录可用与冻结余额，是账户余额的唯一真源';
+) ENGINE=InnoDB AUTO_INCREMENT=421 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='会员现金账户表，按币种记录可用与冻结余额，是账户余额的唯一真源';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `finance_consumptions`;
@@ -426,7 +426,7 @@ CREATE TABLE `finance_consumptions` (
   CONSTRAINT `finance_consumptions_entry_id_foreign` FOREIGN KEY (`entry_id`) REFERENCES `finance_ledger_entries` (`id`) ON DELETE RESTRICT,
   CONSTRAINT `finance_consumptions_lot_id_foreign` FOREIGN KEY (`lot_id`) REFERENCES `finance_funding_lots` (`id`) ON DELETE RESTRICT,
   CONSTRAINT `finance_consumptions_restored_entry_id_foreign` FOREIGN KEY (`restored_entry_id`) REFERENCES `finance_ledger_entries` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=560 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='财务消费映射表，记录一笔出账从哪个资金批次扣减及回补追认金额';
+) ENGINE=InnoDB AUTO_INCREMENT=127 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='财务消费映射表，记录一笔出账从哪个资金批次扣减及回补追认金额';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `finance_funding_lots`;
@@ -456,7 +456,7 @@ CREATE TABLE `finance_funding_lots` (
   CONSTRAINT `finance_funding_lots_account_id_foreign` FOREIGN KEY (`account_id`) REFERENCES `finance_accounts` (`id`) ON DELETE RESTRICT,
   CONSTRAINT `finance_funding_lots_entry_id_foreign` FOREIGN KEY (`entry_id`) REFERENCES `finance_ledger_entries` (`id`) ON DELETE RESTRICT,
   CONSTRAINT `finance_funding_lots_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE RESTRICT
-) ENGINE=InnoDB AUTO_INCREMENT=435 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='资金批次表，记录每笔入账形成的可核销来源及其剩余可核销金额';
+) ENGINE=InnoDB AUTO_INCREMENT=92 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='资金批次表，记录每笔入账形成的可核销来源及其剩余可核销金额';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `finance_ledger_entries`;
@@ -495,7 +495,7 @@ CREATE TABLE `finance_ledger_entries` (
   KEY `finance_ledger_entries_account_id_foreign` (`account_id`),
   CONSTRAINT `finance_ledger_entries_account_id_foreign` FOREIGN KEY (`account_id`) REFERENCES `finance_accounts` (`id`) ON DELETE RESTRICT,
   CONSTRAINT `finance_ledger_entries_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE RESTRICT
-) ENGINE=InnoDB AUTO_INCREMENT=1933 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='资金台账表，只插不改地记录每次余额变动、变动后余额与来源凭据';
+) ENGINE=InnoDB AUTO_INCREMENT=1829 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='资金台账表，只插不改地记录每次余额变动、变动后余额与来源凭据';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `finance_operations`;
@@ -524,7 +524,7 @@ CREATE TABLE `finance_operations` (
   KEY `finance_operations_status_time_index` (`status`,`started_at`),
   KEY `finance_operations_resource_index` (`resource_type`,`resource_id`),
   KEY `finance_operations_trace_index` (`trace_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=31 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='财务写操作幂等表，同 scope 与请求键只允许一行，记录执行结果与错误';
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='财务写操作幂等表，同 scope 与请求键只允许一行，记录执行结果与错误';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `finance_reconciliation_diffs`;
@@ -547,7 +547,7 @@ CREATE TABLE `finance_reconciliation_diffs` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `finance_recon_diffs_object_unique` (`check_type`,`scope_type`,`scope_id`),
   KEY `finance_recon_diffs_status_time_index` (`status`,`detected_at`)
-) ENGINE=InnoDB AUTO_INCREMENT=37 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='财务对账差异表，一条对象一条记录，保存期望值、实际值与处理状态';
+) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='财务对账差异表，一条对象一条记录，保存期望值、实际值与处理状态';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `finance_refund_allocations`;
@@ -613,7 +613,7 @@ CREATE TABLE `finance_refunds` (
   CONSTRAINT `finance_refunds_payment_id_foreign` FOREIGN KEY (`payment_id`) REFERENCES `payments` (`id`) ON DELETE SET NULL,
   CONSTRAINT `finance_refunds_refund_invoice_id_foreign` FOREIGN KEY (`refund_invoice_id`) REFERENCES `invoices` (`id`) ON DELETE SET NULL,
   CONSTRAINT `finance_refunds_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE RESTRICT
-) ENGINE=InnoDB AUTO_INCREMENT=29 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='退款单表，记录退款金额、资金来源与退款到余额的唯一执行通道';
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='退款单表，记录退款金额、资金来源与退款到余额的唯一执行通道';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `first_product_groups`;
@@ -672,7 +672,7 @@ CREATE TABLE `gateway_logs` (
   KEY `gateway_logs_plugin_key_created_idx` (`plugin_key`,`created_at`),
   CONSTRAINT `fk_stage2_gateway_logs_invoice_id` FOREIGN KEY (`invoice_id`) REFERENCES `invoices` (`id`) ON DELETE SET NULL,
   CONSTRAINT `gateway_logs_plugin_fk` FOREIGN KEY (`plugin_id`) REFERENCES `integration_plugins` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=1000148 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='支付网关日志表，记录每次网关请求响应的交易号、处理结果与错误信息';
+) ENGINE=InnoDB AUTO_INCREMENT=1000222 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='支付网关日志表，记录每次网关请求响应的交易号、处理结果与错误信息';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `integration_plugin_bindings`;
@@ -721,7 +721,7 @@ CREATE TABLE `integration_plugin_configs` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `integration_plugin_configs_plugin_unique` (`plugin_id`),
   CONSTRAINT `integration_plugin_configs_plugin_id_foreign` FOREIGN KEY (`plugin_id`) REFERENCES `integration_plugins` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='插件配置表，保存插件级配置与加密凭据及其可用标记';
+) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='插件配置表，保存插件级配置与加密凭据及其可用标记';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `integration_plugin_runtime_logs`;
@@ -754,7 +754,7 @@ CREATE TABLE `integration_plugin_runtime_logs` (
   KEY `plugin_runtime_status_created_idx` (`status`,`created_at`),
   KEY `plugin_runtime_bindable_idx` (`bindable_type`,`bindable_id`,`created_at`),
   CONSTRAINT `integration_plugin_runtime_logs_plugin_id_foreign` FOREIGN KEY (`plugin_id`) REFERENCES `integration_plugins` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=1048794 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='插件运行时日志表，记录每次插件调用的入参摘要、耗时与结果状态';
+) ENGINE=InnoDB AUTO_INCREMENT=1119638 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='插件运行时日志表，记录每次插件调用的入参摘要、耗时与结果状态';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `integration_plugins`;
@@ -785,7 +785,7 @@ CREATE TABLE `integration_plugins` (
   UNIQUE KEY `integration_plugins_domain_slug_unique` (`domain`,`slug`),
   UNIQUE KEY `integration_plugins_domain_key_unique` (`domain`,`plugin_key`),
   KEY `integration_plugins_domain_status_index` (`domain`,`status`)
-) ENGINE=InnoDB AUTO_INCREMENT=44 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='插件注册表，记录插件标识、版本、清单指纹、能力清单与安装启用状态';
+) ENGINE=InnoDB AUTO_INCREMENT=25 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='插件注册表，记录插件标识、版本、清单指纹、能力清单与安装启用状态';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `invoice_items`;
@@ -806,7 +806,7 @@ CREATE TABLE `invoice_items` (
   PRIMARY KEY (`id`),
   KEY `invoice_items_invoice_id_index` (`invoice_id`),
   CONSTRAINT `fk_invoice_items_invoice_id` FOREIGN KEY (`invoice_id`) REFERENCES `invoices` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=2978 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='账单明细表，记录账单内每个收费项目和快照信息';
+) ENGINE=InnoDB AUTO_INCREMENT=3081 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='账单明细表，记录账单内每个收费项目和快照信息';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `invoices`;
@@ -869,6 +869,7 @@ CREATE TABLE `invoices` (
   KEY `invoices_created_at_idx` (`created_at`),
   KEY `invoices_fulfillment_pending_idx` (`fulfillment_pending`,`fulfillment_pending_at`),
   KEY `invoices_requires_refund_idx` (`requires_refund`,`id`),
+  KEY `invoices_service_status_id_idx` (`service_id`,`status`,`id`),
   CONSTRAINT `fk_invoices_order_id` FOREIGN KEY (`order_id`) REFERENCES `orders` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_invoices_product_id` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`) ON DELETE RESTRICT,
   CONSTRAINT `fk_invoices_user_coupon_id` FOREIGN KEY (`user_coupon_id`) REFERENCES `user_coupons` (`id`) ON DELETE SET NULL,
@@ -876,7 +877,7 @@ CREATE TABLE `invoices` (
   CONSTRAINT `fk_stage2_invoices_coupon_id` FOREIGN KEY (`coupon_id`) REFERENCES `coupons` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_stage2_invoices_service_id` FOREIGN KEY (`service_id`) REFERENCES `services` (`id`) ON DELETE SET NULL,
   CONSTRAINT `invoices_origin_invoice_id_foreign` FOREIGN KEY (`origin_invoice_id`) REFERENCES `invoices` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=3238 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='账单主表，所有购买、续费、充值、扣款和退款流程以账单为财务入口';
+) ENGINE=InnoDB AUTO_INCREMENT=3299 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='账单主表，所有购买、续费、充值、扣款和退款流程以账单为财务入口';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `jobs`;
@@ -892,7 +893,7 @@ CREATE TABLE `jobs` (
   `created_at` int unsigned NOT NULL,
   PRIMARY KEY (`id`),
   KEY `jobs_queue_index` (`queue`)
-) ENGINE=InnoDB AUTO_INCREMENT=5621 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='框架队列作业表，保存待执行作业的载荷、重试次数与可见时间';
+) ENGINE=InnoDB AUTO_INCREMENT=356 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='框架队列作业表，保存待执行作业的载荷、重试次数与可见时间';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `marketing_product_group_items`;
@@ -909,7 +910,7 @@ CREATE TABLE `marketing_product_group_items` (
   KEY `marketing_product_group_items_product_idx` (`product_id`),
   CONSTRAINT `fk_mpgi_group` FOREIGN KEY (`marketing_product_group_id`) REFERENCES `marketing_product_groups` (`id`) ON DELETE RESTRICT,
   CONSTRAINT `fk_mpgi_product` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`) ON DELETE RESTRICT
-) ENGINE=InnoDB AUTO_INCREMENT=24 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='营销产品组成员表，记录营销组包含的商品';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='营销产品组成员表，记录营销组包含的商品';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `marketing_product_groups`;
@@ -924,7 +925,7 @@ CREATE TABLE `marketing_product_groups` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `marketing_product_groups_name_unique` (`name`),
   KEY `marketing_product_groups_sort_idx` (`sort_order`,`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='营销产品组表，为会员等级折扣等营销规则提供商品分组';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='营销产品组表，为会员等级折扣等营销规则提供商品分组';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `media_files`;
@@ -940,14 +941,17 @@ CREATE TABLE `media_files` (
   `width` int unsigned DEFAULT NULL COMMENT '图片宽度',
   `height` int unsigned DEFAULT NULL COMMENT '图片高度',
   `group` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'content' COMMENT '分组: content, avatar, brand 等',
+  `disk` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'local' COMMENT '存储驱动标识：local 或远程存储插件 slug',
+  `object_key` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '远程对象键（完整键，含 media/ 前缀段）；本地行为 NULL',
   `uploaded_by` bigint unsigned NOT NULL DEFAULT '0' COMMENT '上传管理员ID',
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `media_files_group_index` (`group`),
   KEY `media_files_uploaded_by_index` (`uploaded_by`),
-  KEY `media_files_created_at_index` (`created_at`)
-) ENGINE=InnoDB AUTO_INCREMENT=65 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='媒体文件登记表，记录素材路径、类型、尺寸与所属分组';
+  KEY `media_files_created_at_index` (`created_at`),
+  KEY `media_files_disk_index` (`disk`)
+) ENGINE=InnoDB AUTO_INCREMENT=100 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='媒体文件登记表，记录素材路径、类型、尺寸与所属分组';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `member_level_group_discounts`;
@@ -966,7 +970,7 @@ CREATE TABLE `member_level_group_discounts` (
   KEY `member_level_group_discounts_group_idx` (`marketing_product_group_id`),
   CONSTRAINT `fk_mlgd_group` FOREIGN KEY (`marketing_product_group_id`) REFERENCES `marketing_product_groups` (`id`) ON DELETE RESTRICT,
   CONSTRAINT `fk_mlgd_level` FOREIGN KEY (`member_level_id`) REFERENCES `member_levels` (`id`) ON DELETE RESTRICT
-) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='会员等级与营销组折扣矩阵表，折扣类型为保留比例时 90 表示九折';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='会员等级与营销组折扣矩阵表，折扣类型为保留比例时 90 表示九折';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `member_levels`;
@@ -980,7 +984,7 @@ CREATE TABLE `member_levels` (
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='会员等级表，记录等级名称、启用状态与备注';
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='会员等级表，记录等级名称、启用状态与备注';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `message_delivery_attempts`;
@@ -1000,7 +1004,7 @@ CREATE TABLE `message_delivery_attempts` (
   UNIQUE KEY `message_delivery_attempts_unique` (`message_log_id`,`attempt_no`),
   KEY `message_delivery_attempts_log_time_index` (`message_log_id`,`created_at`),
   CONSTRAINT `message_delivery_attempts_message_log_id_fk` FOREIGN KEY (`message_log_id`) REFERENCES `message_logs` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=19 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='消息投递尝试表，同一逻辑投递可有多条尝试，记录结果与耗时';
+) ENGINE=InnoDB AUTO_INCREMENT=16 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='消息投递尝试表，同一逻辑投递可有多条尝试，记录结果与耗时';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `message_logs`;
@@ -1037,7 +1041,7 @@ CREATE TABLE `message_logs` (
   KEY `message_logs_request_id_idx` (`request_id`),
   KEY `message_logs_delivery_key_index` (`delivery_key`),
   CONSTRAINT `message_logs_plugin_fk` FOREIGN KEY (`plugin_id`) REFERENCES `integration_plugins` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=3656 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='消息发送日志表，记录渠道、收件方、模板、投递状态与来源对象';
+) ENGINE=InnoDB AUTO_INCREMENT=4535 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='消息发送日志表，记录渠道、收件方、模板、投递状态与来源对象';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `migrations`;
@@ -1048,7 +1052,7 @@ CREATE TABLE `migrations` (
   `migration` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `batch` int NOT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=294 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='框架迁移账本表，记录已执行迁移文件名与批次';
+) ENGINE=InnoDB AUTO_INCREMENT=297 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='框架迁移账本表，记录已执行迁移文件名与批次';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `notice_reads`;
@@ -1065,7 +1069,7 @@ CREATE TABLE `notice_reads` (
   KEY `notice_reads_article_id_index` (`article_id`),
   CONSTRAINT `fk_stage2_notice_reads_article_id` FOREIGN KEY (`article_id`) REFERENCES `content_articles` (`id`) ON DELETE CASCADE,
   CONSTRAINT `fk_stage2_notice_reads_user_id` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=287 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='公告已读表，记录会员阅读公告的时间';
+) ENGINE=InnoDB AUTO_INCREMENT=537 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='公告已读表，记录会员阅读公告的时间';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `notification_templates`;
@@ -1091,7 +1095,7 @@ CREATE TABLE `notification_templates` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `notification_templates_channel_code_unique` (`channel`,`code`),
   KEY `notification_templates_channel_audience_enabled_index` (`channel`,`audience`,`is_enabled`)
-) ENGINE=InnoDB AUTO_INCREMENT=981 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='通知模板表，按渠道维护模板编码、正文、变量与运营商模板号';
+) ENGINE=InnoDB AUTO_INCREMENT=112 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='通知模板表，按渠道维护模板编码、正文、变量与运营商模板号';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `orders`;
@@ -1147,7 +1151,7 @@ CREATE TABLE `orders` (
   CONSTRAINT `fk_stage2_orders_service_id` FOREIGN KEY (`service_id`) REFERENCES `services` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_stage2_orders_user_coupon_id` FOREIGN KEY (`user_coupon_id`) REFERENCES `user_coupons` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_stage2_orders_user_id` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE RESTRICT
-) ENGINE=InnoDB AUTO_INCREMENT=3238 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='履约工单表，记录购买续费升降配的商品快照、金额、优惠与履约状态';
+) ENGINE=InnoDB AUTO_INCREMENT=3338 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='履约工单表，记录购买续费升降配的商品快照、金额、优惠与履约状态';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `password_reset_tokens`;
@@ -1188,7 +1192,7 @@ CREATE TABLE `payment_callbacks` (
   KEY `payment_callbacks_gateway_key_idx` (`gateway_key`,`received_at`),
   CONSTRAINT `fk_payment_callbacks_payment_id` FOREIGN KEY (`payment_id`) REFERENCES `payments` (`id`) ON DELETE CASCADE,
   CONSTRAINT `payment_callbacks_plugin_fk` FOREIGN KEY (`plugin_id`) REFERENCES `integration_plugins` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=623 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='支付回调审计表，保存第三方通知、查询、退款等回调验签结果';
+) ENGINE=InnoDB AUTO_INCREMENT=652 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='支付回调审计表，保存第三方通知、查询、退款等回调验签结果';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `payments`;
@@ -1233,7 +1237,7 @@ CREATE TABLE `payments` (
   CONSTRAINT `fk_payments_user_id` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE RESTRICT,
   CONSTRAINT `fk_stage2_payments_order_id` FOREIGN KEY (`order_id`) REFERENCES `orders` (`id`) ON DELETE SET NULL,
   CONSTRAINT `payments_plugin_fk` FOREIGN KEY (`plugin_id`) REFERENCES `integration_plugins` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=478 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='第三方支付记录表，仅记录真实外部资金流入和退款状态，不记录余额/免费/手工开服';
+) ENGINE=InnoDB AUTO_INCREMENT=510 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='第三方支付记录表，仅记录真实外部资金流入和退款状态，不记录余额/免费/手工开服';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `personal_access_tokens`;
@@ -1254,7 +1258,7 @@ CREATE TABLE `personal_access_tokens` (
   UNIQUE KEY `personal_access_tokens_token_unique` (`token`),
   KEY `personal_access_tokens_tokenable_type_tokenable_id_index` (`tokenable_type`,`tokenable_id`),
   KEY `personal_access_tokens_expires_at_index` (`expires_at`)
-) ENGINE=InnoDB AUTO_INCREMENT=727 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Sanctum 访问令牌表，保存 API 令牌、能力清单与最近使用时间';
+) ENGINE=InnoDB AUTO_INCREMENT=14 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Sanctum 访问令牌表，保存 API 令牌、能力清单与最近使用时间';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `product_upstream_bindings`;
@@ -1285,7 +1289,7 @@ CREATE TABLE `product_upstream_bindings` (
   CONSTRAINT `product_upstream_bindings_plugin_id_foreign` FOREIGN KEY (`plugin_id`) REFERENCES `integration_plugins` (`id`) ON DELETE RESTRICT,
   CONSTRAINT `product_upstream_bindings_product_id_foreign` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`) ON DELETE RESTRICT,
   CONSTRAINT `product_upstream_bindings_supplier_plugin_binding_id_foreign` FOREIGN KEY (`supplier_plugin_binding_id`) REFERENCES `supplier_plugin_bindings` (`id`) ON DELETE RESTRICT
-) ENGINE=InnoDB AUTO_INCREMENT=270 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='商品上游绑定表，记录商品对应的上游商品、开通策略与同步状态';
+) ENGINE=InnoDB AUTO_INCREMENT=277 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='商品上游绑定表，记录商品对应的上游商品、开通策略与同步状态';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `products`;
@@ -1315,7 +1319,7 @@ CREATE TABLE `products` (
   KEY `products_group_status_sort_id_idx` (`product_group_id`,`status`,`sort_order`,`id`),
   KEY `products_deleted_at_idx` (`deleted_at`),
   CONSTRAINT `products_product_group_fk` FOREIGN KEY (`product_group_id`) REFERENCES `third_product_groups` (`id`) ON DELETE RESTRICT
-) ENGINE=InnoDB AUTO_INCREMENT=410 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='商品表，记录可售卖产品的分类、定价、库存、上游绑定和开通策略';
+) ENGINE=InnoDB AUTO_INCREMENT=386 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='商品表，记录可售卖产品的分类、定价、库存、上游绑定和开通策略';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `promotion_ambassadors`;
@@ -1332,7 +1336,7 @@ CREATE TABLE `promotion_ambassadors` (
   `renewal_reward_rate` decimal(5,2) NOT NULL DEFAULT '0.00' COMMENT '续费返利比例（%）0-100',
   PRIMARY KEY (`id`),
   KEY `idx_promotion_ambassador_status` (`status`)
-) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='推广大使表，记录新购与续费返利比例及启用状态';
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='推广大使表，记录新购与续费返利比例及启用状态';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `recharge_records`;
@@ -1377,7 +1381,7 @@ CREATE TABLE `recharge_records` (
   CONSTRAINT `recharge_records_payment_id_foreign` FOREIGN KEY (`payment_id`) REFERENCES `payments` (`id`) ON DELETE SET NULL,
   CONSTRAINT `recharge_records_refund_id_foreign` FOREIGN KEY (`refund_id`) REFERENCES `finance_refunds` (`id`) ON DELETE SET NULL,
   CONSTRAINT `recharge_records_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE RESTRICT
-) ENGINE=InnoDB AUTO_INCREMENT=52 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='充值记录表，记录充值场景、方向、金额与关联订单支付流水';
+) ENGINE=InnoDB AUTO_INCREMENT=127 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='充值记录表，记录充值场景、方向、金额与关联订单支付流水';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `referral_account_logs`;
@@ -1442,7 +1446,7 @@ CREATE TABLE `referral_rewards` (
   CONSTRAINT `fk_stage2_referral_rewards_product_id` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_stage2_referral_rewards_referred_user_id` FOREIGN KEY (`referred_user_id`) REFERENCES `users` (`id`) ON DELETE RESTRICT,
   CONSTRAINT `fk_stage2_referral_rewards_referrer_user_id` FOREIGN KEY (`referrer_user_id`) REFERENCES `users` (`id`) ON DELETE RESTRICT
-) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='推荐奖励表，记录被推荐人订单金额、返利比例、奖励金额与发放状态';
+) ENGINE=InnoDB AUTO_INCREMENT=12 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='推荐奖励表，记录被推荐人订单金额、返利比例、奖励金额与发放状态';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `referral_withdrawals`;
@@ -1469,7 +1473,7 @@ CREATE TABLE `referral_withdrawals` (
   KEY `idx_referral_withdraw_user_status` (`user_id`,`status`),
   KEY `idx_referral_withdraw_status_created` (`status`,`created_at`),
   CONSTRAINT `fk_stage2_referral_withdrawals_user_id` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE RESTRICT
-) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='推荐提现表，记录提现金额、收款方式、处理状态与打款单号';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='推荐提现表，记录提现金额、收款方式、处理状态与打款单号';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `refunds`;
@@ -1506,7 +1510,7 @@ CREATE TABLE `refunds` (
   CONSTRAINT `refunds_payment_id_foreign` FOREIGN KEY (`payment_id`) REFERENCES `payments` (`id`) ON DELETE SET NULL,
   CONSTRAINT `refunds_refund_invoice_id_foreign` FOREIGN KEY (`refund_invoice_id`) REFERENCES `invoices` (`id`) ON DELETE SET NULL,
   CONSTRAINT `refunds_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE RESTRICT
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='旧退款表，仅保留历史数据，退款功能已移除不再产生新行';
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='旧退款表，仅保留历史数据，退款功能已移除不再产生新行';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `roles`;
@@ -1521,7 +1525,7 @@ CREATE TABLE `roles` (
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `roles_name_unique` (`name`)
-) ENGINE=InnoDB AUTO_INCREMENT=451 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='角色表，记录角色标识、显示名与权限标识数组';
+) ENGINE=InnoDB AUTO_INCREMENT=480 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='角色表，记录角色标识、显示名与权限标识数组';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `schedule_run_logs`;
@@ -1543,7 +1547,7 @@ CREATE TABLE `schedule_run_logs` (
   KEY `schedule_run_logs_task_name_created_at_index` (`task_name`,`created_at`),
   KEY `schedule_run_logs_status_created_at_index` (`status`,`created_at`),
   KEY `schedule_run_logs_started_at_id_index` (`started_at`,`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=177198 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='调度任务执行日志表，记录任务名、执行结果、耗时与失败摘要';
+) ENGINE=InnoDB AUTO_INCREMENT=249012 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='调度任务执行日志表，记录任务名、执行结果、耗时与失败摘要';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `schedule_task_runs`;
@@ -1578,7 +1582,7 @@ CREATE TABLE `schedule_task_runs` (
   KEY `schedule_task_runs_active_lookup_index` (`task_key`,`status`,`queued_at`),
   KEY `schedule_task_runs_parent_created_at_index` (`parent_run_id`,`created_at`),
   CONSTRAINT `schedule_task_runs_schedule_tick_id_foreign` FOREIGN KEY (`schedule_tick_id`) REFERENCES `schedule_ticks` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=26736 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='调度任务运行记录表，按节拍记录每次任务尝试的状态、重试与耗时';
+) ENGINE=InnoDB AUTO_INCREMENT=98735 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='调度任务运行记录表，按节拍记录每次任务尝试的状态、重试与耗时';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `schedule_ticks`;
@@ -1597,7 +1601,7 @@ CREATE TABLE `schedule_ticks` (
   UNIQUE KEY `schedule_ticks_global_number_unique` (`global_number`),
   KEY `schedule_ticks_daily_index_index` (`daily_index`),
   KEY `schedule_ticks_triggered_at_index` (`triggered_at`)
-) ENGINE=InnoDB AUTO_INCREMENT=2586 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='调度节拍表，记录每个调度槽位的触发时间与全局当日序号';
+) ENGINE=InnoDB AUTO_INCREMENT=9008 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='调度节拍表，记录每个调度槽位的触发时间与全局当日序号';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `second_product_groups`;
@@ -1618,7 +1622,7 @@ CREATE TABLE `second_product_groups` (
   UNIQUE KEY `uq_second_first_slug` (`first_product_group_id`,`slug`),
   KEY `idx_second_first_visible_sort` (`first_product_group_id`,`is_visible`,`sort_order`),
   CONSTRAINT `fk_second_first_group` FOREIGN KEY (`first_product_group_id`) REFERENCES `first_product_groups` (`id`) ON DELETE RESTRICT
-) ENGINE=InnoDB AUTO_INCREMENT=46 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='二级商品分组表，挂在一级分组下并承载展示配置';
+) ENGINE=InnoDB AUTO_INCREMENT=44 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='二级商品分组表，挂在一级分组下并承载展示配置';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `service_connection_snapshots`;
@@ -1648,7 +1652,7 @@ CREATE TABLE `service_connection_snapshots` (
   CONSTRAINT `service_connection_snapshots_plugin_id_foreign` FOREIGN KEY (`plugin_id`) REFERENCES `integration_plugins` (`id`) ON DELETE SET NULL,
   CONSTRAINT `service_connection_snapshots_service_id_foreign` FOREIGN KEY (`service_id`) REFERENCES `services` (`id`) ON DELETE CASCADE,
   CONSTRAINT `service_connection_snapshots_service_upstream_binding_id_foreign` FOREIGN KEY (`service_upstream_binding_id`) REFERENCES `service_upstream_bindings` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=235 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='服务连接快照表，记录上游连接地址、端口与加密凭据及探测时间';
+) ENGINE=InnoDB AUTO_INCREMENT=244 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='服务连接快照表，记录上游连接地址、端口与加密凭据及探测时间';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `service_provision_attempts`;
@@ -1678,7 +1682,7 @@ CREATE TABLE `service_provision_attempts` (
   CONSTRAINT `service_provision_attempts_plugin_id_foreign` FOREIGN KEY (`plugin_id`) REFERENCES `integration_plugins` (`id`) ON DELETE SET NULL,
   CONSTRAINT `service_provision_attempts_service_id_foreign` FOREIGN KEY (`service_id`) REFERENCES `services` (`id`) ON DELETE SET NULL,
   CONSTRAINT `service_provision_attempts_service_upstream_binding_id_foreign` FOREIGN KEY (`service_upstream_binding_id`) REFERENCES `service_upstream_bindings` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=588 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='开通尝试表，记录每次开通续费调用的请求应答摘要与错误';
+) ENGINE=InnoDB AUTO_INCREMENT=5324 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='开通尝试表，记录每次开通续费调用的请求应答摘要与错误';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `service_runtime_snapshots`;
@@ -1706,7 +1710,7 @@ CREATE TABLE `service_runtime_snapshots` (
   CONSTRAINT `service_runtime_snapshots_plugin_id_foreign` FOREIGN KEY (`plugin_id`) REFERENCES `integration_plugins` (`id`) ON DELETE SET NULL,
   CONSTRAINT `service_runtime_snapshots_service_id_foreign` FOREIGN KEY (`service_id`) REFERENCES `services` (`id`) ON DELETE CASCADE,
   CONSTRAINT `service_runtime_snapshots_service_upstream_binding_id_foreign` FOREIGN KEY (`service_upstream_binding_id`) REFERENCES `service_upstream_bindings` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=235 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='服务运行态快照表，保存上游同步的状态、资源与指标数据';
+) ENGINE=InnoDB AUTO_INCREMENT=244 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='服务运行态快照表，保存上游同步的状态、资源与指标数据';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `service_tracking_records`;
@@ -1758,7 +1762,7 @@ CREATE TABLE `service_upstream_bindings` (
   CONSTRAINT `service_upstream_bindings_product_upstream_binding_id_foreign` FOREIGN KEY (`product_upstream_binding_id`) REFERENCES `product_upstream_bindings` (`id`) ON DELETE SET NULL,
   CONSTRAINT `service_upstream_bindings_service_id_foreign` FOREIGN KEY (`service_id`) REFERENCES `services` (`id`) ON DELETE RESTRICT,
   CONSTRAINT `service_upstream_bindings_supplier_plugin_binding_id_foreign` FOREIGN KEY (`supplier_plugin_binding_id`) REFERENCES `supplier_plugin_bindings` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=329 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='服务上游绑定表，记录服务实例对应的上游服务账号与同步状态';
+) ENGINE=InnoDB AUTO_INCREMENT=330 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='服务上游绑定表，记录服务实例对应的上游服务账号与同步状态';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `services`;
@@ -1803,7 +1807,7 @@ CREATE TABLE `services` (
   CONSTRAINT `fk_services_product_id` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`) ON DELETE RESTRICT,
   CONSTRAINT `fk_services_user_id` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE RESTRICT,
   CONSTRAINT `fk_stage2_services_order_id` FOREIGN KEY (`order_id`) REFERENCES `orders` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=352 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='服务实例表，记录用户已购买产品的生命周期、计费、上游和续费状态';
+) ENGINE=InnoDB AUTO_INCREMENT=350 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='服务实例表，记录用户已购买产品的生命周期、计费、上游和续费状态';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `sessions`;
@@ -1833,7 +1837,7 @@ CREATE TABLE `settings` (
   `item_value` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   PRIMARY KEY (`id`),
   UNIQUE KEY `settings_group_key_unique` (`group_key`,`item_key`)
-) ENGINE=InnoDB AUTO_INCREMENT=797 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='系统设置表，按分组键与条目键保存键值配置';
+) ENGINE=InnoDB AUTO_INCREMENT=804 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='系统设置表，按分组键与条目键保存键值配置';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `sms_provider_templates`;
@@ -1858,7 +1862,7 @@ CREATE TABLE `sms_provider_templates` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `sms_provider_templates_plugin_template_unique` (`plugin_key`,`provider_template_id`),
   KEY `sms_provider_templates_lookup_index` (`plugin_key`,`business_code`,`status`)
-) ENGINE=InnoDB AUTO_INCREMENT=72 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='短信运营商模板映射（插件同步运营商 API 审核状态，发送解析唯一有效态为 approved）';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='短信运营商模板映射（插件同步运营商 API 审核状态，发送解析唯一有效态为 approved）';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `supplier_plugin_bindings`;
@@ -1890,7 +1894,7 @@ CREATE TABLE `supplier_plugin_bindings` (
   KEY `supplier_plugin_plugin_status_idx` (`plugin_id`,`status`),
   CONSTRAINT `supplier_plugin_bindings_plugin_id_foreign` FOREIGN KEY (`plugin_id`) REFERENCES `integration_plugins` (`id`) ON DELETE RESTRICT,
   CONSTRAINT `supplier_plugin_bindings_supplier_id_foreign` FOREIGN KEY (`supplier_id`) REFERENCES `suppliers` (`id`) ON DELETE RESTRICT
-) ENGINE=InnoDB AUTO_INCREMENT=123 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='供应商插件绑定表，记录供应商接入的插件、环境、优先级与连通状态';
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='供应商插件绑定表，记录供应商接入的插件、环境、优先级与连通状态';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `suppliers`;
@@ -1912,7 +1916,7 @@ CREATE TABLE `suppliers` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `suppliers_code_unique` (`code`),
   KEY `suppliers_status_sort_order_index` (`status`,`sort_order`)
-) ENGINE=InnoDB AUTO_INCREMENT=111 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='供应商表，记录供应商编码、联系方式、启用状态与备注';
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='供应商表，记录供应商编码、联系方式、启用状态与备注';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `system_installation`;
@@ -1992,7 +1996,7 @@ CREATE TABLE `ticket_replies` (
   KEY `idx_stage2_ticket_replies_quote_reply_id` (`quote_reply_id`),
   CONSTRAINT `fk_stage2_ticket_replies_quote_reply_id` FOREIGN KEY (`quote_reply_id`) REFERENCES `ticket_replies` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_ticket_replies_ticket_id` FOREIGN KEY (`ticket_id`) REFERENCES `tickets` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=280 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='工单回复表，记录回复正文、附件、员工标记与引用回复';
+) ENGINE=InnoDB AUTO_INCREMENT=212 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='工单回复表，记录回复正文、附件、员工标记与引用回复';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `tickets`;
@@ -2019,7 +2023,7 @@ CREATE TABLE `tickets` (
   CONSTRAINT `fk_stage2_tickets_assignee_id` FOREIGN KEY (`assignee_id`) REFERENCES `admin_users` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_stage2_tickets_service_id` FOREIGN KEY (`service_id`) REFERENCES `services` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_tickets_user_id` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE RESTRICT
-) ENGINE=InnoDB AUTO_INCREMENT=82 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='工单表，记录会员提交的问题、优先级、处理状态与关闭原因';
+) ENGINE=InnoDB AUTO_INCREMENT=89 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='工单表，记录会员提交的问题、优先级、处理状态与关闭原因';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `user_accounts`;
@@ -2069,7 +2073,7 @@ CREATE TABLE `user_coupons` (
   KEY `user_coupons_coupon_status_idx` (`coupon_id`,`status`),
   CONSTRAINT `fk_stage2_user_coupons_user_id` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE RESTRICT,
   CONSTRAINT `fk_user_coupons_coupon_id` FOREIGN KEY (`coupon_id`) REFERENCES `coupons` (`id`) ON DELETE RESTRICT
-) ENGINE=InnoDB AUTO_INCREMENT=131 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户持券表，记录领取方式、持有使用回收状态与占用时间';
+) ENGINE=InnoDB AUTO_INCREMENT=101 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户持券表，记录领取方式、持有使用回收状态与占用时间';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `user_notifications`;
@@ -2091,7 +2095,7 @@ CREATE TABLE `user_notifications` (
   KEY `user_notifications_user_id_created_at_index` (`user_id`,`created_at`),
   KEY `user_notifications_type_index` (`type`),
   CONSTRAINT `fk_stage2_user_notifications_user_id` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=261 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='站内通知表，记录通知类型、标题正文、跳转链接与已读时间';
+) ENGINE=InnoDB AUTO_INCREMENT=509 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='站内通知表，记录通知类型、标题正文、跳转链接与已读时间';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `users`;
@@ -2150,7 +2154,7 @@ CREATE TABLE `users` (
   CONSTRAINT `fk_stage2_users_member_level_id` FOREIGN KEY (`member_level_id`) REFERENCES `member_levels` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_stage2_users_referrer_user_id` FOREIGN KEY (`referrer_user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL,
   CONSTRAINT `users_promotion_ambassador_id_foreign` FOREIGN KEY (`promotion_ambassador_id`) REFERENCES `promotion_ambassadors` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=568 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='会员账号表，记录登录凭据、资料、等级、推荐关系与实名认证状态';
+) ENGINE=InnoDB AUTO_INCREMENT=508 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='会员账号表，记录登录凭据、资料、等级、推荐关系与实名认证状态';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `verification_histories`;
@@ -2180,7 +2184,7 @@ CREATE TABLE `verification_histories` (
   KEY `verification_histories_user_id_id_idx` (`user_id`,`id`),
   KEY `verification_histories_plugin_submitted_idx` (`plugin_id`,`submitted_at`),
   CONSTRAINT `fk_stage2_verification_histories_user_id` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE RESTRICT
-) ENGINE=InnoDB AUTO_INCREMENT=118 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='实名认证历史表，记录每次提交的证件信息、认证状态与完成时间';
+) ENGINE=InnoDB AUTO_INCREMENT=129 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='实名认证历史表，记录每次提交的证件信息、认证状态与完成时间';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (1,'0001_01_01_000000_create_users_table',1);
@@ -2451,6 +2455,9 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (290,'2026_10_26_10
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (291,'2026_10_27_100000_add_deleted_at_index_to_soft_delete_tables',150);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (292,'2026_10_28_000001_move_alipay_settings_to_plugin_config',151);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (293,'2026_10_28_000002_add_core_column_comments',152);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (294,'2026_10_31_000001_add_email_template_100030_service_transferred',153);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (295,'2026_10_31_000002_add_service_transfer_scan_indexes',153);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (296,'2026_11_01_000001_add_storage_columns_to_media_files',153);
 
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;

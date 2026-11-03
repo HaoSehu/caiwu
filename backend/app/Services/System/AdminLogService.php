@@ -57,6 +57,9 @@ class AdminLogService
 
     /** 核心静态任务元数据：title 与 log_keywords 同时收录，供日志展示与文件日志反查。 */
     private const TASK_META = [
+        // 任务已随 hosting_panel 插件下线（2026-11-03），但 activity_logs 仍有 6517 行
+        // context.task_key 命中它；保留展示元数据，否则历史日志标题会退化成原始 task key。
+        // 待历史数据归档清理后，本条目可随归档一并移除。
         'refresh-hosting-panel-auth' => [
             'title' => '接口认证刷新',
             'log_keywords' => ['JWT刷新', '接口认证刷新', 'refresh-hosting-panel-auth'],

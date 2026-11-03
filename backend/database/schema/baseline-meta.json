@@ -1,9 +1,9 @@
 {
     "description": "schema baseline 导出元数据，用于检测基线是否滞后于实库。由 export_schema_baseline.php 生成，禁止手工编辑。",
     "generated_by": "backend/scripts/export_schema_baseline.php",
-    "exported_at": "2026-10-28 00:28:37",
+    "exported_at": "2026-11-03 16:08:49",
     "database": "idc",
     "table_count": 79,
-    "migration_count": 268,
-    "source_commit": "d5750a788466428a8984a9dbf02488d36f7d5a74"
+    "migration_count": 271,
+    "source_commit": "722df2ec0c050810bc6ca8ff7fb8612523878bf3"
 }
