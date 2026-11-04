@@ -1424,12 +1424,6 @@ parameters:
 			path: app/Services/Automation/BillingAutomationService.php
 
 		-
-			message: '#^Using nullsafe property access "\?\-\>id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Services/Automation/BillingAutomationService.php
-
-		-
 			message: '#^Using nullsafe property access "\?\-\>order_no" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 2
@@ -1504,12 +1498,6 @@ parameters:
 		-
 			message: '#^Unreachable statement \- code above always terminates\.$#'
 			identifier: deadCode.unreachable
-			count: 2
-			path: app/Services/Automation/ServiceLifecycleAutomationService.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>display_name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
 			count: 2
 			path: app/Services/Automation/ServiceLifecycleAutomationService.php
 

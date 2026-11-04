@@ -19,6 +19,7 @@ use App\Services\Integrations\Plugins\PluginBindingResolver;
 use App\Services\Integrations\Plugins\ServiceUpstreamBindingWriter;
 use App\Services\Integrations\Plugins\UpstreamBindingWriter;
 use App\Services\Integrations\Support\ProviderErrorMapper;
+use App\Services\Notification\UserNotificationService;
 use App\Services\ProductCatalog\ProductCatalogService;
 use App\Services\ProductCatalog\ProductSyncService;
 use App\Services\Provisioning\Concerns\GeneratesProvisionHostname;
@@ -505,19 +506,31 @@ class ProvisionService
         }
 
         try {
+            $activatedName = (string) ($service->name ?: $order->display_product_name);
+            $expiresAt = $service->expires_at instanceof Carbon ? $service->expires_at->format('Y-m-d H:i:s') : '-';
+
             SendTemplateEmailJob::dispatch($email, NotificationService::TEMPLATE_SERVICE_ACTIVATED, [
                 'display_name' => trim((string) ($user?->display_name ?? '')) !== '' ? (string) $user->display_name : $email,
-                'service_name' => (string) ($service->name ?: $order->display_product_name),
+                'service_name' => $activatedName,
                 'hostname' => (string) ($service->domain ?? $hostDetail['domain'] ?? ''),
                 'product_main_ip' => (string) ($hostDetail['dedicatedip'] ?? ''),
                 'product_username' => (string) ($hostDetail['username'] ?? ''),
                 'operating_system' => (string) ($hostDetail['os'] ?? ''),
                 'activated_at' => now()->format('Y-m-d H:i:s'),
-                'expires_at' => $service->expires_at instanceof Carbon
-                    ? $service->expires_at->format('Y-m-d H:i:s')
-                    : '-',
+                'expires_at' => $expiresAt,
                 'billing_cycle_label' => BillingCycleLabels::label((string) ($order->billing_cycle ?? '')),
             ]);
+
+            // 站内消息：受管理端「服务开通成功」场景的站内消息开关控制
+            app(UserNotificationService::class)->createForScene(
+                (int) $user?->id,
+                'service_activated',
+                '服务已开通',
+                "您的服务「{$activatedName}」已开通，到期时间 {$expiresAt}。",
+                '/client/services/'.$service->id,
+                ['service_name' => $activatedName, 'expires_at' => $expiresAt],
+                ['service_id' => (int) $service->id]
+            );
         } catch (\Throwable $exception) {
             AutomationLog::forgetRecord(
                 'provisioning-notify', 'service_activated', 'service', (int) $service->id, 'activated'

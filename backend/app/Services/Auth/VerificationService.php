@@ -11,6 +11,7 @@ use App\Services\Finance\Core\FinanceAccountService;
 use App\Services\Integrations\Plugins\IntegrationDriverBindingResolver;
 use App\Services\Integrations\Plugins\PluginConfigRepository;
 use App\Services\Integrations\Plugins\PluginDomain;
+use App\Services\Notification\UserNotificationService;
 use App\Services\Verification\Contracts\ProvidesVerificationFeeConfig;
 use App\Services\Verification\Contracts\VerificationDriver;
 use App\Services\Verification\Data\VerificationInitializeRequest;
@@ -245,6 +246,35 @@ class VerificationService
 
             $updatedUser = $this->persistVerificationState($user, $payload);
             $this->syncHistoryEntry($updatedUser, $certifyId);
+
+            // 实名认证结果站内消息：仅在状态真正跃迁时发一次，避免轮询重复写入
+            $previousStatus = (int) ($verification['verification_status'] ?? 0);
+            $nextStatus = (int) ($updatedUser->verification_status ?? 0);
+
+            if ($nextStatus === 2 && $previousStatus !== 2) {
+                app(UserNotificationService::class)->createForScene(
+                    (int) $updatedUser->id,
+                    'real_name_approved',
+                    '实名认证已通过',
+                    '您提交的实名认证审核已通过，可以正常使用全部服务。',
+                    '/client/profile',
+                    ['display_name' => (string) ($updatedUser->display_name ?? '')],
+                    []
+                );
+            } elseif ($nextStatus === 3 && $previousStatus !== 3) {
+                $rejectReason = (string) ($updatedUser->verification_message ?? '');
+                $rejectReason = $rejectReason !== '' ? $rejectReason : '资料不符合要求';
+
+                app(UserNotificationService::class)->createForScene(
+                    (int) $updatedUser->id,
+                    'real_name_rejected',
+                    '实名认证未通过',
+                    "您提交的实名认证审核未通过，原因：{$rejectReason}。请补充资料后重新提交。",
+                    '/client/profile',
+                    ['reason' => $rejectReason],
+                    []
+                );
+            }
         });
 
         return $updatedUser->fresh() ?? $updatedUser;

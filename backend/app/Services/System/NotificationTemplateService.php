@@ -3,6 +3,7 @@
 namespace App\Services\System;
 
 use App\Models\NotificationTemplate;
+use App\Services\Messaging\MessageTemplateOverrideResolver;
 use App\Support\EmailTemplateCatalog;
 use App\Support\NotificationTemplateContent;
 use App\Support\SchemaMetadataCache;
@@ -79,6 +80,42 @@ class NotificationTemplateService
         $this->templateCache[$cacheKey] = false;
 
         return null;
+    }
+
+    /**
+     * 写入短信模板正文与运营商模板 ID（供「从插件拉取验证码模板」使用）。
+     *
+     * 只更新 content / provider_template_id 与 is_custom，不动启用状态；模板不存在时返回 false。
+     */
+    public function updateSmsTemplateContent(string $code, string $content, string $providerTemplateId = ''): bool
+    {
+        if (! SchemaMetadataCache::hasTable('notification_templates')) {
+            return false;
+        }
+
+        $template = NotificationTemplate::query()
+            ->where('channel', 'sms')
+            ->where('code', trim($code))
+            ->first();
+
+        if (! $template instanceof NotificationTemplate) {
+            return false;
+        }
+
+        $template->content = NotificationTemplateContent::sanitizeForStorage('content', $content);
+
+        // 运营商模板 ID 由插件提供时一并写入，否则保留原值
+        if (trim($providerTemplateId) !== '') {
+            $template->provider_template_id = trim($providerTemplateId);
+        }
+
+        $template->is_custom = true;
+        $template->save();
+
+        // 让同请求内的后续读取拿到新值
+        $this->templateCache = [];
+
+        return true;
     }
 
     public function isEnabled(string $channel, string $code): bool
@@ -184,6 +221,19 @@ class NotificationTemplateService
         }
 
         $field = $parsed['field'];
+
+        // 插件优先：被插件接管的字段忽略管理员提交值，写入插件声明值
+        if ($field !== 'is_enabled') {
+            $override = $this->overrides()->overridesForChannel($parsed['channel'])[$parsed['code']] ?? [];
+            if (array_key_exists($field, $override)) {
+                $template->{$field} = (string) $override[$field];
+                $template->is_custom = true;
+                $template->save();
+
+                return true;
+            }
+        }
+
         if ($field === 'is_enabled') {
             $template->is_enabled = $this->normalizeEnabledValue($value);
             $template->save();
@@ -200,9 +250,12 @@ class NotificationTemplateService
 
     private function formatModel(NotificationTemplate $template): array
     {
-        return [
-            'channel' => (string) $template->channel,
-            'code' => (string) $template->code,
+        $channel = (string) $template->channel;
+        $code = (string) $template->code;
+
+        $formatted = [
+            'channel' => $channel,
+            'code' => $code,
             'name' => (string) $template->name,
             'description' => (string) $template->description,
             'audience' => (string) $template->audience,
@@ -212,8 +265,16 @@ class NotificationTemplateService
             'is_enabled' => (bool) $template->is_enabled,
             'variables' => array_values((array) ($template->variables_json ?? [])),
             'provider_variables' => array_values((array) ($template->provider_variables_json ?? [])),
-            'setting_keys' => $this->settingKeys((string) $template->channel, (string) $template->code),
+            'setting_keys' => $this->settingKeys($channel, $code),
         ];
+
+        // 插件优先：插件接管的字段以插件声明为准，管理端只读
+        return $this->overrides()->apply($formatted);
+    }
+
+    private function overrides(): MessageTemplateOverrideResolver
+    {
+        return app(MessageTemplateOverrideResolver::class);
     }
 
     /**

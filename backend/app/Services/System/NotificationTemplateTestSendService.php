@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\System;
 
 use App\Exceptions\BusinessException;
+use App\Services\Messaging\MessageChannelCapabilityResolver;
 use Throwable;
 
 class NotificationTemplateTestSendService
@@ -65,6 +66,13 @@ class NotificationTemplateTestSendService
 
             if ($channel === 'email') {
                 $this->emails->sendTemplateEmail($recipient, $code, $params);
+            } elseif ($this->needsBuiltinVerifyChannel()) {
+                // 插件只有验证码能力时（如阿里云号码认证只接入 dypnsapi），
+                // 测试发送必须走插件内置验证码模板，不能走系统模板正文。
+                $this->sms->sendVerifyCode($recipient, (string) ($params['code'] ?? '123456'), [
+                    'origin_type' => 'notification_template_test',
+                    'purpose' => 'generic',
+                ]);
             } else {
                 $this->sms->sendTemplateSms($recipient, $code, $params, [
                     'origin_type' => 'notification_template_test',
@@ -186,6 +194,27 @@ class NotificationTemplateTestSendService
             'description' => '测试发送',
             default => '测试'.$key,
         };
+    }
+
+    /**
+     * 当前绑定的短信插件是否只能发验证码（没有 message 能力）。
+     *
+     * 这类插件（如仅声明 verify_code 的号码认证插件）无法接收系统模板正文，
+     * 验证码模板的测试发送需要改走插件的内置验证码模板通道。
+     */
+    private function needsBuiltinVerifyChannel(): bool
+    {
+        try {
+            $capabilities = app(MessageChannelCapabilityResolver::class)->smsCapabilities();
+        } catch (Throwable) {
+            return false;
+        }
+
+        if ($capabilities === null) {
+            return false;
+        }
+
+        return ! in_array('message', $capabilities, true);
     }
 
     private function summaryStatus(int $successCount, int $failedCount): string

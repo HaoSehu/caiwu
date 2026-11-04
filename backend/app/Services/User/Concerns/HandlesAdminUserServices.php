@@ -24,6 +24,7 @@ use App\Services\Finance\Core\FinanceAccountService;
 use App\Services\Integrations\Plugins\PluginBindingResolver;
 use App\Services\Integrations\Plugins\ServiceUpstreamBindingWriter;
 use App\Services\Integrations\Plugins\UpstreamBindingWriter;
+use App\Services\Notification\UserNotificationService;
 use App\Services\System\NotificationService;
 use App\Services\Upstream\Contracts\ProvidesConsoleRuntime;
 use App\Services\Upstream\ProviderResolver;
@@ -1368,12 +1369,27 @@ trait HandlesAdminUserServices
         }
 
         try {
+            $terminatedAt = now()->format('Y-m-d H:i:s');
+            $displayServiceName = $serviceName !== '' ? $serviceName : '您的产品';
+            $terminatedNotice = '删除操作完成后资源可能无法恢复，如有疑问请联系客服。';
+
             SendTemplateEmailJob::dispatch($email, NotificationService::TEMPLATE_SERVICE_TERMINATED, [
                 'display_name' => trim((string) ($user->display_name ?? '')) !== '' ? (string) $user->display_name : $email,
-                'service_name' => $serviceName !== '' ? $serviceName : '您的产品',
-                'terminated_at' => now()->format('Y-m-d H:i:s'),
-                'notice_message' => '删除操作完成后资源可能无法恢复，如有疑问请联系客服。',
+                'service_name' => $displayServiceName,
+                'terminated_at' => $terminatedAt,
+                'notice_message' => $terminatedNotice,
             ]);
+
+            // 站内消息：受管理端「服务删除」场景的站内消息开关控制
+            app(UserNotificationService::class)->createForScene(
+                (int) $user->id,
+                'service_terminated',
+                '服务已删除',
+                "您的服务「{$displayServiceName}」已删除。{$terminatedNotice}",
+                '/client/services',
+                ['service_name' => $displayServiceName, 'notice_message' => $terminatedNotice],
+                []
+            );
         } catch (\Throwable $exception) {
             Log::warning('[管理员删除服务记录] 客户通知派发失败', [
                 'user_id' => (int) $user->id,
@@ -1401,17 +1417,35 @@ trait HandlesAdminUserServices
             }
 
             try {
+                $displayServiceName = $serviceName !== '' ? $serviceName : '您的产品';
+                $transferNotice = $direction === 'out'
+                    ? '该实例已不在您的账号下，历史订单与账单仍保留在原账号；如需继续使用请重新下单。'
+                    : '该实例已转入您的账号，后续续费由您的账号承担；历史订单与账单仍保留在原持有人账号。';
+
                 SendTemplateEmailJob::dispatch($email, NotificationService::TEMPLATE_SERVICE_TRANSFERRED, [
                     'display_name' => trim((string) ($recipient->display_name ?? '')) !== '' ? (string) $recipient->display_name : $email,
-                    'service_name' => $serviceName !== '' ? $serviceName : '您的产品',
+                    'service_name' => $displayServiceName,
                     'direction_label' => $directionLabel,
                     'counterparty_email' => trim((string) $counterparty->email),
                     'remark' => $remark,
                     'transferred_at' => now()->format('Y-m-d H:i:s'),
-                    'notice_message' => $direction === 'out'
-                        ? '该实例已不在您的账号下，历史订单与账单仍保留在原账号；如需继续使用请重新下单。'
-                        : '该实例已转入您的账号，后续续费由您的账号承担；历史订单与账单仍保留在原持有人账号。',
+                    'notice_message' => $transferNotice,
                 ]);
+
+                // 站内消息：受管理端「实例归属变更」场景的站内消息开关控制
+                app(UserNotificationService::class)->createForScene(
+                    (int) $recipient->id,
+                    'service_transferred',
+                    '实例归属已变更',
+                    "您的实例「{$displayServiceName}」归属已变更（{$directionLabel}），对方账号 ".trim((string) $counterparty->email).'。',
+                    '/client/services',
+                    [
+                        'service_name' => $displayServiceName,
+                        'direction_label' => $directionLabel,
+                        'counterparty_email' => trim((string) $counterparty->email),
+                    ],
+                    []
+                );
             } catch (\Throwable $exception) {
                 Log::warning('[管理员转移实例归属] 客户通知派发失败', [
                     'user_id' => (int) $recipient->id,

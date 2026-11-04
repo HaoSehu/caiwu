@@ -14,6 +14,7 @@ use App\Models\AutomationLog;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Payment;
+use App\Services\Messaging\MessageDispatcher;
 use App\Services\ProductCatalog\ProductFullPathResolver;
 use App\Services\System\NotificationService;
 use App\Support\AdminPermissions;
@@ -27,7 +28,7 @@ class AdminOrderNotificationService
     private const TASK_KEY = 'admin-order-notification';
 
     public function __construct(
-        private NotificationService $notificationService,
+        private MessageDispatcher $messageDispatcher,
         private ?ProductFullPathResolver $productFullPathResolver = null,
     ) {}
 
@@ -127,9 +128,19 @@ class AdminOrderNotificationService
             }
 
             try {
-                $this->notificationService->sendTemplateEmail(
-                    (string) $admin->email,
-                    NotificationService::TEMPLATE_ADMIN_ORDER_PAID,
+                $this->messageDispatcher->sendNow(
+                    'admin.invoice_paid.'.$invoice->id.'.admin:'.$admin->id,
+                    'admin_order_paid',
+                    'invoice',
+                    (int) $invoice->id,
+                    [[
+                        'audience' => 'admin',
+                        'account_id' => (int) $admin->id,
+                        'target_key' => 'admin:'.$admin->id,
+                        'email' => (string) $admin->email,
+                        'mobile' => '',
+                        'name' => (string) $admin->display_name,
+                    ]],
                     [
                         'recipient_name' => $admin->display_name,
                         'user_name' => $invoice->user?->display_name ?: '客户',
@@ -147,7 +158,8 @@ class AdminOrderNotificationService
                         'paid_at' => $invoice->paid_at?->format('Y-m-d H:i:s')
                             ?? $payment?->paid_at?->format('Y-m-d H:i:s')
                             ?? now()->format('Y-m-d H:i:s'),
-                    ]
+                    ],
+                    'admin'
                 );
 
                 AutomationLog::markExecuted(
@@ -216,9 +228,19 @@ class AdminOrderNotificationService
             }
 
             try {
-                $this->notificationService->sendTemplateEmail(
-                    (string) $admin->email,
-                    NotificationService::TEMPLATE_ADMIN_ORDER_CREATED,
+                $this->messageDispatcher->sendNow(
+                    'admin.invoice_created.'.$invoice->id.'.admin:'.$admin->id,
+                    'admin_order_created',
+                    'invoice',
+                    (int) $invoice->id,
+                    [[
+                        'audience' => 'admin',
+                        'account_id' => (int) $admin->id,
+                        'target_key' => 'admin:'.$admin->id,
+                        'email' => (string) $admin->email,
+                        'mobile' => '',
+                        'name' => (string) $admin->display_name,
+                    ]],
                     [
                         'recipient_name' => $admin->display_name,
                         'user_name' => $invoice->user?->display_name ?: '客户',
@@ -231,7 +253,8 @@ class AdminOrderNotificationService
                         'order_amount' => number_format((float) ($invoice->amount ?? 0), 2, '.', ''),
                         'order_status_label' => (string) (OrderStatus::$labels[(int) ($invoice->order?->status ?? 0)] ?? '-'),
                         'created_at' => $invoice->created_at?->format('Y-m-d H:i:s') ?? now()->format('Y-m-d H:i:s'),
-                    ]
+                    ],
+                    'admin'
                 );
 
                 AutomationLog::markExecuted(

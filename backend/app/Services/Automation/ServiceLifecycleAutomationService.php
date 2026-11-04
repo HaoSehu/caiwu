@@ -3,13 +3,11 @@
 namespace App\Services\Automation;
 
 use App\Constants\ServiceStatus;
-use App\Constants\UserNotificationType;
-use App\Jobs\SendTemplateEmailJob;
 use App\Models\AutomationLog;
 use App\Models\Service;
 use App\Services\ClientServiceConsole\ServiceOverviewService;
+use App\Services\Messaging\MessageDispatcher;
 use App\Services\Notification\UserNotificationService;
-use App\Services\System\NotificationService;
 use App\Services\System\SettingService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -21,8 +19,8 @@ class ServiceLifecycleAutomationService
 
     public function __construct(
         private SettingService $settingService,
-        private NotificationService $notificationService,
         private UserNotificationService $userNotificationService,
+        private MessageDispatcher $messageDispatcher,
     ) {}
 
     public function handle(): array
@@ -128,26 +126,41 @@ class ServiceLifecycleAutomationService
                 continue;
             }
 
-            $displayName = $service->user?->display_name ?? '客户';
+            $displayName = $service->user->display_name ?? '客户';
             $expiryStr = $service->expires_at?->format('Y-m-d H:i') ?? '-';
             $provisionData = is_array($service->provision_data ?? null) ? $service->provision_data : [];
             $suspendedAt = trim((string) ($provisionData[self::EXPIRED_SUSPENDED_AT_KEY] ?? ''));
             $suspendedReason = (string) $service->suspended_reason;
 
             try {
-                $this->notificationService->sendTemplateEmail($email, NotificationService::TEMPLATE_SERVICE_SUSPENDED, [
-                    'display_name' => $displayName,
-                    'service_name' => (string) $service->name,
-                    'reason' => $suspendedReason === 'expired' ? '服务到期未续费' : $suspendedReason,
-                    'expires_at' => $expiryStr,
-                    'suspended_at' => $suspendedAt !== '' ? $suspendedAt : '-',
-                ]);
-                $this->userNotificationService->create(
+                $this->messageDispatcher->sendNow(
+                    'service.suspended_notice.'.$service->id.'.'.$ruleKey,
+                    'service_suspended',
+                    'service',
+                    (int) $service->id,
+                    [[
+                        'audience' => 'customer',
+                        'account_id' => (int) $service->user_id,
+                        'target_key' => 'user:'.(int) $service->user_id,
+                        'email' => $email,
+                        'mobile' => (string) ($service->user->phone ?? ''),
+                        'name' => $displayName,
+                    ]],
+                    [
+                        'display_name' => $displayName,
+                        'service_name' => (string) $service->name,
+                        'reason' => $suspendedReason === 'expired' ? '服务到期未续费' : $suspendedReason,
+                        'expires_at' => $expiryStr,
+                        'suspended_at' => $suspendedAt !== '' ? $suspendedAt : '-',
+                    ]
+                );
+                $this->userNotificationService->createForScene(
                     (int) $service->user_id,
-                    UserNotificationType::SERVICE_EXPIRE_REMINDER,
+                    'service_expired',
                     '服务已到期暂停',
                     "您的服务「{$service->name}」已于 {$expiryStr} 到期并暂停，请尽快续费恢复使用。",
                     '/client/services/'.$service->id,
+                    ['service_name' => (string) $service->name, 'expires_at' => $expiryStr],
                     ['service_id' => (int) $service->id, 'expires_at' => $expiryStr]
                 );
                 AutomationLog::markExecuted(
@@ -284,12 +297,26 @@ class ServiceLifecycleAutomationService
         }
 
         try {
-            SendTemplateEmailJob::dispatch($email, NotificationService::TEMPLATE_SERVICE_TERMINATED, [
-                'display_name' => (string) ($service->user?->display_name ?? '客户'),
-                'service_name' => (string) $service->name,
-                'terminated_at' => now()->format('Y-m-d H:i:s'),
-                'notice_message' => '您的服务已到期并超过保留期，系统已自动删除；如需继续使用请重新购买。',
-            ]);
+            $this->messageDispatcher->sendNow(
+                'service.terminated_notice.'.$service->id.'.'.$suspendedAt->format('Y-m-d'),
+                'service_terminated',
+                'service',
+                (int) $service->id,
+                [[
+                    'audience' => 'customer',
+                    'account_id' => (int) $service->user_id,
+                    'target_key' => 'user:'.(int) $service->user_id,
+                    'email' => $email,
+                    'mobile' => (string) ($service->user->phone ?? ''),
+                    'name' => (string) ($service->user->display_name ?? '客户'),
+                ]],
+                [
+                    'display_name' => (string) ($service->user->display_name ?? '客户'),
+                    'service_name' => (string) $service->name,
+                    'terminated_at' => now()->format('Y-m-d H:i:s'),
+                    'notice_message' => '您的服务已到期并超过保留期，系统已自动删除；如需继续使用请重新购买。',
+                ]
+            );
         } catch (\Throwable $exception) {
             AutomationLog::forgetRecord(
                 'service-lifecycle-maintenance',

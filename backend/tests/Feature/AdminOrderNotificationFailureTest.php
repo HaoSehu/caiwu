@@ -14,8 +14,7 @@ use App\Models\Order;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\Finance\AdminOrderNotificationService;
-use App\Services\Mail\MailDriverManager;
-use App\Services\System\NotificationService;
+use App\Services\Messaging\MessageDispatcher;
 use App\Support\AdminPermissions;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\TestCase;
@@ -33,38 +32,45 @@ class AdminOrderNotificationFailureTest extends TestCase
     use DatabaseTransactions;
 
     /**
-     * 造一个可控的 NotificationService 替身：按收件人邮箱决定成功或失败，
-     * 并记录真实发出过的邮件。生产实现依赖邮件通道与模板表，
-     * 这里只验证通知服务的调度语义，不重复测邮件驱动。
+     * 造一个可控的 MessageDispatcher 替身：按首个收件人邮箱决定成功或失败，
+     * 并记录发出过的收件人。生产实现依赖场景配置与传输层，
+     * 这里只验证通知服务的调度语义，不重复测发送链路。
      */
-    private function makeNotificationService(array $failingEmails = []): NotificationService
+    private function makeDispatcher(array $failingEmails = []): MessageDispatcher
     {
-        $service = new class(new MailDriverManager([])) extends NotificationService
+        $dispatcher = new class extends MessageDispatcher
         {
-            /** @var list<array{email: string, template: string}> */
+            /** @var list<array{email: string, scene: string}> */
             public array $sent = [];
 
             /** @var list<string> */
             public array $failingEmails = [];
 
-            public function sendTemplateEmail(
-                string $to,
-                string $templateCode,
-                array $params = [],
-                ?string $deliveryKey = null,
-                int $attemptNo = 1,
-            ): void {
-                if (in_array($to, $this->failingEmails, true)) {
+            public function __construct() {}
+
+            public function sendNow(
+                string $eventKey,
+                string $scene,
+                string $businessType,
+                int $businessId,
+                array $recipients,
+                array $variables,
+                string $audience = 'customer',
+            ): bool {
+                $email = (string) ($recipients[0]['email'] ?? '');
+                if (in_array($email, $this->failingEmails, true)) {
                     throw new \RuntimeException('邮件通知未启用');
                 }
 
-                $this->sent[] = ['email' => $to, 'template' => $templateCode];
+                $this->sent[] = ['email' => $email, 'scene' => $scene];
+
+                return true;
             }
         };
 
-        $service->failingEmails = $failingEmails;
+        $dispatcher->failingEmails = $failingEmails;
 
-        return $service;
+        return $dispatcher;
     }
 
     private function makeAdmin(string $email, string $nickname): AdminUser
@@ -127,9 +133,9 @@ class AdminOrderNotificationFailureTest extends TestCase
         return [$invoice, $order, $user];
     }
 
-    private function notifyPaid(NotificationService $notificationService, int $invoiceId): void
+    private function notifyPaid(MessageDispatcher $dispatcher, int $invoiceId): void
     {
-        (new AdminOrderNotificationService($notificationService))->notifyInvoicePaidNow($invoiceId);
+        (new AdminOrderNotificationService($dispatcher))->notifyInvoicePaidNow($invoiceId);
     }
 
     /**
@@ -141,10 +147,10 @@ class AdminOrderNotificationFailureTest extends TestCase
      *
      * @return list<string>
      */
-    private function sentTestEmails(NotificationService $notificationService): array
+    private function sentTestEmails(MessageDispatcher $dispatcher): array
     {
         $emails = array_values(array_filter(
-            array_column($notificationService->sent, 'email'),
+            array_column($dispatcher->sent, 'email'),
             static fn (string $email): bool => str_ends_with($email, '@example.test'),
         ));
         sort($emails);
@@ -155,11 +161,11 @@ class AdminOrderNotificationFailureTest extends TestCase
     public function test_single_admin_failure_throws_aggregated_exception(): void
     {
         $admin = $this->makeAdmin('single-fail@example.test', '单发失败管理员');
-        $notificationService = $this->makeNotificationService(['single-fail@example.test']);
+        $dispatcher = $this->makeDispatcher(['single-fail@example.test']);
         [$invoice] = $this->makeInvoice();
 
         try {
-            $this->notifyPaid($notificationService, (int) $invoice->id);
+            $this->notifyPaid($dispatcher, (int) $invoice->id);
             $this->fail('单管理员通知失败时不得静默返回，必须抛异常让队列重试');
         } catch (\RuntimeException $exception) {
             $this->assertStringContainsString('付款通知发送失败 1 位管理员', $exception->getMessage());
@@ -169,7 +175,7 @@ class AdminOrderNotificationFailureTest extends TestCase
         }
 
         // 只看本用例自己造的管理员：库里若已有真实管理员账号，它们同样会被通知到且不会失败。
-        $this->assertSame([], $this->sentTestEmails($notificationService));
+        $this->assertSame([], $this->sentTestEmails($dispatcher));
     }
 
     public function test_partial_failure_still_attempts_everyone_then_throws_aggregate(): void
@@ -178,14 +184,14 @@ class AdminOrderNotificationFailureTest extends TestCase
         $second = $this->makeAdmin('partial-2@example.test', '部分失败管理员二');
         $third = $this->makeAdmin('partial-ok@example.test', '部分成功管理员');
 
-        $notificationService = $this->makeNotificationService([
+        $dispatcher = $this->makeDispatcher([
             'partial-1@example.test',
             'partial-2@example.test',
         ]);
         [$invoice] = $this->makeInvoice();
 
         try {
-            $this->notifyPaid($notificationService, (int) $invoice->id);
+            $this->notifyPaid($dispatcher, (int) $invoice->id);
             $this->fail('多管理员部分失败时必须抛聚合异常');
         } catch (\RuntimeException $exception) {
             $message = $exception->getMessage();
@@ -196,10 +202,10 @@ class AdminOrderNotificationFailureTest extends TestCase
         }
 
         // 失败不得提前退出：第三位管理员仍要收到，否则重试永远不会补到他。
-        $this->assertSame(['partial-ok@example.test'], $this->sentTestEmails($notificationService));
+        $this->assertSame(['partial-ok@example.test'], $this->sentTestEmails($dispatcher));
         $this->assertSame(
-            [NotificationService::TEMPLATE_ADMIN_ORDER_PAID],
-            array_values(array_unique(array_column($notificationService->sent, 'template'))),
+            ['admin_order_paid'],
+            array_values(array_unique(array_column($dispatcher->sent, 'scene'))),
         );
     }
 
@@ -208,12 +214,12 @@ class AdminOrderNotificationFailureTest extends TestCase
         $this->makeAdmin('all-ok-1@example.test', '全部成功管理员一');
         $this->makeAdmin('all-ok-2@example.test', '全部成功管理员二');
 
-        $notificationService = $this->makeNotificationService();
+        $dispatcher = $this->makeDispatcher();
         [$invoice] = $this->makeInvoice();
 
-        $this->notifyPaid($notificationService, (int) $invoice->id);
+        $this->notifyPaid($dispatcher, (int) $invoice->id);
 
-        $this->assertSame(['all-ok-1@example.test', 'all-ok-2@example.test'], $this->sentTestEmails($notificationService));
+        $this->assertSame(['all-ok-1@example.test', 'all-ok-2@example.test'], $this->sentTestEmails($dispatcher));
     }
 
     public function test_retry_only_resends_to_admins_without_delivery_record(): void
@@ -221,25 +227,25 @@ class AdminOrderNotificationFailureTest extends TestCase
         $failing = $this->makeAdmin('retry-fail@example.test', '重试待补发管理员');
         $succeeded = $this->makeAdmin('retry-ok@example.test', '重试已发管理员');
 
-        $notificationService = $this->makeNotificationService(['retry-fail@example.test']);
+        $dispatcher = $this->makeDispatcher(['retry-fail@example.test']);
         [$invoice] = $this->makeInvoice();
 
         try {
-            $this->notifyPaid($notificationService, (int) $invoice->id);
+            $this->notifyPaid($dispatcher, (int) $invoice->id);
             $this->fail('首次通知部分失败时必须抛异常');
         } catch (\RuntimeException $exception) {
             $this->assertStringContainsString('retry-fail@example.test', $exception->getMessage());
         }
 
-        $this->assertSame(['retry-ok@example.test'], $this->sentTestEmails($notificationService));
+        $this->assertSame(['retry-ok@example.test'], $this->sentTestEmails($dispatcher));
 
         // 重试：失败者恢复，已成功者必须被 AutomationLog 幂等跳过。
-        $notificationService->failingEmails = [];
-        $this->notifyPaid($notificationService, (int) $invoice->id);
+        $dispatcher->failingEmails = [];
+        $this->notifyPaid($dispatcher, (int) $invoice->id);
 
         $this->assertSame(
             ['retry-fail@example.test', 'retry-ok@example.test'],
-            $this->sentTestEmails($notificationService),
+            $this->sentTestEmails($dispatcher),
         );
         $this->assertTrue(AutomationLog::hasRecord(
             'admin-order-notification',
@@ -260,11 +266,11 @@ class AdminOrderNotificationFailureTest extends TestCase
     public function test_invoice_created_branch_throws_aggregate_too(): void
     {
         $admin = $this->makeAdmin('created-fail@example.test', '新订单失败管理员');
-        $notificationService = $this->makeNotificationService(['created-fail@example.test']);
+        $dispatcher = $this->makeDispatcher(['created-fail@example.test']);
         [$invoice] = $this->makeInvoice(InvoiceStatus::UNPAID);
 
         try {
-            (new AdminOrderNotificationService($notificationService))->notifyInvoiceCreatedNow((int) $invoice->id);
+            (new AdminOrderNotificationService($dispatcher))->notifyInvoiceCreatedNow((int) $invoice->id);
             $this->fail('新订单通知失败时不得静默返回');
         } catch (\RuntimeException $exception) {
             $this->assertStringContainsString('新订单通知发送失败 1 位管理员', $exception->getMessage());
@@ -285,7 +291,7 @@ class AdminOrderNotificationFailureTest extends TestCase
         $this->assertSame('notification', $job->queue);
 
         $this->makeAdmin('job-fail@example.test', '队列失败管理员');
-        $notificationService = $this->makeNotificationService(['job-fail@example.test']);
+        $dispatcher = $this->makeDispatcher(['job-fail@example.test']);
         [$invoice] = $this->makeInvoice();
 
         $job = new SendPaidInvoiceAdminNotificationJob((int) $invoice->id);
@@ -293,6 +299,6 @@ class AdminOrderNotificationFailureTest extends TestCase
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('付款通知发送失败 1 位管理员');
 
-        $job->handle(new AdminOrderNotificationService($notificationService));
+        $job->handle(new AdminOrderNotificationService($dispatcher));
     }
 }

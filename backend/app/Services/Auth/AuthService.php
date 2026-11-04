@@ -12,6 +12,7 @@ use App\Jobs\SendTemplateEmailJob;
 use App\Models\AdminLoginLog;
 use App\Models\AdminUser;
 use App\Models\User;
+use App\Services\Notification\UserNotificationService;
 use App\Services\Referral\ReferralService;
 use App\Services\System\AdminLoginLogService;
 use App\Services\System\NotificationService;
@@ -69,6 +70,7 @@ class AuthService
         private LegacyPasswordVerifier $legacyPasswordVerifier,
         private AdminLoginLogService $adminLoginLogService,
         private AdminMfaService $adminMfaService,
+        private UserNotificationService $userNotificationService,
     ) {}
 
     /**
@@ -302,11 +304,24 @@ class AuthService
         }
 
         try {
+            $displayName = trim((string) ($user->display_name ?? '')) !== '' ? (string) $user->display_name : $email;
+
             SendTemplateEmailJob::dispatch($email, NotificationService::TEMPLATE_REGISTRATION_SUCCESS, [
-                'display_name' => trim((string) ($user->display_name ?? '')) !== '' ? (string) $user->display_name : $email,
+                'display_name' => $displayName,
                 'email' => $email,
                 'registered_at' => now()->format('Y-m-d H:i:s'),
             ]);
+
+            // 站内消息：受管理端「注册成功」场景的站内消息开关控制
+            $this->userNotificationService->createForScene(
+                (int) $user->id,
+                'registration_success',
+                '注册成功',
+                "{$displayName}，您的账号已注册成功，欢迎使用。",
+                '/client/dashboard',
+                ['display_name' => $displayName],
+                []
+            );
         } catch (\Throwable $exception) {
             Log::warning('[注册通知] 欢迎邮件派发失败', [
                 'user_id' => (int) $user->id,

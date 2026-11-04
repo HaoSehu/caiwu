@@ -2,10 +2,11 @@
 
 namespace App\Services\Ticket;
 
-use App\Constants\UserNotificationType;
+use App\Jobs\SendTicketNotificationEmailJob;
 use App\Models\AutomationLog;
 use App\Models\Ticket;
 use App\Services\Notification\UserNotificationService;
+use App\Services\System\NotificationService;
 use App\Services\System\SettingService;
 use Illuminate\Support\Facades\Log;
 
@@ -99,12 +100,33 @@ class TicketAutomationService
             }
 
             $hoursLeft = max(1, $hours - $remindAfterHours);
-            $this->userNotificationService->create(
+            $ticketUser = $ticket->user;
+            $email = trim((string) ($ticketUser->email ?? ''));
+            $remindBody = "工单「{$ticket->subject}」客服已回复，若 {$hoursLeft} 小时内无后续回复将自动关闭，请及时查看。";
+
+            // 邮件：受管理端「工单待处理提醒」场景的邮件开关控制
+            if ($email !== '') {
+                SendTicketNotificationEmailJob::dispatch(
+                    $email,
+                    NotificationService::TEMPLATE_TICKET_PENDING_REMINDER,
+                    [
+                        'display_name' => (string) ($ticketUser->display_name ?? '客户'),
+                        'ticket_id' => (int) $ticket->id,
+                        'ticket_subject' => (string) $ticket->subject,
+                        'hours_left' => $hoursLeft,
+                    ],
+                    ['scene' => 'ticket_pending_reminder', 'ticket_id' => (int) $ticket->id, 'recipient_user_id' => $userId]
+                );
+            }
+
+            // 站内消息：受管理端「工单待处理提醒」场景的站内消息开关控制
+            $this->userNotificationService->createForScene(
                 $userId,
-                UserNotificationType::TICKET_PENDING_REMINDER,
+                'ticket_pending_reminder',
                 '工单待您处理',
-                "工单「{$ticket->subject}」客服已回复，若 {$hoursLeft} 小时内无后续回复将自动关闭，请及时查看。",
+                $remindBody,
                 '/client/tickets/'.$ticket->id,
+                ['ticket_subject' => (string) $ticket->subject],
                 ['ticket_id' => (int) $ticket->id]
             );
 

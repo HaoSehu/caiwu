@@ -1,7 +1,10 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Jobs;
 
+use App\Services\Messaging\MessageDispatcher;
 use App\Services\System\NotificationService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -12,11 +15,16 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 /**
- * 通用模板邮件队列任务：把请求路径内的 SMTP 发送改为异步。
- * 载荷在派发侧已完成数据组装，任务内只做模板渲染与发送，失败由队列重试兜底。
+ * 模板邮件队列任务：先按模板码解析场景，再走统一消息链路同步发送。
  *
- * deliveryKey 在任务构造时生成，随队列载荷序列化；同一任务的重试沿用同一个键，
- * 使 service 层能把多次尝试归并到同一条 message_logs 并逐次落 attempts。
+ * 历史：本任务曾直接调用 NotificationService::sendTemplateEmail。S6 切换到
+ * MessageDispatcher 后，模板码 → 场景的映射集中在本类，业务派发方不感知。
+ *
+ * 重试语义仍由本队列任务承担（tries=3 + 退避）；MessageDispatcher 自身
+ * 只做单次同步发送并且在明确失败时抛异常，供队列判定是否重试。
+ *
+ * deliveryKey 保留：同一任务的重试沿用同一键，MessageDispatcher 的
+ * event_key 由它与模板码共同决定，因此重试不会重复落地消息流水。
  */
 class SendTemplateEmailJob implements ShouldQueue
 {
@@ -31,6 +39,15 @@ class SendTemplateEmailJob implements ShouldQueue
 
     public array $backoff = [30, 120, 300];
 
+    /** 模板码 → [场景, 受众]；未登记的模板码回退到旧发送路径 */
+    private const SCENE_BY_TEMPLATE = [
+        NotificationService::TEMPLATE_PAYMENT_SUCCESS => ['order_paid', 'customer'],
+        NotificationService::TEMPLATE_REGISTRATION_SUCCESS => ['registration_success', 'customer'],
+        NotificationService::TEMPLATE_AUTO_RENEW_NOTICE => ['auto_renew_notice', 'customer'],
+        NotificationService::TEMPLATE_SERVICE_TERMINATED => ['service_terminated', 'customer'],
+        NotificationService::TEMPLATE_SERVICE_UNSUSPEND_FAILED => ['service_suspend_failed', 'customer'],
+    ];
+
     /** 跨重试稳定的投递键（任务构造时生成，序列化后保持不变） */
     public string $deliveryKey;
 
@@ -44,14 +61,44 @@ class SendTemplateEmailJob implements ShouldQueue
         $this->afterCommit();
     }
 
-    public function handle(NotificationService $notificationService): void
+    public function handle(NotificationService $notificationService, MessageDispatcher $dispatcher): void
     {
-        $notificationService->sendTemplateEmail(
-            $this->email,
-            $this->templateCode,
+        $mapping = self::SCENE_BY_TEMPLATE[$this->templateCode] ?? null;
+
+        if ($mapping === null) {
+            // 未登记场景的模板码仍走旧路径，保证行为不倒退；新增模板时补进映射表。
+            $notificationService->sendTemplateEmail(
+                $this->email,
+                $this->templateCode,
+                $this->payload,
+                $this->deliveryKey,
+                max(1, $this->attempts()),
+            );
+
+            return;
+        }
+
+        [$scene, $audience] = $mapping;
+
+        $name = trim((string) ($this->payload['display_name'] ?? '')) !== ''
+            ? (string) $this->payload['display_name']
+            : $this->email;
+
+        $dispatcher->sendNow(
+            'template.'.$this->templateCode.'.'.$this->deliveryKey,
+            $scene,
+            'email',
+            0,
+            [[
+                'audience' => $audience,
+                'account_id' => 0,
+                'target_key' => 'email:'.$this->email,
+                'email' => $this->email,
+                'mobile' => '',
+                'name' => $name,
+            ]],
             $this->payload,
-            $this->deliveryKey,
-            max(1, $this->attempts()),
+            $audience
         );
     }
 

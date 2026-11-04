@@ -86,6 +86,12 @@ class NotificationService
 
     public const TEMPLATE_TICKET_CLIENT_REPLY = '100027';
 
+    /** 工单待处理提醒（客服已回复、超时未跟进将自动关闭） */
+    public const TEMPLATE_TICKET_PENDING_REMINDER = '100063';
+
+    /** 工单重新开启 */
+    public const TEMPLATE_TICKET_REOPENED = '100064';
+
     public const TEMPLATE_ADMIN_LOGIN_ALERT = '100028';
 
     public const TEMPLATE_SERVICE_UNSUSPEND_FAILED = '100029';

@@ -11,11 +11,22 @@ return [
         'name' => '阿里云号码认证短信',
         'version' => '1.0.0',
         'entry' => AliyunPlugin::class,
+        // 本插件只接入阿里云号码认证服务（dypnsapi），仅支持其内置验证码模板，
+        // 不具备通用短信服务的业务模板发送能力。
         'capabilities' => ['verify_code'],
         'extra' => [
             'driver_binding' => [
                 'binding_key' => 'sms_driver',
                 'provider_key' => 'aliyun',
+            ],
+            // 阿里云号码认证短信的赠送模板为验证码类（100001–100005），
+            // 插件优先接管对应模板的短信正文，管理端只读不可改。
+            // 占位符使用系统短信模板语法 {code} / {min}（渲染时按此替换），
+            // 不是阿里云 API 的 ${code} 写法。
+            'template_overrides' => [
+                '100001' => [
+                    'content' => '您的验证码为{code}。尊敬的客户，以上验证码{min}分钟内有效，请注意保密，切勿告知他人。',
+                ],
             ],
         ],
     ],

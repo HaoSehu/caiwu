@@ -22,6 +22,7 @@ use App\Models\User;
 use App\Services\Finance\Core\Data\CashMutation;
 use App\Services\Finance\Core\FinanceAccountService;
 use App\Services\Finance\Core\FinanceIdempotencyService;
+use App\Services\Notification\UserNotificationService;
 use App\Services\Referral\ReferralService;
 use App\Services\System\ActivityLogService;
 use App\Services\System\NotificationService;
@@ -389,16 +390,29 @@ class InvoiceRefundService
         }
 
         try {
+            $refundAmount = (string) ($refund['refund_amount'] ?? '');
+
             SendTemplateEmailJob::dispatch($email, NotificationService::TEMPLATE_INVOICE_REFUND, [
                 'display_name' => trim((string) ($user->display_name ?? '')) !== '' ? (string) $user->display_name : $email,
                 'invoice_no' => (string) ($invoice->invoice_no ?? ''),
                 'order_no' => (string) ($invoice->order?->order_no ?? ''),
                 'product_name' => (string) ($invoice->display_product_name ?: $invoice->order?->display_product_name ?? ''),
-                'refund_amount' => (string) ($refund['refund_amount'] ?? ''),
+                'refund_amount' => $refundAmount,
                 'refund_method_label' => (string) ($refund['refund_method_label'] ?? ''),
                 'refunded_at' => (string) ($refund['refunded_at'] ?? ''),
                 'refund_reason' => (string) ($refund['refund_reason'] ?? ''),
             ]);
+
+            // 站内消息：受管理端「账单退款」场景的站内消息开关控制
+            app(UserNotificationService::class)->createForScene(
+                (int) $user->id,
+                'order_refunded',
+                '退款已处理',
+                '您的账单 '.($invoice->invoice_no ?? '')." 已退款，金额 {$refundAmount} 元。",
+                '/client/invoices/'.$invoice->id,
+                ['invoice_no' => (string) ($invoice->invoice_no ?? ''), 'refund_amount' => $refundAmount],
+                ['invoice_id' => (int) $invoice->id]
+            );
         } catch (\Throwable $exception) {
             Log::warning('[账单退款] 客户通知派发失败', [
                 'invoice_id' => (int) $invoice->id,

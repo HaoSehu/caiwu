@@ -12,7 +12,7 @@ use App\Models\AutomationLog;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\User;
-use App\Services\System\NotificationService;
+use App\Services\Messaging\MessageDispatcher;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Event;
 use Tests\TestCase;
@@ -93,10 +93,20 @@ class InvoicePaidEventTest extends TestCase
         [$invoice] = $this->makePaidInvoice();
 
         $sent = [];
-        $this->mock(NotificationService::class, function ($mock) use (&$sent): void {
-            $mock->shouldReceive('sendTemplateEmail')
-                ->andReturnUsing(function (string $to, string $template, array $params = []) use (&$sent): void {
-                    $sent[] = compact('to', 'template', 'params');
+        $this->mock(MessageDispatcher::class, function ($mock) use (&$sent): void {
+            $mock->shouldReceive('sendNow')
+                ->andReturnUsing(function (
+                    string $eventKey,
+                    string $scene,
+                    string $businessType,
+                    int $businessId,
+                    array $recipients,
+                    array $variables = [],
+                    string $audience = 'customer',
+                ) use (&$sent): bool {
+                    $sent[] = ['to' => (string) ($recipients[0]['email'] ?? ''), 'template' => $scene, 'params' => $variables];
+
+                    return true;
                 });
         });
 
@@ -107,7 +117,7 @@ class InvoicePaidEventTest extends TestCase
         $listener->handle(new InvoicePaid($invoice, 'trace-e2e'));
 
         $this->assertCount(1, $sent, '同一账单重复进入应只发一次客户付款成功通知');
-        $this->assertSame(NotificationService::TEMPLATE_PAYMENT_SUCCESS, $sent[0]['template']);
+        $this->assertSame('order_paid', $sent[0]['template']);
         $this->assertSame((string) $invoice->user->email, $sent[0]['to']);
 
         $this->assertDatabaseHas('automation_logs', [
@@ -132,9 +142,11 @@ class InvoicePaidEventTest extends TestCase
         $invoice->unsetRelation('user');
 
         $sent = 0;
-        $this->mock(NotificationService::class, function ($mock) use (&$sent): void {
-            $mock->shouldReceive('sendTemplateEmail')->andReturnUsing(function () use (&$sent): void {
+        $this->mock(MessageDispatcher::class, function ($mock) use (&$sent): void {
+            $mock->shouldReceive('sendNow')->andReturnUsing(function () use (&$sent): bool {
                 $sent++;
+
+                return true;
             });
         });
 
@@ -162,8 +174,8 @@ class InvoicePaidEventTest extends TestCase
     {
         [$invoice] = $this->makePaidInvoice();
 
-        $this->mock(NotificationService::class, function ($mock): void {
-            $mock->shouldReceive('sendTemplateEmail')->andThrow(new \RuntimeException('邮件通道不可用'));
+        $this->mock(MessageDispatcher::class, function ($mock): void {
+            $mock->shouldReceive('sendNow')->andThrow(new \RuntimeException('邮件通道不可用'));
         });
 
         $listener = app(SendInvoicePaidClientNotification::class);

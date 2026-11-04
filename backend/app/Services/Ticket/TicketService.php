@@ -298,12 +298,30 @@ class TicketService
 
         $updatedTicket = $ticket->fresh() ?? $ticket;
 
-        $this->userNotificationService->create(
+        // 邮件：受管理端「工单重新开启」场景的邮件开关控制
+        $reopenUser = $updatedTicket->user;
+        $reopenEmail = trim((string) ($reopenUser->email ?? ''));
+        if ($reopenEmail !== '') {
+            SendTicketNotificationEmailJob::dispatch(
+                $reopenEmail,
+                NotificationService::TEMPLATE_TICKET_REOPENED,
+                [
+                    'display_name' => (string) ($reopenUser->display_name ?? '客户'),
+                    'ticket_id' => (int) $updatedTicket->id,
+                    'ticket_subject' => (string) $updatedTicket->subject,
+                ],
+                ['scene' => 'ticket_reopened', 'ticket_id' => (int) $updatedTicket->id]
+            );
+        }
+
+        // 站内消息：受管理端「工单重新开启」场景的站内消息开关控制
+        $this->userNotificationService->createForScene(
             (int) ($updatedTicket->user_id ?? 0),
-            UserNotificationType::TICKET_REOPENED,
+            'ticket_reopened',
             '工单已重新开启',
             "工单「{$updatedTicket->subject}」已重新开启，请继续跟进。",
             '/client/tickets/'.$updatedTicket->id,
+            ['ticket_subject' => (string) $updatedTicket->subject],
             [
                 'ticket_id' => (int) $updatedTicket->id,
                 'reopened_by' => (string) ($context['operator_type'] ?? 'admin'),
@@ -903,12 +921,13 @@ class TicketService
         }
 
         if ($notifyUserId > 0) {
-            $this->userNotificationService->create(
+            $this->userNotificationService->createForScene(
                 $notifyUserId,
-                $notificationType,
+                $scene,
                 $notificationTitle,
                 $notificationBody,
                 '/client/tickets/'.$ticket->id,
+                ['ticket_subject' => (string) $ticket->subject],
                 ['ticket_id' => (int) $ticket->id]
             );
         }

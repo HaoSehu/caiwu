@@ -29,6 +29,8 @@ class AdminNotificationTemplateResource extends JsonResource
             'variables' => array_values((array) ($template['variables'] ?? [])),
             'provider_variables' => array_values((array) ($template['provider_variables'] ?? [])),
             'setting_keys' => (array) ($template['setting_keys'] ?? []),
+            // 被插件接管的字段清单：管理端对应输入框应只读并提示来源
+            'overridden_fields' => array_values((array) ($template['overridden_fields'] ?? [])),
         ];
     }
 }

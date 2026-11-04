@@ -144,11 +144,105 @@ class AliyunSmsClient
      * @param  array<string, mixed>  $options
      * @return array{success: bool, message?: string}
      */
+    /**
+     * 业务短信发送入口。
+     *
+     * 本插件只接入阿里云号码认证服务（dypnsapi），该服务只提供内置验证码模板
+     * （100001–100005，通过 SendSmsVerifyCode 发送），不具备通用短信服务
+     * （dysmsapi / SendSms）的业务模板发送能力。
+     *
+     * 验证码模板仍可通过本方法发送——内部路由到 SendSmsVerifyCode，
+     * 这样「测试发送」等统一入口不必区分插件类型；其余模板明确拒绝。
+     */
     public function sendMessage(string $phone, string $templateCode, string $content, array $options = []): array
     {
+        $accessKeyId = (string) ($this->config['access_key'] ?? '');
+        $accessKeySecret = (string) ($this->config['secret_key'] ?? '');
+
+        if ($accessKeyId === '' || $accessKeySecret === '') {
+            return ['success' => false, 'message' => '短信接口配置不完整'];
+        }
+
+        if (! $this->isVerifyCapacityTemplate($templateCode)) {
+            return [
+                'success' => false,
+                'message' => '本插件为阿里云号码认证服务，仅支持内置验证码模板（100001–100005），不支持通用短信模板发送',
+            ];
+        }
+
+        return $this->sendByVerifyApi($phone, $templateCode, $options, $accessKeyId, $accessKeySecret);
+    }
+
+    /** 号码认证模板号特征：纯 6 位数字（100001–100005） */
+    private function isVerifyCapacityTemplate(string $templateCode): bool
+    {
+        return preg_match('/^10000[1-5]$/', trim($templateCode)) === 1;
+    }
+
+    /**
+     * 走号码认证 SendSmsVerifyCode（dypnsapi）。
+     *
+     * 该接口要求 CodeLength / ValidTime / CodeType 等参数，且模板号是阿里云内置的，
+     * 不接受系统渲染出的完整正文，只能传 code/min 两个变量。
+     *
+     * @return array<string, mixed>
+     */
+    private function sendByVerifyApi(
+        string $phone,
+        string $templateCode,
+        array $options,
+        string $accessKeyId,
+        string $accessKeySecret,
+    ): array {
+        $variables = is_array($options['template_variables'] ?? null) ? $options['template_variables'] : [];
+        $code = trim((string) ($variables['code'] ?? ''));
+        $expireMinutes = trim((string) ($variables['min'] ?? ($variables['expire_minutes'] ?? '5')));
+
+        if ($code === '') {
+            return ['success' => false, 'message' => '验证码模板缺少 code 变量，无法发送'];
+        }
+
+        $templateParams = ['code' => $code, 'min' => $expireMinutes !== '' ? $expireMinutes : '5'];
+
+        $params = [
+            'Action' => 'SendSmsVerifyCode',
+            'SchemeName' => '默认方案',
+            'CountryCode' => '86',
+            'PhoneNumber' => trim($phone),
+            'SignName' => $this->resolveSignName($options),
+            'TemplateCode' => trim($templateCode),
+            'TemplateParam' => json_encode($templateParams, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            'CodeLength' => 6,
+            'ValidTime' => 300,
+            'CodeType' => 1,
+            'AutoRetry' => $this->resolveAutoRetry($options),
+        ];
+
+        $result = $this->request(self::VERIFY_ENDPOINT, $params, $accessKeyId, $accessKeySecret, $phone);
+
+        if (! is_array($result)) {
+            return ['success' => false, 'message' => $this->resolveCurlFailureMessage(), 'raw' => $this->lastCurlError ?? []];
+        }
+
+        if (($result['Code'] ?? '') !== 'OK' || ($result['Success'] ?? false) !== true) {
+            $failureCode = (string) ($result['Code'] ?? '');
+
+            return [
+                'success' => false,
+                'message' => $this->resolveFailureMessage($result['Message'] ?? '', $failureCode),
+                'code' => $failureCode,
+            ];
+        }
+
+        $model = is_array($result['Model'] ?? null) ? $result['Model'] : [];
+
         return [
-            'success' => false,
-            'message' => '阿里云号码认证短信插件仅支持内置验证码模板，不支持系统短信模板正文发送',
+            'success' => true,
+            'request_id' => isset($result['RequestId']) ? (string) $result['RequestId'] : null,
+            'biz_id' => isset($model['BizId']) ? (string) $model['BizId'] : null,
+            'template_code' => trim($templateCode),
+            'template_params' => $templateParams,
+            'raw' => $result,
         ];
     }
 
@@ -189,13 +283,23 @@ class AliyunSmsClient
                 continue;
             }
 
+            // QuerySmsTemplateList 的 SignName 可能是数组（一个模板可关联多个签名），
+            // 直接强转字符串会触发 Array to string conversion 警告。
+            $signName = $item['SignName'] ?? $item['SignNames'] ?? '';
+            if (is_array($signName)) {
+                $signName = implode(',', array_filter(array_map(
+                    static fn ($value): string => is_scalar($value) ? (string) $value : '',
+                    $signName
+                )));
+            }
+
             $templates[] = [
                 'provider_template_id' => (string) ($item['TemplateCode'] ?? ''),
-                'provider_sign' => (string) ($item['SignName'] ?? ''),
+                'provider_sign' => is_scalar($signName) ? (string) $signName : '',
                 'content' => (string) ($item['TemplateContent'] ?? ''),
                 'variables' => self::extractVariables((string) ($item['TemplateContent'] ?? '')),
                 'status' => $this->normalizeTemplateStatus((string) ($item['TemplateStatus'] ?? '')),
-                'reject_reason' => (string) ($item['Reason'] ?? ''),
+                'reject_reason' => is_scalar($item['Reason'] ?? '') ? (string) ($item['Reason'] ?? '') : '',
             ];
         }
 

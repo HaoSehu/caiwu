@@ -16,6 +16,7 @@ use App\Http\Resources\Admin\V2\AdminActionResultResource;
 use App\Http\Resources\Admin\V2\AdminNotificationTemplateResource;
 use App\Services\Admin\V2\AdminConfigurationV2QueryService;
 use App\Services\Sms\SmsProviderTemplateService;
+use App\Services\Sms\SmsVerifyCodeTemplateSyncService;
 use App\Services\System\NotificationTemplateService;
 use App\Services\System\NotificationTemplateTestSendService;
 use App\Services\System\OperationLogService;
@@ -32,6 +33,7 @@ class SettingController extends Controller
         private readonly NotificationTemplateTestSendService $templateTestSender,
         private readonly OperationLogService $operationLogService,
         private readonly SmsProviderTemplateService $smsProviderTemplates,
+        private readonly SmsVerifyCodeTemplateSyncService $verifyCodeTemplateSync,
     ) {}
 
     public function index(ListSettingsRequest $request)
@@ -156,6 +158,20 @@ class SettingController extends Controller
         return $this->success(
             $this->smsProviderTemplates->pull(),
             '已拉取运营商短信模板'
+        );
+    }
+
+    /**
+     * 从当前短信插件的号码认证参数配置拉取内置验证码模板，并写回业务模板正文。
+     *
+     * 与 syncSmsProviderTemplates 的区别：后者拉运营商模板库（需审核与挂接），
+     * 本接口拉插件内置的验证码文案（如阿里云号码认证的 5 个赠送模板），可直接使用。
+     */
+    public function syncSmsVerifyCodeTemplates(): JsonResponse
+    {
+        return $this->success(
+            $this->verifyCodeTemplateSync->pull(),
+            '已从插件拉取验证码模板'
         );
     }
 

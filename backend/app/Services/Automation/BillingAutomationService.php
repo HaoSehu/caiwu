@@ -5,12 +5,11 @@ namespace App\Services\Automation;
 use App\Constants\InvoiceStatus;
 use App\Constants\OrderType;
 use App\Constants\ServiceStatus;
-use App\Constants\UserNotificationType;
-use App\Jobs\SendTemplateEmailJob;
 use App\Models\AutomationLog;
 use App\Models\Invoice;
 use App\Models\Service;
 use App\Models\User;
+use App\Services\Messaging\MessageDispatcher;
 use App\Services\Notification\UserNotificationService;
 use App\Services\Provisioning\ServiceRenewService;
 use App\Services\System\NotificationService;
@@ -23,9 +22,9 @@ class BillingAutomationService
 {
     public function __construct(
         private SettingService $settingService,
-        private NotificationService $notificationService,
         private ServiceRenewService $serviceRenewService,
         private UserNotificationService $userNotificationService,
+        private MessageDispatcher $messageDispatcher,
     ) {}
 
     public function handle(): array
@@ -110,25 +109,30 @@ class BillingAutomationService
                     : "您的服务 {$service->name} 将在 {$days} 天后到期。");
 
             try {
-                // 里程碑分档：最早档（如提前 7 天）发第 1 次提醒（100018），其余档发第 2 次加急提醒（100019）。
-                $renewTemplateCode = $milestoneDays === $maxRenewNoticeDays
-                    ? NotificationService::TEMPLATE_SERVICE_RENEW_REMINDER
-                    : NotificationService::TEMPLATE_SERVICE_SECOND_RENEW_REMINDER;
-
-                $this->notificationService->sendTemplateEmail($email, $renewTemplateCode, [
-                    'display_name' => $displayName,
-                    'service_name' => (string) $service->name,
-                    'days_left' => $days,
-                    'expires_at' => $expiryStr,
-                    'billing_cycle_label' => BillingCycleLabels::label((string) $service->billing_cycle),
-                    'urgency_message' => $urgencyLine,
-                ]);
-                $this->userNotificationService->create(
+                // 里程碑分档：最早档（如提前 7 天）发第 1 次提醒，其余档发第 2 次加急提醒。
+                // 两档都落在 service_due 场景，只是 urgency_message 文案不同。
+                $this->messageDispatcher->sendNow(
+                    'service.renew_notice.'.$service->id.'.'.$ruleKey,
+                    'service_due',
+                    'service',
+                    (int) $service->id,
+                    [$this->customerRecipient($service->user, $email, $displayName)],
+                    [
+                        'display_name' => $displayName,
+                        'service_name' => (string) $service->name,
+                        'days_left' => $days,
+                        'expires_at' => $expiryStr,
+                        'billing_cycle_label' => BillingCycleLabels::label((string) $service->billing_cycle),
+                        'urgency_message' => $urgencyLine,
+                    ]
+                );
+                $this->userNotificationService->createForScene(
                     (int) $service->user_id,
-                    UserNotificationType::SERVICE_RENEW_REMINDER,
+                    'service_due',
                     '服务续费提醒',
                     $urgencyLine,
                     '/client/services/'.$service->id,
+                    ['service_name' => (string) $service->name, 'urgency_message' => $urgencyLine],
                     ['service_id' => (int) $service->id, 'days_left' => $days, 'expires_at' => $expiryStr]
                 );
                 AutomationLog::markExecuted(
@@ -215,9 +219,12 @@ class BillingAutomationService
             $urgencyLine = "您的服务 {$service->name} 将于 {$autoRenewDate} 由系统自动续费（{$cycleLabel}），请确保账户余额充足。如不希望自动续费，请在 {$autoRenewDate} 前登录控制台关闭自动续费。";
 
             try {
-                $this->notificationService->sendTemplateEmail(
-                    $email,
-                    NotificationService::TEMPLATE_AUTO_RENEW_UPCOMING,
+                $this->messageDispatcher->sendNow(
+                    'service.auto_renew_upcoming.'.$service->id.'.'.$ruleKey,
+                    'auto_renew_upcoming',
+                    'service',
+                    (int) $service->id,
+                    [$this->customerRecipient($service->user, $email, $displayName)],
                     [
                         'display_name' => $displayName,
                         'service_name' => (string) $service->name,
@@ -227,12 +234,13 @@ class BillingAutomationService
                         'urgency_message' => $urgencyLine,
                     ]
                 );
-                $this->userNotificationService->create(
+                $this->userNotificationService->createForScene(
                     (int) $service->user_id,
-                    UserNotificationType::SERVICE_AUTO_RENEW_UPCOMING,
+                    'auto_renew_upcoming',
                     '即将自动续费',
                     $urgencyLine,
                     '/client/services/'.$service->id,
+                    ['urgency_message' => $urgencyLine],
                     ['service_id' => (int) $service->id, 'expires_at' => $expiryStr, 'auto_renew_date' => $autoRenewDate]
                 );
                 AutomationLog::markExecuted(
@@ -276,15 +284,37 @@ class BillingAutomationService
         }
 
         try {
-            SendTemplateEmailJob::dispatch($email, NotificationService::TEMPLATE_AUTO_RENEW_NOTICE, [
-                'display_name' => (string) ($user->display_name ?? '客户'),
-                'service_name' => (string) $service->name,
-                'order_no' => (string) ($invoice->order?->order_no ?? ''),
-                'invoice_no' => (string) $invoice->invoice_no,
-                'amount' => number_format((float) $invoice->amount, 2, '.', ''),
-                'renewed_at' => now()->format('Y-m-d H:i:s'),
-                'notice_message' => '系统已生成自动续费账单，请确保账户余额充足，以便按时完成自动扣款。',
-            ]);
+            $this->messageDispatcher->sendNow(
+                'invoice.auto_renew_notice.'.$invoice->id,
+                'auto_renew_notice',
+                'invoice',
+                (int) $invoice->id,
+                [$this->customerRecipient($user, $email, (string) ($user->display_name ?? '客户'))],
+                [
+                    'display_name' => (string) ($user->display_name ?? '客户'),
+                    'service_name' => (string) $service->name,
+                    'order_no' => (string) ($invoice->order?->order_no ?? ''),
+                    'invoice_no' => (string) $invoice->invoice_no,
+                    'amount' => number_format((float) $invoice->amount, 2, '.', ''),
+                    'renewed_at' => now()->format('Y-m-d H:i:s'),
+                    'notice_message' => '系统已生成自动续费账单，请确保账户余额充足，以便按时完成自动扣款。',
+                ]
+            );
+
+            // 站内消息：受管理端「自动续费通知」场景的站内消息开关控制
+            $this->userNotificationService->createForScene(
+                (int) $user->id,
+                'auto_renew_notice',
+                '自动续费已完成',
+                '您的服务「'.$service->name.'」已完成自动续费，账单号 '.$invoice->invoice_no.'，金额 '.number_format((float) $invoice->amount, 2, '.', '').' 元。',
+                '/client/services/'.$service->id,
+                [
+                    'service_name' => (string) $service->name,
+                    'invoice_no' => (string) $invoice->invoice_no,
+                    'amount' => number_format((float) $invoice->amount, 2, '.', ''),
+                ],
+                ['service_id' => (int) $service->id, 'invoice_id' => (int) $invoice->id]
+            );
         } catch (\Throwable $exception) {
             Log::warning('[定时任务] 自动续费通知发送失败', [
                 'service_id' => $service->id,
@@ -519,6 +549,25 @@ class BillingAutomationService
 
     // ─── 公共邮件发送 ──────────────────────────────────────────────────────────
 
+    /**
+     * 构造同步消息发送的客户收件人。
+     *
+     * @return array{audience: string, account_id: int, target_key: string, email: string, mobile: string, name: string}
+     */
+    private function customerRecipient(?User $user, string $email, string $displayName): array
+    {
+        $userId = (int) ($user->id ?? 0);
+
+        return [
+            'audience' => 'customer',
+            'account_id' => $userId,
+            'target_key' => 'user:'.$userId,
+            'email' => $email,
+            'mobile' => (string) ($user->phone ?? ''),
+            'name' => $displayName,
+        ];
+    }
+
     private function sendInvoiceReminderEmail(Invoice $invoice, string $templateCode, string $tailText): bool
     {
         $email = trim((string) ($invoice->user?->email ?? ''));
@@ -534,25 +583,33 @@ class BillingAutomationService
         }
 
         try {
-            $this->notificationService->sendTemplateEmail($email, $templateCode, [
-                'display_name' => $displayName,
-                'invoice_no' => (string) $invoice->invoice_no,
-                'order_no' => (string) ($invoice->order?->order_no ?? ''),
-                'product_name' => $productName,
-                'amount' => number_format((float) $invoice->amount, 2, '.', ''),
-                'due_date' => $dueDate,
-                'notice_message' => $tailText,
-            ]);
+            $this->messageDispatcher->sendNow(
+                'invoice.reminder.'.$invoice->id.'.'.$templateCode,
+                'invoice_payment_reminder',
+                'invoice',
+                (int) $invoice->id,
+                [$this->customerRecipient($invoice->user, $email, $displayName)],
+                [
+                    'display_name' => $displayName,
+                    'invoice_no' => (string) $invoice->invoice_no,
+                    'order_no' => (string) ($invoice->order?->order_no ?? ''),
+                    'product_name' => $productName,
+                    'amount' => number_format((float) $invoice->amount, 2, '.', ''),
+                    'due_date' => $dueDate,
+                    'notice_message' => $tailText,
+                ]
+            );
 
-            $userId = (int) ($invoice->user_id ?? $invoice->user?->id ?? 0);
+            $userId = (int) ($invoice->user_id ?? $invoice->user->id ?? 0);
             if ($userId > 0) {
                 $isOverdue = $templateCode === NotificationService::TEMPLATE_INVOICE_OVERDUE_REMINDER;
-                $this->userNotificationService->create(
+                $this->userNotificationService->createForScene(
                     $userId,
-                    $isOverdue ? UserNotificationType::INVOICE_OVERDUE_REMINDER : UserNotificationType::INVOICE_PAYMENT_REMINDER,
+                    'invoice_payment_reminder',
                     $isOverdue ? '账单逾期提醒' : '账单待支付提醒',
                     $tailText,
                     '/client/invoices/'.$invoice->id,
+                    ['notice_message' => $tailText],
                     ['invoice_id' => (int) $invoice->id, 'amount' => (float) $invoice->amount, 'due_date' => $dueDate]
                 );
             }

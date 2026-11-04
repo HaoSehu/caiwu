@@ -23,6 +23,7 @@ use App\Services\Finance\InvoiceService;
 use App\Services\Integrations\Plugins\PluginBindingResolver;
 use App\Services\Integrations\Plugins\ServiceUpstreamBindingWriter;
 use App\Services\Integrations\Support\ProviderErrorMapper;
+use App\Services\Notification\UserNotificationService;
 use App\Services\Pricing\MemberGroupDiscountService;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Services\System\NotificationService;
@@ -1806,12 +1807,27 @@ class ServiceRenewService
         }
 
         try {
+            $resumedAt = now()->format('Y-m-d H:i:s');
+            $expiresAt = $service->expires_at?->format('Y-m-d H:i:s') ?? '-';
+            $displayName = (string) ($service->user?->display_name ?? '客户');
+
             SendTemplateEmailJob::dispatch($email, NotificationService::TEMPLATE_SERVICE_RESTORED, [
-                'display_name' => (string) ($service->user?->display_name ?? '客户'),
+                'display_name' => $displayName,
                 'service_name' => (string) $service->name,
-                'resumed_at' => now()->format('Y-m-d H:i:s'),
-                'expires_at' => $service->expires_at?->format('Y-m-d H:i:s') ?? '-',
+                'resumed_at' => $resumedAt,
+                'expires_at' => $expiresAt,
             ]);
+
+            // 站内消息：受管理端「服务恢复」场景的站内消息开关控制
+            app(UserNotificationService::class)->createForScene(
+                (int) $service->user_id,
+                'service_resumed',
+                '服务已恢复',
+                "您的服务「{$service->name}」已恢复，新的到期时间 {$expiresAt}。",
+                '/client/services/'.$service->id,
+                ['service_name' => (string) $service->name, 'expires_at' => $expiresAt],
+                ['service_id' => (int) $service->id]
+            );
         } catch (\Throwable $exception) {
             Log::warning('[服务续费] 恢复通知发送失败', [
                 'service_id' => $service->id,
