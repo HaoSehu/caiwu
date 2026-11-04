@@ -35,7 +35,7 @@ import { useTabsRouterStore } from '@/store';
 // 实测请求数随访问过的页数线性增长（连续访问三个商品子页后，规格页会多出 6 个请求）。
 //
 // 因此 key 优先用 meta.keepAliveName 归并同一页面组。但**含参数的路由必须仍按 path 分实例**：
-// products/:id/edit、content/notices/:id、email-templates/:code 这些页面只在 onMounted 里
+// products/:id/edit、content/notices/:id 这些页面只在 onMounted 里
 // 按 route.params 取数、不监听参数变化，若与同组共用缓存槽，从「商品 1」跳到「商品 2」时
 // 会直接命中旧实例，既不重新挂载也不重新请求，页面继续显示上一个 id 的数据（实测已复现）。
 // 判断依据用 route.matched 上的 path 是否含 ':'，不依赖路由名约定。

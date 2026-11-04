@@ -57,6 +57,296 @@
   align-items: center;
 }
 
+/* 渠道状态：统一页每行展示各渠道的启用点与模板名 */
+.channel-cell {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.channel-cell small {
+  overflow: hidden;
+  color: var(--td-text-color-placeholder);
+  font-size: var(--td-font-size-size-1, 12px);
+  line-height: 1.5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 渠道启停开关：单元格内垂直居中，避免行高抖动 */
+.channel-switch {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+}
+
+/* 被插件能力锁定的渠道：明显区别于普通禁用态 */
+.channel-switch.is-locked {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* 移动端卡片里的锁定原因提示 */
+.channel-lock-hint {
+  display: block;
+  margin-top: 4px;
+  color: var(--td-warning-color, #e37318);
+  font-size: var(--td-font-size-size-1, 12px);
+  line-height: 1.5;
+  white-space: normal;
+}
+
+.muted-text {
+  color: var(--td-text-color-placeholder);
+}
+
+/* 抽屉内模板编辑与预览 */
+.drawer-loading {
+  width: 100%;
+}
+
+.drawer-alert {
+  margin-bottom: var(--td-comp-margin-l);
+}
+
+/* 插件接管字段的只读提示 */
+.override-hint {
+  color: var(--td-warning-color, #e37318);
+  font-size: var(--td-font-size-size-1, 12px);
+  line-height: 1.6;
+}
+
+/* 「从插件拉取模板」结果对话框 */
+.pull-result {
+  display: flex;
+  flex-direction: column;
+  gap: var(--td-comp-margin-m);
+}
+
+.pull-result__lead {
+  margin: 0;
+  color: var(--td-text-color-primary);
+}
+
+.pull-result dl {
+  display: grid;
+  gap: var(--td-comp-margin-s);
+  margin: 0;
+  padding: var(--td-comp-margin-m);
+  border: 1px solid var(--td-component-border);
+  border-radius: var(--td-radius-medium);
+  background: var(--td-bg-color-page);
+}
+
+.pull-result dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--td-comp-margin-m);
+}
+
+.pull-result dt {
+  color: var(--td-text-color-secondary);
+  font-size: var(--td-font-size-size-2, 13px);
+}
+
+.pull-result dd {
+  margin: 0;
+  color: var(--td-text-color-primary);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.pull-result__hint {
+  margin: 0;
+  color: var(--td-text-color-secondary);
+  font-size: var(--td-font-size-size-1, 12px);
+  line-height: 1.7;
+}
+
+/* 拉取到的各场景文案清单 */
+.pull-result__list {
+  display: flex;
+  max-height: 240px;
+  flex-direction: column;
+  gap: var(--td-comp-margin-s);
+  overflow-y: auto;
+  padding: var(--td-comp-margin-m);
+  border: 1px solid var(--td-component-border);
+  border-radius: var(--td-radius-medium);
+}
+
+.pull-result__item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pull-result__item strong {
+  color: var(--td-text-color-primary);
+  font-size: var(--td-font-size-size-2, 13px);
+}
+
+.pull-result__item span {
+  color: var(--td-text-color-secondary);
+  font-size: var(--td-font-size-size-1, 12px);
+  line-height: 1.6;
+  overflow-wrap: break-word;
+}
+
+.message-code-input textarea {
+  font-family: var(--td-font-family-monospace, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: var(--td-font-size-size-2, 13px);
+  line-height: 1.65;
+}
+
+.subject-preview {
+  display: flex;
+  align-items: baseline;
+  gap: var(--td-comp-margin-s);
+  margin-bottom: var(--td-comp-margin-l);
+  padding: 8px 12px;
+  border-radius: var(--td-radius-medium);
+  background: var(--td-bg-color-page);
+}
+
+.subject-preview span {
+  flex-shrink: 0;
+  color: var(--td-text-color-secondary);
+  font-size: var(--td-font-size-size-1, 12px);
+}
+
+.subject-preview strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--td-text-color-primary);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.variable-card {
+  margin: var(--td-comp-margin-m) 0;
+  background: var(--td-bg-color-page);
+}
+
+.token-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.preview-pane {
+  margin-top: var(--td-comp-margin-s);
+  border: 1px solid var(--td-component-border);
+  border-radius: var(--td-radius-default);
+  overflow: hidden;
+}
+
+.pane-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--td-comp-margin-s);
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--td-component-border);
+  background: var(--td-bg-color-page);
+}
+
+.pane-header strong {
+  color: var(--td-text-color-primary);
+  font-weight: 600;
+}
+
+.pane-header span {
+  color: var(--td-text-color-secondary);
+  font-size: var(--td-font-size-size-1, 12px);
+}
+
+.preview-frame {
+  display: block;
+  width: 100%;
+  height: 420px;
+  border: 0;
+  background: #fff;
+}
+
+.sms-preview {
+  margin-top: var(--td-comp-margin-s);
+  padding: 12px;
+  border: 1px solid var(--td-component-border);
+  border-radius: var(--td-radius-default);
+}
+
+.sms-preview strong {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--td-text-color-secondary);
+  font-size: var(--td-font-size-size-1, 12px);
+  font-weight: 500;
+}
+
+.sms-preview p {
+  margin: 0;
+  color: var(--td-text-color-primary);
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+/* 批量配置对话框 */
+.batch-channel-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--td-comp-margin-m);
+}
+
+.batch-alert {
+  margin-bottom: 0;
+}
+
+.batch-message-picker {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  border: 1px solid var(--td-component-border);
+  border-radius: var(--td-radius-default);
+}
+
+.batch-select-all {
+  border-bottom: 1px solid var(--td-component-border);
+  padding: 8px 12px;
+}
+
+.batch-message-list {
+  display: flex;
+  max-height: 240px;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+  padding: 6px 12px;
+}
+
+.batch-message-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.batch-message-name {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--td-text-color-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.batch-footnote {
+  margin: 0;
+  color: var(--td-text-color-secondary);
+  font-size: var(--td-font-size-size-1, 12px);
+}
+
 .template-mobile-card {
   overflow: hidden;
   padding: 0;

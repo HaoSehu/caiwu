@@ -1,6 +1,9 @@
 import { request } from '@/utils/request';
 
 import type {
+  MessageAudience,
+  MessageSceneDetail,
+  MessageSceneListResponse,
   NotificationTemplateItem,
   NotificationTemplateTestSendPayload,
   NotificationTemplateTestSendResponse,
@@ -50,6 +53,17 @@ export const settingsApi = {
       })),
   testNotificationTemplateSend: (data: NotificationTemplateTestSendPayload) =>
     request.post<NotificationTemplateTestSendResponse>({ url: '/v2/admin/notification-templates/test-send', data }),
+  messageScenes: (params: { audience: MessageAudience }) =>
+    request.get<MessageSceneListResponse>({ url: '/v2/admin/message-scenes', params }),
+  messageSceneDetail: (code: string, params: { audience: MessageAudience }) =>
+    request.get<MessageSceneDetail>({ url: `/v2/admin/message-scenes/${encodeURIComponent(code)}`, params }),
+  saveMessageScene: (code: string, data: Record<string, unknown>) =>
+    request.put<MessageSceneDetail>({ url: `/v2/admin/message-scenes/${encodeURIComponent(code)}`, data }),
+  batchMessageScenes: (data: Record<string, unknown>) =>
+    request.post<{ updated: number }>({ url: '/v2/admin/message-scenes/batch', data }),
+  /** 从当前短信插件的号码认证参数配置拉取内置验证码模板，并写回业务模板正文 */
+  pullSmsVerifyCodeTemplates: () =>
+    request.post<Record<string, unknown>>({ url: '/v2/admin/notification-templates/sms/verify-code-sync' }),
   save: (data: Record<string, unknown>) => request.post({ url: '/v2/admin/settings', data }),
   revealSecret: (group: string, key: string) =>
     request.get<{ group: string; key: string; value: unknown }>({

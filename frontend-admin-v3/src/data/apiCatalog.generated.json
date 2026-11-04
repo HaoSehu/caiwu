@@ -1,7 +1,7 @@
 {
     "meta": {
-        "generatedAt": "2026-10-28 18:19:05",
-        "total": 392,
+        "generatedAt": "2026-11-03 22:50:14",
+        "total": 400,
         "baseURL": "/api/v2",
         "dataSource": "php artisan route:list --json v2-only",
         "scopeLabels": {
@@ -21,17 +21,17 @@
             "permission": "登录 + 权限"
         },
         "scopeCounts": {
-            "admin": 245,
+            "admin": 253,
             "client": 128,
             "site": 18,
             "system": 1
         },
         "accessCounts": {
             "auth": 121,
-            "permission": 236,
+            "permission": 244,
             "public": 35
         },
-        "moduleCount": 78
+        "moduleCount": 81
     },
     "items": [
         {
@@ -2077,6 +2077,75 @@
             "sourceFiles": []
         },
         {
+            "id": "POST:/api/v2/admin/media-migrations",
+            "scope": "admin",
+            "scopeLabel": "管理端",
+            "module": "media-migrations",
+            "moduleLabel": "Media Migrations",
+            "method": "POST",
+            "methods": [
+                "POST"
+            ],
+            "callPath": "/admin/media-migrations",
+            "backendPath": "/api/v2/admin/media-migrations",
+            "normalizedPath": "/admin/media-migrations",
+            "access": "permission",
+            "accessLabel": "登录 + 权限",
+            "permission": "content.manage",
+            "throttle": "",
+            "guards": [],
+            "handler": "App\\Http\\Controllers\\Admin\\V2\\MediaMigrationController@store",
+            "sourceApps": [],
+            "sourceAppLabels": [],
+            "sourceFiles": []
+        },
+        {
+            "id": "GET:/api/v2/admin/media-migrations/{batchId}",
+            "scope": "admin",
+            "scopeLabel": "管理端",
+            "module": "media-migrations",
+            "moduleLabel": "Media Migrations",
+            "method": "GET",
+            "methods": [
+                "GET"
+            ],
+            "callPath": "/admin/media-migrations/{batchId}",
+            "backendPath": "/api/v2/admin/media-migrations/{batchId}",
+            "normalizedPath": "/admin/media-migrations/{param}",
+            "access": "permission",
+            "accessLabel": "登录 + 权限",
+            "permission": "content.manage",
+            "throttle": "",
+            "guards": [],
+            "handler": "App\\Http\\Controllers\\Admin\\V2\\MediaMigrationController@show",
+            "sourceApps": [],
+            "sourceAppLabels": [],
+            "sourceFiles": []
+        },
+        {
+            "id": "GET:/api/v2/admin/media-storage-drivers",
+            "scope": "admin",
+            "scopeLabel": "管理端",
+            "module": "media-storage-drivers",
+            "moduleLabel": "Media Storage Drivers",
+            "method": "GET",
+            "methods": [
+                "GET"
+            ],
+            "callPath": "/admin/media-storage-drivers",
+            "backendPath": "/api/v2/admin/media-storage-drivers",
+            "normalizedPath": "/admin/media-storage-drivers",
+            "access": "permission",
+            "accessLabel": "登录 + 权限",
+            "permission": "content.list",
+            "throttle": "",
+            "guards": [],
+            "handler": "App\\Http\\Controllers\\Admin\\V2\\MediaFileController@storageDrivers",
+            "sourceApps": [],
+            "sourceAppLabels": [],
+            "sourceFiles": []
+        },
+        {
             "id": "GET:/api/v2/admin/member-levels",
             "scope": "admin",
             "scopeLabel": "管理端",
@@ -2210,6 +2279,102 @@
             "throttle": "",
             "guards": [],
             "handler": "App\\Http\\Controllers\\Admin\\V2\\MemberLevelGroupDiscountController@sync",
+            "sourceApps": [],
+            "sourceAppLabels": [],
+            "sourceFiles": []
+        },
+        {
+            "id": "GET:/api/v2/admin/message-scenes",
+            "scope": "admin",
+            "scopeLabel": "管理端",
+            "module": "message-scenes",
+            "moduleLabel": "Message Scenes",
+            "method": "GET",
+            "methods": [
+                "GET"
+            ],
+            "callPath": "/admin/message-scenes",
+            "backendPath": "/api/v2/admin/message-scenes",
+            "normalizedPath": "/admin/message-scenes",
+            "access": "permission",
+            "accessLabel": "登录 + 权限",
+            "permission": "settings.view",
+            "throttle": "",
+            "guards": [],
+            "handler": "App\\Http\\Controllers\\Admin\\V2\\MessageSceneController@index",
+            "sourceApps": [],
+            "sourceAppLabels": [],
+            "sourceFiles": []
+        },
+        {
+            "id": "POST:/api/v2/admin/message-scenes/batch",
+            "scope": "admin",
+            "scopeLabel": "管理端",
+            "module": "message-scenes",
+            "moduleLabel": "Message Scenes",
+            "method": "POST",
+            "methods": [
+                "POST"
+            ],
+            "callPath": "/admin/message-scenes/batch",
+            "backendPath": "/api/v2/admin/message-scenes/batch",
+            "normalizedPath": "/admin/message-scenes/batch",
+            "access": "permission",
+            "accessLabel": "登录 + 权限",
+            "permission": "settings.manage",
+            "throttle": "admin-privilege-write",
+            "guards": [
+                "限流 admin-privilege-write"
+            ],
+            "handler": "App\\Http\\Controllers\\Admin\\V2\\MessageSceneController@batch",
+            "sourceApps": [],
+            "sourceAppLabels": [],
+            "sourceFiles": []
+        },
+        {
+            "id": "GET:/api/v2/admin/message-scenes/{code}",
+            "scope": "admin",
+            "scopeLabel": "管理端",
+            "module": "message-scenes",
+            "moduleLabel": "Message Scenes",
+            "method": "GET",
+            "methods": [
+                "GET"
+            ],
+            "callPath": "/admin/message-scenes/{code}",
+            "backendPath": "/api/v2/admin/message-scenes/{code}",
+            "normalizedPath": "/admin/message-scenes/{param}",
+            "access": "permission",
+            "accessLabel": "登录 + 权限",
+            "permission": "settings.view",
+            "throttle": "",
+            "guards": [],
+            "handler": "App\\Http\\Controllers\\Admin\\V2\\MessageSceneController@show",
+            "sourceApps": [],
+            "sourceAppLabels": [],
+            "sourceFiles": []
+        },
+        {
+            "id": "PUT:/api/v2/admin/message-scenes/{code}",
+            "scope": "admin",
+            "scopeLabel": "管理端",
+            "module": "message-scenes",
+            "moduleLabel": "Message Scenes",
+            "method": "PUT",
+            "methods": [
+                "PUT"
+            ],
+            "callPath": "/admin/message-scenes/{code}",
+            "backendPath": "/api/v2/admin/message-scenes/{code}",
+            "normalizedPath": "/admin/message-scenes/{param}",
+            "access": "permission",
+            "accessLabel": "登录 + 权限",
+            "permission": "settings.manage",
+            "throttle": "admin-privilege-write",
+            "guards": [
+                "限流 admin-privilege-write"
+            ],
+            "handler": "App\\Http\\Controllers\\Admin\\V2\\MessageSceneController@update",
             "sourceApps": [],
             "sourceAppLabels": [],
             "sourceFiles": []
@@ -5605,6 +5770,31 @@
             "throttle": "",
             "guards": [],
             "handler": "App\\Http\\Controllers\\Admin\\V2\\UserServiceController@trackingDestroy",
+            "sourceApps": [],
+            "sourceAppLabels": [],
+            "sourceFiles": []
+        },
+        {
+            "id": "POST:/api/v2/admin/users/{user}/services/{service}/transfers",
+            "scope": "admin",
+            "scopeLabel": "管理端",
+            "module": "users",
+            "moduleLabel": "用户",
+            "method": "POST",
+            "methods": [
+                "POST"
+            ],
+            "callPath": "/admin/users/{user}/services/{service}/transfers",
+            "backendPath": "/api/v2/admin/users/{user}/services/{service}/transfers",
+            "normalizedPath": "/admin/users/{param}/services/{param}/transfers",
+            "access": "permission",
+            "accessLabel": "登录 + 权限",
+            "permission": "user.manage",
+            "throttle": "10,1,admin-user-service-transfer",
+            "guards": [
+                "限流 10,1,admin-user-service-transfer"
+            ],
+            "handler": "App\\Http\\Controllers\\Admin\\V2\\UserServiceController@transfer",
             "sourceApps": [],
             "sourceAppLabels": [],
             "sourceFiles": []

@@ -137,25 +137,10 @@ export const contentRoutes: RouteRecordRaw[] = [
     component: () => import('@/pages/notifications/index.vue'),
     meta: {
       title: {
-        zh_CN: '邮件模板',
-        en_US: 'Email Templates',
+        zh_CN: '消息配置',
+        en_US: 'Message Configuration',
       },
       permission: AdminPermissions.SETTINGS_VIEW,
-      notificationTab: 'email-templates',
-      keepAliveName: 'AdminNotificationList',
-    },
-  },
-  {
-    path: 'notifications/sms-templates',
-    name: 'AdminNotificationSmsTemplates',
-    component: () => import('@/pages/notifications/index.vue'),
-    meta: {
-      title: {
-        zh_CN: '短信模板',
-        en_US: 'SMS Templates',
-      },
-      permission: AdminPermissions.SETTINGS_VIEW,
-      notificationTab: 'sms-templates',
       keepAliveName: 'AdminNotificationList',
     },
   },
@@ -171,34 +156,6 @@ export const contentRoutes: RouteRecordRaw[] = [
       permission: AdminPermissions.SETTINGS_VIEW,
       notificationTab: 'api-directory',
       keepAliveName: 'AdminNotificationList',
-    },
-  },
-  {
-    path: 'notifications/email-templates/:code',
-    name: 'AdminNotificationEmailTemplateDetail',
-    component: () => import('@/pages/notifications/email-template-detail/index.vue'),
-    meta: {
-      title: {
-        zh_CN: '邮件模板详情',
-        en_US: 'Email Template Detail',
-      },
-      permission: AdminPermissions.SETTINGS_VIEW,
-      hidden: true,
-      keepAliveName: 'AdminNotificationTemplateDetail',
-    },
-  },
-  {
-    path: 'notifications/sms-templates/:code',
-    name: 'AdminNotificationSmsTemplateDetail',
-    component: () => import('@/pages/notifications/email-template-detail/index.vue'),
-    meta: {
-      title: {
-        zh_CN: '短信模板详情',
-        en_US: 'SMS Template Detail',
-      },
-      permission: AdminPermissions.SETTINGS_VIEW,
-      hidden: true,
-      keepAliveName: 'AdminNotificationTemplateDetail',
     },
   },
 ];

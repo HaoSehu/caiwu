@@ -245,6 +245,88 @@ export interface NotificationTemplateItem {
   variables: string[];
   provider_variables?: string[];
   setting_keys?: Record<string, string>;
+  /** 被插件接管的字段（插件优先，管理端只读）：subject / content / provider_template_id */
+  overridden_fields?: string[];
+}
+
+export type MessageAudience = 'customer' | 'admin';
+
+export interface MessageSceneVariable {
+  key: string;
+  label: string;
+}
+
+export interface MessageSceneMetadata {
+  code: string;
+  name: string;
+  description: string;
+  channels: string[];
+  variables: MessageSceneVariable[];
+}
+
+export interface MessageChannelConfiguration {
+  enabled: boolean;
+  channel_id?: number;
+  channel_revision?: number;
+  title?: string;
+  body?: string;
+  template_id?: string;
+  variables?: string;
+}
+
+export interface MessageRecipientPolicy {
+  mode: 'founder' | 'departments' | 'roles' | 'members';
+  ids: number[];
+}
+
+export interface MessageRecipientGroup {
+  id: string;
+  name: string;
+  kind: 'customer' | 'admin' | 'robot';
+  enabled: boolean;
+  recipients: MessageRecipientPolicy;
+  configurations: Record<string, MessageChannelConfiguration>;
+}
+
+export interface MessageSceneRow {
+  code: string;
+  name: string;
+  description: string;
+  purpose: 'notification' | 'verification' | 'system';
+  revision: number;
+  metadata: Partial<Record<MessageAudience, MessageSceneMetadata>>;
+  channels: Record<string, boolean>;
+  /** 该场景实际挂载了模板、且未被插件锁定的渠道；不在其中的渠道无法发送，开关应禁用且不可操作 */
+  sendable_channels: string[];
+  /** 被插件能力锁定的渠道 => 锁定原因（如「当前短信插件不支持业务通知类消息」） */
+  locked_channels: Record<string, string>;
+  enabled: boolean;
+}
+
+export interface MessageSceneTemplateRef {
+  channel: string;
+  code: string;
+  name: string;
+  is_enabled: boolean;
+}
+
+export interface MessageSceneDetail {
+  code: string;
+  name: string;
+  description: string;
+  purpose: 'notification' | 'verification' | 'system';
+  revisions: Partial<Record<MessageAudience, number>>;
+  metadata: Partial<Record<MessageAudience, MessageSceneMetadata>>;
+  groups: MessageRecipientGroup[];
+  group_templates: Record<string, MessageRecipientGroup>;
+  channel_options: Record<string, Array<{ id: number; name: string; available: boolean }>>;
+  recipient_options: Record<string, Array<{ id: number; name: string }>>;
+  templates: MessageSceneTemplateRef[];
+}
+
+export interface MessageSceneListResponse {
+  data: MessageSceneRow[];
+  audience: MessageAudience;
 }
 
 export interface NotificationTemplateTestSendPayload {
