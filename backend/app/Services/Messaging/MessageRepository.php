@@ -28,7 +28,14 @@ final class MessageRepository
 
     private const MAX_ATTEMPTS = 3;
 
-    private const LEASE_SECONDS = 120;
+    /**
+     * 领取租约时长（秒）。
+     *
+     * 必须显著大于 DeliverMessageJob::$timeout（120s）：两者相等时，超时被杀与
+     * 租约到期发生在同一瞬间，recoverExpired 会把仍在发送中的任务标成终态，
+     * 随后 worker 的 finish 被静默丢弃，出现「已发出却记为 unknown」的状态失真。
+     */
+    private const LEASE_SECONDS = 300;
 
     /**
      * 记录一条业务消息与其全部投递任务。
@@ -58,7 +65,10 @@ final class MessageRepository
             'created_at' => $now,
         ]);
 
-        $message = Message::query()->where('event_key', $eventKey)->first();
+        // 用加锁读而非普通一致读：MySQL REPEATABLE READ 下，并发事务的快照早于
+        // 对方提交，普通 SELECT 看不到刚提交的行，会让第二个并发请求误判为「不存在」
+        // 并抛异常回滚整个业务事务。加锁读总是读最新已提交版本。
+        $message = Message::query()->where('event_key', $eventKey)->lockForUpdate()->first();
         if (! $message instanceof Message) {
             throw new LogicException(self::MESSAGE_STATE_STALE_MESSAGE_ID);
         }
@@ -150,6 +160,25 @@ final class MessageRepository
                 'payload' => is_array($payload) ? $payload : [],
             ];
         });
+    }
+
+    /**
+     * 把无法解密的投递标记为终态，避免它被 due() 反复捞起形成毒消息。
+     *
+     * 解密失败通常意味着 APP_KEY 轮换或密文损坏，重试永远不会成功；
+     * 每分钟重投一次只会堆积 failed_jobs，必须在这里一次性判死。
+     */
+    public function markUndecryptable(int $deliveryId): void
+    {
+        MessageDelivery::query()
+            ->whereKey($deliveryId)
+            ->where('status', MessageDelivery::STATUS_PENDING)
+            ->update([
+                'status' => MessageDelivery::STATUS_FAILED,
+                'error_code' => 'payload_undecryptable',
+                'lease_key' => '',
+                'lease_until' => null,
+            ]);
     }
 
     /**

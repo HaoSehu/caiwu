@@ -85,7 +85,10 @@ final class VerificationMessageSender
             $parameters[(string) $key] = $this->render((string) $template, $variables);
         }
 
-        $result = $this->transport->send($method === 'email' ? 'email' : 'sms', $scene.':'.$challengeId, [
+        // request_key 会被 SmsMessage 校验为 [A-Za-z0-9_-]{1,64}，不能含冒号
+        $requestKey = $scene.'-'.$challengeId;
+
+        $result = $this->transport->send($method === 'email' ? 'email' : 'sms', $requestKey, [
             'address' => $target,
             'title' => $this->render((string) ($config['title'] ?? '验证码'), $variables),
             'body' => $this->render((string) ($config['body'] ?? ''), $variables),

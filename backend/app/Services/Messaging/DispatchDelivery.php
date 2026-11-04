@@ -22,7 +22,16 @@ final class DispatchDelivery
 
     public function consume(int $deliveryId): void
     {
-        $task = $this->repository->claim($deliveryId);
+        try {
+            $task = $this->repository->claim($deliveryId);
+        } catch (Throwable) {
+            // 领取阶段异常（典型是 payload 解密失败，如 APP_KEY 轮换）：
+            // 该任务永远不会成功，必须判死，否则 messages:dispatch 每分钟重投一次。
+            $this->repository->markUndecryptable($deliveryId);
+
+            return;
+        }
+
         if ($task === null) {
             return;
         }

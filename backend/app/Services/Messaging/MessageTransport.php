@@ -96,7 +96,8 @@ final class MessageTransport
         try {
             $driver = $this->mailDrivers->resolve();
         } catch (Throwable) {
-            return TransportResult::failed('channel_not_configured');
+            // 通道临时解析失败：配置可能刚变更，允许重试
+            return TransportResult::failed('channel_not_configured', true);
         }
 
         try {
@@ -121,7 +122,8 @@ final class MessageTransport
         try {
             $driver = $this->smsDrivers->resolve();
         } catch (Throwable) {
-            return TransportResult::failed('channel_not_configured');
+            // 通道临时解析失败：配置可能刚变更，允许重试
+            return TransportResult::failed('channel_not_configured', true);
         }
 
         try {
@@ -151,7 +153,8 @@ final class MessageTransport
 
         return match ($status) {
             'success', 'accepted', 'sent', 'delivered' => TransportResult::accepted($result->requestId),
-            'failed', 'rejected' => TransportResult::failed('provider_rejected'),
+            // 厂商明确拒绝多为限流/风控等瞬时原因，允许有限重试
+            'failed', 'rejected' => TransportResult::failed('provider_rejected', true),
             default => TransportResult::unknown('provider_status_unknown'),
         };
     }

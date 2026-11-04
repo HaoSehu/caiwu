@@ -63,11 +63,15 @@ class SendTicketNotificationEmailJob implements ShouldQueue
 
         [$sceneCode, $audience] = $scene;
 
+        // event_key 必须含业务对象 id：同一邮箱同一模板的不同工单是两个独立事件，
+        // 只按邮箱哈希会让它们塌缩成同一条投递记录（payload 永远是第一次的，attempts 累加）。
+        $businessId = (int) ($this->context['ticket_id'] ?? 0);
+
         $dispatcher->sendNow(
-            'template.'.$this->templateCode.'.'.md5($this->to),
+            'template.'.$this->templateCode.'.'.$businessId.'.'.md5($this->to),
             $sceneCode,
             'ticket',
-            0,
+            $businessId,
             [[
                 'audience' => $audience,
                 'account_id' => 0,

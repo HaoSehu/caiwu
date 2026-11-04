@@ -145,6 +145,13 @@ class MessageDispatcher
                         continue;
                     }
 
+                    // 站内消息必须落到具体账号：只给了邮箱/手机号（如队列任务的
+                    // account_id=0）时无法写入 user_notifications，展开阶段就跳过，
+                    // 否则会生成一个必然失败的目标，把整条消息连带邮件一起判为失败。
+                    if ($channel === 'message' && (int) ($recipient['account_id'] ?? 0) <= 0) {
+                        continue;
+                    }
+
                     $targetKey = (string) ($recipient['target_key'] ?? ('user:'.(int) ($recipient['account_id'] ?? 0)));
                     $dedupe = $targetKey.':'.$channel;
                     if (isset($seen[$dedupe])) {
@@ -194,7 +201,14 @@ class MessageDispatcher
                 'created_at' => now(),
             ]);
 
-            return (int) Message::query()->where('event_key', $key)->value('id');
+            // 加锁读：并发事务的快照可能早于对方提交，普通 SELECT 读不到刚插入的行
+            $id = Message::query()->where('event_key', $key)->lockForUpdate()->value('id');
+
+            if (! is_int($id) && ! is_numeric($id)) {
+                throw new \LogicException('消息流水写入后无法读回，请检查 messages 表状态');
+            }
+
+            return (int) $id;
         });
     }
 
