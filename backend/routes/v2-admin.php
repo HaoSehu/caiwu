@@ -21,6 +21,7 @@ use App\Http\Controllers\Admin\V2\MediaFileController;
 use App\Http\Controllers\Admin\V2\MediaMigrationController;
 use App\Http\Controllers\Admin\V2\MemberLevelController;
 use App\Http\Controllers\Admin\V2\MemberLevelGroupDiscountController;
+use App\Http\Controllers\Admin\V2\MessageSceneController;
 use App\Http\Controllers\Admin\V2\OrderController;
 use App\Http\Controllers\Admin\V2\ProductController;
 use App\Http\Controllers\Admin\V2\ProductGroupController;
@@ -445,12 +446,17 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
     Route::middleware(['permission:'.AdminPermissions::SETTINGS_VIEW])->group(function (): void {
         Route::get('/notification-templates', [SettingController::class, 'notificationTemplates']);
         Route::get('/notification-templates/sms/provider-template/list', [SettingController::class, 'listSmsProviderTemplates']);
+        Route::get('/message-scenes', [MessageSceneController::class, 'index']);
+        Route::get('/message-scenes/{code}', [MessageSceneController::class, 'show']);
         Route::get('/settings', [SettingController::class, 'index']);
     });
 
     Route::middleware(['permission:'.AdminPermissions::SETTINGS_MANAGE, 'throttle:admin-privilege-write'])->group(function (): void {
+        Route::put('/message-scenes/{code}', [MessageSceneController::class, 'update']);
+        Route::post('/message-scenes/batch', [MessageSceneController::class, 'batch']);
         Route::post('/notification-templates/test-send', [SettingController::class, 'testNotificationTemplate']);
         Route::post('/notification-templates/sms/provider-sync', [SettingController::class, 'syncSmsProviderTemplates'])->middleware('throttle:20,1');
+        Route::post('/notification-templates/sms/verify-code-sync', [SettingController::class, 'syncSmsVerifyCodeTemplates'])->middleware('throttle:20,1');
         Route::post('/notification-templates/sms/provider-template/import-defaults', [SettingController::class, 'importDefaultSmsProviderTemplates'])->middleware('throttle:20,1');
         Route::post('/notification-templates/sms/provider-template/submit-all', [SettingController::class, 'submitAllSmsProviderTemplates'])->middleware('throttle:20,1');
         Route::post('/notification-templates/sms/provider-template', [SettingController::class, 'createSmsProviderTemplate']);

@@ -55,6 +55,13 @@ Schedule::command('coupon:dispatch-due-campaigns')
     ->name('coupon-campaign-dispatch')
     ->runInBackground();
 
+// 消息投递补投：数据库是待投递队列真源，Redis 只是加速通道；
+// 每轮先把到期的 pending 任务推入队列，并回收过期租约（外部渠道记 unknown，不重发）。
+Schedule::command('messages:dispatch')
+    ->everyMinute()
+    ->name('message-dispatch')
+    ->runInBackground();
+
 if ($shouldUseScheduleMutex) {
     $heartbeat->withoutOverlapping(2);
 }
