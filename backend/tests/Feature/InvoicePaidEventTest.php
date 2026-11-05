@@ -103,6 +103,7 @@ class InvoicePaidEventTest extends TestCase
                     array $recipients,
                     array $variables = [],
                     string $audience = 'customer',
+                    string $templateCode = '',
                 ) use (&$sent): bool {
                     $sent[] = ['to' => (string) ($recipients[0]['email'] ?? ''), 'template' => $scene, 'params' => $variables];
 

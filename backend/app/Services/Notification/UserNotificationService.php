@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Models\UserNotification;
 use App\Services\Messaging\MessageConfigurationRepository;
 use App\Support\MessageGroups;
+use App\Support\MessageTemplateRenderer;
 use App\Support\MessageTypeCatalog;
 use App\Support\SchemaMetadataCache;
 use App\Support\SiteConfigPayload;
@@ -99,6 +100,9 @@ class UserNotificationService
     /**
      * 从场景的 message 模板渲染标题正文；没有模板时用调用方兜底文案。
      *
+     * 同一场景有多条站内模板时（如续费提醒分「即将到期」与「已到期」），
+     * 取占位符与本次变量重合最多的一条，避免不同档位共用同一文案。
+     *
      * @param  array<string, scalar|null>  $variables
      * @return array{0: string, 1: string|null}
      */
@@ -109,30 +113,27 @@ class UserNotificationService
         ?string $fallbackContent,
     ): array {
         try {
-            $template = DB::table('notification_templates')
+            $templates = DB::table('notification_templates')
                 ->where('channel', 'message')
                 ->where('scene_code', $scene)
                 ->where('is_enabled', 1)
                 ->orderBy('sort_order')
-                ->first(['subject', 'content']);
+                ->get(['subject', 'content'])
+                ->all();
 
-            if ($template === null) {
+            if ($templates === []) {
                 return [$fallbackTitle, $fallbackContent];
             }
+
+            $template = $this->pickMessageTemplate($templates, $variables);
 
             $values = ['site_name' => (string) (SiteConfigPayload::payload()['site_name'] ?? '')];
             foreach ($variables as $key => $value) {
                 $values[(string) $key] = (string) $value;
             }
 
-            $render = static fn (string $text): string => (string) preg_replace_callback(
-                '/\{\{([a-zA-Z][a-zA-Z0-9_]*)\}\}/',
-                static fn (array $m): string => $values[$m[1]] ?? '',
-                $text
-            );
-
-            $title = $render((string) $template->subject);
-            $content = $render((string) $template->content);
+            $title = MessageTemplateRenderer::render((string) $template->subject, $values);
+            $content = MessageTemplateRenderer::render((string) $template->content, $values);
 
             return [
                 $title !== '' ? $title : $fallbackTitle,
@@ -141,6 +142,50 @@ class UserNotificationService
         } catch (\Throwable) {
             return [$fallbackTitle, $fallbackContent];
         }
+    }
+
+    /**
+     * 多条站内模板时选最贴近本次变量的一条。
+     *
+     * 排序口径（依次比较，全部相同才保留先出现的，即 sort_order 靠前者）：
+     * 1. 命中本次变量的占位符数量越多越贴近；
+     * 2. 占位符总数越多，信息越完整；
+     * 3. 模板正文越短，说明越聚焦。
+     *
+     * @param  list<object>  $templates
+     * @param  array<string, scalar|null>  $variables
+     */
+    private function pickMessageTemplate(array $templates, array $variables): object
+    {
+        if (count($templates) === 1) {
+            return $templates[0];
+        }
+
+        $keys = array_keys($variables);
+        $best = $templates[0];
+        $bestRank = null;
+
+        foreach ($templates as $template) {
+            $text = (string) ($template->subject ?? '').' '.(string) ($template->content ?? '');
+            preg_match_all('/\{\{([a-zA-Z][a-zA-Z0-9_]*)\}\}/', $text, $matches);
+            $placeholders = array_values(array_unique($matches[1]));
+
+            $matched = 0;
+            foreach ($placeholders as $placeholder) {
+                if (in_array($placeholder, $keys, true)) {
+                    $matched++;
+                }
+            }
+
+            $rank = [$matched, count($placeholders), -strlen($text)];
+
+            if ($bestRank === null || $rank > $bestRank) {
+                $best = $template;
+                $bestRank = $rank;
+            }
+        }
+
+        return $best;
     }
 
     /**

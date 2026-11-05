@@ -46,6 +46,14 @@ class SendTemplateEmailJob implements ShouldQueue
         NotificationService::TEMPLATE_AUTO_RENEW_NOTICE => ['auto_renew_notice', 'customer'],
         NotificationService::TEMPLATE_SERVICE_TERMINATED => ['service_terminated', 'customer'],
         NotificationService::TEMPLATE_SERVICE_UNSUSPEND_FAILED => ['service_suspend_failed', 'customer'],
+        NotificationService::TEMPLATE_INVOICE_REFUND => ['order_refunded', 'customer'],
+        NotificationService::TEMPLATE_SERVICE_ACTIVATED => ['service_activated', 'customer'],
+        NotificationService::TEMPLATE_SERVICE_RESTORED => ['service_resumed', 'customer'],
+        NotificationService::TEMPLATE_SERVICE_TRANSFERRED => ['service_transferred', 'customer'],
+        // 100004「绑定通知」在场景目录里归到 security_changed（账号安全变更）
+        NotificationService::TEMPLATE_ACCOUNT_BINDING_ALERT => ['security_changed', 'customer'],
+        NotificationService::TEMPLATE_CLIENT_ORDER_PENDING => ['order_created', 'customer'],
+        NotificationService::TEMPLATE_ADMIN_LOGIN_ALERT => ['admin_login_alert', 'admin'],
     ];
 
     /** 跨重试稳定的投递键（任务构造时生成，序列化后保持不变） */
@@ -92,13 +100,14 @@ class SendTemplateEmailJob implements ShouldQueue
             [[
                 'audience' => $audience,
                 'account_id' => 0,
-                'target_key' => 'email:'.$this->email,
+                'target_key' => ($audience === 'admin' ? 'admin:email:' : 'email:').$this->email,
                 'email' => $this->email,
                 'mobile' => '',
                 'name' => $name,
             ]],
             $this->payload,
-            $audience
+            $audience,
+            $this->templateCode
         );
     }
 

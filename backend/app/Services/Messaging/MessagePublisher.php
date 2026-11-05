@@ -9,6 +9,7 @@ use App\Models\AdminUser;
 use App\Models\User;
 use App\Support\MessageGroups;
 use App\Support\MessageTypeCatalog;
+use App\Support\MessageVariables;
 use Illuminate\Support\Collection;
 use InvalidArgumentException;
 
@@ -68,7 +69,6 @@ final class MessagePublisher
 
             $known = true;
             $stored = $this->configurations->get($audience, $scene);
-            $values = $this->filterVariables($variables, $type['variables']);
 
             foreach (MessageGroups::fromStored($audience, $type, $stored['configurations']) as $group) {
                 if (! MessageGroups::enabled($group)) {
@@ -81,12 +81,22 @@ final class MessagePublisher
                         continue;
                     }
 
+                    // 管理员受众没有站内信载体：message 渠道写入 user_notifications
+                    // 会把内部通知投给编号相同的普通用户，待有独立载体后再启用。
+                    if ($channel === 'message' && $audience === 'admin') {
+                        continue;
+                    }
+
                     foreach ($this->recipients($audience, $group, $memberId) as $recipient) {
                         $dedupe = ($group['kind'] === 'robot' ? 'robot' : $audience).':'.$recipient['id'].':'.$channel;
                         if (isset($seen[$dedupe])) {
                             continue;
                         }
                         $seen[$dedupe] = true;
+
+                        // 与 MessageDispatcher 共用同一套兜底口径；收件人名称按人解析，
+                        // 避免群发时所有人的 display_name 都变成第一个收件人。
+                        $values = MessageVariables::resolve($variables, $type['variables'], $recipient['name']);
 
                         $targets[] = [
                             'audience' => $audience,
@@ -207,17 +217,6 @@ final class MessagePublisher
             'link' => (string) ($config['link'] ?? ''),
             'data' => [],
         ];
-    }
-
-    /** @param  array<string, scalar|null>  $variables */
-    private function filterVariables(array $variables, array $allowed): array
-    {
-        $filtered = [];
-        foreach ($allowed as $key) {
-            $filtered[$key] = (string) ($variables[$key] ?? '');
-        }
-
-        return $filtered;
     }
 
     /** @param  array<string, string>  $values */

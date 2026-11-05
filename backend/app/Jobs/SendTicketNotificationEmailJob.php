@@ -81,7 +81,8 @@ class SendTicketNotificationEmailJob implements ShouldQueue
                 'name' => (string) ($this->params['display_name'] ?? $this->to),
             ]],
             $this->params,
-            $audience
+            $audience,
+            $this->templateCode
         );
     }
 

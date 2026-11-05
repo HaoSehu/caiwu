@@ -56,6 +56,7 @@ class AdminOrderNotificationFailureTest extends TestCase
                 array $recipients,
                 array $variables,
                 string $audience = 'customer',
+                string $templateCode = '',
             ): bool {
                 $email = (string) ($recipients[0]['email'] ?? '');
                 if (in_array($email, $this->failingEmails, true)) {

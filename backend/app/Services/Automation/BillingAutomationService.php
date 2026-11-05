@@ -109,8 +109,12 @@ class BillingAutomationService
                     : "您的服务 {$service->name} 将在 {$days} 天后到期。");
 
             try {
-                // 里程碑分档：最早档（如提前 7 天）发第 1 次提醒，其余档发第 2 次加急提醒。
-                // 两档都落在 service_due 场景，只是 urgency_message 文案不同。
+                // 里程碑分档：最早档（如提前 7 天）发第 1 次提醒（100018），其余档发第 2 次加急提醒（100019）。
+                // 两档都落在 service_due 场景，按模板编号取对应正文；urgency_message 为催办文案。
+                $renewTemplateCode = $milestoneDays === $maxRenewNoticeDays
+                    ? NotificationService::TEMPLATE_SERVICE_RENEW_REMINDER
+                    : NotificationService::TEMPLATE_SERVICE_SECOND_RENEW_REMINDER;
+
                 $this->messageDispatcher->sendNow(
                     'service.renew_notice.'.$service->id.'.'.$ruleKey,
                     'service_due',
@@ -124,7 +128,9 @@ class BillingAutomationService
                         'expires_at' => $expiryStr,
                         'billing_cycle_label' => BillingCycleLabels::label((string) $service->billing_cycle),
                         'urgency_message' => $urgencyLine,
-                    ]
+                    ],
+                    'customer',
+                    $renewTemplateCode
                 );
                 $this->userNotificationService->createForScene(
                     (int) $service->user_id,
@@ -301,12 +307,13 @@ class BillingAutomationService
                 ]
             );
 
-            // 站内消息：受管理端「自动续费通知」场景的站内消息开关控制
+            // 站内消息：受管理端「自动续费通知」场景的站内消息开关控制。
+            // 此处只是「续费账单已生成」，真正扣款由 AutoRenewService 异步执行，文案不得写成已完成。
             $this->userNotificationService->createForScene(
                 (int) $user->id,
                 'auto_renew_notice',
-                '自动续费已完成',
-                '您的服务「'.$service->name.'」已完成自动续费，账单号 '.$invoice->invoice_no.'，金额 '.number_format((float) $invoice->amount, 2, '.', '').' 元。',
+                '自动续费账单已生成',
+                '您的服务「'.$service->name.'」的自动续费账单已生成，账单号 '.$invoice->invoice_no.'，金额 '.number_format((float) $invoice->amount, 2, '.', '').' 元，请确保账户余额充足以便自动扣款。',
                 '/client/services/'.$service->id,
                 [
                     'service_name' => (string) $service->name,
@@ -597,16 +604,24 @@ class BillingAutomationService
                     'amount' => number_format((float) $invoice->amount, 2, '.', ''),
                     'due_date' => $dueDate,
                     'notice_message' => $tailText,
-                ]
+                ],
+                'customer',
+                $templateCode
             );
 
+            // 站内信标题跟随里程碑档位（第 1/2 次提醒、第 3 次即逾期提醒），
+            // 正文取调用方传入的催办文案。
             $userId = (int) ($invoice->user_id ?? $invoice->user->id ?? 0);
             if ($userId > 0) {
-                $isOverdue = $templateCode === NotificationService::TEMPLATE_INVOICE_OVERDUE_REMINDER;
+                $title = match ($templateCode) {
+                    NotificationService::TEMPLATE_INVOICE_SECOND_PAYMENT_REMINDER => '账单二次提醒',
+                    NotificationService::TEMPLATE_INVOICE_OVERDUE_REMINDER => '账单逾期提醒',
+                    default => '账单待支付提醒',
+                };
                 $this->userNotificationService->createForScene(
                     $userId,
                     'invoice_payment_reminder',
-                    $isOverdue ? '账单逾期提醒' : '账单待支付提醒',
+                    $title,
                     $tailText,
                     '/client/invoices/'.$invoice->id,
                     ['notice_message' => $tailText],

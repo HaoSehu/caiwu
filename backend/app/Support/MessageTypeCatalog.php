@@ -116,7 +116,16 @@ final class MessageTypeCatalog
         'notice_title' => '通知标题',
         'auto_renew' => '是否自动续费',
         'server_status' => '实例状态',
+        'hours_left' => '剩余小时数',
     ];
+
+    /**
+     * 各场景默认兜底变量：模板实际引用了它、但调用方不一定显式传入时，
+     * 从收件人上下文自动填充（display_name / recipient_name 取收件人名称）。
+     *
+     * @var list<string>
+     */
+    public const RECIPIENT_NAME_ALIASES = ['display_name', 'recipient_name'];
 
     /**
      * 客户侧场景：键为场景编码，值为 [名称, 描述, 渠道, 变量]。
@@ -210,7 +219,14 @@ final class MessageTypeCatalog
         $result = [];
 
         foreach ($definitions as $code => [$name, $description, $channels, $variables]) {
-            $keys = array_values(array_unique(array_merge(['site_name', 'customer_name'], $variables)));
+            // 收件人名称是通用变量：历史邮件模板大量使用 {{display_name}}（管理员侧为
+            // {{recipient_name}}），若未登记会被渲染成空白。统一并入每个场景，
+            // 由发送侧在调用方未显式传值时用收件人名称兜底。
+            $keys = array_values(array_unique(array_merge(
+                ['site_name', 'customer_name'],
+                self::RECIPIENT_NAME_ALIASES,
+                $variables
+            )));
 
             $result[$code] = [
                 'code' => $code,
