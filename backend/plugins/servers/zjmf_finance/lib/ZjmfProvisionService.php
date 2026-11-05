@@ -57,15 +57,27 @@ final class ZjmfProvisionService
                 // 而上游账单实际未扣款，造成收入缺口；账单未付时重试供应商余额支付。
                 $existingInvoiceId = (int) ($existingProvisionData['upstream_invoice_id'] ?? 0);
                 if ($existingInvoiceId > 0) {
+                    // withHttpCode 读的是 requestWithMeta 的元信息结构；用 get() 的裸响应体
+                    // 传进来会得到空数组 + http_code=0，恒判失败——幂等回查会被误阻断。
                     $invoiceResponse = ZjmfUpstreamResponse::withHttpCode(
-                        $this->transport->get($supplier, "/v1/invoices/{$existingInvoiceId}", $jwt)
+                        $this->transport->requestWithMeta($supplier, 'GET', "/v1/invoices/{$existingInvoiceId}", [], $jwt)
                     );
                     ZjmfUpstreamResponse::assertSuccess($invoiceResponse, [200, 1000, 1001], '校验上游开通账单支付状态');
-                    $invoicePayload = ZjmfUpstreamResponse::payload($invoiceResponse);
-                    $upstreamStatus = strtolower(trim((string) ($invoicePayload['status'] ?? '')));
+
+                    // 上游 /v1/invoices/{id} 把它放在 data.invoices.status（业务码在顶层
+                    // data.status=200）——按顶层读会恒得到 "200"，每张已付账单都会被当成
+                    // 未付再去 fund，而上游对已付账单回 400「Bill paid」，幂等回查直接失败。
+                    $upstreamStatus = ZjmfUpstreamResponse::invoiceStatus(
+                        $invoiceResponse,
+                        ZjmfUpstreamResponse::payload($invoiceResponse)
+                    );
 
                     if ($upstreamStatus !== 'paid') {
-                        $fundResponse = $this->transport->post($supplier, "/v1/invoices/{$existingInvoiceId}/fund", [], $jwt);
+                        // 与账单查询同口径保留 HTTP 状态：裸 post 只带业务码，
+                        // 上游 5xx 且业务码看似正常时会被误判为支付成功。
+                        $fundResponse = ZjmfUpstreamResponse::withHttpCode(
+                            $this->transport->requestWithMeta($supplier, 'POST', "/v1/invoices/{$existingInvoiceId}/fund", [], $jwt)
+                        );
                         ZjmfUpstreamResponse::assertSuccess($fundResponse, [200, 1000, 1001], '重试供应商余额支付开通账单');
                     }
                 }
@@ -203,10 +215,18 @@ final class ZjmfProvisionService
             }
             // invoiceId=0 且已拿到实例 ID：上游同 token 防重门(1001)或 0 元单——
             // 实例已存在、无账单可付，跳过付款段直接进入详情确认。
-            // 此处不预落检查点：防重门命中的可能是换绑前旧商品实例，必须待
-            // 详情一致性校验通过后再写（见下方 assertUpstreamHostMatchesBinding）。
+            // 防重门命中的可能是换绑前旧商品实例，故此处不落检查点，待下方
+            // assertUpstreamHostMatchesBinding 校验通过后再写。
 
-            if ($invoiceId > 0 && ZjmfUpstreamResponse::status($checkoutResponse) !== 1001) {
+            // 结算成功即先落检查点：上游此刻已生成订单、账单与 host 行（余额足够时
+            // 由后续 apply_credit 支付开通）。若付款失败（如供应商余额不足）而这里不写，
+            // 下次重试就只剩 token 可依——账单/实例标识双双丢失，重试只能重开一单。
+            // 同 token 防重门(1001)命中的实例尚未校验商品归属，故排除在该路径之外。
+            $hasPayableInvoice = $invoiceId > 0 && ZjmfUpstreamResponse::status($checkoutResponse) !== 1001;
+
+            if ($hasPayableInvoice) {
+                $this->checkpointUpstreamProvision($existingService, $supplier, $product, $invoiceId, $hostIds, $requestedHost);
+
                 $stepStartedAt = microtime(true);
                 $creditResponse = $this->requestCartWithSession(
                     $supplier,

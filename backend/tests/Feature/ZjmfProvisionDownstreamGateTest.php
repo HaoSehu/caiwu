@@ -29,6 +29,8 @@ use Tests\TestCase;
 // 插件类由运行时的 PluginFileLoader 按 require 加载，Feature 测试中需手动引入
 require_once __DIR__.'/../../plugins/servers/zjmf_finance/lib/ZjmfFinanceTransport.php';
 require_once __DIR__.'/../../plugins/servers/zjmf_finance/lib/ZjmfAuthManager.php';
+require_once __DIR__.'/../../plugins/servers/zjmf_finance/lib/ZjmfUpstreamResponse.php';
+require_once __DIR__.'/../../plugins/servers/zjmf_finance/lib/ZjmfCartPayloadBuilder.php';
 require_once __DIR__.'/../../plugins/servers/zjmf_finance/lib/ZjmfProvisionService.php';
 
 /**

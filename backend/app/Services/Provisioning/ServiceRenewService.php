@@ -894,10 +894,12 @@ class ServiceRenewService
 
                             $recoveryJwt = $renewal->login($supplier);
 
-                            // 查询上游账单状态
+                            // 查询上游账单状态：上游把它放在 data.invoices.status，
+                            // 顶层 status 是业务码 200，按顶层读会让已付账单永远走进补付分支。
                             $invoiceResponse = $renewal->get($supplier, "/v1/invoices/{$existingUpstreamInvoiceId}", $recoveryJwt);
                             $invoicePayload = $this->extractPayload($invoiceResponse);
-                            $upstreamStatus = (string) ($invoicePayload['status'] ?? '');
+                            $invoicesNode = is_array($invoicePayload['invoices'] ?? null) ? $invoicePayload['invoices'] : [];
+                            $upstreamStatus = (string) ($invoicesNode['status'] ?? ($invoicePayload['status'] ?? ''));
 
                             if ($upstreamStatus === 'Paid') {
                                 // 上游已支付→本地完成履约

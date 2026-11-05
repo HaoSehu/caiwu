@@ -106,6 +106,37 @@ final class ZjmfUpstreamResponse
     }
 
     /**
+     * 账单支付状态（小写，如 paid/unpaid/refunded）。
+     *
+     * 上游 /v1/invoices/{id} 把它嵌在 data.invoices.status，而顶层 status 是业务码
+     * 200——只读顶层会恒得到 "200"，已付账单被当成未付。这里按
+     * invoices.status → invoice.status → 顶层 status（非数字时）的顺序兼容取，
+     * 顶层是数字业务码时一律视为缺失，避免把 200 当成支付状态。
+     */
+    public static function invoiceStatus(array $response, array $payload): string
+    {
+        foreach ([
+            $payload['invoices']['status'] ?? null,
+            $payload['invoice']['status'] ?? null,
+            $payload['status'] ?? null,
+            $response['invoices']['status'] ?? null,
+        ] as $candidate) {
+            if (! is_string($candidate)) {
+                continue;
+            }
+
+            $normalized = strtolower(trim($candidate));
+
+            // 纯数字是业务码（200/1001），不是支付状态。
+            if ($normalized !== '' && ! is_numeric($normalized)) {
+                return $normalized;
+            }
+        }
+
+        return '';
+    }
+
+    /**
      * 保留底层 HTTP 状态，避免上游 4xx/5xx JSON 缺少业务状态码时被误判为成功。
      */
     public static function withHttpCode(array $meta): array

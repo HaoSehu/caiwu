@@ -1451,7 +1451,10 @@ class ProvisionService
     {
         // 重试沿用凭据快照：主机名规则也要按冻结的那个上游去取，否则改绑后会按新规则改名。
         $hostname = $this->resolveProvisionHostname($order, $service);
-        $provisionData = $this->serviceProvisionData($service, includeSecrets: true);
+        // 基线取数据库最新值：与成功/失败回写同口径。驱动类在上一轮已自行落库
+        // downstream_token 等检查点，用调用方手里的旧实例拼数据会把它们冲掉，
+        // 重试换 token 后上游幂等门失效、重复开通。
+        $provisionData = $this->latestServiceProvisionData($service, includeSecrets: true);
 
         foreach ([
             'upstream_status',
