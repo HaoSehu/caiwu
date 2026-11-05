@@ -354,6 +354,27 @@ class Product extends Model
         return round((float) $monthly * $months, 2);
     }
 
+    /**
+     * 该计费周期是否在定价表里有明确配置（含显式 0 元）。
+     *
+     * getPriceByBillingCycle() 对「未配置的周期」和「配成 0 元的周期」都返回 0，
+     * 下单链路需要区分这两者：0 元商品可正常成单（走余额支付收口），
+     * 而未配置的周期是配置错误，必须继续拒绝。
+     */
+    public function hasBillingCyclePrice(string $cycle): bool
+    {
+        $pricing = $this->pricing;
+
+        if (array_key_exists($cycle, $pricing)) {
+            return true;
+        }
+
+        $monthly = $pricing['monthly'] ?? null;
+        $months = self::BILLING_CYCLE_MONTHS[$cycle] ?? 0;
+
+        return $monthly !== null && $months > 0 && is_numeric($monthly);
+    }
+
     public function getTypeAttribute(): ?string
     {
         $value = $this->getProductTypeAttribute($this->attributes['product_type'] ?? null);

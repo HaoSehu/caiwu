@@ -1049,7 +1049,8 @@ export interface InvoiceSummaryInfo {
 }
 
 export interface InvoicePaymentMethod {
-  key?: 'balance' | 'alipay' | 'free' | string;
+  // 0 元账单也只给 balance：后端不再下发 free 占位选项（余额支付是唯一收口方式）。
+  key?: 'balance' | 'alipay' | string;
   option_key?: string;
   // name = 插件名（仅管理端展示），label = 渠道名（兼容别名）；用户端展示名只能取 channel_name。
   name?: string;

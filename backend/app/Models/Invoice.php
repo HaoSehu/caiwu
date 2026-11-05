@@ -121,6 +121,21 @@ class Invoice extends Model
         return $this->hasMany(Payment::class);
     }
 
+    /**
+     * 账单名下的现金扣款台账（source_type='invoice' + source_id=账单 ID）。
+     *
+     * 余额支付按架构约定不产生 Payment 记录（见 ARCHITECTURE.md「payments 是第三方资金流入记录」），
+     * 「这笔账单是不是用余额付的」唯一事实来源就是这条扣款流水。展示侧派生出「余额支付」
+     * 渠道时必须预取本关系，否则会逐行回查。
+     *
+     * @return HasMany<FinanceLedgerEntry, $this>
+     */
+    public function ledgerEntries(): HasMany
+    {
+        return $this->hasMany(FinanceLedgerEntry::class, 'source_id')
+            ->where('source_type', 'invoice');
+    }
+
     public function items(): HasMany
     {
         return $this->hasMany(InvoiceItem::class, 'invoice_id');

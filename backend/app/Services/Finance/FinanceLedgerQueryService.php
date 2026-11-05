@@ -68,7 +68,7 @@ class FinanceLedgerQueryService
 
     public function detailForClient(User $user, int $ledgerId): array
     {
-        $record = $this->buildQuery(['user_id' => (int) $user->id])
+        $record = $this->buildQuery(['user_id' => (int) $user->id], forList: false)
             ->where('finance_ledger_entries.id', $ledgerId)
             ->firstOrFail();
 
@@ -77,7 +77,7 @@ class FinanceLedgerQueryService
 
     public function detailForAdmin(int $ledgerId): array
     {
-        $record = $this->buildQuery([])
+        $record = $this->buildQuery([], forList: false)
             ->where('finance_ledger_entries.id', $ledgerId)
             ->firstOrFail();
 
@@ -114,6 +114,10 @@ class FinanceLedgerQueryService
             ->where('account_type', 'cash');
 
         $this->applyFilters($baseQuery, $filters);
+
+        // 与列表口径保持一致：0 元结清台账是「账单渠道证据」、不是资金流水，
+        // 不参与 total_count / total_in 等聚合，避免汇总里出现无意义的 0 元行。
+        $this->excludeZeroAmountInvoiceEvidence($baseQuery);
 
         $normalizedEventSql = $this->normalizedEventTypeSql('finance_ledger_entries.event_type');
         $summaryRow = (clone $baseQuery)
@@ -217,7 +221,10 @@ class FinanceLedgerQueryService
         return 'finance:ledger:summary:'.$userId.':'.$fingerprint;
     }
 
-    private function buildQuery(array $filters, bool $withRelations = true): Builder
+    /**
+     * @param  bool  $forList  列表/汇总为 true（排除 0 元渠道证据行）；按 id 取详情为 false
+     */
+    private function buildQuery(array $filters, bool $withRelations = true, bool $forList = true): Builder
     {
         $query = FinanceLedgerEntry::query()
             ->where('account_type', 'cash')
@@ -233,6 +240,16 @@ class FinanceLedgerQueryService
 
         $this->applyFilters($query, $filters);
 
+        // 0 元结清台账是「账单渠道证据」、不是资金流水：它只用于说明该账单由哪种
+        // 渠道结清，渲染到余额流水列表会变成无意义的「扣款 ¥0.00」，故排除。
+        //
+        // 只在列表/汇总路径排除：详情接口（detailForClient/detailForAdmin）也走本方法，
+        // 若在此一并过滤，按 id 直查 0 元证据行会变成 404，运维与用户从旧链接进来就查不到记录。
+        // 详情是「按 id 精确取一条」，不会出现列表里堆满 ¥0.00 行的问题，无需排除。
+        if (! $forList) {
+            $this->excludeZeroAmountInvoiceEvidence($query);
+        }
+
         $rows = $query->orderByDesc('created_at')->orderByDesc('id');
 
         if ($withRelations) {
@@ -240,6 +257,24 @@ class FinanceLedgerQueryService
         }
 
         return $rows;
+    }
+
+    /**
+     * 排除 0 元结清台账行：它们是「账单渠道证据」（记录账单由哪个渠道结清），
+     * 不是真正的资金变动流水，列表与汇总都不应包含。
+     *
+     * 语义为「不是（event_type = invoice_payment 且 change_amount = 0）」：
+     * 其余事件类型即使金额为 0（理论上不应出现）也不受影响。
+     * 0 元行只会以规范值 invoice_payment 写入，历史别名（consume 等）无需覆盖。
+     */
+    private function excludeZeroAmountInvoiceEvidence(Builder $query): void
+    {
+        $query->where(function (Builder $inner) {
+            $inner->whereRaw(
+                'NOT (finance_ledger_entries.event_type = ? AND finance_ledger_entries.change_amount = 0)',
+                [FinanceLedgerEventType::INVOICE_PAYMENT]
+            );
+        });
     }
 
     private function applyFilters(Builder $query, array $filters): void

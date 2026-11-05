@@ -288,11 +288,16 @@ export function useInvoiceDetail() {
     if (selectedIsAlipay.value && allowBalanceDeduction.value) {
       return `将自动抵扣余额 ¥${autoDeductionAmountText.value}，支付宝支付剩余 ¥${estimatedAlipayAmountText.value}。`;
     }
-    if (selectedGatewayKey.value && !['balance', 'free'].includes(selectedGatewayKey.value)) {
+    if (selectedGatewayKey.value && selectedGatewayKey.value !== 'balance') {
       return `生成二维码后请使用${selectedPayMethodName.value}完成支付，系统会自动轮询状态。`;
     }
-    if (selectedPayMethod.value === 'balance') return '余额支付会直接扣减账户余额并完成账单。';
-    return '零元账单无需额外支付。';
+    if (selectedPayMethod.value === 'balance') {
+      // 0 元账单同样走余额支付收口，但不会扣款，文案必须说清楚，避免用户以为要扣钱。
+      return Number(payableAmount.value) > 0
+        ? '余额支付会直接扣减账户余额并完成账单。'
+        : '该账单金额为 0 元，点击支付即可完成账单，不会扣减账户余额。';
+    }
+    return '';
   });
 
   function warnPaymentSessionUnavailable() {
@@ -549,7 +554,11 @@ export function useInvoiceDetail() {
     payingConfirming.value = true;
     const dialog = DialogPlugin.confirm({
       header: '余额支付',
-      body: `确认使用账户余额支付 ¥${formatMoney(payableAmount.value)} 吗？`,
+      // 0 元账单同样走余额收口但不扣款，确认文案必须说清楚，否则用户会以为要扣钱。
+      body:
+        Number(payableAmount.value) > 0
+          ? `确认使用账户余额支付 ¥${formatMoney(payableAmount.value)} 吗？`
+          : '该账单金额为 0 元，确认后直接完成账单，不会扣减账户余额。',
       confirmBtn: '确定',
       cancelBtn: '取消',
       theme: 'warning',
@@ -581,7 +590,7 @@ export function useInvoiceDetail() {
     }
 
     const gateway = selectedGatewayKey.value;
-    if (!gateway || ['balance', 'free'].includes(gateway)) {
+    if (!gateway || gateway === 'balance') {
       MessagePlugin.warning('请选择可用支付方式');
       return;
     }

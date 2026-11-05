@@ -11,6 +11,7 @@ use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\User;
 use App\Services\Integrations\Payments\PaymentGatewayManager;
+use App\Services\User\AccountPolicyService;
 use App\Support\Money;
 use App\Support\VersionedJson;
 
@@ -24,6 +25,7 @@ class ClientInvoicePaymentWorkflowService
         private readonly PaymentGatewayManager $paymentGateways,
         private readonly CheckoutSecurityService $checkoutSecurity,
         private readonly CheckoutService $checkout,
+        private readonly AccountPolicyService $accountPolicy,
     ) {}
 
     /**
@@ -78,6 +80,7 @@ class ClientInvoicePaymentWorkflowService
         array $operationContext,
         array $expiredContext,
     ): array {
+        $this->accountPolicy->assertSatisfied($user, 'payment');
         $invoice = $this->cancelExpiredInvoice($user, $invoiceId, $expiredContext);
         $this->checkoutSecurity->assertInvoicePaymentSessionToken($paymentSessionToken, $invoice, (int) $user->id);
 
@@ -108,6 +111,7 @@ class ClientInvoicePaymentWorkflowService
         array $expiredContext,
         string $ipAddress,
     ): array {
+        $this->accountPolicy->assertSatisfied($user, 'payment');
         $invoice = $this->cancelExpiredInvoice($user, $invoiceId, $expiredContext);
         $this->checkoutSecurity->assertInvoicePaymentSessionToken($paymentSessionToken, $invoice, (int) $user->id);
 
@@ -142,6 +146,7 @@ class ClientInvoicePaymentWorkflowService
         array $expiredContext,
         string $ipAddress,
     ): array {
+        $this->accountPolicy->assertSatisfied($user, 'payment');
         $invoice = $this->cancelExpiredInvoice($user, $invoiceId, $expiredContext);
         $this->checkoutSecurity->assertInvoicePaymentSessionToken($paymentSessionToken, $invoice, (int) $user->id);
 
@@ -322,7 +327,10 @@ class ClientInvoicePaymentWorkflowService
     }
 
     /**
-     * 账单支付方式唯一组装点：零元账单返回 free，其余为「余额 + 第三方网关选项」。
+     * 账单支付方式唯一组装点。
+     *
+     * 0 元账单与普通账单一样只展示「余额支付 + 第三方网关选项」，
+     * 因为第三方入口对 0 元账单会明确拒绝。
      * 第三方部分与充值模块同源（PaymentGatewayManager::availableThirdPartyGatewayOptions()），
      * 详情接口（InvoiceController）与 create/pay 响应均复用本方法，新增/下架网关自动跟随。
      *
@@ -330,10 +338,6 @@ class ClientInvoicePaymentWorkflowService
      */
     public function availablePaymentMethods(float $payableAmount): array
     {
-        if ($payableAmount <= 0) {
-            return [['key' => 'free', 'name' => '确认支付', 'label' => '零元账单', 'option_key' => 'free', 'plugin_name' => '', 'channel_name' => '确认支付']];
-        }
-
         return [
             ['key' => 'balance', 'name' => '余额支付', 'label' => '账户余额', 'option_key' => 'balance', 'plugin_name' => '', 'channel_name' => '余额支付'],
             ...$this->paymentGateways->availableThirdPartyGatewayOptions(),

@@ -263,7 +263,7 @@
                   支付
                 </t-button>
                 <t-button
-                  v-else-if="hasPayMethods && selectedPayMethod && selectedPayMethod !== 'free'"
+                  v-else-if="hasPayMethods && selectedPayMethod"
                   theme="primary"
                   size="large"
                   :loading="paying"
@@ -275,14 +275,6 @@
                       ? '支付'
                       : `生成${selectedPayMethodName}二维码`
                   }}
-                </t-button>
-                <t-button
-                  v-else-if="hasPayMethods && selectedPayMethod === 'free'"
-                  theme="primary"
-                  size="large"
-                  disabled
-                >
-                  零元账单无需操作
                 </t-button>
                 <t-button variant="outline" size="large" :disabled="paying || loading" @click="() => loadDetail()"
                   >刷新</t-button

@@ -59,6 +59,16 @@ trait NormalizesImportedProductData
 
     /**
      * 上游金额统一成两位小数；非数字或非正数视为未提供。
+     *
+     * 语义边界（不要放宽）：这里是「上游导入」口径，上游返回 0 价通常意味着
+     * 数据缺失（上游未配置价格）而不是免费商品。若把 0 当作合法价格放行，
+     * 缺价商品会变成 0 元商品并被免费履约。0 元免费商品只能由管理员在商品
+     * 编辑页显式配置 pricing=0，绝不能从上游同步链路推断出来。
+     *
+     * 相关观察（仅记录，未改动行为）：上游 setup_fee 也经过本方法，但调用点
+     * ProductSyncService::buildBulkConnectProductPayload() 用 `?? '0.00'` 兜底，
+     * 因此「0」与「缺失」最终都是 '0.00'，不存在合法 0 被丢弃的问题；
+     * 代价是上游是否显式配置了 0 元开户费无法区分，需要在导入日志层面追溯。
      */
     private function normalizeImportedAmount(mixed $value): ?string
     {
@@ -77,6 +87,13 @@ trait NormalizesImportedProductData
 
     /**
      * 把上游「月付价」或「整期总价 + 周期」折算成月单价。
+     *
+     * 返回 null 表示上游没有可用的正价：调用方（buildImportedPricing /
+     * normalizeImportedSubPricing）应因此放弃生成价格表，而不是补 0。
+     * 上游 0 价 / 负价一律按「数据缺失」处理，不产生免费商品；
+     * 这属于上游导入口径，与管理员在商品编辑页显式保存 pricing=0
+     * （管理端保存链路由 HandlesProductCatalogHelpers::normalizePricing
+     * 等自行处理）是两条独立路径，切勿在此静默放行 0。
      */
     private function resolveMonthlyBaseAmount(mixed $monthlyCandidate, mixed $productPriceCandidate, mixed $billingCycle): ?float
     {
@@ -187,6 +204,17 @@ trait NormalizesImportedProductData
 
     /**
      * 子项价格表：能直接识别的周期原样保留，否则按周期内首个可用价格反推月付价再外推。
+     *
+     * 语义边界备忘（仅记录，未改动行为）：
+     * 1) 直接路径 normalizePricing()（定义在 HandlesProductCatalogHelpers，
+     *    管理端保存口径：显式 0 合法、负数丢弃）会保留显式 0，因此上游子项
+     *    若直接给出 0 价会被原样保留；这是与商品主价格（resolveMonthlyBaseAmount
+     *    把 0 视为缺失）不一致的既有行为，若日后要求「上游不得产生免费子项」，
+     *    需要在上游导入入口单独过滤，而不是在 normalizePricing 里去 0。
+     * 2) resolveFirstAvailablePricingValue()/resolveFirstAvailablePricingCycle() 用
+     *    「非 null 且非空串」判断可用，字符串 '0' 会被选中；若高优先级周期是 0 而
+     *    低优先级周期有正价，会先选中 0 再被 normalizeImportedAmount() 归为缺失，
+     *    从而放弃本可用的正价（宁可无价也不补 0，这是刻意的保守取舍）。
      */
     private function normalizeImportedSubPricing(mixed $pricing): array
     {

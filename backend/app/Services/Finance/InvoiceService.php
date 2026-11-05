@@ -23,6 +23,7 @@ use App\Services\ProductCatalog\ProductFullPathResolver;
 use App\Services\System\OperationLogService;
 use App\Support\AdminPrivacy;
 use App\Support\Concerns\FiltersDateRange;
+use App\Support\InvoicePaymentSummary;
 use App\Support\LikeEscape;
 use App\Support\Money;
 use App\Support\PaymentChannelLabel;
@@ -216,6 +217,8 @@ class InvoiceService
             'product.productGroup.secondProductGroup.firstProductGroup:id,code,name',
             'service:id,name,status,expires_at',
             'payments.callbacks:payment_id,callback_type,payload_json',
+            // 余额支付没有 Payment 记录，渠道要从扣款台账派生（见 InvoicePaymentSummary::fromBalanceLedger）。
+            'ledgerEntries:id,source_type,source_id,event_type,change_amount,operator_type,trace_id,remark',
             // 列表路径不加载仅详情使用的 items（buildInvoiceItems 只在详情路径调用）
         ])->select('invoices.*')->selectSub(
             // 退款状态派生（列表轻量口径）：已完成退款累计，单子查询预加载无 N+1。
@@ -311,6 +314,8 @@ class InvoiceService
             'payments.callbacks:payment_id,callback_type,payload_json',
             'items',
             'refunds:id,invoice_id,refund_no,amount,status,funds_moved,data_origin,reason,operator_name,refunded_at',
+            // 余额支付没有 Payment 记录，渠道要从扣款台账派生（见 InvoicePaymentSummary::fromBalanceLedger）。
+            'ledgerEntries:id,source_type,source_id,event_type,change_amount,operator_type,trace_id,remark',
         ])->findOrFail($id);
 
         $scene = $this->resolveInvoiceScene($invoice);
@@ -485,6 +490,8 @@ class InvoiceService
             'service:id,name,status,expires_at',
             // 渠道名要走回调证据（历史账单的 gateway_key 为空），预取避免逐行回查。
             'payments.callbacks:payment_id,callback_type,payload_json',
+            // 余额支付没有 Payment 记录，渠道要从扣款台账派生（见 InvoicePaymentSummary::fromBalanceLedger）。
+            'ledgerEntries:id,source_type,source_id,event_type,change_amount,operator_type,trace_id,remark',
             'items',
         ]);
 
@@ -577,6 +584,8 @@ class InvoiceService
             'service:id,name,status,expires_at',
             // 渠道名要走回调证据（历史账单的 gateway_key 为空），预取避免逐行回查。
             'payments.callbacks:payment_id,callback_type,payload_json',
+            // 余额支付没有 Payment 记录，渠道要从扣款台账派生（见 InvoicePaymentSummary::fromBalanceLedger）。
+            'ledgerEntries:id,source_type,source_id,event_type,change_amount,operator_type,trace_id,remark',
             // 列表路径不加载仅详情使用的 items
         ]);
 
@@ -1024,10 +1033,14 @@ class InvoiceService
             $invoice->loadMissing(['payments' => fn ($query) => $query->orderByDesc('id')]);
         }
 
-        $payment = $this->resolvePrimaryInvoicePayment($invoice->payments);
+        /** @var \Illuminate\Database\Eloquent\Collection<int, Payment> $payments */
+        $payments = $invoice->payments;
+        $payment = $this->resolvePrimaryInvoicePayment($payments);
 
         if (! $payment instanceof Payment) {
-            return null;
+            // 余额支付按架构约定不产生 Payment（ARCHITECTURE.md「payments 是第三方资金流入记录」），
+            // 渠道事实只落在账单名下的扣款台账上。不回落这一层，余额支付的账单「支付方式」会整行为空。
+            return InvoicePaymentSummary::fromBalanceLedger($invoice);
         }
 
         $refund = (array) data_get((array) ($payment->callback_raw ?? []), 'refund', []);
@@ -1052,6 +1065,11 @@ class InvoiceService
         ];
     }
 
+    /**
+     * 主支付单：成功/已退款里取最新一条（跳过重复支付转余额的记录）。
+     *
+     * @param  iterable<Payment>  $payments
+     */
     private function resolvePrimaryInvoicePayment(iterable $payments): ?Payment
     {
         $collection = $this->channelPayments($payments);

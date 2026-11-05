@@ -185,3 +185,45 @@ test('账单支付宝扫码成功：轮询到已支付后仅保留一条成功�
   await expect(page).toHaveURL(/\/client\/invoices$/);
   expect(await guardToastAppeared).toBe(false);
 });
+
+// 0 元账单只给余额支付：后端 availablePaymentMethods(0) 不再给 free 占位选项，
+// 支付按钮必须可点（旧实现渲染成 disabled 的「零元账单无需操作」，账单永远结不掉）。
+function zeroAmountInvoiceDetailPayload() {
+  return envelope({
+    invoice: {
+      id: 31,
+      basic: { ...PAID_INVOICE_BASIC, status: 0, status_label: '待支付' },
+      display: { product_display_name: '云服务器 S1' },
+      financial: { amount: '0.00', payable_amount: '0.00', paid_amount: '0.00' },
+      payment_options: {
+        can_cancel: true,
+        pay_methods: [
+          { key: 'balance', option_key: 'balance', name: '余额支付', label: '账户余额', channel_name: '余额支付' },
+        ],
+        payment_security: { can_pay: true, session_token: 'e2e-zero-session-token' },
+      },
+    },
+  });
+}
+
+test('零元账单：只给余额支付且按钮可点，确认文案说明不扣款', async ({ page }) => {
+  await mockAuthenticatedSession(page);
+  await page.route('**/api/v2/client/invoices?*', (route) => {
+    route.fulfill(jsonOk(envelope({ list: [], total: 0, page: 1, page_size: 15 })));
+  });
+  await page.route('**/api/v2/client/invoices/31', (route) => {
+    route.fulfill(jsonOk(zeroAmountInvoiceDetailPayload()));
+  });
+
+  await page.goto('/client/invoices/31/pay', { waitUntil: 'domcontentloaded' });
+
+  // 不可点击的「零元账单无需操作」占位按钮必须消失
+  await expect(page.getByText('零元账单无需操作')).toHaveCount(0);
+
+  const payButton = page.getByRole('button', { name: '支付', exact: true });
+  await expect(payButton).toBeEnabled();
+  await payButton.click();
+
+  // 0 元不扣款，确认文案必须说清楚
+  await expect(page.getByText('该账单金额为 0 元，确认后直接完成账单，不会扣减账户余额')).toBeVisible();
+});

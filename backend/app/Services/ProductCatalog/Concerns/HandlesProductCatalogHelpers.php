@@ -128,8 +128,17 @@ trait HandlesProductCatalogHelpers
                 continue;
             }
 
+            if (! is_numeric($amount)) {
+                continue;
+            }
+
             $value = (float) $amount;
-            if ($value <= 0) {
+
+            // 显式 0 元是合法配置（免费商品/免费首月），必须原样保留：
+            // 丢弃它会让「0 元商品」在库里退化成「该周期未配置」，
+            // 下单被 hasBillingCyclePrice() 判为配置错误，0 元账单永远产生不出来。
+            // 负数与非法值仍然丢弃。
+            if ($value < 0) {
                 continue;
             }
 
@@ -140,6 +149,8 @@ trait HandlesProductCatalogHelpers
             ? (float) $normalized['monthly']
             : null;
 
+        // 月价为正时才按月数推导其它周期；月价为 0 不做推导——
+        // 免费周期必须由管理员显式配置，避免把 0 元误推成「所有周期全免费」。
         if ($monthly !== null && $monthly > 0) {
             $importPricingMonths = ['monthly' => 1, 'quarterly' => 3, 'semiannually' => 6, 'annually' => 12];
             foreach ($importPricingMonths as $cycle => $months) {

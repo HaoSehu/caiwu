@@ -217,7 +217,8 @@ class CheckoutService
                     $displayNamePayload = $this->resolveProductDisplayNameResolver()->resolveForProduct($product, $normalizedConfig);
                     $productDisplayName = $this->resolveCheckoutProductDisplayName($displayNamePayload);
                     $invoiceConfigSnapshot = $this->withProductDisplaySnapshot($product, $normalizedConfig, $productDisplayName);
-                    throw_if($amount <= 0, new BusinessException('无效的计费周期'));
+                    // 0 元商品允许成单：账单照常创建、订单照常投影，收口走余额支付（见 BalanceInvoicePaymentService）。
+                    // 周期未配置交给 quote() 的 hasBillingCyclePrice 守卫拦截，此处不再按金额判非法。
 
                     // 会员折扣层：目录价按「等级 × 营销组」先折算，优惠券以折后价为基数
                     $memberDiscount = $this->memberDiscountFor((int) $userId, $product, $amount);

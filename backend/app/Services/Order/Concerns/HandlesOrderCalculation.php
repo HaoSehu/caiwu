@@ -52,7 +52,7 @@ trait HandlesOrderCalculation
         $baseAmount = (float) $product->getPriceByBillingCycle($billingCycle);
         $quantity = max($quantity, 1);
 
-        throw_if($baseAmount <= 0, new BusinessException('无效的计费周期'));
+        throw_if(! $product->hasBillingCyclePrice($billingCycle), new BusinessException('无效的计费周期'));
 
         $quote = $this->buildQuoteBreakdown($product, $billingCycle, $config);
         $setupFee = (float) $product->setup_fee;

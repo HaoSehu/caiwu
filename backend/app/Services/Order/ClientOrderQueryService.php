@@ -21,6 +21,7 @@ use App\Support\Concerns\FiltersDateRange;
 use App\Support\LikeEscape;
 use App\Support\Pagination;
 use App\Support\PaymentChannelLabel;
+use Illuminate\Database\Eloquent\Collection;
 
 class ClientOrderQueryService
 {
@@ -43,7 +44,6 @@ class ClientOrderQueryService
 
         $query = Order::query()
             ->with($this->relations())
-            ->with($this->paymentRelations())
             ->where('user_id', $userId)
             ->orderByDesc('id');
 
@@ -148,18 +148,25 @@ class ClientOrderQueryService
     {
         return Order::query()
             ->with($this->relations())
-            ->with($this->paymentRelations())
             ->where('user_id', $userId)
             ->findOrFail($orderId);
     }
 
     /**
-     * @return list<string>
+     * @return array<int|string, \Closure|string>
      */
     private function relations(): array
     {
         return [
-            'invoice:id,invoice_no,order_id,type,status,amount,paid_amount,paid_at,due_date,created_at',
+            'payments' => self::successfulPaymentQuery(),
+            // 账单同时承载两种渠道证据：账单支付单（渠道权威来源）
+            // 与余额支付的扣款台账。这里一次给出完整关系，避免对同一关系重复 with()。
+            'invoice' => static fn ($query) => $query
+                ->select(['id', 'invoice_no', 'order_id', 'type', 'status', 'amount', 'paid_amount', 'paid_at', 'due_date', 'created_at'])
+                ->with([
+                    'payments' => self::successfulPaymentQuery(),
+                    'ledgerEntries:id,source_type,source_id,event_type,change_amount,operator_type,trace_id,remark',
+                ]),
             'service:id,name,domain,status,expires_at',
             'coupon:id,code,name,discount_type,discount_value',
             'product:id,product_type,service_type_code,product_group_id,remark,config_options,purchase_requires',
@@ -170,23 +177,50 @@ class ClientOrderQueryService
     }
 
     /**
-     * 列表与详情要展示支付渠道，但支付方式的唯一真源是 payments 表（orders 表无支付列）。
-     * 投影走 gatewayProjectionColumns() 而刻意不取 callback_raw：它含网关签名与买家标识。
-     * 但历史支付单的渠道只写在回调里（gateway_key 为空），因此随行预取 payment_callbacks
+     * 可展示支付方式的支付单查询（成功/已退款里取最新一条，与账单侧同口径）。
+     * 投影走 gatewayProjectionColumns() 而刻意不取 callback_raw：它含网关签名与买家标识；
+     * 历史支付单的渠道只写在回调里（gateway_key 为空），因此随行预取 payment_callbacks
      * 供渠道还原使用——该表只有渠道标记，不含网关签名与买家标识。
-     * 渠道口径与 InvoiceService::resolvePrimaryInvoicePayment 一致——成功/已退款里取最新一条。
      *
-     * @return array<string, \Closure>
+     * 注意：payments.order_id 是冗余字段，不保证与实际订单一致（见 Payment 模型注释），
+     * 存量里就有只挂 invoice_id 的成功支付单，所以订单侧渠道以账单支付单为准，
+     * 订单支付单只作兼容回落，两者都为空时再回落账单扣款台账。
      */
-    private function paymentRelations(): array
+    /**
+     * 主支付单：成功/已退款里取最新一条，并跳过「重复支付转余额」的记录。
+     *
+     * 与 InvoiceService::resolvePrimaryInvoicePayment() / UserService 同一口径：
+     * 重复支付（duplicate_paid）的钱已退回用户余额，不能代表这笔账单实际走的渠道。
+     * 订单侧若直接 first() 会取到它，导致订单与账单显示不同渠道。
+     *
+     * @param  iterable<Payment>  $payments  已按 id 倒序
+     */
+    private static function primaryPayment(iterable $payments): ?Payment
     {
-        return [
-            'payments' => static fn ($query) => $query
-                ->select(Payment::gatewayProjectionColumns(['id', 'order_id', 'status', 'amount', 'paid_at']))
-                ->with('callbacks:payment_id,callback_type,payload_json')
-                ->whereIn('status', [PaymentStatus::SUCCESS, PaymentStatus::REFUNDED])
-                ->orderByDesc('id'),
-        ];
+        $collection = collect($payments)
+            ->filter(static fn (Payment $payment): bool => in_array(
+                (int) $payment->status,
+                [PaymentStatus::SUCCESS, PaymentStatus::REFUNDED],
+                true
+            ))
+            ->values();
+
+        return $collection->first(static fn (Payment $payment): bool => ! (bool) data_get(
+            (array) ($payment->callback_raw ?? []),
+            'duplicate_paid',
+            false
+        )) ?? $collection->first();
+    }
+
+    private static function successfulPaymentQuery(): \Closure
+    {
+        // invoice_id / order_id 是 Eloquent 归组用的外键：投影里缺任一侧，
+        // 嵌套加载（invoice.payments）或订单侧加载都会把行全丢掉。
+        return static fn ($query) => $query
+            ->select(Payment::gatewayProjectionColumns(['id', 'order_id', 'invoice_id', 'status', 'amount', 'paid_at']))
+            ->with('callbacks:payment_id,callback_type,payload_json')
+            ->whereIn('status', [PaymentStatus::SUCCESS, PaymentStatus::REFUNDED])
+            ->orderByDesc('id');
     }
 
     /**
@@ -265,18 +299,50 @@ class ClientOrderQueryService
     }
 
     /**
-     * 订单的支付渠道名：只认第三方支付里成功/已退款的最新一条（与账单侧支付摘要同口径）。
+     * 订单的支付渠道名：以账单支付单（invoice.payments）为准，订单侧支付单作为回落，
+     * 两者都没有时再回落账单扣款台账——余额支付不产生 Payment，渠道只落在台账上。
+     *
+     * 为什么账单支付单优先：payments.order_id 是冗余字段，不保证与实际订单一致
+     * （见 Payment 模型注释），而 invoice_id 才是资金的权威关联；先看订单侧会与账单侧口径分叉，
+     * 出现同一订单列表显示 A 渠道、账单显示 B 渠道的情况。订单侧只用于兼容
+     * 账单关系缺失（无 invoice / 账单支付单未加载）的历史数据。
+     *
      * 未支付、或支付已关闭的订单返回空串，由前端统一兜底为占位符。
      */
     private function paymentChannelLabel(Order $order): string
     {
-        $payment = $order->relationLoaded('payments') ? $order->payments->first() : null;
+        $invoice = $order->relationLoaded('invoice') ? $order->invoice : null;
 
-        if (! $payment instanceof Payment) {
+        $payment = null;
+
+        // 先取账单支付单：invoice.payments 是权威关联（invoice_id 才是资金的权威关联）。
+        if ($invoice instanceof Invoice && $invoice->relationLoaded('payments')) {
+            /** @var Collection<int, Payment> $invoicePayments */
+            $invoicePayments = $invoice->payments;
+            $payment = self::primaryPayment($invoicePayments);
+        }
+
+        // 账单侧为空时回落到订单侧支付单（order_id 冗余，仅作兼容）。
+        if (! $payment instanceof Payment && $order->relationLoaded('payments')) {
+            /** @var Collection<int, Payment> $orderPayments */
+            $orderPayments = $order->payments;
+            $payment = self::primaryPayment($orderPayments);
+        }
+
+        if ($payment instanceof Payment) {
+            return PaymentChannelLabel::channelNameFromPayment($payment);
+        }
+
+        if (! $invoice instanceof Invoice) {
             return '';
         }
 
-        return PaymentChannelLabel::channelNameFromPayment($payment);
+        // 台账证据同样要走既有口径：只对已入账的账单派生，避免把待支付账单说成余额支付。
+        if (! in_array((int) $invoice->status, [InvoiceStatus::PAID, InvoiceStatus::REFUNDED], true)) {
+            return '';
+        }
+
+        return PaymentChannelLabel::channelNameFromLedger($invoice->ledgerEntries);
     }
 
     /**

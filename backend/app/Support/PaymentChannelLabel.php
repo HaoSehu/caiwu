@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Support;
 
+use App\Constants\FinanceLedgerEventType;
 use App\Constants\ManualPaymentGateway;
 use App\Constants\PaymentGatewayCode;
+use App\Models\FinanceLedgerEntry;
 use App\Models\Payment;
 use App\Services\Integrations\Plugins\PaymentGatewayBindingResolver;
 
@@ -81,6 +83,57 @@ final class PaymentChannelLabel
             self::resolveGatewayKey($payment),
             trim((string) ($payment->payment_type ?? ''))
         );
+    }
+
+    /**
+     * 无支付单时的账单级渠道：余额支付走的扣款流水就是渠道事实。
+     *
+     * 余额支付按 ARCHITECTURE.md 的职责边界不产生 Payment 记录，
+     * 它的唯一证据是账单名下 event_type=invoice_payment 的现金扣款台账。
+     * 有这一行即「余额支付」；没有则返回空串，交由调用方兜底占位符——
+     * 无台账的账单（待支付、第三方支付）不会被错认成余额支付。
+     *
+     * 0 元账单不扣款，但余额收口时会补一条金额为 0 的同类型台账作为溯源证据
+     * （见 BalanceInvoicePaymentService::recordZeroAmountBalanceSettlement），
+     * 因此这里只认「方向不是更正性入账」的行：扣款为负，结清为 0。
+     *
+     * 除事件类型外，还要求这行带溯源标记（trace_id 非空，或备注是「支付账单/账单余额支付」）：
+     * invoice_payment 台账的写入方是会员自助余额支付、组合支付预扣、管理员代扣与自动续费。
+     * operator_type 是后加的列，历史行普遍为 NULL/'legacy'，但它们的 trace_id 与备注仍在，
+     * 用 operator_type 做白名单会把 auto_renew:service:147:… 这类真实余额扣款一并误杀。
+     * 真正无溯源的行（trace_id 与备注都为空）才无法证明渠道，这类宁可留空也不臆造——
+     * 与类头「猜错比留空更糟」一致。
+     *
+     * @param  iterable<FinanceLedgerEntry>  $ledgerEntries  已预取的 ledgerEntries 关系
+     */
+    public static function channelNameFromLedger(iterable $ledgerEntries): string
+    {
+        foreach ($ledgerEntries as $entry) {
+            if ((string) ($entry->event_type ?? '') !== FinanceLedgerEventType::INVOICE_PAYMENT) {
+                continue;
+            }
+
+            // 正数行是退款/恢复类更正，不构成「用余额支付」的事实。
+            if ((float) ($entry->change_amount ?? 0) > 0) {
+                continue;
+            }
+
+            // 必须有溯源标记：无 trace_id 且备注也不是账单支付的行，无法证明这笔扣款走的什么渠道。
+            $traceId = trim((string) ($entry->trace_id ?? ''));
+            $remark = (string) ($entry->remark ?? '');
+            $hasProvenance = $traceId !== ''
+                || str_contains($remark, '支付账单')
+                || str_contains($remark, '账单余额支付')
+                || str_contains($remark, '余额结清');
+
+            if (! $hasProvenance) {
+                continue;
+            }
+
+            return PaymentGatewayCode::channelLabel(PaymentGatewayCode::BALANCE);
+        }
+
+        return '';
     }
 
     /**

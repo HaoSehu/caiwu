@@ -230,6 +230,8 @@ class InvoiceV2QueryService
             'service:id,name,status,expires_at',
             // 回调载荷由 Payment 模型按需读取，缺预载会逐行 loadMissing（N+1）。
             'payments.callbacks:payment_id,callback_type,payload_json',
+            // 余额支付没有 Payment 记录，渠道要从扣款台账派生（见 InvoicePaymentSummary::fromBalanceLedger）。
+            'ledgerEntries:id,source_type,source_id,event_type,change_amount,operator_type,trace_id,remark',
             'items',
         ];
     }

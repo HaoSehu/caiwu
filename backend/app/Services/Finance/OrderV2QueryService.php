@@ -129,6 +129,8 @@ class OrderV2QueryService
                         'created_at',
                     ]))
                     ->orderByDesc('id'),
+                // 余额支付不产生 Payment，渠道要从账单扣款台账派生。
+                'invoice.ledgerEntries:id,source_type,source_id,event_type,change_amount,operator_type,trace_id,remark',
                 'product' => fn ($query) => $query->select($this->productProjectionColumns()),
                 'product.productGroup:id,second_product_group_id,name',
                 'product.productGroup.secondProductGroup:id,first_product_group_id,name',

@@ -39,6 +39,7 @@ use App\Services\System\OperationLogService;
 use App\Services\System\SettingService;
 use App\Services\User\Concerns\HandlesAdminUserServices;
 use App\Support\AccountIdentifier;
+use App\Support\InvoicePaymentSummary;
 use App\Support\LikeEscape;
 use App\Support\Money;
 use App\Support\PaymentChannelLabel;
@@ -490,6 +491,8 @@ class UserService
             'product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
             'service:id,name,status,expires_at',
             'payments.callbacks:payment_id,callback_type,payload_json',
+            // 余额支付没有 Payment 记录，渠道要从扣款台账派生（见 InvoicePaymentSummary::fromBalanceLedger）。
+            'ledgerEntries:id,source_type,source_id,event_type,change_amount,operator_type,trace_id,remark',
             'items',
         ])->select('invoices.*')->selectSub(
             // 退款投影（列表轻量口径）与财务/客户端账单列表同源，单子查询预加载避免逐行 N+1。
@@ -856,7 +859,9 @@ class UserService
         $payment = $this->resolvePrimaryInvoicePayment($invoice->payments);
 
         if (! $payment instanceof Payment) {
-            return null;
+            // 余额支付不产生 Payment（ARCHITECTURE.md），渠道只能从扣款台账派生，
+            // 否则管理端用户详情的「支付方式」列对余额支付恒为空。
+            return InvoicePaymentSummary::fromBalanceLedger($invoice);
         }
 
         $refund = (array) data_get((array) ($payment->callback_raw ?? []), 'refund', []);

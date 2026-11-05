@@ -79,7 +79,8 @@ class GatewayInvoicePaymentService
                 );
 
                 $amount = $lockedInvoice->payableAmount();
-                throw_if($amount <= 0, new BusinessException('无需支付'));
+                // 0 元账单只允许余额收口，第三方网关不参与（见 availablePaymentMethods）。
+                throw_if($amount <= 0, new BusinessException('该账单无需第三方支付，请使用余额支付'));
 
                 $payment = Payment::query()
                     ->where('invoice_id', $lockedInvoice->id)

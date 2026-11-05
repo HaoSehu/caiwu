@@ -11,14 +11,13 @@ use App\Exceptions\BusinessException;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Payment;
-use App\Models\Product;
-use App\Models\User;
 use App\Services\Finance\CheckoutSecurityService;
 use App\Services\Finance\MixPaymentService;
 use App\Services\Finance\PaymentCallbackProjector;
 use App\Services\Finance\TradeLifecycleService;
 use App\Services\Order\Concerns\HandlesOrderCalculation;
 use App\Services\System\OperationLogService;
+use App\Support\InvoicePaymentSummary;
 use App\Support\PaymentChannelLabel;
 use Illuminate\Support\Facades\DB;
 
@@ -243,28 +242,6 @@ class OrderService
         return $this->loadAdminOrder($id);
     }
 
-    private function assertPurchaseRequires(Product $product, int $userId): void
-    {
-        $requires = (array) ($product->purchase_requires ?? []);
-
-        $user = User::find($userId);
-        if (! $user) {
-            return;
-        }
-
-        throw_if(
-            ! $user->hasCompletedVerification(),
-            new BusinessException('该商品需要实名认证后才能购买，请先完成实名认证', 40301)
-        );
-
-        if (! empty($requires['require_phone'])) {
-            throw_if(
-                empty(trim((string) ($user->phone ?? ''))),
-                new BusinessException('该商品需要绑定手机号后才能购买，请先添加手机号', 40302)
-            );
-        }
-    }
-
     private function loadAdminOrder(int $orderId): Order
     {
         $order = Order::query()
@@ -279,6 +256,8 @@ class OrderService
                 'invoice.payments' => fn ($query) => $query
                     ->with('callbacks:payment_id,callback_type,payload_json')
                     ->orderByDesc('id'),
+                // 余额支付不产生 Payment，渠道证据在账单扣款台账上。
+                'invoice.ledgerEntries:id,source_type,source_id,event_type,change_amount,operator_type,trace_id,remark',
                 'service',
             ])
             ->findOrFail($orderId);
@@ -311,7 +290,11 @@ class OrderService
             ?? $payments->first(fn (Payment $item) => in_array((int) $item->status, [PaymentStatus::SUCCESS, PaymentStatus::REFUNDED], true));
 
         if (! $payment instanceof Payment) {
-            return null;
+            // 余额支付不产生 Payment，渠道只在账单扣款台账上；不回落这一层，
+            // 管理端订单详情的支付链对余额支付订单恒为空。
+            return ($invoice = $order->invoice) instanceof Invoice
+                ? InvoicePaymentSummary::fromBalanceLedger($invoice)
+                : null;
         }
 
         $refund = (array) data_get((array) ($payment->callback_raw ?? []), 'refund', []);

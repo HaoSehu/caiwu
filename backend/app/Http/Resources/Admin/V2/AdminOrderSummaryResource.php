@@ -4,13 +4,16 @@ declare(strict_types=1);
 
 namespace App\Http\Resources\Admin\V2;
 
+use App\Constants\InvoiceStatus;
 use App\Constants\OrderStatus;
 use App\Constants\OrderType;
 use App\Constants\RefundStatus;
+use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Services\ProductCatalog\ProductFullPathResolver;
 use App\Support\AdminPrivacy;
+use App\Support\InvoicePaymentSummary;
 use App\Support\PaymentChannelLabel;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -186,13 +189,19 @@ class AdminOrderSummaryResource extends JsonResource
     }
 
     /**
+     * 订单的支付链：有支付单的走支付单快照，没有支付单的回落账单扣款台账。
+     *
+     * 余额支付按架构约定不产生 Payment（ARCHITECTURE.md），它的渠道事实只落在
+     * 账单名下的 invoice_payment 扣款流水上。不回落这一层，余额支付的订单在
+     * 管理端「第三方支付与入账记录」里会整块显示为空，财务无从核对。
+     *
      * @return list<array<string, mixed>>
      */
     protected function payments(Order $order): array
     {
         $payments = $order->invoice?->payments ?? collect();
 
-        return collect($payments)
+        $rows = collect($payments)
             // 与账单/订单展示同口径：渠道能从快照或回调证据还原即可展示。
             ->filter(fn (Payment $payment): bool => PaymentChannelLabel::hasKnownChannel($payment))
             ->map(fn (Payment $payment): array => [
@@ -213,5 +222,40 @@ class AdminOrderSummaryResource extends JsonResource
             ])
             ->values()
             ->all();
+
+        if ($rows !== []) {
+            return $rows;
+        }
+
+        $invoice = $order->invoice;
+        if (! $invoice instanceof Invoice) {
+            return [];
+        }
+
+        // 与账单摘要同一判据：只对已入账的账单派生，待支付账单不给渠道。
+        if (! in_array((int) $invoice->status, [InvoiceStatus::PAID, InvoiceStatus::REFUNDED], true)) {
+            return [];
+        }
+
+        $summary = InvoicePaymentSummary::fromBalanceLedger($invoice);
+        if ($summary === null) {
+            return [];
+        }
+
+        return [[
+            'id' => 0,
+            'payment_no' => '',
+            'gateway' => (string) $summary['gateway'],
+            'gateway_key' => (string) $summary['gateway_key'],
+            'gateway_label' => (string) $summary['gateway_label'],
+            'plugin_name' => '',
+            'channel_name' => (string) $summary['channel_name'],
+            'trade_no' => '',
+            'amount' => $this->money($summary['amount']),
+            'status' => (int) $summary['status'],
+            'paid_at' => $summary['paid_at'],
+            'trace_id' => (string) ($invoice->trace_id ?? ''),
+            'created_at' => $invoice->paid_at?->format('Y-m-d H:i:s'),
+        ]];
     }
 }

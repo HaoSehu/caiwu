@@ -157,3 +157,41 @@ test('账单列表：列收敛为六列、只展示实付金额，不出现插�
   // 即使摘要里带 plugin_name，也不能渲染
   await expect(page.locator('body')).not.toContainText('易支付');
 });
+
+// 余额支付不产生支付单，渠道由后端从账单扣款台账派生后下发；
+// 前端只读 channel_name 并原样展示，不得因摘要里没有 payment_no 而显示占位符。
+const BALANCE_ORDER_ROWS = [
+  {
+    id: 3,
+    order_no: 'ORD202611060001',
+    type: 'new',
+    type_label: '新购',
+    status: 1,
+    status_label: '已支付',
+    amount: '0.01',
+    paid_amount: '0.01',
+    discount: '0.00',
+    member_discount_amount: '0.00',
+    billing_cycle: 'monthly',
+    quantity: 1,
+    product_name: '云服务器',
+    product_full_path: '云服务器 / 标准型',
+    service_name: '',
+    channel_name: '余额支付',
+    gateway_label: '余额支付',
+    invoice: { id: 13, invoice_no: 'INV202611060001', status: 1, amount: '0.01', payment_window_expired: false },
+    paid_at: '2026-11-06 10:00:00',
+    finished_at: '2026-11-06 10:00:00',
+    created_at: '2026-11-06 09:59:00',
+  },
+];
+
+test('订单列表：余额支付订单展示「余额支付」渠道，不因无支付单号而留空', async ({ page }) => {
+  await mockAuthenticatedSession(page);
+  await mockList(page, 'orders', BALANCE_ORDER_ROWS);
+
+  await page.goto('/client/orders', { waitUntil: 'domcontentloaded' });
+
+  const table = page.locator('.record-table');
+  await expect(table.locator('.order-channel').first()).toHaveText('余额支付');
+});
