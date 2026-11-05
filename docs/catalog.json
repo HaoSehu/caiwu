@@ -2,10 +2,22 @@
     "version": 1,
     "records": [
         {
+            "path": "执行计划/进行中/强制实名与绑定手机邮箱-2026-11-06.md",
+            "status": "active",
+            "summary": "管理端新增账户策略开关（强制实名/手机号/邮箱，默认关闭），把下单、充值、提现的无条件实名硬编码收敛为 AccountPolicyService 统一断言，并在支付工作流覆盖续费/流量包等补付场景；用户端 auth/info 下发 account_policy，控制台以不可关闭弹窗引导、只读页面不阻断，实名与资料页豁免；补后端 Feature 12 例、控制台 e2e 5 例与管理端 e2e 2 例。",
+            "review_by": "2026-12-18"
+        },
+        {
             "path": "执行计划/进行中/实名通过后用户名落成真实姓名-2026-11-05.md",
             "status": "active",
             "summary": "实名通过时把 users.nickname 落成真实姓名（真实姓名优先于自定义昵称），User::display_name 改为昵称优先、真实姓名兜底，用户之后仍可改回自定义名称并立即生效；管理端列表/详情保持实名优先，迁移回填存量已实名用户昵称，补后端 Feature 6 例与控制台 e2e 3 例。",
             "review_by": "2026-12-26"
+        },
+        {
+            "path": "执行计划/进行中/余额支付渠道展示与0元账单收口-2026-11-06.md",
+            "status": "active",
+            "summary": "余额支付按架构约定不产生 Payment，账单/订单的「支付渠道」改从 finance_ledger_entries 的 invoice_payment 扣款台账派生（新增 PaymentChannelLabel::channelNameFromLedger 与共享摘要 InvoicePaymentSummary，五处读取点接入并预载避免 N+1）；0 元账单改为只给余额支付、允许正常下单与结清（不扣款、补 0 元结清台账），删除不可点击的 free 占位选项，并用 Product::hasBillingCyclePrice() 区分「配成 0 元」与「未配置」；顺带修复订单侧支付单投影缺 invoice_id 导致嵌套加载丢行的存量缺陷；审查后收紧台账判据（只认带溯源标记（trace_id 或账单支付类备注）的行，不用 operator_type 做白名单以免误杀自动续费等真实扣款）、打通管理端 0 元价格配置（原先 normalizePricing 丢弃所有 0 值导致 0 元链路不可达）、余额流水排除 0 元证据行，补后端 Feature 8 例与控制台 e2e 2 例。",
+            "review_by": "2027-01-06"
         },
         {
             "path": "执行计划/进行中/消息发送体系按howstack重构-2026-11-03.md",
