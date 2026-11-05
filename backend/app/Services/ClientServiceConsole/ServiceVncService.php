@@ -117,6 +117,7 @@ class ServiceVncService
                 VolatileStore::store()->put(CacheKey::vncToken($token), array_merge($tokenPayload, [
                     'service_id' => $serviceId,
                     'allowed_origin' => $this->resolveAllowedVncOrigin(),
+                    'allowed_app_origins' => $this->resolveAllowedAppOrigins(),
                     // 服务 + 用户绑定载荷：公开 token 仅由取链接接口签发给当前用户，
                     // 兑换侧凭该 token 本身寻址，无法跨用户/跨服务复用。
                     'user_id' => (int) $user->id,
@@ -642,6 +643,21 @@ class ServiceVncService
     private function resolveAllowedVncOrigin(): string
     {
         return PublicUrl::console();
+    }
+
+    /**
+     * 移动端 App 连接 Relay 时携带的 Origin 列表（配置 `idc.vnc_relay.app_origins`）。
+     * 浏览器端仍只允许 console 域；App 无法伪造 console Origin，需单独白名单。
+     *
+     * @return list<string>
+     */
+    private function resolveAllowedAppOrigins(): array
+    {
+        $origins = config('idc.vnc_relay.app_origins', []);
+
+        return is_array($origins)
+            ? array_values(array_filter(array_map(static fn (mixed $origin): string => trim((string) $origin), $origins)))
+            : [];
     }
 
     private function resolvePublicApiBase(): string

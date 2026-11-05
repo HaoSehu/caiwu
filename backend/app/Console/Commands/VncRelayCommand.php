@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Console\Commands;
 
 use App\Services\ClientServiceConsole\ClientServiceConsoleService;
+use App\Services\ClientServiceConsole\VncOriginPolicy;
 use App\Support\PublicUrl;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
@@ -34,6 +35,12 @@ class VncRelayCommand extends Command
     private const IDLE_TIMEOUT_SECONDS = 300;
 
     private const MAX_BUFFER_BYTES = 1048576;
+
+    public function __construct(
+        private readonly VncOriginPolicy $originPolicy,
+    ) {
+        parent::__construct();
+    }
 
     public function handle(ClientServiceConsoleService $consoleService): int
     {
@@ -723,45 +730,8 @@ class VncRelayCommand extends Command
 
     private function isAllowedClientOrigin(string $origin, array $params = []): bool
     {
-        $allowedOrigin = $this->normalizeOrigin((string) ($params['allowed_origin'] ?? ''));
-        if ($allowedOrigin === '') {
-            $allowedOrigin = $this->normalizeOrigin(PublicUrl::console());
-        }
-
-        $actualOrigin = $this->normalizeOrigin($origin);
-        if ($actualOrigin === '') {
-            return false;
-        }
-
-        return strcasecmp($allowedOrigin, $actualOrigin) === 0;
-    }
-
-    private function normalizeOrigin(string $origin): string
-    {
-        $origin = trim($origin);
-        if ($origin === '') {
-            return '';
-        }
-
-        $parts = parse_url($origin);
-        if (! is_array($parts)) {
-            return '';
-        }
-
-        $scheme = strtolower((string) ($parts['scheme'] ?? ''));
-        $host = strtolower((string) ($parts['host'] ?? ''));
-        if ($scheme === '' || $host === '') {
-            return '';
-        }
-
-        $port = (int) ($parts['port'] ?? 0);
-        $defaultPort = $scheme === 'https' ? 443 : 80;
-
-        if ($port > 0 && $port !== $defaultPort) {
-            return sprintf('%s://%s:%d', $scheme, $host, $port);
-        }
-
-        return sprintf('%s://%s', $scheme, $host);
+        // 判定逻辑收敛在 VncOriginPolicy：浏览器走 console 域，App 走 allowed_app_origins 白名单。
+        return $this->originPolicy->isAllowed($origin, $params);
     }
 
     private function maskToken(string $token): string

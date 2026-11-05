@@ -87,6 +87,12 @@ return [
         // 且本地 Relay 仅监听 127.0.0.1 内网端口。默认本地跳过校验、生产保持严格，
         // 可用 VNC_RELAY_ALLOW_PRIVATE_UPSTREAM 显式覆盖（生产不建议开启）。
         'allow_private_upstream' => (bool) env('VNC_RELAY_ALLOW_PRIVATE_UPSTREAM', env('APP_ENV') === 'local'),
+        // 移动端 App（原生 Flutter，非浏览器）连接 Relay 时无法伪造 console 域 Origin，
+        // 需显式放行的额外 Origin 列表（逗号分隔，如 caiwu-app）。浏览器端仍走 console 域白名单。
+        'app_origins' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env('VNC_RELAY_APP_ORIGINS', 'caiwu-app'))
+        ))),
     ],
 
     'frontend' => [

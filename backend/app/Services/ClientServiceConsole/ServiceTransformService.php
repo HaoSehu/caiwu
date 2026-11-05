@@ -233,6 +233,11 @@ class ServiceTransformService
         $productDisplayName = ServiceListPresentation::productDisplayName($service, $this->productDisplayNameResolver);
         $instanceName = ServiceHostname::resolveInstanceName($service, $provisionData, $host);
 
+        // 历史数据的 services.invoice_id 可能为空，购买账单只挂在订单上；
+        // 与管理员端（HandlesAdminUserServices）一致地向订单账单回退，
+        // 否则 App 服务详情的「账单」页签会显示为空。
+        $invoice = $service->invoice ?? $service->order?->getRelationValue('invoice');
+
         return [
             'id' => $service->id,
             'name' => $instanceName !== '' ? $instanceName : ($service->name ?? ''),
@@ -271,11 +276,11 @@ class ServiceTransformService
                 'console_template' => $service->product?->console_template,
             ],
             'invoice' => [
-                'id' => (int) ($service->invoice?->id ?? 0),
-                'invoice_no' => $service->invoice?->invoice_no ?? '',
-                'order_no' => $service->order?->order_no ?: $service->invoice?->order?->order_no ?: '',
-                'status' => (int) ($service->invoice?->status ?? 0),
-                'paid_at' => $service->invoice?->paid_at?->format('Y-m-d H:i:s'),
+                'id' => (int) ($invoice?->id ?? 0),
+                'invoice_no' => (string) ($invoice?->invoice_no ?? ''),
+                'order_no' => $service->order?->order_no ?: $invoice?->order?->order_no ?: '',
+                'status' => (int) ($invoice?->status ?? 0),
+                'paid_at' => $invoice?->paid_at?->format('Y-m-d H:i:s'),
             ],
             'upstream' => [
                 'provider_key' => (string) ($this->bindingResolver()->providerKeyForService($service) ?? ''),

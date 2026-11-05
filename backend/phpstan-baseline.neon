@@ -1828,35 +1828,17 @@ parameters:
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
 			identifier: property.notFound
-			count: 2
+			count: 1
 			path: app/Services/ClientServiceConsole/ServiceTransformService.php
 
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$invoice_no\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Services/ClientServiceConsole/ServiceTransformService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$order\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Services/ClientServiceConsole/ServiceTransformService.php
 
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$order_no\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/ClientServiceConsole/ServiceTransformService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$paid_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/ClientServiceConsole/ServiceTransformService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$status\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Services/ClientServiceConsole/ServiceTransformService.php
