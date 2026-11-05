@@ -69,9 +69,32 @@ class AppServiceProvider extends ServiceProvider
         // 过高的单 IP 频率会放大为对供应商接口的请求压力。60/分钟远高于正常浏览节奏。
         RateLimiter::for('site-product-browse', fn (Request $request) => Limit::perMinute(60)->by('site-product-browse:'.$request->ip()));
 
-        // api 组全局限流兜底：细粒度限流（登录、询价等）之外，防止公开端点被滥用时绕过缓存直击 DB。
-        // 按 IP 计数；throttle 中间件在 auth 之前执行，此处不依赖登录态。
-        RateLimiter::for('api', fn (Request $request) => Limit::perMinute(120)->by('api:'.$request->ip()));
+        // api 组全局限流兜底：防止公开端点被滥用时绕过缓存直击 DB。
+        //
+        // 事故背景：原实现一律按 IP 计 120/分钟。收银台每 5 秒轮询支付状态、
+        // 充值页同频轮询、实名认证每 3 秒轮询，叠加列表/详情/资产刷新，正常用户
+        // 3–5 分钟打满额度后，连余额/支付宝/微信/组合支付请求也一起 429
+        // （四种支付方式共用同一全局桶）——这就是「用户付款被阻断」的根因。
+        // 且按 IP 计数在 NAT/公司出口下会把互不相干的用户压进同一个桶。
+        //
+        // 现口径：已登录按用户 id、匿名按 IP 分桶计数。
+        // throttle:api 位于 api 组最前，正常情况下早于 Authenticate:sanctum，
+        // 此处 $request->user() 通常为 null；但 Sanctum 在部分入口（stateful /
+        // 网关回调）会先行解析，且中间件顺序可随配置变化——所以这里按「能拿到
+        // 用户就按用户、拿不到按 IP」自适应，两种情形都不会退化成 IP 共享桶。
+        //
+        // 阈值：已登录 600/分钟（轮询 + 页面切换 + 常规操作留足余量）；
+        // 匿名 120/分钟（与原防刷口径一致）。
+        //
+        // 匿名键沿用原来的 `api:{IP}` 前缀：改名会让滚动发布期间新旧实例各用一个桶，
+        // 同一 IP 的匿名额度短暂翻倍；键名本身不承载语义，保持原值即可平滑升级。
+        RateLimiter::for('api', function (Request $request) {
+            $userId = (int) ($request->user()?->getAuthIdentifier() ?? 0);
+
+            return $userId > 0
+                ? Limit::perMinute(600)->by('authenticated-api:user:'.$userId)
+                : Limit::perMinute(120)->by('api:'.$request->ip());
+        });
 
         // 未认证前端入口按 IP 收敛：实名回调/二维码跳转与密码修改属于可被脚本化利用的端点，
         // 全局 120/分钟过宽，这里单独压到与业务节奏匹配的水平。

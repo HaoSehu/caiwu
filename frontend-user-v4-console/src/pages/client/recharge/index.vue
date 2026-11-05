@@ -142,9 +142,18 @@
               </div>
             </div>
 
-            <div v-if="qrCodeValue && !rechargePaid && !rechargeCancelled" class="mobile-pay-helper">
+            <div
+              v-if="qrCodeValue && !rechargePaid && !rechargeCancelled"
+              class="mobile-pay-helper"
+              :data-pay-target="mobilePayTarget"
+            >
               <p>{{ mobilePayHelperText }}</p>
-              <t-button size="small" theme="primary" variant="outline" @click="copyPayUrl">复制支付链接</t-button>
+              <div class="mobile-pay-helper__actions">
+                <t-button size="small" theme="primary" @click="launchMobilePayment()">{{
+                  mobileLaunchButtonText
+                }}</t-button>
+                <t-button size="small" theme="primary" variant="outline" @click="copyPayUrl">复制支付链接</t-button>
+              </div>
             </div>
           </div>
         </template>
@@ -320,10 +329,15 @@ const {
   qrCodeTitle,
   hasPaymentGateways,
   selectedPaymentGateway,
+  mobilePayChannel,
+  mobilePayNotice,
+  mobilePayTarget,
+  mobileLaunchButtonText,
   selectPreset,
   selectPaymentGateway,
   handleAmountChange,
   handleCreateOrder,
+  launchMobilePayment,
   copyPayUrl,
 } = useRecharge();
 
@@ -336,11 +350,16 @@ const mobileSubmitText = computed(() =>
   rechargePaid.value ? '继续充值' : rechargeCancelled.value ? '重新发起充值' : '立即充值',
 );
 const mobilePayHelperText = computed(() => {
-  if (selectedPaymentGateway.value?.payment_type === 'wxpay') {
-    return '请复制支付链接后在微信或手机浏览器中继续支付。';
+  // 内置浏览器拦截（微信内打不开支付宝等）优先展示具体原因，再谈重试方式。
+  if (mobilePayNotice.value) return mobilePayNotice.value;
+  if (mobilePayChannel.value === 'wechat') {
+    return '已尝试打开微信 App；若未自动跳转，请点下方按钮重试，或复制支付链接在微信中打开。';
+  }
+  if (mobilePayChannel.value === 'alipay') {
+    return '已尝试打开支付宝 App；若未自动跳转，请点下方按钮重试，或复制支付链接在支付宝中打开。';
   }
 
-  return '若未能自动打开支付宝，请复制支付链接后在手机浏览器中继续支付。';
+  return '若未自动跳转，请点下方按钮重试，或复制支付链接在手机浏览器中打开。';
 });
 
 const balanceText = computed(() => {

@@ -14,12 +14,13 @@
          style-src 还需放行 static.geetest.com/static.geevisit.com：gt4.js 会动态插入 gcaptcha4.css。
          script-src 允 https://tdesign.gtimg.com：TDesign Icon 组件默认 loadDefaultIcons=true 会动态插入
          https://tdesign.gtimg.com/icon/0.4.5/fonts/index.js 的 SVG 雪碧图（Header/MenuContent 等处用到 t-icon）。
-         frame-src 允 alipays:：移动端充值用隐藏 iframe 拉起支付宝 App（src/domains/finance/useRecharge.ts:407-427）。
+         frame-src 允 alipays: / weixin: / wxp:：移动端充值用隐藏 iframe 拉起支付宝与微信 App
+         （src/domains/finance/paymentLaunch.ts 的 openPaymentLaunch）。
          style-src 必须含 'unsafe-inline'（TDesign 运行时注入样式）；font-src 含 data:（TencentSansW7 base64 @font-face）。
          img-src/connect-src 用 https: 兜底：API 源站与支付宝二维码代理地址由 VITE_API_BASE_URL 配置，无法在静态 HTML 写死。 -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' https://static.geetest.com https://static.geevisit.com https://gcaptcha4.geetest.com https://gcaptcha4.geevisit.com https://gcaptcha4.gsensebot.com https://monitor.geetest.com https://tdesign.gtimg.com; style-src 'self' 'unsafe-inline' https://static.geetest.com https://static.geevisit.com; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https:; media-src 'self' https: blob:; frame-src 'self' https: alipays:; object-src 'none'; base-uri 'self'; form-action 'self'"
+      content="default-src 'self'; script-src 'self' https://static.geetest.com https://static.geevisit.com https://gcaptcha4.geetest.com https://gcaptcha4.geevisit.com https://gcaptcha4.gsensebot.com https://monitor.geetest.com https://tdesign.gtimg.com; style-src 'self' 'unsafe-inline' https://static.geetest.com https://static.geevisit.com; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https:; media-src 'self' https: blob:; frame-src 'self' https: alipays: weixin: wxp:; object-src 'none'; base-uri 'self'; form-action 'self'"
     />
     <!-- 单图 32×32：浏览器标签页的最大渲染尺寸就是 32px，
          原先是 64×64 单图未压缩 32bpp（16958 B），缩到 32×32 后 4286 B，首访省 12.6 KB（PB-21） -->

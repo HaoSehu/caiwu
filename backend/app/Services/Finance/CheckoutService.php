@@ -594,11 +594,19 @@ class CheckoutService
         }
     }
 
+    /**
+     * 幂等/指纹命中的账单必须仍是待支付才可复用。
+     *
+     * 只排除「已取消」会让用户第二次购买同一商品（同周期同配置，指纹一致）时
+     * 直接拿回上一张已支付账单，前端随即提示「该账单已支付」，购买被卡死。
+     * 幂等键命中的场景同理：同一键重复提交应返回原单，但原单已支付后
+     * 仍需新建，才能支持重复购买。
+     */
     private function freshCheckoutInvoice(int $invoiceId): ?Invoice
     {
         return Invoice::query()
             ->with(['product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires', 'service'])
-            ->where('status', '!=', InvoiceStatus::CANCELLED)
+            ->where('status', InvoiceStatus::UNPAID)
             ->find($invoiceId);
     }
 

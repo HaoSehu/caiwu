@@ -1,3 +1,5 @@
+import type { Page } from '@playwright/test';
+
 import { envelope, expect, mockAuthenticatedSession, test } from './fixtures';
 
 // 充值 → 支付轮询链路用例（mock 网关）：快捷金额选档 → 确认弹窗 → 生成二维码 →
@@ -97,4 +99,76 @@ test('充值：生成二维码后自动轮询支付状态，成功后停止轮�
   expect(callsAtSuccess).toBeGreaterThanOrEqual(2);
   await page.waitForTimeout(3200);
   expect(statusCalls).toBe(callsAtSuccess);
+});
+
+// 手机端：下单后必须直接唤起支付宝 / 微信 App，而不是只给一个二维码或链接。
+// 唤起统一走隐藏 iframe（src/domains/finance/paymentLaunch.ts），该 iframe 1.2 秒后会被移除，
+// 直接断言它与移除竞态；因此断言页面上稳定的 data-pay-target（= 本次实际发起的拉起目标）。
+test.describe('手机端充值直接拉起支付 App', () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  /** 移动端下单所需的公共 mock：支付方式 + 建单 + 状态轮询（一直待支付）。 */
+  async function mockMobileRecharge(page: Page, gateway: Record<string, unknown>, qrCode: string) {
+    await mockAuthenticatedSession(page);
+    await page.route('**/api/v2/client/recharge/gateways', (route) => route.fulfill(jsonOk({ list: [gateway] })));
+    await page.route('**/api/v2/client/recharge', (route) => {
+      const payload = {
+        payment_no: PAYMENT_NO,
+        qr_code: qrCode,
+        amount: 20,
+        gateway: String(gateway.key || ''),
+        poll_token: POLL_TOKEN,
+      };
+      return route.fulfill(jsonOk(payload));
+    });
+    await page.route(`**/api/v2/client/recharge/${PAYMENT_NO}/status*`, (route) => {
+      return route.fulfill(jsonOk({ paid: false, message: '等待支付' }));
+    });
+    await page.goto('/client/recharge', { waitUntil: 'domcontentloaded' });
+  }
+
+  test('微信支付：下单后拉起 weixin:// 支付 scheme', async ({ page }) => {
+    await mockMobileRecharge(
+      page,
+      {
+        key: 'yi_pay',
+        option_key: 'yi_pay:wxpay',
+        plugin_name: '易支付',
+        channel_name: '微信支付',
+        payment_type: 'wxpay',
+      },
+      'weixin://wxpay/bizpayurl?pr=e2e-wxpay',
+    );
+
+    await page.getByRole('button', { name: '立即充值' }).click();
+    await page.getByRole('button', { name: '确定' }).click();
+
+    // 已是微信 scheme，原样透传；同时保留重试入口。
+    await expect(page.locator('.mobile-pay-helper')).toHaveAttribute('data-pay-target', /^weixin:\/\/wxpay\/bizpayurl/);
+    await expect(page.getByRole('button', { name: '打开微信 App' })).toBeVisible();
+    await expect(page.locator('.mobile-pay-helper')).toContainText('已尝试打开微信 App');
+  });
+
+  test('支付宝当面付：qr.alipay.com 走扫一扫 scheme', async ({ page }) => {
+    await mockMobileRecharge(
+      page,
+      {
+        key: 'ali_pay',
+        option_key: 'ali_pay:alipay',
+        plugin_name: '支付宝',
+        channel_name: '支付宝',
+        payment_type: 'alipay',
+      },
+      'https://qr.alipay.com/e2e-alipay',
+    );
+
+    await page.getByRole('button', { name: '立即充值' }).click();
+    await page.getByRole('button', { name: '确定' }).click();
+
+    await expect(page.locator('.mobile-pay-helper')).toHaveAttribute(
+      'data-pay-target',
+      /^alipays:\/\/platformapi\/startapp\?saId=10000007/,
+    );
+    await expect(page.getByRole('button', { name: '打开支付宝 App' })).toBeVisible();
+  });
 });

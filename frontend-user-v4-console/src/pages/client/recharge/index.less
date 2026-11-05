@@ -326,6 +326,13 @@
   }
 }
 
+// 唤起按钮与复制链接并排：窄屏（320px）放不下时换行，不截断按钮文案。
+.mobile-pay-helper__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--td-comp-margin-s);
+}
+
 .qrcode-panel {
   display: flex;
   flex-direction: column;

@@ -13,6 +13,9 @@ import type {
 import { getErrorMessage } from '@/utils/error';
 import { copyText, formatMoney, formatMoneyText } from '@/utils/format';
 
+import type { PaymentChannel } from './paymentLaunch';
+import { detectPaymentChannel, openPaymentLaunch, resolvePaymentLaunchPlan } from './paymentLaunch';
+
 const ACTIVE_SERVICE_STATUS = 1;
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -34,22 +37,6 @@ function parseDateTime(value: unknown) {
 
 function isRenewableService(service: ServiceInstance) {
   return Number(service.status) === ACTIVE_SERVICE_STATUS && Number(service.id || 0) > 0;
-}
-
-function resolveAlipayLaunchUrl(rawUrl: unknown) {
-  const url = String(rawUrl || '').trim();
-  if (!url) return '';
-  if (/^alipays?:\/\//i.test(url)) return url;
-  if (/^https?:\/\//i.test(url)) {
-    return `alipays://platformapi/startapp?appId=20000067&url=${encodeURIComponent(url)}`;
-  }
-  if (/^\/\//.test(url)) {
-    return `alipays://platformapi/startapp?appId=20000067&url=${encodeURIComponent(`https:${url}`)}`;
-  }
-  if (/^qr\.alipay\.com\//i.test(url) || /^mclient\.alipay\.com\//i.test(url)) {
-    return `alipays://platformapi/startapp?appId=20000067&url=${encodeURIComponent(`https://${url}`)}`;
-  }
-  return '';
 }
 
 function normalizePaymentGatewayOption(item: RechargeGatewayOption): RechargeGatewayOption | null {
@@ -75,10 +62,6 @@ function normalizePaymentGatewayOption(item: RechargeGatewayOption): RechargeGat
 
 function gatewayOptionKey(item: RechargeGatewayOption) {
   return String(item.option_key || item.key || '').trim();
-}
-
-function isAlipayGateway(option: RechargeGatewayOption | null) {
-  return option?.key === 'alipay' || option?.payment_type === 'alipay';
 }
 
 export function useRecharge() {
@@ -125,6 +108,18 @@ export function useRecharge() {
       String(selectedPaymentGateway.value?.key || '') ||
       '支付',
   );
+  // 手机端拉起：渠道决定按钮文案（打开支付宝 / 打开微信），
+  // mobilePayNotice 承接无法自动唤起的情况（微信内置浏览器打不开支付宝等），
+  // 放在页面里而不是只弹一次 toast，否则用户回头找不到失败原因。
+  const mobilePayChannel = computed<PaymentChannel>(() => detectPaymentChannel(selectedPaymentGateway.value));
+  const mobilePayNotice = ref('');
+  // 最近一次实际发起的拉起目标（scheme 或收银台链接），用于页面标记本次真的唤起了 App。
+  const mobilePayTarget = ref('');
+  const mobileLaunchButtonText = computed(() => {
+    if (mobilePayChannel.value === 'alipay') return '打开支付宝 App';
+    if (mobilePayChannel.value === 'wechat') return '打开微信 App';
+    return '打开支付页面';
+  });
   const paymentButtonText = computed(() => {
     if (paymentGatewaysLoading.value) return '支付方式加载中…';
     if (!hasPaymentGateways.value) return '暂无可用支付方式';
@@ -182,6 +177,8 @@ export function useRecharge() {
     clearPollingTimer();
     rechargePaid.value = false;
     rechargeCancelled.value = false;
+    mobilePayNotice.value = '';
+    mobilePayTarget.value = '';
     paymentPayload.value = null;
   }
 
@@ -411,6 +408,28 @@ export function useRecharge() {
     }
   }
 
+  /**
+   * 手机端直接拉起支付宝 / 微信 App。
+   *
+   * 下单成功后立即调用一次（页面此时已进入移动分支），失败时用户还可以用
+   * 「打开支付宝 App / 打开微信 App」按钮重试——部分浏览器要求唤起紧跟用户手势。
+   */
+  function launchMobilePayment(rawUrl?: unknown) {
+    const url = String(rawUrl ?? qrCodeValue.value ?? '').trim();
+    if (!url) return false;
+
+    const plan = resolvePaymentLaunchPlan(url, mobilePayChannel.value);
+    if (plan.kind === 'blocked') {
+      mobilePayNotice.value = plan.message;
+      mobilePayTarget.value = '';
+      return false;
+    }
+
+    mobilePayNotice.value = '';
+    mobilePayTarget.value = plan.url;
+    return openPaymentLaunch(plan);
+  }
+
   async function handleCreateOrder(isMobileScreen = false) {
     const targetAmount = normalizeRechargeAmount(inputAmount.value);
     inputAmount.value = targetAmount;
@@ -419,17 +438,8 @@ export function useRecharge() {
     const result = await createRechargeOrder(targetAmount);
     if (!result?.qr_code) return;
 
-    if (isMobileScreen && isAlipayGateway(selectedPaymentGateway.value)) {
-      const launchUrl = resolveAlipayLaunchUrl(result.qr_code);
-      if (launchUrl) {
-        const iframe = document.createElement('iframe');
-        iframe.style.display = 'none';
-        iframe.src = launchUrl;
-        document.body.appendChild(iframe);
-        window.setTimeout(() => {
-          if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
-        }, 3000);
-      }
+    if (isMobileScreen) {
+      launchMobilePayment(result.qr_code);
     }
 
     startAutoPolling();
@@ -504,6 +514,10 @@ export function useRecharge() {
     hasPaymentGateways,
     selectedPaymentGateway,
     selectedPaymentGatewayName,
+    mobilePayChannel,
+    mobilePayNotice,
+    mobilePayTarget,
+    mobileLaunchButtonText,
     summaryCards,
     selectPreset,
     selectPaymentGateway,
@@ -514,6 +528,7 @@ export function useRecharge() {
     clearPaymentPayload,
     loadRechargeSummary,
     handleCreateOrder,
+    launchMobilePayment,
     copyPayUrl,
     openServiceQuickFilter,
   };
