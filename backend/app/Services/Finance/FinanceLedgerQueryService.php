@@ -24,6 +24,7 @@ use App\Support\ServiceHostname;
 use App\Support\VersionedJson;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 
@@ -401,7 +402,7 @@ class FinanceLedgerQueryService
                             ->whereExists(fn ($q) => $q->selectRaw(1)
                                 ->from('invoices')
                                 ->whereColumn('invoices.id', 'finance_ledger_entries.source_id')
-                                ->where(function (Builder $invoiceMatch) use ($keyword) {
+                                ->where(function (QueryBuilder $invoiceMatch) use ($keyword) {
                                     $invoiceMatch->where('invoices.invoice_no', 'like', LikeEscape::contains($keyword))
                                         ->orWhereExists(fn ($pi) => $pi->selectRaw(1)
                                             ->from('payments')
@@ -413,7 +414,7 @@ class FinanceLedgerQueryService
                             ->whereExists(fn ($q) => $q->selectRaw(1)
                                 ->from('payments')
                                 ->whereColumn('payments.id', 'finance_ledger_entries.source_id')
-                                ->where(function (Builder $paymentMatch) use ($keyword) {
+                                ->where(function (QueryBuilder $paymentMatch) use ($keyword) {
                                     $paymentMatch->where('payments.payment_no', 'like', LikeEscape::contains($keyword))
                                         ->orWhereExists(fn ($iv) => $iv->selectRaw(1)
                                             ->from('invoices')
@@ -440,7 +441,7 @@ class FinanceLedgerQueryService
                     ->whereExists(fn ($q) => $q->selectRaw(1)
                         ->from('invoices')
                         ->whereColumn('invoices.id', 'finance_ledger_entries.source_id')
-                        ->where(function (Builder $invoiceMatch) use ($serviceId) {
+                        ->where(function (QueryBuilder $invoiceMatch) use ($serviceId) {
                             $invoiceMatch->where('invoices.service_id', $serviceId)
                                 ->orWhereExists(fn ($oi) => $oi->selectRaw(1)
                                     ->from('orders')
@@ -455,7 +456,7 @@ class FinanceLedgerQueryService
                         ->whereExists(fn ($iv) => $iv->selectRaw(1)
                             ->from('invoices')
                             ->whereColumn('invoices.id', 'payments.invoice_id')
-                            ->where(function (Builder $invoiceMatch) use ($serviceId) {
+                            ->where(function (QueryBuilder $invoiceMatch) use ($serviceId) {
                                 $invoiceMatch->where('invoices.service_id', $serviceId)
                                     ->orWhereExists(fn ($oi) => $oi->selectRaw(1)
                                         ->from('orders')

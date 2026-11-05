@@ -188,12 +188,13 @@ class ProductCatalogService
     }
 
     /**
-     * 浏览时实时库存覆盖（前台目录/详情）：展示上游实时库存并把快照回写 products.stock，
-     * 缩短上游售罄到本地结账闸门感知的窗口；拉取失败降级快照展示，不影响页面可用性。
+     * 浏览时的库存展示（前台目录/详情）：只读 /stock 接口维护的库存缓存（新鲜或陈旧），
+     * 未命中回退本地快照，不在请求内同步拉上游。上游拉取、快照回写与售罄收敛
+     * 统一由 /stock 接口与 RefreshSiteProductStockJob 承担，页面不再被上游 HTTP 拖慢。
      */
     public function overlayLiveStockForBrowse(Collection $products): Collection
     {
-        return $this->syncService->applyLiveStockToProducts($products, persistSnapshot: true);
+        return $this->syncService->applyCachedLiveStockForBrowse($products);
     }
 
     public function siteProductStock(int $productId): ?array

@@ -255,15 +255,56 @@ class StockGateTest extends TestCase
         $syncService->assertUpstreamStockForProvision($product, (int) $ownOrder->id, 1);
     }
 
-    public function test_browse_overlay_persists_upstream_snapshot_to_product_stock(): void
+    public function test_browse_overlay_uses_cached_site_stock_without_hitting_upstream(): void
     {
-        [$product, $syncService] = $this->makeBoundProduct(remoteStock: 7, localStock: 3);
+        // 首屏回归：详情/目录接口的浏览展示不得在请求内同步等待上游库存 HTTP。
+        // 上游库存拉取缓存只有 15 秒，命中率不足时每次进产品页都会同步挂 1.5~3 秒，
+        // 用户看到的是配置区一直停在「商品配置加载中…」。浏览路径只读 /stock 接口
+        // 维护的库存缓存（新鲜或陈旧），未命中回退本地快照，不碰上游。
+        [$product, $syncService] = $this->makeBoundProduct(remoteStock: 7, localStock: 3, throwOnFetch: true);
+        $this->seedSiteStockCache($product, 7);
 
-        $overlaid = $syncService->applyLiveStockToProducts(new Collection([$product]), true);
+        $overlaid = $syncService->applyCachedLiveStockForBrowse(new Collection([$product]));
 
-        // 展示值取上游实时，且本地快照被覆盖为上游原始值（与 15 分钟同步任务同口径）
+        // 缓存命中即用展示口径值；上游驱动被设成必然抛错，能走到这里就说明没拉上游
         $this->assertSame(7, (int) $overlaid->first()->getAttribute('live_stock'));
-        $this->assertSame(7, (int) $product->fresh()->stock);
+        // 浏览不写快照：缓存是扣预留后的净值，回写会把预计算两次
+        $this->assertSame(3, (int) $product->fresh()->stock);
+    }
+
+    public function test_browse_overlay_falls_back_to_stale_cache_then_snapshot(): void
+    {
+        [$product, $syncService] = $this->makeBoundProduct(remoteStock: 7, localStock: 3, throwOnFetch: true);
+
+        // 只有陈旧键（新鲜值已过期、后台尚未刷新）：仍优先展示陈旧值
+        VolatileStore::store()->put(
+            CacheKey::siteProductStock((int) $product->id).':stale',
+            ['product_id' => (int) $product->id, 'stock' => 5],
+            now()->addMinutes(5),
+        );
+
+        $overlaid = $syncService->applyCachedLiveStockForBrowse(new Collection([$product]));
+        $this->assertSame(5, (int) $overlaid->first()->getAttribute('live_stock'));
+
+        // 新鲜键过期后展示过期的新鲜值而非陈旧值（与 stock 接口读取顺序一致）
+        VolatileStore::store()->put(
+            CacheKey::siteProductStock((int) $product->id),
+            ['product_id' => (int) $product->id, 'stock' => 6],
+            now()->addMinutes(5),
+        );
+        $overlaid = $syncService->applyCachedLiveStockForBrowse(new Collection([$product]));
+        $this->assertSame(6, (int) $overlaid->first()->getAttribute('live_stock'));
+    }
+
+    public function test_browse_overlay_never_blocks_on_upstream_http(): void
+    {
+        // 两个缓存键都没有时不等待上游：展示回退本地快照，页面照常渲染。
+        [$product, $syncService] = $this->makeBoundProduct(remoteStock: 7, localStock: 3, throwOnFetch: true);
+
+        $overlaid = $syncService->applyCachedLiveStockForBrowse(new Collection([$product]));
+
+        $this->assertSame(3, (int) $overlaid->first()->getAttribute('live_stock'));
+        $this->assertSame(3, (int) $product->fresh()->stock);
     }
 
     public function test_browse_overlay_skips_write_when_upstream_unchanged(): void
@@ -271,9 +312,9 @@ class StockGateTest extends TestCase
         [$product, $syncService] = $this->makeBoundProduct(remoteStock: 3, localStock: 3);
         $updatedAtBefore = $product->refresh()->updated_at?->toISOString();
 
-        $syncService->applyLiveStockToProducts(new Collection([$product]), true);
+        // 刷新路径（/stock 与后台 Job 共用）每次上游值与快照一致时不产生写放大
+        $syncService->refreshSiteProductStock((int) $product->id);
 
-        // 上游值与快照一致时不产生写放大（updated_at 不变）
         $this->assertSame($updatedAtBefore, $product->fresh()->updated_at?->toISOString());
     }
 
@@ -282,9 +323,10 @@ class StockGateTest extends TestCase
         [$product, $syncService] = $this->makeBoundProduct(remoteStock: 7, localStock: 3, throwOnFetch: true);
         $stockBefore = (int) $product->refresh()->stock;
 
-        $overlaid = $syncService->applyLiveStockToProducts(new Collection([$product]), true);
+        // 刷新路径上游不可达：写 miss 语义前不得误写快照，浏览侧照旧降级
+        $syncService->refreshSiteProductStock((int) $product->id);
+        $overlaid = $syncService->applyCachedLiveStockForBrowse(new Collection([$product]));
 
-        // 上游不可达时浏览不炸：展示降级为本地快照，快照不被误写
         $this->assertSame($stockBefore, (int) $product->fresh()->stock);
         $this->assertSame($stockBefore, (int) $overlaid->first()->getAttribute('live_stock'));
     }
@@ -313,7 +355,7 @@ class StockGateTest extends TestCase
     public function test_shortage_override_forces_remote_stock_reads_to_zero(): void
     {
         // 覆盖期读取回归：上游 qty 仍返回 20（展示口径假值）时，覆盖标记内
-        // 库存读取一律按 0 —— 展示归零，浏览回写不再把假值写回快照。
+        // 库存读取一律按 0 —— 展示归零，快照被归零，浏览缓存也读到 0。
         [$product, $syncService] = $this->makeBoundProduct(remoteStock: 20, localStock: 20);
         $supplierId = $this->boundSupplierId($product);
 
@@ -323,10 +365,15 @@ class StockGateTest extends TestCase
             now()->addSeconds(60)
         );
 
-        $overlaid = $syncService->applyLiveStockToProducts(new Collection([$product]), true);
+        // 刷新路径在读取出口应用覆盖：上游 qty 假值不得写回快照
+        $refreshed = $syncService->applyLiveStockToProduct($product->loadMissing('supplier'), persistSnapshot: true);
 
-        $this->assertSame(0, (int) $overlaid->first()->getAttribute('live_stock'));
+        $this->assertSame(0, (int) $refreshed->getAttribute('live_stock'));
         $this->assertSame(0, (int) $product->fresh()->stock);
+
+        // 浏览路径按快照展示 0
+        $overlaid = $syncService->applyCachedLiveStockForBrowse(new Collection([$product->refresh()]));
+        $this->assertSame(0, (int) $overlaid->first()->getAttribute('live_stock'));
     }
 
     public function test_shortage_override_is_scoped_to_bound_supplier_product(): void
@@ -412,6 +459,18 @@ class StockGateTest extends TestCase
             ->firstOrFail(['supplier_id']);
 
         return (int) $supplierBinding->supplier_id;
+    }
+
+    /**
+     * 预置 /stock 接口维护的库存缓存：浏览路径只读这里的新鲜/陈旧双键。
+     */
+    private function seedSiteStockCache(Product $product, int $stock): void
+    {
+        VolatileStore::store()->put(
+            CacheKey::siteProductStock((int) $product->id),
+            ['product_id' => (int) $product->id, 'stock' => $stock],
+            now()->addMinutes(5),
+        );
     }
 
     private function checkoutPayload(Product $product, string $quoteToken): array

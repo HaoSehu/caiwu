@@ -818,7 +818,9 @@ class ProductSyncService
             return;
         }
 
-        $product = $this->applyLiveStockToProduct($product->loadMissing('supplier'));
+        // 快照回写收敛在这里：/stock 与后台刷新是唯一拿到上游原始值的路径，
+        // 补看回写在 applyLiveStockToProducts 内执行（值一致时不产生写放大）。
+        $product = $this->applyLiveStockToProduct($product->loadMissing('supplier'), persistSnapshot: true);
 
         $result = [
             'product_id' => (int) $product->id,
@@ -953,6 +955,63 @@ class ProductSyncService
         $products = $this->applyLiveStockToProducts(new Collection([$product]), $persistSnapshot);
 
         return $products->first() ?? $product;
+    }
+
+    /**
+     * 前台浏览覆盖：只读 /stock 接口维护的库存缓存，未命中时回退本地快照，绝不在请求内等上游。
+     *
+     * 上游库存拉取的最短缓存只有 15 秒（REMOTE_STOCK_CACHE_TTL_SECONDS），若浏览请求
+     * 同步拉取，缓存一过期每个进产品页的请求都要等上游 1.5~3 秒，用户看到的就是
+     * 配置区长期停在「商品配置加载中…」。因此浏览路径与 siteProductStock 同一范式：
+     * 读它维护的新鲜/陈旧双键（值同为减去在途预留后的 live 口径），未命中用
+     * 本地快照先把页面渲染出来；上游拉取与后台刷新全部交给 /stock 接口与定时同步。
+     *
+     * 快照回写不在这里做：缓存里是扣除预留后的净值，写回 products.stock（纯上游快照）
+     * 会把预计算两次；回写已随上游拉取一起收敛到 refreshSiteProductStock。
+     */
+    public function applyCachedLiveStockForBrowse(Collection $products): Collection
+    {
+        $store = VolatileStore::store();
+
+        foreach ($products as $product) {
+            if (! $product instanceof Product) {
+                continue;
+            }
+
+            $productId = (int) $product->id;
+            $cachedStock = $this->readCachedSiteStock($store, $productId);
+
+            // 缓存值与回退值都是展示口径：缓存命中取 live 净值，未命中取本地快照原值。
+            $product->setAttribute(
+                'live_stock',
+                $cachedStock ?? (int) ($product->stock ?? -1)
+            );
+        }
+
+        return $products;
+    }
+
+    /**
+     * 读取 /stock 接口写入的新鲜或陈旧库存值；两者都未命中返回 null。
+     */
+    private function readCachedSiteStock(mixed $store, int $productId): ?int
+    {
+        if ($productId <= 0) {
+            return null;
+        }
+
+        $cacheKey = CacheKey::siteProductStock($productId);
+
+        foreach ([$cacheKey, $cacheKey.':stale'] as $key) {
+            $cached = $store->get($key);
+
+            // false 是「商品不存在/已下架」的 miss 标记：没有可展示的库存，回退快照。
+            if (is_array($cached) && array_key_exists('stock', $cached)) {
+                return (int) $cached['stock'];
+            }
+        }
+
+        return null;
     }
 
     public function applyLiveStockToProducts(Collection $products, bool $persistSnapshot = false): Collection

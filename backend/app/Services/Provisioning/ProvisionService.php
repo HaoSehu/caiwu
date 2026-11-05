@@ -344,7 +344,7 @@ class ProvisionService
                 'domain' => (string) ($hostDetail['domain'] ?? $result['requested_host']),
                 'expires_at' => $this->resolveServiceExpiry($hostDetail, $order),
                 'suspended_reason' => null,
-                'provision_data' => array_merge($this->serviceProvisionData($service), [
+                'provision_data' => array_merge($this->latestServiceProvisionData($service), [
                     'provider_key' => $providerKey,
                     'supplier_id' => $this->resolveProductSupplierId($order->product, $service),
                     'requested_host' => $result['requested_host'],
@@ -426,7 +426,10 @@ class ProvisionService
 
             // 失败回写必须保住首次冻结的端点快照（serviceProvisionData 已带出 legacy 里的快照），
             // 否则一次失败就会把快照冲掉，重试会打回改绑后的新上游。
-            $failedProvisionData = $this->serviceProvisionData($service);
+            // 基线取数据库最新值：驱动类（如 zjmf 插件）会在提交上游前自行落库
+            // downstream_token 等检查点，用进入上游窗口之前的旧 model 快照做基线
+            // 会把这些键整段覆盖掉，重试换 token 后上游幂等门失效、重复开通。
+            $failedProvisionData = $this->latestServiceProvisionData($service);
             // markPending/驱动类解析本身失败时 $providerKey 还没赋值，这里回落到实时解析，
             // 避免把 provision_data.provider_key 写成空串冲掉已有标识。
             $fallbackProduct = $order->product instanceof Product ? $order->product : null;
@@ -1819,5 +1822,19 @@ class ProvisionService
         $projection = $this->pluginBindingResolver()->serviceProvisionProjection($service, $includeSecrets);
 
         return $projection === [] ? $legacy : array_replace($legacy, $projection);
+    }
+
+    /**
+     * 回写基线：先按 id 取数据库最新行，再叠加绑定投影。
+     *
+     * 上游窗口内的驱动会自行落库检查点（如 zjmf 的 downstream_token 必须跨重试
+     * 稳定，上游据此匹配既有主机）。这些写入不会回流到调用方手里的旧 model 实例，
+     * 直接用旧实例拼 provision_data 会把它们整段覆盖掉。
+     */
+    private function latestServiceProvisionData(Service $service, bool $includeSecrets = false): array
+    {
+        $fresh = (int) $service->id > 0 ? $service->fresh() : null;
+
+        return $this->serviceProvisionData($fresh instanceof Service ? $fresh : $service, $includeSecrets);
     }
 }
