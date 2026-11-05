@@ -209,6 +209,7 @@ API 治理必须同时覆盖请求入口和响应出口。新增或重构接口�
 - 支付宝原路退款、余额退款、混合支付余额恢复必须同步账单退款投影字段，收入统计必须按净额计入（实收 − 累计已完成退款，红字账单不参与收入统计）。**当前口径：只有一条退款出口——退款到余额**（`refund_method=balance`，管理员入口 `POST /v2/admin/invoices/{id}/refunds`），支付插件层无退款能力与契约，不得出现「原路退款」标签或 `refund_method=original` 分支。**2026-10-20 裁决：纯标记通道 `refund_method=manual_mark` 已整体移除**（路由、`InvoiceRefundMarkService`、互斥守卫一并删除），历史 `funds_moved=0` 行只读保留，不回填、不删除；累计退款口径（真实退款与历史纯标记都计入）见 `FinanceRefund` 模型注释。详见 `docs/参考资料/后端/财务单据生成规则.md` §6.2。
 - 管理员余额退款（`refundInvoiceToBalance`）必须走资金三唯一写口（余额经 `AccountService`、台账经 `FinanceLedgerService`、单据经 `FinanceDocumentService`），并在事务内持有账单行锁与用户行锁；充值/补录账单不得退回余额（资金从未离开系统），推广奖励可提余额不足时先阻断。
 - 支付和实名回调必须在路由层先过签名中间件，Service 层保留二次验签、金额/状态校验、幂等和事务锁。
+- 账户策略（强制实名 / 手机号 / 邮箱）只在服务层断言（`App\Services\User\AccountPolicyService`），不得用中间件做全局拦截：它只拦下单、支付、充值、提现四类关键写操作，只读接口与页面不受影响；自动续费（直连 `BalanceInvoicePaymentService`）和管理端代付不受策略约束。开关存于 `settings` 的 `account_policy` 组，默认关闭。
 - VNC、支付、实名、上游等日志不脱敏，保留完整 token、sign、password、secret 以便排查。
 - 公开 VNC token 采用**幂等消费**（同一 token 在 TTL 内可重复兑换，不要求一次性消费）、短 TTL、绑定必要上下文；兑换端点 Origin 校验保留「空 Origin 放行」以兼容同源与非浏览器客户端；不得在公开解析响应中返回 VNC 密码、原始 token 或完整 URL。
 - 用户端账单详情为白名单输出（`ClientInvoiceDetailResource`）：不得返回 `callback_raw`、`trace_id`、成本/佣金/结算类等管理端内部字段；支付流水级 `trade_no`（第三方订单号）为控制台既有展示口径（用户对账需要），不属于泄露面（2026-10-10 裁决：客户端账单详情 `trade_no` 维持现状并以此条款消解 §9 字面冲突）。

@@ -27,7 +27,7 @@ docs/
 ├── BACKEND.md            # 后端工程约束
 ├── DATABASE.md           # 数据库结构快照
 ├── DESIGN.md             # 视觉与交互约束
-├── FRONTEND.md           # 三个前端与 shared 约束
+├── FRONTEND.md           # 四个前端（三个 Vue 端 + Flutter App）与 shared 约束
 ├── 设计文档/              # 需要做出或已记录的技术设计
 ├── 产品规格/              # 用户问题、范围、验收条件
 ├── 执行计划/              # 版本控制的执行计划与决策日志

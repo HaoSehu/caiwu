@@ -1,6 +1,6 @@
 ---
 status: current
-updated: 2026-11-02
+updated: 2026-11-06
 owner: frontend-platform
 ---
 
@@ -28,12 +28,13 @@ owner: frontend-platform
 
 ## 2. 总体定位与端划分
 
-本规范适用于使用 **TDesign Vue Next** 体系的三端（`frontend-admin-v3`、`frontend-user-v4-console` 与 `frontend-user-v3-www`）。其中**交互与组件映射**条款对三端全部适用；**信息密度与页面结构**条款仅适用于管理端与控制台，官网端按下文第 2 节该端条目执行。系统视觉基线为**浅色企业级云服务控制台**，专注于信息传达效率与业务处理：
+本规范适用于 **TDesign** 体系的前端：使用 TDesign Vue Next 的三端（`frontend-admin-v3`、`frontend-user-v4-console` 与 `frontend-user-v3-www`）与使用 TDesign Flutter 的 `app_flutter`。其中**交互与组件映射**条款对各端全部适用；**信息密度与页面结构**条款仅适用于管理端、控制台与 App，官网端按下文第 2 节该端条目执行。系统视觉基线为**浅色企业级云服务控制台**，专注于信息传达效率与业务处理：
 
 - **主题模式约束**：**系统仅提供浅色（Light）模式，暂时不提供暗黑（Dark）主题**。严禁把控制台做成深色大屏仪表盘，严禁添加纯营销化发光渐变与玻璃拟态修饰。
 - **`frontend-admin-v3`（管理端）**：采用 `TDesign Vue Next`。服务于内部运营、财务及平台管理人员，侧重高密度数据处理、严谨的权限与状态呈现。
 - **`frontend-user-v4-console`（用户控制台）**：采用 `TDesign Vue Next`。服务于终端租户及开发者，重视资产与资源扫描效率、直观的实例管控与轻量清晰的账单呈现。
 - **`frontend-user-v3-www`（官网与用户入口）**：采用 `TDesign Vue Next` 组件体系（2026-11-01 完成迁移），组件样式由各组件子入口自带，并与两端共享根 `theme.css` 的浅色基线（`:root` 全局变量、`#app .t-*` 组件覆写）。官网保留营销化的视觉表现（大图 hero、更强的留白与投影），且页面样式仍走自有 SCSS 令牌（`src/assets/styles/variables.scss`，共定义 75 个变量；其中 `$color*` 系列颜色令牌 455 处引用）而非 `--td-*`（业务代码零直接消费，源码内唯一命中是 `pages/website/products/page.scss:1433` 的注释）。因此：本规范的**交互与组件映射**条款（组件选型、无障碍热区、状态与反馈形态）适用于它；**§3 设计令牌的取值口径与档位表**（颜色/字号/圆角/投影的具体数值）以及**信息密度与页面结构**条款（表格/卡片布局、控制台式紧凑间距）不适用于它，官网自有令牌即为该端的准绳。
+- **`app_flutter`（Android 原生 App）**：采用 `TDesign Flutter`。服务于终端用户的移动场景，侧重服务管控、工单与账单的随手处理、SSH/VNC 远程运维。视觉沿用本规范的浅色基线，主色与语义色色值对齐 §3.1（`lib/core/theme/app_theme.dart` 覆写 TDesign Flutter 品牌色阶）；圆角、字号、颜色一律取自 `context.tTheme`（TDesign Flutter 令牌），不在页面硬编码。断点是 **Material 3 的 600 / 840**（`compact` / `medium` / `expanded`），不套用 §7 的 Web 断点，因为移动端要覆盖手机横屏与平板分屏。信息密度与页面结构条款适用于它，但以移动端单列、底部 Tab（平板改左侧导航）为实现形态。
 
 ---
 
@@ -243,6 +244,7 @@ owner: frontend-platform
    - 768 属于 `sm`，因此"移动端"查询一律写 `@media (max-width: 767.98px)`（LESS/SCSS 用变量：控制台 `@screen-mobile-max`、官网 `$breakpoint-mobile-max`、共享样式 `theme.css` 直接写字面量）。不要写成 `max-width: 768px` 或 `width <= 768px`——那会把 768 视口也算进移动端。
    - CSS 媒体查询统一使用 `max-width` / `min-width` 写法，不使用 CSS Media Queries Level 4 的区间语法（`width <= 768px`）：官网 browserslist 为 Chrome 84 / Safari 13.4，低于区间语法所需版本（Chrome 104 / Safari 16.4），构建不会自动降级，旧浏览器会整条丢规则。
    - JS 侧判定与 CSS 等价：管理端 `window.innerWidth < MOBILE_BREAKPOINT`（常量 768 代表 sm 起点），控制台 `useDeviceLayout().isMobile`（vueuse `smaller(768)`，内部为 `max-width: 767.9px`）。
+   - **`app_flutter` 例外**：该端为 Flutter 原生渲染，不使用 CSS 媒体查询，断点取 Material 3 的 `600` / `840`（`lib/core/layout/responsive.dart`，`compact` / `medium` / `expanded`），覆盖手机竖屏、手机横屏/小平板竖屏与平板横屏。这三档只约束该端，不要回写到 Vue 端的 768/992/1200 体系。
 2. **无障碍访问性 (WCAG AA)**：
    - 文本与背景对比度必须达到 4.5:1（大文本至少 3:1）。浅底标签中的彩色文字必须采用深色阶（如 `--td-success-color-9`、`--td-warning-color-10`、`--td-error-color-8`）。
    - 所有仅包含图标的按钮必须显式提供 `aria-label` 或外层 `t-tooltip` 说明用途。

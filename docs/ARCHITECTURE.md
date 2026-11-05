@@ -1,6 +1,6 @@
 ---
 status: current
-updated: 2026-11-03
+updated: 2026-11-06
 owner: backend-platform
 ---
 
@@ -16,6 +16,7 @@ caiwu/
 ├── frontend-admin-v3/        当前管理端，Vue 3 + TDesign
 ├── frontend-user-v3-www/     官网与用户入口，Vue 3 + TDesign
 ├── frontend-user-v4-console/ 新版用户控制台，Vue 3 + TDesign
+├── app_flutter/              Android 原生 App，Flutter + TDesign Flutter（独立构建，不入根 workspace）
 ├── shared/                   跨前端共享包
 └── docs/                     项目长期开发文档
 ```
@@ -140,6 +141,17 @@ API 直接重构路由口径：
 
 涉及状态文案、状态颜色、状态标签、控制台基础组件时，先查 `shared`。
 
+### 3.5 `app_flutter`
+
+- 定位：面向 caiwu 用户的 Android 原生 App，对标阿里云 App 形态，覆盖控制台首页、服务管理、工单、账单订单充值、公告、SSH 终端与 VNC 远程桌面。
+- 技术：Flutter（Dart SDK `^3.8.0`）、`tdesign_flutter`（唯一 UI 框架）、`dio`、`go_router`、`provider`、`flutter_secure_storage` / `shared_preferences`；SSH 用 `dartssh2` + `xterm`，VNC 为自研 RFB 3.8 over WebSocket。
+- 入口：`lib/main.dart` → `lib/app.dart`（恢复会话、挂载 `AppServices`、登录守卫路由）。
+- 目录：`lib/core/`（config、net、router、store、theme、util、layout）、`lib/widgets/`（设计系统组件与三态容器）、`lib/features/`（auth、home、services、tickets、finance、notices、profile、ssh、vnc、shell）。
+- 后端契约：只消费 `/api/v2/client/*` 与站点公开接口，不改后端接口结构；唯一后端配套改动是 VNC relay 的 App Origin 白名单（`VNC_RELAY_APP_ORIGINS`）。
+- 隔离边界：独立构建，**不接入根 npm workspace**，依赖（`pubspec.yaml`）与产物均在 `app_flutter/` 内，根 `npm run build:frontends` 不覆盖它；需要单独的 Flutter SDK 与 Android SDK。
+- 验证：`cd app_flutter && flutter analyze && flutter test && dart run tool/check_no_webview.dart`，构建用 `flutter build apk`。
+- 详细工程约束（设计系统、断点、SSH/VNC 能力、已知限制与审查记录）见 [FRONTEND.md](FRONTEND.md) §9 与 [app_flutter/README.md](../app_flutter/README.md)。
+
 ## 4. 本地启动
 
 ```bash
@@ -149,6 +161,9 @@ php artisan app:serve
 npm run dev:admin-v3
 npm run dev:user-v3-www
 npm run dev:user-v4-console
+
+# Android App（独立目录，需 Flutter SDK）
+cd app_flutter && flutter run --dart-define=API_BASE=http://10.0.2.2:8000/api
 ```
 
 不要使用 `php artisan serve` 替代 `app:serve`。
@@ -163,6 +178,7 @@ npm run dev:user-v4-console
   - `frontend-admin-v3/dist`
   - `frontend-user-v3-www/dist`
   - `frontend-user-v4-console/dist`
+- Android App（`app_flutter/`）独立构建 APK 走应用分发，不参与站点静态发布。
 
 ## 6. 数据库口径
 

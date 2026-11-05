@@ -163,7 +163,9 @@ API 直接重构已完成，后续遵循以下 V2 边界：
 | `40001` | 签名验证失败                     | `VerifyCallbackSignature`                       |
 | `40100` | 未登录、未认证或登录已过期       | 认证异常、权限中间件                            |
 | `40300` | 无权限、角色不匹配、账号被禁用   | `ensure.admin` / `ensure.client` / `permission` |
-| `40301` | 邮箱验证或实名认证前置条件未满足 | `EnsureEmailIsVerified`                         |
+| `40301` | 账户策略前置条件未满足：需先完成实名认证                 | `AccountPolicyService`（下单/支付/充值/提现） |
+| `40302` | 账户策略前置条件未满足：需先绑定手机号                   | `AccountPolicyService`、商品 `purchase_requires.require_phone` |
+| `40303` | 账户策略前置条件未满足：需先绑定邮箱                     | `AccountPolicyService`                        |
 | `40400` | 资源不存在                       | 控制器内资源查询失败                            |
 | `40901` | 实例开通租约被其他任务占用       | `ProvisionLeaseBusyException`                   |
 | `42200` | 参数验证失败或一般业务校验失败   | `ValidationException`、`BusinessException`      |
@@ -234,16 +236,24 @@ Accept: application/json
 
 ### 6.4 前置条件不满足
 
-例如邮箱未验证或未完成实名认证：
+账户策略（管理端「账户策略」开关）在关键写操作上不满足时，返回第一项缺失项对应的业务码与文案，
+`data` 同时带上完整清单，前端据此渲染引导弹窗，不必从文案反推缺少哪几项：
 
 ```json
 {
   "code": 40301,
-  "message": "请先完成实名认证",
-  "data": null,
+  "message": "根据平台要求，请先完成实名认证后再进行操作",
+  "data": {
+    "action": "checkout",
+    "missing": ["verification", "email"]
+  },
   "timestamp": 1760000000
 }
 ```
+
+- `action`：`checkout`（下单）、`payment`（支付）、`recharge`（充值）、`withdrawal`（提现）。
+- `missing`：`verification` / `phone` / `email`，按实名 → 手机号 → 邮箱顺序排列。
+- 商品级 `purchase_requires.require_phone` 的拦截仍是纯 `40302`，不带 `data.missing`，因为它不受全局开关控制。
 
 ## 7. 分页与查询参数规范
 
@@ -408,7 +418,7 @@ API 响应必须由统一响应构造器、Resource 或明确 DTO 转换，避�
 - 业务异常统一映射为 `code != 0` 的响应。
 - 第三方异常必须转换成项目内部错误码和简体中文 `message`，不直接暴露供应商原始错误。
 - 表单校验错误统一使用 `42200` 和 `data.errors`。
-- 鉴权、权限、前置条件必须区分 `40100`、`40300`、`40301`。
+- 鉴权、权限、前置条件必须区分 `40100`、`40300`、`40301`/`40302`/`40303`。
 - 不允许接口一部分返回 `code=0` 表示失败，另一部分用 HTTP 500 表示失败。
 
 ### 11.4 文案语言规范

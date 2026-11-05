@@ -50,7 +50,7 @@ owner: backend-platform
 
 | 业务域   | 关键路径前缀                                                                                          | 说明                                                      |
 | -------- | ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| 认证     | `/api/v2/client/login`、`/api/v2/client/register`、`/api/v2/client/auth/*`、`/api/v2/client/password` | 登录、注册、找回密码、资料、通知偏好、支付宝账号          |
+| 认证     | `/api/v2/client/login`、`/api/v2/client/register`、`/api/v2/client/auth/*`、`/api/v2/client/password` | 登录、注册、找回密码、资料、通知偏好、支付宝账号；`auth/info` 额外下发 `account_policy`（账户策略开关与 `missing_items`） |
 | 实名认证 | `/api/v2/client/verification*`                                                                        | 状态、初始化、二维码、重试、回调、扫码                    |
 | 账单     | `/api/v2/client/invoices*`                                                                            | 当前用户侧下单与支付主实体是发票                          |
 | 充值     | `/api/v2/client/recharge*`                                                                            | 充值下单与状态轮询                                        |

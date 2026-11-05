@@ -1,0 +1,44 @@
+name: caiwu_app
+description: Caiwu 用户端移动 App，对标阿里云 App 形态，原生 Flutter + TDesign Flutter。
+publish_to: 'none'
+version: 0.4.1+9
+
+environment:
+  sdk: ^3.8.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # UI：腾讯 TDesign 官方 Flutter 组件库（唯一 UI 框架）
+  tdesign_flutter: ^1.1.0
+
+  # 网络与状态
+  dio: ^5.7.0
+  go_router: ^14.6.2
+  provider: ^6.1.2
+
+  # 本地存储
+  flutter_secure_storage: ^9.2.2
+  shared_preferences: ^2.3.3
+
+  # 工具
+  intl: ^0.20.0
+  url_launcher: ^6.3.1
+  image_picker: ^1.1.2
+
+  # SSH 终端：纯 Dart SSH 客户端 + 终端渲染
+  dartssh2: ^4.1.0
+  xterm: ^4.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+
+  # 终端等宽字体：优先使用系统字体栈，避免打包巨型 CJK 字体；
+  # 如后续需要精确等宽，再在 assets/fonts 补充。
+  assets: []

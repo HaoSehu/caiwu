@@ -1,18 +1,19 @@
 ---
 status: current
-updated: 2026-10-24
+updated: 2026-11-06
 owner: frontend-platform
 ---
 
 # 前端项目规范
 
-- 读者画像：维护当前三个前端与 `shared` 的开发者和代理
+- 读者画像：维护当前四个前端（三个 Vue 端与 Flutter App）与 `shared` 的开发者和代理
 
 ## 1. 当前前端项目
 
 - `frontend-admin-v3`：管理端，Vue 3 + Vite + TypeScript + TDesign Vue Next。
 - `frontend-user-v3-www`：官网与用户入口，Vue 3 + Vite + TDesign Vue Next。
 - `frontend-user-v4-console`：新版用户控制台，Vue 3 + Vite + TypeScript + TDesign Vue Next。
+- `app_flutter`：Android 原生 App，Flutter + TDesign Flutter，独立构建、不接入根 npm workspace。
 - `shared`：跨端共享包，导出状态、runtime、content 和用户控制台基础组件。
 
 旧路径 `frontend-admin`、`frontend-client`、`frontend-user-v3-console`、`frontend-www-v2`、`frontend-console-v2` 当前不存在，不要新增引用。完整废弃目录清单以 [AGENTS.md](../AGENTS.md) 为唯一真源（另含根 `scripts`、`.kiro`）。
@@ -178,9 +179,64 @@ npm run verify:frontends
 
 根 `package.json` 只保留当前真实 workspace。新增前端项目时，必须同步更新 `package.json`、`package-lock.json`、`AGENTS.md`、`docs/参考资料/运维/本地启动指南.md` 和本规范。
 
+`app_flutter` 是唯一的例外：Flutter 工程有自己的 `pubspec.yaml` 依赖体系，**不进入根 workspace**，也不受上列 `npm run` 命令覆盖，验证命令见 §9。
+
 ## 8. 依赖版本口径
 
 - `unplugin-vue-components` 三端统一锁 `^0.27.5`（当前 `frontend-user-v3-www` 仍声明 `^0.27.0`，属待对齐的漂移项，锁文件会 dedupe 到同一份实现）。`frontend-user-v4-console` 曾声明 `^28.8.0`，但该大版本改写了 `ComponentResolverObject` 契约与解析时机，与两端现有自定义 `createTDesignResolver()` 实现不匹配；两端各装一个主版本还会让 Vite 按 workspace 分别解析，出现「同一份 `vite.config.ts` 在 admin 生效、在 console 失效」的难查故障。降回 0.27.x 后三端 dedupe 到同一份实现，按需引入行为一致。
 - `vue-tsc` 锁 `3.3.11`（不写 `^`）。`vue-tsc` 的次版本会改变类型推导严格度，放开版本会让 CI 与本地在不同时间得出不同结果。
 - `@playwright/test` 三端统一 `^1.62.1`；e2e 产物目录（`dist-e2e/`、`test-results/`、`playwright-report/`）一律不入库。
 - 体积门禁预算在 `backend/scripts/frontend_budget.mjs`：首屏 gzip admin 560,000 B、www 145,000 B（闭包口径）、console 420,000 B；单分片 raw www 180,000 B、样式分片 raw www 70,000 B。改动构建配置（按需引入、manualChunks、依赖增删）后必须跑 `npm run build:frontends`，超预算即失败。
+
+## 9. `app_flutter`（Android 原生 App）
+
+定位：面向 caiwu 终端用户的 Android App，对标阿里云 App 形态；业务面与 `frontend-user-v4-console` 的客户端能力对齐，但按移动端原生交互重新实现，不是网页套壳。
+
+技术基线：
+
+- Flutter（Dart SDK `^3.8.0`，本机验证 Flutter 3.47.9 / Dart 3.13.7）、`tdesign_flutter ^1.1.0`（唯一 UI 框架）。
+- `dio`（统一外层 `{code,message,data,timestamp}` 解包）、`go_router`（声明式路由 + 登录守卫）、`provider`（会话与依赖注入）。
+- `flutter_secure_storage`（Token 进 Keystore）+ `shared_preferences`（用户资料）。
+- SSH：`dartssh2` + `xterm`，App 直连服务器 22 端口；VNC：自研 RFB 3.8 over WebSocket，经后端 relay 转发。
+
+目录约定：
+
+- `lib/main.dart`、`lib/app.dart`：入口、会话恢复与 `AppServices` 挂载。
+- `lib/core/config/env.dart`：`API_BASE` / `WS_BASE` / `VNC_ORIGIN`，全部由 `--dart-define` 覆盖，禁止写死地址。
+- `lib/core/net/`：`ApiClient`、异常、`*Api` 领域接口、`AppServices` 依赖根。
+- `lib/core/router/router.dart`：全部路由与登录守卫（`/home`、`/services`、`/tickets`、`/profile` 四个 Tab，另有 `/finance`、`/notices`、`/ssh`、`/sessions`）。
+- `lib/core/theme/`：`app_theme.dart`（TDesign Token 覆写品牌色阶）、`app_tokens.dart`（`AppSpacing` / `AppRadius` / `AppType`）。
+- `lib/core/layout/responsive.dart`：断点 `compact < 600`、`medium 600–839`、`expanded >= 840`（Material 3 口径，与 Vue 端 768/992/1200 不同，见下方说明）。
+- `lib/widgets/`：`app_kit.dart` 设计系统组件、`data_state.dart` 三态容器、`app_feedback.dart` 反馈。
+- `lib/features/`：按业务域组织（`auth`、`home`、`services`、`tickets`、`finance`、`notices`、`profile`、`ssh`、`vnc`、`shell`）。
+
+实现约束：
+
+- UI 只用 `tdesign_flutter`；页面骨架、卡片、区块标题、字段网格、状态标签、分段器与胶囊统一走 `app_kit.dart`，间距/圆角/字阶只取 `app_tokens.dart` 与 `context.tTheme`，不各页自拼。
+- 数值一律 `AppType.money` / `AppType.stat`（内部等宽数字，刷新不抖动）；加载中的按钮 `onPressed: null`；破坏性操作走 `AppFeedback.confirm(danger: true)`。
+- **禁止任何 WebView / 网页嵌套**，由 `tool/check_no_webview.dart` 守卫（扫描 `pubspec.yaml` 依赖与源码 import），提交前运行。
+- 视觉遵循 [DESIGN.md](DESIGN.md)：浅色、主色 `#165DFF`、页面底 `#F5F7FB`；断点用 Material 3 的 600/840 而非 Web 端 768，因为移动端要覆盖手机横屏与平板分屏，600 更贴合触控设备。
+- 后端契约只消费 `/api/v2/client/*` 与站点公开接口，不改接口结构；唯一后端配套改动是 VNC relay 的 App Origin 白名单（`backend/config/idc.php` 的 `vnc_relay.app_origins`，默认 `caiwu-app`，两端默认值即可对上）。
+- 依赖与构建完全独立：不接入根 npm workspace，也不参与 `npm run build:frontends` / `verify:frontends`。
+
+验证：
+
+```bash
+cd app_flutter
+flutter analyze
+flutter test
+dart run tool/check_no_webview.dart
+flutter build apk --debug
+```
+
+影响 `backend/` 的改动（如 VNC Origin 白名单）仍按后端规则跑 `composer analyse && composer format:check`。
+
+已知边界：
+
+- 仅 Android 为当前目标平台（工程含 `web/` 目录但不作为发布形态）；iOS 需补构建适配。
+- 首版不含产品选购下单、实名认证、推荐返利、优惠券领取、帮助中心、NAT/安全组编辑、推送、深色模式。
+- Geetest 图形验证不内嵌网页，触发时提示改用密码登录（与"禁止网页嵌套"红线一致）。
+- VNC 仅支持 None / VNC Authentication 安全类型；只声明 Raw 编码。
+- Release 签名当前复用 debug keystore，上线前需替换正式 keystore。
+
+模块自己的安装、运行与审查记录在 [app_flutter/README.md](../app_flutter/README.md)，跨模块的架构位置见 [ARCHITECTURE.md](ARCHITECTURE.md) §3.5。
