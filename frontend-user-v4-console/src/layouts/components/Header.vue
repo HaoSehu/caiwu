@@ -348,10 +348,29 @@ const handleMarkAllReadClick = () => {
 };
 
 const resolveTagTheme = (type: string): 'primary' | 'warning' | 'danger' | 'success' | 'default' => {
-  if (type === 'invoice_overdue_reminder' || type === 'service_expire_reminder') return 'danger';
-  if (type === 'invoice_payment_reminder' || type === 'service_renew_reminder' || type === 'ticket_pending_reminder')
+  if (type === 'invoice_overdue_reminder' || type === 'service_expire_reminder' || type === 'service_expired') {
+    return 'danger';
+  }
+  if (
+    type === 'invoice_payment_reminder' ||
+    type === 'service_renew_reminder' ||
+    type === 'service_due' ||
+    type === 'auto_renew_upcoming' ||
+    type === 'auto_renew_notice' ||
+    type === 'ticket_pending_reminder'
+  ) {
     return 'warning';
-  if (type === 'order_paid' || type === 'ticket_staff_reply') return 'success';
+  }
+  if (
+    type === 'order_paid' ||
+    type === 'ticket_staff_reply' ||
+    type === 'service_activated' ||
+    type === 'service_resumed' ||
+    type === 'real_name_approved'
+  ) {
+    return 'success';
+  }
+  if (type === 'order_refunded' || type === 'service_terminated' || type === 'real_name_rejected') return 'danger';
   if (type === 'notice') return 'primary';
   return 'default';
 };
