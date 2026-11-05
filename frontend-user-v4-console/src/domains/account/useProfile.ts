@@ -57,6 +57,7 @@ export function useProfile() {
     is_verified: 0,
     real_name: '',
     id_card_masked: '',
+    verification_status: 0,
   });
   const passwordForm = reactive({ oldPassword: '', newPassword: '', confirmPassword: '' });
   const passwordMode = ref<'old' | 'reset'>('old');
@@ -483,14 +484,25 @@ export function useProfile() {
   function hydrateProfile(info: ClientUserInfo = {}) {
     profileForm.id = String(info.id || '');
     profileForm.email = String(info.email || '');
-    profileForm.nickname = String(info.nickname || info.name || '');
+    profileForm.nickname = String(info.nickname || '');
     profileForm.phone = String(info.phone || '');
     profileForm.cash_balance = String(info.cash_balance || '0.00');
     profileForm.createdAt = String(info.created_at || '');
     profileForm.is_verified = Number(info.is_verified || 0);
     profileForm.real_name = String(info.real_name || '');
     profileForm.id_card_masked = String(info.id_card_masked || '');
+    profileForm.verification_status = Number(info.verification_status || 0);
   }
+
+  const isProfileVerified = computed(
+    () => Number(profileForm.is_verified || 0) === 1 || Number(profileForm.verification_status || 0) === 2,
+  );
+  // 实名通过时后端会把用户名落成真实姓名，这里只做提示，不限制用户改回自定义名称。
+  const nicknameHint = computed(() =>
+    isProfileVerified.value && profileForm.real_name
+      ? `已实名认证，用户名默认使用真实姓名「${profileForm.real_name}」，可按需修改为自定义名称。`
+      : '用户名会显示在控制台右上角与业务记录中。',
+  );
 
   async function loadProfile() {
     // AC-22：不吞异常也不放未处理 rejection，失败时把错误交给页面展示并提供重试入口
@@ -649,6 +661,7 @@ export function useProfile() {
     notificationList,
     balanceText,
     enabledNotificationCount,
+    nicknameHint,
     securityItems,
     copyText,
     updateProfile,

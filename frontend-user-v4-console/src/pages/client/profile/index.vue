@@ -49,7 +49,7 @@
             </div>
           </t-form-item>
           <t-form-item label="注册时间"><t-input :value="profileForm.createdAt || '--'" readonly /></t-form-item>
-          <t-form-item label="用户名"
+          <t-form-item label="用户名" :help="nicknameHint"
             ><t-input v-model="profileForm.nickname" maxlength="50" placeholder="请输入用户名"
           /></t-form-item>
           <t-form-item label="账户余额"><t-input :value="balanceText" readonly /></t-form-item>
@@ -366,6 +366,7 @@ const {
   emailOldCountdown,
   notificationList,
   balanceText,
+  nicknameHint,
   enabledNotificationCount,
   securityItems,
   copyText,

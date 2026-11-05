@@ -576,7 +576,7 @@ function resolveProductMeta(item: ServiceOverviewGroup, key: string) {
 const userInfo = computed<ClientUserInfo>(() => (userStore.info || {}) as ClientUserInfo);
 const displayName = computed(() =>
   String(
-    userInfo.value.nickname || userInfo.value.display_name || userInfo.value.email || userInfo.value.name || '客户账户',
+    userInfo.value.display_name || userInfo.value.nickname || userInfo.value.email || userInfo.value.name || '客户账户',
   ),
 );
 // 头像只渲染首字：接口与 shared 均未下发头像地址，原先的 avatarUrl 恒为 '' ，

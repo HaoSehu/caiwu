@@ -246,17 +246,24 @@ class User extends Authenticatable
         return trim((string) ($value ?? ''));
     }
 
+    /**
+     * 展示名：昵称优先，真实姓名兜底。
+     *
+     * 实名通过时会把 nickname 写成真实姓名（VerificationService），因此已实名的用户
+     * 默认就显示真实姓名；用户之后在个人中心改回自定义昵称，展示名随之切换——
+     * 「真实姓名 > 自定义」体现在写入时机，而不是每次读取都强制压过用户设置。
+     */
     public function getDisplayNameAttribute(): string
     {
-        $realName = trim((string) $this->real_name);
-        if ($realName !== '' && $this->hasCompletedVerification()) {
-            return $realName;
-        }
-
         $nickname = trim((string) $this->nickname);
 
         if ($this->hasReadableNickname($nickname)) {
             return $nickname;
+        }
+
+        $realName = trim((string) $this->real_name);
+        if ($realName !== '' && $this->hasCompletedVerification()) {
+            return $realName;
         }
 
         $email = trim((string) $this->email);

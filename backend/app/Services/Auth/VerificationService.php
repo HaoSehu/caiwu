@@ -23,6 +23,7 @@ use App\Support\CacheKey;
 use App\Support\Money;
 use App\Support\PublicUrl;
 use App\Support\SchemaMetadataCache;
+use App\Support\TextSanitizer;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -226,6 +227,15 @@ class VerificationService
                 $payload['verification_status'] = 2;
                 $payload['verification_message'] = (string) ($result['msg'] ?? '审核通过');
                 $payload['verified_at'] = now();
+                // 实名通过即把用户名落成真实姓名（真实姓名 > 自定义）；用户之后在个人中心
+                // 改回自定义昵称仍然生效，解绑不回滚。只在「未认证 → 已认证」的跃迁上写，
+                // 已认证用户再次触发查询时不得把用户改过的昵称覆盖回真实姓名。
+                if ($verification['verification_status'] !== 2) {
+                    $realNameNickname = $this->resolvedRealNameNickname($verification);
+                    if ($realNameNickname !== null) {
+                        $payload['nickname'] = $realNameNickname;
+                    }
+                }
             } elseif (($result['status'] ?? null) === self::RESULT_STATUS_NETWORK_ERROR) {
                 $payload['verification_status'] = $verification['verification_status'] > 0
                     ? $verification['verification_status']
@@ -939,6 +949,10 @@ class VerificationService
             $userPayload['real_name'] = $this->nullableString($payload['real_name']);
         }
 
+        if (array_key_exists('nickname', $payload)) {
+            $userPayload['nickname'] = $this->nullableString($payload['nickname']);
+        }
+
         if (array_key_exists('id_card', $payload)) {
             // User 的 cast 统一负责加密；这里预加密会在模型保存时再次加密。
             $userPayload['id_card'] = $payload['id_card'];
@@ -968,5 +982,20 @@ class VerificationService
         $normalized = trim((string) $value);
 
         return $normalized === '' ? null : $normalized;
+    }
+
+    /**
+     * 实名通过时要落成用户名的真实姓名。
+     *
+     * 取认证快照里的 real_name（getVerificationSnapshot 读的是库中最新值，initVerification
+     * 已把本次提交的姓名落库）。为空时返回 null，避免写空值把用户原有用户名清掉。
+     *
+     * @param  array<string, mixed>  $verification
+     */
+    private function resolvedRealNameNickname(array $verification): ?string
+    {
+        $realName = trim((string) ($verification['real_name'] ?? ''));
+
+        return $realName === '' ? null : TextSanitizer::clean($realName);
     }
 }

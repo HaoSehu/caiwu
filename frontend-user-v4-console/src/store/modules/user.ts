@@ -12,10 +12,14 @@ const initUserInfo: ClientUserInfo = {
 };
 
 function normalizeUserInfo(raw: Record<string, unknown> = {}): ClientUserInfo {
-  const nickname = String(raw.nickname || raw.name || raw.email || '').trim();
+  // 展示名以接口的 display_name 为准：后端已统一「昵称优先、真实姓名兜底」，
+  // 前端各处只读 name，避免每个页面各自拼一遍 fallback 导致口径不一。
+  const nickname = String(raw.nickname || '').trim();
+  const displayName = String(raw.display_name || '').trim();
+  const fallback = String(raw.name || raw.email || '').trim();
   return {
     ...raw,
-    name: nickname || '创欧云用户',
+    name: displayName || nickname || fallback || '创欧云用户',
     nickname,
     roles: ['client'],
   };
