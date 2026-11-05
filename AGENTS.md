@@ -24,6 +24,7 @@
 | `frontend-admin-v3/`        | 管理端，Vue 3 + TDesign Vue Next。              |
 | `frontend-user-v3-www/`     | 官网与用户入口，Vue 3 + TDesign Vue Next。      |
 | `frontend-user-v4-console/` | 用户控制台，Vue 3 + TDesign Vue Next。          |
+| `app_flutter/`              | Android 原生 App，Flutter + TDesign Flutter，独立构建，不入根 npm workspace。 |
 | `shared/`                   | 跨端状态、组件和运行时能力。                    |
 | `docs/`                     | 唯一的长期文档记录系统。                        |
 
@@ -47,7 +48,7 @@
 
 - 后端：控制器薄层；第三方调用进入专用 Service/Driver/插件；Payment 不物理删除；迁移只新增。
 - 插件：全部特有逻辑收敛到 `backend/plugins/{domain}/{slug}/`，不得注册系统级路由、调度或全局中间件；所有插件不需要 SSL 和 CA。
-- 前端：不混用 UI 框架；管理端不加头部说明卡片；v4-console 财务页不加指标卡片。
+- 前端：不混用 UI 框架；管理端不加头部说明卡片；v4-console 财务页不加指标卡片；`app_flutter` 禁止任何 WebView/网页嵌套（`tool/check_no_webview.dart` 守卫）。
 - 自动生成物：修改路由或结构后运行生成脚本，绝不手工编辑 `docs/自动生成/`。
 - 细节以 [工作规则](docs/治理/WORKING_RULES.md) 和任务对应领域文档为准。
 
@@ -64,6 +65,7 @@
 | `frontend-admin-v3/`        | `cd frontend-admin-v3 && npm run build`                                            |
 | `frontend-user-v3-www/`     | `cd frontend-user-v3-www && npm run build`；重构追加 `npm run verify:refactor`     |
 | `frontend-user-v4-console/` | `cd frontend-user-v4-console && npm run build`；重构追加 `npm run verify:refactor` |
+| `app_flutter/`              | `cd app_flutter && flutter analyze && flutter test && dart run tool/check_no_webview.dart` |
 | `shared/`                   | `npm run typecheck:shared && npm run test:shared`，再按影响端构建                  |
 
 每个子任务先跑受影响验证；全部完成后跑本次变更覆盖范围的完整验证。不能运行时，说明原因和未覆盖风险。

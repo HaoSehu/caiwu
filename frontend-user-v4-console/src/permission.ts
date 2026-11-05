@@ -55,7 +55,15 @@ router.beforeEach(async (to, _from, next) => {
     const userStore = useUserStore();
     userStore.syncTokenFromSession();
 
-    if ((!userStore.profileHydrated || !userStore.userInfo.name) && !fetchingUser) {
+    // 登录/注册会话载荷不含账户策略与实名状态，profileHydrated 为真时也不能直接跳过：
+    // 否则已实名用户会被误判为未实名弹引导。缺字段时补一次权威的 auth/info。
+    const needAuthoritativeProfile =
+      !userStore.profileHydrated ||
+      !userStore.userInfo.name ||
+      !userStore.userInfo.account_policy ||
+      userStore.userInfo.verification_status === undefined;
+
+    if (needAuthoritativeProfile && !fetchingUser) {
       fetchingUser = true;
       try {
         await userStore.getUserInfo();

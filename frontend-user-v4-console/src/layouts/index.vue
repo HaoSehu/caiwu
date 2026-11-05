@@ -21,6 +21,7 @@
       </t-layout>
     </template>
     <div id="aria-live-region" class="sr-only" aria-live="polite" role="status"></div>
+    <account-policy-dialog />
   </div>
 </template>
 <script setup lang="ts">
@@ -30,6 +31,7 @@ import { storeToRefs } from 'pinia';
 import { computed, onMounted, watch } from 'vue';
 import { useRoute } from 'vue-router';
 
+import AccountPolicyDialog from '@/components/common/AccountPolicyDialog.vue';
 import { prefix } from '@/config/global';
 import { useSettingStore, useTabsRouterStore } from '@/store';
 

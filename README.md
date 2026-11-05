@@ -2,7 +2,7 @@
 
 ![PHP](https://img.shields.io/badge/PHP-8.2%2B-777BB4) ![Laravel](https://img.shields.io/badge/Laravel-12-FF2D20) ![Vue](https://img.shields.io/badge/Vue-3-42b883) ![MySQL](https://img.shields.io/badge/MySQL-8-4479A1) ![Redis](https://img.shields.io/badge/Redis-6%2B-DC382D) ![Node.js](https://img.shields.io/badge/Node.js-20.19%2B-339933) ![license](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue) [![CodeRabbit Pull Request Reviews](https://img.shields.io/badge/CodeRabbit-PRRs-yellowgreen)](https://github.com/marketplace/coderabbitai)
 
-面向 IDC / 云服务商的业务与财务经营系统。覆盖商品目录、订单计费、账单结算、自动开通、余额充值、退款、优惠券、分销返佣、提现、工单、通知等完整业务闭环，提供管理后台、官网门户与用户控制台三端前端，并通过可扩展插件机制对接上游供应商与第三方服务。
+面向 IDC / 云服务商的业务与财务经营系统。覆盖商品目录、订单计费、账单结算、自动开通、余额充值、退款、优惠券、分销返佣、提现、工单、通知等完整业务闭环，提供管理后台、官网门户、用户控制台三端 Web 前端与 Android 原生 App，并通过可扩展插件机制对接上游供应商与第三方服务。
 
 [文档](docs/README.md) · [架构](docs/ARCHITECTURE.md) · [后端](docs/BACKEND.md) · [前端](docs/FRONTEND.md) · [数据库](docs/DATABASE.md) · [产品规格](docs/产品规格/README.md) · [执行计划](docs/执行计划/README.md)
 
@@ -28,6 +28,7 @@
 | 管理后台   | Vue 3 + TypeScript + TDesign Vue Next + Vite（`frontend-admin-v3`，开发端口 5174）        |
 | 官网门户   | Vue 3 + TDesign Vue Next + Vite（`frontend-user-v3-www`，开发端口 5175）                  |
 | 用户控制台 | Vue 3 + TypeScript + TDesign Vue Next + Vite（`frontend-user-v4-console`，开发端口 5173） |
+| Android App | Flutter + TDesign Flutter（`app_flutter`，独立构建，含 SSH 终端与 VNC 远程桌面）          |
 | 共享包     | `shared`（跨端会话、HTTP、状态、组件与状态枚举）                                          |
 
 ## 🔗 智简魔方财务（ZJMF Finance）兼容
@@ -134,6 +135,7 @@ caiwu/
 ├── frontend-admin-v3/        # 管理后台（开发端口 5174）
 ├── frontend-user-v3-www/     # 官网门户（开发端口 5175）
 ├── frontend-user-v4-console/ # 用户控制台（开发端口 5173）
+├── app_flutter/              # Android 原生 App（Flutter + TDesign Flutter，独立构建）
 ├── shared/                   # 跨前端共享包（会话、HTTP、状态、组件）
 └── docs/                     # 长期文档记录系统（索引见 docs/README.md）
 ```
@@ -196,13 +198,25 @@ npm run dev:user-v4-console
 npm run dev:admin-v3
 ```
 
-### 3. 后台进程（生产）
+### 3. Android App
+
+`app_flutter/` 是独立 Flutter 工程，不接入根 npm workspace，需单独安装 Flutter SDK 与 Android SDK：
+
+```bash
+cd app_flutter
+flutter pub get
+flutter run --dart-define=API_BASE=http://10.0.2.2:8000/api
+```
+
+完整前置、真机地址与 VNC relay 配置见 [本地启动指南](docs/参考资料/运维/本地启动指南.md)。
+
+### 4. 后台进程（生产）
 
 生产环境不使用 `app:serve` 常驻：PHP-FPM 指向 `backend/public`，宝塔每分钟执行 `php artisan schedule:run`（并行消费业务队列与 `automation` 队列），并单独常驻 `php artisan vnc:relay`。详见 [部署与调度指南](docs/参考资料/运维/部署与调度指南.md)。
 
 ## 🏗️ 构建前端产物
 
-`npm run build:frontends` 读取 `backend/.env` 中的 `APP_URL` / `FRONTEND_URL` / `CLIENT_CONSOLE_URL` / `ADMIN_URL`（四个地址必须互不相同且协议一致），依次构建三端并输出到各自 `dist/`。
+`npm run build:frontends` 读取 `backend/.env` 中的 `APP_URL` / `FRONTEND_URL` / `CLIENT_CONSOLE_URL` / `ADMIN_URL`（四个地址必须互不相同且协议一致），依次构建三端并输出到各自 `dist/`。`app_flutter` 不在此列，按需单独执行 `cd app_flutter && flutter build apk`。
 
 ## 🧪 验证与测试
 
@@ -217,6 +231,9 @@ npm run docs:check
 npm run typecheck:frontends
 npm run build:frontends
 npm run verify:frontends
+
+# Android App（独立的 Flutter 工程）
+cd app_flutter && flutter analyze && flutter test && dart run tool/check_no_webview.dart
 ```
 
 ## 📚 文档

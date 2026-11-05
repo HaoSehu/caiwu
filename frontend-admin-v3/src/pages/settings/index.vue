@@ -230,7 +230,7 @@ import SiteHeroConfig from './components/SiteHeroConfig.vue';
 
 defineOptions({ name: 'AdminSettings' });
 
-type SettingsTab = 'referral' | 'automation' | 'log_archive' | 'site_basic' | 'site_hero';
+type SettingsTab = 'referral' | 'automation' | 'log_archive' | 'account_policy' | 'site_basic' | 'site_hero';
 type FieldType = 'input' | 'password' | 'textarea' | 'switch' | 'select' | 'number' | 'image' | 'time';
 type FieldValue = string | number | boolean | null;
 
@@ -316,6 +316,7 @@ const tabGroups: Array<{ group: string; label: string; tabs: Array<{ label: stri
     label: '基础配置',
     tabs: [
       { label: '推荐奖励', value: 'referral' },
+      { label: '账户策略', value: 'account_policy' },
       { label: '自动化策略', value: 'automation' },
       { label: '日志归档', value: 'log_archive' },
     ],
@@ -334,6 +335,7 @@ const tabGroups: Array<{ group: string; label: string; tabs: Array<{ label: stri
 // 这里把 tabGroups 摊平成一行 tab，每个分组的首项标记 groupStart 用于画竖分隔线。
 const tabPaths: Record<SettingsTab, string> = {
   referral: '/admin/referral-settings',
+  account_policy: '/admin/account-policy',
   automation: '/admin/automation',
   log_archive: '/admin/log-archive',
   site_basic: '/admin/site-info',
@@ -343,6 +345,7 @@ const tabPaths: Record<SettingsTab, string> = {
 // 无权限的 tab 不该出现（点了只会被 permission.ts 踢到 403）。
 const tabPermissions: Record<SettingsTab, string> = {
   referral: AdminPermissions.SETTINGS_VIEW,
+  account_policy: AdminPermissions.SETTINGS_VIEW,
   automation: AdminPermissions.SCHEDULE_VIEW,
   log_archive: AdminPermissions.SETTINGS_VIEW,
   site_basic: AdminPermissions.SITE_VIEW,
@@ -382,6 +385,39 @@ const configs: Record<Exclude<SettingsTab, 'site_hero'>, SettingsConfig> = {
           { key: 'renewal_reward_rate', label: '续费默认奖励比例（%）', type: 'number', default: 0, min: 0, max: 100 },
           { key: 'reward_freeze_days', label: '奖励冻结期（天）', type: 'number', default: 4, min: 0, max: 365 },
           { key: 'withdraw_min_amount', label: '最低提现金额 (¥)', type: 'number', default: 20, min: 0 },
+        ],
+      },
+    ],
+  },
+  account_policy: {
+    group: 'account_policy',
+    title: '账户策略配置',
+    description: '统一控制实名、手机号与邮箱的强制要求；开启后只拦截下单、支付、充值、提现，不影响只读页面。',
+    sections: [
+      {
+        title: '强制要求',
+        fields: [
+          {
+            key: 'require_verification',
+            label: '是否强制开启实名',
+            type: 'switch',
+            default: false,
+            help: '开启后未实名用户无法下单、支付、充值与提现，并在控制台看到不可关闭的引导弹窗。',
+          },
+          {
+            key: 'require_phone',
+            label: '是否强制绑定手机号',
+            type: 'switch',
+            default: false,
+            help: '按手机号非空判定绑定状态，不要求短信验证标记。',
+          },
+          {
+            key: 'require_email',
+            label: '是否强制绑定邮箱',
+            type: 'switch',
+            default: false,
+            help: '按邮箱非空判定绑定状态，不要求邮件验证标记。',
+          },
         ],
       },
     ],

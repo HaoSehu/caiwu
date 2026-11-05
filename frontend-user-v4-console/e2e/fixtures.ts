@@ -27,7 +27,15 @@ export const E2E_USER_INFO = {
   phone: '13800000000',
   cash_balance: '1000.00',
   is_verified: 1,
-  verification_status: 1,
+  // 与后端 User::hasCompletedVerification() 同口径：只有 verification_status=2 才算已实名
+  verification_status: 2,
+  // 账户策略默认全关：既有用例不应被引导弹窗遮挡
+  account_policy: {
+    require_verification: false,
+    require_phone: false,
+    require_email: false,
+    missing_items: [] as string[],
+  },
 };
 
 export const E2E_SITE_CONFIG = {

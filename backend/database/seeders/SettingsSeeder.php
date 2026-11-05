@@ -23,6 +23,13 @@ class SettingsSeeder
             'provision_hostname_length' => '12',
         ]);
 
+        // 账户策略默认全部关闭：存量行为保持不变，由管理端按运营需要开启。
+        static::seedGroup('account_policy', [
+            'require_verification' => '0',
+            'require_phone' => '0',
+            'require_email' => '0',
+        ]);
+
         static::seedGroup('basic', [
             'site_name' => '创欧云',
             'browser_title' => '创欧云 - 云计算服务平台',

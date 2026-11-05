@@ -25,6 +25,7 @@ use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Services\ProductCatalog\ProductFullPathResolver;
 use App\Services\System\NotificationService;
 use App\Services\System\OperationLogService;
+use App\Services\User\AccountPolicyService;
 use App\Support\BillingCycleLabels;
 use App\Support\CacheKey;
 use App\Support\Logging\SafeLog;
@@ -56,6 +57,7 @@ class CheckoutService
         private PaymentCallbackProjector $callbackProjector,
         private TradeLifecycleService $tradeLifecycleService,
         private FinanceIdempotencyService $idempotency,
+        private AccountPolicyService $accountPolicy,
         private ?ProductDisplayNameResolver $productDisplayNameResolver = null,
         private ?MemberGroupDiscountService $memberGroupDiscountService = null,
     ) {}
@@ -582,10 +584,9 @@ class CheckoutService
             return;
         }
 
-        throw_if(
-            ! $user->hasCompletedVerification(),
-            new BusinessException('该商品需要实名认证后才能购买，请先完成实名认证', 40301)
-        );
+        // 实名/手机/邮箱的强制要求由管理端账户策略开关控制，这里只统一断言；
+        // 商品自身追加的手机号要求（purchase_requires.require_phone）独立于全局开关。
+        $this->accountPolicy->assertSatisfied($user, 'checkout');
 
         if (! empty($requires['require_phone'])) {
             throw_if(

@@ -31,7 +31,7 @@ declare module 'vue-router' {
     logTab?:
       'api' | 'activity' | 'runtime' | 'admin-logins' | 'email' | 'sms' | 'gateway' | 'tasks' | 'schedules' | 'cleanup';
     /** 设置页默认分组标签 */
-    settingsTab?: 'site_basic' | 'site_hero' | 'referral' | 'automation' | 'log_archive';
+    settingsTab?: 'site_basic' | 'site_hero' | 'referral' | 'account_policy' | 'automation' | 'log_archive';
     /** 财务订单页默认标签 */
     orderTab?: 'all' | 'orders' | 'renewals' | 'upgrade';
     /** 商品页默认标签 */

@@ -3,6 +3,7 @@ import { defineStore } from 'pinia';
 import { clientAuthApi } from '@/api/auth';
 import { getClientToken, removeClientToken, setClientToken } from '@/app/runtime/session';
 import { store } from '@/store';
+import { useAccountPolicyStore } from '@/store/modules/account-policy';
 import type { ClientAuthSessionPayload, ClientUserInfo } from '@/types/client';
 import { localStorageKeys, removeLocalStorage } from '@/utils/storage';
 
@@ -17,6 +18,10 @@ function normalizeUserInfo(raw: Record<string, unknown> = {}): ClientUserInfo {
   const nickname = String(raw.nickname || '').trim();
   const displayName = String(raw.display_name || '').trim();
   const fallback = String(raw.name || raw.email || '').trim();
+
+  // 账户策略随用户信息下发；统一在这里 hydrate，页面与弹窗只读 account-policy store。
+  useAccountPolicyStore().hydrate(raw.account_policy);
+
   return {
     ...raw,
     name: displayName || nickname || fallback || '创欧云用户',

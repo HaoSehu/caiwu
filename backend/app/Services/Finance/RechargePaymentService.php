@@ -21,6 +21,7 @@ use App\Services\Integrations\Payments\PaymentGatewayOperationService;
 use App\Services\Integrations\Plugins\PaymentGatewayBindingResolver;
 use App\Services\System\ActivityLogService;
 use App\Services\System\OperationLogService;
+use App\Services\User\AccountPolicyService;
 use App\Support\CacheKey;
 use App\Support\Money;
 use Carbon\CarbonImmutable;
@@ -608,9 +609,7 @@ class RechargePaymentService
 
     private function assertVerifiedUser(User $user): void
     {
-        throw_if(
-            ! $user->hasCompletedVerification(),
-            new BusinessException('请先完成实名认证后再继续操作', 40301)
-        );
+        // 充值入口的账户策略断言（工作流层已拦截，这里兜住直接调用本服务的外部入口）。
+        app(AccountPolicyService::class)->assertSatisfied($user, 'recharge');
     }
 }

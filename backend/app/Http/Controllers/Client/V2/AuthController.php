@@ -27,6 +27,7 @@ use App\Services\Auth\ClientLoginFlowService;
 use App\Services\Auth\GeeTestService;
 use App\Services\Auth\SendAccountCodeService;
 use App\Services\Auth\VerificationCodeService;
+use App\Services\User\AccountPolicyService;
 use App\Support\AccountIdentifier;
 use Illuminate\Http\Request;
 use Laravel\Sanctum\PersonalAccessToken;
@@ -39,6 +40,7 @@ class AuthController extends Controller
         private ClientLoginFlowService $loginFlowService,
         private SendAccountCodeService $sendAccountCodeService,
         private VerificationCodeService $codeService,
+        private AccountPolicyService $accountPolicy,
     ) {}
 
     /**
@@ -171,7 +173,13 @@ class AuthController extends Controller
             'account',
         ]);
 
-        return $this->success(new ClientUserInfoResource($user));
+        // 账户策略随用户信息一并下发：控制台据此决定是否弹强制引导，
+        // 避免为三个布尔再单独开一次请求。
+        $payload = (new ClientUserInfoResource($user))->resolve();
+        $payload['account_policy'] = $this->accountPolicy->policy();
+        $payload['account_policy']['missing_items'] = $this->accountPolicy->missingItems($user);
+
+        return $this->success($payload);
     }
 
     /**

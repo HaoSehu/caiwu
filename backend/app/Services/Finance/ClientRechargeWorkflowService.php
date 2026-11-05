@@ -9,6 +9,7 @@ use App\Exceptions\BusinessException;
 use App\Models\Payment;
 use App\Models\User;
 use App\Services\Integrations\Payments\PaymentGatewayManager;
+use App\Services\User\AccountPolicyService;
 
 class ClientRechargeWorkflowService
 {
@@ -16,6 +17,7 @@ class ClientRechargeWorkflowService
         private readonly RechargePaymentService $payments,
         private readonly CheckoutSecurityService $checkoutSecurity,
         private readonly PaymentGatewayManager $paymentGateways,
+        private readonly AccountPolicyService $accountPolicy,
     ) {}
 
     /**
@@ -32,6 +34,9 @@ class ClientRechargeWorkflowService
      */
     public function create(User $user, array $payload, string $ipAddress): array
     {
+        // 账户策略前置：放在网关选择之前，未达标用户得到策略提示而不是「无可用支付方式」。
+        $this->accountPolicy->assertSatisfied($user, 'recharge');
+
         $options = $this->gatewayOptions();
         $gateway = trim((string) ($payload['gateway'] ?? ''));
         $paymentType = trim((string) ($payload['payment_type'] ?? ''));

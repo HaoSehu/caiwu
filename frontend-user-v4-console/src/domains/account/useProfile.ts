@@ -611,8 +611,39 @@ export function useProfile() {
     return Promise.all([loadProfile(), loadNotificationPreferences()]).catch(() => undefined);
   }
 
+  /**
+   * 处理外部入口带入的意图：`?tab=security&bind=phone|email`。
+   *
+   * 账户策略弹窗「去完成」走这个入口直达绑定弹窗；处理完清掉 query，
+   * 避免刷新或从别的标签切回时重复弹出。
+   */
+  function applyRouteIntent() {
+    const current = router.currentRoute.value;
+    const tab = String(current.query.tab || '');
+    const bind = String(current.query.bind || '');
+
+    if (tab && PROFILE_TABS.has(tab as ProfileTab)) {
+      activeTab.value = tab as ProfileTab;
+    }
+
+    if (bind !== 'phone' && bind !== 'email') {
+      return;
+    }
+
+    // 先清参数再打开：弹窗打开期间地址栏保持干净，刷新不会二次触发。
+    void router.replace({ path: current.path, query: {} });
+    void loadProfile().then(() => {
+      if (bind === 'phone') {
+        openPhoneDialog();
+      } else {
+        openEmailDialog();
+      }
+    });
+  }
+
   onMounted(() => {
     void loadProfilePage();
+    applyRouteIntent();
   });
 
   // keep-alive 现在真的会缓存页面（Content.vue 按 route.name 做 key），onMounted 一生只跑一次，
@@ -625,6 +656,8 @@ export function useProfile() {
       return;
     }
     void loadProfilePage();
+    // 从别的页面带 query 跳进来（页面被 keep-alive 命中，不会重新 mount）时也要响应意图。
+    applyRouteIntent();
   });
 
   onBeforeUnmount(() => {

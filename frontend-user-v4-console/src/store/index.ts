@@ -6,6 +6,7 @@ store.use(createPersistedState());
 
 export { store };
 
+export * from './modules/account-policy';
 export * from './modules/permission';
 export * from './modules/setting';
 export * from './modules/site-branding';

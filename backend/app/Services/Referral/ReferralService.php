@@ -24,6 +24,7 @@ use App\Services\Finance\InvoiceService;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Services\ProductCatalog\ProductFullPathResolver;
 use App\Services\System\OperationLogService;
+use App\Services\User\AccountPolicyService;
 use App\Services\User\AccountService;
 use App\Support\AdminPrivacy;
 use App\Support\CacheKey;
@@ -89,6 +90,7 @@ class ReferralService
         private InvoiceService $invoiceService,
         private readonly ?ProductDisplayNameResolver $productDisplayNameResolver = null,
         private ?AccountService $accountService = null,
+        private readonly ?AccountPolicyService $accountPolicy = null,
     ) {}
 
     public function ensureReferralCode(User $user): string
@@ -617,9 +619,8 @@ class ReferralService
         $amount = round((float) ($data['amount'] ?? 0), 2);
         $minAmount = $this->withdrawMinAmount();
 
-        // 提现涉及资金外流，必须先完成实名认证（反洗钱/合规底线）。
-        // is_verified / verification_status 字段已存在，此处对齐 hasCompletedVerification 判断。
-        throw_if(! $user->hasCompletedVerification(), new BusinessException('请先完成实名认证后再申请提现'));
+        // 提现涉及资金外流，强制项由管理端账户策略控制（实名/手机/邮箱）。
+        $this->resolveAccountPolicy()->assertSatisfied($user, 'withdrawal');
 
         throw_if($amount <= 0, new BusinessException('提现金额必须大于 0'));
         throw_if($amount < $minAmount, new BusinessException("奖励满 {$minAmount} 元才可提现"));
@@ -1822,6 +1823,11 @@ class ReferralService
     {
         // 必须与容器单例一致：预载写在别的实例上等于没预载，逐行解析仍会各发一次源商品查询。
         return $this->productDisplayNameResolver ?? app(ProductDisplayNameResolver::class);
+    }
+
+    private function resolveAccountPolicy(): AccountPolicyService
+    {
+        return $this->accountPolicy ?? app(AccountPolicyService::class);
     }
 
     private function resolveBuyerReferrerUserId(User $buyer): ?int

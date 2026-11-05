@@ -215,7 +215,7 @@ const ADMIN_MENU_GROUPS: MenuGroupConfig[] = [
       {
         path: '/admin/menu/system-settings/maintenance',
         title: { zh_CN: '系统维护', en_US: 'System Maintenance' },
-        children: ['/admin/automation', '/admin/system/database'],
+        children: ['/admin/automation', '/admin/account-policy', '/admin/system/database'],
       },
     ],
   },

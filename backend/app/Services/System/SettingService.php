@@ -80,6 +80,23 @@ class SettingService
         ];
     }
 
+    /**
+     * 账户策略：是否强制实名、强制绑定手机号、强制绑定邮箱。
+     *
+     * 默认全部关闭，存量行为保持不变；开关只控制关键写操作的前置校验，
+     * 不改变只读接口与系统/管理员发起的资金动作。
+     *
+     * @return array{require_verification: bool, require_phone: bool, require_email: bool}
+     */
+    public static function defaultAccountPolicyConfig(): array
+    {
+        return [
+            'require_verification' => false,
+            'require_phone' => false,
+            'require_email' => false,
+        ];
+    }
+
     public static function defaultAutomationConfig(): array
     {
         return [
@@ -254,6 +271,20 @@ class SettingService
         $value = mb_strtolower($value);
 
         return mb_substr($value, 0, 10);
+    }
+
+    /**
+     * @return array{require_verification: bool, require_phone: bool, require_email: bool}
+     */
+    public function getAccountPolicyConfig(): array
+    {
+        $defaults = self::defaultAccountPolicyConfig();
+
+        return [
+            'require_verification' => $this->getBool('account_policy', 'require_verification', $defaults['require_verification']),
+            'require_phone' => $this->getBool('account_policy', 'require_phone', $defaults['require_phone']),
+            'require_email' => $this->getBool('account_policy', 'require_email', $defaults['require_email']),
+        ];
     }
 
     public function getAutomationConfig(): array
@@ -451,6 +482,11 @@ class SettingService
     {
         return match ($group) {
             'system' => [],
+            'account_policy' => [
+                'require_verification' => '0',
+                'require_phone' => '0',
+                'require_email' => '0',
+            ],
             'log_archive' => self::defaultLogArchiveConfig(),
             'traffic_package' => [
                 'traffic_package_enabled' => '1',

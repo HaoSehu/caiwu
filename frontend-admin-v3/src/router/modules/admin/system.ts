@@ -354,6 +354,20 @@ export const systemRoutes: RouteRecordRaw[] = [
     },
   },
   {
+    path: 'account-policy',
+    name: 'AdminAccountPolicy',
+    component: () => import('@/pages/settings/index.vue'),
+    meta: {
+      title: {
+        zh_CN: '账户策略',
+        en_US: 'Account Policy',
+      },
+      permission: AdminPermissions.SETTINGS_VIEW,
+      settingsTab: 'account_policy',
+      keepAliveName: 'AdminSettings',
+    },
+  },
+  {
     path: 'referral-settings',
     name: 'AdminReferralSettings',
     component: () => import('@/pages/settings/index.vue'),
