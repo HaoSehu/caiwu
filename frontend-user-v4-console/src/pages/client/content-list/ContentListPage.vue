@@ -63,38 +63,43 @@
               >全部标记已读 ({{ unreadCount }})</t-button
             >
           </template>
-          <data-state
-            :loading="loading"
-            :error="!loading && Boolean(loadError)"
-            :error-text="loadError"
-            :empty="!loading && !loadError && !articleList.length"
-            :description="hasActiveFilters ? '当前筛选条件下没有匹配内容' : config.emptyText"
-            @retry="syncPage"
-          >
-            <!-- N-06：空态必须给一条可执行的出口，否则用户只能自己猜是换个词还是清分类。
-                 补：没有筛选条件时的空态原先没有任何按钮（docs/DESIGN.md §5.2 要求空数据必须给出引导路径），
-                 与账单/订单/服务页口径不一致，这里补一条回控制台的出口。 -->
-            <template #empty-action>
-              <t-button v-if="hasActiveFilters" theme="primary" variant="outline" @click="resetFilters"
-                >清除筛选条件</t-button
-              >
-              <t-button v-else theme="primary" variant="outline" @click="router.push('/client/dashboard')"
-                >回到控制台</t-button
-              >
-            </template>
-            <article v-for="item in articleList" :key="item.id" class="article-row">
-              <div class="article-row__head">
-                <router-link class="article-row__title" :to="buildDetailRoute(item)">{{ item.title }}</router-link>
-                <t-tag v-if="Number(item.is_pinned) === 1" theme="primary" variant="light" class="pin-tag">置顶</t-tag>
-              </div>
-              <p v-if="item.excerpt">{{ item.excerpt }}</p>
-              <div class="article-row__meta">
-                <span>{{ item.category_name || currentCategoryLabel }}</span>
-                <span>{{ formatDateTime(item.publish_at || item.created_at) }}</span>
-                <span>浏览量 {{ item.view_count || 0 }}</span>
-              </div>
-            </article>
-          </data-state>
+          <!-- 手机形态标记：公告 / 帮助共用本组件，列表在手机端以卡片形态呈现 -->
+          <div :data-mobile-view="isMobile ? 'card' : undefined">
+            <data-state
+              :loading="loading"
+              :error="!loading && Boolean(loadError)"
+              :error-text="loadError"
+              :empty="!loading && !loadError && !articleList.length"
+              :description="hasActiveFilters ? '当前筛选条件下没有匹配内容' : config.emptyText"
+              @retry="syncPage"
+            >
+              <!-- N-06：空态必须给一条可执行的出口，否则用户只能自己猜是换个词还是清分类。
+                   补：没有筛选条件时的空态原先没有任何按钮（docs/DESIGN.md §5.2 要求空数据必须给出引导路径），
+                   与账单/订单/服务页口径不一致，这里补一条回控制台的出口。 -->
+              <template #empty-action>
+                <t-button v-if="hasActiveFilters" theme="primary" variant="outline" @click="resetFilters"
+                  >清除筛选条件</t-button
+                >
+                <t-button v-else theme="primary" variant="outline" @click="router.push('/client/dashboard')"
+                  >回到控制台</t-button
+                >
+              </template>
+              <article v-for="item in articleList" :key="item.id" class="article-row">
+                <div class="article-row__head">
+                  <router-link class="article-row__title" :to="buildDetailRoute(item)">{{ item.title }}</router-link>
+                  <t-tag v-if="Number(item.is_pinned) === 1" theme="primary" variant="light" class="pin-tag"
+                    >置顶</t-tag
+                  >
+                </div>
+                <p v-if="item.excerpt">{{ item.excerpt }}</p>
+                <div class="article-row__meta">
+                  <span>{{ item.category_name || currentCategoryLabel }}</span>
+                  <span>{{ formatDateTime(item.publish_at || item.created_at) }}</span>
+                  <span>浏览量 {{ item.view_count || 0 }}</span>
+                </div>
+              </article>
+            </data-state>
+          </div>
         </t-card>
 
         <div v-if="total > pageSize" class="content-pagination">
@@ -147,6 +152,7 @@ import { computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 
 import SearchFieldButton from '@/components/common/SearchFieldButton.vue';
+import { useDeviceLayout } from '@/composables/useDeviceLayout';
 import { useContentList } from '@/domains/content/useContent';
 import { useNoticeReadStatus } from '@/domains/content/useNoticeReadStatus';
 import { getErrorMessage } from '@/utils/error';
@@ -182,6 +188,7 @@ const {
 
 const router = useRouter();
 const { unreadCount, markAllRead, fetchUnreadCount } = useNoticeReadStatus();
+const { isMobile } = useDeviceLayout();
 const isNotice = props.contentType === 'notice';
 // 空态文案要能区分「真没有内容」与「被筛选条件筛空」，两者的可执行出口不同
 const hasActiveFilters = computed(() => Boolean(keyword.value) || activeCategoryId.value > 0);
@@ -408,6 +415,88 @@ async function handleMarkAllRead() {
   // 这里只保留真正需要单列的侧栏。
   .content-sidebar {
     grid-template-columns: 1fr;
+  }
+
+  // 单列时 grid 轨道默认按内容最小宽度撑开，而热门榜标题是 nowrap，
+  // 会把卡片撑到 570px 以上并顶出屏幕；轨道与卡片显式归零让省略号生效
+  .content-list-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .content-main,
+  .content-sidebar,
+  .content-card {
+    min-width: 0;
+  }
+
+  // 手机端列表转卡片：每条内容自成一张卡，标题换行不截断，元信息纵向成组。
+  // 桌面端仍是分隔线列表（本条断点内改动，桌面零影响）。
+  .article-row {
+    padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-m);
+    background: var(--td-bg-color-container);
+    border: thin solid var(--td-component-stroke);
+    border-radius: var(--td-radius-medium);
+    box-shadow: var(--td-shadow-1);
+
+    &:last-child {
+      border-bottom: thin solid var(--td-component-stroke);
+    }
+
+    p {
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+  }
+
+  // 列表容器在手机端由卡片自带边框与阴影承载，去掉卡片壳的重复留白与描边
+  .list-card :deep(.t-card__body) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--td-comp-margin-s);
+    padding: var(--td-comp-paddingTB-s) var(--td-comp-paddingLR-s);
+    background: transparent;
+  }
+
+  .article-row__head {
+    flex-wrap: nowrap;
+    align-items: flex-start;
+  }
+
+  .article-row__title {
+    flex: 1;
+    min-width: 0;
+    font: var(--td-font-title-small);
+    font-weight: 600;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .article-row__meta {
+    gap: var(--td-comp-margin-xs) var(--td-comp-margin-m);
+    margin-top: var(--td-comp-margin-s);
+    font: var(--td-font-body-small);
+  }
+
+  .hero-copy h1 {
+    font: var(--td-font-title-medium);
+  }
+
+  .hero-keywords {
+    margin-top: var(--td-comp-margin-s);
+  }
+
+  // 分类筛选按钮在手机端换行排布，热区走 theme.css 的 44px 基线
+  .category-card :deep(.t-space) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--td-comp-margin-xs);
+  }
+
+  .content-pagination {
+    justify-content: flex-start;
+    overflow-x: auto;
   }
 }
 </style>

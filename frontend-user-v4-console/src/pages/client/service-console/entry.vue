@@ -1,5 +1,5 @@
 <template>
-  <section class="service-console-entry">
+  <section class="service-console-entry" :data-mobile-view="isMobile ? 'detail' : undefined">
     <t-loading :loading="loading" text="正在打开实例控制台" />
   </section>
 </template>
@@ -9,12 +9,14 @@ import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import clientApi from '@/api/client';
+import { useDeviceLayout } from '@/composables/useDeviceLayout';
 import { isNatConsole, normalizeConsoleDetail, rememberConsoleDetail } from '@/domains/services/console/useConsoleCore';
 import type { ConsoleServiceDetail } from '@/types/client';
 import { getErrorMessage } from '@/utils/error';
 
 const route = useRoute();
 const router = useRouter();
+const { isMobile } = useDeviceLayout();
 const loading = ref(true);
 const serviceId = computed(() => Number(route.params.id));
 

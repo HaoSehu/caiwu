@@ -1,6 +1,8 @@
 // 服务控制台组件样式
 // 令牌基线（H4 重构 2026-10-11）：字号/圆角/投影一律 var(--td-*) token；
 // 间距收敛 4/8 网格（rem）；数值型 strong 需 tabular-nums。禁止新增非标 rem 字号与 !important 圆角。
+// 手机形态（≤767.98 断点）规则优先用 var(--td-comp-*) 间距令牌；2.75rem/3.25rem 仅用于
+// 44×44 触控热区（DESIGN.md §7 的硬性像素值，无对应令牌）。
 .service-console {
   display: flex;
   flex-direction: column;
@@ -1074,8 +1076,8 @@
 
   .vnc-fullscreen-exit {
     position: fixed;
-    top: calc(0.75rem + env(safe-area-inset-top, 0px));
-    right: calc(0.75rem + env(safe-area-inset-right, 0px));
+    top: calc(0.75rem + env(safe-area-inset-top, 0));
+    right: calc(0.75rem + env(safe-area-inset-right, 0));
     z-index: 1600;
     padding: 0.5rem 1rem;
     border: 0;
@@ -1100,7 +1102,12 @@
 
     .vnc-toolbar {
       align-items: flex-start;
+      flex-flow: column nowrap;
       gap: 0.5rem;
+    }
+
+    .vnc-toolbar-status {
+      gap: var(--td-comp-margin-xs);
     }
 
     .vnc-toolbar-actions {
@@ -1128,22 +1135,23 @@
       }
     }
 
+    // 画面区高度随视口自适应：短屏（高度不足 667）不再固定 60dvh，避免工具栏与画面互相挤压
     .vnc-frame-shell,
     .vnc-empty {
-      min-height: 60dvh;
+      min-height: clamp(16rem, 52dvh, 60dvh);
     }
 
     // 手机竖屏用 60dvh：兼顾虚拟键盘弹出时不把画面挤没，又不至于只剩一条窄带
     .vnc-frame {
       height: 60dvh;
-      min-height: 20rem;
+      min-height: clamp(14rem, 44dvh, 20rem);
     }
   }
 
   // 手机横屏：远程桌面铺满屏幕高度，避免横屏下只有半屏画面。
-  // shell 必须一起缩：横屏宽度通常 > 767.98px，不命中上面的移动断点，
+  // shell 必须一起缩：横屏宽度通常大于 767.98 断点，不命中上面的移动断点，
   // 只改 iframe 高度会让 shell 保持 35rem 的桌面 min-height，画面下方留出大片空白。
-  @media (max-height: 500px) and (pointer: coarse) {
+  @media (max-height: 31.25rem) and (pointer: coarse) {
     .vnc-frame-shell,
     .vnc-empty {
       min-height: 12rem;
@@ -1417,50 +1425,97 @@
     }
   }
 
+  // 手机形态（≤767.98 断点，与 useDeviceLayout().isMobile 同口径）。
+  // 只重排内容、不改桌面规则；新增规则一律取 --td-* 令牌，不新增 !important。
   @media (max-width: @screen-mobile-max) {
+    gap: var(--td-comp-margin-m);
+
+    /* ---- 面包屑 ---- */
+    .console-breadcrumb {
+      flex-wrap: wrap;
+      gap: var(--td-comp-margin-xs);
+
+      strong {
+        min-width: 0;
+        overflow-wrap: anywhere;
+      }
+    }
+
+    .console-breadcrumb__link {
+      // 仅文字按钮，高度对齐全局 .t-button 触控基线
+      min-height: 2.75rem;
+    }
+
+    /* ---- 顶部卡片：标题、元信息、操作纵向排布 ---- */
+    .console-header-card .t-card__body {
+      padding: var(--td-comp-margin-m);
+      gap: var(--td-comp-margin-m);
+    }
+
     .console-title-line {
+      gap: var(--td-comp-margin-xs);
+
       h1 {
+        width: 100%;
         font-size: var(--td-font-size-title-medium);
+        overflow-wrap: anywhere;
       }
     }
 
     .console-meta-grid {
-      grid-template-columns: 1fr 1fr;
-      gap: 0.25rem;
+      // 手机端元信息单列：实例 ID / 地址 / 公网 IP / 备注 / 自动续费依次堆叠
+      grid-template-columns: minmax(0, 1fr);
+      gap: var(--td-comp-margin-xs);
+      margin-top: var(--td-comp-margin-s);
       font-size: var(--td-font-size-body-small);
 
-      > :nth-child(1) {
-        grid-column: 1;
-        grid-row: 1;
-      } // 实例ID
-      > :nth-child(3) {
-        grid-column: 2;
-        grid-row: 1;
-      } // 公网IP
-      > :nth-child(2) {
-        grid-column: 1;
-        grid-row: 2;
-      } // 地址
+      > * {
+        grid-column: 1 / -1;
+        grid-row: auto;
+        min-width: 0;
+      }
 
+      // 桌面把这两项放在第 1/2 列，手机端必须单列铺满（特异性高于上面的 `> *`）
+      .console-auto-renew-line,
       .console-remark-line {
-        grid-column: 2;
-        grid-row: 2;
+        grid-column: 1 / -1;
+        grid-row: auto;
       }
+    }
 
-      .console-auto-renew-line {
-        grid-column: 1 / span 2;
-        grid-row: 3;
+    .console-remark-line {
+      font-size: var(--td-font-size-body-small);
+
+      strong {
+        overflow-wrap: anywhere;
       }
+    }
+
+    .console-auto-renew-line {
+      // 开关本身不足 44 见方，整行给足高度保证可点
+      min-height: 2.75rem;
+    }
+
+    .copy-link,
+    .connection-ip-chip .copy-link {
+      // 复制按钮是仅图标按钮，手机端放大到 44×44 触控热区。
+      // 992 及以下的 2.75rem 规则在 @screen-md-rem 块已覆盖同一组选择器，此处不重复声明。
+      min-width: 2.75rem;
+      min-height: 2.75rem;
     }
 
     .console-header-actions {
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 0.25rem;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: var(--td-comp-margin-xs);
+
+      > * {
+        min-width: 0;
+      }
     }
 
     // margin-left 必须 !important：全局 layout.less 有「.t-button + .t-button { margin-left }」，
-    // 移动端这两个按钮已改成 grid 两列平铺，再叠一层左间距会把右侧按钮挤出容器（C-20）。
+    // 移动端按钮已改成 grid 两列平铺，再叠一层左间距会把右侧按钮挤出容器（C-20）。
     .console-header-actions .t-button {
       width: 100%;
       min-width: 0;
@@ -1468,12 +1523,89 @@
       justify-content: center;
     }
 
+    .console-alert {
+      padding: var(--td-comp-margin-m);
+    }
+
+    // 备注旁的方形图标按钮是 size="small"：theme.css 以 `#app .t-button--shape-square.t-size-s`
+    // 把宽度锁到 24（含一个 id，特异性高于本文件任何纯类选择器）。触控热区必须 ≥44×44，
+    // 这里同样带 #app 前缀提升特异性，不新增 !important。
+    #app & .console-remark-line .t-button--shape-square {
+      width: 2.75rem;
+      min-width: 2.75rem;
+      height: 2.75rem;
+    }
+
+    /* ---- 工作台：纵向堆叠，侧栏改为三列图标磁贴 ---- */
+    .console-workbench {
+      gap: var(--td-comp-margin-m);
+    }
+
+    .console-sidebar {
+      // 三列磁贴：每个标签宽度约 110，容纳 6 个汉字的标签不折行
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: var(--td-comp-margin-xs);
+      padding: var(--td-comp-margin-xs);
+    }
+
+    .console-sidebar-item {
+      // 图标 + 文案上下排布；min-height 取 44 触控基线（DESIGN.md §7）
+      min-height: 2.75rem;
+      padding: var(--td-comp-margin-xs);
+      font-size: var(--td-font-size-body-small);
+      line-height: 1.3;
+      overflow-wrap: anywhere;
+      text-align: center;
+    }
+
+    .console-content {
+      gap: var(--td-comp-margin-m);
+    }
+
+    /* ---- 卡片页头：标题与操作上下排布，操作整行等分 ---- */
+    .console-panel-section .t-card__header {
+      flex-direction: column;
+      align-items: stretch;
+      gap: var(--td-comp-margin-s);
+    }
+
+    .console-panel-section .t-card__actions {
+      float: none;
+      width: 100%;
+    }
+
+    .console-panel-section .t-card__actions .t-space {
+      display: flex;
+      width: 100%;
+      flex-wrap: wrap;
+      gap: var(--td-comp-margin-s);
+    }
+
+    // 每个操作项等分一行；区间切换器等超宽控件由自身内容决定并换行
+    .console-panel-section .t-card__actions .t-space-item {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+
+    .console-panel-section .t-card__actions .t-button {
+      width: 100%;
+      margin-left: 0;
+    }
+
+    /* ---- 概览网格与字段 ---- */
     .console-overview-grid {
-      gap: 0.75rem;
+      gap: var(--td-comp-margin-m);
+    }
+
+    .detail-grid--info,
+    .detail-grid--config {
+      grid-template-columns: minmax(0, 1fr);
+      gap: var(--td-comp-margin-s);
     }
 
     .detail-cell {
-      padding: 0.25rem 0;
+      align-items: flex-start;
+      padding: var(--td-comp-margin-xs) 0;
 
       > span,
       > span:first-child {
@@ -1484,25 +1616,207 @@
 
     .credential-grid .detail-cell {
       grid-template-columns: 4rem minmax(0, 1fr);
+      align-items: flex-start;
     }
 
     .detail-cell-value {
       font-size: var(--td-font-size-body-small);
     }
 
-    .renew-cycle-group {
-      grid-template-columns: 1fr;
+    // 手机端长文本（IP、域名、备注）折行而不是截断：截断后需要点气泡才能看到完整值
+    .detail-cell .detail-cell-value strong,
+    .credential-password-text {
+      overflow: visible;
+      text-overflow: clip;
+      white-space: normal;
+      overflow-wrap: anywhere;
     }
 
+    /* ---- 监控 ---- */
+    .monitor-grid {
+      gap: var(--td-comp-margin-m);
+    }
+
+    // 监控页操作区：区间切换独占一行（4 档在 375 宽下略超一行，横向滚动保完整），刷新按钮整行。
+    // 选择器带 .console-panel-section，特异性高于上面「每个操作项等分」的通用规则
+    .console-panel-section .console-monitor-actions {
+      display: flex;
+      width: 100%;
+      flex-wrap: wrap;
+    }
+
+    .console-panel-section .console-monitor-actions .t-space-item {
+      flex: 1 1 100%;
+      min-width: 0;
+    }
+
+    .monitor-range-group {
+      max-width: 100%;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .console-monitor-actions .console-monitor-refresh {
+      width: 100%;
+      margin-left: 0;
+    }
+
+    .monitor-card {
+      min-height: 0;
+      padding: var(--td-comp-margin-m);
+    }
+
+    .monitor-card-header {
+      flex-wrap: wrap;
+    }
+
+    .monitor-chart-shell {
+      // 图表高度改为随视口收缩，避免手机端固定 8.75rem 与卡片留白叠加后过高
+      --console-plot-height: clamp(6.5rem, 26vw, 8.75rem);
+
+      grid-template-columns: 2.75rem minmax(0, 1fr);
+      min-height: 0;
+    }
+
+    .monitor-y-axis,
+    .monitor-chart-plot,
+    .monitor-chart {
+      height: var(--console-plot-height);
+    }
+
+    .monitor-y-axis span {
+      max-width: 2.5rem;
+    }
+
+    .monitor-tooltip {
+      min-width: 0;
+      max-width: 70%;
+      overflow-wrap: anywhere;
+    }
+
+    .monitor-metrics {
+      gap: var(--td-comp-margin-xs);
+    }
+
+    /* ---- 安全组 ---- */
+    .security-group-card {
+      grid-template-columns: minmax(0, 1fr);
+      gap: var(--td-comp-margin-s);
+      padding: var(--td-comp-margin-m);
+    }
+
+    .security-group-card__main p {
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
+
+    .security-group-card__actions {
+      justify-content: flex-start;
+    }
+
+    .security-rules-panel__head {
+      flex-direction: column;
+      align-items: stretch;
+      gap: var(--td-comp-margin-s);
+
+      .t-button {
+        width: 100%;
+        margin-left: 0;
+      }
+    }
+
+    .security-rule-card {
+      padding: var(--td-comp-margin-m);
+    }
+
+    .security-rule-card__row {
+      align-items: flex-start;
+      flex-direction: column;
+      gap: var(--td-comp-margin-xs);
+    }
+
+    .security-rule-card__value {
+      text-align: left;
+    }
+
+    /* ---- 日志 / 财务表格：保持完整列，可横向滚动 ---- */
+    // 表格自身的 .t-table__content 已是 overflow:auto 的滚动容器；这里只收住外层宽度，
+    // 避免外层再叠一层滚动条，也避免表格把页面撑宽
+    .console-table-scroll {
+      max-width: 100%;
+      min-width: 0;
+    }
+
+    .console-table-scroll .t-table__content {
+      -webkit-overflow-scrolling: touch;
+    }
+
+    /* ---- 日志 / 财务摘要与分页 ---- */
+    .log-summary {
+      gap: var(--td-comp-margin-s);
+      margin-bottom: var(--td-comp-margin-m);
+      font-size: var(--td-font-size-body-small);
+    }
+
+    .finance-summary span {
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
+
+    .console-pagination {
+      justify-content: flex-start;
+      margin-top: var(--td-comp-margin-m);
+
+      // 每页条数选择器在手机端占宽且低频，隐藏后页码区更宽松（与 record-page.less 同口径）
+      .t-pagination__select {
+        display: none;
+      }
+    }
+
+    /* ---- 续费 / 流量包对话框内容 ---- */
+    .renew-cycle-group,
     .traffic-summary,
     .traffic-package-group {
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
     }
 
     .renew-coupon-row,
     .renew-total-line {
       align-items: flex-start;
       flex-direction: column;
+      gap: var(--td-comp-margin-xs);
+    }
+
+    .renew-coupon-row .t-select {
+      width: 100%;
+    }
+
+    .renew-binding-tip {
+      overflow-wrap: anywhere;
+    }
+
+    .traffic-package-option {
+      gap: var(--td-comp-margin-s);
+    }
+
+    /* ---- 对话框内部排版（宽度与页脚由 theme.css 兜底，这里只管内容） ---- */
+    .dialog-form {
+      gap: var(--td-comp-margin-m);
+
+      label {
+        gap: var(--td-comp-margin-xs);
+      }
+    }
+
+    .password-generate-row {
+      // 随机密码按钮升到 44 见方热区
+      grid-template-columns: minmax(0, 1fr) 2.75rem;
+    }
+
+    .dice-icon-button {
+      width: 2.75rem;
+      height: 2.75rem;
     }
   }
 }

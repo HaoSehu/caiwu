@@ -1,5 +1,5 @@
 <template>
-  <section class="record-page client-orders">
+  <section class="record-page client-orders" :data-mobile-view="isMobile ? 'card' : undefined">
     <!-- 快捷筛选标签 -->
     <record-quick-filters v-model="filters.quickFilter" @change="applyQuickFilter" />
 
@@ -220,7 +220,7 @@ import { formatDateTime, formatFinishTime, formatMoneyText } from '@/utils/forma
 
 const router = useRouter();
 // 表格与移动卡片只渲染一套，切换点与 record-page.less 的平板断点保持一致
-const { isDesktop } = useDeviceLayout();
+const { isDesktop, isMobile } = useDeviceLayout();
 
 const {
   loading,

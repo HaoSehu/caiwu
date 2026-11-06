@@ -11,18 +11,20 @@
           >最近 {{ formatDateTime(logsState.summary.latest_created_at) }}</span
         >
       </div>
-      <t-table
-        row-key="id"
-        :data="logsState.list"
-        :columns="logColumns"
-        :loading="logsState.loading"
-        :pagination="null"
-        size="small"
-      >
-        <template #empty>
-          <t-empty :description="logsState.total > 0 ? '未找到匹配结果' : '暂无操作日志'" />
-        </template>
-      </t-table>
+      <div class="console-table-scroll" :data-mobile-view="isMobile ? 'scroll' : undefined">
+        <t-table
+          row-key="id"
+          :data="logsState.list"
+          :columns="logColumns"
+          :loading="logsState.loading"
+          :pagination="null"
+          size="small"
+        >
+          <template #empty>
+            <t-empty :description="logsState.total > 0 ? '未找到匹配结果' : '暂无操作日志'" />
+          </template>
+        </t-table>
+      </div>
       <div v-if="logsState.total > 0" class="console-pagination">
         <t-pagination
           v-model="logsState.page"
@@ -38,10 +40,12 @@
   </section>
 </template>
 <script setup lang="ts">
+import { useDeviceLayout } from '@/composables/useDeviceLayout';
 import { formatDateTime } from '@/utils/format';
 
 import { logColumns } from '../../composables/useConsoleTables';
 import { useServiceConsoleContext } from '../context';
 
+const { isMobile } = useDeviceLayout();
 const { logsState, loadLogs, handleLogsPageSizeChange } = useServiceConsoleContext();
 </script>

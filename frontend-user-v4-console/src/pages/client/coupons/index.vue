@@ -1,5 +1,5 @@
 <template>
-  <section class="coupon-page">
+  <section class="client-coupons coupon-page">
     <h1 class="sr-only">优惠券中心</h1>
 
     <t-card class="coupon-card-shell" :bordered="false">
@@ -29,7 +29,7 @@
     </t-tabs>
 
     <template v-if="activeTab === 'owned'">
-      <div class="coupon-list-shell">
+      <div class="coupon-list-shell" :data-mobile-view="isMobile ? 'card' : undefined">
         <data-state
           :loading="ownedState.loading"
           :empty="!ownedState.loading && !ownedState.error && !ownedState.list.length"
@@ -97,7 +97,7 @@
     </template>
 
     <template v-else>
-      <div class="coupon-list-shell">
+      <div class="coupon-list-shell" :data-mobile-view="isMobile ? 'card' : undefined">
         <data-state
           :loading="plazaState.loading"
           :empty="!plazaState.loading && !plazaState.error && !plazaState.list.length"
@@ -228,6 +228,7 @@ import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 
 import SearchFieldButton from '@/components/common/SearchFieldButton.vue';
+import { useDeviceLayout } from '@/composables/useDeviceLayout';
 import {
   resolveDiscountAmountText,
   resolveDiscountTypeLabel,
@@ -240,6 +241,7 @@ import type { CouponProductScopeItem } from '@/types/client';
 import { formatDateTime } from '@/utils/format';
 
 const router = useRouter();
+const { isMobile } = useDeviceLayout();
 
 const {
   activeTab,
@@ -398,6 +400,9 @@ function mergeCouponProductHierarchy(data: CouponHierarchyItem[]): MergedCouponH
   display: flex;
   flex-direction: column;
   gap: var(--td-comp-margin-m);
+  // 卡片内含 nowrap 的长标题/说明，网格项默认最小宽度取内容最小宽度，
+  // 手机上会撑破列宽并把整页顶出屏幕；显式归零让省略号真正生效
+  min-width: 0;
   padding: var(--td-comp-paddingTB-l) var(--td-comp-paddingLR-l);
   background: var(--td-bg-color-container);
   border: thin solid var(--td-component-stroke);
@@ -636,6 +641,24 @@ function mergeCouponProductHierarchy(data: CouponHierarchyItem[]): MergedCouponH
   .coupon-filter-bar,
   .coupon-grid {
     grid-template-columns: 1fr;
+  }
+
+  // 手机端券卡：标题与说明允许两行折行，不再单行省略（单行在 375px 下几乎只剩几个字）
+  .coupon-item__body strong,
+  .coupon-item__body p {
+    overflow: hidden;
+    display: -webkit-box;
+    white-space: normal;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+
+  .coupon-item__detail {
+    min-width: var(--td-comp-size-xxl);
+    min-height: var(--td-comp-size-xxl);
+    margin: calc(var(--td-comp-margin-s) * -1) calc(var(--td-comp-margin-s) * -1) 0 0;
+    padding: var(--td-comp-paddingTB-xs) var(--td-comp-paddingLR-xs);
+    text-align: right;
   }
 
   .coupon-pagination {

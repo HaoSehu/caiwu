@@ -2,14 +2,21 @@
   <section class="console-panel-section">
     <t-card title="监控信息" :bordered="false">
       <template #actions>
-        <t-space>
-          <t-radio-group v-model="monitorState.range" variant="default-filled" @change="handleRangeChange">
+        <t-space class="console-monitor-actions">
+          <t-radio-group
+            v-model="monitorState.range"
+            class="monitor-range-group"
+            variant="default-filled"
+            @change="handleRangeChange"
+          >
             <t-radio-button value="3h">3 小时</t-radio-button>
             <t-radio-button value="24h">24 小时</t-radio-button>
             <t-radio-button value="7d">7 天</t-radio-button>
             <t-radio-button value="30d">30 天</t-radio-button>
           </t-radio-group>
-          <t-button :loading="monitorState.loading" @click="loadMonitor(true)">刷新</t-button>
+          <t-button class="console-monitor-refresh" :loading="monitorState.loading" @click="loadMonitor(true)"
+            >刷新</t-button
+          >
         </t-space>
       </template>
 

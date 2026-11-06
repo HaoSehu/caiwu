@@ -18,38 +18,42 @@
         v-else-if="natState.supported === false"
         :description="natState.message || '当前实例暂不支持 NAT 转发'"
       />
-      <t-table
-        v-else
-        row-key="id"
-        :data="natState.list"
-        :columns="natColumns"
-        :loading="natState.loading"
-        :pagination="null"
-        size="small"
-      >
-        <template #empty>
-          <t-empty description="暂无端口转发" />
-        </template>
-        <template #operation="{ row }">
-          <t-tooltip v-if="row.can_delete === false" content="当前转发规则不支持删除">
-            <t-button theme="danger" variant="text" disabled>删除</t-button>
-          </t-tooltip>
-          <t-button
-            v-else
-            theme="danger"
-            variant="text"
-            :disabled="natState.submitting"
-            @click="deleteNatForwarding(row)"
-            >删除</t-button
-          >
-        </template>
-      </t-table>
+      <div v-else class="console-table-scroll" :data-mobile-view="isMobile ? 'scroll' : undefined">
+        <t-table
+          row-key="id"
+          :data="natState.list"
+          :columns="natColumns"
+          :loading="natState.loading"
+          :pagination="null"
+          size="small"
+        >
+          <template #empty>
+            <t-empty description="暂无端口转发" />
+          </template>
+          <template #operation="{ row }">
+            <t-tooltip v-if="row.can_delete === false" content="当前转发规则不支持删除">
+              <t-button theme="danger" variant="text" disabled>删除</t-button>
+            </t-tooltip>
+            <t-button
+              v-else
+              theme="danger"
+              variant="text"
+              :disabled="natState.submitting"
+              @click="deleteNatForwarding(row)"
+              >删除</t-button
+            >
+          </template>
+        </t-table>
+      </div>
     </t-card>
   </section>
 </template>
 <script setup lang="ts">
+import { useDeviceLayout } from '@/composables/useDeviceLayout';
+
 import { natColumns } from '../../composables/useConsoleTables';
 import { useServiceConsoleContext } from '../context';
 
+const { isMobile } = useDeviceLayout();
 const { natState, loadNatForwardings, openNatForwardingDialog, deleteNatForwarding } = useServiceConsoleContext();
 </script>

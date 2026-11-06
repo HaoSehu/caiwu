@@ -8,7 +8,7 @@
       <strong>{{ currentArticle?.title || config.detailTitle }}</strong>
     </div>
 
-    <div class="reader-layout">
+    <div class="reader-layout" :data-mobile-view="isMobile ? 'detail' : undefined">
       <main class="reader-main">
         <t-card class="reader-card" :bordered="false">
           <data-state
@@ -73,11 +73,15 @@
 import DataState from '@caiwu/shared/user-v3/components/DataState.vue';
 import { ChevronRightIcon } from 'tdesign-icons-vue-next';
 
+import { useDeviceLayout } from '@/composables/useDeviceLayout';
 import { useContentDetail } from '@/domains/content/useContent';
 
 const props = defineProps<{
   contentType: 'notice' | 'help';
 }>();
+
+// 手机形态标记：公告详情 / 帮助详情共用本组件，手机端为详情形态
+const { isMobile } = useDeviceLayout();
 
 const {
   config,
@@ -286,6 +290,54 @@ const {
 @media (max-width: @screen-lg-rem) {
   .reader-layout {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: @screen-mobile-max) {
+  // 手机端详情：标题降一档、元信息纵向成组，正文长表格可横向滚动不撑破页面
+  .reader-header h1 {
+    font: var(--td-font-title-medium);
+  }
+
+  .reader-meta {
+    flex-direction: column;
+    gap: var(--td-comp-margin-xs);
+    margin-top: var(--td-comp-margin-s);
+    padding: var(--td-comp-paddingTB-s) var(--td-comp-paddingLR-s);
+  }
+
+  .reader-content {
+    :deep(table) {
+      display: block;
+      overflow-x: auto;
+    }
+  }
+
+  // 面包屑在手机上只保留回列表入口与当前标题，避免三级标题挤成多行
+  .reader-breadcrumb {
+    flex-wrap: nowrap;
+    overflow: hidden;
+
+    > :deep(.t-icon) {
+      flex: none;
+    }
+
+    span,
+    strong {
+      overflow: hidden;
+      min-width: 0;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  // 侧栏分类/目录在正文之后，按钮整行即可（已有 block 属性，这里只补间距）
+  .reader-sidebar {
+    gap: var(--td-comp-margin-s);
+  }
+
+  .toc-row {
+    min-height: var(--td-comp-size-xxl);
   }
 }
 </style>

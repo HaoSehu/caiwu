@@ -1,5 +1,5 @@
 <template>
-  <section class="client-recharge">
+  <section class="client-recharge" :data-mobile-view="isMobileScreen ? 'form' : undefined">
     <t-card class="recharge-stage" :bordered="false">
       <div class="recharge-panel">
         <template v-if="isMobileScreen">

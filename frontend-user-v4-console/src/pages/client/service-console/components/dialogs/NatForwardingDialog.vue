@@ -1,6 +1,6 @@
 <template>
   <t-dialog v-model:visible="natVisible" header="新建端口转发" width="min(34rem, calc(100vw - 2rem))" destroy-on-close>
-    <t-form label-align="right" :label-width="96" :disabled="natState.submitting">
+    <t-form :label-align="isMobile ? 'top' : 'right'" :label-width="isMobile ? 0 : 96" :disabled="natState.submitting">
       <t-form-item label="名称" required-mark>
         <t-input v-model="natForm.name" placeholder="例如：Web 服务" :maxlength="255" />
       </t-form-item>
@@ -34,7 +34,10 @@
   </t-dialog>
 </template>
 <script setup lang="ts">
+import { useDeviceLayout } from '@/composables/useDeviceLayout';
+
 import { useServiceConsoleContext } from '../context';
 
+const { isMobile } = useDeviceLayout();
 const { natVisible, natForm, natState, submitNatForwarding } = useServiceConsoleContext();
 </script>

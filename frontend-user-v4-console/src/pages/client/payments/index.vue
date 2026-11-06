@@ -1,5 +1,5 @@
 <template>
-  <section class="record-page client-payments">
+  <section class="record-page client-payments" :data-mobile-view="isMobile ? 'card' : undefined">
     <record-quick-filters v-model="filters.quickFilter" @change="applyQuickFilter" />
 
     <t-card class="record-card" :bordered="false">
@@ -158,7 +158,7 @@ import { formatDateTime, formatFinishTime, formatMoney } from '@/utils/format';
 
 const router = useRouter();
 // 表格与移动卡片只渲染一套，切换点与 record-page.less 的平板断点保持一致
-const { isDesktop } = useDeviceLayout();
+const { isDesktop, isMobile } = useDeviceLayout();
 
 const {
   loading,

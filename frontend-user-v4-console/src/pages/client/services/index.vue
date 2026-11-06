@@ -61,7 +61,11 @@
       </div>
     </t-card>
 
-    <section class="service-list-section">
+    <!-- 手机形态标记：卡片视图 → card，列表视图（表格自身横向滚动）→ scroll；桌面端不渲染该属性 -->
+    <section
+      class="service-list-section"
+      :data-mobile-view="isMobile ? (viewMode === 'grid' ? 'card' : 'scroll') : undefined"
+    >
       <data-state
         :loading="loading"
         :empty="!loading && !error && !list.length"
@@ -373,6 +377,7 @@ import type { PrimaryTableCol } from 'tdesign-vue-next';
 import { computed } from 'vue';
 
 import SearchFieldButton from '@/components/common/SearchFieldButton.vue';
+import { useDeviceLayout } from '@/composables/useDeviceLayout';
 import {
   DEFAULT_SERVICE_STATUS_SCOPE,
   findListSpecValue,
@@ -392,6 +397,8 @@ import { formatMoney } from '@/utils/format';
 import { useServiceOsIconFallback } from './composables/useServiceOsIconFallback';
 
 const { shouldShowServiceOsIcon, markServiceOsIconFailed } = useServiceOsIconFallback();
+// 手机形态标记（执行计划「统一判定口径」第 9 条）：与 CSS 的 @screen-mobile-max 同源
+const { isMobile } = useDeviceLayout();
 
 const {
   loading,

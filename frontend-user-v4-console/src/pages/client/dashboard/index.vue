@@ -1,5 +1,5 @@
 <template>
-  <section class="client-dashboard">
+  <section class="client-dashboard" :data-mobile-view="isMobile ? 'card' : undefined">
     <!-- 页面标题只保留在无障碍树里：视觉上首屏已有问候语与账户卡说明当前位置，不再单独占一行 -->
     <h1 class="sr-only">控制台</h1>
     <data-state v-if="loadError" error error-text="控制台数据加载失败，请重试" @retry="loadDashboard" />
@@ -434,6 +434,7 @@ import { computed, onActivated, onDeactivated, onMounted, onUnmounted, reactive,
 import { useRouter } from 'vue-router';
 
 import clientApi from '@/api/client';
+import { useDeviceLayout } from '@/composables/useDeviceLayout';
 import { useNoticeReadStatus } from '@/domains/content/useNoticeReadStatus';
 import { useSiteBrandingStore, useUserStore } from '@/store';
 import type {
@@ -464,6 +465,8 @@ const router = useRouter();
 const userStore = useUserStore();
 const siteBranding = useSiteBrandingStore();
 const { unreadCount, fetchUnreadCount } = useNoticeReadStatus();
+// 手机形态标记：与 CSS 的 @screen-mobile-max 同源
+const { isMobile } = useDeviceLayout();
 
 const {
   balanceLogsLoadFailed,

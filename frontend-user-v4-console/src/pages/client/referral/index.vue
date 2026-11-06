@@ -1,5 +1,5 @@
 <template>
-  <section class="referral-page">
+  <section class="referral-page" :data-mobile-view="isMobile ? 'scroll' : undefined">
     <h1 class="sr-only">推广大使</h1>
 
     <data-state v-if="loadError && !loading" error error-text="推广大使数据加载失败，请重试" @retry="loadAll" />
@@ -39,7 +39,16 @@
           <t-empty description="提现前需要先绑定支付宝，并完成该手机号的短信验证，无需上传支付宝图片。" />
           <t-button theme="primary" @click="openBindDialog">立即绑定</t-button>
         </div>
-        <t-form v-else class="withdraw-form" layout="inline" label-align="right">
+        <!-- 手机端用 vertical 布局 + label-width 0：inline 布局会让 TDesign 给 label 写死
+             100px 行内宽度、给 controls 写死 100px 行内左边距（form-item.mjs 的 labelWidth 默认
+             "100px"），CSS 不靠 !important 收不回来，只能在模板层把这两个值置空。 -->
+        <t-form
+          v-else
+          class="withdraw-form"
+          :layout="isMobile ? 'vertical' : 'inline'"
+          :label-width="isMobile ? 0 : undefined"
+          :label-align="isMobile ? 'top' : 'right'"
+        >
           <t-form-item label="收款账户">
             <span>{{ alipayAccount.real_name || '--' }} {{ alipayAccount.account || '--' }}</span>
           </t-form-item>
@@ -175,8 +184,12 @@ import { LinkIcon } from 'tdesign-icons-vue-next';
 import type { PrimaryTableCol } from 'tdesign-vue-next';
 import { computed } from 'vue';
 
+import { useDeviceLayout } from '@/composables/useDeviceLayout';
 import { accountEventLabel, money, rewardStatus, useReferral, withdrawStatus } from '@/domains/marketing/useReferral';
 import type { ReferralUserBrief } from '@/types/client';
+
+// 手机形态标记：四张报表在手机端保持表格，由表格自身横向滚动承载
+const { isMobile } = useDeviceLayout();
 
 const {
   loading,
@@ -435,11 +448,85 @@ const logVm = (row: { id: number }) => logRowViewModels.value.get(row.id) ?? EMP
   }
 }
 
+// 平板竖屏：6 项指标在 992px 以下三列仍偏窄，收成两列
+@media (max-width: @screen-md-rem) {
+  .referral-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: @screen-mobile-max) {
-  // 原先两个同断点块连写，前者被后者完全覆盖；合并为单一规则。
-  .referral-stats,
+  // 六项指标在手机端按两列排布（单列时每格过长、数值与标签拉得很开），
+  // 推广链接行则收成单列，复制按钮整行。
+  .referral-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--td-comp-margin-xs);
+  }
+
   .referral-link-row {
     grid-template-columns: 1fr;
+    gap: var(--td-comp-margin-xs);
+  }
+
+  .referral-stat :deep(.t-card__body) {
+    padding: var(--td-comp-paddingTB-s) var(--td-comp-paddingLR-s);
+  }
+
+  .referral-stat strong {
+    font: var(--td-font-title-small);
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+  }
+
+  // 提现表单：手机端纵向整行（layout 由模板切到 vertical，这里只处理间距与宽度）
+  .withdraw-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--td-comp-margin-s);
+
+    :deep(.t-form__item) {
+      display: block;
+      min-width: 100%;
+      margin: 0;
+      padding: 0;
+    }
+
+    :deep(.t-form__label) {
+      float: none;
+      width: auto;
+      max-width: 100%;
+      padding-right: 0;
+      margin-bottom: var(--td-comp-margin-xs);
+      line-height: var(--td-line-height-body-medium);
+      text-align: left;
+    }
+
+    :deep(.t-form__controls),
+    :deep(.t-form__controls-content) {
+      display: block;
+      width: 100%;
+      margin-left: 0;
+    }
+
+    :deep(.t-button) {
+      width: 100%;
+      margin-left: 0;
+    }
+  }
+
+  .referral-card :deep(.t-card__header) {
+    flex-wrap: wrap;
+    gap: var(--td-comp-margin-xs);
+  }
+
+  // 四张报表在手机端保持表格，由各表格自身横向滚动；卡片壳不能裁掉滚动条
+  .referral-card :deep(.t-card__body) {
+    overflow-x: auto;
+  }
+
+  .referral-empty {
+    align-items: stretch;
+    text-align: center;
   }
 }
 </style>

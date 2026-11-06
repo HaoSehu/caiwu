@@ -1,5 +1,5 @@
 <template>
-  <section class="client-verification">
+  <section class="client-verification" :data-mobile-view="isMobile ? 'form' : undefined">
     <h1 class="sr-only">实名认证</h1>
     <data-state :loading="loading" :error="Boolean(loadError)" :error-text="loadError" @retry="handleRetry">
       <t-card class="verification-status-card" :bordered="false">
@@ -137,6 +137,7 @@ import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref } from 
 
 const QrcodeVue = defineAsyncComponent(() => import('qrcode.vue'));
 
+import { useDeviceLayout } from '@/composables/useDeviceLayout';
 import { useVerification } from '@/domains/account/useVerification';
 
 const {
@@ -182,6 +183,9 @@ function handleRetry() {
 // 补：computed 里读 window.innerWidth 不是响应式依赖，Vue 只会求值一次——
 // 首帧宽度定死之后，旋转屏幕 / 拖动窗口都不会重算，窄屏仍会溢出。
 // 因此改成 ref + resize 监听（rAF 合并，避免拖动时每像素触发一次重算）。
+// 手机端形态标记只在手机/平板断点渲染（计划「统一判定口径」第 9 条）
+const { isMobile } = useDeviceLayout();
+
 const viewportWidth = ref(typeof window === 'undefined' ? 0 : window.innerWidth);
 const qrcodeSize = computed(() => {
   if (!viewportWidth.value) return 260;

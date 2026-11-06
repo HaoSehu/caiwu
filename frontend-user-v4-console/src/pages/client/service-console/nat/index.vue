@@ -1,5 +1,5 @@
 <template>
-  <section class="service-console service-console--nat">
+  <section class="service-console service-console--nat" :data-mobile-view="isMobile ? 'detail' : undefined">
     <console-breadcrumb />
 
     <data-state
@@ -23,6 +23,7 @@ import DataState from '@caiwu/shared/user-v3/components/DataState.vue';
 import { computed, watch } from 'vue';
 import { useRouter } from 'vue-router';
 
+import { useDeviceLayout } from '@/composables/useDeviceLayout';
 import { isNatConsole } from '@/domains/services/console/useConsoleCore';
 import { useServiceConsole } from '@/domains/services/useServiceConsole';
 
@@ -35,6 +36,7 @@ import { provideServiceConsoleContext } from '../components/context';
 import { resolveConsoleNavItems } from '../components/registry';
 
 const router = useRouter();
+const { isMobile } = useDeviceLayout();
 const serviceConsole = useServiceConsole();
 provideServiceConsoleContext(serviceConsole);
 

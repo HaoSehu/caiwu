@@ -1,5 +1,5 @@
 <template>
-  <section class="client-tickets">
+  <section class="client-tickets" :data-mobile-view="isMobile ? 'card' : undefined">
     <h1 class="sr-only">工单支持</h1>
     <t-card class="ticket-filter-card" :bordered="false">
       <div class="ticket-filter-bar">
@@ -258,7 +258,7 @@ const {
 } = useTicketList();
 
 // 表格与移动卡片只渲染一套，避免两套模板同时存在于 DOM
-const { isDesktop } = useDeviceLayout();
+const { isDesktop, isMobile } = useDeviceLayout();
 
 // 是否存在生效筛选：空态区分“暂无数据”与“未找到匹配结果”（DESIGN.md §4.3）
 const hasActiveFilters = computed(() => filters.keyword.trim() !== '' || filters.status !== undefined);

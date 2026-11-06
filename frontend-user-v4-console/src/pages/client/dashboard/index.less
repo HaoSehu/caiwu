@@ -336,7 +336,9 @@
 // D-04：窄屏隔一个隐藏标签。7 根日柱并排时每柱可用宽度约 2.6rem，而「10/29」自身要 2rem，
 // 再加列间距必然互相压盖；月度 12 根柱更窄。间隔显示后刻度仍然等距，
 // 被隐藏的日期可从 tooltip 与每根的 aria-label 读到，信息不丢。
-@media (max-width: @screen-xs-rem) {
+// 手机形态统一走 @screen-mobile-max（执行计划「统一判定口径」第 1 条），
+// 原先用 @screen-xs-rem（40rem = 640px）会让 641–767px 的机型拿不到手机排版。
+@media (max-width: @screen-mobile-max) {
   .bar-chart__label--wide-only {
     display: none;
   }
@@ -563,7 +565,7 @@
   }
 }
 
-@media (max-width: @screen-xs-rem) {
+@media (max-width: @screen-mobile-max) {
   .summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: var(--td-comp-margin-s);
@@ -631,6 +633,36 @@
     align-items: flex-start;
     gap: var(--td-comp-margin-xxs);
     padding: var(--td-comp-paddingTB-s) 0;
+  }
+
+  // 手机端图表压矮：12rem 的柱图叠加卡片标题在 375px 首屏占比过高，
+  // 且月度 12 根柱的刻度在更矮的容器里已能读全。
+  .chart-card {
+    min-height: auto;
+  }
+
+  .bar-chart,
+  .bar-chart--daily {
+    height: 9rem;
+  }
+
+  .bar-chart--monthly {
+    height: 11rem;
+  }
+
+  // 月度 12 根柱在 375px 下每根仅约 1.5rem，金额标签超出本柱时不再撑出横向滚动
+  .bar-chart__value {
+    font: var(--td-font-body-small);
+  }
+
+  .support-box {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    text-align: center;
+  }
+
+  .support-box__qr {
+    max-width: 9rem;
   }
 }
 

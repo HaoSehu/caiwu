@@ -114,7 +114,7 @@
             </template>
           </t-table>
 
-          <div v-else class="security-rules-cards">
+          <div v-else class="security-rules-cards" :data-mobile-view="isMobile ? 'card' : undefined">
             <div v-for="rule in securityState.rules" :key="rule.id" class="security-rule-card">
               <div class="security-rule-card__row">
                 <span class="security-rule-card__label">方向</span>
@@ -159,7 +159,7 @@ import { useDeviceLayout } from '@/composables/useDeviceLayout';
 import { securityColumns } from '../../composables/useConsoleTables';
 import { useServiceConsoleContext } from '../context';
 
-const { isDesktop } = useDeviceLayout();
+const { isDesktop, isMobile } = useDeviceLayout();
 
 const {
   securityState,

@@ -57,4 +57,22 @@ function select(key: string) {
   cursor: pointer;
   user-select: none;
 }
+
+@media (max-width: @screen-mobile-max) {
+  // 手机端四个快捷标签纵向两列等分：不再换行后左对齐成锯齿，
+  // 每个标签的可点面积也随之放大（热区由 min-height 与列宽共同保证）。筛选语义不变。
+  .quick-filter-tags {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--td-comp-margin-xs);
+    margin-bottom: var(--td-comp-margin-s);
+  }
+
+  .quick-filter-tag {
+    justify-content: center;
+    width: 100%;
+    min-height: 2.75rem;
+    margin: 0;
+  }
+}
 </style>

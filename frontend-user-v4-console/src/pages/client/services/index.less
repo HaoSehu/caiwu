@@ -543,6 +543,7 @@
 }
 
 @media (max-width: @screen-mobile-max) {
+  // 手机端筛选区纵向两列：搜索独占一行，三个下拉两列，操作区整行等分（DESIGN.md §7 筛选区口径）。
   .service-filter-bar {
     grid-template-columns: repeat(2, minmax(0, 1fr));
 
@@ -552,8 +553,10 @@
     }
   }
 
-  // 视图切换在手机端无意义（只有卡片视图），但复位入口要有：筛选卡片被压成两列后，
-  // 用户改完下拉很难意识到页面上方还有一处「重置筛选」的空态出口。
+  // 视图切换在手机端无意义：useServiceCenter 的 restoreViewMode() 在手机断点强制
+  // viewMode='grid'（忽略历史偏好），且该函数只在 onMounted 执行一次 —— 若允许切换，
+  // 用户点「列表」后状态会写入 localStorage 却在刷新时被强制拉回，形成可点但立即失效的按钮。
+  // 复位入口必须保留：筛选卡片压成两列后，用户很难发现上方还有一处「重置筛选」。
   .service-view-toggle {
     display: none;
   }
