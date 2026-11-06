@@ -1,14 +1,14 @@
-/// 手机端支付拉起：把网关下发的支付链接转换为支付宝 / 微信 App 的
-/// scheme 并直接唤起，失败时才回退系统浏览器。
+/// 手机端支付拉起：把网关下发的支付链接转换为可直接打开的支付入口。
 ///
 /// 后端 `qr_code` 在不同网关下可能是：
 /// - `https://qr.alipay.com/xxx`（支付宝当面付二维码内容）
 /// - `https://<收银台域名>/pay/...`（聚合网关收银台页面）
 /// - `alipays://...` / `weixin://...` / `wxp://...`（已可直接唤起的 scheme）
 ///
-/// 口径与 `frontend-user-v4-console/src/domains/finance/useRecharge.ts` 的
-/// `resolveAlipayLaunchUrl` 一致：支付宝统一走 `appId=20000067&url=`，
-/// 当面付二维码走扫一扫 `saId=10000007&qrcode=`。
+/// 支付宝能靠 scheme 直接唤起 App；微信没有可用的公开外部唤起协议，
+/// 只能原样打开 https 收银台（微信内）或引导用户复制链接到微信内打开。
+/// 口径与 `frontend-user-v4-console/src/domains/finance/paymentLaunch.ts`
+/// 保持一致，两端任一侧调整都要同步另一侧。
 library;
 
 import 'package:flutter/foundation.dart';
@@ -28,9 +28,6 @@ enum PaymentChannel {
 
 /// 支付宝内置浏览器 scheme。
 const String _alipayScheme = 'alipays://';
-
-/// 微信内置浏览器 scheme。
-const String _wechatScheme = 'weixin://';
 
 /// 根据网关编码、支付类型与渠道名推断支付渠道。
 ///
@@ -104,13 +101,13 @@ Uri buildAlipayLaunchUri(Uri payUrl) {
   );
 }
 
-/// 构造微信唤起链接：用微信内置浏览器打开收银台页面，
-/// 页面内的 `weixin://wap/pay` 跳转才会被微信识别为支付。
-Uri buildWechatLaunchUri(Uri payUrl) {
-  return Uri.parse(
-    '${_wechatScheme}dl/businessWebview/link/'
-    '?url=${Uri.encodeComponent(payUrl.toString())}',
-  );
+/// 把支付链接规范化为最终要打开的目标。
+///
+/// 微信没有可用的公开外部唤起协议（`weixin://dl/businessWebview/link/` 会触发
+/// 微信「提示：invalid_source」），因此 https 收银台原样返回，由调用方引导用户
+/// 复制到微信内打开；已是 `weixin://` 等 scheme 的同样原样透传。
+String buildWechatLaunchUrl(String rawUrl) {
+  return normalizePaymentUrl(rawUrl);
 }
 
 /// 从 `alipays://platformapi/startapp?...url=<encoded>` 还原原始 https 链接，
@@ -127,8 +124,11 @@ Uri? httpsFallbackFromAlipayScheme(Uri uri) {
 
 /// 拉起支付链接。
 ///
-/// 顺序：按渠道唤起 App → 唤起失败回退原始 https 链接（系统浏览器）。
+/// 顺序：按渠道打开支付入口 → 失败回退原始链接。
 /// 返回是否至少有一次拉起成功；全部失败时调用方给出「请在浏览器中完成支付」提示。
+///
+/// 微信：没有可用的外部唤起协议，https 收银台原样交给系统浏览器/微信打开；
+/// 调用方据此提示「复制链接到微信内打开」。
 Future<bool> launchPaymentUrl(
   String rawUrl, {
   required PaymentChannel channel,
@@ -154,8 +154,7 @@ Future<bool> launchPaymentUrl(
       if (await _tryLaunch(buildAlipayLaunchUri(original))) return true;
       return _tryLaunch(original);
     case PaymentChannel.wechat:
-      if (await _tryLaunch(buildWechatLaunchUri(original))) return true;
-      return _tryLaunch(original);
+      return _tryLaunch(Uri.parse(buildWechatLaunchUrl(normalized)));
     case PaymentChannel.other:
       return _tryLaunch(original);
   }

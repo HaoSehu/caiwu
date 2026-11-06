@@ -127,7 +127,7 @@ test.describe('手机端充值直接拉起支付 App', () => {
     await page.goto('/client/recharge', { waitUntil: 'domcontentloaded' });
   }
 
-  test('微信支付：下单后拉起 weixin:// 支付 scheme', async ({ page }) => {
+  test('微信支付：已是 weixin:// scheme 时原样拉起', async ({ page }) => {
     await mockMobileRecharge(
       page,
       {
@@ -143,10 +143,131 @@ test.describe('手机端充值直接拉起支付 App', () => {
     await page.getByRole('button', { name: '立即充值' }).click();
     await page.getByRole('button', { name: '确定' }).click();
 
-    // 已是微信 scheme，原样透传；同时保留重试入口。
+    // 已是微信 scheme，原样拉起；同时保留复制入口。
     await expect(page.locator('.mobile-pay-helper')).toHaveAttribute('data-pay-target', /^weixin:\/\/wxpay\/bizpayurl/);
-    await expect(page.getByRole('button', { name: '打开微信 App' })).toBeVisible();
-    await expect(page.locator('.mobile-pay-helper')).toContainText('已尝试打开微信 App');
+    await expect(page.getByRole('button', { name: '在微信中打开支付' })).toBeVisible();
+    await expect(page.getByRole('button', { name: '复制支付链接' })).toBeVisible();
+    // 可直接拉起的 scheme 不应套用「手动搬进微信」的引导，也不该把 scheme 明文展示给用户。
+    await expect(page.locator('.mobile-pay-helper')).not.toContainText('微信支付需要在微信中完成');
+    await expect(page.locator('.mobile-pay-url')).toHaveCount(0);
+  });
+
+  // 回归：易支付微信通道下发的是 https 公众号收银台（pay/jspay/…），该页面在任何浏览器
+  // 都 302 到微信 OAuth，微信外打开会被微信拒绝（提示 invalid_source）；H5 支付未开通，
+  // 微信外没有任何官方唤起方式。因此不拼 businessWebview scheme，改为展示链接 + 三步引导。
+  test('微信支付：微信外展示链接并引导复制到微信打开', async ({ page }) => {
+    const payUrl = 'https://bbs.example.com/pay/jspay/E2E-WXPAY-1/';
+    await mockMobileRecharge(
+      page,
+      {
+        key: 'yi_pay',
+        option_key: 'yi_pay:wxpay',
+        plugin_name: '易支付',
+        channel_name: '微信支付',
+        payment_type: 'wxpay',
+      },
+      payUrl,
+    );
+
+    await page.getByRole('button', { name: '立即充值' }).click();
+    await page.getByRole('button', { name: '确定' }).click();
+
+    const helper = page.locator('.mobile-pay-helper');
+    await expect(helper).toBeVisible();
+    // 没有发起任何跳转目标，页面必须给出可操作的原因，而不是静默失败。
+    await expect(helper).toHaveAttribute('data-pay-target', '');
+    await expect(helper).toContainText('微信支付需要在微信中完成');
+    // 三步引导：复制 → 粘到文件传输助手发送 → 点开付款
+    await expect(helper.locator('.mobile-pay-helper__steps li')).toHaveCount(3);
+    await expect(helper).toContainText('文件传输助手');
+    // 链接必须明文可见且可手动选中（自动复制失败时的兜底）
+    await expect(helper.locator('.mobile-pay-url')).toHaveText(payUrl);
+    await expect(page.getByRole('button', { name: '复制支付链接' })).toBeVisible();
+    // 不做无法兑现的「唤起微信」承诺
+    await expect(page.getByRole('button', { name: '在微信中打开支付' })).toHaveCount(0);
+  });
+
+  test('微信支付：点复制后提示需到微信粘贴打开', async ({ page, context }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    const payUrl = 'https://bbs.example.com/pay/jspay/E2E-WXPAY-2/';
+    await mockMobileRecharge(
+      page,
+      {
+        key: 'yi_pay',
+        option_key: 'yi_pay:wxpay',
+        plugin_name: '易支付',
+        channel_name: '微信支付',
+        payment_type: 'wxpay',
+      },
+      payUrl,
+    );
+
+    await page.getByRole('button', { name: '立即充值' }).click();
+    await page.getByRole('button', { name: '确定' }).click();
+    await page.getByRole('button', { name: '复制支付链接' }).click();
+
+    // 复制成功后的提示必须说清下一步，只回「已复制」等于没说。
+    await expect(page.getByText('已复制，去微信「文件传输助手」粘贴发送后点开')).toBeVisible();
+    const clipboard = await page.evaluate(() => navigator.clipboard.readText());
+    expect(clipboard).toBe(payUrl);
+  });
+
+  // 微信内置浏览器是唯一能整页跳转完成的场景：跳走再回来必须能接上原来的支付单，
+  // 否则用户看到「还没生成二维码」的空态，而钱可能已经到账（回归 2026-11 审查发现）。
+  test('微信支付：微信内跳转收银台后返回可恢复支付单并继续轮询', async ({ page }) => {
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, 'userAgent', {
+        configurable: true,
+        get: () =>
+          'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.49',
+      });
+    });
+
+    await mockAuthenticatedSession(page);
+    const gateway = {
+      key: 'yi_pay',
+      option_key: 'yi_pay:wxpay',
+      plugin_name: '易支付',
+      channel_name: '微信支付',
+      payment_type: 'wxpay',
+    };
+    await page.route('**/api/v2/client/recharge/gateways', (route) => route.fulfill(jsonOk({ list: [gateway] })));
+    const order = {
+      payment_no: PAYMENT_NO,
+      qr_code: 'https://bbs.example.com/pay/jspay/E2E-WX-INNER/',
+      amount: 20,
+      gateway: 'yi_pay',
+      payment_type: 'wxpay',
+      poll_token: POLL_TOKEN,
+    };
+    await page.route('**/api/v2/client/recharge', (route) => route.fulfill(jsonOk(order)));
+    // 收银台域名给一个静态页：真机上这里是网关页面，测试里只需让导航能完成。
+    const cashierPage = { status: 200, contentType: 'text/html', body: '<!doctype html><title>收银台</title>' };
+    await page.route('https://bbs.example.com/**', (route) => route.fulfill(cashierPage));
+    // 从收银台返回后轮询能查到「已支付」，证明恢复后直接进入成功态。
+    const paidStatus = { paid: true, balance: '1020.00', message: '支付成功' };
+    await page.route(`**/api/v2/client/recharge/${PAYMENT_NO}/status*`, (route) => route.fulfill(jsonOk(paidStatus)));
+
+    await page.goto('/client/recharge', { waitUntil: 'domcontentloaded' });
+    await page.getByRole('button', { name: '立即充值' }).click();
+    await page.getByRole('button', { name: '确定' }).click();
+
+    // 微信内不展示「复制到微信」引导，而是整页跳转到收银台——页面会真的离开控制台。
+    await expect(page.locator('.mobile-pay-helper')).toHaveCount(0);
+    await page.waitForURL(/bbs\.example\.com\/pay\/jspay\/E2E-WX-INNER/, { timeout: 10_000 });
+
+    // 模拟从收银台返回：重新进入控制台（内存里的支付单已丢失）。
+    // sessionStorage 按源隔离，凭证是在控制台源下写的，回到同源即可读到。
+    await page.goto('/client/recharge', { waitUntil: 'domcontentloaded' });
+
+    // 恢复后必须能认出这张单并进入成功态，而不是回到「待生成二维码」空态。
+    // 这一条同时验证了「跳转前凭证已落盘」——没落盘就恢复不出来。
+    await expect(page.getByText(PAYMENT_NO)).toBeVisible({ timeout: 10_000 });
+    // 移动端不渲染 .qrcode-success（那是桌面二维码面板），成功态体现在状态行。
+    await expect(page.locator('.mobile-payment-meta')).toContainText('已支付', { timeout: 10_000 });
+    // 支付完成后凭证要被清掉，避免下次进入又"恢复"一张已支付的单。
+    const afterPaid = await page.evaluate(() => window.sessionStorage.getItem('client-recharge-poll'));
+    expect(afterPaid).toBeNull();
   });
 
   test('支付宝当面付：qr.alipay.com 走扫一扫 scheme', async ({ page }) => {

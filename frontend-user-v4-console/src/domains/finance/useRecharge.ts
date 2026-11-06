@@ -14,7 +14,13 @@ import { getErrorMessage } from '@/utils/error';
 import { copyText, formatMoney, formatMoneyText } from '@/utils/format';
 
 import type { PaymentChannel } from './paymentLaunch';
-import { detectPaymentChannel, openPaymentLaunch, resolvePaymentLaunchPlan } from './paymentLaunch';
+import {
+  detectPaymentBrowserEnv,
+  detectPaymentChannel,
+  normalizePaymentUrl,
+  openPaymentLaunch,
+  resolvePaymentLaunchPlan,
+} from './paymentLaunch';
 
 const ACTIVE_SERVICE_STATUS = 1;
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
@@ -64,6 +70,29 @@ function gatewayOptionKey(item: RechargeGatewayOption) {
   return String(item.option_key || item.key || '').trim();
 }
 
+/**
+ * 充值支付单的轮询凭证持久化键。
+ *
+ * 微信内点支付会整页跳到网关收银台（公众号 JSAPI 只能整页跳），付完款由网关
+ * 的 return_url 回到本页——那是全新挂载的页面，`paymentPayload` 已丢失。
+ * 不把凭证带回来，用户看到的会是「还没生成二维码」的空态，而钱已经到账。
+ *
+ * 与账单页 `useInvoices.ts` 的 ALIPAY_POLL_STORAGE_PREFIX 同一套做法：用
+ * sessionStorage 而不是 URL query——poll_token 是支付凭证，放 URL 会进浏览器
+ * 历史与 Referer。sessionStorage 在同标签页跳转回来时仍然有效。
+ */
+const RECHARGE_POLL_STORAGE_KEY = 'client-recharge-poll';
+
+/** 可恢复的支付单凭证；缺失任一字段都视为不可恢复。 */
+interface PersistedRechargePoll {
+  payment_no: string;
+  poll_token: string;
+  qr_code: string;
+  amount: string;
+  gateway: string;
+  payment_type: string;
+}
+
 export function useRecharge() {
   const router = useRouter();
   const userStore = useUserStore();
@@ -109,7 +138,7 @@ export function useRecharge() {
       '支付',
   );
   // 手机端拉起：渠道决定按钮文案（打开支付宝 / 打开微信），
-  // mobilePayNotice 承接无法自动唤起的情况（微信内置浏览器打不开支付宝等），
+  // mobilePayNotice 承接无法自动唤起的情况（微信内置浏览器打不开支付宝、微信外无法唤起微信支付等），
   // 放在页面里而不是只弹一次 toast，否则用户回头找不到失败原因。
   const mobilePayChannel = computed<PaymentChannel>(() => detectPaymentChannel(selectedPaymentGateway.value));
   const mobilePayNotice = ref('');
@@ -117,9 +146,29 @@ export function useRecharge() {
   const mobilePayTarget = ref('');
   const mobileLaunchButtonText = computed(() => {
     if (mobilePayChannel.value === 'alipay') return '打开支付宝 App';
-    if (mobilePayChannel.value === 'wechat') return '打开微信 App';
+    // 微信没有可用的外部唤起协议：微信外点按钮只会把链接交出去，不能宣称「打开微信 App」。
+    if (mobilePayChannel.value === 'wechat') return '在微信中打开支付';
     return '打开支付页面';
   });
+  // 展示用链接：本场景下网关给的就是 https 收银台（scheme 链接不对外展示）。
+  const mobilePayUrlText = computed(() => normalizePaymentUrl(qrCodeValue.value));
+  /**
+   * 微信支付、当前不在微信内、且网关给的是 https 收银台：只能由用户把链接搬进微信完成付款。
+   *
+   * 公众号 JSAPI 收银台（pay/jspay/…）只在微信内可用，微信外打开会被
+   * 302 到微信 OAuth 后拒绝（invalid_source 一类来源校验失败）；H5 支付
+   * 未开通时没有任何官方外部唤起方式，因此这里改为「显示链接 + 三步引导」，
+   * 而不是假装能唤起微信。
+   *
+   * 已是 `weixin://` scheme 的链接不在此列——那种链接本来就能直接拉起，
+   * 当成文本展示反而会把 scheme 明文暴露给用户、还丢掉可用的拉起入口。
+   */
+  const mobileWechatManualCopy = computed(
+    () =>
+      mobilePayChannel.value === 'wechat' &&
+      detectPaymentBrowserEnv() !== 'wechat' &&
+      /^https?:\/\//i.test(mobilePayUrlText.value),
+  );
   const paymentButtonText = computed(() => {
     if (paymentGatewaysLoading.value) return '支付方式加载中…';
     if (!hasPaymentGateways.value) return '暂无可用支付方式';
@@ -158,6 +207,102 @@ export function useRecharge() {
     selectedGateway.value = optionKey;
   }
 
+  /**
+   * 持久化当前支付单的轮询凭证：整页跳到网关收银台后，返回时据此恢复轮询与状态。
+   *
+   * sessionStorage 不可用（隐私模式、存储配额）时静默降级——只失去中断恢复能力，
+   * 不影响本次支付本身。
+   */
+  function persistRechargePoll() {
+    const payload = paymentPayload.value;
+    if (!payload?.payment_no || !payload?.poll_token) return;
+
+    try {
+      window.sessionStorage.setItem(
+        RECHARGE_POLL_STORAGE_KEY,
+        JSON.stringify({
+          payment_no: String(payload.payment_no),
+          poll_token: String(payload.poll_token),
+          qr_code: String(payload.qr_code || ''),
+          amount: String(payload.amount || ''),
+          gateway: String(payload.gateway || ''),
+          payment_type: String(payload.payment_type || ''),
+        } satisfies PersistedRechargePoll),
+      );
+    } catch {
+      // 静默降级：仅失去跳转返回后的恢复能力
+    }
+  }
+
+  function clearPersistedRechargePoll() {
+    try {
+      window.sessionStorage.removeItem(RECHARGE_POLL_STORAGE_KEY);
+    } catch {
+      // 忽略存储异常
+    }
+  }
+
+  function readPersistedRechargePoll(): PersistedRechargePoll | null {
+    try {
+      const raw = window.sessionStorage.getItem(RECHARGE_POLL_STORAGE_KEY);
+      if (!raw) return null;
+
+      const parsed = JSON.parse(raw) as Partial<PersistedRechargePoll> | null;
+      if (!parsed?.payment_no || !parsed?.poll_token) return null;
+
+      return {
+        payment_no: String(parsed.payment_no),
+        poll_token: String(parsed.poll_token),
+        qr_code: String(parsed.qr_code || ''),
+        amount: String(parsed.amount || ''),
+        gateway: String(parsed.gateway || ''),
+        payment_type: String(parsed.payment_type || ''),
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * 从持久化凭证恢复支付单并继续轮询。
+   *
+   * 只在页面没有当前支付单时调用（跳转返回 = 全新挂载），恢复后立刻触发一次
+   * 状态查询：若用户已完成支付，页面直接进入成功态，而不是等下一轮轮询。
+   *
+   * @returns 是否恢复了支付单
+   */
+  function restoreRechargePoll(): boolean {
+    if (paymentPayload.value?.payment_no) return false;
+
+    const persisted = readPersistedRechargePoll();
+    if (!persisted) return false;
+
+    paymentPayload.value = {
+      payment_no: persisted.payment_no,
+      poll_token: persisted.poll_token,
+      qr_code: persisted.qr_code,
+      amount: persisted.amount,
+      gateway: persisted.gateway,
+      ...(persisted.payment_type ? { payment_type: persisted.payment_type } : {}),
+    };
+
+    const restoredAmount = Number(persisted.amount || 0);
+    if (Number.isFinite(restoredAmount) && restoredAmount > 0) {
+      amount.value = restoredAmount;
+      inputAmount.value = restoredAmount;
+    }
+
+    const gatewayOption = paymentGateways.value.find(
+      (item) => item.key === persisted.gateway && String(item.payment_type || '') === persisted.payment_type,
+    );
+    if (gatewayOption) {
+      selectedGateway.value = gatewayOptionKey(gatewayOption);
+    }
+
+    startAutoPolling();
+    return true;
+  }
+
   function handleAmountChange(value: unknown) {
     const nextAmount = normalizeRechargeAmount(value);
     if (nextAmount !== value) {
@@ -175,6 +320,9 @@ export function useRecharge() {
 
   function clearPaymentPayload() {
     clearPollingTimer();
+    // 用户主动放弃当前支付单（换金额/换渠道/重新下单）时，持久化凭证必须同步清除，
+    // 否则下次进入页面会把这张已放弃的单「恢复」回来。
+    clearPersistedRechargePoll();
     rechargePaid.value = false;
     rechargeCancelled.value = false;
     mobilePayNotice.value = '';
@@ -208,6 +356,9 @@ export function useRecharge() {
       amount.value = targetAmount;
       inputAmount.value = targetAmount;
       paymentPayload.value = response.data || null;
+      // 先落盘再返回：调用方拿到结果后可能立刻整页跳走（微信内支付），
+      // 晚一步写就来不及了。
+      persistRechargePoll();
       MessagePlugin.success('充值二维码已生成');
       return paymentPayload.value;
     } catch (error: unknown) {
@@ -244,6 +395,8 @@ export function useRecharge() {
           paid: true,
         };
         clearPollingTimer();
+        // 已到账的单没有恢复价值，清掉凭证避免下次进入页面又"恢复"一张已支付的单。
+        clearPersistedRechargePoll();
         await refreshClientInfo();
         // 后端 status() 只在 paid=true 时回传 balance（= user_accounts.cash_balance 真源）；
         // 原先读的 cash_balance 不是该接口字段，永远落到 store 旧值上，到账后余额会滞后显示。
@@ -261,6 +414,8 @@ export function useRecharge() {
           ...payload,
         };
         clearPollingTimer();
+        // 已取消的单同样没有恢复价值。
+        clearPersistedRechargePoll();
         notifyScreenReader('该充值支付单已取消，请重新发起充值；若你已完成付款，款项会转入账户余额');
         MessagePlugin.warning('该充值单已失效，请重新发起充值；若你已完成付款，款项会转入账户余额');
       } else if (!options.silentPending) {
@@ -409,10 +564,15 @@ export function useRecharge() {
   }
 
   /**
-   * 手机端直接拉起支付宝 / 微信 App。
+   * 手机端打开支付入口。
+   *
+   * 支付宝：直接拉起支付宝 App。微信：没有可用的外部唤起协议，微信内的 https
+   * 收银台在微信外无法支付（`weixin://dl/businessWebview/link` 会报 invalid_source，
+   * 2026-11 线上问题），因此微信外只提示复制链接到微信打开，由用户手势触发时的
+   * 复制按钮完成搬运。
    *
    * 下单成功后立即调用一次（页面此时已进入移动分支），失败时用户还可以用
-   * 「打开支付宝 App / 打开微信 App」按钮重试——部分浏览器要求唤起紧跟用户手势。
+   * 「打开支付宝 App / 复制支付链接」按钮重试。
    */
   function launchMobilePayment(rawUrl?: unknown) {
     const url = String(rawUrl ?? qrCodeValue.value ?? '').trim();
@@ -448,8 +608,13 @@ export function useRecharge() {
   async function copyPayUrl() {
     if (!qrCodeValue.value) return;
     await copyText(qrCodeValue.value, {
-      successMsg: '支付链接已复制到剪贴板',
-      errorMsg: '当前浏览器不支持自动复制，请手动复制',
+      // 微信场景复制后要立刻告诉用户下一步，否则「已复制」等于没说。
+      successMsg: mobileWechatManualCopy.value
+        ? '已复制，去微信「文件传输助手」粘贴发送后点开'
+        : '支付链接已复制到剪贴板',
+      errorMsg: mobileWechatManualCopy.value
+        ? '当前浏览器不支持自动复制，请长按下方链接手动复制'
+        : '当前浏览器不支持自动复制，请手动复制支付链接',
     });
   }
 
@@ -518,6 +683,8 @@ export function useRecharge() {
     mobilePayNotice,
     mobilePayTarget,
     mobileLaunchButtonText,
+    mobileWechatManualCopy,
+    mobilePayUrlText,
     summaryCards,
     selectPreset,
     selectPaymentGateway,
@@ -527,6 +694,7 @@ export function useRecharge() {
     startAutoPolling,
     clearPaymentPayload,
     loadRechargeSummary,
+    restoreRechargePoll,
     handleCreateOrder,
     launchMobilePayment,
     copyPayUrl,

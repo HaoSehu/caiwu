@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
 
@@ -58,6 +59,13 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
 
   /// 已发起通道的查询参数：`gateway`（插件编码）。
   String _payGateway = '';
+
+  /// 本次下发的支付链接：微信支付只能在微信内完成，页面提供复制入口。
+  String _payUrl = '';
+
+  /// 本次下发链接的渠道：只有微信需要用户复制链接到微信内打开，
+  /// 支付宝能直接唤起 App，给它挂复制按钮只是干扰。
+  PaymentChannel _payChannel = PaymentChannel.other;
 
   Map<String, dynamic> get _basic => mapOf(_invoice?['basic']);
   Map<String, dynamic> get _display => mapOf(_invoice?['display']);
@@ -126,6 +134,9 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
         _invoice = invoice;
         _loading = false;
         _error = null;
+        // 账单已支付/已取消后，之前发起的支付链接就失效了：不清掉会让底部
+        // 「复制支付链接」按钮残留并复制出一张已经用不了的链接。
+        if (!_canPay) _payUrl = '';
       });
     } catch (error) {
       if (!mounted || seq != _seq) return;
@@ -200,32 +211,45 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
       // 后端查单要求 payment_no + poll_token，必须从下单响应保存下来。
       final paymentNo = strOf(result, 'payment_no');
       final pollToken = strOf(result, 'poll_token');
+      final channel = detectPaymentChannel(
+        gateway: gateway,
+        paymentType: paymentType,
+        channelName: channelName,
+      );
       if (!mounted) return;
       setState(() {
         _paymentNo = paymentNo;
         _pollToken = pollToken;
         _payGateway = gateway;
+        _payUrl = url;
+        _payChannel = channel;
       });
       if (url.isEmpty) {
         AppFeedback.toast(context, '已创建支付单，请在支付完成后点击「我已完成支付」');
         return;
       }
-      final opened = await launchPaymentUrl(
-        url,
-        channel: detectPaymentChannel(
-          gateway: gateway,
-          paymentType: paymentType,
-          channelName: channelName,
-        ),
-      );
+      final opened = await launchPaymentUrl(url, channel: channel);
       if (!opened && mounted) {
-        AppFeedback.toast(context, '无法打开支付页面，请在浏览器中完成支付');
+        if (channel == PaymentChannel.wechat) {
+          // 微信没有可用的外部唤起协议：提示复制链接到微信内打开，比「打不开」可操作。
+          AppFeedback.toast(context, '微信支付需要在微信内完成，请复制链接到微信打开');
+        } else {
+          AppFeedback.toast(context, '无法打开支付页面，请在浏览器中完成支付');
+        }
       }
     } catch (error) {
       if (mounted) AppFeedback.error(context, AppServices.errorText(error));
     } finally {
       if (mounted) setState(() => _payingMethod = null);
     }
+  }
+
+  /// 微信支付只能在微信内完成，而微信不开放外部唤起协议：把网关下发的
+  /// https 收银台链接交给用户复制到微信（可发给文件传输助手）后打开。
+  Future<void> _copyPayUrl() async {
+    if (_payUrl.isEmpty) return;
+    await Clipboard.setData(ClipboardData(text: _payUrl));
+    if (mounted) AppFeedback.success(context, '支付链接已复制，请在微信中打开');
   }
 
   Future<void> _checkGatewayStatus() async {
@@ -622,6 +646,16 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
                   child: Text(_cancelling ? '取消中…' : '取消账单'),
                 ),
               const Spacer(),
+              // 只有微信链接需要用户搬到微信内打开；支付宝可直接唤起 App，
+              // 给它挂复制按钮既是干扰，也会在窄屏上把三个文字按钮挤在一行。
+              if (_payUrl.isNotEmpty && _payChannel == PaymentChannel.wechat)
+                TButton(
+                  size: TButtonSize.small,
+                  variant: TButtonVariant.text,
+                  colorPreset: TButtonColorPreset.primary,
+                  onPressed: _copyPayUrl,
+                  child: const Text('复制支付链接'),
+                ),
               if (showGatewayCheck)
                 TButton(
                   size: TButtonSize.small,

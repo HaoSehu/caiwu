@@ -112,7 +112,7 @@ class YiPayClient
             'name' => mb_substr($subject !== '' ? $subject : $outTradeNo, 0, 100),
             'money' => number_format($amount, 2, '.', ''),
             'clientip' => $this->resolveClientIp(),
-            'device' => 'pc',
+            'device' => $this->resolveDevice($selectedPaymentType),
             'param' => $outTradeNo,
             'sign_type' => $this->signType,
         ];
@@ -359,6 +359,54 @@ class YiPayClient
         }
 
         return trim((string) $ip) !== '' ? trim((string) $ip) : '127.0.0.1';
+    }
+
+    /**
+     * 下游设备口径：网关按 device 决定「扫码」还是「手机跳转」。
+     *
+     * 微信通道固定上报 pc 时，网关只会下发 pay/jspay 公众号收银台；该页面在
+     * 任何浏览器都会 302 到微信 OAuth，微信外打开会被微信拒绝（页面提示
+     * invalid_source 一类来源校验失败），手机端因此无法完成支付。
+     *
+     * 因此微信通道按本次下单请求的 UA 判定：微信内置浏览器上报 wechat
+     * （网关转 mobile 并保留 mdevice=wechat，直接给公众号 JSAPI 收银台），
+     * 其余移动端上报 mobile，桌面端维持 pc。
+     *
+     * 支付宝通道维持 pc：其 mapi 在 device=pc 且未开扫码时同样走收银台跳转，
+     * 现有线上流程正常，不随本修复扩大改动面。
+     */
+    private function resolveDevice(string $paymentType): string
+    {
+        if ($paymentType !== 'wxpay') {
+            return 'pc';
+        }
+
+        try {
+            $userAgent = strtolower((string) (request()->userAgent() ?? ''));
+        } catch (\Throwable) {
+            $userAgent = '';
+        }
+
+        if ($userAgent === '') {
+            return 'pc';
+        }
+
+        if (str_contains($userAgent, 'micromessenger')) {
+            return 'wechat';
+        }
+
+        return $this->isMobileUserAgent($userAgent) ? 'mobile' : 'pc';
+    }
+
+    private function isMobileUserAgent(string $userAgent): bool
+    {
+        foreach (['android', 'iphone', 'ipad', 'ipod', 'windows phone', 'harmonyos', 'mobile'] as $keyword) {
+            if (str_contains($userAgent, $keyword)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function endpoint(string $path): string

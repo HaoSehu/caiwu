@@ -147,13 +147,30 @@
               class="mobile-pay-helper"
               :data-pay-target="mobilePayTarget"
             >
-              <p>{{ mobilePayHelperText }}</p>
-              <div class="mobile-pay-helper__actions">
-                <t-button size="small" theme="primary" @click="launchMobilePayment()">{{
-                  mobileLaunchButtonText
-                }}</t-button>
-                <t-button size="small" theme="primary" variant="outline" @click="copyPayUrl">复制支付链接</t-button>
-              </div>
+              <!-- 微信支付且不在微信内：公众号收银台只能由用户在微信里打开，
+                   不伪造 scheme 唤起（那会触发 invalid_source），改为展示链接 + 三步引导。 -->
+              <template v-if="mobileWechatManualCopy">
+                <p class="mobile-pay-helper__title">微信支付需要在微信中完成</p>
+                <ol class="mobile-pay-helper__steps">
+                  <li>点「复制支付链接」</li>
+                  <li>打开微信，粘贴到「文件传输助手」并发送</li>
+                  <li>点开发送出去的链接，即可进入付款页</li>
+                </ol>
+                <p class="mobile-pay-url" :title="mobilePayUrlText">{{ mobilePayUrlText }}</p>
+                <div class="mobile-pay-helper__actions">
+                  <t-button size="small" theme="primary" @click="copyPayUrl">复制支付链接</t-button>
+                </div>
+                <p class="mobile-pay-helper__tip">完成支付后返回本页，系统会自动确认到账。</p>
+              </template>
+              <template v-else>
+                <p>{{ mobilePayHelperText }}</p>
+                <div class="mobile-pay-helper__actions">
+                  <t-button size="small" theme="primary" @click="launchMobilePayment()">{{
+                    mobileLaunchButtonText
+                  }}</t-button>
+                  <t-button size="small" theme="primary" variant="outline" @click="copyPayUrl">复制支付链接</t-button>
+                </div>
+              </template>
             </div>
           </div>
         </template>
@@ -333,12 +350,15 @@ const {
   mobilePayNotice,
   mobilePayTarget,
   mobileLaunchButtonText,
+  mobileWechatManualCopy,
+  mobilePayUrlText,
   selectPreset,
   selectPaymentGateway,
   handleAmountChange,
   handleCreateOrder,
   launchMobilePayment,
   copyPayUrl,
+  restoreRechargePoll,
 } = useRecharge();
 
 const mobileCustomSelected = computed(() => mobileCustomMode.value || activePreset.value === null);
@@ -350,10 +370,10 @@ const mobileSubmitText = computed(() =>
   rechargePaid.value ? '继续充值' : rechargeCancelled.value ? '重新发起充值' : '立即充值',
 );
 const mobilePayHelperText = computed(() => {
-  // 内置浏览器拦截（微信内打不开支付宝等）优先展示具体原因，再谈重试方式。
+  // 内置浏览器拦截（微信内打不开支付宝等）与微信外无法唤起微信支付，优先展示具体原因。
   if (mobilePayNotice.value) return mobilePayNotice.value;
   if (mobilePayChannel.value === 'wechat') {
-    return '已尝试打开微信 App；若未自动跳转，请点下方按钮重试，或复制支付链接在微信中打开。';
+    return '微信支付需要在微信内完成：请复制支付链接，粘贴到微信（可发给文件传输助手）后点开支付；完成后回到本页等待自动确认。';
   }
   if (mobilePayChannel.value === 'alipay') {
     return '已尝试打开支付宝 App；若未自动跳转，请点下方按钮重试，或复制支付链接在支付宝中打开。';
@@ -504,8 +524,12 @@ async function handleGatewayCreate(method: RechargeGatewayOption) {
   }
 }
 
-onMounted(() => {
-  void loadPaymentGateways();
+onMounted(async () => {
+  // 先加载支付方式：恢复支付单要据此回填选中的支付渠道。
+  await loadPaymentGateways();
+  // 从网关收银台跳回时是全新挂载，内存里的支付单已丢失，靠持久化凭证恢复轮询；
+  // 不恢复的话用户会看到「还没生成二维码」的空态，而钱可能已经到账。
+  restoreRechargePoll();
 });
 </script>
 <style src="./index.less" lang="less" scoped></style>

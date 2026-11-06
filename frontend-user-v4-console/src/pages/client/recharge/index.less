@@ -333,6 +333,45 @@
   gap: var(--td-comp-margin-s);
 }
 
+// 微信支付手动搬运场景：不唤起、只给步骤和可复制的链接。
+.mobile-pay-helper__title {
+  margin: 0;
+  font: var(--td-font-title-small);
+  font-weight: 600;
+}
+
+.mobile-pay-helper__steps {
+  margin: 0;
+  padding-left: 1.125rem;
+  font: var(--td-font-body-small);
+  line-height: 1.7;
+
+  li::marker {
+    color: var(--td-brand-color);
+  }
+}
+
+// 链接必须可长按选中：自动复制在部分内置浏览器/无权限时不可用，
+// 用户要能手动选中复制。break-all 保证长 URL 不撑破窄屏。
+.mobile-pay-url {
+  margin: 0;
+  padding: var(--td-comp-paddingTB-s) var(--td-comp-paddingLR-s);
+  overflow-wrap: anywhere;
+  font: var(--td-font-body-small);
+  word-break: break-all;
+  white-space: normal;
+  user-select: text;
+  background: var(--td-bg-color-container);
+  border: thin solid var(--td-component-stroke);
+  border-radius: var(--td-radius-small);
+}
+
+.mobile-pay-helper__tip {
+  margin: 0;
+  font: var(--td-font-body-small);
+  color: var(--td-text-color-placeholder);
+}
+
 .qrcode-panel {
   display: flex;
   flex-direction: column;

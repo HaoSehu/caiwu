@@ -1,15 +1,14 @@
 /**
- * 手机端支付拉起：把后端下发的支付链接转换成支付宝 / 微信 App 的 scheme，
- * 让手机浏览器在**用户点击后直接唤起对应 App**，而不是只给一个二维码或链接。
+ * 手机端支付拉起：把后端下发的支付链接转换成可直接打开的支付入口。
  *
  * 后端 `qr_code` 在不同网关下可能是：
  * - `https://qr.alipay.com/xxx`（支付宝当面付二维码内容）
  * - `https://<收银台域名>/pay/...`（聚合网关收银台页面）
  * - `alipays://...` / `weixin://...` / `wxp://...`（已可直接唤起的 scheme）
  *
- * 口径与 `app_flutter/lib/core/util/payment_launch.dart` 完全一致：支付宝统一走
- * `appId=20000067&url=`，当面付二维码走扫一扫 `saId=10000007&qrcode=`；微信走
- * `weixin://dl/businessWebview/link/?url=`，已是微信 scheme 的原样透传。
+ * 支付宝能靠 scheme 直接唤起 App；微信没有可用的公开外部唤起协议，
+ * 只能原样打开 https 收银台（微信内）或引导用户复制链接到微信内打开。
+ * 口径与 `app_flutter/lib/core/util/payment_launch.dart` 完全一致，
  * 两端任何一侧调整都要同步另一侧，否则 App 与网页的支付体验会分叉。
  */
 
@@ -100,15 +99,6 @@ export function buildAlipayLaunchUrl(rawUrl: unknown): string {
   return `alipays://platformapi/startapp?appId=20000067&url=${encodeURIComponent(url)}`;
 }
 
-/** 构造微信唤起链接：已在微信 scheme 内的原样透传，https 收银台包一层微信内置浏览器。 */
-export function buildWechatLaunchUrl(rawUrl: unknown): string {
-  const url = normalizePaymentUrl(rawUrl);
-  if (!url) return '';
-  if (/^(?:weixin|wxp):\/\//i.test(url)) return url;
-  if (!isHttpUrl(url)) return '';
-  return `weixin://dl/businessWebview/link/?url=${encodeURIComponent(url)}`;
-}
-
 /**
  * 还原 https 兜底链接：scheme 链接里的 `url=` / `qrcode=` 参数就是原始网页地址，
  * 复制按钮与「浏览器中继续支付」都靠它，还原不出时返回空串。
@@ -132,7 +122,10 @@ export function resolveHttpsPayUrl(rawUrl: unknown): string {
 /**
  * 决定这次点击该怎么打开支付：
  *
- * - 普通手机浏览器：按渠道唤起支付宝 / 微信 App；
+ * - 普通手机浏览器：支付宝按渠道唤起支付宝 App；微信支付只有两种可用形态——
+ *   已是 `weixin://` scheme 的原样拉起，https 收银台则**不能**在微信外完成支付
+ *   （公众号 JSAPI 收银台会 302 到微信 OAuth，微信外打开会被拒绝），
+ *   因此返回 blocked 并引导用户复制链接到微信内打开；
  * - 支付宝内置浏览器：再唤起支付宝无效，直接打开收银台链接（就在支付宝里完成支付）；
  * - 微信内置浏览器：微信不开放 `alipays://`，只能引导到系统浏览器；
  *   微信支付本身已在微信内，直接打开收银台链接。
@@ -160,9 +153,20 @@ export function resolvePaymentLaunchPlan(
     if (scheme) return { kind: 'scheme', url: scheme, fallbackUrl: fallbackUrl || normalized, message: '' };
   }
 
-  if (channel === 'wechat' && env !== 'wechat') {
-    const scheme = buildWechatLaunchUrl(normalized);
-    if (scheme) return { kind: 'scheme', url: scheme, fallbackUrl: fallbackUrl || normalized, message: '' };
+  if (channel === 'wechat') {
+    // 已是微信 scheme（如 weixin://wxpay/bizpayurl…）才可直接拉起。
+    if (!isHttpUrl(normalized)) {
+      return { kind: 'navigate', url: normalized, fallbackUrl, message: '' };
+    }
+
+    // 微信内打开的 https 收银台就是公众号 JSAPI 支付页，直接跳转即可完成支付。
+    if (env === 'wechat') {
+      return { kind: 'navigate', url: normalized, fallbackUrl: normalized, message: '' };
+    }
+
+    // 微信外打开 https 收银台会 302 到微信 OAuth 并被拒绝（invalid_source 类提示），
+    // 不能跳转；把链接交给用户复制到微信内打开。
+    return blocked('微信支付需要在微信内完成：请点下方「复制支付链接」，粘贴到微信（可发给文件传输助手）后点开支付');
   }
 
   if (fallbackUrl) return { kind: 'navigate', url: fallbackUrl, fallbackUrl, message: '' };

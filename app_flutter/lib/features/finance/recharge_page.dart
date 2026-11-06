@@ -36,10 +36,21 @@ class RechargePage extends StatefulWidget {
 
 /// 已创建的充值支付单（用于提交后展示）。
 class _CreatedRecharge {
-  const _CreatedRecharge({required this.amount, required this.gatewayLabel});
+  const _CreatedRecharge({
+    required this.amount,
+    required this.gatewayLabel,
+    required this.payUrl,
+    required this.channel,
+  });
 
   final String amount;
   final String gatewayLabel;
+
+  /// 网关下发的支付链接；微信支付需要它在微信内打开，页面提供复制入口。
+  final String payUrl;
+
+  /// 本次链接的渠道：只有微信需要搬运到微信内，支付宝可直接唤起 App。
+  final PaymentChannel channel;
 }
 
 class _RechargePageState extends State<RechargePage> {
@@ -230,24 +241,31 @@ class _RechargePageState extends State<RechargePage> {
       );
       if (!mounted) return;
       final url = _pickUrl(result);
+      final channel = detectPaymentChannel(
+        gateway: gateway,
+        paymentType: paymentType,
+        channelName: selected['label'],
+      );
       setState(() {
         _created = _CreatedRecharge(
           amount: amount,
           gatewayLabel: selected['label'] ?? _gatewayLabel(_gateway),
+          payUrl: url,
+          channel: channel,
         );
       });
       if (url.isEmpty) {
         AppFeedback.toast(context, '充值单已创建，请在支付完成后刷新余额');
         return;
       }
-      final channel = detectPaymentChannel(
-        gateway: gateway,
-        paymentType: paymentType,
-        channelName: selected['label'],
-      );
       final opened = await launchPaymentUrl(url, channel: channel);
       if (!opened && mounted) {
-        AppFeedback.toast(context, '无法打开支付页面，请在浏览器中完成支付');
+        if (channel == PaymentChannel.wechat) {
+          // 微信没有可用的外部唤起协议：提示复制链接到微信内打开，比「打不开」可操作。
+          AppFeedback.toast(context, '微信支付需要在微信内完成，请复制链接到微信打开');
+        } else {
+          AppFeedback.toast(context, '无法打开支付页面，请在浏览器中完成支付');
+        }
       }
     } catch (error) {
       if (mounted) AppFeedback.error(context, AppServices.errorText(error));
@@ -274,6 +292,13 @@ class _RechargePageState extends State<RechargePage> {
     } finally {
       if (mounted) setState(() => _refreshing = false);
     }
+  }
+
+  /// 微信支付只能在微信内完成，而微信不开放外部唤起协议：把网关下发的
+  /// https 收银台链接交给用户复制到微信（可发给文件传输助手）后打开。
+  Future<void> _copyPayUrl(String url) async {
+    await Clipboard.setData(ClipboardData(text: url));
+    if (mounted) AppFeedback.success(context, '支付链接已复制，请在微信中打开');
   }
 
   /// 选中值的展示名：优先取当前选项的 `label`，回落遍历匹配。
@@ -368,6 +393,23 @@ class _RechargePageState extends State<RechargePage> {
               title: Text('支付方式', style: AppType.secondary(theme)),
               note: Text(created.gatewayLabel, style: AppType.body(theme)),
             ),
+            // 只有微信链接需要用户复制到微信内打开；支付宝可直接唤起 App，
+            // 给它挂复制入口只是干扰。
+            if (created.payUrl.isNotEmpty && created.channel == PaymentChannel.wechat)
+              TCell(
+                title: Text('支付链接', style: AppType.secondary(theme)),
+                note: Text(
+                  '复制到微信中打开',
+                  style: AppType.caption(theme),
+                ),
+                trailing: TButton(
+                  size: TButtonSize.extraSmall,
+                  variant: TButtonVariant.text,
+                  colorPreset: TButtonColorPreset.primary,
+                  onPressed: () => _copyPayUrl(created.payUrl),
+                  child: const Text('复制链接'),
+                ),
+              ),
             TCell(
               enableFeedback: false,
               title: SizedBox(
