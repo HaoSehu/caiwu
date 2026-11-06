@@ -271,33 +271,28 @@ class ServiceVncService
 
         $this->assertVncExchangeQuota($publicTokenHash);
 
-        $relayToken = $this->reusableRelayToken($publicTokenHash);
+        // 每次兑换都签发独立的 relay token，绝不复用。
+        //
+        // 复用同一个 relay token 会让并发的两次建连指向同一份上游凭证。实测上游
+        // （zk2/zk4/zk1/meidecloud）对同一 VNC token 的第二次并发连接直接拒绝握手，
+        // Relay 只能回 502「VNC 中转连接上游失败」。浏览器侧很容易触发并发：
+        // 刷新页面时旧 iframe 尚未断开、同页「嵌入 + 新窗口」并列打开、多页签同源打开。
+        // 上游 token 本身可重复使用，故让它留在服务端共享，仅把「下发凭证」按次隔离。
+        $relayToken = bin2hex(random_bytes(24));
+        $relayPayload = $params;
+        // relay 建连仅需 host/port/path/encrypt/origin，不落明文 VNC 密码到 Redis。
+        unset($relayPayload['password']);
+        VolatileStore::store()->put(CacheKey::vncToken($relayToken), array_merge($relayPayload, [
+            'token_scope' => 'relay',
+            'public_token_hash' => $publicTokenHash,
+        ]), now()->addSeconds(self::VNC_RELAY_TOKEN_TTL_SECONDS));
 
-        if ($relayToken === null) {
-            $relayToken = bin2hex(random_bytes(24));
-            $relayPayload = $params;
-            // relay 建连仅需 host/port/path/encrypt/origin，不落明文 VNC 密码到 Redis。
-            unset($relayPayload['password']);
-            VolatileStore::store()->put(CacheKey::vncToken($relayToken), array_merge($relayPayload, [
-                'token_scope' => 'relay',
-                'public_token_hash' => $publicTokenHash,
-            ]), now()->addSeconds(self::VNC_RELAY_TOKEN_TTL_SECONDS));
-
-            // 记录公开 token 与 relay token 的映射：同一公开 token 在其有效期内只派生一次 relay，
-            // 页面刷新/重连/多页签重复兑换得到同一个 relay token，避免每次兑换都签发新凭证。
-            VolatileStore::store()->put(
-                CacheKey::vncRelayHandle($publicTokenHash),
-                $relayToken,
-                now()->addSeconds(self::VNC_RELAY_TOKEN_TTL_SECONDS)
-            );
-
-            $this->safeLog('info', '[VNC] 公开 token 已换取 relay token', [
-                'service_id' => (int) ($params['service_id'] ?? 0),
-                'token_hash' => $publicTokenHash,
-                'relay_token_hash' => hash('sha256', $relayToken),
-                'has_password' => trim((string) ($params['password'] ?? '')) !== '',
-            ]);
-        }
+        $this->safeLog('info', '[VNC] 公开 token 已换取 relay token', [
+            'service_id' => (int) ($params['service_id'] ?? 0),
+            'token_hash' => $publicTokenHash,
+            'relay_token_hash' => hash('sha256', $relayToken),
+            'has_password' => trim((string) ($params['password'] ?? '')) !== '',
+        ]);
 
         return [
             'token' => $relayToken,
@@ -313,8 +308,8 @@ class ServiceVncService
      * 单个公开 token 的兑换次数上限：正常使用是「打开一次 + 刷新/重连若干次」，
      * 30 次足以覆盖浏览器重连，又能阻止拿到链接后脚本化反复兑换。
      *
-     * 注意：relay token 已按公开 token 幂等复用（见 reusableRelayToken），本计数挡的是
-     * 「同一公开 token 被反复兑换」的请求量，不是「会派生多个 relay 凭证」。
+     * 注意：每次兑换都会签发新的 relay token（见 resolvePublicVncTokenPayload），
+     * 本计数挡的是「同一公开 token 被反复兑换」的请求量。
      */
     private function assertVncExchangeQuota(string $publicTokenHash): void
     {
@@ -337,21 +332,6 @@ class ServiceVncService
 
             throw new BusinessException('VNC 链接使用次数过多，请重新获取', 42900, 429);
         }
-    }
-
-    private function reusableRelayToken(string $publicTokenHash): ?string
-    {
-        $cache = VolatileStore::store();
-        $relayToken = $cache->get(CacheKey::vncRelayHandle($publicTokenHash));
-
-        if (! is_string($relayToken) || $relayToken === '') {
-            return null;
-        }
-
-        $relayPayload = $cache->get(CacheKey::vncToken($relayToken));
-
-        // relay token 已过期（60 秒短 TTL）时不再复用，直接派生新凭证。
-        return is_array($relayPayload) && ! empty($relayPayload) ? $relayToken : null;
     }
 
     private function withCachedVncCredentials(Service $service, array $vncParams): array

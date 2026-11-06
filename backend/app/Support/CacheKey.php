@@ -112,16 +112,6 @@ final class CacheKey
     }
 
     /**
-     * VNC 公开 token → 已派生 relay token 的句柄缓存。
-     * 同一公开 token 重复兑换必须复用同一 relay token（刷新/重连/多页签幂等），
-     * 因此需要一个独立于 token 载荷的索引键。
-     */
-    public static function vncRelayHandle(string $publicTokenHash): string
-    {
-        return 'vnc_relay_handle:'.$publicTokenHash;
-    }
-
-    /**
      * VNC 公开 token 兑换次数计数（防单链接被脚本化无限兑换）。
      */
     public static function vncTokenExchangeCount(string $publicTokenHash): string

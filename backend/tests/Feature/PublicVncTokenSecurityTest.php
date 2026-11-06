@@ -57,8 +57,18 @@ class PublicVncTokenSecurityTest extends TestCase
         $this->assertSame('host-42', $first['target']);
         $this->assertGreaterThan(0, (int) $first['expires_in']);
         $this->assertMatchesRegularExpression('/^[0-9a-f]{48}$/', (string) $first['token']);
-        // 刷新/重连/多页签会重复兑换同一公开 token：必须复用同一 relay token，否则首个请求之后的兑换全部失效。
-        $this->assertSame($first['token'], $second['token'], '同一公开 token 重复兑换应复用 relay token');
+        // 每次兑换必须签发独立 relay token：复用会让刷新/多页签/嵌入+新窗口的并发建连
+        // 撞到同一份上游凭证，上游对同一 VNC token 的第二次并发握手直接拒绝（Relay 回 502）。
+        $this->assertNotSame($first['token'], $second['token'], '每次兑换应签发独立 relay token');
+        $this->assertMatchesRegularExpression('/^[0-9a-f]{48}$/', (string) $second['token']);
+
+        // 两个 relay token 各自指向同一份上游参数，互不影响。
+        $relayFirst = VolatileStore::store()->get(CacheKey::vncToken((string) $first['token']));
+        $relaySecond = VolatileStore::store()->get(CacheKey::vncToken((string) $second['token']));
+        $this->assertIsArray($relayFirst);
+        $this->assertIsArray($relaySecond);
+        $this->assertSame($relayFirst['host'], $relaySecond['host']);
+        $this->assertSame($relayFirst['port'], $relaySecond['port']);
 
         // relay 缓存参数同样不落明文密码，仅以 hash 维系统计与溯源
         $relayParams = VolatileStore::store()->get(CacheKey::vncToken((string) $first['token']));
@@ -118,6 +128,38 @@ class PublicVncTokenSecurityTest extends TestCase
             } catch (BusinessException $exception) {
                 $this->assertSame(40400, $exception->getErrorCode());
             }
+        }
+    }
+
+    /**
+     * 并发刷新/多页签：同一公开 token 连续兑换得到的 relay token 必须彼此不同，
+     * 否则多个浏览器连接会共用同一份上游凭证并被上游拒绝握手（表现为 502）。
+     */
+    public function test_each_exchange_issues_isolated_relay_token_for_concurrent_connections(): void
+    {
+        $token = 'pub-concurrent-'.uniqid();
+        $this->putToken($token, [
+            'token_scope' => 'public',
+            'service_id' => 42,
+            'username' => 'root',
+            'host' => '10.0.0.5',
+            'port' => 5901,
+        ]);
+
+        $service = app(ServiceVncService::class);
+
+        $tokens = [];
+        for ($i = 0; $i < 3; $i++) {
+            $tokens[] = (string) $service->resolvePublicVncTokenPayload($token)['token'];
+        }
+
+        $this->assertCount(3, array_unique($tokens), '并发兑换必须各自拿到独立 relay token');
+
+        foreach ($tokens as $relayToken) {
+            $params = VolatileStore::store()->get(CacheKey::vncToken($relayToken));
+            $this->assertIsArray($params, '每个 relay token 都应写入独立的建连参数');
+            $this->assertSame('relay', (string) ($params['token_scope'] ?? ''));
+            $this->assertSame(hash('sha256', $token), (string) ($params['public_token_hash'] ?? ''));
         }
     }
 

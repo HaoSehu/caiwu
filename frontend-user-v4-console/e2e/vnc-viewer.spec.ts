@@ -37,9 +37,9 @@ export default class RFB {
 }
 `;
 
-async function openViewer(page: Page) {
+async function openViewer(page: Page, rfbStub: string = RFB_STUB) {
   await page.route('**/vnc/core/rfb.js', (route) => {
-    return route.fulfill({ status: 200, contentType: 'application/javascript', body: RFB_STUB });
+    return route.fulfill({ status: 200, contentType: 'application/javascript', body: rfbStub });
   });
   await page.route('**/api/v2/client/vnc-tokens/**', (route) => {
     return route.fulfill({
@@ -71,6 +71,42 @@ function rfbCalls(page: Page) {
 function activeElementId(page: Page) {
   return page.evaluate(() => document.activeElement?.id ?? '');
 }
+
+/**
+ * 桩：带一个「假 WebSocket」，让页面能旁听到 Relay 下发的关闭原因。
+ * 真实场景里 Relay 在上游长时间零数据时以 1011 + 原因关闭。
+ */
+const RFB_SILENT_UPSTREAM_STUB = `
+window.__vncCalls = [];
+export default class RFB {
+  constructor(container, url) {
+    window.__vncRfb = this;
+    this.listeners = {};
+    this._sock = { _websocket: new EventTarget() };
+    setTimeout(() => this.emit('connect', { detail: { clean: true } }), 10);
+  }
+  addEventListener(name, handler) {
+    (this.listeners[name] || (this.listeners[name] = [])).push(handler);
+  }
+  emit(name, event) {
+    (this.listeners[name] || []).forEach((handler) => handler(event));
+  }
+  failSilently(reason) {
+    const closeEvent = new Event('close');
+    closeEvent.wasClean = true;
+    closeEvent.code = 1011;
+    closeEvent.reason = reason;
+    this._sock._websocket.dispatchEvent(closeEvent);
+    this.emit('disconnect', { detail: { clean: false } });
+  }
+  sendCtrlAltDel() {}
+  clipboardPasteFrom() {}
+  sendKey() {}
+  sendCredentials() {}
+  focus() {}
+  disconnect() { this.emit('disconnect', { detail: { clean: true } }); }
+}
+`;
 
 test.describe('VNC 查看器移动端控制栏', () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
@@ -155,5 +191,21 @@ test.describe('VNC 查看器移动端控制栏', () => {
       );
     });
     await expect(page.locator('#noVNC_transition')).not.toHaveClass(/show/);
+  });
+
+  test('上游长时间无数据时，展示 Relay 下发的具体原因而不是笼统的中断提示', async ({ page }) => {
+    await openViewer(page, RFB_SILENT_UPSTREAM_STUB);
+    await expect(page.locator('#btn_cad')).toBeEnabled();
+
+    await page.evaluate(() => {
+      (window as unknown as { __vncRfb: { failSilently: (reason: string) => void } }).__vncRfb.failSilently(
+        '上游 VNC 无响应，请确认实例已开机且系统已完成引导',
+      );
+    });
+
+    await expect(page.locator('#noVNC_error')).toHaveClass(/show/);
+    // 关键：用户要能看到上游不可用，而不是只能看到「连接已中断」干等
+    await expect(page.locator('#noVNC_error_message')).toContainText('上游 VNC 无响应');
+    await expect(page.locator('#noVNC_error_message')).not.toContainText('目标地址');
   });
 });
