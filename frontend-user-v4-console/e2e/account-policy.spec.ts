@@ -31,6 +31,13 @@ const POLICY_ON = {
   missing_items: ['phone'],
 };
 
+const POLICY_OFF = {
+  require_verification: false,
+  require_phone: false,
+  require_email: false,
+  missing_items: [] as string[],
+};
+
 function jsonResponse(body: unknown) {
   return { status: 200, contentType: 'application/json', body: JSON.stringify(body) };
 }
@@ -80,8 +87,61 @@ test('点「去完成」跳到个人资料页并自动打开手机绑定弹窗',
   await page.locator('.account-policy-dialog .t-dialog').getByRole('button', { name: '去完成' }).click();
 
   await expect(page).toHaveURL(/\/client\/profile/);
-  // bind query 打开的是「更换绑定手机 / 绑定手机」弹窗标题
-  await expect(page.getByText('更换绑定手机')).toBeVisible();
+  // 未绑定手机时弹窗标题是「绑定手机」，已绑定时才是「更换绑定手机」
+  await expect(page.getByText('绑定手机', { exact: true })).toBeVisible();
+});
+
+test('未绑手机用户填写新号码后校验通过并提交', async ({ page }) => {
+  await mockConsole(page, { ...BASE_USER, phone: '' }, POLICY_OFF);
+  await page.route('**/api/v2/client/auth/notification-preferences', (route) => {
+    return route.fulfill(jsonResponse(envelope({ login_notify: 1 })));
+  });
+
+  let submitted: Record<string, unknown> | null = null;
+  await page.route('**/api/v2/client/auth/phone', async (route) => {
+    submitted = route.request().postDataJSON() as Record<string, unknown>;
+    return route.fulfill(jsonResponse(envelope({ phone: submitted.phone })));
+  });
+
+  // 回归点：t-form 必须绑定 :data，否则校验读不到输入值，填了号码仍提示「请输入新手机号」
+  await page.goto('/client/profile?tab=security&bind=phone', { waitUntil: 'domcontentloaded' });
+  const phoneDialog = page.locator('.t-dialog').filter({ hasText: '新手机号' });
+  await expect(page.getByText('绑定手机', { exact: true })).toBeVisible();
+
+  await phoneDialog.getByPlaceholder('请输入新手机号').fill('13171721367');
+  await phoneDialog.getByPlaceholder('请输入 6 位验证码').fill('123456');
+
+  await expect(phoneDialog.getByText('请输入新手机号')).toHaveCount(0);
+  await phoneDialog.getByRole('button', { name: '确定' }).click();
+
+  await expect.poll(() => submitted?.phone).toBe('13171721367');
+  await expect.poll(() => submitted?.code).toBe('123456');
+});
+
+test('未绑邮箱用户填写新邮箱后校验通过并提交', async ({ page }) => {
+  await mockConsole(page, { ...BASE_USER, email: '' }, POLICY_OFF);
+  await page.route('**/api/v2/client/auth/notification-preferences', (route) => {
+    return route.fulfill(jsonResponse(envelope({ login_notify: 0 })));
+  });
+
+  let submitted: Record<string, unknown> | null = null;
+  await page.route('**/api/v2/client/auth/email', async (route) => {
+    submitted = route.request().postDataJSON() as Record<string, unknown>;
+    return route.fulfill(jsonResponse(envelope({ email: submitted.email })));
+  });
+
+  await page.goto('/client/profile?tab=security&bind=email', { waitUntil: 'domcontentloaded' });
+  const emailDialog = page.locator('.t-dialog').filter({ hasText: '新邮箱' });
+  await expect(page.getByText('绑定邮箱', { exact: true })).toBeVisible();
+
+  await emailDialog.getByPlaceholder('请输入新邮箱').fill('user@example.com');
+  await emailDialog.getByPlaceholder('请输入 6 位验证码').fill('654321');
+
+  await expect(emailDialog.getByText('请输入新邮箱')).toHaveCount(0);
+  await emailDialog.getByRole('button', { name: '确定' }).click();
+
+  await expect.poll(() => submitted?.email).toBe('user@example.com');
+  await expect.poll(() => submitted?.code).toBe('654321');
 });
 
 test('用户已满足全部强制项时不弹窗', async ({ page }) => {

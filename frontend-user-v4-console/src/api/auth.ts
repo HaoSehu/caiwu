@@ -13,7 +13,8 @@ import request from '@/utils/request';
 type RequestConfig = AxiosRequestConfig & { silentError?: boolean; authBearer?: boolean };
 
 const SILENT_ERROR_CONFIG: RequestConfig = { silentError: true };
-// 已登录态下发"验证已绑定号码"验证码：公开发码路由需显式携带凭证供后端识别绑定归属
+// 已登录态下发验证码（校验已绑定号码 / 绑定新号码）：公开发码路由需显式携带凭证，
+// 后端据此把验证码归属到当前账号；缺凭证会落到 guest 归属，提交时按用户 ID 校验必然失败。
 export const AUTH_BOUND_CODE_CONFIG: RequestConfig = { authBearer: true };
 
 function getEnvelope<T>(url: string, config?: RequestConfig) {

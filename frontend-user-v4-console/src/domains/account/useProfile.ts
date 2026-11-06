@@ -376,11 +376,16 @@ export function useProfile() {
     codeSending.phone = true;
     try {
       await runWithCaptcha(async (captcha: unknown) => {
-        await clientAuthApi.sendPhoneCode({
-          phone: phoneForm.phone,
-          purpose: profileForm.phone ? 'change_phone' : 'bind_phone',
-          captcha,
-        });
+        // 必须带登录凭证：后端按凭证把验证码归属到当前账号，
+        // 无凭证会落到 guest 归属，提交换绑时按用户 ID 校验必然失败。
+        await clientAuthApi.sendPhoneCode(
+          {
+            phone: phoneForm.phone,
+            purpose: profileForm.phone ? 'change_phone' : 'bind_phone',
+            captcha,
+          },
+          AUTH_BOUND_CODE_CONFIG,
+        );
       });
       MessagePlugin.success('验证码已发送');
       phoneCountdown.value = 60;
@@ -403,7 +408,11 @@ export function useProfile() {
       await runWithCaptcha(async (captcha: unknown) => {
         // 这里发往的是「新邮箱」，不能用 change_email：后端 EMAIL_BOUND_PURPOSES 含 change_email，
         // 会校验目标必须等于当前已绑定邮箱，换绑新邮箱时必然 422。
-        await clientAuthApi.sendEmailCode({ email: emailForm.email, purpose: 'bind_email', captcha });
+        // 同时带登录凭证，让验证码归属当前账号，否则提交时按用户 ID 校验必然失败。
+        await clientAuthApi.sendEmailCode(
+          { email: emailForm.email, purpose: 'bind_email', captcha },
+          AUTH_BOUND_CODE_CONFIG,
+        );
       });
       MessagePlugin.success('验证码已发送');
       emailCountdown.value = 60;

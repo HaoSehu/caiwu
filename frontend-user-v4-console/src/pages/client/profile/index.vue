@@ -1,5 +1,5 @@
 <template>
-  <section class="profile-page">
+  <section class="profile-page" :data-mobile-view="isMobile ? 'form' : undefined">
     <h1 class="sr-only">个人资料</h1>
 
     <!-- 账户中心导航只渲染一份（AC-24）：原先移动标签栏与桌面侧栏同时存在于 DOM，
@@ -116,7 +116,7 @@
       :close-on-overlay-click="!changingPassword"
       @close="handlePasswordDialogClose"
     >
-      <t-form v-if="passwordMode === 'old'" ref="passwordFormRef" label-align="right">
+      <t-form v-if="passwordMode === 'old'" ref="passwordFormRef" :data="passwordForm" label-align="right">
         <t-form-item label="原密码" name="oldPassword" :rules="requiredBlur('请输入原密码')">
           <t-input v-model="passwordForm.oldPassword" type="password" />
         </t-form-item>
@@ -130,7 +130,7 @@
           >忘记原密码？</t-button
         >
       </t-form>
-      <t-form v-else ref="resetFormRef" label-align="right">
+      <t-form v-else ref="resetFormRef" :data="resetForm" label-align="right">
         <!-- 验证方式只有两个互斥选项，且不承载独立内容：用单选按钮组替代 t-tabs，
              避免在弹窗内再套一层标签页导航（AC-16） -->
         <t-form-item v-if="profileForm.phone && profileForm.email" label="验证方式">
@@ -188,7 +188,11 @@
       </template>
     </t-dialog>
 
-    <t-dialog v-model:visible="phoneDialogVisible" header="更换绑定手机" width="min(30rem, calc(100vw - 2rem))">
+    <t-dialog
+      v-model:visible="phoneDialogVisible"
+      :header="profileForm.phone ? '更换绑定手机' : '绑定手机'"
+      width="min(30rem, calc(100vw - 2rem))"
+    >
       <t-form v-if="phoneChangeStep === 1" label-align="right">
         <div class="reset-single-tip">为确认是本人操作，请先验证当前绑定的手机号 {{ profileForm.phone }}</div>
         <t-form-item label="验证码">
@@ -205,7 +209,7 @@
           </div>
         </t-form-item>
       </t-form>
-      <t-form v-else ref="phoneFormRef" label-align="right">
+      <t-form v-else ref="phoneFormRef" :data="phoneForm" label-align="right">
         <t-form-item label="新手机号" name="phone" :rules="phoneRules">
           <t-input
             v-model="phoneForm.phone"
@@ -257,7 +261,11 @@
       </template>
     </t-dialog>
 
-    <t-dialog v-model:visible="emailDialogVisible" header="更换绑定邮箱" width="min(30rem, calc(100vw - 2rem))">
+    <t-dialog
+      v-model:visible="emailDialogVisible"
+      :header="profileForm.email ? '更换绑定邮箱' : '绑定邮箱'"
+      width="min(30rem, calc(100vw - 2rem))"
+    >
       <t-form v-if="emailChangeStep === 1" label-align="right">
         <div class="reset-single-tip">为确认是本人操作，请先验证当前绑定的邮箱 {{ profileForm.email }}</div>
         <t-form-item label="验证码">
@@ -274,7 +282,7 @@
           </div>
         </t-form-item>
       </t-form>
-      <t-form v-else ref="emailFormRef" label-align="right">
+      <t-form v-else ref="emailFormRef" :data="emailForm" label-align="right">
         <t-form-item label="新邮箱" name="email" :rules="emailRules">
           <t-input v-model="emailForm.email" placeholder="请输入新邮箱" />
         </t-form-item>
@@ -336,7 +344,7 @@ const profileTabs = [
 ] as const;
 
 // 表格/表单的形态切换听 useDeviceLayout（mobile=48rem），与 :587 的 @media (max-width: @screen-sm-max) 恰好互补
-const { isDesktop } = useDeviceLayout();
+const { isDesktop, isMobile } = useDeviceLayout();
 
 const {
   activeTab,
