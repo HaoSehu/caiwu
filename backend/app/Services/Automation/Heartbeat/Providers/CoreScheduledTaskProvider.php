@@ -183,12 +183,14 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
             ),
             // 财务账务一致性审计（只读）：余额 vs 流水合计、来源完整性、充值桥接覆盖。
             // strict 只对金额级差异退出非零；source_type/trace 存量缺口只作为报告项。
+            // 心跳槽位固定 15 分钟粒度（TickSlot::SECONDS=900），cron 分钟必须落在
+            // 00/15/30/45，否则注册期会被 ScheduledTaskValidator 剔除、任务永不执行。
             $this->task(
                 key: 'finance-ledger-audit',
                 title: '财务流水一致性审计',
                 category: '财务',
                 description: '每日只读审计财务台账：余额与流水合计是否一致、来源字段完整性、充值账单桥接覆盖；只对金额级差异告警。',
-                triggers: [ScheduleRule::cron('20 4 * * *')],
+                triggers: [ScheduleRule::cron('15 4 * * *')],
                 handler: fn (): array => $this->runArtisan('finance:audit-ledger-consistency', [
                     '--json' => true,
                 ]),
@@ -198,7 +200,7 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
             ),
             // 在线账户余额对账（只读）：核对每个 (user_id, account_type) 最新一条流水
             // balance_after 快照与账户余额是否一致，兜住并发与直改库造成的账实不符。
-            // 与 04:20 的合计口径审计错峰到 04:50；调度传 --tolerate-legacy：
+            // 与 04:15 的合计口径审计错峰到 04:45；调度传 --tolerate-legacy：
             // 财务内核切换前的存量漂移（如返利释放漏写冻结侧冲减行）无法自动修复，
             // 一律非零会让心跳天天红灯、真告警被淹没，因此只告警不失败。
             $this->task(
@@ -206,7 +208,7 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
                 title: '账户余额快照对账',
                 category: '财务',
                 description: '每日只读核对财务流水最新 balance_after 快照与账户余额是否一致（现金与返利子账户），存量历史漂移只告警不阻断调度。',
-                triggers: [ScheduleRule::cron('50 4 * * *')],
+                triggers: [ScheduleRule::cron('45 4 * * *')],
                 handler: fn (): array => $this->runArtisan('reconcile:account-balance', [
                     '--json' => true,
                     '--tolerate-legacy' => true,
@@ -221,7 +223,7 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
                 title: '财务幂等记录清理',
                 category: '财务',
                 description: '每天清理超过保留期（默认 30 天）的财务幂等记录，防止 finance_operations 无限增长。',
-                triggers: [ScheduleRule::cron('40 4 * * *')],
+                triggers: [ScheduleRule::cron('30 4 * * *')],
                 handler: fn (): array => $this->runArtisan('finance:prune-operations', [
                     '--execute' => true,
                 ]),
