@@ -203,9 +203,32 @@
     padding-bottom: 2px;
   }
 
+  // 移动端隐藏每页条数与跳页。表格内置分页（.t-table__pagination）不在
+  // .pagination-row 里——只按 .pagination-row 限定会让用户详情等页面
+  // 的分页器撑到 800px+ 后被父级裁掉，翻页控件直接不可见。
   .pagination-row .t-pagination__select,
-  .pagination-row .t-pagination__jump {
+  .pagination-row .t-pagination__jump,
+  .t-table__pagination .t-pagination__select,
+  .t-table__pagination .t-pagination__jump {
     display: none;
+  }
+
+  .t-table__pagination {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  // 表格内置分页在横向滚动容器里会被排到表格总宽度的右侧（实测 818px 宽、
+  // 起点在 860px 的表格盒内），手机上滚到最右才能看到，等于不可用。
+  // 钉在滚动视口左侧并压到视口宽度，保证翻页控件始终可见。
+  .table-scroll .t-table__pagination,
+  .console-table-scroll .t-table__pagination {
+    position: sticky;
+    left: 0;
+    width: calc(100vw - 32px);
+    max-width: calc(100vw - 32px);
+    padding-top: 8px;
+    background: var(--td-bg-color-container);
   }
 
   .filter-row {
@@ -524,7 +547,9 @@
     top: 0;
     bottom: 0;
     z-index: 200;
-    transition: width 0.3s @anim-time-fn-easing, transform 0.3s @anim-time-fn-easing;
+    transition:
+      width 0.3s @anim-time-fn-easing,
+      transform 0.3s @anim-time-fn-easing;
     min-height: 100%;
 
     &-mix {
@@ -571,7 +596,9 @@
     &-logo-normal {
       color: var(--td-brand-color);
       font: var(--td-font-body-large);
-      transition: color 0.3s @anim-time-fn-easing, font 0.3s @anim-time-fn-easing;
+      transition:
+        color 0.3s @anim-time-fn-easing,
+        font 0.3s @anim-time-fn-easing;
     }
   }
 
@@ -582,12 +609,16 @@
   &-side-nav-placeholder {
     flex: 1 1 232px;
     min-width: 232px;
-    transition: flex-basis 0.3s @anim-time-fn-easing, min-width 0.3s @anim-time-fn-easing;
+    transition:
+      flex-basis 0.3s @anim-time-fn-easing,
+      min-width 0.3s @anim-time-fn-easing;
 
     &-hidden {
       flex: 1 1 72px;
       min-width: 72px;
-      transition: flex-basis 0.3s @anim-time-fn-easing, min-width 0.3s @anim-time-fn-easing;
+      transition:
+        flex-basis 0.3s @anim-time-fn-easing,
+        min-width 0.3s @anim-time-fn-easing;
     }
   }
 }

@@ -242,6 +242,17 @@
   width: var(--td-comp-size-xl);
 }
 
+/* 数字输入框（行内）的加减按钮是绝对定位在输入框内的控件，不参与按钮最小尺寸基线：
+   被 72px 最小宽度 / 移动端 44px 触控规则放大后会溢出输入框边框，看起来整体错位。
+   这里固定回 TDesign 控件尺寸（32px），与 .t-input 高度对齐。 */
+#app .t-input-number--row .t-input-number__decrease,
+#app .t-input-number--row .t-input-number__increase {
+  width: var(--td-comp-size-m);
+  min-width: var(--td-comp-size-m);
+  height: var(--td-comp-size-m);
+  min-height: var(--td-comp-size-m);
+}
+
 #app .t-button--theme-primary.t-button--variant-base {
   background: var(--td-brand-color);
   border-color: var(--td-brand-color);
@@ -776,6 +787,29 @@
     width: 44px;
     min-height: 44px;
   }
+
+  /* size="small" 的方形图标按钮默认只有 24px 宽（上一段规则被 .t-size-s 的
+     专属规则按优先级压回去），触屏上热区只有 24×44。这里统一回 44×44。 */
+  #app .t-button--shape-square.t-size-s {
+    min-width: 44px;
+    width: 44px;
+  }
+
+  /* 固定列与横向滚动的内容重叠时补一条内阴影，让「内容滚到钉住的列下面」
+     读起来是被遮挡而不是文字被裁断。
+     只在对应方向仍有内容可滚时出现（TDesign 的 scrollable-to-* 状态类），
+     否则表格不溢出或已滚到端点时仍画阴影，会误示「后面还有内容」。 */
+  #app .t-table__content--scrollable-to-right .t-table__cell--fixed-right-first {
+    box-shadow: -8px 0 12px -8px rgba(25, 35, 50, 0.18);
+  }
+
+  #app .t-table__content--scrollable-to-left .t-table__cell--fixed-left-last {
+    box-shadow: 8px 0 12px -8px rgba(25, 35, 50, 0.18);
+  }
+
+  /* 标签条溢出时由 layout.less 改为横向滚动（滚动条隐藏）。
+     这里不额外加右侧渐隐：TDesign 的 t-is-scrollable 在滑到最右端后仍保留，
+     常驻渐隐会永久淡化最后一个标签，比没有提示更糟。 */
 }
 
 /* 系统级减少动态效果偏好：停用循环动画与过渡 */
