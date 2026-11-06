@@ -1,5 +1,11 @@
 <template>
-  <div class="shop-wrap">
+  <!-- data-mobile-view：手机端主容器形态标记（form）。商品页在手机上以纵向表单
+       一列排列配置项，桌面端不渲染该属性。 -->
+  <div
+    class="shop-wrap"
+    :class="{ 'shop-wrap--no-product': !selectedProduct }"
+    :data-mobile-view="isPhone ? 'form' : undefined"
+  >
     <!-- 左侧产品目录侧边栏 -->
     <aside
       v-if="!isMobile"
@@ -52,31 +58,9 @@
       <!-- 中间配置区 -->
       <div class="shop-main">
         <!-- 页面标题视觉隐藏：产品页是目录型界面，视觉上的层级由左侧「产品目录」
-             与移动端产品类型切换按钮承担，再叠一个大标题会挤掉首屏配置区。
+             与配置区标题承担，再叠一个大标题会挤掉首屏配置区。
              h1 仍保留在无障碍树里，读屏与 SEO 有明确页面主题。 -->
         <h1 class="sr-only">产品与服务 - 配置选型与报价</h1>
-        <!-- 移动端产品类型切换：桌面靠左侧栏完成，移动端侧栏被隐藏，必须另给入口 -->
-        <!-- 这是一组筛选按钮而非标签页：切换只改数据筛选，没有对应的 tabpanel，
-             也没有左右方向键切换的 Tab 键盘模型。用 role="tab" 会让读屏进入「标签页」
-             模式却等不到 aria-controls/tabpanel，因此与桌面侧栏一致改用组 + aria-pressed。 -->
-        <div
-          v-if="isMobile && productTypes.length > 1"
-          class="mobile-type-tabs"
-          role="group"
-          aria-label="产品类型"
-        >
-          <button
-            v-for="type in productTypes"
-            :key="type.value"
-            type="button"
-            class="mobile-type-tab"
-            :class="{ active: activeTypeValue === type.value }"
-            :aria-pressed="activeTypeValue === type.value"
-            @click="switchType(type.value)"
-          >
-            {{ type.label }}
-          </button>
-        </div>
         <div v-if="isMobile" class="mobile-picker-row mobile-picker-row--duo">
           <div class="mobile-picker-col">
             <h2 class="config-block-title">地区</h2>
@@ -1245,51 +1229,57 @@
     >
       <div ref="allocationFooterInnerEl" class="allocation-footer-inner">
         <div class="allocation-footer-main">
-          <div class="allocation-footer-summary">
-            <span class="allocation-footer-label">费用合计：</span>
-            <div class="allocation-footer-price">
-              <template v-if="quoteError && !quoteLoading">
-                <span class="allocation-footer-quote-error">价格计算失败</span>
-                <button
-                  type="button"
-                  class="allocation-footer-quote-retry"
-                  @click="retryQuote"
-                >
-                  重试
-                </button>
-              </template>
-              <template v-else>
-                <span class="allocation-footer-symbol">¥</span>
-                <span v-if="quoteLoading" class="allocation-footer-num">…</span>
-                <span v-else class="allocation-footer-num">{{
-                  totalPrice
-                }}</span>
-              </template>
+          <!-- 只读信息（价格 + 库存/周期）纵向成组，动作（优惠券）单独放右侧胶囊 -->
+          <div class="allocation-footer-info">
+            <div class="allocation-footer-summary">
+              <span class="allocation-footer-label">费用合计：</span>
+              <div class="allocation-footer-price">
+                <template v-if="quoteError && !quoteLoading">
+                  <span class="allocation-footer-quote-error">价格计算失败</span>
+                  <button
+                    type="button"
+                    class="allocation-footer-quote-retry"
+                    @click="retryQuote"
+                  >
+                    重试
+                  </button>
+                </template>
+                <template v-else>
+                  <span class="allocation-footer-symbol">¥</span>
+                  <span v-if="quoteLoading" class="allocation-footer-num"
+                    >…</span
+                  >
+                  <span v-else class="allocation-footer-num">{{
+                    totalPrice
+                  }}</span>
+                </template>
+              </div>
+              <span class="allocation-footer-discount-text">
+                {{
+                  hasDiscount ? `已优惠 ¥${totalDiscountAmount}` : "无折扣"
+                }}
+              </span>
             </div>
-            <span class="allocation-footer-discount-text">
-              {{
-                hasDiscount
-                  ? `已优惠 ¥${totalDiscountAmount}`
-                  : "无折扣"
-              }}
-            </span>
-          </div>
-          <div class="allocation-footer-meta">
-            <span v-if="stockLabel">{{ stockLabel }}</span>
-            <span v-if="selectedCycleLabel">{{ selectedCycleLabel }}</span>
-            <button
-              type="button"
-              class="allocation-footer-coupon-btn"
-              @click="mobileCouponDrawer = true"
+            <div
+              v-if="stockLabel || selectedCycleLabel"
+              class="allocation-footer-meta"
             >
-              <TicketIcon class="allocation-footer-coupon-icon" />
-              {{
-                appliedCoupon
-                  ? `使用优惠券 -¥${appliedCoupon.discount_amount}`
-                  : "使用优惠券"
-              }}
-            </button>
+              <span v-if="stockLabel">{{ stockLabel }}</span>
+              <span v-if="selectedCycleLabel">{{ selectedCycleLabel }}</span>
+            </div>
           </div>
+          <button
+            type="button"
+            class="allocation-footer-coupon-btn"
+            @click="mobileCouponDrawer = true"
+          >
+            <TicketIcon class="allocation-footer-coupon-icon" />
+            {{
+              appliedCoupon
+                ? `优惠券 -¥${appliedCoupon.discount_amount}`
+                : "使用优惠券"
+            }}
+          </button>
         </div>
         <div class="allocation-footer-actions">
           <!-- 辅助入口进入文档流并与购买按钮同行，避免绝对定位压住按钮热区 -->
@@ -1654,6 +1644,7 @@ import {
 } from "tdesign-icons-vue-next";
 import { MessagePlugin } from "tdesign-vue-next/es/message/plugin";
 import { useWebsiteProductsPage } from "@/domains/products/useWebsiteProductsPage";
+import { usePhoneBreakpoint } from "@/composables/useMobileBreakpoint";
 import MobileRangePicker from "@/components/MobileRangePicker.vue";
 // 抽屉类移动组件只在移动端真正打开时才需要，桌面访问者永远用不到；
 // 静态引入会让它们随 products 路由 chunk 一起下发（实测移动端专属部分 gzip 约 16KB）。
@@ -1757,6 +1748,10 @@ const {
   selectProduct,
 } = useWebsiteProductsPage();
 
+// 手机形态标记：与 $breakpoint-mobile-max 同口径。商品页的布局换轨（侧栏隐藏、
+// picker 行出现）仍按 992 判定；这里只用于 data-mobile-view 契约标记。
+const { isMobile: isPhone } = usePhoneBreakpoint();
+
 const mobileOsDrawer = ref(false);
 const mobileIntroDrawer = ref(false);
 const mobileCostDrawer = ref(false);
@@ -1845,7 +1840,17 @@ function setupAllocationFooterObserver() {
 
   if ("ResizeObserver" in window && allocationFooterInnerEl.value) {
     allocationFooterResizeObserver = new ResizeObserver(([entry]) => {
-      const height = Math.ceil(entry?.contentRect?.height || 0);
+      // 必须取 border-box 高度：fixed 结算栏的上下 padding（含 safe-area）同样遮挡页面，
+      // contentRect 会漏掉这部分，滚到页面底部时最后一段内容会被结算栏压住
+      const borderBoxSize = entry?.borderBoxSize;
+      const borderBoxHeight = Array.isArray(borderBoxSize)
+        ? borderBoxSize[0]?.blockSize
+        : borderBoxSize?.blockSize;
+      const height = Math.ceil(
+        borderBoxHeight ||
+          allocationFooterInnerEl.value?.getBoundingClientRect().height ||
+          0,
+      );
       if (height > 0) {
         // 变量写到 .shop-wrap（allocation-footer 的父级）：fixed 结算栏高度变化时，
         // 同级 .shop-wrap 的 padding-bottom 避让与 .shop-main 内部留白都能联动读取

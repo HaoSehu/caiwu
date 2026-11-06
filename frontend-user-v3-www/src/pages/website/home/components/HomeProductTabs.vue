@@ -23,12 +23,14 @@
       >
         <button
           v-for="item in enterpriseServiceItems"
+          :id="`product-tab-${item.key}`"
           :key="item.key"
           type="button"
           role="tab"
           class="product-tabs__tab"
           :class="{ 'is-active': item.key === activeEnterpriseServiceKey }"
           :aria-selected="item.key === activeEnterpriseServiceKey"
+          :aria-controls="productPanelId"
           :tabindex="item.key === activeEnterpriseServiceKey ? 0 : -1"
           @click="activateEnterpriseService(item.key)"
         >
@@ -36,7 +38,15 @@
         </button>
       </div>
 
-      <div class="product-tabs__grid">
+      <!-- tab 必须指向一个真实面板：role=tabpanel + aria-labelledby 指回当前选中的 tab，
+           否则读屏进入标签页模式后找不到对应内容 -->
+      <div
+        :id="productPanelId"
+        class="product-tabs__grid"
+        role="tabpanel"
+        :aria-labelledby="activeTabElementId"
+        tabindex="0"
+      >
         <button
           v-for="card in activeEnterpriseService.cards"
           :key="`${activeEnterpriseService.key}-${card.key}`"
@@ -88,6 +98,15 @@ const props = defineProps({
 const router = useRouter();
 const appStore = useAppStore();
 const activeEnterpriseServiceKey = shallowRef("");
+
+// WAI-ARIA Tabs：tabpanel 的 id 固定，tab 通过 aria-controls 指向它，
+// 面板再用 aria-labelledby 指回当前选中的 tab，形成完整的 tab ↔ tabpanel 关联
+const productPanelId = "home-product-panel";
+const activeTabElementId = computed(() =>
+  activeEnterpriseServiceKey.value
+    ? `product-tab-${activeEnterpriseServiceKey.value}`
+    : undefined,
+);
 const resolvedProductTypes = computed(() => {
   if (props.productTypes.length) {
     return props.productTypes;
@@ -539,6 +558,78 @@ watch(
 
   .product-tabs__grid {
     grid-template-columns: 1fr;
+  }
+}
+
+// 手机形态（≤767.98px）：容器留白、标签行与卡片热区按单手触控口径收口。
+// 断点比 compact（640）宽，覆盖 360~767 全部手机竖屏。
+@media (max-width: $breakpoint-mobile-max) {
+  .container {
+    width: calc(100% - 24px);
+  }
+
+  .product-tabs-section {
+    padding: 40px 0 44px;
+  }
+
+  .product-tabs__title {
+    font-size: 20px;
+    line-height: 1.35;
+  }
+
+  .product-tabs__desc {
+    margin-top: 10px;
+    font-size: 13px;
+    line-height: 1.7;
+  }
+
+  // 「查看全部产品」是行内文字链接，手机端补 44px 热区
+  .product-tabs__more {
+    min-height: 44px;
+    padding: 0 4px;
+  }
+
+  // 分类标签：手机上 5 个标签会折成两行，改为单行横向滚动，
+  // 与首页 hero 入口列、商品页类型切换同一范式
+  .product-tabs__list {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    margin: 20px 0 16px;
+    gap: 0 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  }
+
+  .product-tabs__tab {
+    flex: 0 0 auto;
+    min-height: 44px;
+    padding: 0 4px;
+    white-space: nowrap;
+  }
+
+  .product-tabs__grid {
+    gap: 12px;
+  }
+
+  .product-card {
+    min-height: 0;
+    padding: 16px;
+    border-radius: 12px;
+  }
+
+  // 卡片整块可点，热区由内容撑开；标题在手机上允许两行，不再单行省略
+  .product-card__title {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    white-space: normal;
   }
 }
 </style>

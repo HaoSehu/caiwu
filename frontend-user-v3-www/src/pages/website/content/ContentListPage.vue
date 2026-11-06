@@ -64,7 +64,12 @@
         </section>
 
         <t-loading :loading="loading">
-          <section class="list-panel">
+          <!-- data-mobile-view：手机端列表形态标记（card），挂在列表容器而非页面根，
+               避免把 hero 与侧栏一并算作列表形态；桌面端不渲染该属性。 -->
+          <section
+            class="list-panel"
+            :data-mobile-view="isPhone ? 'card' : undefined"
+          >
             <template v-if="articleList.length">
               <article
                 v-for="item in articleList"
@@ -231,6 +236,7 @@
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import siteApi from "@/api/site";
+import { usePhoneBreakpoint } from "@/composables/useMobileBreakpoint";
 import { getContentConfig } from "./contentConfig";
 
 const props = defineProps({
@@ -246,6 +252,8 @@ const props = defineProps({
 
 const route = useRoute();
 const router = useRouter();
+// 手机形态标记：与 $breakpoint-mobile-max 同口径，平板竖屏（768~992）仍按桌面形态
+const { isMobile: isPhone } = usePhoneBreakpoint();
 const api = computed(() => siteApi);
 const config = computed(() => getContentConfig(props.contentType, props.scope));
 
@@ -1004,6 +1012,124 @@ onBeforeUnmount(() => {
   .list-item__head {
     align-items: flex-start;
     flex-direction: column;
+  }
+}
+
+// 手机形态（≤767.98px）：列表改为独立卡片，与 data-mobile-view="card" 契约配套。
+// 桌面端规则零改动：面板底色与分割线只在手机断点内换成卡片间距。
+@media (max-width: $breakpoint-mobile-max) {
+  .content-list-page {
+    padding: 12px 0 32px;
+  }
+
+  .content-list-layout {
+    gap: 12px;
+  }
+
+  .hero-panel {
+    min-height: 0;
+    margin-bottom: 12px;
+    border-radius: 12px;
+  }
+
+  .hero-panel__inner {
+    gap: 16px;
+    padding: 18px 16px;
+  }
+
+  .hero-copy h1 {
+    // 28px 一级标题在 375 视口下会与右侧装饰争宽，降一档保持两行内可读
+    font-size: 24px;
+  }
+
+  .hero-copy p {
+    font-size: 13px;
+    line-height: 1.7;
+  }
+
+  .hero-keywords {
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  // 关键词是文字按钮，热区靠上下内边距撑到 44px，视觉字号不变
+  .hero-keywords__item {
+    min-height: 44px;
+    padding: 0 2px;
+  }
+
+  .category-panel {
+    gap: 4px;
+    margin-bottom: 12px;
+    padding: 0 8px;
+    border-radius: 12px;
+  }
+
+  .category-tab {
+    min-height: 48px;
+    padding: 0 10px;
+  }
+
+  // 列表：桌面面板 → 手机卡片堆叠
+  .list-panel {
+    border: none;
+    background: transparent;
+    box-shadow: none;
+    overflow: visible;
+  }
+
+  .list-item {
+    margin-bottom: 12px;
+    padding: 16px;
+    border: 1px solid $border-color;
+    border-radius: 12px;
+    background: $bg-color-card;
+    box-shadow: $shadow-sm;
+  }
+
+  .list-item:last-child {
+    border-bottom: 1px solid $border-color;
+    margin-bottom: 0;
+  }
+
+  .list-item__title {
+    font-size: 15px;
+  }
+
+  .list-item__meta {
+    gap: 8px 12px;
+    margin-top: 12px;
+  }
+
+  .list-panel__pager {
+    justify-content: center;
+    padding: 16px 8px;
+  }
+
+  .list-empty,
+  .list-error {
+    border: 1px solid $border-color;
+    border-radius: 12px;
+    background: $bg-color-card;
+  }
+
+  .content-sidebar {
+    gap: 12px;
+  }
+
+  .sidebar-card {
+    border-radius: 12px;
+    padding: 16px;
+  }
+
+  // 侧栏快捷入口保持三列（与桌面一致的栏目结构），只收紧图标与间距，
+  // 375 视口下每列约 90px，四项文案仍完整可读
+  .shortcut-grid {
+    gap: 10px;
+  }
+
+  .shortcut-item {
+    min-height: 44px;
   }
 }
 </style>

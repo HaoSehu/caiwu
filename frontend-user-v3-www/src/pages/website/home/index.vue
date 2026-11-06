@@ -1,5 +1,7 @@
 <template>
-  <div class="home-page">
+  <!-- data-mobile-view：手机端主容器形态标记（card），桌面端不渲染。
+       首页在手机上由左侧入口列 + 右侧内容的三栏舞台改为纵向卡片流，故取 card。 -->
+  <div class="home-page" :data-mobile-view="isPhone ? 'card' : undefined">
     <HomeHeroCarousel v-if="homeHeroReady" :hero="homeHero || {}" />
     <HomeSectionSkeleton v-else type="hero" />
 
@@ -49,6 +51,7 @@ import {
 } from "vue";
 import siteApi from "@/api/site";
 import { useAppStore } from "@/app/stores/app";
+import { usePhoneBreakpoint } from "@/composables/useMobileBreakpoint";
 import HomeHeroCarousel from "@/pages/website/home/components/HomeHeroCarousel.vue";
 import HomeProductTabs from "@/pages/website/home/components/HomeProductTabs.vue";
 import HomeSectionSkeleton from "@/pages/website/home/components/HomeSectionSkeleton.vue";
@@ -74,6 +77,8 @@ interface ProductTypeItem {
 }
 
 const appStore = useAppStore();
+// 手机形态标记：与 $breakpoint-mobile-max 同口径（平板竖屏仍按桌面形态）
+const { isMobile: isPhone } = usePhoneBreakpoint();
 const loading = ref(true);
 const homeLoaded = ref(false);
 const homeLoadSucceeded = ref(false);
@@ -266,6 +271,35 @@ onBeforeUnmount(() => {
       opacity: 0.7;
       cursor: not-allowed;
     }
+  }
+}
+
+// 手机形态（≤767.98px）：首页各 section 的容器留白与卡片圆角统一收窄。
+// 各 section 组件自带 scoped 样式，这里只处理 .home-page 自身能控的间距。
+@media (max-width: $breakpoint-mobile-max) {
+  .home-page {
+    // 首页在手机上改为纵向卡片流，容器由各 section 的 .container 各自提供。
+    // 不能在这里写 overflow-x: hidden：那会把真实的横向溢出裁掉而不产生
+    // document 级 scrollWidth，移动端 e2e 的无溢出断言将永远通过。溢出必须在源头修。
+    min-width: 0;
+  }
+
+  .home-error-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    margin: 12px 12px 0;
+    padding: 12px 14px;
+    border-radius: 12px;
+  }
+
+  .home-error-bar__text {
+    font-size: 13px;
+    line-height: 1.6;
+  }
+
+  .home-error-bar__retry {
+    min-height: 44px;
   }
 }
 </style>

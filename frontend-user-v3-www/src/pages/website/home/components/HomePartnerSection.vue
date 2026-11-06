@@ -169,4 +169,27 @@ onBeforeUnmount(() => {
     }
   }
 }
+
+// 手机形态（≤767.98px）：标题区补容器留白（.partner-section__head 原先没有
+// .container 的宽度约束，靠 section 自身 0 内边距贴边），并收紧标题字号。
+@media (max-width: $breakpoint-mobile-max) {
+  .partner-section {
+    padding: 40px 0 32px;
+
+    &__head {
+      width: calc(100% - 24px);
+      margin: 0 auto 20px;
+    }
+
+    &__title {
+      font-size: 20px;
+      line-height: 1.35;
+    }
+
+    &__desc {
+      font-size: 13px;
+      line-height: 1.7;
+    }
+  }
+}
 </style>

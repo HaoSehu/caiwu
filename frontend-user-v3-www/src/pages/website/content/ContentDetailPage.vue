@@ -1,5 +1,9 @@
 <template>
-  <div class="content-reader-page">
+  <!-- data-mobile-view：手机端主容器形态标记（detail），桌面端不渲染 -->
+  <div
+    class="content-reader-page"
+    :data-mobile-view="isPhone ? 'detail' : undefined"
+  >
     <nav class="reader-breadcrumb" aria-label="面包屑">
       <router-link class="reader-breadcrumb__link" :to="backToListRoute">
         {{ config.pageTitle }}
@@ -119,6 +123,7 @@ import siteApi from "@/api/site";
 import { renderMarkdown } from "@/utils/markdown";
 import { rewriteApiAssetUrlsInHtml } from "@/utils/apiAssetUrl";
 import { applyDetailPageMeta, buildDetailCanonical } from "@/composables/usePageMeta";
+import { usePhoneBreakpoint } from "@/composables/useMobileBreakpoint";
 import { useAppStore } from "@/app/stores/app";
 import { getContentConfig } from "./contentConfig";
 
@@ -161,6 +166,8 @@ const props = defineProps({
 
 const route = useRoute();
 const router = useRouter();
+// 手机形态标记：与 $breakpoint-mobile-max 同口径，平板竖屏仍按桌面形态
+const { isMobile: isPhone } = usePhoneBreakpoint();
 const apiBaseUrl = String(import.meta.env.VITE_API_BASE_URL || "");
 const api = computed(() => siteApi);
 const config = computed(() => getContentConfig(props.contentType, props.scope));
@@ -721,12 +728,91 @@ watch(
 }
 
 @media (max-width: $breakpoint-mobile-max) {
+  .content-reader-page {
+    padding: 12px 0 32px;
+    gap: 12px;
+  }
+
+  .reader-breadcrumb {
+    gap: 6px;
+    font-size: 12px;
+    // 面包屑最后一段是当前标题，长标题必须可换行，不能把整行撑出容器
+    word-break: break-word;
+  }
+
   .reader-article {
     padding: 18px 16px 22px;
+    border-radius: 12px;
+  }
+
+  .sidebar-card {
+    border-radius: 12px;
+    padding: 16px;
   }
 
   .reader-article__header h1 {
     font-size: 22px;
+  }
+
+  // 发布人 / 时间 / 阅读量：手机端由横排换行改为纵向三行，避免每条都被截断
+  .reader-meta {
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 14px;
+    padding: 12px;
+  }
+
+  .reader-content {
+    font-size: 14px;
+
+    :deep(h1) {
+      font-size: 22px;
+    }
+
+    :deep(h2) {
+      font-size: 19px;
+    }
+
+    :deep(h3) {
+      font-size: 17px;
+    }
+
+    // 长链接与英文串在 375 视口会把正文撑出卡片
+    :deep(a) {
+      word-break: break-word;
+    }
+
+    :deep(pre) {
+      padding: 12px;
+      font-size: 13px;
+    }
+
+    :deep(th),
+    :deep(td) {
+      padding: 8px 10px;
+      font-size: 13px;
+    }
+  }
+
+  .reader-failed,
+  .reader-empty {
+    border-radius: 12px;
+    padding: 36px 16px;
+  }
+
+  .reader-failed__actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  // 分类与目录项是文字按钮，手机端补齐 44px 热区（视觉靠内边距撑开）
+  .category-item {
+    min-height: 44px;
+  }
+
+  .toc-item {
+    min-height: 44px;
+    padding: 10px 0;
   }
 }
 

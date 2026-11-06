@@ -398,4 +398,58 @@ function handleFooterLogoError() {
     font-size: 12px;
   }
 }
+
+// 手机形态（≤767.98px）：页脚链接是手机端主要导航入口，逐项补到 44px 热区；
+// 容器留白与桌面一致，仅补齐手机竖屏的触控与可读性。
+@media (max-width: $breakpoint-mobile-max) {
+  .site-footer {
+    padding-top: 40px;
+  }
+
+  .footer-top {
+    gap: 24px;
+    padding-bottom: 24px;
+  }
+
+  .footer-brand__desc {
+    font-size: 13px;
+    line-height: 1.7;
+  }
+
+  .footer-columns {
+    gap: 20px 16px;
+  }
+
+  // 页脚链接原本 line-height:1 + 6px 内边距只有 24px 高，手指难以点中；
+  // 撑到 44px 后已自带行距，列内 gap 归零避免再叠加一倍空白
+  .footer-col {
+    gap: 0;
+  }
+
+  .footer-col a,
+  .footer-col__static {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0;
+    line-height: 1.4;
+  }
+
+  .footer-col h2 {
+    margin-bottom: 2px;
+  }
+
+  // 联系方式里 QQ 群等是可点链接，与其它页脚链接统一到 44px 热区
+  .footer-contact li {
+    min-height: 44px;
+    align-items: center;
+  }
+
+  .footer-bottom {
+    gap: 6px;
+    padding-block: 16px;
+    font-size: 11px;
+    line-height: 1.7;
+  }
+}
 </style>

@@ -1,5 +1,9 @@
 <template>
-  <div class="legal-page">
+  <!-- data-mobile-view：手机端主容器形态标记（detail），桌面端不渲染 -->
+  <div
+    class="legal-page"
+    :data-mobile-view="isPhone ? 'detail' : undefined"
+  >
     <div class="legal-card">
       <h1>{{ pageTitle }}</h1>
       <p>{{ pageDescription }}</p>
@@ -28,10 +32,13 @@ import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { MessagePlugin } from "tdesign-vue-next/es/message/plugin";
 import { useAppStore } from "@/app/stores/app";
+import { usePhoneBreakpoint } from "@/composables/useMobileBreakpoint";
 
 const route = useRoute();
 const router = useRouter();
 const appStore = useAppStore();
+// 手机形态标记：与 $breakpoint-mobile-max 同口径
+const { isMobile: isPhone } = usePhoneBreakpoint();
 
 const documentKey = computed(() => String(route.meta?.documentKey || "terms"));
 const isPrivacy = computed(() => documentKey.value === "privacy");
@@ -122,6 +129,13 @@ function openDocument() {
 
   .legal-card h1 {
     font-size: 24px;
+  }
+
+  // 手机端两个操作按钮整行等分，避免并排时各剩不到 100px
+  .legal-actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
   }
 }
 </style>

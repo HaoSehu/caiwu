@@ -637,4 +637,48 @@ function openNotice(item) {
     padding: 18px 20px;
   }
 }
+
+// 手机形态（≤767.98px）：容器留白、卡片圆角与热区按单手口径收口。
+@media (max-width: $breakpoint-mobile-max) {
+  .container {
+    width: calc(100% - 24px);
+  }
+
+  .news-section {
+    padding: 40px 0 28px;
+  }
+
+  .news-section__head {
+    margin-bottom: 18px;
+  }
+
+  .news-section__title {
+    font-size: 20px;
+    line-height: 1.35;
+  }
+
+  .news-section__desc {
+    margin-top: 8px;
+    font-size: 13px;
+    line-height: 1.7;
+  }
+
+  // 「查看全部」是行内文字链接，手机端补 44px 热区
+  .news-section__more {
+    min-height: 44px;
+    padding: 0 2px;
+  }
+
+  .news-feature,
+  .news-promo {
+    border-radius: 12px;
+  }
+
+  // 新闻条目整块可点，热区由内容撑开；手机端统一到 44px 起
+  .news-promo {
+    min-height: 44px;
+    padding: 16px;
+    border-radius: 12px;
+  }
+}
 </style>

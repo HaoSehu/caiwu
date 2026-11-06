@@ -1,5 +1,10 @@
 <template>
-  <article class="seo-landing-page">
+  <!-- data-mobile-view：手机端主容器形态标记（card）。落地页在手机上由
+       左右分栏的 hero / 场景面板改为纵向卡片流，桌面端不渲染该属性。 -->
+  <article
+    class="seo-landing-page"
+    :data-mobile-view="isPhone ? 'card' : undefined"
+  >
     <section class="seo-hero">
       <div class="seo-hero__ambient" aria-hidden="true">
         <span class="seo-hero__line seo-hero__line--one"></span>
@@ -256,6 +261,7 @@ import {
   HelpCircleFilledIcon,
 } from "tdesign-icons-vue-next";
 import { buildConsoleUrl } from "@/utils/consoleUrl";
+import { usePhoneBreakpoint } from "@/composables/useMobileBreakpoint";
 
 // 本组件只负责展示：文案由对应的落地页薄壳以 props 传入，
 // 这样每条路由的 chunk 里只包含自己那一份数据。
@@ -264,6 +270,9 @@ const props = defineProps({
 });
 
 const activeScenarioIndex = ref(0);
+
+// 手机形态标记：与 $breakpoint-mobile-max 同口径（平板竖屏仍按桌面形态）
+const { isMobile: isPhone } = usePhoneBreakpoint();
 
 const page = computed(() => props.page);
 
@@ -1369,6 +1378,79 @@ const processSteps = computed(() => {
   .seo-register__inner {
     align-items: flex-start;
     flex-direction: column;
+  }
+}
+
+// 手机形态（≤767.98px）：在 760px 版面之上补齐触控热区与容器留白口径，
+// 与 $breakpoint-mobile-max 契约一致（760~767.98 区间此前只吃到 1080 档）。
+@media (max-width: $breakpoint-mobile-max) {
+  .seo-container {
+    width: calc(100% - 24px);
+  }
+
+  .seo-hero__inner {
+    padding: 32px 0 44px;
+  }
+
+  // CTA 全宽且热区 44px：手机上主操作是唯一转化入口
+  .seo-action {
+    min-height: 44px;
+  }
+
+  // 产品卡片动作与结尾 CTA 同样是文字链接按钮，手机端补 44px
+  .seo-product-card__actions a,
+  .seo-strip-card__link,
+  .seo-section__heading a {
+    min-height: 44px;
+  }
+
+  .seo-product-card__actions a {
+    flex: 1 1 0;
+  }
+
+  .seo-strip-card__link {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  // 横向滚动的标签带与场景列：隐藏滚动条并留出两侧点击余量
+  .seo-category-tabs,
+  .seo-solution-tabs {
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  }
+
+  .seo-solution-tabs button {
+    min-height: 44px;
+  }
+
+  .seo-section {
+    padding: 40px 0;
+  }
+
+  .seo-section__heading h2,
+  .seo-register h2 {
+    font-size: 22px;
+  }
+
+  .seo-product-card,
+  .seo-process__item,
+  .seo-faq,
+  .seo-solution-content {
+    border-radius: 12px;
+  }
+
+  .seo-process__item,
+  .seo-faq {
+    padding: 18px 16px;
+  }
+
+  .seo-solution-content {
+    padding: 22px 16px;
   }
 }
 </style>

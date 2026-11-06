@@ -1,5 +1,8 @@
 import { onBeforeUnmount, onMounted, ref } from "vue";
-import { MOBILE_BREAKPOINT } from "@/constants/breakpoints";
+import {
+  MOBILE_BREAKPOINT,
+  PHONE_BREAKPOINT_MAX,
+} from "@/constants/breakpoints";
 
 /** 把断点常量拼成移动端媒体查询串：只有这里做断点→CSS 查询的转换，避免各处拼写漂移。 */
 export function buildMobileMediaQuery(breakpoint = MOBILE_BREAKPOINT) {
@@ -97,4 +100,15 @@ export function useMobileBreakpoint({
     startMobileBreakpoint,
     disposeMobileBreakpoint,
   };
+}
+
+/**
+ * 手机形态（≤767.98px）判定，与 `$breakpoint-mobile-max` 同口径。
+ *
+ * 与 useMobileBreakpoint 分开的原因：992 判定决定的是「导航抽屉 / 商品目录侧栏」
+ * 这类布局换轨，768 判定决定的是「列表是否改卡片、详情字段是否单列」这类页面形态。
+ * 平板竖屏（768~992）沿用桌面形态，因此页面形态标记必须用这一个。
+ */
+export function usePhoneBreakpoint({ listen = true } = {}) {
+  return useMobileBreakpoint({ breakpoint: PHONE_BREAKPOINT_MAX, listen });
 }

@@ -2,13 +2,8 @@
   <section class="home-section-skeleton" :class="`home-section-skeleton--${type}`" aria-hidden="true">
     <div class="container">
       <div v-if="type === 'hero'" class="home-section-skeleton__hero">
-        <div class="home-section-skeleton__hero-rail">
-          <span
-            v-for="item in 5"
-            :key="`hero-rail-${item}`"
-            class="home-section-skeleton__pill home-section-skeleton__pill--rail"
-          ></span>
-        </div>
+        <!-- 真实 hero 的入口列已移除内容，这里同样只保留空占位列宽 -->
+        <div class="home-section-skeleton__hero-rail"></div>
 
         <div class="home-section-skeleton__hero-body">
           <span class="home-section-skeleton__line home-section-skeleton__line--hero-title"></span>
@@ -20,8 +15,7 @@
           </div>
         </div>
 
-        <!-- 第三列在真实 hero 中是留白（无可见内容），空单元格即可保证三列不塌 -->
-        <div class="home-section-skeleton__hero-side"></div>
+        <!-- 真实 hero 的第三列本就无可见内容；入口列下线后栅格只剩两列，这里不再占位 -->
 
         <div class="home-section-skeleton__hero-features">
           <span
@@ -191,27 +185,23 @@ defineProps({
 
 .home-section-skeleton__hero {
   display: grid;
-  // 与真实 hero-stage 完全一致的三列栅格
-  grid-template-columns: 220px minmax(0, 1fr) minmax(340px, 420px);
+  // 与真实 hero-stage--no-rail（入口列已下线）一致的两列栅格；
+  // 多出来的空 rail 占位不占轨道，避免骨架与真实首屏切换时跳版
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 420px);
   grid-template-rows: minmax(320px, auto) auto;
   gap: 28px 48px;
   align-items: center;
 }
 
+/* 真实 hero 的入口列已不再渲染内容，骨架里这块占位不参与栅格 */
 .home-section-skeleton__hero-rail {
-  display: grid;
-  gap: 12px;
+  display: none;
 }
 
 .home-section-skeleton__hero-body {
   display: grid;
   align-content: center;
   gap: 18px;
-}
-
-// 第三列留白单元格：仅占位，不绘制任何视觉
-.home-section-skeleton__hero-side {
-  min-width: 0;
 }
 
 .home-section-skeleton__hero-features {
@@ -496,11 +486,6 @@ defineProps({
   .home-section-skeleton--hero {
     min-height: 0;
     padding: 12px 0 4px;
-  }
-
-  // 单列后第三列不再存在，空占位单元格会白占一段 row-gap，隐藏
-  .home-section-skeleton__hero-side {
-    display: none;
   }
 
   .home-section-skeleton__hero-features {

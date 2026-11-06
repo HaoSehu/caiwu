@@ -1,5 +1,6 @@
 <template>
-  <div class="about-page">
+  <!-- data-mobile-view：手机端主容器形态标记（card），桌面端不渲染 -->
+  <div class="about-page" :data-mobile-view="isPhone ? 'card' : undefined">
     <section class="about-hero">
       <div class="container">
         <p class="about-kicker">关于我们</p>
@@ -30,8 +31,11 @@
 
 <script setup lang="ts">
 import { useAppStore } from '@/app/stores/app'
+import { usePhoneBreakpoint } from '@/composables/useMobileBreakpoint'
 
 const appStore = useAppStore()
+// 手机形态标记：与 $breakpoint-mobile-max 同口径
+const { isMobile: isPhone } = usePhoneBreakpoint()
 </script>
 
 <style scoped lang="scss">
@@ -89,6 +93,23 @@ h1 {
   // 移动端标题字号降级，避免 32px 在窄屏挤压换行
   h1 {
     font-size: 28px;
+  }
+
+  .about-hero {
+    padding: 36px 0 24px;
+  }
+
+  .about-section {
+    padding: 16px 0 48px;
+  }
+
+  .about-grid {
+    gap: 12px;
+  }
+
+  .about-card {
+    padding: 20px 16px;
+    border-radius: 12px;
   }
 }
 

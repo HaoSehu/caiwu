@@ -799,13 +799,28 @@
   margin-bottom: 4px;
 }
 
-/* 产品层级统一文案：一级 产品目录 / 二级 地区（与选购页、控制台保持一致）。 */
+/* 产品层级统一文案：一级 产品目录 / 二级 地区（与选购页、控制台保持一致）。
+   分组标签与下方可点条目字形接近，用「更小字号 + 更大字距 + 尾部细线」区分层级，
+   避免被误读成又一个可点分类。 */
 .mobile-menu-section-label {
-  padding: 8px 4px 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 4px 6px;
   color: $text-color-placeholder;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.08em;
+  line-height: 1.4;
+  user-select: none;
+}
+
+.mobile-menu-section-label::after {
+  content: "";
+  flex: 1;
+  min-width: 12px;
+  height: 1px;
+  background: $divider-color;
 }
 
 .mobile-second-level-item {
@@ -1048,5 +1063,67 @@
   .mobile-left-bottom {
     padding: 8px;
     padding-bottom: calc(8px + env(safe-area-inset-bottom));
+  }
+}
+
+// 手机形态（≤767.98px）：站头与移动抽屉按单手触控口径收口。
+// 桌面与平板（768~992）规则零改动，只补手机竖屏。
+@media (max-width: $breakpoint-mobile-max) {
+  .header-bar {
+    gap: 8px;
+  }
+
+  // 375 视口下 148px logo 会与用户图标、汉堡按钮争宽，收到 120px 保住完整站名
+  .logo {
+    width: 120px;
+  }
+
+  .logo-image {
+    max-width: 120px;
+    height: 28px;
+  }
+
+  .logo-fallback {
+    height: 28px;
+    font-size: 13px;
+    padding: 0 6px;
+  }
+
+  // 图标按钮热区已在 992 档做到 44×44，这里只收紧彼此间距，避免右端贴边
+  .mobile-user-icon,
+  .mobile-menu-toggle {
+    width: 44px;
+    height: 44px;
+  }
+
+  // 移动抽屉两列在 375 视口下左列 120px 占比过大，收到 104px 给内容列留宽度
+  .mobile-menu-col--left {
+    width: 104px;
+  }
+
+  .mobile-first-level-item {
+    padding: 0 12px;
+    font-size: 13px;
+  }
+
+  .mobile-menu-col--right {
+    padding: 8px 12px 16px;
+  }
+
+  // 抽屉底部登录/控制台入口是主操作，热区统一到 44px
+  .mobile-left-login-btn {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  // 用户下拉在手机端可能紧贴右边缘，收窄最小宽度并把命中项补到 44px
+  .user-menu-panel {
+    min-width: 168px;
+  }
+
+  .user-menu-item {
+    min-height: 44px;
   }
 }

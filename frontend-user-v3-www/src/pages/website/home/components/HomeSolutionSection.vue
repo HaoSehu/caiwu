@@ -483,4 +483,49 @@ function onRailKeydown(event) {
     font-size: 13px;
   }
 }
+
+// 手机形态（≤767.98px）：容器留白与面板内边距按单手口径收口。
+// 断点比 compact（640）宽，覆盖 360~767 全部手机竖屏。
+@media (max-width: $breakpoint-mobile-max) {
+  .container {
+    width: calc(100% - 24px);
+  }
+
+  .solution-section {
+    padding: 40px 0 0;
+  }
+
+  .solution-section__head {
+    margin-bottom: 20px;
+  }
+
+  .solution-section__title {
+    font-size: 20px;
+    line-height: 1.35;
+  }
+
+  .solution-section__desc {
+    margin-top: 10px;
+    font-size: 13px;
+    line-height: 1.7;
+  }
+
+  .solution-stage {
+    padding: 32px 0 28px;
+  }
+
+  .solution-panel {
+    border-radius: 12px;
+  }
+
+  // 场景切换按钮在手机上横向滚动，补 44px 热区
+  .solution-panel__rail-item {
+    min-height: 44px;
+    padding: 0 14px;
+  }
+
+  .solution-panel__content {
+    padding: 18px 16px 20px;
+  }
+}
 </style>

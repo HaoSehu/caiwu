@@ -418,50 +418,6 @@
   }
 }
 
-// 移动端产品类型切换：桌面左侧栏在移动端被隐藏，这里是唯一入口
-.mobile-type-tabs {
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  padding: 12px 14px;
-  border-bottom: 1px solid $divider-color;
-  scrollbar-width: none;
-
-  &::-webkit-scrollbar {
-    display: none;
-  }
-}
-
-.mobile-type-tab {
-  flex-shrink: 0;
-  // 触控目标 ≥44px，产品类型是移动端第一层导航
-  min-height: 44px;
-  padding: 0 18px;
-  border: 1px solid $border-color;
-  border-radius: 999px;
-  background: $bg-color-card;
-  color: $text-color-secondary;
-  font-size: 14px;
-  font-weight: 600;
-  white-space: nowrap;
-  cursor: pointer;
-  transition:
-    border-color $motion-fast ease,
-    background-color $motion-fast ease,
-    color $motion-fast ease;
-
-  &:hover {
-    border-color: $color-primary;
-    color: $color-primary;
-  }
-
-  &.active {
-    border-color: $color-primary;
-    background: $color-primary;
-    color: $text-color-inverse;
-  }
-}
-
 .mobile-picker-row {
   padding: 16px 14px;
   border-bottom: 1px solid $divider-color;
@@ -1725,8 +1681,18 @@
 
 .allocation-footer-main {
   display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+// 价格 + 库存/周期同属只读信息，纵向成组，避免与可点的优惠券抢同一行
+.allocation-footer-info {
+  display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
 }
 
@@ -1778,6 +1744,8 @@
 .allocation-footer-meta {
   display: flex;
   flex-wrap: wrap;
+  // 与旁边的按钮/图标同基线：默认 stretch 会把 span 拉高，文字看起来掉一行
+  align-items: center;
   gap: 10px;
   font-size: 12px;
   line-height: 1.4;
@@ -1805,13 +1773,13 @@
   gap: 10px;
 }
 
-// 辅助入口与购买按钮同行：左侧占满剩余宽度、右对齐，不再绝对定位压住按钮热区
+// 辅助入口与购买按钮同行：左侧靠左排、右侧购买按钮贴右
 .allocation-footer-links {
   flex: 1;
   min-width: 0;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 12px;
 }
 
@@ -1825,13 +1793,28 @@
   color: $text-color-secondary;
   font-size: 12px;
   font-weight: 500;
-  text-decoration: underline;
-  text-underline-offset: 3px;
   cursor: pointer;
   transition: color $motion-fast ease;
 
   &:hover {
     color: $text-color-primary;
+  }
+
+  // 两个入口之间用发丝线分隔，替代下划线——下划线与右侧主按钮同屏时噪声太大
+  & + & {
+    position: relative;
+    margin-left: 4px;
+
+    &::before {
+      content: "";
+      position: absolute;
+      left: -8px;
+      top: 50%;
+      width: 1px;
+      height: 10px;
+      background: $border-color;
+      transform: translateY(-50%);
+    }
   }
 }
 
@@ -1839,23 +1822,32 @@
   font-size: 13px;
 }
 
+// 优惠券是可点的改价动作：用描边胶囊与只读信息区分，但保持次级视觉重量——
+// 实心淡蓝底在白色结算栏上过于抢眼，会盖过主按钮「立即购买」
 .allocation-footer-coupon-btn {
+  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  border: none;
-  padding: 10px 0;
+  gap: 4px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid $border-color;
+  border-radius: 999px;
   background: transparent;
   color: $text-color-secondary;
   font-size: 12px;
   font-weight: 500;
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  white-space: nowrap;
   cursor: pointer;
-  transition: color $motion-fast ease;
+  transition:
+    border-color $motion-fast ease,
+    background-color $motion-fast ease,
+    color $motion-fast ease;
 
   &:hover {
-    color: $text-color-primary;
+    border-color: $color-primary-border;
+    background: $color-primary-a08;
+    color: $color-primary;
   }
 }
 
@@ -2327,6 +2319,14 @@
       box-shadow: none;
     }
   }
+
+  // 结算栏内「使用优惠券」是可点动作，紧邻主按钮「立即购买」；
+  // 28px 高在触屏上容易误触主按钮，按 docs/DESIGN.md §7 补到 44px 热区
+  .allocation-footer-coupon-btn {
+    height: 44px;
+    min-height: 44px;
+    padding: 0 14px;
+  }
 }
 
 .cost-item-value {
@@ -2335,4 +2335,24 @@
 
 .cost-item-value .spec-note-inline--summary {
   justify-content: flex-end;
+}
+
+// 手机形态（≤767.98px）：未选中商品时页面上没有吸底结算栏，
+// 992 档预留的 --allocation-footer-height 避让（默认 136px）会变成纯空白。
+// 只在「无结算栏」状态收回这段留白，有商品时仍按实际高度避让。
+@media (max-width: $breakpoint-mobile-max) {
+  // 桌面用 min-height 撑满首屏让左右两栏等高；手机是纵向表单流，
+  // 撑满会在空态下方留下一整屏空白，改为由内容决定高度
+  .shop-wrap {
+    min-height: 0;
+  }
+
+  .shop-wrap--no-product {
+    padding-bottom: 16px;
+  }
+
+  // 同理：桌面靠 flex:1 把配置区拉到与侧栏等高，手机无侧栏时只会撑出空白
+  .shop-body {
+    flex: 0 0 auto;
+  }
 }
