@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Exceptions\BusinessException;
 use App\Services\ClientServiceConsole\ClientServiceConsoleService;
 use App\Services\ClientServiceConsole\VncOriginPolicy;
 use App\Support\PublicUrl;
@@ -33,6 +34,12 @@ class VncRelayCommand extends Command
     private const HANDSHAKE_TIMEOUT_SECONDS = 15;
 
     private const IDLE_TIMEOUT_SECONDS = 300;
+
+    /** 保活心跳间隔：远端长时间无画面变化时，靠 WS ping/pong 维持 last_activity。 */
+    private const PING_INTERVAL_SECONDS = 60;
+
+    /** 上游握手响应头上限，防止异常上游无限输出拖住 Relay。 */
+    private const MAX_UPSTREAM_HANDSHAKE_BYTES = 65536;
 
     private const MAX_BUFFER_BYTES = 1048576;
 
@@ -195,6 +202,7 @@ class VncRelayCommand extends Command
             'token' => '',
             'created_at' => $now,
             'last_activity_at' => $now,
+            'last_ping_at' => $now,
         ];
     }
 
@@ -230,6 +238,18 @@ class VncRelayCommand extends Command
                 $this->closeConnection($id);
 
                 continue;
+            }
+
+            // 保活：双向 ping。浏览器与 websockify 都会自动回 pong，
+            // pong 刷新 last_activity，避免“桌面长时间无画面变化”被空闲超时误杀。
+            if ($connection['handshake_done'] ?? false) {
+                $lastPing = (int) ($connection['last_ping_at'] ?? $createdAt);
+                if (($now - $lastPing) >= self::PING_INTERVAL_SECONDS) {
+                    $connection['client_out'] .= $this->encodeFrame(0x9, '', false, true);
+                    $connection['upstream_out'] .= $this->encodeFrame(0x9, '', true, true);
+                    $connection['last_ping_at'] = $now;
+                    $this->connections[$id] = $connection;
+                }
             }
 
             // 空闲超时：已建立的双向连接长时间无活动。
@@ -363,17 +383,47 @@ class VncRelayCommand extends Command
 
         try {
             $params = $this->resolveVncTokenForClient($consoleService, $token, $clientOrigin);
-            if ($params === null) {
-                Log::warning('[VNC Relay] 浏览器 Origin 未获授权', [
-                    'token' => $this->maskToken($token),
-                    'origin' => $clientOrigin,
-                ]);
-                $this->writeHttpError($connection['client'], 403, 'Forbidden', 'VNC 请求来源未获授权');
-                $this->closeConnection($connectionId);
+        } catch (BusinessException $e) {
+            // token 过期/兑换超限属于预期内的客户端错误，不能报成“上游连接失败”，否则会把排查方向带偏。
+            $status = (int) $e->getCode() === 429 ? 429 : 404;
+            Log::warning('[VNC Relay] token 无效或已过期', [
+                'token' => $this->maskToken($token),
+                'message' => $e->getMessage(),
+                'status' => $status,
+            ]);
+            $this->writeHttpError(
+                $connection['client'],
+                $status,
+                $status === 429 ? 'Too Many Requests' : 'Not Found',
+                $status === 429 ? 'VNC 链接使用次数过多，请重新获取' : 'VNC 链接已过期或无效'
+            );
+            $this->closeConnection($connectionId);
 
-                return;
-            }
+            return;
+        } catch (Throwable $e) {
+            Log::error('[VNC Relay] token 解析失败', [
+                'token' => $this->maskToken($token),
+                'message' => $e->getMessage(),
+                'exception' => $e::class,
+            ]);
+            $this->writeHttpError($connection['client'], 500, 'Internal Server Error', 'VNC 中转凭证解析失败');
+            $this->closeConnection($connectionId);
 
+            return;
+        }
+
+        if ($params === null) {
+            Log::warning('[VNC Relay] 浏览器 Origin 未获授权', [
+                'token' => $this->maskToken($token),
+                'origin' => $clientOrigin,
+            ]);
+            $this->writeHttpError($connection['client'], 403, 'Forbidden', 'VNC 请求来源未获授权');
+            $this->closeConnection($connectionId);
+
+            return;
+        }
+
+        try {
             [$upstream, $upstreamExtra] = $this->connectUpstream($params);
         } catch (Throwable $e) {
             Log::warning('[VNC Relay] 上游连接失败', [
@@ -496,6 +546,8 @@ class VncRelayCommand extends Command
         $context = stream_context_create($contextOptions);
         $transport = $secure ? 'tls' : 'tcp';
         $address = sprintf('%s://%s:%d', $transport, $host, $port);
+        $wsKey = base64_encode(random_bytes(16));
+        $expectedAccept = base64_encode(sha1($wsKey.'258EAFA5-E914-47DA-95CA-C5AB0DC85B11', true));
         $errno = 0;
         $errstr = '';
 
@@ -520,7 +572,7 @@ class VncRelayCommand extends Command
             'Upgrade: websocket',
             'Connection: Upgrade',
             'Sec-WebSocket-Version: 13',
-            'Sec-WebSocket-Key: '.base64_encode(random_bytes(16)),
+            'Sec-WebSocket-Key: '.$wsKey,
         ];
 
         if ($origin !== '') {
@@ -544,12 +596,23 @@ class VncRelayCommand extends Command
             }
 
             $response .= $chunk;
+            if (strlen($response) > self::MAX_UPSTREAM_HANDSHAKE_BYTES) {
+                @fclose($socket);
+                throw new \RuntimeException('上游握手响应过大');
+            }
         }
 
         [$headerBlock, $extra] = explode("\r\n\r\n", $response, 2);
         if (! preg_match('#^HTTP/1\.[01]\s+101\b#i', $headerBlock)) {
             @fclose($socket);
             throw new \RuntimeException('上游拒绝 WebSocket 握手');
+        }
+
+        // 校验 Sec-WebSocket-Accept，防止把普通 101/错误代理当成上游 VNC 接入。
+        if (preg_match('/^Sec-WebSocket-Accept:\s*(.+)$/mi', $headerBlock, $acceptMatch) !== 1
+            || ! hash_equals($expectedAccept, trim((string) $acceptMatch[1]))) {
+            @fclose($socket);
+            throw new \RuntimeException('上游 WebSocket 握手校验失败');
         }
 
         stream_set_blocking($socket, false);

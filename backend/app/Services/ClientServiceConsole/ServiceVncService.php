@@ -169,12 +169,12 @@ class ServiceVncService
 
     public function previewVncToken(string $token): array
     {
-        return $this->loadVncTokenParams($token);
+        return $this->loadVncTokenParams($token, 'relay');
     }
 
     public function resolveVncToken(string $token): array
     {
-        return $this->loadVncTokenParams($token);
+        return $this->loadVncTokenParams($token, 'relay');
     }
 
     private function assertVncSuccess(array $response): void
@@ -410,12 +410,25 @@ class ServiceVncService
         SafeLog::log($level, $message, $context);
     }
 
-    private function loadVncTokenParams(string $token): array
+    /**
+     * 读取 token 载荷。
+     *
+     * $expectedScope 用于把 relay 建连限定在 relay token 上：公开 token 虽然也能
+     * 被这个方法读到，但它面向 viewer/兑换流程，TTL（10 分钟）远长于 relay token（60 秒），
+     * 不能直接当作建连凭证使用。
+     *
+     * @param  string  $expectedScope  为空时不校验作用域（仅内部兑换流程使用）
+     */
+    private function loadVncTokenParams(string $token, string $expectedScope = ''): array
     {
         $cacheKey = CacheKey::vncToken($token);
         $params = VolatileStore::store()->get($cacheKey);
 
         if (! is_array($params) || empty($params)) {
+            throw new BusinessException('VNC 链接已过期或无效，请重新获取', 40400, 404);
+        }
+
+        if ($expectedScope !== '' && (string) ($params['token_scope'] ?? '') !== $expectedScope) {
             throw new BusinessException('VNC 链接已过期或无效，请重新获取', 40400, 404);
         }
 

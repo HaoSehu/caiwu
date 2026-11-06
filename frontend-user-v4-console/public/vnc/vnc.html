@@ -53,7 +53,8 @@
     }
 
     /* 软键盘输入代理：承载系统输入法，本身必须留在视口内且不可见。
-       不能用 display:none / visibility:hidden，否则移动端不会唤起软键盘。 */
+       不能用 display:none / visibility:hidden，否则移动端不会唤起软键盘。
+       opacity 不用 0：部分 Android 输入法把完全透明的元素判定为不可见而拒绝弹键盘。 */
     #noVNC_kbd_proxy {
       position: fixed;
       bottom: 0;
@@ -63,7 +64,7 @@
       padding: 0;
       border: 0;
       outline: none;
-      opacity: 0;
+      opacity: 0.01;
       z-index: 1;
       resize: none;
       font-size: 16px; /* 小于 16px 时 iOS Safari 会自动放大页面 */
@@ -232,7 +233,10 @@
     .noVNC_panel {
       pointer-events: auto;
       transform: translateX(60px);
-      transition: transform 0.4s ease, opacity 0.4s ease, visibility 0.4s;
+      /* visibility 用 0s + 0.4s 延迟：关闭时等动画结束再隐藏，
+         打开时立即变为 visible，否则按钮点击后的同步 focus() 会因元素仍 hidden 而失败，
+         移动端也就无法在同一次用户手势里唤起软键盘。 */
+      transition: transform 0.4s ease, opacity 0.4s ease, visibility 0s linear 0.4s;
       visibility: hidden;
       opacity: 0;
       background: #fff;
@@ -251,6 +255,7 @@
       transform: translateX(70px);
       visibility: visible;
       opacity: 1;
+      transition: transform 0.4s ease, opacity 0.4s ease, visibility 0s;
     }
     .panel_heading {
       background: var(--bar-bg);
@@ -267,6 +272,29 @@
       resize: both;
       font-family: monospace;
       font-size: 16px; /* 避免 iOS 聚焦输入框时自动放大页面 */
+    }
+    /* 剪贴板显式发送：不能只依赖 textarea 的 change（失焦才触发），
+       移动端键盘弹出时用户很难通过“点别处”产生一次可靠的 change。 */
+    .noVNC_panel_actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .noVNC_panel_actions button {
+      flex: 1;
+      padding: 8px 14px;
+      border: 1px solid var(--bar-bg);
+      border-radius: 6px;
+      background: var(--bar-bg);
+      color: #fff;
+      font-size: 14px;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .noVNC_panel_actions button:active { background: var(--bar-dark); }
+    .noVNC_panel_actions button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
     }
     /* html,body 的 user-select:none 会继承到表单控件，iOS Safari 上长按选择/粘贴菜单会失效；
        剪贴板面板与错误详情需要可选中，这里显式回补 */
@@ -401,7 +429,9 @@
         padding: 6px calc(8px + var(--safe-left)) calc(6px + var(--safe-bottom)) calc(8px + var(--safe-right));
         border-radius: 12px 12px 0 0;
         transition: top 0.35s ease, transform 0.35s ease, box-shadow 0.35s ease;
-        transform: translateY(calc(100% + 24px));
+        /* 只下移自身高度：拉手位于 top:-24px，会留在视口底部露出 24px 可点区域。
+           若再叠加 24px，拉手会整块落到视口外，手机端将完全无法展开控制栏。 */
+        transform: translateY(100%);
       }
       #noVNC_control_bar.open {
         left: 0;
@@ -540,7 +570,7 @@
 <!-- 控制栏锚点 -->
 <div id="noVNC_control_bar_anchor">
   <div id="noVNC_control_bar">
-    <div id="noVNC_control_bar_handle"></div>
+    <div id="noVNC_control_bar_handle" role="button" tabindex="0" title="展开/收起控制栏" aria-label="展开或收起控制栏" aria-expanded="false"></div>
     <div class="noVNC_scroll">
 
       <!-- Logo -->
@@ -583,6 +613,9 @@
   <div class="noVNC_panel" id="panel_clipboard">
     <div class="panel_heading">剪贴板</div>
     <textarea id="clipboard_text" placeholder="在此编辑剪贴板内容..."></textarea>
+    <div class="noVNC_panel_actions">
+      <button type="button" id="btn_clipboard_send">发送到远程</button>
+    </div>
   </div>
 </div>
 
@@ -626,10 +659,22 @@
   const btnRetry       = document.getElementById('btn_retry')
   const panelClipboard = document.getElementById('panel_clipboard')
   const clipboardText  = document.getElementById('clipboard_text')
+  const btnClipboardSend = document.getElementById('btn_clipboard_send')
 
   let rfb = null
+  let rfbConnected = false
   let statusTimer = null
-  let focusTimer = null
+  /** 最近一次已发送到远端的剪贴板内容：change 与显式发送按钮会连着触发，
+      只靠事件去重不够，必须按内容判重，避免同一次编辑被发两遍。 */
+  let lastSentClipboard = null
+
+  /** 三个远程控制能力（Ctrl+Alt+Del / 键盘 / 剪贴板）都依赖已建立的 RFB 会话；
+      未连接时必须显式提示，否则按钮看起来点了没反应。 */
+  function requireRemoteReady() {
+    if (rfb && rfbConnected) return true
+    showStatus('远程桌面尚未连接，请先重新连接', 'warn', 2500)
+    return false
+  }
 
   // 被父页面以 iframe 嵌入时，把真实连接状态回传，供外层展示「连接中/已连接/已断开/失败」。
   // 独立窗口打开时 window.parent === window，不上报。
@@ -681,6 +726,7 @@
 
   btnKeyboard.addEventListener('click', (e) => {
     e.stopPropagation()
+    if (!requireRemoteReady()) return
     if (!isTouchDevice) {
       focusDesktop()
       return
@@ -692,7 +738,11 @@
     }
   })
 
-  keyboardProxy.addEventListener('input', () => {
+  keyboardProxy.addEventListener('input', (e) => {
+    // 输入法组合中的中间态（拼音字母、候选词）不能当最终文本发到远端，
+    // 否则远端会先收到一串无意义字符；最终文本由 compositionend 提交。
+    if (e.isComposing) return
+
     const text = keyboardProxy.value
     keyboardProxy.value = ''
     if (rfb && text) rfb.clipboardPasteFrom(text)
@@ -707,10 +757,16 @@
   })
 
   keyboardProxy.addEventListener('keydown', (e) => {
-    // 代理框已占位时按回车提交；其余按键交给 noVNC 的按键映射，不在此处拦截。
+    // 输入法组合期间的回车是“上屏候选词”，不能当远程回车发送。
+    // keyCode 229 是老 Android WebView 在组合期的兼容值。
+    if (e.isComposing || e.keyCode === 229) return
+
+    // 代理框已占位时按回车提交。这里必须发真正的 Enter 键，
+    // 不能用 clipboardPasteFrom('\n')：非 extended clipboard 服务端只会粘贴一个换行字符，
+    // 远程系统的确认/登录框不会因此提交。
     if (e.key === 'Enter') {
       e.preventDefault()
-      if (rfb) rfb.clipboardPasteFrom('\n')
+      if (rfb && rfbConnected) rfb.sendKey(0xFF0D, 'Enter')
     } else if (e.key === 'Escape') {
       keyboardProxy.blur()
       focusDesktop()
@@ -752,7 +808,17 @@
   statusEl.addEventListener('click', () => statusEl.classList.remove('open'))
 
   // ---- 控制栏开关 ----
-  barHandle.addEventListener('click', () => controlBar.classList.toggle('open'))
+  function toggleControlBar() {
+    const open = controlBar.classList.toggle('open')
+    barHandle.setAttribute('aria-expanded', open ? 'true' : 'false')
+  }
+  barHandle.addEventListener('click', toggleControlBar)
+  barHandle.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      toggleControlBar()
+    }
+  })
 
   // ---- 面板开关（点击外部关闭） ----
   function togglePanel(panel) {
@@ -770,15 +836,14 @@
     e.stopPropagation()
     togglePanel(panelClipboard)
     // 手机端点开剪贴板通常就是要粘贴：自动聚焦面板输入框，省一次点击。
-    // 用 setTimeout 让面板完成 transition 再聚焦，避免 iOS 在元素不可见时拒绝聚焦。
-    // 定时器先清掉上一次的：快速开关面板时旧定时器不能再去抢键盘/画布的焦点。
-    if (focusTimer !== null) { clearTimeout(focusTimer); focusTimer = null }
+    // 必须在同一次用户手势内同步 focus：iOS 只允许手势上下文里的同步聚焦唤起软键盘，
+    // 旧实现延迟 400ms 再聚焦会被判定为脚本主动聚焦而静默失败。
+    // 强制读取一次布局，确保 .open 的 visibility 已生效后再聚焦。
     if (isTouchDevice && panelClipboard.classList.contains('open')) {
-      focusTimer = setTimeout(() => {
-        focusTimer = null
-        if (!panelClipboard.classList.contains('open')) return
-        try { clipboardText.focus({ preventScroll: true }) } catch {}
-      }, 400)
+      try {
+        void panelClipboard.offsetHeight
+        clipboardText.focus({ preventScroll: true })
+      } catch {}
     }
   })
 
@@ -860,7 +925,10 @@
   })
 
   // ---- Ctrl+Alt+Del ----
-  btnCad.addEventListener('click', () => rfb?.sendCtrlAltDel())
+  btnCad.addEventListener('click', () => {
+    if (!requireRemoteReady()) return
+    rfb.sendCtrlAltDel()
+  })
 
   // ---- 断开 ----
   btnDisconnect.addEventListener('click', () => rfb?.disconnect())
@@ -869,14 +937,45 @@
   btnRetry.addEventListener('click', connectVnc)
 
   // ---- 剪贴板同步 ----
+  // textarea 的 change 只在失焦时触发，移动端键盘弹出期间用户很难制造一次可靠失焦，
+  // 因此面板里补一个显式「发送到远程」按钮；change 保留为桌面端编辑后的自动同步。
+  function syncClipboardToRemote(showFeedback) {
+    if (!(rfb && rfbConnected)) {
+      if (showFeedback) showStatus('远程桌面尚未连接，请先重新连接', 'warn', 2500)
+      return
+    }
+
+    const text = clipboardText.value
+    if (text === '') {
+      if (showFeedback) showStatus('剪贴板内容为空，未发送', 'warn', 1800)
+      return
+    }
+
+    if (text === lastSentClipboard) {
+      if (showFeedback) showStatus('剪贴板内容未变化，无需重复发送', 'normal', 1800)
+      return
+    }
+
+    lastSentClipboard = text
+    rfb.clipboardPasteFrom(text)
+    if (showFeedback) showStatus('剪贴板内容已发送到远程桌面', 'normal', 2000)
+  }
+
+  btnClipboardSend.addEventListener('click', (e) => {
+    e.stopPropagation()
+    syncClipboardToRemote(true)
+  })
+
   clipboardText.addEventListener('change', () => {
-    if (rfb) rfb.clipboardPasteFrom(clipboardText.value)
+    syncClipboardToRemote(false)
   })
 
   // ---- 错误/成功状态 ----
   function setConnected(yes) {
+    rfbConnected = Boolean(yes)
     btnCad.disabled = !yes
     btnDisconnect.disabled = !yes
+    btnClipboardSend.disabled = !yes
   }
 
   function showError(msg) {
@@ -1003,13 +1102,11 @@
 
     if (password || hasPasswordParam) {
       creds.password = password
-      return creds
     }
 
-    // 用户侧 VNC 按免输入密码处理；公开 token 响应不下发真实密码，
-    // 未取到本地临时凭据时只提交空密码，避免浏览器弹窗向用户索要 VNC 密码。
-    creds.password = ''
-
+    // 只有确实拿到密码（含显式空密码）时才提交。完全没凭据时不伪造空密码，
+    // 让 credentialsrequired 分支给出“缺少免密认证参数”的明确提示，
+    // 否则会反复提交空密码，最终表现为“连接已中断”。
     return creds
   }
 
@@ -1169,6 +1266,7 @@
       if (!url) throw new Error('VNC 连接参数无效')
 
       const creds = buildInitialCredentials(params)
+      let emptyPasswordTried = false
 
       rfb = new RFB(container, url, { credentials: creds })
       rfb.scaleViewport = true
@@ -1180,6 +1278,8 @@
       rfb.addEventListener('connect', () => {
         transEl.classList.remove('show')
         setConnected(true)
+        // 新会话的远端剪贴板状态未知，清掉上一会话的去重值，允许重发相同内容。
+        lastSentClipboard = null
         showStatus('已连接', 'normal', 3000)
         controlBar.classList.remove('open')
         window.dispatchEvent(new Event('resize'))
@@ -1188,6 +1288,9 @@
 
       rfb.addEventListener('disconnect', (e) => {
         setConnected(false)
+        // 无论断开是否干净都要收起“正在连接”遮罩；否则连接建立前被关闭时
+        // 页面会永远停留在“正在连接远程桌面…”，看起来像卡死。
+        transEl.classList.remove('show')
         if (e.detail?.clean) {
           showStatus('已断开连接', 'normal', 4000)
           notifyParent('disconnected')
@@ -1203,11 +1306,21 @@
 
       rfb.addEventListener('clipboard', (e) => {
         clipboardText.value = e.detail?.text || ''
+        // 远端下发的剪贴板只做展示，不能因为后续失焦产生的 change 又回送远端。
+        lastSentClipboard = clipboardText.value
       })
 
       rfb.addEventListener('credentialsrequired', async () => {
         if (creds.password !== undefined) {
           rfb.sendCredentials(creds)
+          return
+        }
+
+        // 兼容密码为空的服务端：旧行为会提交空密码。只尝试一次，
+        // 失败后不再循环提交空密码，而是给出明确提示。
+        if (!emptyPasswordTried) {
+          emptyPasswordTried = true
+          rfb.sendCredentials({ ...creds, password: '' })
           return
         }
 

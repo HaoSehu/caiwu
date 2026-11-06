@@ -97,6 +97,30 @@ class PublicVncTokenSecurityTest extends TestCase
         }
     }
 
+    public function test_public_token_cannot_be_used_as_relay_connection_token(): void
+    {
+        $token = 'pub-relay-denied-'.uniqid();
+        $this->putToken($token, [
+            'token_scope' => 'public',
+            'service_id' => 42,
+            'host' => '10.0.0.5',
+            'port' => 5901,
+            'allowed_origin' => 'https://console.example.test',
+        ]);
+
+        $service = app(ServiceVncService::class);
+
+        // relay 建连只认 60 秒 TTL 的 relay token；公开 token（10 分钟）不得直接建连。
+        foreach (['previewVncToken', 'resolveVncToken'] as $method) {
+            try {
+                $service->{$method}($token);
+                $this->fail($method.' 不得接受 public token');
+            } catch (BusinessException $exception) {
+                $this->assertSame(40400, $exception->getErrorCode());
+            }
+        }
+    }
+
     public function test_public_token_exchange_is_capped_per_token(): void
     {
         $token = 'pub-cap-'.uniqid();
