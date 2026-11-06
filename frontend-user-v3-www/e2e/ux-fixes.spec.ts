@@ -79,24 +79,29 @@ test("390 视口移动轮播圆点可点击切换", async ({ page }) => {
   await expect(dots.first()).not.toHaveClass(/is-active/);
 });
 
-test("390 视口保留带文案的产品入口而非只剩圆点", async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
+test("桌面端首屏文案居左且不提供轮播暂停按钮", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/", { waitUntil: "domcontentloaded" });
 
-  // 入口列表此前在 ⩽640 被整段 display:none，手机上只剩无法辨识内容的轮播圆点
-  const rail = page.locator(".hero-rail");
-  await expect(rail).toBeVisible();
+  const stage = page.locator(".hero-stage").first();
+  const body = page.locator(".hero-body").first();
+  await expect(stage).toBeVisible();
+  await expect(body).toBeVisible();
 
-  const items = page.locator(".hero-rail__item");
-  expect(await items.count()).toBeGreaterThan(1);
-  // 入口必须带文案，纯图标等于没有入口
-  await expect(items.first().locator(".hero-rail__label")).not.toBeEmpty();
-  await expect(items.first()).toBeInViewport();
+  // 文案列与舞台左边缘对齐（允许 1px 亚像素误差）
+  const stageBox = await stage.boundingBox();
+  const bodyBox = await body.boundingBox();
+  expect(stageBox).not.toBeNull();
+  expect(bodyBox).not.toBeNull();
+  expect(Math.abs(bodyBox!.x - stageBox!.x)).toBeLessThanOrEqual(1);
 
-  // 点第二项应切换轮播，而不是被圆点独占交互
-  const second = items.nth(1);
-  await second.click();
-  await expect(second).toHaveClass(/is-active/);
+  // 桌面端与移动端都不再提供暂停/继续自动切换的按钮
+  await expect(page.locator(".hero-rotate-toggle")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: /暂停自动切换|继续自动切换/ }),
+  ).toHaveCount(0);
+  // 指示点仍保留，轮播可手动切换
+  await expect(page.locator(".hero-dots__item").first()).toBeVisible();
 });
 
 // @needs-backend：结算条金额与可购买状态来自真实商品/价格接口。

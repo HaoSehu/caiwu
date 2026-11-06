@@ -67,30 +67,6 @@ async function mockProductsInit(page: import("@playwright/test").Page) {
   );
 }
 
-// 641~992px（平板竖屏/小窗桌面）既没有桌面圆点条，也必须保留暂停/继续入口，
-// 否则自动轮播每 6~15s 强制换页且无法暂停（WCAG 2.2.2）。
-test("641~992 区间仍保留轮播暂停入口（WCAG 2.2.2）", async ({ page }) => {
-  const errors = collectUncaughtErrors(page);
-
-  for (const width of [768, 991]) {
-    await page.setViewportSize({ width, height: 900 });
-    await page.goto("/", { waitUntil: "domcontentloaded" });
-
-    // 桌面圆点条已按设计隐藏
-    await expect(page.locator(".hero-dots")).toBeHidden();
-    // 移动控制条接管，且暂停按钮可见可点
-    const toggle = page.locator(".hero-mobile-nav .hero-rotate-toggle");
-    await expect(toggle).toBeVisible();
-    await expect(toggle).toHaveAttribute("aria-pressed", "false");
-
-    await toggle.click();
-    await expect(toggle).toHaveAttribute("aria-pressed", "true");
-    await expect(toggle).toHaveAccessibleName("继续自动切换");
-  }
-
-  expect(errors).toEqual([]);
-});
-
 // 断点值本身必须被钉住：只取 375 与 1280 时，任何落在两者之间的断点
 // （768/900/1100）都能让断言通过，992 这个具体取值从未被验证。
 test("992 断点两侧各 1px 精确切换形态", async ({ page }) => {

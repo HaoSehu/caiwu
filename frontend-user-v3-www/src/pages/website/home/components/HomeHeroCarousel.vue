@@ -53,35 +53,12 @@
     </div>
 
     <div
-      class="container hero-stage"
-      @mouseenter="pauseRotation"
-      @mouseleave="resumeRotation"
-      @focusin="pauseRotation"
-      @focusout="resumeRotation"
+      class="container hero-stage hero-stage--no-rail"
       @touchstart="handleTouchStart"
       @touchend="handleTouchEnd"
     >
-      <aside class="hero-rail" aria-label="产品入口">
-        <button
-          v-for="(slide, index) in heroSlides"
-          :key="slide.key"
-          type="button"
-          class="hero-rail__item"
-          :class="{ 'is-active': index === activeIndex }"
-          :aria-current="index === activeIndex ? 'true' : undefined"
-          @click="activateSlide(index)"
-        >
-          <span
-            v-if="slide.ribbon"
-            class="hero-rail__ribbon"
-            :class="`hero-rail__ribbon--${slide.ribbonType}`"
-          >
-            {{ slide.ribbon }}
-          </span>
-          <span class="hero-rail__label">{{ slide.railTitle }}</span>
-          <chevron-right-icon class="hero-rail__arrow" />
-        </button>
-      </aside>
+      <!-- 左侧入口列已移除，保留空占位维持原有栅格留白（不引入可聚焦/可读内容） -->
+      <aside class="hero-rail" aria-hidden="true"></aside>
 
       <div
         class="hero-body"
@@ -125,16 +102,6 @@
           :aria-current="index === activeIndex ? 'true' : undefined"
           @click="activateSlide(index)"
         ></button>
-        <button
-          type="button"
-          class="hero-rotate-toggle"
-          :aria-pressed="rotationPaused"
-          :aria-label="rotationPaused ? '继续自动切换' : '暂停自动切换'"
-          @click="toggleRotation"
-        >
-          <play-circle-icon v-if="rotationPaused" />
-          <pause-circle-icon v-else />
-        </button>
       </div>
 
       <div class="hero-mobile-nav" role="group" aria-label="轮播控制">
@@ -150,17 +117,6 @@
             @click="activateSlide(index)"
           ></button>
         </div>
-        <!-- hero-dots 在 <=992px 被隐藏，这里提供同源的暂停按钮，避免移动端失去 WCAG 2.2.2 的暂停能力 -->
-        <button
-          type="button"
-          class="hero-rotate-toggle"
-          :aria-pressed="rotationPaused"
-          :aria-label="rotationPaused ? '继续自动切换' : '暂停自动切换'"
-          @click="toggleRotation"
-        >
-          <play-circle-icon v-if="rotationPaused" />
-          <pause-circle-icon v-else />
-        </button>
       </div>
     </div>
 
@@ -202,11 +158,6 @@ import {
   watch,
 } from "vue";
 import { useRouter } from "vue-router";
-import {
-  ChevronRightIcon,
-  PauseCircleIcon,
-  PlayCircleIcon,
-} from "tdesign-icons-vue-next";
 import { resolveApiAssetUrl } from "@/utils/apiAssetUrl";
 
 const props = defineProps({
@@ -232,8 +183,6 @@ const videoSlotA = ref("");
 const videoSlotB = ref("");
 const videoDurations = new Map();
 const activeIndex = ref(0);
-// 用户显式暂停自动切换（WCAG 2.2.2）：与 isHovering 的临时暂停相互独立
-const rotationPaused = ref(false);
 const heroSlides = shallowRef(Object.freeze([]));
 const heroFeatures = shallowRef(Object.freeze([]));
 
@@ -494,23 +443,19 @@ const activePoster = computed(() => String(activeSlide.value?.poster || ""));
 
 const MIN_ROTATION_INTERVAL = 6000;
 const MAX_ROTATION_INTERVAL = 15000;
-// 系统级「减弱动态效果」下自动轮播不启动；用户显式点「继续」时再放开，
-// 否则弱动效用户会被 6~15s 强制换页（WCAG 2.2.2 暂停要求只靠按钮仍可满足，
-// 但把默认行为改成不自动切换才符合 reduce 语义）。
+// 系统级「减弱动态效果」下自动轮播不启动，避免弱动效用户被 6~15s 强制换页
 const reducedMotionQuery =
   typeof window !== "undefined" && typeof window.matchMedia === "function"
     ? window.matchMedia("(prefers-reduced-motion: reduce)")
     : null;
 const prefersReducedMotion = ref(Boolean(reducedMotionQuery?.matches));
-// 用户显式点「继续」后即便系统开启减弱动效也尊重其选择
-const reducedMotionOptIn = ref(false);
 
 function syncReducedMotion(event) {
   prefersReducedMotion.value = Boolean(event.matches);
   // 系统偏好中途变化后重新评估当前是否应继续自动切换
-  if (prefersReducedMotion.value && !reducedMotionOptIn.value) {
+  if (prefersReducedMotion.value) {
     stopRotation();
-  } else if (!isHovering && !rotationPaused.value) {
+  } else {
     startRotation();
   }
 }
@@ -538,7 +483,6 @@ let videoEnableIdleId = null;
 let playbackRetryCount = 0;
 let lastForcedLoadAt = 0;
 let isUnmounting = false;
-let isHovering = false;
 let touchStartX = 0;
 
 function getNavigatorConnection() {
@@ -757,11 +701,8 @@ function queueActiveVideoPlayback(delay = 0) {
 
 function startRotation() {
   stopRotation();
-  // 悬停/焦点临时暂停，以及用户显式暂停，都不允许重启计时器
-  if (isHovering || rotationPaused.value) return;
-  // 减弱动效用户默认不自动换页；rotationPaused 为 false 但用户已在本次会话显式
-  // 点过「继续」时（reducedMotionOptIn）才恢复计时器
-  if (prefersReducedMotion.value && !reducedMotionOptIn.value) return;
+  // 减弱动效用户不自动换页
+  if (prefersReducedMotion.value) return;
   rotationTimer = setTimeout(() => {
     const count = heroSlides.value.length || 1;
     const nextIndex = (activeIndex.value + 1) % count;
@@ -769,47 +710,8 @@ function startRotation() {
   }, getRotationInterval());
 }
 
-function pauseRotation() {
-  isHovering = true;
-  stopRotation();
-}
-
-function resumeRotation(event) {
-  // focusout 会冒泡：键盘在舞台内部（指示点之间）移动焦点时不应恢复轮播，
-  // 只有焦点真正离开舞台才恢复，否则键盘用户浏览期间轮播仍在后台换页
-  if (
-    event?.type === "focusout" &&
-    event.currentTarget?.contains(event.relatedTarget)
-  ) {
-    return;
-  }
-  isHovering = false;
-  // rotationPaused 由用户点击暂停按钮控制，不能被移出/失焦覆盖
-  if (rotationPaused.value) return;
-  startRotation();
-}
-
-// 用户主动暂停/继续自动切换：显式意图，独立于 hover 与 focus 的临时暂停
-function toggleRotation() {
-  if (rotationPaused.value) {
-    rotationPaused.value = false;
-    // 显式意图优先于系统 reduce 偏好
-    reducedMotionOptIn.value = true;
-    // 不能复用 resumeRotation()：它无条件把 isHovering 置 false，
-    // 而鼠标此刻可能仍停在舞台内，会把 hover 暂停误清掉并立即启动轮播。
-    // 这里只解除用户暂停，hover 态保持原值。
-    if (!isHovering) startRotation();
-  } else {
-    rotationPaused.value = true;
-    pauseRotation();
-  }
-}
-
 function handleTouchStart(event) {
   if (!event.touches || event.touches.length !== 1) return;
-  // 移动端触摸会合成 mouseenter 把 isHovering 置 true 且不触发 mouseleave，
-  // 这里复位，避免首次触摸后自动轮播永久停止
-  isHovering = false;
   touchStartX = event.touches[0].clientX;
 }
 
@@ -1182,127 +1084,29 @@ onBeforeUnmount(() => {
   min-height: 460px;
 }
 
+// 左侧入口列已下线，只剩空的 aria-hidden 占位。
+// 桌面端若继续保留 220px 轨道，首屏左侧会空出 220px 空白，因此在无 rail 时收掉第一列。
+.hero-stage--no-rail {
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 420px);
+}
+
+// 桌面端文案居左：空占位列退到第二列，只作为右侧视觉留白
+.hero-stage--no-rail .hero-body {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.hero-stage--no-rail .hero-rail {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+// 入口列空占位：不绘制内容，仅占住原列宽
 .hero-rail {
   display: flex;
   flex-direction: column;
   gap: 8px;
   padding-top: 18px;
-}
-
-.hero-rail__item {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  min-height: 52px;
-  padding: 14px 20px;
-  border: none;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.36);
-  color: $text-color-nav;
-  font-size: 16px;
-  font-weight: 500;
-  text-align: left;
-  cursor: pointer;
-  transition:
-    background 0.24s cubic-bezier(0.22, 1, 0.36, 1),
-    color 0.24s cubic-bezier(0.22, 1, 0.36, 1),
-    box-shadow 0.24s cubic-bezier(0.22, 1, 0.36, 1),
-    transform 0.24s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.hero-rail__item:hover {
-  background: rgba(255, 255, 255, 0.7);
-  color: $text-color-heading;
-  transform: translateX(2px);
-}
-
-.hero-rail__item:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px $color-primary-a22;
-}
-
-.hero-rail__item.is-active {
-  background: $color-primary;
-  color: $text-color-inverse;
-  box-shadow: 0 14px 28px rgba(22, 93, 255, 0.28);
-  transform: none;
-}
-
-.hero-rail__item.is-active:hover {
-  transform: translateX(0);
-}
-
-.hero-rail__item.is-active .hero-rail__label {
-  color: $text-color-inverse;
-}
-
-.hero-rail__ribbon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  min-width: 32px;
-  height: 20px;
-  padding: 0 7px;
-  border-radius: 4px;
-  color: $text-color-inverse;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: 0.02em;
-}
-
-.hero-rail__ribbon--hot {
-  // 白字 11px 需 ≥4.5:1，浅红底不达标，改用深红文字色变体
-  background: $color-danger-text;
-  box-shadow: 0 3px 8px rgba(180, 35, 24, 0.24);
-}
-
-.hero-rail__ribbon--warm {
-  background: $color-warning-text;
-  box-shadow: 0 3px 8px rgba(181, 71, 8, 0.22);
-}
-
-.hero-rail__ribbon--new {
-  background: $color-primary;
-  box-shadow: 0 3px 8px $color-primary-a22;
-}
-
-.hero-rail__item.is-active .hero-rail__ribbon {
-  box-shadow: none;
-}
-
-.hero-rail__label {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.hero-rail__arrow {
-  flex-shrink: 0;
-  font-size: 12px;
-  opacity: 0;
-  transform: translateX(-4px);
-  transition:
-    opacity 0.2s ease,
-    transform 0.2s ease;
-}
-
-// 触屏设备无 hover：激活项箭头常显，避免入口指示不可见
-.hero-rail__item.is-active .hero-rail__arrow {
-  opacity: 1;
-  transform: translateX(0);
-}
-
-@media (hover: hover) {
-  .hero-rail__item:hover .hero-rail__arrow {
-    opacity: 1;
-    transform: translateX(0);
-  }
 }
 
 .hero-dots {
@@ -1363,39 +1167,6 @@ onBeforeUnmount(() => {
 
 .hero-dots__item.is-active:hover::before {
   background: $color-primary-hover;
-}
-
-// 轮播暂停/继续按钮：与指示点同色系，透明底，居中排在指示点之后
-.hero-rotate-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  width: 28px;
-  height: 28px;
-  margin-left: 4px;
-  padding: 0;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: rgba(44, 54, 84, 0.6);
-  font: inherit;
-  font-size: 13px;
-  line-height: 1;
-  cursor: pointer;
-  transition:
-    background 0.22s cubic-bezier(0.22, 1, 0.36, 1),
-    color 0.22s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.hero-rotate-toggle:hover {
-  background: rgba(44, 54, 84, 0.08);
-  color: rgba(44, 54, 84, 0.85);
-}
-
-.hero-rotate-toggle:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px $color-primary-a22;
 }
 
 .hero-body {
@@ -1640,19 +1411,20 @@ onBeforeUnmount(() => {
     align-items: start;
   }
 
+  // 无入口列时同样收掉首列（本断点规则晚于基础 .hero-stage--no-rail，需就地覆盖）
+  .hero-stage--no-rail {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  // 单列堆叠时取消桌面端的列定位，回到文档流自动排列
+  .hero-stage--no-rail .hero-body,
+  .hero-stage--no-rail .hero-rail {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
   .hero-rail {
     padding-top: 8px;
-  }
-
-  .hero-rail__item {
-    min-height: 46px;
-    padding: 12px 16px;
-    font-size: 15px;
-  }
-
-  .hero-body {
-    grid-column: 2;
-    grid-row: 1;
   }
 
   .hero-desc {
@@ -1692,45 +1464,17 @@ onBeforeUnmount(() => {
     align-items: start;
   }
 
+  // 入口列已无内容，但仍在首屏顶部保留一行空白，避免内容整体上移
   .hero-rail {
-    flex-direction: row;
-    flex-wrap: nowrap;
-    gap: 8px;
-    padding: 0 0 4px;
-    overflow-x: auto;
-    scrollbar-width: none;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  .hero-rail::-webkit-scrollbar {
-    display: none;
-  }
-
-  .hero-rail__item {
-    flex: 0 0 auto;
-    width: auto;
-    min-height: 0;
-    padding: 8px 16px;
-    border-radius: 999px;
-    font-size: 14px;
-    background: rgba(255, 255, 255, 0.58);
-  }
-
-  .hero-rail__item.is-active {
-    background: $color-primary;
-  }
-
-  .hero-rail__arrow {
-    display: none;
+    min-height: 44px;
+    padding: 0 0 2px;
   }
 
   .hero-dots {
     display: none;
   }
 
-  // hero-dots 在此断点起被隐藏，移动控制条必须同时接管：
-  // 若仍等到 640px 才显示，641~992px（平板竖屏/小窗桌面）自动轮播每 6~15s 强制换页
-  // 且没有任何暂停入口，不满足 WCAG 2.2.2（自动更新内容须可暂停）。
+  // hero-dots 在此断点起被隐藏，改由移动控制条接管轮播指示
   .hero-mobile-nav {
     display: flex;
     align-items: center;
@@ -1741,8 +1485,13 @@ onBeforeUnmount(() => {
 
   .hero-mobile-nav__dots {
     display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
     align-items: center;
     gap: 2px;
+    // 圆点撑到 44px 后，轮播项多时（如 8 项）单行会超出 375 视口宽度；
+    // 容器可换行，避免末尾圆点被裁掉后无法点击
+    max-width: 100%;
   }
 
   .hero-mobile-nav__dot {
@@ -1817,18 +1566,6 @@ onBeforeUnmount(() => {
 @media (max-width: $breakpoint-compact) {
   .hero-section {
     padding: 16px 0 24px;
-  }
-
-  // 窄屏不再隐藏入口列表：⩽992 已把它做成横向滚动的胶囊行，
-  // 隐藏后 5 个带文案的产品入口在手机上彻底消失，只剩无法辨识内容的圆点。
-  .hero-rail {
-    gap: 6px;
-    padding-bottom: 2px;
-  }
-
-  .hero-rail__item {
-    padding: 6px 12px;
-    font-size: 13px;
   }
 
   .hero-title {
@@ -1918,23 +1655,57 @@ onBeforeUnmount(() => {
   }
 }
 
+// 手机形态（≤767.98px）：容器留白与触控热区按单手操作口径收口。
+// 断点比 compact（640）宽，覆盖 360~767 全部手机竖屏；桌面与平板规则零改动。
+@media (max-width: $breakpoint-mobile-max) {
+  .container {
+    width: calc(100% - 24px);
+  }
+
+  .hero-section {
+    padding: 16px 0 24px;
+  }
+
+  // CTA 是手机端首屏主要可点区域，热区统一到 44px
+  .hero-cta {
+    height: 44px;
+  }
+
+  // 轮播圆点：视觉尺寸不变，按钮本体撑到 44×44 满足触控热区
+  .hero-mobile-nav {
+    gap: 4px;
+  }
+
+  .hero-mobile-nav__dot {
+    width: 44px;
+    height: 44px;
+  }
+
+  .hero-feature-strip {
+    margin-top: 16px;
+    border-radius: 12px;
+  }
+
+  .hero-feature {
+    min-height: 44px;
+    padding: 14px 16px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .hero-title,
   .hero-desc {
     animation: none !important;
   }
 
-  .hero-rail__item,
   .hero-dots__item,
   .hero-cta,
   .hero-feature,
-  .hero-feature::before,
-  .hero-rail__arrow {
+  .hero-feature::before {
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
   }
 
-  .hero-rail__item:hover,
   .hero-cta:hover,
   .hero-cta:active {
     transform: none !important;

@@ -56,7 +56,9 @@
 
         <div class="slide-body">
           <div class="slide-row">
-            <label class="slide-label">标题</label>
+            <!-- 首页首屏的入口列已下线，rail_title 不再出现在站点上；
+                 仅作为后台列表里的项目名与轮播圆点的无障碍标签（切换到 X）保留 -->
+            <label class="slide-label">导航名称</label>
             <t-input
               v-model="slide.rail_title"
               maxlength="20"
@@ -384,7 +386,8 @@ async function saveHero() {
 function validateHero() {
   for (const [index, slide] of heroForm.slides.entries()) {
     for (const [key, label] of [
-      ['rail_title', '导航名称'],
+      // rail_title 不再是页面上的入口文案（入口列已下线），只作为后台标签与圆点无障碍名，
+      // 因此不再强制必填；缺失时按「新轮播项 / 未命名轮播」兜底展示。
       ['title', '主标题'],
       ['desc', '描述'],
       ['primary_text', '主按钮文案'],
@@ -995,6 +998,57 @@ onBeforeUnmount(() => {
 @media (max-width: 767.98px) {
   .feature-card {
     grid-template-columns: 1fr;
+  }
+
+  /* 轮播/功能条目头部在窄屏换行，标题与排序按钮各占一行 */
+  .slides-section-head,
+  .slide-card-head {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--td-comp-margin-s);
+  }
+
+  .slide-card-head__actions,
+  .feature-card-sort {
+    margin-left: 0;
+  }
+
+  /* 仅图标按钮：命中区不得小于 44×44（docs/DESIGN.md §7） */
+  .slide-card-head__actions .t-button,
+  .feature-card-sort .t-button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .slide-card,
+  .feature-card {
+    padding: var(--td-comp-margin-m);
+  }
+
+  /* 视频选择抽屉：预览与操作按钮纵向铺开 */
+  .video-drawer-tabs {
+    display: flex;
+    width: 100%;
+  }
+
+  .video-drawer-tabs .t-radio-button {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .video-drawer-url-mode__actions {
+    display: flex;
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .video-drawer-url-mode__actions .t-button {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .settings-bottom-actions .t-button {
+    width: 100%;
   }
 }
 </style>
