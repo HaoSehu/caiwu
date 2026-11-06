@@ -170,6 +170,28 @@ flutter run --dart-define=API_BASE=http://192.168.x.x:8000/api
 flutter build apk --release --dart-define=API_BASE=https://api.example.com/api
 ```
 
+### 推送到平板（USB 真机）
+
+```bash
+export ANDROID_HOME="D:/dev/android-sdk"
+ADB="$ANDROID_HOME/platform-tools/adb.exe"
+
+# 1. 确认平板已连接（产品型号 PA2353 / DPD2305 等）
+"$ADB" devices -l
+
+# 2. 只出 arm64，覆盖安装到指定设备
+flutter build apk --release --target-platform android-arm64 \
+  --dart-define=API_BASE=https://api.coyjs.cn/api
+
+# 3. 安装并启动
+"$ADB" -s <serial> install -r -d build/app/outputs/flutter-apk/app-release.apk
+"$ADB" -s <serial> shell monkey -p com.caiwu.caiwu_app \
+  -c android.intent.category.LAUNCHER 1
+```
+
+> 国内镜像 `pub.flutter-io.cn` 缺少 `image_picker_ios`，Android 构建时需走官方源，
+> 即 `flutter pub get` 前 `unset PUB_HOSTED_URL FLUTTER_STORAGE_BASE_URL`。
+
 ### 后端配套（VNC 必需）
 
 VNC relay 默认只允许 console 域 Origin，App 用固定 Origin 连接，需要放行：
