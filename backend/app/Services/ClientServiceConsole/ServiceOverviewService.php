@@ -93,6 +93,12 @@ class ServiceOverviewService
         $statusScope = trim((string) ($filters['status_scope'] ?? ''));
         if ($statusScope === self::STATUS_SCOPE_ACTIVE_PENDING) {
             $query->whereIn('status', [ServiceStatus::ACTIVE, ServiceStatus::PENDING]);
+        } elseif (is_array($filters['status'] ?? null)) {
+            // 管理端用户详情默认多选状态（开通中/运行中/已暂停/异常）；空数组视为不筛选
+            $statuses = array_values(array_unique(array_map('intval', $filters['status'])));
+            if ($statuses !== []) {
+                $query->whereIn('status', $statuses);
+            }
         } elseif (($filters['status'] ?? '') !== '') {
             $query->where('status', (int) $filters['status']);
         }
