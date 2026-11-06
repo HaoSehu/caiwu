@@ -329,4 +329,29 @@
     width: auto;
     text-align: left;
   }
+
+  /* 媒体库表格保持横向滚动（配置型），手机端只收窄预览图与操作列按钮 */
+  .media-library-card .table-scroll .t-table {
+    min-width: 720px;
+  }
+
+  .media-upload-files__head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: var(--td-comp-margin-xs);
+  }
+
+  .media-upload-files__name {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .media-batch-bar .t-space {
+    width: 100%;
+  }
+
+  .media-batch-bar .t-button {
+    flex: 1 1 0;
+    min-width: 0;
+  }
 }

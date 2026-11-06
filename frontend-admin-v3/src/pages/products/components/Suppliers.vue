@@ -31,89 +31,91 @@
       </div>
     </div>
 
-    <t-table
-      row-key="id"
-      class="supplier-table"
-      :data="suppliers"
-      :columns="supplierColumns"
-      :loading="supplierLoading"
-      hover
-      table-layout="fixed"
-      aria-label="提供商列表"
-    >
-      <template #empty>
-        <t-empty
-          :description="
-            supplierLoading
-              ? '加载中…'
-              : supplierFilters.keyword || supplierFilters.status !== ''
-                ? '未找到匹配结果'
-                : '暂无提供商'
-          "
-        />
-      </template>
-      <template #name="{ row }">
-        <div class="supplier-name">
-          <strong>{{ supplierCardTitle(row) }}</strong>
-          <span v-if="supplierCardSubtitle(row)">{{ supplierCardSubtitle(row) }}</span>
-        </div>
-      </template>
-      <template #status="{ row }">
-        <t-tag
-          v-if="supplierCardStatus(row).label"
-          :theme="supplierCardStatus(row).theme"
-          :variant="supplierCardStatus(row).variant"
-        >
-          {{ supplierCardStatus(row).label }}
-        </t-tag>
-        <span v-else>--</span>
-      </template>
-      <template #info="{ row }">
-        <div v-if="supplierCardEmptyText(row)" class="supplier-info-empty">{{ supplierCardEmptyText(row) }}</div>
-        <dl v-else class="supplier-info">
-          <div v-for="field in supplierCardFields(row)" :key="supplierCardFieldKey(field)">
-            <dt>{{ field.label }}</dt>
-            <dd :class="supplierCardFieldClass(field)">{{ supplierCardFieldValue(field) }}</dd>
+    <div class="table-scroll" :data-mobile-view="isMobile ? 'scroll' : undefined">
+      <t-table
+        row-key="id"
+        class="supplier-table"
+        :data="suppliers"
+        :columns="supplierColumns"
+        :loading="supplierLoading"
+        hover
+        table-layout="fixed"
+        aria-label="提供商列表"
+      >
+        <template #empty>
+          <t-empty
+            :description="
+              supplierLoading
+                ? '加载中…'
+                : supplierFilters.keyword || supplierFilters.status !== ''
+                  ? '未找到匹配结果'
+                  : '暂无提供商'
+            "
+          />
+        </template>
+        <template #name="{ row }">
+          <div class="supplier-name">
+            <strong>{{ supplierCardTitle(row) }}</strong>
+            <span v-if="supplierCardSubtitle(row)">{{ supplierCardSubtitle(row) }}</span>
           </div>
-        </dl>
-      </template>
-      <template #operation="{ row }">
-        <div class="supplier-actions">
-          <t-button size="small" variant="text" theme="primary" @click="openSupplierDialog(row)">{{
-            canManageSuppliers ? '编辑' : '查看'
-          }}</t-button>
-          <t-button
-            v-for="action in supplierCardActions(row)"
-            :key="action.key"
-            size="small"
-            :variant="action.variant || 'text'"
-            :theme="action.theme || 'default'"
-            :loading="supplierCardActionLoading === supplierCardActionLoadingKey(row, action)"
-            :disabled="supplierCardActionDisabled(action)"
-            @click="handleSupplierCardAction(row, action)"
+        </template>
+        <template #status="{ row }">
+          <t-tag
+            v-if="supplierCardStatus(row).label"
+            :theme="supplierCardStatus(row).theme"
+            :variant="supplierCardStatus(row).variant"
           >
-            {{ action.label }}
-          </t-button>
-          <t-button
-            v-if="canManageSuppliers"
-            size="small"
-            variant="text"
-            :loading="supplierActionLoading === row.id"
-            @click="handleToggleSupplier(row)"
-          >
-            {{ Number(row.status) === 1 ? '停用' : '启用' }}
-          </t-button>
-          <t-button
-            v-if="canManageSuppliers"
-            size="small"
-            variant="text"
-            theme="danger"
-            @click="handleDeleteSupplier(row)"
-            >删除</t-button
-          >
-        </div>
-      </template>
-    </t-table>
+            {{ supplierCardStatus(row).label }}
+          </t-tag>
+          <span v-else>--</span>
+        </template>
+        <template #info="{ row }">
+          <div v-if="supplierCardEmptyText(row)" class="supplier-info-empty">{{ supplierCardEmptyText(row) }}</div>
+          <dl v-else class="supplier-info">
+            <div v-for="field in supplierCardFields(row)" :key="supplierCardFieldKey(field)">
+              <dt>{{ field.label }}</dt>
+              <dd :class="supplierCardFieldClass(field)">{{ supplierCardFieldValue(field) }}</dd>
+            </div>
+          </dl>
+        </template>
+        <template #operation="{ row }">
+          <div class="supplier-actions">
+            <t-button size="small" variant="text" theme="primary" @click="openSupplierDialog(row)">{{
+              canManageSuppliers ? '编辑' : '查看'
+            }}</t-button>
+            <t-button
+              v-for="action in supplierCardActions(row)"
+              :key="action.key"
+              size="small"
+              :variant="action.variant || 'text'"
+              :theme="action.theme || 'default'"
+              :loading="supplierCardActionLoading === supplierCardActionLoadingKey(row, action)"
+              :disabled="supplierCardActionDisabled(action)"
+              @click="handleSupplierCardAction(row, action)"
+            >
+              {{ action.label }}
+            </t-button>
+            <t-button
+              v-if="canManageSuppliers"
+              size="small"
+              variant="text"
+              :loading="supplierActionLoading === row.id"
+              @click="handleToggleSupplier(row)"
+            >
+              {{ Number(row.status) === 1 ? '停用' : '启用' }}
+            </t-button>
+            <t-button
+              v-if="canManageSuppliers"
+              size="small"
+              variant="text"
+              theme="danger"
+              @click="handleDeleteSupplier(row)"
+              >删除</t-button
+            >
+          </div>
+        </template>
+      </t-table>
+    </div>
 
     <div v-if="supplierTotal > 0" class="pagination-row">
       <t-pagination
@@ -470,6 +472,7 @@ import { supplierApi } from '@/api/supplier';
 import SecretInput from '@/components/secret-input/index.vue';
 import { PAGE_SIZE_OPTIONS } from '@/constants/pagination';
 import { AdminPermissions } from '@/constants/permissions';
+import { MOBILE_MEDIA_QUERY, useMediaQuery } from '@/hooks/useMediaQuery';
 import { hasAdminPermission } from '@/utils/permission';
 
 import type { SupplierBatchProduct, SupplierBatchTreeRow } from '../composables/supplierBatchTree';
@@ -556,6 +559,8 @@ const supplierSecretEdited = reactive<Record<string, boolean>>({});
 const canManageSuppliers = computed(() => hasAdminPermission(AdminPermissions.SUPPLIER_MANAGE));
 const canSyncSuppliers = computed(() => hasAdminPermission(AdminPermissions.SUPPLIER_SYNC));
 const canRevealSupplierSecrets = computed(() => hasAdminPermission(AdminPermissions.SUPPLIER_SECRET_REVEAL));
+// 与 responsive.less 的 `max-width: 767.98px` 同源；配置类列表保留表格并横向滚动。
+const isMobile = useMediaQuery(MOBILE_MEDIA_QUERY);
 
 const supplierRules = {
   provider_key: [{ required: true, message: '请选择插件提供商', trigger: 'change' }],

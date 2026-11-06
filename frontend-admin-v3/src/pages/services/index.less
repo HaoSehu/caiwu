@@ -175,6 +175,14 @@
     width: 100%;
   }
 
+  /* 批量主机名弹窗内的表格：由外层容器横向滚动，弹层本身不超宽 */
+  .hostname-table {
+    width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
   .service-filter {
     flex-direction: column;
     align-items: stretch;

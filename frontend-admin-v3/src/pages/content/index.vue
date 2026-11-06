@@ -123,7 +123,7 @@
         </t-table>
       </div>
 
-      <div v-else class="mobile-list">
+      <div v-else class="mobile-list" data-mobile-view="card">
         <article v-for="row in articles" :key="row.id" class="content-mobile-card">
           <div class="content-mobile-card__head">
             <button class="content-mobile-card__title" type="button" @click="goEditArticle(row.id)">
@@ -271,7 +271,7 @@ import type {
 import { adminApi } from '@/api/admin';
 import { AdminPermissions } from '@/constants/permissions';
 import { useListPage } from '@/hooks/useListPage';
-import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { MOBILE_MEDIA_QUERY, useMediaQuery } from '@/hooks/useMediaQuery';
 import { fieldValue, formatDateTime } from '@/utils/format';
 import { required } from '@/utils/formRules';
 import { hasAdminPermission } from '@/utils/permission';
@@ -347,7 +347,7 @@ const categoryRules: Record<string, FormRule[]> = {
 const contentType = computed<ContentType>(() => (route.meta.contentType === 'help' ? 'help' : 'notice'));
 const pageTitle = computed(() => (contentType.value === 'help' ? '帮助中心' : '系统公告'));
 const articleLabel = computed(() => (contentType.value === 'help' ? '帮助文章' : '公告'));
-const isMobile = useMediaQuery('(max-width: 767.98px)');
+const isMobile = useMediaQuery(MOBILE_MEDIA_QUERY);
 // 空态文案区分「未筛选但无数据」与「筛选后无匹配」（docs/DESIGN.md 术语表）
 const hasActiveFilters = computed(
   () =>

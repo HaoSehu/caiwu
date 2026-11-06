@@ -1,5 +1,5 @@
 <template>
-  <div class="login-container">
+  <div class="login-container" :data-mobile-view="isMobile ? 'form' : undefined">
     <div class="login-card">
       <div class="login-header">
         <h1>管理后台</h1>
@@ -76,7 +76,11 @@ import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { hasPermissionInList } from '@/constants/permissions';
+import { MOBILE_MEDIA_QUERY, useMediaQuery } from '@/hooks/useMediaQuery';
 import { getPermissionStore, useUserStore } from '@/store';
+
+// 手机端形态标记只在手机断点渲染（计划「统一判定口径」第 9 条）
+const isMobile = useMediaQuery(MOBILE_MEDIA_QUERY);
 
 const router = useRouter();
 const userStore = useUserStore();

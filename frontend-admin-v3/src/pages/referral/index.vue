@@ -10,7 +10,7 @@
 
       <t-card :bordered="false" :loading="overviewLoading">
         <template #title>推广达人排行</template>
-        <div class="table-scroll">
+        <div class="table-scroll" :data-mobile-view="isMobile ? 'scroll' : undefined">
           <t-table
             row-key="id"
             :data="overview.top_referrers"
@@ -130,7 +130,7 @@
           </t-table>
         </div>
 
-        <div v-else class="mobile-list">
+        <div v-else class="mobile-list" data-mobile-view="card">
           <article v-for="row in rewardList" :key="row.id" class="referral-mobile-card">
             <div class="referral-mobile-card__head">
               <strong>{{ userName(row.referrer) }}</strong>
@@ -263,7 +263,7 @@
           </t-table>
         </div>
 
-        <div v-else class="mobile-list">
+        <div v-else class="mobile-list" data-mobile-view="card">
           <article v-for="row in withdrawalList" :key="row.id" class="referral-mobile-card">
             <div class="referral-mobile-card__head">
               <strong>{{ userName(row.user) }}</strong>
@@ -347,7 +347,7 @@ import type { ReferralListParams, ReferralOverview, ReferralRewardRecord, Referr
 import { adminApi } from '@/api/admin';
 import { AdminPermissions } from '@/constants/permissions';
 import { useListPage } from '@/hooks/useListPage';
-import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { MOBILE_MEDIA_QUERY, useMediaQuery } from '@/hooks/useMediaQuery';
 import { fieldValue, formatDateTime, formatMoney, toRecord } from '@/utils/format';
 import { hasAdminPermission } from '@/utils/permission';
 import { errorMessage } from '@/utils/userMessage';
@@ -462,7 +462,7 @@ const withdrawalDialog = reactive<{
   remark: '',
 });
 
-const isMobile = useMediaQuery('(max-width: 767.98px)');
+const isMobile = useMediaQuery(MOBILE_MEDIA_QUERY);
 
 const rewardLabelMap = toLabelMap(REWARD_STATUS_MAP);
 const rewardTypeMap = toTagTypeMap(REWARD_STATUS_MAP);

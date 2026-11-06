@@ -10,7 +10,7 @@
       </div>
     </t-card>
 
-    <t-card :bordered="false" :loading="pageLoading">
+    <t-card :bordered="false" :loading="pageLoading" :data-mobile-view="isMobile ? 'form' : undefined">
       <t-form ref="formRef" :data="form" :rules="rules" label-align="top" class="content-edit-form">
         <section class="edit-section">
           <h3 class="edit-section__title">基本信息</h3>
@@ -237,6 +237,7 @@ import { useRoute, useRouter } from 'vue-router';
 
 import type { ContentArticlePayload, ContentArticleRecord, ContentCategoryRecord, MediaFileRecord } from '@/api/admin';
 import { adminApi } from '@/api/admin';
+import { MOBILE_MEDIA_QUERY, useMediaQuery } from '@/hooks/useMediaQuery';
 import { useUnsavedGuard } from '@/hooks/useUnsavedGuard';
 import { errorMessage } from '@/utils/userMessage';
 
@@ -285,6 +286,8 @@ interface ArticleForm {
 
 const route = useRoute();
 const router = useRouter();
+// 手机端形态契约：表单标记只在手机断点渲染，桌面端保持无属性
+const isMobile = useMediaQuery(MOBILE_MEDIA_QUERY);
 
 const pageLoading = ref(false);
 const saving = ref(false);

@@ -428,7 +428,83 @@
   }
 }
 
+@media (max-width: 991px) {
+  .console-summary {
+    padding: var(--td-comp-paddingTB-l) var(--td-comp-paddingLR-m);
+  }
+}
+
 @media (max-width: 767.98px) {
+  .console-toolbar--page {
+    flex-wrap: wrap;
+    align-items: stretch;
+    min-height: 0;
+
+    .console-toolbar__back {
+      width: 100%;
+      justify-content: flex-start;
+    }
+
+    .console-toolbar__actions {
+      width: 100%;
+
+      .t-button {
+        width: 100%;
+      }
+    }
+  }
+
+  .console-toolbar:not(.console-toolbar--page) {
+    .t-input,
+    .t-select,
+    .console-toolbar__search {
+      width: 100%;
+    }
+  }
+
+  /* 概览卡：身份区与指标卡纵向排列，指标卡两列 */
+  .console-summary {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--td-comp-margin-l);
+  }
+
+  .console-summary__metrics {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--td-comp-margin-s);
+  }
+
+  .summary-metric-card {
+    min-width: 0;
+    padding: var(--td-comp-paddingTB-s) var(--td-comp-paddingLR-s);
+  }
+
+  .console-summary__identity .identity-title,
+  .console-summary__identity .identity-description {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  /* 四个标签在窄屏放不下时横向滚动，不换行压扁文字 */
+  .service-console-page .t-tabs__nav-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  }
+
+  .service-console-page .t-tabs__nav-item {
+    padding: 0 var(--td-comp-paddingLR-s);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
   .console-actions,
   .console-row-actions {
     display: grid;
@@ -453,8 +529,17 @@
     grid-template-columns: 1fr;
   }
 
-  .console-summary__metrics {
-    flex-direction: column;
+  .console-pagination {
+    overflow-x: auto;
+  }
+
+  .transfer-picker__search {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .tracking-item__head {
+    gap: var(--td-comp-margin-s);
   }
 }
 

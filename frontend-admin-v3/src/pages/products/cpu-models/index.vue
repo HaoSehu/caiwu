@@ -1,5 +1,5 @@
 <template>
-  <div class="cpu-models-page">
+  <div class="cpu-models-page" :data-mobile-view="isMobile ? 'scroll' : undefined">
     <div class="page-inline-actions">
       <t-button v-if="canManage" theme="primary" :loading="saving" @click="handleSave">保存目录</t-button>
     </div>
@@ -165,12 +165,16 @@ import { adminApi } from '@/api/admin';
 import ProductBindingTreeSelect from '@/components/product-binding-tree-select/index.vue';
 import { AdminPermissions } from '@/constants/permissions';
 import { useListPage } from '@/hooks/useListPage';
+import { MOBILE_MEDIA_QUERY, useMediaQuery } from '@/hooks/useMediaQuery';
 import { normalizeProductBindings as normalizeBindings } from '@/hooks/useProductBindingTree';
 import { useUnsavedGuard } from '@/hooks/useUnsavedGuard';
 import { hasAdminPermission } from '@/utils/permission';
 import { errorMessage } from '@/utils/userMessage';
 
 defineOptions({ name: 'AdminCpuModels' });
+
+// 与 index.less 的 `max-width: 767.98px` 同源；配置类列表保留表格并横向滚动。
+const isMobile = useMediaQuery(MOBILE_MEDIA_QUERY);
 
 // CPU 目录与实例规格一样走 PRODUCT_MANAGE 写权限，只读岗看不到写入口
 const canManage = computed(() => hasAdminPermission(AdminPermissions.PRODUCT_MANAGE));

@@ -109,7 +109,7 @@
           </t-table>
         </div>
 
-        <div v-else class="mobile-list">
+        <div v-else class="mobile-list" data-mobile-view="card">
           <article v-for="row in filteredTemplates" :key="row.code" class="template-mobile-card">
             <div class="template-mobile-card__head">
               <strong>{{ row.name }}</strong>
@@ -282,7 +282,7 @@ import type { MessageAudience, MessageSceneRow as SceneRow, NotificationTemplate
 import { adminApi } from '@/api/admin';
 import { AdminPermissions } from '@/constants/permissions';
 import { useListPage } from '@/hooks/useListPage';
-import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { MOBILE_MEDIA_QUERY, useMediaQuery } from '@/hooks/useMediaQuery';
 import { hasAdminPermission } from '@/utils/permission';
 import { errorMessage } from '@/utils/userMessage';
 
@@ -315,7 +315,7 @@ const router = useRouter();
 const canManage = computed(() => hasAdminPermission(AdminPermissions.SETTINGS_MANAGE));
 // 场景数据源受众为 customer/admin；query.tab 兼容旧 user 值。
 const templateAudience = ref<MessageAudience>(normalizeAudience(route.query.tab));
-const isMobile = useMediaQuery('(max-width: 767.98px)');
+const isMobile = useMediaQuery(MOBILE_MEDIA_QUERY);
 // 两条路由复用本组件：/admin/notifications 为统一「消息配置」页，
 // /admin/notifications/api-directory 保留原接口目录面板。
 const isApiDirectory = computed(() => route.meta?.notificationTab === 'api-directory');

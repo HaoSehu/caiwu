@@ -62,7 +62,7 @@
         </template>
       </t-table>
 
-      <div v-else class="roles-mobile-list">
+      <div v-else class="roles-mobile-list" data-mobile-view="card">
         <t-loading :loading="loading" size="small">
           <div v-if="list.length" class="roles-mobile-stack">
             <mobile-record-card
@@ -203,7 +203,7 @@ import {
   VISITOR_PERMISSION_CODES,
 } from '@/constants/permissions';
 import { useListPage } from '@/hooks/useListPage';
-import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { MOBILE_MEDIA_QUERY, useMediaQuery } from '@/hooks/useMediaQuery';
 import { useUserStore } from '@/store';
 import { formatDateTime } from '@/utils/format';
 import { required } from '@/utils/formRules';
@@ -280,7 +280,7 @@ const rolePermissionPresets: RolePermissionPreset[] = [
 ] as const;
 
 const canManage = computed(() => hasPermission(AdminPermissions.ROLE_MANAGE));
-const isMobile = useMediaQuery('(max-width: 767.98px)');
+const isMobile = useMediaQuery(MOBILE_MEDIA_QUERY);
 const hasAllPermissionSelected = computed(() => form.permissions.includes(AdminPermissions.ALL));
 const isReadonlySuperRole = computed(() => hasAllPermissionSelected.value);
 const currentRole = computed(() => list.value.find((item) => String(item.id) === String(form.id)) || null);

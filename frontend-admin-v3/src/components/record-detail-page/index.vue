@@ -1,5 +1,6 @@
 <template>
-  <div class="record-detail-page">
+  <!-- 手机端形态标记：仅手机断点渲染 data-mobile-view，供逐页适配清点（计划「统一判定口径」第 9 条） -->
+  <div class="record-detail-page" :data-mobile-view="isMobile ? 'detail' : undefined">
     <!-- 顶部操作条 -->
     <div v-if="showToolbar" class="record-detail-toolbar">
       <t-button
@@ -121,6 +122,7 @@ import { ChevronLeftIcon, FileCopyIcon, RefreshIcon } from 'tdesign-icons-vue-ne
 import type { SkeletonRowCol } from 'tdesign-vue-next';
 import { computed } from 'vue';
 
+import { MOBILE_MEDIA_QUERY, useMediaQuery } from '@/hooks/useMediaQuery';
 import { copyToClipboard } from '@/utils/format';
 
 export interface RecordDetailMetric {
@@ -200,6 +202,9 @@ const bodySkeletonRowCol: SkeletonRowCol = [[{ width: '100%', height: '220px' }]
 const visibleMetrics = computed(() => props.metrics.filter((item) => item.show !== false && item.label !== '状态'));
 const visibleTabs = computed(() => props.tabs.filter((item) => item.show !== false));
 const currentTab = computed(() => props.activeTab || visibleTabs.value[0]?.value || 'basic');
+
+// 手机端形态：与 CSS 断点同源（window.innerWidth < MOBILE_BREAKPOINT）
+const isMobile = useMediaQuery(MOBILE_MEDIA_QUERY);
 
 function displayValue(value: string | number | null | undefined) {
   if (value === null || value === undefined || value === '') return '-';
@@ -291,6 +296,26 @@ function copyText(text: string) {
 
   .record-detail-skeleton__metrics {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* 工具栏操作按钮数量多时在手机端换行整行铺开，避免挤压标题行 */
+  .record-detail-toolbar {
+    flex-wrap: wrap;
+    min-height: 0;
+
+    &__actions {
+      flex-wrap: wrap;
+      width: 100%;
+    }
+
+    // 用 :deep()：工具栏按钮由各详情页通过 slot 传入，不带本组件的 scoped 属性，
+    // 直接写 .t-button 只会命中组件自己渲染的那颗（如「刷新」）
+    &__actions :deep(.t-button) {
+      // 固定 50% 两列。原来用 flex: 1 1 calc(50% - gap)：按钮数量为奇数时
+      // 最后那颗会被拉伸到整行宽，看起来像误放的大按钮
+      flex: 0 0 calc(50% - 4px);
+      min-width: 0;
+    }
   }
 }
 

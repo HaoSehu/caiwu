@@ -120,7 +120,7 @@ import { computed, reactive, ref, watch } from 'vue';
 
 import type { NotificationTemplateItem } from '@/api/admin';
 import { adminApi } from '@/api/admin';
-import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { MOBILE_MEDIA_QUERY, useMediaQuery } from '@/hooks/useMediaQuery';
 import { resolveApiAssetUrl } from '@/utils/apiAssetUrl';
 import { errorMessage } from '@/utils/userMessage';
 
@@ -176,7 +176,7 @@ const emit = defineEmits<{
 
 const DEFAULT_SITE_NAME = '创欧云';
 const DEFAULT_SITE_LOGO = '/branding/logo.svg';
-const isMobile = useMediaQuery('(max-width: 767.98px)');
+const isMobile = useMediaQuery(MOBILE_MEDIA_QUERY);
 const drawerSize = computed(() => (isMobile.value ? '100%' : '720px'));
 
 const loading = ref(false);

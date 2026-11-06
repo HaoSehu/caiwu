@@ -29,7 +29,7 @@
         </t-button>
       </div>
 
-      <div class="table-scroll">
+      <div class="table-scroll" :data-mobile-view="isMobile ? 'scroll' : undefined">
         <t-table
           row-key="id"
           :data="specs"
@@ -108,6 +108,15 @@
             <t-option value="隐藏" label="隐藏" />
           </t-select>
         </t-form-item>
+        <!-- 手机端表格不渲染「绑定配置」列，绑定改在这里编辑；桌面仍用表格列，避免两份编辑器同时存在 -->
+        <t-form-item v-if="isMobile && canManage" label="绑定配置">
+          <product-binding-tree-select
+            v-model="specForm.binding_ids"
+            mode="batch"
+            :existing-bindings="specForm.bindings"
+            @change="handleDialogBindingChange"
+          />
+        </t-form-item>
       </t-form>
     </t-dialog>
   </div>
@@ -126,12 +135,16 @@ import { adminApi } from '@/api/admin';
 import ProductBindingTreeSelect from '@/components/product-binding-tree-select/index.vue';
 import { AdminPermissions } from '@/constants/permissions';
 import { useListPage } from '@/hooks/useListPage';
+import { MOBILE_MEDIA_QUERY, useMediaQuery } from '@/hooks/useMediaQuery';
 import { normalizeProductBindings } from '@/hooks/useProductBindingTree';
 import { useUnsavedGuard } from '@/hooks/useUnsavedGuard';
 import { hasAdminPermission } from '@/utils/permission';
 import { errorMessage } from '@/utils/userMessage';
 
 defineOptions({ name: 'AdminSpecs' });
+
+// 与 index.less 的 `max-width: 767.98px` 同源；配置类列表在手机端保留表格并横向滚动。
+const isMobile = useMediaQuery(MOBILE_MEDIA_QUERY);
 
 type SpecRecord = Omit<
   InstanceSpecRecord,
@@ -199,19 +212,33 @@ const specForm = reactive({
   alias: '',
   note: '',
   status: '展示中',
+  // 手机端没有「绑定配置」列，绑定改在弹窗里编辑；桌面仍走表格列，弹窗不渲染该字段
+  binding_ids: [] as string[],
+  bindings: [] as ProductBindingRecord[],
 });
 
 const specRules: Record<string, FormRule[]> = {
   text: [{ required: true, message: '请输入实例规格文本', type: 'error' }],
 };
 
-const columns: PrimaryTableCol<SpecRecord>[] = [
-  { colKey: 'spec', title: '实例规格文本', minWidth: 220 },
-  { colKey: 'note', title: '说明', minWidth: 220, ellipsis: true },
-  { colKey: 'status', title: '状态', width: 110 },
-  { colKey: 'bindings', title: '绑定配置', minWidth: 360 },
-  { colKey: 'operation', title: '操作', width: 150, fixed: 'right' },
-];
+/* 手机端只留「规格 / 状态 / 操作」：说明与绑定配置属于详情信息，
+   5 列合计 1060px 在 443px 视口下只能看到 3 列，且说明列会被固定操作列压住 */
+const columns = computed<PrimaryTableCol<SpecRecord>[]>(() => {
+  if (isMobile.value) {
+    return [
+      { colKey: 'spec', title: '实例规格文本', minWidth: 150 },
+      { colKey: 'status', title: '状态', width: 84 },
+      { colKey: 'operation', title: '操作', width: 132, fixed: 'right' },
+    ];
+  }
+  return [
+    { colKey: 'spec', title: '实例规格文本', minWidth: 220 },
+    { colKey: 'note', title: '说明', minWidth: 220, ellipsis: true },
+    { colKey: 'status', title: '状态', width: 110 },
+    { colKey: 'bindings', title: '绑定配置', minWidth: 360 },
+    { colKey: 'operation', title: '操作', width: 150, fixed: 'right' },
+  ];
+});
 
 function createLocalId(prefix: string) {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -285,6 +312,8 @@ function openSpecDialog(spec?: SpecRecord) {
     alias: spec?.alias || '',
     note: spec?.note || '',
     status: spec?.status || '展示中',
+    binding_ids: [...(spec?.binding_ids || [])],
+    bindings: normalizeProductBindings(spec?.bindings),
   });
   specDialogVisible.value = true;
 }
@@ -307,6 +336,9 @@ async function handleSubmitSpec() {
   dialogSubmitting.value = true;
   try {
     const nextValue = String(specForm.value || '').trim() || slugify(text);
+    // 手机端在弹窗里改过绑定：以弹窗值为准；桌面未渲染该字段，保持原行绑定不变
+    const nextBindings = isMobile.value ? specForm.bindings : undefined;
+    const nextBindingIds = isMobile.value ? [...specForm.binding_ids] : undefined;
     if (editingSpecId.value) {
       specs.value = specs.value.map((item, index) =>
         item.id === editingSpecId.value
@@ -318,6 +350,7 @@ async function handleSubmitSpec() {
               note: String(specForm.note || '').trim(),
               status: String(specForm.status || '展示中').trim() || '展示中',
               sort_order: index + 1,
+              ...(nextBindings ? { bindings: nextBindings, binding_ids: nextBindingIds } : {}),
             }
           : item,
       );
@@ -332,7 +365,7 @@ async function handleSubmitSpec() {
             alias: specForm.alias,
             note: specForm.note,
             status: specForm.status,
-            bindings: [],
+            bindings: nextBindings || [],
           },
           specs.value.length,
         ),
@@ -371,6 +404,12 @@ function handleBindingSelectionChange(
   row.bindings = payload.bindings;
   row.binding_ids = payload.binding_ids;
   dirty.value = true;
+}
+
+/** 弹窗内的绑定选择（手机端）：只更新表单，提交时再写入行 */
+function handleDialogBindingChange(payload: { binding_ids: string[]; bindings: ProductBindingRecord[] }) {
+  specForm.binding_ids = payload.binding_ids;
+  specForm.bindings = payload.bindings;
 }
 
 function buildPayload(): InstanceSpecRecord[] {

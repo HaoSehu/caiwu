@@ -1,5 +1,5 @@
 <template>
-  <t-card :bordered="false" :loading="loading">
+  <t-card :bordered="false" :loading="loading" :data-mobile-view="isMobile ? 'form' : undefined">
     <t-alert theme="warning" message="日志清理为不可逆操作，请确认保留天数、清理类型和确认文本。" />
     <t-alert
       v-if="!canManage"
@@ -115,6 +115,7 @@ import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 
 import { adminApi } from '@/api/admin';
+import { MOBILE_MEDIA_QUERY, useMediaQuery } from '@/hooks/useMediaQuery';
 import { fieldValue, formatDateTime, formatJson, numberText, toRecord } from '@/utils/format';
 import { errorMessage } from '@/utils/userMessage';
 
@@ -131,6 +132,8 @@ type RecordRow = Record<string, unknown>;
 
 const loading = ref(false);
 const submitting = ref(false);
+// 手机端形态契约：表单类标记只在手机断点渲染，桌面端保持无属性
+const isMobile = useMediaQuery(MOBILE_MEDIA_QUERY);
 const previewing = ref(false);
 const formRef = ref<FormInstanceFunctions>();
 const form = reactive({

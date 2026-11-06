@@ -1,5 +1,5 @@
 <template>
-  <div class="integration-plugins-page">
+  <div class="integration-plugins-page" :data-mobile-view="isMobile ? 'card' : undefined">
     <t-card :bordered="false">
       <div class="plugins-toolbar">
         <t-tabs :value="activeDomain" @change="handleDomainChange">
@@ -416,6 +416,7 @@ import type {
 import { pluginsApi } from '@/api/admin/plugins';
 import SecretInput from '@/components/secret-input/index.vue';
 import { AdminPermissions } from '@/constants/permissions';
+import { MOBILE_MEDIA_QUERY, useMediaQuery } from '@/hooks/useMediaQuery';
 import { formatDateTime } from '@/utils/format';
 import { hasAdminPermission } from '@/utils/permission';
 import { errorMessage } from '@/utils/userMessage';
@@ -424,6 +425,8 @@ defineOptions({ name: 'AdminIntegrationPlugins' });
 
 const router = useRouter();
 const route = useRoute();
+// 与 index.less 的 `max-width: 767.98px` 同源；插件列表本身是卡片网格，手机端单列即卡片形态。
+const isMobile = useMediaQuery(MOBILE_MEDIA_QUERY);
 
 interface SmtpAccountForm {
   __index: number | null;

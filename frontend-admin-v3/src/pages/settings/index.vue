@@ -1,5 +1,5 @@
 <template>
-  <div class="settings-page">
+  <div class="settings-page" :data-mobile-view="isMobile ? 'form' : undefined">
     <t-card :bordered="false">
       <div class="page-tabs-toolbar">
         <t-tabs :value="activeTab" @change="handleTabChange">
@@ -221,6 +221,7 @@ import type { MediaFileRecord, SettingItem } from '@/api/admin';
 import { adminApi } from '@/api/admin';
 import SecretInput from '@/components/secret-input/index.vue';
 import { AdminPermissions } from '@/constants/permissions';
+import { MOBILE_MEDIA_QUERY, useMediaQuery } from '@/hooks/useMediaQuery';
 import { useUnsavedGuard } from '@/hooks/useUnsavedGuard';
 import { toRecord } from '@/utils/format';
 import { hasAdminPermission } from '@/utils/permission';
@@ -276,6 +277,8 @@ interface SettingsConfig {
 
 const route = useRoute();
 const router = useRouter();
+// 与 index.less 的 `max-width: 767.98px` 同源，用于手机端形态标记。
+const isMobile = useMediaQuery(MOBILE_MEDIA_QUERY);
 const settingsLoading = ref(false);
 const settingsSaving = ref(false);
 const activeSection = ref('');

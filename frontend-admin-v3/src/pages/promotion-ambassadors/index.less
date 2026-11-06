@@ -36,23 +36,35 @@
 
 .ambassador-mobile-card__head {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 28px;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--td-comp-margin-s);
-  min-height: 42px;
+  min-height: 54px;
   border-bottom: 1px solid var(--td-component-border);
-  padding: 9px 10px;
+  padding: 8px 10px;
 }
 
 .ambassador-mobile-card__head > div {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  flex-wrap: wrap;
   gap: var(--td-comp-margin-s);
   min-width: 0;
 }
 
+.ambassador-mobile-card__head strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .ambassador-mobile-card__more {
+  /* 仅图标按钮：命中区不得小于 44×44（docs/DESIGN.md §7） */
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
   padding: 0;
 }
 
@@ -69,20 +81,63 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--td-comp-margin-s);
+  min-width: 0;
 }
 
 .ambassador-mobile-card dt {
+  flex: 0 0 auto;
   color: var(--td-text-color-secondary);
   font-size: var(--td-font-size-size-1, 12px);
 }
 
 .ambassador-mobile-card dd {
+  min-width: 0;
   margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ambassador-mobile-card .t-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 44px;
+  padding-right: 8px;
+  padding-left: 8px;
 }
 
 @media (max-width: 767.98px) {
+  /* 卡片头部「新建大使档位」独占整行 */
+  .promotion-ambassadors-page .t-card__header-wrapper {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--td-comp-margin-s);
+  }
+
+  .promotion-ambassadors-page .t-card__actions,
+  .promotion-ambassadors-page .t-card__actions .t-space,
+  .promotion-ambassadors-page .t-card__actions .t-button {
+    width: 100%;
+  }
+
   .promotion-ambassadors-page .t-space,
   .promotion-ambassadors-page .t-button {
     flex-wrap: wrap;
+  }
+
+  .ambassador-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ambassador-form-span {
+    grid-column: span 1;
+  }
+
+  .ambassador-mobile-card__head > div {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--td-comp-margin-xs);
   }
 }

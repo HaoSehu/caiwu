@@ -26,7 +26,7 @@
       </div>
     </div>
 
-    <div class="traffic-editor">
+    <div class="traffic-editor" :data-mobile-view="isMobile ? 'form' : undefined">
       <aside class="traffic-group-list">
         <article
           v-for="group in trafficGroupItems"
@@ -69,11 +69,30 @@
 
           <div class="traffic-row-list">
             <div v-for="(row, index) in trafficRows" :key="row._rowKey" class="traffic-row">
-              <t-input v-model="row.label" placeholder="档位名称" />
-              <t-input-number v-model="row.target_value" :min="1" placeholder="目标 GB" />
-              <t-input-number v-model="row.price" :min="0" :decimal-places="2" placeholder="售价" />
-              <t-switch v-model="row.enabled" />
-              <t-button v-if="canManage" variant="text" theme="danger" @click="removeTrafficRow(index)">删除</t-button>
+              <div class="traffic-row__field">
+                <span class="traffic-row__label">档位名称</span>
+                <t-input v-model="row.label" placeholder="档位名称" />
+              </div>
+              <div class="traffic-row__field">
+                <span class="traffic-row__label">流量（GB）</span>
+                <t-input-number v-model="row.target_value" :min="1" placeholder="目标 GB" />
+              </div>
+              <div class="traffic-row__field">
+                <span class="traffic-row__label">售价（元）</span>
+                <t-input-number v-model="row.price" :min="0" :decimal-places="2" placeholder="售价" />
+              </div>
+              <div class="traffic-row__field traffic-row__field--switch">
+                <span class="traffic-row__label">启用</span>
+                <t-switch v-model="row.enabled" />
+              </div>
+              <t-button
+                v-if="canManage"
+                class="traffic-row__remove"
+                variant="text"
+                theme="danger"
+                @click="removeTrafficRow(index)"
+                >删除</t-button
+              >
             </div>
             <t-empty v-if="trafficRows.length === 0" description="暂无档位，请新增或从上游拉取" />
           </div>
@@ -124,6 +143,7 @@ import { adminApi } from '@/api/admin';
 import { productApi } from '@/api/product';
 import ProductBindingTreeSelect from '@/components/product-binding-tree-select/index.vue';
 import { AdminPermissions } from '@/constants/permissions';
+import { MOBILE_MEDIA_QUERY, useMediaQuery } from '@/hooks/useMediaQuery';
 import { useUnsavedGuard } from '@/hooks/useUnsavedGuard';
 import { hasAdminPermission } from '@/utils/permission';
 
@@ -163,6 +183,8 @@ interface TrafficPackageItem {
 
 // 路由只要求 PRODUCT_LIST，写操作必须另判 PRODUCT_MANAGE，否则只读岗能改流量包
 const canManage = computed(() => hasAdminPermission(AdminPermissions.PRODUCT_MANAGE));
+// 与 responsive.less 的 `max-width: 767.98px` 同源；本页是配置表单，手机端纵向堆叠。
+const isMobile = useMediaQuery(MOBILE_MEDIA_QUERY);
 
 // --- State ---
 const trafficLoading = ref(false);

@@ -105,7 +105,7 @@
         </t-table>
       </div>
 
-      <div v-else class="service-mobile-list">
+      <div v-else class="service-mobile-list" data-mobile-view="card">
         <t-loading :loading="loading" size="small">
           <div v-if="services.length" class="service-mobile-stack">
             <mobile-record-card
@@ -206,7 +206,7 @@ import type { ServiceListParams, ServiceRecord } from '@/api/service';
 import { serviceApi } from '@/api/service';
 import MobileRecordCard from '@/components/mobile-record-card/index.vue';
 import { useListPage } from '@/hooks/useListPage';
-import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { MOBILE_MEDIA_QUERY, useMediaQuery } from '@/hooks/useMediaQuery';
 import { fieldValue, formatDateTime, formatMoney, toRecord } from '@/utils/format';
 import { errorMessage } from '@/utils/userMessage';
 
@@ -232,7 +232,7 @@ const selectedRowKeys = ref<Array<string | number>>([]);
 const hostnameDialogVisible = ref(false);
 const hostnameSubmitting = ref(false);
 const hostnameRows = ref<HostnameRow[]>([]);
-const isMobile = useMediaQuery('(max-width: 767.98px)');
+const isMobile = useMediaQuery(MOBILE_MEDIA_QUERY);
 
 const {
   filters,

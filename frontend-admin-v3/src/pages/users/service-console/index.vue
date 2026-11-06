@@ -1,5 +1,5 @@
 <template>
-  <div class="service-console-page">
+  <div class="service-console-page" :data-mobile-view="isMobile ? 'detail' : undefined">
     <div class="console-toolbar console-toolbar--page">
       <t-button variant="text" class="console-toolbar__back" @click="goBack">
         <template #icon><chevron-left-icon /></template>
@@ -351,6 +351,7 @@ import { supplierApi } from '@/api/supplier';
 import type { AdminUser } from '@/api/user';
 import { userApi } from '@/api/user';
 import { AdminPermissions } from '@/constants/permissions';
+import { MOBILE_MEDIA_QUERY, useMediaQuery } from '@/hooks/useMediaQuery';
 import {
   createLockedPricingForm,
   mergeServiceDetail,
@@ -386,6 +387,9 @@ const router = useRouter();
 
 const userId = computed(() => String(route.params.id || ''));
 const serviceId = computed(() => Number(route.params.serviceId || 0));
+
+// 手机端形态：与 CSS 断点同源；桌面端不渲染 data-mobile-view
+const isMobile = useMediaQuery(MOBILE_MEDIA_QUERY);
 /** 实例标识：用户与被查看实例的组合，用于识别 keep-alive 复用后的参数变化 */
 const serviceConsoleKey = computed(() => `${userId.value}:${serviceId.value}`);
 

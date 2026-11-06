@@ -667,4 +667,82 @@
   .template-mobile-card dl {
     grid-template-columns: 1fr;
   }
+
+  /* 卡片头/描述/操作在手机端撑满，避免长消息名被挤压 */
+  .template-mobile-card__head {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .template-mobile-card__head strong {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  /* 抽屉内模板编辑：预览 iframe 降高，正文编辑器改为可换行 */
+  .preview-frame {
+    height: 300px;
+  }
+
+  .subject-preview {
+    flex-direction: column;
+    gap: var(--td-comp-margin-xs);
+  }
+
+  .subject-preview strong {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .sms-preview p {
+    overflow-wrap: anywhere;
+  }
+
+  /* 拉取结果对话框：定义列表改为单列堆叠 */
+  .pull-result dl div {
+    flex-direction: column;
+    gap: var(--td-comp-margin-xs);
+  }
+
+  .pull-result dd {
+    text-align: left;
+  }
+
+  .pull-result__list {
+    max-height: none;
+  }
+
+  /* 测试发送对话框：反馈与结果行单列 */
+  .template-test-feedback {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .template-test-result-row > span {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .template-test-target strong {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  /* 批量配置对话框：消息选择列表限高收紧 */
+  .batch-message-list {
+    max-height: 200px;
+  }
+
+  .batch-message-name {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  /* 接口目录：分类侧栏条目触控热区 */
+  .api-category-list button {
+    min-height: 44px;
+  }
+
+  .api-meta-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }

@@ -35,90 +35,93 @@
           <t-button variant="text" @click="clearSelection">清空选择</t-button>
         </t-space>
       </div>
-      <t-table
-        row-key="id"
-        :loading="loading"
-        :data="items"
-        :columns="columns"
-        :pagination="pagination"
-        :hover="true"
-        size="medium"
-        table-layout="auto"
-        :selected-row-keys="selectedRowKeys"
-        aria-label="媒体库文件列表"
-        @page-change="handlePageChange"
-        @select-change="handleSelectChange"
-      >
-        <template #empty>
-          <t-empty :description="loading ? '加载中…' : hasActiveFilters ? '未找到匹配结果' : '暂无数据'" />
-        </template>
-        <template #preview="{ row }">
-          <div class="media-preview">
-            <video
-              v-if="isVideo(row)"
-              class="media-preview__asset"
-              :src="String(row.url || '')"
-              muted
-              preload="metadata"
-              playsinline
-            ></video>
-            <img
-              v-else
-              class="media-preview__asset"
-              :src="String(row.url || '')"
-              :alt="String(row.filename || 'media')"
-              loading="lazy"
-            />
-          </div>
-        </template>
+      <!-- 手机端形态契约：媒体库是多列媒体配置表，保留表格并由外层横向滚动承载 -->
+      <div class="table-scroll" :data-mobile-view="isMobile ? 'scroll' : undefined">
+        <t-table
+          row-key="id"
+          :loading="loading"
+          :data="items"
+          :columns="columns"
+          :pagination="pagination"
+          :hover="true"
+          size="medium"
+          table-layout="auto"
+          :selected-row-keys="selectedRowKeys"
+          aria-label="媒体库文件列表"
+          @page-change="handlePageChange"
+          @select-change="handleSelectChange"
+        >
+          <template #empty>
+            <t-empty :description="loading ? '加载中…' : hasActiveFilters ? '未找到匹配结果' : '暂无数据'" />
+          </template>
+          <template #preview="{ row }">
+            <div class="media-preview">
+              <video
+                v-if="isVideo(row)"
+                class="media-preview__asset"
+                :src="String(row.url || '')"
+                muted
+                preload="metadata"
+                playsinline
+              ></video>
+              <img
+                v-else
+                class="media-preview__asset"
+                :src="String(row.url || '')"
+                :alt="String(row.filename || 'media')"
+                loading="lazy"
+              />
+            </div>
+          </template>
 
-        <template #filename="{ row }">
-          <div class="media-cell">
-            <strong>{{ row.filename || '-' }}</strong>
-            <span class="media-cell__sub">{{ row.path || '-' }}</span>
-          </div>
-        </template>
+          <template #filename="{ row }">
+            <div class="media-cell">
+              <strong>{{ row.filename || '-' }}</strong>
+              <span class="media-cell__sub">{{ row.path || '-' }}</span>
+            </div>
+          </template>
 
-        <template #type="{ row }">
-          <t-tag :theme="isVideo(row) ? 'warning' : 'primary'" variant="light">
-            {{ isVideo(row) ? '视频' : '图片' }}
-          </t-tag>
-        </template>
+          <template #type="{ row }">
+            <t-tag :theme="isVideo(row) ? 'warning' : 'primary'" variant="light">
+              {{ isVideo(row) ? '视频' : '图片' }}
+            </t-tag>
+          </template>
 
-        <template #disk="{ row }">
-          <t-tag :theme="isRemoteDisk(row) ? 'primary' : undefined" variant="light">
-            {{ diskLabel(row.disk) }}
-          </t-tag>
-        </template>
+          <template #disk="{ row }">
+            <t-tag :theme="isRemoteDisk(row) ? 'primary' : undefined" variant="light">
+              {{ diskLabel(row.disk) }}
+            </t-tag>
+          </template>
 
-        <template #meta="{ row }">
-          <div class="media-cell">
-            <span>{{ formatFileSize(row.size) }}</span>
-            <span class="media-cell__sub">{{ formatDimensions(row) }}</span>
-          </div>
-        </template>
+          <template #meta="{ row }">
+            <div class="media-cell">
+              <span>{{ formatFileSize(row.size) }}</span>
+              <span class="media-cell__sub">{{ formatDimensions(row) }}</span>
+            </div>
+          </template>
 
-        <template #actions="{ row }">
-          <t-space size="8">
-            <t-button variant="text" @click="copyText(String(row.url || ''))">复制 URL</t-button>
-            <t-button variant="text" @click="copyText(String(row.path || ''))">复制路径</t-button>
-            <t-button variant="text" @click="openMigrateDialog(row)">转存</t-button>
-            <t-popconfirm
-              content="删除后将无法恢复，确认继续？"
-              :confirm-btn="{ theme: 'danger', content: '删除' }"
-              @confirm="removeMedia(row)"
-            >
-              <t-button
-                variant="text"
-                theme="danger"
-                :disabled="!canDelete(row)"
-                :loading="deletingId === String(row.id || '')"
-                >删除</t-button
+          <template #actions="{ row }">
+            <t-space size="8">
+              <t-button variant="text" @click="copyText(String(row.url || ''))">复制 URL</t-button>
+              <t-button variant="text" @click="copyText(String(row.path || ''))">复制路径</t-button>
+              <t-button variant="text" @click="openMigrateDialog(row)">转存</t-button>
+              <t-popconfirm
+                content="删除后将无法恢复，确认继续？"
+                :confirm-btn="{ theme: 'danger', content: '删除' }"
+                @confirm="removeMedia(row)"
               >
-            </t-popconfirm>
-          </t-space>
-        </template>
-      </t-table>
+                <t-button
+                  variant="text"
+                  theme="danger"
+                  :disabled="!canDelete(row)"
+                  :loading="deletingId === String(row.id || '')"
+                  >删除</t-button
+                >
+              </t-popconfirm>
+            </t-space>
+          </template>
+        </t-table>
+      </div>
 
       <div v-if="!loading && !items.length" class="media-empty">暂无媒体文件，先上传一批图片或视频。</div>
     </t-card>
@@ -316,12 +319,15 @@ import { computed, onMounted, onUnmounted, reactive, ref } from 'vue';
 
 import type { MediaFileRecord, MediaMigrationProgress, MediaStorageDriver } from '@/api/admin';
 import { adminApi } from '@/api/admin';
+import { MOBILE_MEDIA_QUERY, useMediaQuery } from '@/hooks/useMediaQuery';
 import { copyToClipboard } from '@/utils/format';
 import { errorMessage } from '@/utils/userMessage';
 
 defineOptions({ name: 'AdminMediaLibrary' });
 
 const PAGE_SIZE = 24;
+// 手机端形态契约：仅用于给表格外层滚动容器挂 data-mobile-view，桌面端不渲染该属性
+const isMobile = useMediaQuery(MOBILE_MEDIA_QUERY);
 
 const typeOptions = [
   { label: '全部类型', value: '' },

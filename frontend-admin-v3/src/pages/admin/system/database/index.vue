@@ -51,25 +51,27 @@
         <span v-else class="candidates-empty">暂无达到优化阈值的数据表</span>
       </div>
 
-      <t-table
-        row-key="name"
-        :data="filteredList"
-        :columns="columns"
-        :loading="loading"
-        hover
-        table-layout="fixed"
-        aria-label="数据表列表"
-      >
-        <template #name="{ row }">
-          <strong>{{ row.name }}</strong>
-        </template>
-        <template #rows="{ row }">{{ formatNumber(row.rows) }}</template>
-        <template #size="{ row }">{{ formatSizeMb(row.size_mb) }}</template>
-        <template #updateTime="{ row }">{{ formatDateTime(row.update_time) }}</template>
-        <template #empty>
-          <t-empty :description="loading ? '加载中…' : '暂无数据表'" />
-        </template>
-      </t-table>
+      <div class="table-scroll database-table-scroll" :data-mobile-view="isMobile ? 'scroll' : undefined">
+        <t-table
+          row-key="name"
+          :data="filteredList"
+          :columns="columns"
+          :loading="loading"
+          hover
+          table-layout="fixed"
+          aria-label="数据表列表"
+        >
+          <template #name="{ row }">
+            <strong>{{ row.name }}</strong>
+          </template>
+          <template #rows="{ row }">{{ formatNumber(row.rows) }}</template>
+          <template #size="{ row }">{{ formatSizeMb(row.size_mb) }}</template>
+          <template #updateTime="{ row }">{{ formatDateTime(row.update_time) }}</template>
+          <template #empty>
+            <t-empty :description="loading ? '加载中…' : '暂无数据表'" />
+          </template>
+        </t-table>
+      </div>
     </t-card>
   </div>
 </template>
@@ -82,6 +84,7 @@ import { computed, onMounted, ref } from 'vue';
 import type { DatabaseOptimizationCandidate, DatabaseStatus, DatabaseTableItem } from '@/api/admin/database';
 import { databaseApi } from '@/api/admin/database';
 import { AdminPermissions, hasPermissionInList } from '@/constants/permissions';
+import { MOBILE_MEDIA_QUERY, useMediaQuery } from '@/hooks/useMediaQuery';
 import { useUserStore } from '@/store';
 import { formatDateTime } from '@/utils/format';
 import { errorMessage } from '@/utils/userMessage';
@@ -89,6 +92,8 @@ import { errorMessage } from '@/utils/userMessage';
 defineOptions({ name: 'AdminDatabaseStatus' });
 
 const userStore = useUserStore();
+// 与页内 scoped 样式的 `max-width: 767.98px` 同源；配置类列表保留表格并横向滚动。
+const isMobile = useMediaQuery(MOBILE_MEDIA_QUERY);
 
 const loading = ref(false);
 const optimizing = ref(false);
@@ -337,6 +342,32 @@ function hasPermission(permission: string) {
 
   .candidates-empty {
     color: var(--td-text-color-placeholder);
+  }
+
+  @media (max-width: 767.98px) {
+    .database-toolbar {
+      flex-direction: column;
+      align-items: stretch;
+      gap: var(--td-comp-margin-s);
+    }
+
+    .database-toolbar .t-button {
+      width: 100%;
+    }
+
+    .database-summary {
+      flex-direction: column;
+      gap: var(--td-comp-margin-xs);
+    }
+
+    .database-optimization-candidates {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+
+    .database-table-scroll {
+      margin-top: var(--td-comp-margin-s);
+    }
   }
 }
 </style>

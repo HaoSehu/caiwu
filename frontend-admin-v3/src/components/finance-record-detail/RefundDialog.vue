@@ -216,4 +216,20 @@ async function handleSubmit(): Promise<void> {
 .refund-dialog__full-btn {
   margin-top: var(--td-comp-margin-xs);
 }
+
+/* 手机端：实收/已退/可退三项在窄屏由横排改为两列网格，避免金额被挤压换行 */
+@media (max-width: 767.98px) {
+  .refund-dialog__summary {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--td-comp-margin-s) var(--td-comp-margin-m);
+    margin: var(--td-comp-margin-s) 0 var(--td-comp-margin-l);
+    padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-s);
+  }
+
+  .refund-dialog__value {
+    font-size: var(--td-font-size-size-3, 14px);
+    overflow-wrap: anywhere;
+  }
+}
 </style>

@@ -53,6 +53,8 @@
 
     <t-card :bordered="false">
       <t-table
+        v-if="!isMobile"
+        class="tickets-desktop-table"
         row-key="id"
         :data="list"
         :columns="columns"
@@ -88,7 +90,7 @@
         </template>
       </t-table>
 
-      <div v-if="total > 0" class="ticket-pagination">
+      <div v-if="!isMobile && total > 0" class="ticket-pagination tickets-desktop-pagination">
         <t-pagination
           :current="pagination.page"
           :page-size="pagination.page_size"
@@ -97,6 +99,74 @@
           show-jumper
           @change="handlePaginationChange"
         />
+      </div>
+
+      <!-- 手机端形态契约：9 列固定表格在 375px 无法表达，改为卡片；data-mobile-view 供 e2e 判定。
+           桌面分页夹在两者之间，v-else 无法与上面的 v-if 相邻，故这里用独立的 v-if 二选一。 -->
+      <div v-if="isMobile" class="tickets-mobile-list" data-mobile-view="card">
+        <t-loading :loading="loading" size="small">
+          <div v-if="list.length" class="tickets-mobile-stack">
+            <article v-for="row in list" :key="row.id" class="tickets-mobile-card">
+              <div class="tickets-mobile-card__head">
+                <button class="tickets-mobile-card__subject" type="button" @click="openDetail(row.id)">
+                  {{ row.subject || '-' }}
+                </button>
+                <t-tag :theme="statusTheme(row.status)" variant="light">{{ statusLabel(row.status) }}</t-tag>
+              </div>
+              <dl class="tickets-mobile-card__meta">
+                <div>
+                  <dt>编号</dt>
+                  <dd>#{{ row.id }}</dd>
+                </div>
+                <div>
+                  <dt>用户</dt>
+                  <dd>
+                    <button
+                      class="tickets-mobile-card__user"
+                      type="button"
+                      @click="goUserDetail(row.user?.id || row.user_id)"
+                    >
+                      {{ userName(row) }}
+                    </button>
+                  </dd>
+                </div>
+                <div>
+                  <dt>优先级</dt>
+                  <dd>
+                    <t-tag :theme="priorityTheme(row.priority)" variant="light">{{
+                      priorityLabel(row.priority)
+                    }}</t-tag>
+                  </dd>
+                </div>
+                <div>
+                  <dt>分类</dt>
+                  <dd>{{ departmentLabel(row.department) }}</dd>
+                </div>
+                <div>
+                  <dt>处理人</dt>
+                  <dd>{{ assigneeName(row) }}</dd>
+                </div>
+                <div>
+                  <dt>最后更新</dt>
+                  <dd>{{ formatDateTime(row.updated_at || row.created_at) }}</dd>
+                </div>
+              </dl>
+              <div class="tickets-mobile-card__actions">
+                <t-button variant="outline" theme="primary" @click="openDetail(row.id)">查看详情</t-button>
+              </div>
+            </article>
+          </div>
+          <t-empty v-else :description="hasActiveFilters ? '未找到匹配结果' : '暂无工单记录'" />
+        </t-loading>
+        <div v-if="total > 0" class="ticket-mobile-pagination">
+          <t-pagination
+            v-model:current="pagination.page"
+            v-model:page-size="pagination.page_size"
+            :total="total"
+            :page-size-options="pagination.pageSizeOptions"
+            @change="handlePaginationChange"
+          />
+        </div>
       </div>
     </t-card>
   </div>
@@ -113,6 +183,7 @@ import { useRouter } from 'vue-router';
 import type { TicketRecord } from '@/api/admin';
 import { adminApi } from '@/api/admin';
 import { useListPage } from '@/hooks/useListPage';
+import { MOBILE_MEDIA_QUERY, useMediaQuery } from '@/hooks/useMediaQuery';
 import { formatDateTime } from '@/utils/format';
 import { errorMessage } from '@/utils/userMessage';
 
@@ -121,6 +192,8 @@ defineOptions({ name: 'AdminTickets' });
 const DEFAULT_STATUS_FILTER = 'ongoing';
 
 const router = useRouter();
+// 手机端形态：与 index.less 的 max-width: 767.98px 同源，用于桌面表格/移动卡片二选一渲染
+const isMobile = useMediaQuery(MOBILE_MEDIA_QUERY);
 
 interface TicketFilter {
   keyword: string;

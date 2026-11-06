@@ -116,7 +116,8 @@
 
 @media (max-width: 1024px) {
   .cpu-layout {
-    grid-template-columns: 1fr;
+    // 必须 minmax(0, 1fr)：1fr 的最小值是 min-content，右侧表格会把整列撑到 1000px+
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

@@ -75,7 +75,7 @@
         <t-card :bordered="false">
           <template #title>接口明细</template>
           <template #subtitle> 共 {{ apiItems.length }} 条，当前筛选 {{ filteredApiItems.length }} 条 </template>
-          <div class="table-scroll">
+          <div class="table-scroll" :data-mobile-view="isMobile ? 'scroll' : undefined">
             <t-table
               row-key="id"
               :data="pagedApiItems"
@@ -149,6 +149,7 @@ import { computed, reactive, ref, watch } from 'vue';
 
 import { PAGE_SIZE_OPTIONS } from '@/constants/pagination';
 import apiCatalogData from '@/data/apiCatalog.generated.json';
+import { MOBILE_MEDIA_QUERY, useMediaQuery } from '@/hooks/useMediaQuery';
 import { copyToClipboard } from '@/utils/format';
 
 defineOptions({ name: 'AdminApiDirectory' });
@@ -182,6 +183,8 @@ interface ApiCatalogMeta {
 }
 
 const selectedApiModule = ref('all');
+// 手机端形态契约：接口目录是多列配置表，保留表格由滚动容器承载，标记只在手机断点渲染
+const isMobile = useMediaQuery(MOBILE_MEDIA_QUERY);
 const apiFilters = reactive({
   keyword: '',
   access: 'all',

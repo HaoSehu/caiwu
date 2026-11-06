@@ -364,7 +364,85 @@
   }
 }
 
+@media (max-width: 991px) {
+  .user-detail-summary {
+    padding: var(--td-comp-paddingTB-l) var(--td-comp-paddingLR-m);
+  }
+
+  .user-detail-subpanel {
+    padding: var(--td-comp-paddingTB-l) var(--td-comp-paddingLR-l);
+  }
+}
+
 @media (max-width: 767.98px) {
+  /* 工具栏：返回独占一行，操作按钮整行等分，避免挤压标题 */
+  .user-detail-toolbar {
+    flex-wrap: wrap;
+    align-items: stretch;
+    min-height: 0;
+
+    &__back {
+      width: 100%;
+      justify-content: flex-start;
+    }
+
+    &__actions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      width: 100%;
+
+      .t-button {
+        min-width: 0;
+        width: 100%;
+      }
+
+      // 没有「代登录」权限时只剩一颗按钮，独占整行而不是只占半格
+      .t-button:only-child {
+        grid-column: 1 / -1;
+      }
+    }
+  }
+
+  /* 概览卡：身份区与指标卡纵向排列，指标卡两列网格 */
+  .user-detail-summary {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--td-comp-margin-l);
+
+    &__metrics {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      width: 100%;
+
+      .summary-metric-card {
+        min-width: 0;
+        padding: var(--td-comp-paddingTB-s) var(--td-comp-paddingLR-s);
+        text-align: left;
+      }
+    }
+  }
+
+  .user-detail-summary.is-skeleton .summary-metric-skeleton {
+    min-width: 0;
+  }
+
+  /* 标签栏：九项在窄屏放不下时横向滚动，不换行压扁文字 */
+  .user-detail-page .t-tabs__nav-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  }
+
+  .user-detail-page .t-tabs__nav-item {
+    padding: 0 var(--td-comp-paddingLR-s);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
   .detail-toolbar {
     grid-template-columns: repeat(2, minmax(0, 1fr));
 
@@ -402,8 +480,27 @@
   }
 
   .info-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
   }
+
+  /* 值可能很长（邮箱、地址），手机端允许换行而不是截断成省略号 */
+  .info-value {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .referral-item {
+    padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-m);
+  }
+}
+
+.member-level-edit-field {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
 }
 
 .member-level-edit-row {
@@ -423,4 +520,16 @@
   color: var(--td-text-color-secondary);
   font-size: var(--td-font-size-body-small);
   line-height: 1.6;
+}
+
+/* 手机端服务卡片列表：与用户列表的卡片流保持同一套间距 */
+.user-services-cards__stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--td-comp-margin-m);
+}
+
+.user-services-cards__pagination {
+  flex-wrap: wrap;
+  margin-top: var(--td-comp-margin-l);
 }

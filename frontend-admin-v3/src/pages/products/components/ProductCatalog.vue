@@ -191,7 +191,7 @@
           </div>
         </div>
 
-        <div class="table-scroll">
+        <div class="table-scroll" :data-mobile-view="isMobile ? 'scroll' : undefined">
           <t-table
             row-key="id"
             :data="products"
@@ -240,7 +240,25 @@
             </template>
             <template #operation="{ row }">
               <div class="product-row-actions">
-                <template v-if="canManage && row.is_deleted">
+                <!-- 手机端列宽有限：三个文字按钮横排要 190px，收成「更多」下拉后可把它压到 64px -->
+                <t-dropdown
+                  v-if="canManage && isMobile"
+                  trigger="click"
+                  placement="bottom-right"
+                  :options="productRowActionOptions(row)"
+                  @click="handleProductRowAction(row, $event)"
+                >
+                  <t-button
+                    class="product-row-action-trigger"
+                    size="small"
+                    shape="square"
+                    variant="text"
+                    :aria-label="`更多操作：${productSpecDisplayName(row)}`"
+                  >
+                    <template #icon><more-icon /></template>
+                  </t-button>
+                </t-dropdown>
+                <template v-else-if="canManage && row.is_deleted">
                   <t-button
                     size="small"
                     variant="text"
@@ -852,6 +870,7 @@ import type { ProductCategoryRecord, ProductRecord } from '@/api/product';
 import { productApi } from '@/api/product';
 import { PAGE_SIZE_OPTIONS } from '@/constants/pagination';
 import { AdminPermissions } from '@/constants/permissions';
+import { MOBILE_MEDIA_QUERY, useMediaQuery } from '@/hooks/useMediaQuery';
 import { hasAdminPermission } from '@/utils/permission';
 
 import {
@@ -904,6 +923,8 @@ type ProductLifecycleStatus = 'active' | 'deleted' | 'all';
 // 商品目录所有写入口（分类、商品、批量操作）统一走 PRODUCT_MANAGE；只读岗隐藏按钮，
 // 后端路由同样以 permission:product.manage 兜底。
 const canManage = computed(() => hasAdminPermission(AdminPermissions.PRODUCT_MANAGE));
+// 与 responsive.less 的 `max-width: 767.98px` 同源，供 `data-mobile-view` 契约使用。
+const isMobile = useMediaQuery(MOBILE_MEDIA_QUERY);
 
 // --- State ---
 const router = useRouter();
@@ -1039,17 +1060,81 @@ const productDrawerSections = [
   { key: 'config', label: '产品配置', description: '规格与可选项' },
 ];
 
-const productColumns: PrimaryTableCol<ProductRecord>[] = [
-  { colKey: 'row-select', type: 'multiple', width: 54, fixed: 'left' },
-  { colKey: 'id', title: 'ID', width: 64 },
-  { colKey: 'name', title: '商品', minWidth: 200 },
-  { colKey: 'effective_product_group_full_name', title: '分类', minWidth: 180 },
-  { colKey: 'price', title: '月价格', width: 110, align: 'right', sorter: true },
-  { colKey: 'stock', title: '库存', width: 90, align: 'right', sorter: true },
-  { colKey: 'services_count', title: '现存', width: 90, align: 'right', sorter: true },
-  { colKey: 'status', title: '显示状态', width: 100, align: 'center' },
-  { colKey: 'operation', title: '操作', width: 190, fixed: 'right', align: 'center' },
-];
+const productColumns = computed<PrimaryTableCol<ProductRecord>[]>(() => {
+  const operation: PrimaryTableCol<ProductRecord> = {
+    colKey: 'operation',
+    title: '操作',
+    width: isMobile.value ? 60 : 190,
+    fixed: 'right',
+    align: 'center',
+  };
+  // 只读角色没有商品操作权限：操作列三个分支都被 canManage 挡掉，
+  // 渲染出来只会是一条空白列，手机端还会挤占本已紧张的列宽。
+  // 桌面与手机统一：无权限时不渲染操作列。
+  const showOperation = canManage.value;
+  // 手机端只保留识别商品与决策所需的列：分类由左上角筛选入口与商品名承载，
+  // 库存/现存属于后端运营指标，手机窄屏下先让给商品名与价格。
+  // 列宽合计 ≈ 408px，配合 responsive.less 去掉 680px 最小宽度，
+  // 主流手机宽度下不再横向滚动。
+  if (isMobile.value) {
+    return [
+      { colKey: 'row-select', type: 'multiple', width: 44, fixed: 'left' },
+      { colKey: 'id', title: 'ID', width: 52 },
+      { colKey: 'name', title: '商品', minWidth: 110 },
+      { colKey: 'price', title: '月价格', width: 84, align: 'right', sorter: true },
+      { colKey: 'status', title: '状态', width: 66, align: 'center' },
+      ...(showOperation ? [operation] : []),
+    ];
+  }
+  return [
+    { colKey: 'row-select', type: 'multiple', width: 54, fixed: 'left' },
+    { colKey: 'id', title: 'ID', width: 64 },
+    { colKey: 'name', title: '商品', minWidth: 200 },
+    { colKey: 'effective_product_group_full_name', title: '分类', minWidth: 180 },
+    { colKey: 'price', title: '月价格', width: 110, align: 'right', sorter: true },
+    { colKey: 'stock', title: '库存', width: 90, align: 'right', sorter: true },
+    { colKey: 'services_count', title: '现存', width: 90, align: 'right', sorter: true },
+    { colKey: 'status', title: '显示状态', width: 100, align: 'center' },
+    ...(showOperation ? [operation] : []),
+  ];
+});
+
+// 手机端「更多」下拉与桌面端三个按钮同源，避免两套操作逻辑分叉
+function productRowActionOptions(row: ProductRecord): DropdownOption[] {
+  if (row.is_deleted) {
+    return [
+      { content: '恢复', value: 'restore' },
+      { content: '彻底删除', value: 'force-delete', theme: 'error' },
+    ];
+  }
+  return [
+    { content: '编辑', value: 'edit' },
+    { content: Number(row.status) === 1 ? '隐藏' : '显示', value: 'toggle' },
+    { content: '删除', value: 'delete', theme: 'error' },
+  ];
+}
+
+function handleProductRowAction(row: ProductRecord, option: DropdownOption) {
+  switch (option.value) {
+    case 'restore':
+      void handleRestoreProduct(row);
+      break;
+    case 'force-delete':
+      void handleForceDeleteProduct(row);
+      break;
+    case 'toggle':
+      void handleToggleProduct(row);
+      break;
+    case 'delete':
+      handleDeleteProduct(row);
+      break;
+    case 'edit':
+      router.push({ name: 'AdminProductEdit', params: { id: row.id } });
+      break;
+    default:
+      break;
+  }
+}
 
 const productRules = {
   display_name: [{ required: true, message: '请输入商品名称', trigger: 'blur' }],

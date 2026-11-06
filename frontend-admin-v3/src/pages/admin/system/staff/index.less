@@ -70,6 +70,25 @@
     justify-content: flex-end;
     margin-top: var(--td-comp-margin-m);
   }
+
+  /* 移动卡片列表：外层由 v-if="isMobile" 控制渲染，这里只负责堆叠间距与分页对齐 */
+  .staff-mobile-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--td-comp-margin-l);
+    margin-top: var(--td-comp-margin-m);
+  }
+
+  .staff-mobile-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .staff-mobile-pagination {
+    justify-content: flex-start;
+    overflow-x: auto;
+  }
 }
 
 @media (max-width: 767.98px) {

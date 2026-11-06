@@ -226,6 +226,16 @@
   padding: var(--td-comp-paddingTB-s) var(--td-comp-paddingLR-m);
 }
 
+/* 字段包裹层只在手机端展开成「标签 + 控件」的行；桌面用 display: contents
+   让它对栅格完全透明（否则会多出 5 个栅格项），标签本身也隐藏。 */
+.traffic-row__field {
+  display: contents;
+}
+
+.traffic-row__label {
+  display: none;
+}
+
 .traffic-row:last-child {
   border-bottom: 0;
 }

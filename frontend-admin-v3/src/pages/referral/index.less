@@ -179,6 +179,23 @@
     width: 100%;
   }
 
+  /* 概览指标由四列降为单列，避免 375px 下每个卡片被压到 80px 以内 */
+  .referral-metrics {
+    grid-template-columns: 1fr;
+    gap: var(--td-comp-margin-s);
+  }
+
+  .referral-metrics .t-card .t-card__body {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--td-comp-margin-s);
+  }
+
+  .referral-metrics strong {
+    margin-top: 0;
+  }
+
   .referral-filter {
     flex-direction: column;
     align-items: stretch;
@@ -198,7 +215,6 @@
     }
   }
 
-  .referral-metrics,
   .referral-mobile-card dl {
     grid-template-columns: 1fr;
   }
@@ -208,7 +224,7 @@
   .referral-filter {
     grid-template-columns: 1fr;
     grid-template-areas:
-      "keyword"
-      "status";
+      'keyword'
+      'status';
   }
 }

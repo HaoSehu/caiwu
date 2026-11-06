@@ -251,7 +251,7 @@ import { useRouter } from 'vue-router';
 import type { InvoiceRecord } from '@/api/admin';
 import type { RecordDetailMetric, RecordDetailTab } from '@/components/record-detail-page/index.vue';
 import RecordDetailPage from '@/components/record-detail-page/index.vue';
-import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { MOBILE_MEDIA_QUERY, useMediaQuery } from '@/hooks/useMediaQuery';
 import { copyToClipboard, fieldValue, formatDateTime, formatMoney, toRecord } from '@/utils/format';
 
 const props = withDefaults(
@@ -300,7 +300,7 @@ const emit = defineEmits<{
   (event: 'view-user', id: unknown): void;
 }>();
 
-const isMobile = useMediaQuery('(max-width: 767.98px)');
+const isMobile = useMediaQuery(MOBILE_MEDIA_QUERY);
 const drawerSize = computed(() => (isMobile.value ? '100%' : '780px'));
 
 // 外壳切换：抽屉模式套 TDrawer；embedded 模式渲染为页面内容（复用同一套详情 UI）
@@ -578,6 +578,38 @@ function paymentStatusTheme(payment: Record<string, unknown>) {
   .detail-kv-item--span-2,
   .detail-kv-item--span-3 {
     grid-column: 1;
+  }
+
+  .detail-kv-item {
+    padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-s);
+  }
+
+  .finance-detail-section + .finance-detail-section {
+    margin-top: var(--td-comp-margin-l);
+  }
+
+  /* 账单行：单号与金额在窄屏上下排列，长单号允许换行 */
+  .finance-line-item {
+    flex-wrap: wrap;
+    gap: var(--td-comp-margin-xs);
+    padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-s);
+
+    > span {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+
+    strong {
+      margin-left: auto;
+    }
+  }
+
+  .finance-line-item--stacked {
+    gap: var(--td-comp-margin-xs);
+  }
+
+  .finance-line-item__head {
+    flex-wrap: wrap;
   }
 }
 

@@ -82,7 +82,7 @@
         </t-table>
       </div>
 
-      <div v-else class="record-mobile-list">
+      <div v-else class="record-mobile-list" data-mobile-view="card">
         <t-loading :loading="loading" size="small">
           <div v-if="recharges.length" class="record-mobile-stack">
             <mobile-record-card
@@ -154,7 +154,7 @@ import QuickFilterTags from '@/components/quick-filter-tags/index.vue';
 import type { InvoiceDetailPayload } from '@/hooks/useFinanceDetailDrawer';
 import { useFinanceDetailDrawer } from '@/hooks/useFinanceDetailDrawer';
 import { useListPage } from '@/hooks/useListPage';
-import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { MOBILE_MEDIA_QUERY, useMediaQuery } from '@/hooks/useMediaQuery';
 import { fieldValue, formatDateTime, formatFinishTime, formatMoney, toRecord } from '@/utils/format';
 import { errorMessage } from '@/utils/userMessage';
 
@@ -171,7 +171,7 @@ interface RechargeFilter {
 }
 
 const router = useRouter();
-const isMobile = useMediaQuery('(max-width: 767.98px)');
+const isMobile = useMediaQuery(MOBILE_MEDIA_QUERY);
 
 const {
   filters,

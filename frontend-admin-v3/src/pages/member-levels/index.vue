@@ -47,7 +47,7 @@
         </t-table>
       </div>
 
-      <div v-else class="mobile-list">
+      <div v-else class="mobile-list" data-mobile-view="card">
         <article v-for="row in levels" :key="row.id" class="member-mobile-card">
           <div class="member-mobile-card__head">
             <div>
@@ -170,7 +170,7 @@ import type { MemberLevelPayload, MemberLevelRecord } from '@/api/admin';
 import { adminApi } from '@/api/admin';
 import { AdminPermissions } from '@/constants/permissions';
 import { useListPage } from '@/hooks/useListPage';
-import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { MOBILE_MEDIA_QUERY, useMediaQuery } from '@/hooks/useMediaQuery';
 import { fieldValue, formatDateTime } from '@/utils/format';
 import { required } from '@/utils/formRules';
 import { hasAdminPermission } from '@/utils/permission';
@@ -202,7 +202,7 @@ const matrixLoaded = ref(false);
 const dialogVisible = ref(false);
 const formRef = ref<FormInstanceFunctions>();
 const matrixGroups = ref<MatrixGroupRow[]>([]);
-const isMobile = useMediaQuery('(max-width: 767.98px)');
+const isMobile = useMediaQuery(MOBILE_MEDIA_QUERY);
 
 // 会员等级是后端一次性返回的全量档位（MemberLevelController::index 固定 page=1、page_size=条数），
 // 接入统一列表引擎只为拿到请求竞态防护、统一错误提示与三态空文案，不渲染分页器。

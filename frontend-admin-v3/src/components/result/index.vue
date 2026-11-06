@@ -1,5 +1,5 @@
 <template>
-  <div class="result-container">
+  <div class="result-container" :data-mobile-view="isMobile ? 'detail' : undefined">
     <div class="result-bg-img">
       <component :is="dynamicComponent"></component>
     </div>
@@ -17,6 +17,7 @@ import Result500Icon from '@/assets/assets-result-500.svg?component';
 import ResultIeIcon from '@/assets/assets-result-ie.svg?component';
 import ResultMaintenanceIcon from '@/assets/assets-result-maintenance.svg?component';
 import ResultWifiIcon from '@/assets/assets-result-wifi.svg?component';
+import { MOBILE_MEDIA_QUERY, useMediaQuery } from '@/hooks/useMediaQuery';
 
 const { type } = defineProps({
   bgUrl: {
@@ -36,6 +37,9 @@ const { type } = defineProps({
     default: '',
   },
 });
+
+// 与下方 scoped 样式的 `max-width: 767.98px` 同源；结果页手机端为单列详情形态。
+const isMobile = useMediaQuery(MOBILE_MEDIA_QUERY);
 
 const dynamicComponent = computed(() => {
   switch (type) {
@@ -114,6 +118,28 @@ const dynamicComponent = computed(() => {
     flex-wrap: wrap;
     gap: var(--td-comp-margin-s);
     justify-content: center;
+  }
+
+  // 手机端：75vh 固定高度在横屏与地址栏占用后会把插图与按钮挤出视口
+  @media (max-width: 767.98px) {
+    &-container {
+      height: auto;
+      min-height: calc(100dvh - 160px);
+      padding: var(--td-comp-margin-xl) 0;
+    }
+
+    &-bg-img {
+      width: 140px;
+    }
+
+    :deep(.result-actions) {
+      width: 100%;
+
+      .t-button {
+        flex: 1 1 100%;
+        min-width: 0;
+      }
+    }
   }
 }
 </style>

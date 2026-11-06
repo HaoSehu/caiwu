@@ -61,6 +61,123 @@
   justify-content: flex-end;
 }
 
+.ticket-mobile-pagination {
+  display: none;
+}
+
+.tickets-mobile-list {
+  display: none;
+}
+
+.tickets-mobile-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tickets-mobile-card {
+  overflow: hidden;
+  border: 1px solid var(--td-component-border);
+  border-radius: var(--td-radius-large);
+  background: var(--td-bg-color-container);
+}
+
+.tickets-mobile-card__head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--td-comp-margin-s);
+  min-height: 50px;
+  border-bottom: 1px solid var(--td-component-border);
+  padding: var(--td-comp-margin-m);
+}
+
+.tickets-mobile-card__subject {
+  display: -webkit-box;
+  min-width: 0;
+  overflow: hidden;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--td-brand-color);
+  font: inherit;
+  font-size: var(--td-font-size-size-3, 14px);
+  font-weight: 600;
+  line-height: 21px;
+  text-align: left;
+  cursor: pointer;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.tickets-mobile-card__meta {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
+  margin: 0;
+  padding: var(--td-comp-margin-s) var(--td-comp-margin-m);
+}
+
+.tickets-mobile-card__meta div {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  align-items: center;
+  min-width: 0;
+  padding: 4px 0;
+}
+
+.tickets-mobile-card__meta dt {
+  color: var(--td-text-color-placeholder);
+  font-size: var(--td-font-size-size-1, 12px);
+  line-height: 20px;
+}
+
+.tickets-mobile-card__meta dd {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--td-text-color-primary);
+  font-size: var(--td-font-size-size-3, 14px);
+  line-height: 20px;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tickets-mobile-card__user {
+  min-width: 0;
+  overflow: hidden;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--td-brand-color);
+  font: inherit;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.tickets-mobile-card__actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  border-top: 1px solid var(--td-component-border);
+  padding: var(--td-comp-margin-s) var(--td-comp-margin-m);
+}
+
+.tickets-mobile-card .t-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 44px;
+  padding-right: 8px;
+  padding-left: 8px;
+}
+
 @media (max-width: 767.98px) {
   .tickets-filter {
     flex-direction: column;
@@ -87,15 +204,38 @@
     justify-content: stretch;
     overflow-x: auto;
   }
+
+  /* 手机端只有卡片列表需要分页；桌面分页随表格一起隐藏，避免同一页出现两套分页 */
+  .tickets-desktop-pagination {
+    display: none;
+  }
+
+  .ticket-mobile-pagination {
+    display: block;
+    margin-top: var(--td-comp-margin-l);
+    overflow-x: auto;
+  }
+
+  .tickets-desktop-table {
+    display: none;
+  }
+
+  .tickets-mobile-list {
+    display: block;
+  }
+
+  .tickets-mobile-card__meta div {
+    grid-template-columns: 60px minmax(0, 1fr);
+  }
 }
 
 @media (max-width: 360px) {
   .tickets-filter {
     grid-template-columns: 1fr;
     grid-template-areas:
-      "keyword"
-      "status"
-      "priority"
-      "department";
+      'keyword'
+      'status'
+      'priority'
+      'department';
   }
 }

@@ -243,7 +243,9 @@
   border-radius: var(--td-radius-medium);
   background: var(--td-bg-color-page);
   cursor: pointer;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
   max-width: 480px;
 }
 
@@ -297,7 +299,10 @@
   background: var(--td-bg-color-container);
   overflow: hidden;
   cursor: pointer;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.18s ease;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.18s ease;
 }
 
 .cover-drawer-card:hover {
@@ -423,6 +428,31 @@
     width: 100%;
   }
 
+  /* 分类横向胶囊条在手机端触控热区抬到 44px，桌面保持 34px */
+  .category-chip {
+    min-height: 44px;
+  }
+
+  /* 移动卡片操作图标按钮：44×44 命中区 */
+  .content-mobile-card__more {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+  }
+
+  .content-mobile-card__head {
+    align-items: center;
+  }
+
+  .content-mobile-card__title {
+    -webkit-line-clamp: 2;
+  }
+
+  /* 分类管理弹窗内的表格：保留表格并由外层横向滚动（配置型） */
+  .category-dialog .t-table {
+    min-width: 560px;
+  }
+
   .category-form-grid {
     grid-template-columns: 1fr;
   }
@@ -445,12 +475,12 @@
   .content-filter {
     grid-template-columns: 1fr;
     grid-template-areas:
-      "keyword"
-      "category"
-      "status"
-      "pinned"
-      "categoryManage"
-      "create";
+      'keyword'
+      'category'
+      'status'
+      'pinned'
+      'categoryManage'
+      'create';
   }
 
   .content-mobile-card__meta {

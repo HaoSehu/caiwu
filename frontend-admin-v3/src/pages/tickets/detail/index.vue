@@ -1,5 +1,5 @@
 <template>
-  <div class="ticket-conversation-page">
+  <div class="ticket-conversation-page" :data-mobile-view="isMobile ? 'detail' : undefined">
     <t-loading :loading="detailLoading" size="small">
       <div class="conversation-action-bar">
         <t-button variant="text" theme="default" @click="goBack">
@@ -241,6 +241,7 @@ import { useRoute, useRouter } from 'vue-router';
 
 import type { TicketAdminUser, TicketAttachment, TicketDetail, TicketReply } from '@/api/admin';
 import { adminApi } from '@/api/admin';
+import { MOBILE_MEDIA_QUERY, useMediaQuery } from '@/hooks/useMediaQuery';
 import { copyToClipboard, formatDateTime } from '@/utils/format';
 import { errorMessage } from '@/utils/userMessage';
 
@@ -268,6 +269,8 @@ type ConversationMessage = TicketReply & {
 
 const route = useRoute();
 const router = useRouter();
+// 手机端形态契约：详情标记只在手机断点渲染，桌面端保持无属性
+const isMobile = useMediaQuery(MOBILE_MEDIA_QUERY);
 
 const detailLoading = ref(false);
 const detail = ref<TicketDetail | null>(null);

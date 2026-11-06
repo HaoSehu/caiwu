@@ -45,7 +45,7 @@
         </t-table>
       </div>
 
-      <div v-else class="mobile-list">
+      <div v-else class="mobile-list" data-mobile-view="card">
         <article v-for="row in groups" :key="row.id" class="mg-mobile-card">
           <div class="mg-mobile-card__head">
             <div>
@@ -124,7 +124,7 @@ import type { MarketingProductGroupPayload, MarketingProductGroupRecord } from '
 import { adminApi } from '@/api/admin';
 import ProductBindingTreeSelect from '@/components/product-binding-tree-select/index.vue';
 import { AdminPermissions } from '@/constants/permissions';
-import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { MOBILE_MEDIA_QUERY, useMediaQuery } from '@/hooks/useMediaQuery';
 import { required } from '@/utils/formRules';
 import { hasAdminPermission } from '@/utils/permission';
 import { errorMessage } from '@/utils/userMessage';
@@ -146,7 +146,7 @@ const formRef = ref<FormInstanceFunctions>();
 const groups = ref<MarketingProductGroupRecord[]>([]);
 const pickTarget = ref<MarketingProductGroupRecord | null>(null);
 const pickProductIds = ref<Array<number | string>>([]);
-const isMobile = useMediaQuery('(max-width: 767.98px)');
+const isMobile = useMediaQuery(MOBILE_MEDIA_QUERY);
 // 路由只要求 PRODUCT_LIST，写操作必须另判 PRODUCT_MANAGE，否则只读岗能看到并点到写入口
 const canManage = computed(() => hasAdminPermission(AdminPermissions.PRODUCT_MANAGE));
 

@@ -92,12 +92,14 @@
         />
       </div>
 
-      <div class="users-mobile-list">
+      <!-- 手机端形态契约：桌面端由 CSS 隐藏，e2e 以 data-mobile-view 判定本页已适配 -->
+      <div class="users-mobile-list" :data-mobile-view="isMobile ? 'card' : undefined">
         <t-loading :loading="loading" size="small">
           <div v-if="list.length" class="users-mobile-stack">
             <article v-for="row in list" :key="row.id" class="users-mobile-card">
               <div class="users-mobile-card__head">
                 <button class="users-mobile-card__account" type="button" @click="openDetail(row.id)">
+                  <small class="users-mobile-card__id">ID {{ row.id }}</small>
                   <span>{{ row.phone || '未绑定手机号' }}</span>
                   <em>{{ row.email || '未绑定邮箱' }}</em>
                 </button>
@@ -179,6 +181,7 @@ import type { AdminUser, UserListParams } from '@/api/user';
 import { userApi } from '@/api/user';
 import { AdminPermissions, hasPermissionInList } from '@/constants/permissions';
 import { useListPage } from '@/hooks/useListPage';
+import { MOBILE_MEDIA_QUERY, useMediaQuery } from '@/hooks/useMediaQuery';
 import { useUserStore } from '@/store';
 import { formatDateTime, formatMoney } from '@/utils/format';
 import { phoneRule, required } from '@/utils/formRules';
@@ -189,6 +192,8 @@ defineOptions({
 });
 
 const router = useRouter();
+// 手机端形态契约：桌面端不渲染 data-mobile-view
+const isMobile = useMediaQuery(MOBILE_MEDIA_QUERY);
 const userStore = useUserStore();
 
 function userPermissions() {

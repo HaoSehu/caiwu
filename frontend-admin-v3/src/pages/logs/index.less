@@ -416,6 +416,10 @@
     min-width: 0;
   }
 
+  .logs-mobile-list {
+    display: block;
+  }
+
   .log-mobile-stack {
     display: flex;
     flex-direction: column;
@@ -434,12 +438,14 @@
 
   .log-mobile-card__head {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    justify-content: space-between;
-    gap: var(--td-comp-margin-s);
+    justify-content: flex-start;
+    gap: var(--td-comp-margin-xs);
   }
 
   .log-mobile-card__time {
+    flex: 1 1 100%;
     color: var(--td-text-color-placeholder);
     font-size: var(--td-font-size-size-1, 12px);
   }
@@ -448,7 +454,7 @@
     color: var(--td-text-color-primary);
     font-size: var(--td-font-size-size-3, 14px);
     line-height: 1.5;
-    overflow-wrap: break-word;
+    overflow-wrap: anywhere;
   }
 
   .log-mobile-card__meta {
@@ -458,11 +464,25 @@
     flex-wrap: wrap;
   }
 
+  /* 手机端卡片里的路径/键值可能很长，必须可换行，否则会撑出横向滚动 */
+  .log-mobile-card__meta .muted-text {
+    overflow: visible;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    text-overflow: clip;
+    white-space: normal;
+  }
+
   .log-mobile-card__actions {
     display: flex;
     align-items: center;
     justify-content: flex-end;
     gap: var(--td-comp-margin-s);
+  }
+
+  .log-mobile-card__actions .t-button {
+    width: auto;
+    min-width: 88px;
   }
 
   .schedule-env-grid {
@@ -658,6 +678,11 @@
     width: 100%;
   }
 
+  /* 清理表单：三个操作按钮在手机端整宽纵向排列（已由 .cleanup-actions 单列兜住） */
+  .cleanup-form .t-input-number {
+    width: 100%;
+  }
+
   .detail-drawer-actions {
     margin-right: -16px;
     margin-left: -16px;
@@ -667,5 +692,38 @@
 
   .detail-drawer-actions .t-button {
     width: 100%;
+  }
+
+  /* 抽屉内明细网格（LogDetailDrawer）：手机端单列，长 ID / JSON 允许换行 */
+  .detail-grid strong {
+    overflow-wrap: anywhere;
+  }
+
+  .json-block {
+    max-height: none;
+    font-size: var(--td-font-size-size-1, 12px);
+  }
+
+  .mail-preview-frame {
+    min-height: 320px;
+  }
+
+  /* 队列任务抽屉：工具栏纵向排列，表格保持横向滚动 */
+  .queue-jobs-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .queue-jobs-toolbar__summary {
+    flex-wrap: wrap;
+  }
+
+  .queue-jobs-toolbar .t-button {
+    width: 100%;
+  }
+
+  .queue-jobs-pagination {
+    justify-content: stretch;
+    overflow-x: auto;
   }
 }

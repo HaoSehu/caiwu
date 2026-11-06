@@ -102,7 +102,8 @@
         />
       </div>
 
-      <div v-else class="staff-mobile-list">
+      <!-- v-if 与表格的 !isMobile 同源：桌面零结果时不能再渲染移动卡片，否则两套空态并存 -->
+      <div v-if="isMobile" class="staff-mobile-list" data-mobile-view="card">
         <t-loading :loading="loading" size="small">
           <div v-if="list.length" class="staff-mobile-stack">
             <mobile-record-card
@@ -211,7 +212,7 @@ import { adminStaffApi } from '@/api/admin/staff';
 import MobileRecordCard from '@/components/mobile-record-card/index.vue';
 import { AdminPermissions, hasPermissionInList } from '@/constants/permissions';
 import { useListPage } from '@/hooks/useListPage';
-import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { MOBILE_MEDIA_QUERY, useMediaQuery } from '@/hooks/useMediaQuery';
 import { useUserStore } from '@/store';
 import { formatDateTime } from '@/utils/format';
 import { required } from '@/utils/formRules';
@@ -270,7 +271,7 @@ const resetForm = reactive({ password: '', password_confirmation: '' });
 
 const canManage = computed(() => hasPermission(AdminPermissions.STAFF_MANAGE));
 const canEditStaffIdentity = computed(() => hasPermission(AdminPermissions.ALL));
-const isMobile = useMediaQuery('(max-width: 767.98px)');
+const isMobile = useMediaQuery(MOBILE_MEDIA_QUERY);
 
 const formRules = computed<Record<string, FormRule[]>>(() => ({
   username: [

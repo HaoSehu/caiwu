@@ -16,16 +16,6 @@
     max-height: 240px;
   }
 
-  /* Hide less critical columns on tablet */
-  .t-table--layout-fixed colgroup col:nth-child(6),
-  .t-table--layout-fixed colgroup col:nth-child(7),
-  .t-table--layout-fixed th:nth-child(6),
-  .t-table--layout-fixed th:nth-child(7),
-  .t-table--layout-fixed td:nth-child(6),
-  .t-table--layout-fixed td:nth-child(7) {
-    display: none;
-  }
-
   .traffic-editor {
     grid-template-columns: 1fr;
   }
@@ -64,10 +54,38 @@
   }
 }
 
+@media (min-width: 768px) and (max-width: 1024px) {
+  /* 平板：桌面列集下隐藏「库存/现存」两个次要指标列。
+     与 767.98 以下的手机列集互斥——手机列集只有 6 列，nth-child(6) 是「状态」，
+     放在全局会误伤手机端的显示状态列。 */
+  .t-table--layout-fixed colgroup col:nth-child(6),
+  .t-table--layout-fixed colgroup col:nth-child(7),
+  .t-table--layout-fixed th:nth-child(6),
+  .t-table--layout-fixed th:nth-child(7),
+  .t-table--layout-fixed td:nth-child(6),
+  .t-table--layout-fixed td:nth-child(7) {
+    display: none;
+  }
+}
+
 @media (max-width: 767.98px) {
   .products-page,
   .catalog-page {
     gap: var(--td-comp-margin-m);
+  }
+
+  /* 手机端商品表已收敛为 6 列（合计约 404px），不再套用全局 680px 最小宽度：
+     否则商品列会吞掉多余宽度，把月价格/状态挤出可视区。 */
+  .products-page .table-scroll .t-table {
+    min-width: 0;
+  }
+
+  /* 窄屏单元格收内边距，给商品名和金额让出空间。
+     必须带 #app 前缀：主题用 `#app .t-table td` 级别的选择器覆盖了单元格内边距。 */
+  #app .products-page .table-scroll .t-table th,
+  #app .products-page .table-scroll .t-table td {
+    padding-right: 8px;
+    padding-left: 8px;
   }
 
   .catalog-main {
@@ -223,9 +241,20 @@
   }
 
   .category-tree-row {
-    grid-template-columns: 18px minmax(0, 1fr) 28px;
-    min-height: 40px;
+    /* 展开箭头与「更多」都是仅图标按钮，命中区给足 44px（docs/DESIGN.md §7） */
+    grid-template-columns: 44px minmax(0, 1fr) 44px;
+    min-height: 44px;
     margin-left: calc(var(--category-level, 0) * 10px);
+  }
+
+  .category-expand {
+    width: 44px;
+    height: 44px;
+  }
+
+  .category-menu-trigger {
+    min-width: 44px;
+    height: 44px;
   }
 
   .category-drag {
@@ -244,9 +273,9 @@
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-template-areas:
-      "keyword keyword"
-      "status status"
-      "actions actions";
+      'keyword keyword'
+      'status status'
+      'actions actions';
     gap: 10px;
     align-items: stretch;
   }
@@ -373,7 +402,44 @@
   }
 
   .traffic-row {
-    grid-template-columns: 1fr;
+    /* 前三个字段各占一整行，最后一行放「启用 + 删除」 */
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: var(--td-comp-margin-s);
+  }
+
+  .traffic-row__field {
+    display: flex;
+    grid-column: 1 / -1;
+    align-items: center;
+    gap: var(--td-comp-margin-s);
+    min-width: 0;
+  }
+
+  /* 手机端字段名固定宽，控件右对齐，整列竖看是对齐的表单 */
+  .traffic-row__label {
+    display: block;
+    flex: 0 0 76px;
+    color: var(--td-text-color-secondary);
+    font-size: var(--td-font-size-size-1, 12px);
+    line-height: 1.4;
+    white-space: nowrap;
+  }
+
+  .traffic-row__field > .t-input,
+  .traffic-row__field > .t-input-number {
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* 开关不能被栅格拉满宽度（拉满会看成一条滑轨）；与删除按钮同行左右分列 */
+  .traffic-row__field--switch {
+    grid-column: 1;
+    flex: 0 0 auto;
+  }
+
+  .traffic-row__remove {
+    grid-column: 2;
+    justify-self: end;
   }
 
   .traffic-group-item {
@@ -406,7 +472,7 @@
 
   .mobile-type-item,
   .mobile-type-tool {
-    min-height: 38px;
+    min-height: 44px;
     padding-right: 6px;
     padding-left: 6px;
   }
@@ -445,7 +511,7 @@
   }
 
   .category-tree-row {
-    grid-template-columns: 16px minmax(0, 1fr) 26px;
+    grid-template-columns: 44px minmax(0, 1fr) 44px;
     gap: var(--td-comp-margin-xs);
     margin-left: calc(var(--category-level, 0) * 7px);
     padding-right: 2px;
@@ -453,8 +519,8 @@
   }
 
   .category-expand {
-    width: 24px;
-    height: 24px;
+    width: 44px;
+    height: 44px;
   }
 
   .category-tree-main {
@@ -463,7 +529,7 @@
   }
 
   .category-menu-trigger {
-    min-width: 24px;
+    min-width: 44px;
   }
 }
 

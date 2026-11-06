@@ -79,7 +79,7 @@
         />
       </div>
 
-      <div class="verification-mobile-list">
+      <div class="verification-mobile-list" :data-mobile-view="isMobile ? 'card' : undefined">
         <t-loading :loading="listLoading" size="small">
           <div v-if="list.length" class="verification-mobile-stack">
             <article v-for="row in list" :key="row.id" class="verification-mobile-card">
@@ -130,7 +130,11 @@
       </div>
     </section>
 
-    <section v-else-if="activePane === 'manage'" class="verification-section verification-form-section">
+    <section
+      v-else-if="activePane === 'manage'"
+      class="verification-section verification-form-section"
+      :data-mobile-view="isMobile ? 'form' : undefined"
+    >
       <t-form ref="feeFormRef" :data="feeForm" :rules="feeRules" label-align="top">
         <t-form-item label="免费认证次数" name="free_attempts">
           <t-input-number v-model="feeForm.free_attempts" :min="0" :max="10" />
@@ -244,6 +248,7 @@ import { useRoute } from 'vue-router';
 import type { VerificationRecord } from '@/api/admin';
 import { adminApi } from '@/api/admin';
 import { useListPage } from '@/hooks/useListPage';
+import { MOBILE_MEDIA_QUERY, useMediaQuery } from '@/hooks/useMediaQuery';
 import { useUserStore } from '@/store';
 import { formatDateTime } from '@/utils/format';
 import { required } from '@/utils/formRules';
@@ -254,6 +259,8 @@ const route = useRoute();
 const validPanes = ['list', 'manage'] as const;
 type VerificationPane = (typeof validPanes)[number];
 const activePane = ref<VerificationPane>(resolveRoutePane());
+// 手机端形态契约：详情/表单类标记只在手机断点渲染，桌面端保持无属性
+const isMobile = useMediaQuery(MOBILE_MEDIA_QUERY);
 const feeLoading = ref(false);
 const actionLoadingId = ref<number | string | null>(null);
 const quickStatus = ref('all');

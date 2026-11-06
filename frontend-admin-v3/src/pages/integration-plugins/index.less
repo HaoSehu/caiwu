@@ -304,8 +304,35 @@
     grid-template-columns: 1fr;
   }
 
+  /* 卡片标题行放不下名称 + 多个状态标签时换行，而不是把名称压成省略号 */
+  .plugin-card__title {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .plugin-card__title strong {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .plugin-card__body p {
+    overflow-wrap: anywhere;
+  }
+
+  /* 手机上操作按钮整行铺开，避免多个文字按钮挤在一行被裁切 */
   .plugin-actions {
     justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .plugin-actions .t-button {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .plugin-detail dd {
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 }
 

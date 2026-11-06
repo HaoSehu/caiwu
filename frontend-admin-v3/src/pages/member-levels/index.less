@@ -48,7 +48,7 @@
 
 .member-mobile-card__head {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 28px;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--td-comp-margin-s);
   min-height: 42px;
@@ -78,10 +78,11 @@
 }
 
 .member-mobile-card__more {
-  width: 28px;
-  min-width: 28px;
-  height: 28px;
-  min-height: 28px;
+  /* 仅图标按钮：命中区不得小于 44×44（docs/DESIGN.md §7） */
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
   padding: 0;
   color: var(--td-text-color-placeholder);
   font-weight: 600;
@@ -155,6 +156,46 @@
 
   .member-form-span {
     grid-column: span 1;
+  }
+}
+
+@media (max-width: 767.98px) {
+  /* 卡片头部「新建等级」独占整行 */
+  .member-levels-page .t-card__header-wrapper {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--td-comp-margin-s);
+  }
+
+  .member-levels-page .t-card__actions,
+  .member-levels-page .t-card__actions .t-space,
+  .member-levels-page .t-card__actions .t-button {
+    width: 100%;
+  }
+
+  /* 折扣矩阵在手机端每行纵向堆叠：营销组 / 折扣类型 / 数值各占一行 */
+  .matrix-head {
+    display: none;
+  }
+
+  .matrix-row {
+    grid-template-columns: 1fr;
+    gap: var(--td-comp-margin-s);
+    padding: var(--td-comp-margin-m) var(--td-comp-margin-s);
+  }
+
+  .matrix-row .col-type,
+  .matrix-row .col-value {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .member-form-grid {
+    gap: var(--td-comp-margin-m);
+  }
+
+  .discount-matrix-head span {
+    line-height: 1.7;
   }
 }
 

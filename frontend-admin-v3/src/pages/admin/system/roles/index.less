@@ -175,5 +175,19 @@
     .roles-filter {
       grid-template-columns: 1fr;
     }
+
+    /* 移动卡片列表：渲染由 v-if="isMobile" 控制，这里只补堆叠间距 */
+    .roles-mobile-list {
+      display: flex;
+      flex-direction: column;
+      gap: var(--td-comp-margin-l);
+      margin-top: var(--td-comp-margin-m);
+    }
+
+    .roles-mobile-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
   }
 }

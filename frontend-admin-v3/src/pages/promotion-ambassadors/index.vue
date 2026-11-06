@@ -55,7 +55,7 @@
         </t-table>
       </div>
 
-      <div v-else class="mobile-list">
+      <div v-else class="mobile-list" data-mobile-view="card">
         <article v-for="row in ambassadors" :key="row.id" class="ambassador-mobile-card">
           <div class="ambassador-mobile-card__head">
             <div>
@@ -131,7 +131,7 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import type { PromotionAmbassadorPayload, PromotionAmbassadorRecord } from '@/api/admin';
 import { adminApi } from '@/api/admin';
 import { AdminPermissions } from '@/constants/permissions';
-import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { MOBILE_MEDIA_QUERY, useMediaQuery } from '@/hooks/useMediaQuery';
 import { fieldValue, formatDateTime } from '@/utils/format';
 import { required } from '@/utils/formRules';
 import { hasAdminPermission } from '@/utils/permission';
@@ -156,7 +156,7 @@ const saving = ref(false);
 const dialogVisible = ref(false);
 const formRef = ref<FormInstanceFunctions>();
 const ambassadors = ref<PromotionAmbassadorRecord[]>([]);
-const isMobile = useMediaQuery('(max-width: 767.98px)');
+const isMobile = useMediaQuery(MOBILE_MEDIA_QUERY);
 
 const form = reactive<AmbassadorForm>(createDefaultForm());
 

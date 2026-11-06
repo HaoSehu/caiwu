@@ -44,7 +44,7 @@
         </t-table>
       </div>
 
-      <div v-else class="record-mobile-list">
+      <div v-else class="record-mobile-list" data-mobile-view="card">
         <t-loading :loading="loading" size="small">
           <div v-if="dailyList.length" class="record-mobile-stack">
             <t-card v-for="row in dailyList" :key="row.date" class="mobile-daily-card" :bordered="false">
@@ -86,14 +86,14 @@ import { computed, onMounted, ref } from 'vue';
 
 import type { NewCustomerDailyRecord } from '@/api/admin';
 import { adminApi } from '@/api/admin';
-import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { MOBILE_MEDIA_QUERY, useMediaQuery } from '@/hooks/useMediaQuery';
 import { errorMessage } from '@/utils/userMessage';
 
 defineOptions({
   name: 'AdminFinanceNewCustomers',
 });
 
-const isMobile = useMediaQuery('(max-width: 767.98px)');
+const isMobile = useMediaQuery(MOBILE_MEDIA_QUERY);
 const loading = ref(false);
 const dailyList = ref<NewCustomerDailyRecord[]>([]);
 const summaryData = ref<Record<string, number | string>>({});

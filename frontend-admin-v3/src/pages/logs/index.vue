@@ -275,7 +275,7 @@
           </t-table>
         </div>
 
-        <div v-else class="table-scroll">
+        <div v-else class="logs-mobile-list" data-mobile-view="card">
           <t-loading :loading="logLoading" size="small">
             <div v-if="logRows.length" class="log-mobile-stack">
               <article
@@ -372,7 +372,7 @@
           </div>
         </t-card>
 
-        <t-card :bordered="false" :loading="scheduleLoading">
+        <t-card :bordered="false" :loading="scheduleLoading" :data-mobile-view="isMobile ? 'scroll' : undefined">
           <template #title>已注册任务</template>
           <template #subtitle>共 {{ scheduleTasks.length }} 个任务</template>
           <div class="schedule-task-toolbar">
@@ -510,7 +510,7 @@ import type { LogListParams, PaginatedList } from '@/api/admin';
 import { adminApi } from '@/api/admin';
 import { AdminPermissions, hasPermissionInList } from '@/constants/permissions';
 import { useListPage } from '@/hooks/useListPage';
-import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { MOBILE_MEDIA_QUERY, useMediaQuery } from '@/hooks/useMediaQuery';
 import { useUserStore } from '@/store';
 import { copyToClipboard, fieldValue, formatDateTime, toRecord } from '@/utils/format';
 import { errorMessage } from '@/utils/userMessage';
@@ -528,7 +528,7 @@ type RecordRow = Record<string, unknown>;
 const route = useRoute();
 const router = useRouter();
 const userStore = useUserStore();
-const isMobile = useMediaQuery('(max-width: 767.98px)');
+const isMobile = useMediaQuery(MOBILE_MEDIA_QUERY);
 const validTabs: LogsTab[] = [
   'activity',
   'runtime',

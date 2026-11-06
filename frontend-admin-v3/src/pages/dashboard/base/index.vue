@@ -1,7 +1,7 @@
 <template>
   <!-- 首屏加载只保留「骨架」一种表达：原先外层 t-loading show-overlay 与 TopPanel 内部骨架并存，
        同一屏同时出现整页遮罩和灰条骨架（审查条目 P2-12）。刷新由各区块自己的骨架承担。 -->
-  <div class="dashboard-page">
+  <div class="dashboard-page" :data-mobile-view="isMobile ? 'detail' : undefined">
     <top-panel :stats="dashboardStats" :loading="loading" />
 
     <todo-panel :todos="dashboardStats.todos" :loading="loading" />
@@ -74,6 +74,7 @@ import {
 
 import type { DashboardStats, MonthlyRevenue } from '@/api/admin';
 import { adminApi } from '@/api/admin';
+import { MOBILE_MEDIA_QUERY, useMediaQuery } from '@/hooks/useMediaQuery';
 import { getChartListColor } from '@/utils/color';
 import echarts from '@/utils/echarts';
 import { formatMoney } from '@/utils/format';
@@ -90,6 +91,8 @@ defineOptions({
 
 // 初值为 true：首帧直接出骨架，否则 <t-empty> 会先闪一帧「暂无数据」再被骨架替换
 const loading = ref(true);
+// 手机端形态标记只在手机断点渲染（计划「统一判定口径」第 9 条）
+const isMobile = useMediaQuery(MOBILE_MEDIA_QUERY);
 const monthlyRevenue = shallowRef<MonthlyRevenue>({});
 const dashboardStats = shallowRef<DashboardStats>({});
 const productChartRef = ref<HTMLDivElement>();
@@ -129,8 +132,12 @@ const refundAdjustment = computed(() =>
  */
 const CHART_GRID = { left: 64, right: 56, top: 32, bottom: 52 };
 const LEGEND_ITEM_SIZE = { itemWidth: 10, itemHeight: 10 };
-const PIE_RADIUS: string[] = ['45%', '70%'];
-const PIE_CENTER: string[] = ['50%', '42%'];
+// 环形图竖直空间预算：半径上限 60%（相对画布短边的一半），圆心居中，
+// 标签折线收到 10+10。这样顶部标签文字距画布顶端仍有约 16px，
+// 原来的 70% + 42% 会把顶部标签顶到容器外，被卡片上沿裁掉。
+const PIE_RADIUS: string[] = ['40%', '60%'];
+const PIE_CENTER: string[] = ['50%', '50%'];
+const PIE_LABEL_LINE = { length: 10, length2: 10 };
 const PIE_BORDER_WIDTH = 2;
 const PIE_EMPHASIS_SCALE = 6;
 const DAILY_BAR_MAX_WIDTH = 14;
@@ -178,6 +185,7 @@ function renderProductChart() {
           borderColor: themeToken('--td-bg-color-container', '#ffffff'),
           borderWidth: PIE_BORDER_WIDTH,
         },
+        labelLine: PIE_LABEL_LINE,
         label: { formatter: '{b}\n{d}%', color: themeToken('--td-text-color-secondary', '#5B6B82') },
         emphasis: { scale: true, scaleSize: PIE_EMPHASIS_SCALE },
         data: positiveChartData.value,

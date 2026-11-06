@@ -1,8 +1,9 @@
 <template>
-  <div class="user-detail-page">
+  <div class="user-detail-page" :data-mobile-view="isMobile ? 'detail' : undefined">
     <!-- 首屏只做「骨架」这一种加载表达：原先整块 t-loading 遮罩加载完成后才露出内容，
          首次进入会先看到一整片遮罩再看到数据（审查条目 P2-12）。
-         刷新时改由工具栏「刷新」按钮自身的 loading 反馈，避免整块内容被遮罩盖住。 -->
+         工具栏保留手动刷新：用户在控制台的改绑、工单状态等外部变更不会走本页的保存流程，
+         没有刷新入口就只能整路由重载。 -->
     <!-- 第一层：紧凑工具栏 (36px) -->
     <div class="user-detail-toolbar">
       <t-button variant="text" theme="default" class="user-detail-toolbar__back" @click="goBack">
@@ -20,7 +21,7 @@
           代登录
         </t-button>
         <t-button theme="default" :disabled="!user.id" @click="openEditDialog">编辑资料</t-button>
-        <t-button variant="outline" :loading="detailLoading" @click="loadDetail">刷新</t-button>
+        <t-button variant="outline" :loading="detailLoading" @click="refreshDetail">刷新</t-button>
       </div>
     </div>
 
@@ -29,7 +30,7 @@
       <t-skeleton :row-col="summarySkeletonRowCol" animation="gradient" />
       <div class="user-detail-summary__metrics">
         <t-skeleton
-          v-for="slot in 3"
+          v-for="slot in 4"
           :key="slot"
           :row-col="metricSkeletonRowCol"
           animation="gradient"
@@ -49,6 +50,7 @@
               shape="square"
               size="small"
               class="copy-btn"
+              aria-label="复制用户 ID"
               @click="copyField('用户 ID', user.id)"
             >
               <template #icon><file-copy-icon /></template>
@@ -69,7 +71,7 @@
       </div>
 
       <div class="user-detail-summary__metrics">
-        <div v-for="item in statCards" :key="item.key" class="summary-metric-card">
+        <div v-for="item in statCards" :key="item.key" class="summary-metric-card" :title="item.hint">
           <span class="metric-label">{{ item.label }}</span>
           <strong class="metric-value" :class="`is-${item.tone}`">{{ item.value }}</strong>
         </div>
@@ -187,7 +189,14 @@
           >
             <template #suffix-icon><search-icon /></template>
           </t-input>
-          <t-select v-model="services.filters.status" clearable placeholder="状态" @change="searchServices">
+          <t-select
+            v-model="services.filters.status"
+            multiple
+            clearable
+            :min-collapsed-num="1"
+            placeholder="状态"
+            @change="searchServices"
+          >
             <t-option
               v-for="option in serviceStatusOptions"
               :key="option.value"
@@ -202,7 +211,39 @@
             >批量刷新状态</t-button
           >
         </div>
-        <div class="table-scroll">
+        <!-- 手机端改用卡片：服务表 10 列合计 1480px，窄屏只能横向滚，
+             金额/到期/状态这些关键信息看不全 -->
+        <div v-if="isMobile" class="user-services-cards" data-mobile-view="card">
+          <t-loading :loading="services.loading" size="small">
+            <div v-if="services.list.length" class="user-services-cards__stack">
+              <mobile-record-card
+                v-for="row in services.list"
+                :key="row.id"
+                :title="serviceName(row)"
+                :description="row.domain || ''"
+                :status-label="serviceStatusLabel(row.status)"
+                :status-theme="serviceStatusTheme(row.status)"
+                :rows="serviceCardRows(row)"
+                :action-options="serviceCardActions()"
+                @action="(value) => handleServiceCardAction(row, value)"
+              />
+            </div>
+            <t-empty
+              v-else
+              :description="services.loading ? '加载中…' : hasActiveServiceFilters ? '未找到匹配结果' : '暂无数据'"
+            />
+          </t-loading>
+          <t-pagination
+            v-if="services.total > 0"
+            :current="services.page"
+            :page-size="services.pageSize"
+            :total="services.total"
+            :page-size-options="[10, 20, 50]"
+            class="user-services-cards__pagination"
+            @change="handleServicesPageChange"
+          />
+        </div>
+        <div v-else class="table-scroll">
           <t-table
             row-key="id"
             :data="services.list"
@@ -440,7 +481,15 @@
       @cancel="editVisible = false"
       @confirm="handleSave"
     >
-      <t-form ref="editFormRef" :data="editForm" :rules="editRules" label-align="right">
+      <!-- 弹窗内表单按 docs/DESIGN.md §4.4 固定右对齐：跨断点切换对齐方式会让同一表单
+           在手机与桌面呈现两套版式；窄屏靠 label 宽度自适应（下方样式）容纳长标签 -->
+      <t-form
+        ref="editFormRef"
+        :data="editForm"
+        :rules="editRules"
+        label-align="right"
+        :label-width="isMobile ? 80 : undefined"
+      >
         <t-form-item label="邮箱">
           <t-input :value="user.email || '-'" disabled />
         </t-form-item>
@@ -457,34 +506,40 @@
           <t-switch v-model="editForm.status" :custom-value="[1, 0]" />
         </t-form-item>
         <t-form-item label="会员等级" name="member_level_id">
-          <div class="member-level-edit-row">
-            <t-select
-              v-model="editForm.member_level_id"
-              :options="memberLevelOptions"
-              clearable
-              placeholder="未分级"
-              @change="handleMemberLevelChange"
-            />
-            <t-tag v-if="user.member_level_id" theme="success" variant="light">已指定</t-tag>
-            <t-tag v-else theme="default" variant="light">未分级</t-tag>
-          </div>
-          <div class="member-level-edit-tip">
-            会员等级由管理员直接指定（不再按销售额自动升级）；清空下拉即置为未分级。
+          <!-- 行内控件与说明必须包成同一列：t-form__controls-content 是 flex 行，
+               直接并列会让说明文字被挤到控件右侧成为一条窄栏 -->
+          <div class="member-level-edit-field">
+            <div class="member-level-edit-row">
+              <t-select
+                v-model="editForm.member_level_id"
+                :options="memberLevelOptions"
+                clearable
+                placeholder="未分级"
+                @change="handleMemberLevelChange"
+              />
+              <t-tag v-if="user.member_level_id" theme="success" variant="light">已指定</t-tag>
+              <t-tag v-else theme="default" variant="light">未分级</t-tag>
+            </div>
+            <div class="member-level-edit-tip">
+              会员等级由管理员直接指定（不再按销售额自动升级）；清空下拉即置为未分级。
+            </div>
           </div>
         </t-form-item>
         <t-form-item label="推广大使" name="promotion_ambassador_id">
-          <div class="member-level-edit-row">
-            <t-select
-              v-model="editForm.promotion_ambassador_id"
-              :options="promotionAmbassadorOptions"
-              clearable
-              placeholder="未指派"
-              @change="handlePromotionAmbassadorChange"
-            />
-            <t-tag v-if="user.promotion_ambassador_id" theme="success" variant="light">已指派</t-tag>
-            <t-tag v-else theme="default" variant="light">未指派</t-tag>
+          <div class="member-level-edit-field">
+            <div class="member-level-edit-row">
+              <t-select
+                v-model="editForm.promotion_ambassador_id"
+                :options="promotionAmbassadorOptions"
+                clearable
+                placeholder="未指派"
+                @change="handlePromotionAmbassadorChange"
+              />
+              <t-tag v-if="user.promotion_ambassador_id" theme="success" variant="light">已指派</t-tag>
+              <t-tag v-else theme="default" variant="light">未指派</t-tag>
+            </div>
+            <div class="member-level-edit-tip">推广大使决定邀请返利比例；未指派时按系统设置的全局返利比例计算。</div>
           </div>
-          <div class="member-level-edit-tip">推广大使决定邀请返利比例；未指派时按系统设置的全局返利比例计算。</div>
         </t-form-item>
       </t-form>
     </t-dialog>
@@ -588,6 +643,7 @@ import {
 import dayjs from 'dayjs';
 import { ChevronLeftIcon, FileCopyIcon, SearchIcon } from 'tdesign-icons-vue-next';
 import type {
+  DropdownOption,
   FormInstanceFunctions,
   FormRule,
   PageInfo,
@@ -603,7 +659,9 @@ import { useRoute, useRouter } from 'vue-router';
 import { adminApi } from '@/api/admin';
 import type { AdminUser, ManualPaymentGateway, PageParams } from '@/api/user';
 import { userApi } from '@/api/user';
+import MobileRecordCard from '@/components/mobile-record-card/index.vue';
 import { AdminPermissions } from '@/constants/permissions';
+import { MOBILE_MEDIA_QUERY, useMediaQuery } from '@/hooks/useMediaQuery';
 import { copyToClipboard, fieldValue, formatDateTime, formatMoney } from '@/utils/format';
 import { phoneRule, required } from '@/utils/formRules';
 import { hasAdminPermission } from '@/utils/permission';
@@ -642,7 +700,7 @@ interface PageState {
   total: number;
   page: number;
   pageSize: number;
-  filters: Record<string, string | number>;
+  filters: Record<string, string | number | number[]>;
   channel?: 'email' | 'sms';
 }
 
@@ -678,6 +736,9 @@ if (initialTab && !VALID_DETAIL_TABS.includes(initialTab as TabName)) {
 }
 const loadedTabs = reactive<Record<string, boolean>>({});
 const user = ref<AdminUser>({ id: 0, status: 1 });
+
+// 手机端形态：与 CSS 断点同源；桌面端不渲染 data-mobile-view
+const isMobile = useMediaQuery(MOBILE_MEDIA_QUERY);
 
 /* 概览骨架：尺寸对齐 .user-detail-summary 的身份区与指标卡，加载完成时不跳版 */
 const summarySkeletonRowCol: SkeletonRowCol = [
@@ -746,6 +807,19 @@ const ordersTabRef = ref<InstanceType<typeof OrdersTab>>();
 const rechargesTabRef = ref<InstanceType<typeof RechargesTab>>();
 const addServiceDialogRef = ref<InstanceType<typeof AddServiceDialog>>();
 
+// 服务列表默认只看「在用」的实例：开通中(0) / 运行中(1) / 已暂停(2) / 异常(4)，
+// 「已删除(3)」需要用户主动选才会出现；重置也回到这组默认值
+const DEFAULT_SERVICE_STATUS_FILTER = [0, 1, 2, 4];
+
+/** 筛选值是否等于默认值：默认值不算「用户主动筛选」，否则空态永远显示「未找到匹配结果」 */
+function isDefaultServiceStatus(value: unknown): boolean {
+  const current = Array.isArray(value) ? value.map(Number) : [];
+  return (
+    current.length === DEFAULT_SERVICE_STATUS_FILTER.length &&
+    DEFAULT_SERVICE_STATUS_FILTER.every((item) => current.includes(item))
+  );
+}
+
 const services = reactive<PageState>({
   loading: false,
   refreshingId: null,
@@ -754,7 +828,7 @@ const services = reactive<PageState>({
   total: 0,
   page: 1,
   pageSize: 10,
-  filters: { keyword: '', status: '' },
+  filters: { keyword: '', status: [...DEFAULT_SERVICE_STATUS_FILTER] },
 });
 const invoices = reactive<PageState>({
   loading: false,
@@ -784,8 +858,9 @@ const notices = reactive<PageState>({
 });
 
 // 空态文案区分「未筛选但无数据」与「筛选后无匹配」（docs/DESIGN.md 术语表）
+// 状态默认值属于「未筛选」，只有用户改成别的组合才算主动筛选
 const hasActiveServiceFilters = computed(
-  () => Boolean(String(services.filters.keyword || '').trim()) || Boolean(services.filters.status),
+  () => Boolean(String(services.filters.keyword || '').trim()) || !isDefaultServiceStatus(services.filters.status),
 );
 const hasActiveInvoiceFilters = computed(() => Boolean(invoices.filters.status) || Boolean(invoices.filters.type));
 const hasActiveLogFilters = computed(() =>
@@ -871,11 +946,35 @@ const isVerified = computed(
 const recentReferrals = computed(() =>
   Array.isArray(referral.value.recent_referrals) ? referral.value.recent_referrals : [],
 );
-const statCards = computed(() => [
-  { key: 'ticket_open', label: '在线工单', value: stats.value.ticket_open || 0, tone: 'warning' },
-  { key: 'cash_balance', label: '余额', value: formatMoney(user.value.cash_balance), tone: 'success' },
-  { key: 'total_expense', label: '总消费', value: formatMoney(stats.value.total_expense), tone: 'primary' },
-]);
+const statCards = computed(() => {
+  // 现服务 = 开通中 + 运行中 + 已暂停（与后端 UserService::detail 的 service_active 口径一致）
+  const serviceActive = Number(stats.value.service_active || 0);
+  const serviceTotal = Number(stats.value.service_total || 0);
+  return [
+    {
+      key: 'service',
+      label: '服务',
+      value: `${serviceActive}/${serviceTotal}`,
+      tone: 'primary',
+      hint: '现服务（开通中 + 运行中 + 已暂停）/ 总服务数',
+    },
+    { key: 'ticket_open', label: '在线工单', value: stats.value.ticket_open || 0, tone: 'warning', hint: '' },
+    {
+      key: 'cash_balance',
+      label: '余额',
+      value: formatMoney(user.value.cash_balance),
+      tone: 'success',
+      hint: '',
+    },
+    {
+      key: 'total_expense',
+      label: '总消费',
+      value: formatMoney(stats.value.total_expense),
+      tone: 'primary',
+      hint: '',
+    },
+  ];
+});
 const referralItems = computed(() => [
   { label: '推荐码', value: referral.value.referral_code || '-' },
   { label: '当前等级', value: referral.value.member_level?.name || user.value.member_level?.name || '未分级' },
@@ -1030,7 +1129,7 @@ function searchServices() {
 /** 重置筛选并重新拉取；提交式筛选必须成对提供「查询/重置」（docs/DESIGN.md §5.1） */
 function resetServicesFilters() {
   services.filters.keyword = '';
-  services.filters.status = '';
+  services.filters.status = [...DEFAULT_SERVICE_STATUS_FILTER];
   searchServices();
 }
 
@@ -1262,6 +1361,21 @@ async function handleOrdersChanged() {
   if (loadedTabs.invoices) await loadInvoices();
 }
 
+/** 工具栏「刷新」：概览与已加载的列表页签一起重新拉取，未打开过的页签留到切换时再取 */
+async function refreshDetail() {
+  await Promise.all([
+    loadDetail(),
+    activeTab.value === 'services' ? loadServices() : Promise.resolve(),
+    loadedTabs.invoices ? loadInvoices() : Promise.resolve(),
+    loadedTabs.tickets ? loadTickets() : Promise.resolve(),
+    loadedTabs.logs ? loadLogs() : Promise.resolve(),
+    loadedTabs.notices ? loadNotices() : Promise.resolve(),
+    // 订单/充值两个页签由子组件持有自己的列表，通过 ref 触发各自的重新拉取
+    loadedTabs.orders ? ordersTabRef.value?.reload?.() : Promise.resolve(),
+    loadedTabs.recharges ? rechargesTabRef.value?.reload?.() : Promise.resolve(),
+  ]);
+}
+
 async function handleAddServiceCreated() {
   // 子组件只负责表单与提交，创建成功后由父级刷新服务列表、概览与已加载的账单 tab
   await Promise.all([loadServices(), loadDetail(), ...(loadedTabs.invoices ? [loadInvoices()] : [])]);
@@ -1387,6 +1501,44 @@ function serviceName(row: Row) {
     row.product?.display_name ||
     (row.product_id ? `未配置规格 #${row.product_id}` : '-')
   );
+}
+
+/** 手机端卡片信息行：空值行用 show:false 隐藏，避免满屏「-」 */
+function serviceCardRows(row: Row) {
+  const dedicatedIp = String(row.upstream?.dedicated_ip || '');
+  return [
+    { label: '服务 ID', value: row.id },
+    { label: '金额', value: formatMoney(row.amount), strong: true },
+    { label: '公网 IP', value: dedicatedIp, show: Boolean(dedicatedIp) },
+    { label: '计费周期', value: row.billing_cycle_label || '', show: Boolean(row.billing_cycle_label) },
+    { label: '购买时间', value: formatDateTime(row.created_at) },
+    { label: '到期时间', value: formatDateTime(row.expires_at), show: Boolean(row.expires_at) },
+  ];
+}
+
+/** 手机端行操作与桌面表格的「管理 / 刷新 / 删除」同源 */
+function serviceCardActions(): DropdownOption[] {
+  return [
+    { content: '管理', value: 'manage' },
+    { content: '刷新状态', value: 'refresh' },
+    { content: '删除', value: 'delete', theme: 'error' },
+  ];
+}
+
+function handleServiceCardAction(row: Row, value: unknown) {
+  switch (value) {
+    case 'manage':
+      goToServiceConsole(row);
+      break;
+    case 'refresh':
+      void handleRefreshService(row);
+      break;
+    case 'delete':
+      void handleDeleteServiceRow(row);
+      break;
+    default:
+      break;
+  }
 }
 function patchServiceListItem(detail: Row = {}) {
   const target = buildServiceListItem(services.list, detail);

@@ -46,10 +46,10 @@
   .specs-filter {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-template-areas:
-      "keyword keyword"
-      "status status"
-      "query reset"
-      "add add";
+      'keyword keyword'
+      'status status'
+      'query reset'
+      'add add';
     align-items: stretch;
     gap: 10px;
   }
@@ -83,14 +83,21 @@
   }
 }
 
+@media (max-width: 767.98px) {
+  /* 手机端列集已收敛为 3 列（约 366px），不再套用全局 680px 最小宽度 */
+  .specs-page .table-scroll .t-table {
+    min-width: 0;
+  }
+}
+
 @media (max-width: 360px) {
   .specs-filter {
     grid-template-columns: 1fr;
     grid-template-areas:
-      "keyword"
-      "status"
-      "query"
-      "reset"
-      "add";
+      'keyword'
+      'status'
+      'query'
+      'reset'
+      'add';
   }
 }

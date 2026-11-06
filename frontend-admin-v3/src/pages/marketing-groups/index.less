@@ -30,10 +30,25 @@
     display: flex;
     align-items: center;
     gap: var(--td-comp-margin-s);
+    min-width: 0;
+    flex-wrap: wrap;
   }
 }
 
+.mg-mobile-card__head strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .mg-mobile-card__more {
+  /* 仅图标按钮：命中区不得小于 44×44（docs/DESIGN.md §7） */
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
   color: var(--td-text-color-secondary);
 }
 
@@ -47,6 +62,7 @@
     display: flex;
     flex-direction: column;
     gap: var(--td-comp-margin-xxs);
+    min-width: 0;
   }
 
   dt {
@@ -56,10 +72,41 @@
 
   dd {
     margin: 0;
+    overflow: hidden;
     color: var(--td-text-color-primary);
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
 
 .pick-alert {
   margin-bottom: var(--td-comp-margin-m);
+}
+
+@media (max-width: 767.98px) {
+  /* 卡片头部「新建营销组」独占整行，避免与标题挤在一行被压缩 */
+  .marketing-groups-page .t-card__header-wrapper {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--td-comp-margin-s);
+  }
+
+  .marketing-groups-page .t-card__actions,
+  .marketing-groups-page .t-card__actions .t-space,
+  .marketing-groups-page .t-card__actions .t-button {
+    width: 100%;
+  }
+
+  .mg-mobile-card {
+    padding: var(--td-comp-margin-m);
+  }
+
+  .mg-mobile-card dl {
+    grid-template-columns: 1fr;
+  }
+
+  /* 圈选商品的树选择器在窄屏下改为整宽弹层内容，避免横向被裁切 */
+  .pick-alert {
+    margin-bottom: var(--td-comp-margin-s);
+  }
 }

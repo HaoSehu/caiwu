@@ -109,7 +109,7 @@
         </t-table>
       </div>
 
-      <div v-else class="order-mobile-list">
+      <div v-else class="order-mobile-list" data-mobile-view="card">
         <t-loading :loading="loading" size="small">
           <div v-if="orders.length" class="order-mobile-stack">
             <mobile-record-card
@@ -163,7 +163,7 @@ import { adminApi } from '@/api/admin';
 import MobileRecordCard from '@/components/mobile-record-card/index.vue';
 import QuickFilterTags from '@/components/quick-filter-tags/index.vue';
 import { useListPage } from '@/hooks/useListPage';
-import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { MOBILE_MEDIA_QUERY, useMediaQuery } from '@/hooks/useMediaQuery';
 import { fieldValue, formatBillingCycle, formatDateTime, formatFinishTime, formatMoney } from '@/utils/format';
 import { errorMessage } from '@/utils/userMessage';
 
@@ -182,7 +182,7 @@ const ORDER_TAB_OPTIONS = [
 
 const route = useRoute();
 const router = useRouter();
-const isMobile = useMediaQuery('(max-width: 767.98px)');
+const isMobile = useMediaQuery(MOBILE_MEDIA_QUERY);
 
 function normalizeMode(value: unknown): FinanceOrderMode | null {
   return ORDER_TAB_OPTIONS.some((o) => o.value === value) ? (value as FinanceOrderMode) : null;

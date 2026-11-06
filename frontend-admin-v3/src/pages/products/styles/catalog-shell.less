@@ -230,6 +230,29 @@
   white-space: nowrap;
 }
 
+/* 手机端行操作收敛成的「更多」下拉触发器。
+   主题里有 `#app .t-button { min-height: 44px }` 与 `.t-button--shape-square.t-size-s { width: 24px }`，
+   不加 #app 前缀既压不住高度又会被挤成 24px；图标默认继承 12px 字号，需显式放大才看得见。 */
+#app .products-page .product-row-action-trigger {
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
+  color: var(--td-text-color-secondary);
+  opacity: 1;
+}
+
+#app .products-page .product-row-action-trigger .t-icon {
+  font-size: 18px;
+}
+
+#app .products-page .product-row-action-trigger:hover,
+#app .products-page .product-row-action-trigger:focus-visible {
+  color: var(--td-brand-color);
+  background: var(--td-brand-color-1);
+}
+
 .category-tree-row:hover .category-menu-trigger,
 .category-tree-row.active .category-menu-trigger,
 .category-tree-row:focus-within .category-menu-trigger {

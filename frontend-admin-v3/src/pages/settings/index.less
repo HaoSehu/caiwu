@@ -115,6 +115,14 @@
 }
 
 @media (max-width: 767.98px) {
+  /* 手机端：页内 tab 横向滚动（全局 .page-tabs-toolbar 已兜住滚动，这里补偿触控高度） */
+  .page-tabs-toolbar .t-tabs__nav-item {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  /* 分组切换条改为两列铺满的纵向堆叠，不再是一条被压扁的横排 */
   .section-nav {
     flex-direction: column;
     align-items: stretch;
@@ -126,12 +134,61 @@
     width: 100%;
   }
 
+  .section-nav .t-radio-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--td-comp-margin-s);
+  }
+
+  .section-nav .t-radio-button {
+    flex: 1 1 calc(50% - var(--td-comp-margin-s));
+    min-width: 0;
+  }
+
+  .section-nav .t-radio-button__label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .settings-field-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .field-card--wide {
+    grid-column: auto;
+  }
+
+  .field-card {
+    gap: var(--td-comp-margin-m);
+    padding: 14px;
+  }
+
   .field-card--switch {
-    align-items: flex-start;
+    align-items: center;
+  }
+
+  .settings-bottom-actions .t-button {
+    width: 100%;
   }
 
   .tool-actions .t-button {
     flex: 1 1 auto;
+  }
+
+  /* 媒体选择抽屉：工具条纵向排列，缩略图最小宽度收窄以适配 375px */
+  .cover-drawer-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+    gap: var(--td-comp-margin-s);
+  }
+
+  .cover-drawer-toolbar .t-select {
+    width: 100%;
+  }
+
+  .cover-drawer-grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   }
 }
 

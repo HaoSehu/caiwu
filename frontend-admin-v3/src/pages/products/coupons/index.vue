@@ -157,7 +157,7 @@
           </t-table>
         </div>
 
-        <div v-else class="coupon-mobile-list">
+        <div v-else class="coupon-mobile-list" data-mobile-view="card">
           <t-loading :loading="loading" size="small">
             <div v-if="coupons.length" class="coupon-mobile-stack">
               <mobile-record-card
@@ -455,7 +455,7 @@ import MobileRecordCard from '@/components/mobile-record-card/index.vue';
 import ProductBindingTreeSelect from '@/components/product-binding-tree-select/index.vue';
 import { AdminPermissions } from '@/constants/permissions';
 import { useListPage } from '@/hooks/useListPage';
-import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { MOBILE_MEDIA_QUERY, useMediaQuery } from '@/hooks/useMediaQuery';
 import { formatDateTime } from '@/utils/format';
 import { hasAdminPermission } from '@/utils/permission';
 import { errorMessage } from '@/utils/userMessage';
@@ -538,7 +538,7 @@ const userOptions = ref<UserOption[]>([]);
 const userSearchResults = ref<UserOption[]>([]);
 const userSearchKeyword = ref('');
 const userOptionsLoading = ref(false);
-const isMobile = useMediaQuery('(max-width: 767.98px)');
+const isMobile = useMediaQuery(MOBILE_MEDIA_QUERY);
 const canManage = computed(() => hasAdminPermission(AdminPermissions.COUPON_MANAGE));
 
 interface CouponFilter {
