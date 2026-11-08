@@ -110,6 +110,12 @@ ops/mysql-dual-backup/backup.env
 anget.md
 mcloud/
 *.sql
+# docs 下禁止提交数据库快照：历史上曾把 45MB 生产库 dump 提交进仓库（含手机号/邮箱/密码哈希/供应商凭据）。
+# docs 正文需要的结构说明写进 Markdown，不落 .sql。
+/docs/**/*.sql
+/docs/**/*.sql.gz
+# 演练版静态数据集由 backend/scripts/demo_export.php 从脱敏副本库现场生成，属构建产物不入库
+/demo-data/
 *.pen
 *.zip
 pencil-preview/
@@ -219,8 +225,20 @@ docs/_local/
 # 会话遗留的临时审查脚本（根目录误生成，含本机绝对路径，不得入库）
 .tmp_review/
 
+# 本机 AI 工具的后端专属配置：只指向本机 artisan，与仓库分发的根 .mcp.json 无关
+backend/.grok/
+backend/.mcp.json
+backend/boost.json
+
+# 探针脚本与会话误生成的空文件，非项目源码
+frontend-user-v3-www/scan.mjs
+/expr
+
 backend/.env.testing
 backend/storage/app/installer/
 
 # WorkBuddy 项目会话数据（本地保留，不入库）
 .workbuddy/
+
+# Laravel 引导缓存：由 composer install / artisan 现场生成，随 PHP 版本与包列表变化，不入库
+/backend/bootstrap/cache/*.php

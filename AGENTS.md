@@ -7,6 +7,8 @@
 - 使用 CMD 与 UTF-8；创建文件前确认当前目录。
 - 始终使用中文交流，注释，提问。
 - 先查代码、测试和对应文档，禁止猜测接口、业务或目录。
+- API 先查后建：新增功能或接口前，先经 Apifox MCP 查询已有接口（`listEndpoints` → `getEndpoint` / `getDataSchema`），优先复用或扩展现有接口，确无可用接口才新增。
+- API 的新增、删除、修改（路由、FormRequest 参数、Resource 响应字段、错误码、鉴权）必须同时经 Apifox MCP 落到 caiwu 项目，代码与接口文档两侧都完成才算完成。
 - 最小范围修改；不保留无调用方的旧代码或运行时兼容层。
 - 工作区可能很脏，绝不回滚、覆盖或格式化非本任务改动。
 - 临时文件仅放系统临时目录；不要用输出重定向污染仓库。
@@ -36,7 +38,7 @@
 | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | 入项、资料定位               | [docs/README.md](docs/README.md)                                                                                                               |
 | 系统边界、运行方式           | [ARCHITECTURE.md](docs/ARCHITECTURE.md) 与 [运维参考](docs/参考资料/运维/部署与调度指南.md)                                                    |
-| 后端、API、上游或插件        | [BACKEND.md](docs/BACKEND.md)、[API 规范](docs/参考资料/接口/API格式规范.md)、[插件开发](docs/参考资料/集成/插件/README.md)                    |
+| 后端、API、上游或插件        | [BACKEND.md](docs/BACKEND.md)、[API 规范](docs/参考资料/接口/API格式规范.md)、[Apifox 接口文档项目](docs/参考资料/接口/Apifox接口文档项目.md)、[插件开发](docs/参考资料/集成/插件/README.md)                    |
 | API 重构                     | [API 直接重构方案](docs/设计文档/后端/API直接重构方案.md) 与自动生成 [API 清单](docs/自动生成/接口/后端API清单.md)                             |
 | 前端或页面                   | [FRONTEND.md](docs/FRONTEND.md) 与 [DESIGN.md](docs/DESIGN.md)                                                                                 |
 | 数据库、迁移、归档           | [DATABASE.md](docs/DATABASE.md) 与 [数据库参考](docs/参考资料/README.md)                                                                       |
@@ -47,8 +49,9 @@
 ## 关键约束入口
 
 - 后端：控制器薄层；第三方调用进入专用 Service/Driver/插件；Payment 不物理删除；迁移只新增。
+- API 文档：Apifox 项目「caiwu 创欧云 API」是接口文档唯一载体，接口增删改一律经 Apifox MCP 执行，不得只改代码或只改文档其中一侧。
 - 插件：全部特有逻辑收敛到 `backend/plugins/{domain}/{slug}/`，不得注册系统级路由、调度或全局中间件；所有插件不需要 SSL 和 CA。
-- 前端：不混用 UI 框架；管理端不加头部说明卡片；v4-console 财务页不加指标卡片；`app_flutter` 禁止任何 WebView/网页嵌套（`tool/check_no_webview.dart` 守卫）。
+- 前端：不混用 UI 框架；管理端不加头部说明卡片；v4-console 财务页不加指标卡片；`app_flutter` 禁止任何 WebView/网页嵌套（`tool/check_no_webview.dart` 守卫），并保持「平实移动端列表流」视觉基线、禁止渐变头/浮卡/玻璃拟态回流（`tool/check_visual_rules.dart` 守卫）。
 - 自动生成物：修改路由或结构后运行生成脚本，绝不手工编辑 `docs/自动生成/`。
 - 细节以 [工作规则](docs/治理/WORKING_RULES.md) 和任务对应领域文档为准。
 
@@ -61,11 +64,12 @@
 | 影响范围                    | 最小验证                                                                           |
 | --------------------------- | ---------------------------------------------------------------------------------- |
 | 文档                        | `npm run docs:check`                                                               |
+| 接口增删改                  | Apifox MCP 写入后 `listEndpoints` / `getEndpoint` 回读确认，再跑 `npm run docs:check` |
 | `backend/`                  | `cd backend && composer analyse && composer format:check && composer audit:plugins` |
 | `frontend-admin-v3/`        | `cd frontend-admin-v3 && npm run build`                                            |
 | `frontend-user-v3-www/`     | `cd frontend-user-v3-www && npm run build`；重构追加 `npm run verify:refactor`     |
 | `frontend-user-v4-console/` | `cd frontend-user-v4-console && npm run build`；重构追加 `npm run verify:refactor` |
-| `app_flutter/`              | `cd app_flutter && flutter analyze && flutter test && dart run tool/check_no_webview.dart` |
+| `app_flutter/`              | `cd app_flutter && flutter analyze && flutter test && dart run tool/check_no_webview.dart && dart run tool/check_visual_rules.dart` |
 | `shared/`                   | `npm run typecheck:shared && npm run test:shared`，再按影响端构建                  |
 
 每个子任务先跑受影响验证；全部完成后跑本次变更覆盖范围的完整验证。不能运行时，说明原因和未覆盖风险。
