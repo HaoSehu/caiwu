@@ -1,6 +1,6 @@
 ---
 status: current
-updated: 2026-07-20
+updated: 2026-11-07
 owner: backend-platform
 ---
 
@@ -480,8 +480,30 @@ API 响应必须由统一响应构造器、Resource 或明确 DTO 转换，避�
 10. v2 新接口必须列表与详情 Resource 分离。
 11. v2 新接口不得复用旧宽 Resource 作为默认输出。
 12. v2 新接口必须有 Feature 测试覆盖鉴权、权限、校验失败、成功响应和字段白名单。
+13. 接口新增、删除、修改必须同时经 Apifox MCP 写入 Apifox 项目 `9019820`，见下方 §12.1。
 
-### 12.1 推荐控制器写法
+### 12.1 Apifox 同步（强制）
+
+Apifox 项目「caiwu 创欧云 API」是接口文档的唯一载体。**接口契约的任何变更都必须经 Apifox MCP 落到该项目，不得只改代码或只改 Apifox 其中一侧。**
+
+| 变更 | 必做动作 |
+| --- | --- |
+| 新增路由 / 接口 | `createEndpoint` 写入，`GET\|POST` 拆为两条，确认文件夹与鉴权方案 |
+| 修改路径、参数、请求体、响应结构、错误码 | `getEndpoint` 读全量 → `updateEndpoint`（`responses` / `responseExamples` 为整体替换） |
+| 删除路由 / 接口 | `deleteEndpoint`，必须走 `deleteMethod` 执行器 |
+| 新增或修改 Resource 输出字段 | 同步对应数据模型（`createDataSchema` / `updateDataSchema`） |
+| 新增或修改统一响应、错误组件 | 同步响应组件，改前先查引用方 |
+
+约束：
+
+- 执行前先 `discoverMethods` 确认方法名，再读 `endpoint-authoring` / `component-payload-authoring` workflow skill 与对应 `schemaUri`，禁止凭猜测拼请求体。
+- 写入后必须 `getEndpoint` 回读确认，不能只看写入返回成功。
+- 删除接口或数据模型前先查引用方：Apifox 不级联清理，删掉被引用的组件会留下悬空 `$ref`。
+- MCP 不可用或同步失败时，必须在改动摘要中列出未同步接口与原因，不得静默跳过。
+
+项目 ID、目录 ID、映射规则和历史口径见 [Apifox 接口文档项目](Apifox接口文档项目.md)；鉴权与默认模板见 [Apifox 鉴权与默认模板](Apifox鉴权与默认模板.md)；数据模型见 [Apifox 数据模型与组件库](Apifox数据模型与组件库.md)。
+
+### 12.2 推荐控制器写法
 
 ```php
 public function index(ListProductsRequest $request)

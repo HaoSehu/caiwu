@@ -36,6 +36,31 @@ owner: frontend-platform
 - **`frontend-user-v3-www`（官网与用户入口）**：采用 `TDesign Vue Next` 组件体系（2026-11-01 完成迁移），组件样式由各组件子入口自带，并与两端共享根 `theme.css` 的浅色基线（`:root` 全局变量、`#app .t-*` 组件覆写）。官网保留营销化的视觉表现（大图 hero、更强的留白与投影），且页面样式仍走自有 SCSS 令牌（`src/assets/styles/variables.scss`，共定义 75 个变量；其中 `$color*` 系列颜色令牌 455 处引用）而非 `--td-*`（业务代码零直接消费，源码内唯一命中是 `pages/website/products/page.scss:1433` 的注释）。因此：本规范的**交互与组件映射**条款（组件选型、无障碍热区、状态与反馈形态）适用于它；**§3 设计令牌的取值口径与档位表**（颜色/字号/圆角/投影的具体数值）以及**信息密度与页面结构**条款（表格/卡片布局、控制台式紧凑间距）不适用于它，官网自有令牌即为该端的准绳。
 - **`app_flutter`（Android 原生 App）**：采用 `TDesign Flutter`。服务于终端用户的移动场景，侧重服务管控、工单与账单的随手处理、SSH/VNC 远程运维。视觉沿用本规范的浅色基线，主色与语义色色值对齐 §3.1（`lib/core/theme/app_theme.dart` 覆写 TDesign Flutter 品牌色阶）；圆角、字号、颜色一律取自 `context.tTheme`（TDesign Flutter 令牌），不在页面硬编码。断点是 **Material 3 的 600 / 840**（`compact` / `medium` / `expanded`），不套用 §7 的 Web 断点，因为移动端要覆盖手机横屏与平板分屏。信息密度与页面结构条款适用于它，但以移动端单列、底部 Tab（平板改左侧导航）为实现形态。
 
+  **App 端移动视觉补充（2026-11-07，实机与浏览器多尺寸验收后定稿）**：
+
+  视觉总纲：**平实的移动端列表流**。整页由「白色通栏块 + 极淡分割线 + 页面底色带」三者交替构成，
+  同一屏内只允许一种块级语言。以下写法属于**明确禁止**的模板化装饰，会直接被判为不合格：
+
+  - 顶部整块品牌色渐变/大色块横幅、大圆角彩色头区；
+  - 给每个区块套独立圆角卡片并加投影（「一堆浮起的小卡片」）；
+  - 营销落地页式的图标渐变、外发光、光斑、玻璃拟态；
+  - 胶囊式选中页签（页内分段器改用下划线）。
+
+  具体条款：
+
+  - **页面头**：一行标题 + 一行辅助说明 + 右侧图标入口，不画底色、不加圆角；页头上下留白 `gapL` / `gapS`。
+  - **通栏块**：宫格、分组列表、头像区、表单分组都铺满整宽白底（`AppCard(flat: true)` 或 `Container(color: bgColorContainer)`），
+    块与块之间只留页面底色带，分隔用同组内 0.5–1px 的 `borderLevel1Color` 细线。
+  - **区块节奏**：区块间距 `AppSpacing.sectionGap`（手机 20 / 平板 28）；分组标题上下留白 `sectionHeaderTop` / `sectionHeaderBottom`；
+    组标题必须与它所属的行处在同一块白底内，不得悬在页面灰底上。
+  - **页内分段器**：`AppSegmentedTabs` 自绘，高 40，选中项为 2px 下划线 + 品牌色 + 加粗；不使用 `TTabBar` 的胶囊选中态。
+  - **设备级断点**：按**短边**判定设备类别（`Breakpoints.resolve`），手机横屏仍按 `compact` 出手机版式，只把内容收窄到 640 居中；不得让手机横屏切到平板双栏或横屏分栏。
+  - **触控热区**：可点元素（区块动作、胶囊、图标按钮、缩略图删除角标）命中区不得小于 `AppSpacing.minTapTarget = 44`；视觉尺寸可小，命中区必须补齐。
+  - **字阶**：正文最小 12（`AppType.caption` 用次色，不用占位色——时间戳、到期日、辅助说明都属于可读信息）；金额统一走 `AppType.amountDisplay/amountLarge/amountRow/amountSmall` 阶梯，不再各页写 17/20/24/32。
+  - **列表行对齐**：行尾金额列定宽（`minWidth 76`），避免不同位数的金额让各行左缘漂移。
+  - **双栏口径**：列表双栏只在 `expanded`（≥840）启用，且按**前半/后半**切分保持各栏内时间顺序；600–839 竖屏保持单栏。详情页左右分栏同理只在 `expanded`。
+  - **深色终端页**：SSH 与 VNC 共用 `lib/core/theme/console_theme.dart` 的 `ConsoleColors`，两者不得各自定义色值；键盘弹出时收起工具条。
+
 ---
 
 ## 3. 设计令牌 (Design Tokens)
@@ -244,11 +269,11 @@ owner: frontend-platform
    - 768 属于 `sm`，因此"移动端"查询一律写 `@media (max-width: 767.98px)`（LESS/SCSS 用变量：控制台 `@screen-mobile-max`、官网 `$breakpoint-mobile-max`、共享样式 `theme.css` 直接写字面量）。不要写成 `max-width: 768px` 或 `width <= 768px`——那会把 768 视口也算进移动端。
    - CSS 媒体查询统一使用 `max-width` / `min-width` 写法，不使用 CSS Media Queries Level 4 的区间语法（`width <= 768px`）：官网 browserslist 为 Chrome 84 / Safari 13.4，低于区间语法所需版本（Chrome 104 / Safari 16.4），构建不会自动降级，旧浏览器会整条丢规则。
    - JS 侧判定与 CSS 等价：管理端 `window.innerWidth < MOBILE_BREAKPOINT`（常量 768 代表 sm 起点），控制台 `useDeviceLayout().isMobile`（vueuse `smaller(768)`，内部为 `max-width: 767.9px`）。
-   - **`app_flutter` 例外**：该端为 Flutter 原生渲染，不使用 CSS 媒体查询，断点取 Material 3 的 `600` / `840`（`lib/core/layout/responsive.dart`，`compact` / `medium` / `expanded`），覆盖手机竖屏、手机横屏/小平板竖屏与平板横屏。这三档只约束该端，不要回写到 Vue 端的 768/992/1200 体系。
+   - **`app_flutter` 例外**：该端为 Flutter 原生渲染，不使用 CSS 媒体查询，断点取 Material 3 的 `600` / `840`（`lib/core/layout/responsive.dart`，`compact` / `medium` / `expanded`），覆盖手机竖屏、手机横屏/小平板竖屏与平板横屏。这三档只约束该端，不要回写到 Vue 端的 768/992/1200 体系。**设备类别按短边判定**（`Breakpoints.resolve`）：短边 < 600 一律按手机处理，因此手机横屏保持单列 + 底部 Tab 版式，仅把内容收窄到 `Breakpoints.phoneLandscapeMaxWidth`（640）居中；不得因为宽度超过 600 就切平板分栏或侧边导航。
 2. **无障碍访问性 (WCAG AA)**：
    - 文本与背景对比度必须达到 4.5:1（大文本至少 3:1）。浅底标签中的彩色文字必须采用深色阶（如 `--td-success-color-9`、`--td-warning-color-10`、`--td-error-color-8`）。
    - 所有仅包含图标的按钮必须显式提供 `aria-label` 或外层 `t-tooltip` 说明用途。
    - 键盘 Tab 键焦点导航必须保持逻辑清晰，获得焦点时展示 `--td-brand-color-focus` 高亮聚焦环。
-   - 可点击元素（含自定义按钮）最小可交互热区 `44px × 44px`（视觉尺寸可小，但命中区不得小于该值）。
+   - 可点击元素（含自定义按钮）最小可交互热区 `44px × 44px`（视觉尺寸可小，但命中区不得小于该值）。**`app_flutter` 以 `AppSpacing.minTapTarget = 44` 为唯一口径**：区块右侧动作、筛选胶囊、图标按钮、缩略图删除角标都必须用它补齐命中区。
    - 必须尊重 `prefers-reduced-motion: reduce`：装饰性动画（如趋势图描绘、悬浮位移）在减弱动态偏好下禁用或降级。
 

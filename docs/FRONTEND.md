@@ -215,6 +215,7 @@ npm run verify:frontends
 - UI 只用 `tdesign_flutter`；页面骨架、卡片、区块标题、字段网格、状态标签、分段器与胶囊统一走 `app_kit.dart`，间距/圆角/字阶只取 `app_tokens.dart` 与 `context.tTheme`，不各页自拼。
 - 数值一律 `AppType.money` / `AppType.stat`（内部等宽数字，刷新不抖动）；加载中的按钮 `onPressed: null`；破坏性操作走 `AppFeedback.confirm(danger: true)`。
 - **禁止任何 WebView / 网页嵌套**，由 `tool/check_no_webview.dart` 守卫（扫描 `pubspec.yaml` 依赖与源码 import），提交前运行。
+- **视觉基线防回退**：`tool/check_visual_rules.dart` 扫描 `lib/features/`，拦截渐变头、投影浮卡、玻璃拟态等模板化装饰回流，并强制深色控制台色值集中在 `ConsoleColors`。
 - 视觉遵循 [DESIGN.md](DESIGN.md)：浅色、主色 `#165DFF`、页面底 `#F5F7FB`；断点用 Material 3 的 600/840 而非 Web 端 768，因为移动端要覆盖手机横屏与平板分屏，600 更贴合触控设备。
 - 后端契约只消费 `/api/v2/client/*` 与站点公开接口，不改接口结构；唯一后端配套改动是 VNC relay 的 App Origin 白名单（`backend/config/idc.php` 的 `vnc_relay.app_origins`，默认 `caiwu-app`，两端默认值即可对上）。
 - 依赖与构建完全独立：不接入根 npm workspace，也不参与 `npm run build:frontends` / `verify:frontends`。
@@ -226,6 +227,7 @@ cd app_flutter
 flutter analyze
 flutter test
 dart run tool/check_no_webview.dart
+dart run tool/check_visual_rules.dart
 flutter build apk --debug
 ```
 
@@ -235,7 +237,11 @@ flutter build apk --debug
 
 - 仅 Android 为当前目标平台（工程含 `web/` 目录但不作为发布形态）；iOS 需补构建适配。
 - 首版不含产品选购下单、实名认证、推荐返利、优惠券领取、帮助中心、NAT/安全组编辑、推送、深色模式。
-- Geetest 图形验证不内嵌网页，触发时提示改用密码登录（与"禁止网页嵌套"红线一致）。
+- Geetest 图形验证不内嵌网页（与"禁止网页嵌套"红线一致）。**App 只提供验证码登录**，
+  不设密码入口：App 以固定请求头 `X-Client-Platform: android` 声明身份，后端在发验证码
+  接口（`phone-code` / `email-code`）对 App 免除人机验证；需要密码的场景走「忘记密码」的
+  验证码重置。密码登录在网页端行为不变。依据见
+  [AppClientCaptchaExemptionTest](../backend/tests/Feature/AppClientCaptchaExemptionTest.php)。
 - VNC 仅支持 None / VNC Authentication 安全类型；只声明 Raw 编码。
 - Release 签名当前复用 debug keystore，上线前需替换正式 keystore。
 

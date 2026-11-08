@@ -681,7 +681,7 @@ php artisan schedule:list
 | 邮件发送      | `backend/plugins/mail/smtp`                       | 单 SMTP 邮件插件                |
 | 邮件发送      | `backend/plugins/mail/demo_mail`                  | 模拟邮件插件                    |
 | 短信发送      | `backend/plugins/sms/aliyun`                      | 阿里云短信插件                  |
-| 短信发送      | `backend/plugins/sms/stay33`                      | Stay33 短信插件                 |
+| 短信发送      | `backend/plugins/sms/stay33`                      | MC云短信 v10 插件（`api.freescdn.com/api/v1/sms/send`，`uid`+`api_key`） |
 | 短信发送      | `backend/plugins/sms/demo_sms`                    | 模拟短信插件                    |
 | 上游开通/控制 | `backend/plugins/servers/zjmf_finance`            | ZJMF 财务上游插件               |
 | 上游开通/控制 | `backend/plugins/servers/kanghostx`               | 康乐虚拟主机插件                |

@@ -55,7 +55,7 @@ owner: backend-platform
 | 账单     | `/api/v2/client/invoices*`                                                                            | 当前用户侧下单与支付主实体是发票                          |
 | 充值     | `/api/v2/client/recharge*`                                                                            | 充值下单与状态轮询                                        |
 | 服务实例 | `/api/v2/client/services*`、`/api/v2/client/vnc-tokens/*`                                             | 实例详情、监控、续费、重装、VNC、NAT、安全组、流量包      |
-| 余额     | `/api/v2/client/balance-logs*`                                                                        | 余额流水和汇总                                            |
+| 余额     | `/api/v2/client/ledger`                                                                               | 资金台账（`tab=balance` 即余额流水）                      |
 | 优惠券   | `/api/v2/client/coupons*`                                                                             | 优惠券、汇总、领取；其中 `coupons/public*` 仍需客户端鉴权 |
 | 推荐返佣 | `/api/v2/client/referral*`                                                                            | 概览、奖励、账变、提现申请                                |
 | 工单     | `/api/v2/client/tickets*`                                                                             | 列表、详情、回复、关闭、上传图片                          |
@@ -66,7 +66,7 @@ owner: backend-platform
 
 | 业务域       | 关键路径前缀                                                                                                               | 说明                              |
 | ------------ | -------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
-| 站点配置     | `/api/v2/site/config`、`/api/v2/site/home`、`/api/v2/site/home-hero`                                                       | 官网基础配置、首页聚合、首页 Hero |
+| 站点配置     | `/api/v2/site/config`、`/api/v2/site/home`                                                                                 | 官网基础配置、首页聚合（含 Banner） |
 | 公开商品     | `/api/v2/site/product-types`、`/api/v2/site/product-groups*`、`/api/v2/site/product-categories*`、`/api/v2/site/products*` | 官网商品浏览、库存、报价          |
 | 公开内容     | `/api/v2/site/content/overview`、`/api/v2/site/notices*`、`/api/v2/site/help-articles*`                                    | 官网公告与帮助中心                |
 | 健康检查     | `/api/health`                                                                                                              | 服务可用性探针                    |
@@ -90,11 +90,11 @@ owner: backend-platform
 
 ### 服务续费
 
-| 步骤         | 接口                                      |
-| ------------ | ----------------------------------------- |
-| 查看续费预览 | `GET /api/v2/client/services/{id}/renew`  |
-| 生成续费账单 | `POST /api/v2/client/services/{id}/renew` |
-| 后续支付     | 复用 `/api/v2/client/invoices/{id}/pay/*` |
+| 步骤         | 接口                                         |
+| ------------ | -------------------------------------------- |
+| 查看续费预览 | `GET /api/v2/client/services/{id}/renewals`  |
+| 生成续费账单 | `POST /api/v2/client/services/{id}/renewals` |
+| 后续支付     | 复用 `/api/v2/client/invoices/{id}/pay/*`    |
 
 ### 流量包加购
 

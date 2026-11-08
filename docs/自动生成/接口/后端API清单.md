@@ -1,14 +1,14 @@
 ---
 status: generated
-updated: 2026-11-01
+updated: 2026-11-08
 owner: backend-platform
 ---
 
 # 后端 API 清单
 
-- 生成时间: `2026-11-01 15:21:10`
-- API 总数: `398`
-- 分组统计: `公共 / 健康检查=1, 公共 / 其他=1, 公共 / 安全资源=1, 客户端 / VNC Token=1, 客户端 / 优惠券=5, 客户端 / 充值=3, 客户端 / 内容=8, 客户端 / 分销=6, 客户端 / 实名认证=8, 客户端 / 工单=10, 客户端 / 支付回调=2, 客户端 / 支付记录=3, 客户端 / 服务=37, 客户端 / 订单=4, 客户端 / 认证=18, 客户端 / 认证入口=3, 客户端 / 财务=6, 客户端 / 账单=9, 客户端 / 通知=5, 站点 / 产品=10, 站点 / 内容=5, 站点 / 首页=3, 管理端 / Integration Plugins=11, 管理端 / 产品=16, 管理端 / 产品分组=8, 管理端 / 产品类型=5, 管理端 / 仪表盘=3, 管理端 / 优惠券=17, 管理端 / 会员等级=6, 管理端 / 供应商=13, 管理端 / 其他=25, 管理端 / 内容=10, 管理端 / 分销=6, 管理端 / 员工=8, 管理端 / 媒体=5, 管理端 / 实名认证=5, 管理端 / 工单=11, 管理端 / 日志=5, 管理端 / 服务=3, 管理端 / 用户=37, 管理端 / 站点=2, 管理端 / 规格目录=4, 管理端 / 角色权限=7, 管理端 / 订单=4, 管理端 / 认证=9, 管理端 / 设置=15, 管理端 / 调度=2, 管理端 / 财务=8, 管理端 / 账单=4`
+- 生成时间: `2026-11-08 23:42:19`
+- API 总数: `382`
+- 分组统计: `公共 / 健康检查=1, 公共 / 其他=1, 公共 / 安全资源=1, 客户端 / VNC Token=1, 客户端 / 优惠券=5, 客户端 / 充值=3, 客户端 / 内容=8, 客户端 / 分销=6, 客户端 / 实名认证=8, 客户端 / 工单=10, 客户端 / 支付回调=2, 客户端 / 支付记录=2, 客户端 / 服务=37, 客户端 / 订单=3, 客户端 / 认证=18, 客户端 / 认证入口=3, 客户端 / 财务=1, 客户端 / 账单=9, 客户端 / 通知=5, 站点 / 产品=10, 站点 / 内容=5, 站点 / 首页=2, 管理端 / Integration Plugins=11, 管理端 / 产品=16, 管理端 / 产品分组=8, 管理端 / 产品类型=5, 管理端 / 仪表盘=2, 管理端 / 优惠券=17, 管理端 / 会员等级=6, 管理端 / 供应商=13, 管理端 / 其他=25, 管理端 / 内容=10, 管理端 / 分销=6, 管理端 / 员工=8, 管理端 / 媒体=5, 管理端 / 实名认证=5, 管理端 / 工单=11, 管理端 / 日志=5, 管理端 / 服务=3, 管理端 / 用户=35, 管理端 / 站点=2, 管理端 / 规格目录=4, 管理端 / 角色权限=7, 管理端 / 订单=4, 管理端 / 认证=9, 管理端 / 设置=16, 管理端 / 调度=2, 管理端 / 财务=2, 管理端 / 账单=4`
 
 > **自动生成**，由 `backend/scripts/export_api_inventory.php` 扫描 Laravel 路由表导出，**不要手工编辑**。
 >
@@ -36,7 +36,7 @@ owner: backend-platform
 | 客户端 / 内容 | `POST` | `/api/v2/client/notices/mark-all-read` | `App\Http\Controllers\Client\V2\ContentController@markAllNoticesRead` | `client` | `api, auth:sanctum, ensure.client` |
 | 客户端 / 内容 | `GET` | `/api/v2/client/notices/unread-count` | `App\Http\Controllers\Client\V2\ContentController@noticeUnreadCount` | `client` | `api, auth:sanctum, ensure.client` |
 | 客户端 / 内容 | `GET` | `/api/v2/client/notices/{article}` | `App\Http\Controllers\Client\V2\ContentController@noticeDetail` | `client` | `api, auth:sanctum, ensure.client` |
-| 客户端 / 内容 | `PUT` | `/api/v2/client/notices/{article}/read-state` | `App\Http\Controllers\Client\V2\ActionController@markNoticeRead` | `client` | `api, auth:sanctum, ensure.client` |
+| 客户端 / 内容 | `PUT` | `/api/v2/client/notices/{article}/read-state` | `App\Http\Controllers\Client\V2\ContentController@markNoticeRead` | `client` | `api, auth:sanctum, ensure.client` |
 | 客户端 / 分销 | `GET` | `/api/v2/client/referral/account-logs` | `App\Http\Controllers\Client\V2\ReferralController@accountLogs` | `client` | `api, auth:sanctum, ensure.client` |
 | 客户端 / 分销 | `GET` | `/api/v2/client/referral/direct-referrals` | `App\Http\Controllers\Client\V2\ReferralController@directReferrals` | `client` | `api, auth:sanctum, ensure.client` |
 | 客户端 / 分销 | `GET` | `/api/v2/client/referral/overview` | `App\Http\Controllers\Client\V2\ReferralController@overview` | `client` | `api, auth:sanctum, ensure.client` |
@@ -55,20 +55,21 @@ owner: backend-platform
 | 客户端 / 工单 | `POST` | `/api/v2/client/tickets` | `App\Http\Controllers\Client\V2\TicketWorkflowController@store` | `client` | `api, auth:sanctum, ensure.client, throttle:10,1,client-ticket-store` |
 | 客户端 / 工单 | `GET` | `/api/v2/client/tickets/service-options` | `App\Http\Controllers\Client\V2\TicketWorkflowController@serviceOptions` | `client` | `api, auth:sanctum, ensure.client` |
 | 客户端 / 工单 | `POST` | `/api/v2/client/tickets/upload-images` | `App\Http\Controllers\Client\V2\TicketWorkflowController@uploadImage` | `client` | `api, auth:sanctum, ensure.client, throttle:12,1,client-ticket-upload-image` |
+| 客户端 / 工单 | `GET` | `/api/v2/client/tickets/{id}` | `App\Http\Controllers\Client\V2\TicketWorkflowController@show` | `client` | `api, auth:sanctum, ensure.client` |
 | 客户端 / 工单 | `POST` | `/api/v2/client/tickets/{id}/closures` | `App\Http\Controllers\Client\V2\TicketWorkflowController@close` | `client` | `api, auth:sanctum, ensure.client, throttle:10,1,client-ticket-close` |
 | 客户端 / 工单 | `POST` | `/api/v2/client/tickets/{id}/reopen` | `App\Http\Controllers\Client\V2\TicketWorkflowController@reopen` | `client` | `api, auth:sanctum, ensure.client, throttle:10,1,client-ticket-reopen` |
+| 客户端 / 工单 | `GET` | `/api/v2/client/tickets/{id}/replies` | `App\Http\Controllers\Client\V2\TicketWorkflowController@replies` | `client` | `api, auth:sanctum, ensure.client` |
 | 客户端 / 工单 | `POST` | `/api/v2/client/tickets/{id}/replies` | `App\Http\Controllers\Client\V2\TicketWorkflowController@reply` | `client` | `api, auth:sanctum, ensure.client, throttle:10,1,client-ticket-reply` |
-| 客户端 / 工单 | `GET` | `/api/v2/client/tickets/{ticket}` | `App\Http\Controllers\Client\V2\TicketController@show` | `client` | `api, auth:sanctum, ensure.client` |
-| 客户端 / 工单 | `GET` | `/api/v2/client/tickets/{ticket}/replies` | `App\Http\Controllers\Client\V2\TicketController@replies` | `client` | `api, auth:sanctum, ensure.client` |
-| 客户端 / 工单 | `POST` | `/api/v2/client/tickets/{ticket}/replies/{reply}/recalls` | `App\Http\Controllers\Client\V2\ActionController@recallTicketReply` | `client` | `api, auth:sanctum, ensure.client, throttle:10,1,client-ticket-recall` |
+| 客户端 / 工单 | `POST` | `/api/v2/client/tickets/{id}/replies/{reply}/recalls` | `App\Http\Controllers\Client\V2\TicketWorkflowController@recallReply` | `client` | `api, auth:sanctum, ensure.client, throttle:10,1,client-ticket-recall` |
 | 客户端 / 支付回调 | `POST` | `/api/v2/client/payment/alipay/notify` | `App\Http\Controllers\Client\V2\PaymentCallbackController@alipayNotify` | `public` | `api, throttle:60,1,client-payment-alipay-notify, verify.alipay.callback` |
 | 客户端 / 支付回调 | `GET&#124;POST` | `/api/v2/client/payment/notify/{gateway}` | `App\Http\Controllers\Client\V2\PaymentCallbackController@notify` | `public` | `api, throttle:60,1,client-payment-notify, verify.payment.callback` |
 | 客户端 / 支付记录 | `GET` | `/api/v2/client/payments` | `App\Http\Controllers\Client\V2\PaymentController@index` | `client` | `api, auth:sanctum, ensure.client` |
-| 客户端 / 支付记录 | `GET` | `/api/v2/client/payments/summary` | `App\Http\Controllers\Client\V2\PaymentController@summary` | `client` | `api, auth:sanctum, ensure.client` |
 | 客户端 / 支付记录 | `GET` | `/api/v2/client/payments/{id}` | `App\Http\Controllers\Client\V2\PaymentController@show` | `client` | `api, auth:sanctum, ensure.client` |
 | 客户端 / 服务 | `GET` | `/api/v2/client/services` | `App\Http\Controllers\Client\V2\ServiceConsoleController@index` | `client` | `api, auth:sanctum, ensure.client` |
 | 客户端 / 服务 | `GET` | `/api/v2/client/services/grouped-overview` | `App\Http\Controllers\Client\V2\ServiceConsoleController@groupedOverview` | `client` | `api, auth:sanctum, ensure.client` |
+| 客户端 / 服务 | `GET` | `/api/v2/client/services/{id}` | `App\Http\Controllers\Client\V2\ServiceController@show` | `client` | `api, auth:sanctum, ensure.client` |
 | 客户端 / 服务 | `GET` | `/api/v2/client/services/{id}/config` | `App\Http\Controllers\Client\V2\ServiceConsoleController@config` | `client` | `api, auth:sanctum, ensure.client` |
+| 客户端 / 服务 | `GET` | `/api/v2/client/services/{id}/connection` | `App\Http\Controllers\Client\V2\ServiceController@connection` | `client` | `api, auth:sanctum, ensure.client` |
 | 客户端 / 服务 | `GET` | `/api/v2/client/services/{id}/module-status` | `App\Http\Controllers\Client\V2\ServiceConsoleController@moduleStatus` | `client` | `api, auth:sanctum, ensure.client` |
 | 客户端 / 服务 | `GET` | `/api/v2/client/services/{id}/monitor` | `App\Http\Controllers\Client\V2\ServiceConsoleController@monitor` | `client` | `api, auth:sanctum, ensure.client` |
 | 客户端 / 服务 | `GET` | `/api/v2/client/services/{id}/monitor/batch` | `App\Http\Controllers\Client\V2\ServiceConsoleController@monitorBatch` | `client` | `api, auth:sanctum, ensure.client` |
@@ -77,12 +78,16 @@ owner: backend-platform
 | 客户端 / 服务 | `POST` | `/api/v2/client/services/{id}/nat-forwardings` | `App\Http\Controllers\Client\V2\ServiceNetworkController@createNatForwarding` | `client` | `api, auth:sanctum, ensure.client, throttle:10,1,client-service-nat-create` |
 | 客户端 / 服务 | `DELETE` | `/api/v2/client/services/{id}/nat-forwardings/{forwardingId}` | `App\Http\Controllers\Client\V2\ServiceNetworkController@deleteNatForwarding` | `client` | `api, auth:sanctum, ensure.client, throttle:10,1,client-service-nat-delete` |
 | 客户端 / 服务 | `GET` | `/api/v2/client/services/{id}/operation-logs` | `App\Http\Controllers\Client\V2\ServiceConsoleController@operationLogs` | `client` | `api, auth:sanctum, ensure.client` |
+| 客户端 / 服务 | `POST` | `/api/v2/client/services/{id}/password-resets` | `App\Http\Controllers\Client\V2\ServiceConsoleController@resetPassword` | `client` | `api, auth:sanctum, ensure.client, throttle:6,1,client-service-password-reset` |
+| 客户端 / 服务 | `POST` | `/api/v2/client/services/{id}/power-actions` | `App\Http\Controllers\Client\V2\ServiceConsoleController@power` | `client` | `api, auth:sanctum, ensure.client, throttle:10,1,client-service-power` |
 | 客户端 / 服务 | `GET` | `/api/v2/client/services/{id}/power-status` | `App\Http\Controllers\Client\V2\ServiceConsoleController@powerStatus` | `client` | `api, auth:sanctum, ensure.client, throttle:12,1,client-service-power-status` |
+| 客户端 / 服务 | `POST` | `/api/v2/client/services/{id}/reinstallations` | `App\Http\Controllers\Client\V2\ServiceConsoleController@reinstall` | `client` | `api, auth:sanctum, ensure.client, throttle:6,1,client-service-reinstall` |
 | 客户端 / 服务 | `GET` | `/api/v2/client/services/{id}/reinstallations/options` | `App\Http\Controllers\Client\V2\ServiceConsoleController@reinstallOptions` | `client` | `api, auth:sanctum, ensure.client` |
 | 客户端 / 服务 | `PUT` | `/api/v2/client/services/{id}/remark` | `App\Http\Controllers\Client\V2\ServiceConsoleController@updateRemark` | `client` | `api, auth:sanctum, ensure.client` |
 | 客户端 / 服务 | `GET` | `/api/v2/client/services/{id}/renewals` | `App\Http\Controllers\Client\V2\ServiceBillingController@renewPreview` | `client` | `api, auth:sanctum, ensure.client` |
 | 客户端 / 服务 | `POST` | `/api/v2/client/services/{id}/renewals` | `App\Http\Controllers\Client\V2\ServiceBillingController@createRenewOrder` | `client` | `api, auth:sanctum, ensure.client, throttle:6,1,client-service-renew` |
 | 客户端 / 服务 | `PUT` | `/api/v2/client/services/{id}/renewals/auto` | `App\Http\Controllers\Client\V2\ServiceBillingController@updateAutoRenew` | `client` | `api, auth:sanctum, ensure.client, throttle:6,1,client-service-renew-auto` |
+| 客户端 / 服务 | `GET` | `/api/v2/client/services/{id}/runtime` | `App\Http\Controllers\Client\V2\ServiceController@runtime` | `client` | `api, auth:sanctum, ensure.client` |
 | 客户端 / 服务 | `GET` | `/api/v2/client/services/{id}/security-groups` | `App\Http\Controllers\Client\V2\ServiceNetworkController@securityGroups` | `client` | `api, auth:sanctum, ensure.client` |
 | 客户端 / 服务 | `POST` | `/api/v2/client/services/{id}/security-groups` | `App\Http\Controllers\Client\V2\ServiceNetworkController@createSecurityGroup` | `client` | `api, auth:sanctum, ensure.client, throttle:10,1,client-service-security-group-create` |
 | 客户端 / 服务 | `DELETE` | `/api/v2/client/services/{id}/security-groups/{groupId}` | `App\Http\Controllers\Client\V2\ServiceNetworkController@deleteSecurityGroup` | `client` | `api, auth:sanctum, ensure.client, throttle:10,1,client-service-security-group-delete` |
@@ -97,16 +102,9 @@ owner: backend-platform
 | 客户端 / 服务 | `POST` | `/api/v2/client/services/{id}/upgrades/orders` | `App\Http\Controllers\Client\V2\ServiceBillingController@createHostUpgradeOrder` | `client` | `api, auth:sanctum, ensure.client, throttle:6,1,client-service-host-upgrade-order` |
 | 客户端 / 服务 | `POST` | `/api/v2/client/services/{id}/upgrades/quotes` | `App\Http\Controllers\Client\V2\ServiceBillingController@quoteHostUpgrade` | `client` | `api, auth:sanctum, ensure.client, throttle:12,1,client-service-host-upgrade-quote` |
 | 客户端 / 服务 | `GET` | `/api/v2/client/services/{id}/vnc` | `App\Http\Controllers\Client\V2\ServiceConsoleController@vnc` | `client` | `api, auth:sanctum, ensure.client` |
-| 客户端 / 服务 | `GET` | `/api/v2/client/services/{service}` | `App\Http\Controllers\Client\V2\ServiceController@show` | `client` | `api, auth:sanctum, ensure.client` |
-| 客户端 / 服务 | `GET` | `/api/v2/client/services/{service}/connection` | `App\Http\Controllers\Client\V2\ServiceController@connection` | `client` | `api, auth:sanctum, ensure.client` |
-| 客户端 / 服务 | `POST` | `/api/v2/client/services/{service}/password-resets` | `App\Http\Controllers\Client\V2\ActionController@resetPassword` | `client` | `api, auth:sanctum, ensure.client, throttle:6,1,client-service-password-reset` |
-| 客户端 / 服务 | `POST` | `/api/v2/client/services/{service}/power-actions` | `App\Http\Controllers\Client\V2\ActionController@power` | `client` | `api, auth:sanctum, ensure.client, throttle:10,1,client-service-power` |
-| 客户端 / 服务 | `POST` | `/api/v2/client/services/{service}/reinstallations` | `App\Http\Controllers\Client\V2\ActionController@reinstall` | `client` | `api, auth:sanctum, ensure.client, throttle:6,1,client-service-reinstall` |
-| 客户端 / 服务 | `GET` | `/api/v2/client/services/{service}/runtime` | `App\Http\Controllers\Client\V2\ServiceController@runtime` | `client` | `api, auth:sanctum, ensure.client` |
 | 客户端 / 订单 | `GET` | `/api/v2/client/orders` | `App\Http\Controllers\Client\V2\OrderController@index` | `client` | `api, auth:sanctum, ensure.client` |
-| 客户端 / 订单 | `GET` | `/api/v2/client/orders/summary` | `App\Http\Controllers\Client\V2\OrderController@summary` | `client` | `api, auth:sanctum, ensure.client` |
 | 客户端 / 订单 | `GET` | `/api/v2/client/orders/{id}` | `App\Http\Controllers\Client\V2\OrderController@show` | `client` | `api, auth:sanctum, ensure.client` |
-| 客户端 / 订单 | `POST` | `/api/v2/client/orders/{order}/cancellations` | `App\Http\Controllers\Client\V2\ActionController@cancelOrder` | `client` | `api, auth:sanctum, ensure.client, throttle:10,1,client-orders-cancel` |
+| 客户端 / 订单 | `POST` | `/api/v2/client/orders/{id}/cancellations` | `App\Http\Controllers\Client\V2\OrderController@cancel` | `client` | `api, auth:sanctum, ensure.client, throttle:10,1,client-orders-cancel` |
 | 客户端 / 认证 | `GET` | `/api/v2/client/auth/alipay-account` | `App\Http\Controllers\Client\V2\AuthController@alipayAccount` | `client` | `api, auth:sanctum, ensure.client` |
 | 客户端 / 认证 | `PUT` | `/api/v2/client/auth/alipay-account` | `App\Http\Controllers\Client\V2\AuthController@updateAlipayAccount` | `client` | `api, auth:sanctum, ensure.client` |
 | 客户端 / 认证 | `GET` | `/api/v2/client/auth/captcha-config` | `App\Http\Controllers\Client\V2\AuthController@captchaConfig` | `public` | `api` |
@@ -128,26 +126,21 @@ owner: backend-platform
 | 客户端 / 认证入口 | `POST` | `/api/v2/client/login` | `App\Http\Controllers\Client\V2\AuthController@login` | `public` | `api, throttle:5,1,client-auth-login` |
 | 客户端 / 认证入口 | `PUT` | `/api/v2/client/password` | `App\Http\Controllers\Client\V2\AuthController@updatePassword` | `client` | `api, auth:sanctum, ensure.client, throttle:client-password` |
 | 客户端 / 认证入口 | `POST` | `/api/v2/client/register` | `App\Http\Controllers\Client\V2\AuthController@register` | `public` | `api, throttle:5,1,client-auth-register` |
-| 客户端 / 财务 | `GET` | `/api/v2/client/balance-logs` | `App\Http\Controllers\Client\V2\FinanceController@balanceLogs` | `client` | `api, auth:sanctum, ensure.client` |
-| 客户端 / 财务 | `GET` | `/api/v2/client/balance-logs/summary` | `App\Http\Controllers\Client\V2\FinanceController@balanceLogsSummary` | `client` | `api, auth:sanctum, ensure.client` |
-| 客户端 / 财务 | `GET` | `/api/v2/client/finance/ledger` | `App\Http\Controllers\Client\V2\FinanceLedgerController@index` | `client` | `api, auth:sanctum, ensure.client` |
-| 客户端 / 财务 | `GET` | `/api/v2/client/finance/ledger/summary` | `App\Http\Controllers\Client\V2\FinanceLedgerController@summary` | `client` | `api, auth:sanctum, ensure.client` |
-| 客户端 / 财务 | `GET` | `/api/v2/client/finance/ledger/{id}` | `App\Http\Controllers\Client\V2\FinanceLedgerController@show` | `client` | `api, auth:sanctum, ensure.client` |
 | 客户端 / 财务 | `GET` | `/api/v2/client/ledger` | `App\Http\Controllers\Client\V2\LedgerController@index` | `client` | `api, auth:sanctum, ensure.client` |
 | 客户端 / 账单 | `GET` | `/api/v2/client/invoices` | `App\Http\Controllers\Client\V2\InvoiceController@index` | `client` | `api, auth:sanctum, ensure.client` |
 | 客户端 / 账单 | `POST` | `/api/v2/client/invoices` | `App\Http\Controllers\Client\V2\InvoiceWorkflowController@store` | `client` | `api, auth:sanctum, ensure.client, throttle:8,1,client-invoices-store` |
 | 客户端 / 账单 | `GET` | `/api/v2/client/invoices/summary` | `App\Http\Controllers\Client\V2\InvoiceWorkflowController@summary` | `client` | `api, auth:sanctum, ensure.client` |
+| 客户端 / 账单 | `GET` | `/api/v2/client/invoices/{id}` | `App\Http\Controllers\Client\V2\InvoiceController@show` | `client` | `api, auth:sanctum, ensure.client` |
+| 客户端 / 账单 | `POST` | `/api/v2/client/invoices/{id}/cancellations` | `App\Http\Controllers\Client\V2\InvoiceController@cancel` | `client` | `api, auth:sanctum, ensure.client, throttle:10,1,client-invoices-cancel` |
 | 客户端 / 账单 | `POST` | `/api/v2/client/invoices/{id}/pay/alipay` | `App\Http\Controllers\Client\V2\InvoiceWorkflowController@payByAlipay` | `client` | `api, auth:sanctum, ensure.client, throttle:12,1,client-invoices-pay-alipay` |
 | 客户端 / 账单 | `GET` | `/api/v2/client/invoices/{id}/pay/alipay/status` | `App\Http\Controllers\Client\V2\InvoiceWorkflowController@queryAlipayStatus` | `client` | `api, auth:sanctum, ensure.client, throttle:30,1,client-invoices-pay-alipay-status` |
 | 客户端 / 账单 | `POST` | `/api/v2/client/invoices/{id}/pay/balance` | `App\Http\Controllers\Client\V2\InvoiceWorkflowController@payByBalance` | `client` | `api, auth:sanctum, ensure.client, throttle:10,1,client-invoices-pay-balance` |
 | 客户端 / 账单 | `POST` | `/api/v2/client/invoices/{id}/pay/mix` | `App\Http\Controllers\Client\V2\InvoiceWorkflowController@payByBalanceAndAlipay` | `client` | `api, auth:sanctum, ensure.client, throttle:10,1,client-invoices-pay-mix` |
-| 客户端 / 账单 | `GET` | `/api/v2/client/invoices/{invoice}` | `App\Http\Controllers\Client\V2\InvoiceController@show` | `client` | `api, auth:sanctum, ensure.client` |
-| 客户端 / 账单 | `POST` | `/api/v2/client/invoices/{invoice}/cancellations` | `App\Http\Controllers\Client\V2\ActionController@cancelInvoice` | `client` | `api, auth:sanctum, ensure.client, throttle:10,1,client-invoices-cancel` |
 | 客户端 / 通知 | `GET` | `/api/v2/client/notifications` | `App\Http\Controllers\Client\V2\NotificationController@index` | `client` | `api, auth:sanctum, ensure.client` |
 | 客户端 / 通知 | `GET` | `/api/v2/client/notifications/feed` | `App\Http\Controllers\Client\V2\NotificationController@feed` | `client` | `api, auth:sanctum, ensure.client` |
 | 客户端 / 通知 | `POST` | `/api/v2/client/notifications/mark-all-read` | `App\Http\Controllers\Client\V2\NotificationController@markAllRead` | `client` | `api, auth:sanctum, ensure.client` |
 | 客户端 / 通知 | `GET` | `/api/v2/client/notifications/unread-count` | `App\Http\Controllers\Client\V2\NotificationController@unreadCount` | `client` | `api, auth:sanctum, ensure.client` |
-| 客户端 / 通知 | `PUT` | `/api/v2/client/notifications/{notification}/read-state` | `App\Http\Controllers\Client\V2\ActionController@markNotificationRead` | `client` | `api, auth:sanctum, ensure.client` |
+| 客户端 / 通知 | `PUT` | `/api/v2/client/notifications/{notification}/read-state` | `App\Http\Controllers\Client\V2\NotificationController@markRead` | `client` | `api, auth:sanctum, ensure.client` |
 | 站点 / 产品 | `GET` | `/api/v2/site/product-groups` | `App\Http\Controllers\Site\V2\ProductGroupController@index` | `public` | `api` |
 | 站点 / 产品 | `GET` | `/api/v2/site/product-groups/{group}/catalog` | `App\Http\Controllers\Site\V2\ProductGroupController@catalog` | `public` | `api, throttle:site-product-browse` |
 | 站点 / 产品 | `GET` | `/api/v2/site/product-groups/{group}/children` | `App\Http\Controllers\Site\V2\ProductGroupController@children` | `public` | `api` |
@@ -165,7 +158,6 @@ owner: backend-platform
 | 站点 / 内容 | `GET` | `/api/v2/site/notices/{article}` | `App\Http\Controllers\Site\V2\ContentController@noticeDetail` | `public` | `api` |
 | 站点 / 首页 | `GET` | `/api/v2/site/config` | `App\Http\Controllers\Site\V2\HomeController@config` | `public` | `api` |
 | 站点 / 首页 | `GET` | `/api/v2/site/home` | `App\Http\Controllers\Site\V2\HomeController@home` | `public` | `api` |
-| 站点 / 首页 | `GET` | `/api/v2/site/home-hero` | `App\Http\Controllers\Site\V2\HomeController@hero` | `public` | `api` |
 | 管理端 / Integration Plugins | `POST` | `/api/v2/admin/integration-plugin-scans` | `App\Http\Controllers\Admin\V2\IntegrationPluginController@scan` | `admin` | `api, auth:sanctum, ensure.admin, permission:integration_plugin.manage, throttle:admin-privilege-write` |
 | 管理端 / Integration Plugins | `GET` | `/api/v2/admin/integration-plugins` | `App\Http\Controllers\Admin\V2\IntegrationPluginController@index` | `admin` | `api, auth:sanctum, ensure.admin, permission:integration_plugin.view` |
 | 管理端 / Integration Plugins | `POST` | `/api/v2/admin/integration-plugins` | `App\Http\Controllers\Admin\V2\IntegrationPluginController@install` | `admin` | `api, auth:sanctum, ensure.admin, permission:integration_plugin.manage, throttle:admin-privilege-write` |
@@ -207,7 +199,6 @@ owner: backend-platform
 | 管理端 / 产品类型 | `DELETE` | `/api/v2/admin/product-types/{productType}` | `App\Http\Controllers\Admin\V2\ProductTypeController@destroy` | `admin` | `api, auth:sanctum, ensure.admin, permission:product.manage` |
 | 管理端 / 产品类型 | `PUT` | `/api/v2/admin/product-types/{productType}` | `App\Http\Controllers\Admin\V2\ProductTypeController@update` | `admin` | `api, auth:sanctum, ensure.admin, permission:product.manage` |
 | 管理端 / 仪表盘 | `GET` | `/api/v2/admin/dashboard/monthly-revenue` | `App\Http\Controllers\Admin\V2\DashboardController@monthlyRevenue` | `admin` | `api, auth:sanctum, ensure.admin, permission:dashboard.view` |
-| 管理端 / 仪表盘 | `GET` | `/api/v2/admin/dashboard/recent-invoices` | `App\Http\Controllers\Admin\V2\DashboardController@recentInvoices` | `admin` | `api, auth:sanctum, ensure.admin, permission:dashboard.view` |
 | 管理端 / 仪表盘 | `GET` | `/api/v2/admin/dashboard/stats` | `App\Http\Controllers\Admin\V2\DashboardController@stats` | `admin` | `api, auth:sanctum, ensure.admin, permission:dashboard.view` |
 | 管理端 / 优惠券 | `GET` | `/api/v2/admin/coupon-campaigns` | `App\Http\Controllers\Admin\V2\CouponCampaignController@index` | `admin` | `api, auth:sanctum, ensure.admin, permission:coupon.list` |
 | 管理端 / 优惠券 | `POST` | `/api/v2/admin/coupon-campaigns` | `App\Http\Controllers\Admin\V2\CouponCampaignController@store` | `admin` | `api, auth:sanctum, ensure.admin, permission:coupon.manage` |
@@ -259,6 +250,10 @@ owner: backend-platform
 | 管理端 / 其他 | `POST` | `/api/v2/admin/media-migrations` | `App\Http\Controllers\Admin\V2\MediaMigrationController@store` | `admin` | `api, auth:sanctum, ensure.admin, permission:content.manage` |
 | 管理端 / 其他 | `GET` | `/api/v2/admin/media-migrations/{batchId}` | `App\Http\Controllers\Admin\V2\MediaMigrationController@show` | `admin` | `api, auth:sanctum, ensure.admin, permission:content.manage` |
 | 管理端 / 其他 | `GET` | `/api/v2/admin/media-storage-drivers` | `App\Http\Controllers\Admin\V2\MediaFileController@storageDrivers` | `admin` | `api, auth:sanctum, ensure.admin, permission:content.list` |
+| 管理端 / 其他 | `GET` | `/api/v2/admin/message-scenes` | `App\Http\Controllers\Admin\V2\MessageSceneController@index` | `admin` | `api, auth:sanctum, ensure.admin, permission:settings.view` |
+| 管理端 / 其他 | `POST` | `/api/v2/admin/message-scenes/batch` | `App\Http\Controllers\Admin\V2\MessageSceneController@batch` | `admin` | `api, auth:sanctum, ensure.admin, permission:settings.manage, throttle:admin-privilege-write` |
+| 管理端 / 其他 | `GET` | `/api/v2/admin/message-scenes/{code}` | `App\Http\Controllers\Admin\V2\MessageSceneController@show` | `admin` | `api, auth:sanctum, ensure.admin, permission:settings.view` |
+| 管理端 / 其他 | `PUT` | `/api/v2/admin/message-scenes/{code}` | `App\Http\Controllers\Admin\V2\MessageSceneController@update` | `admin` | `api, auth:sanctum, ensure.admin, permission:settings.manage, throttle:admin-privilege-write` |
 | 管理端 / 其他 | `GET` | `/api/v2/admin/promotion-ambassadors` | `App\Http\Controllers\Admin\V2\PromotionAmbassadorController@index` | `admin` | `api, auth:sanctum, ensure.admin, permission:promotion_ambassador.list` |
 | 管理端 / 其他 | `POST` | `/api/v2/admin/promotion-ambassadors` | `App\Http\Controllers\Admin\V2\PromotionAmbassadorController@store` | `admin` | `api, auth:sanctum, ensure.admin, permission:promotion_ambassador.manage, throttle:admin-privilege-write` |
 | 管理端 / 其他 | `DELETE` | `/api/v2/admin/promotion-ambassadors/{promotionAmbassador}` | `App\Http\Controllers\Admin\V2\PromotionAmbassadorController@destroy` | `admin` | `api, auth:sanctum, ensure.admin, permission:promotion_ambassador.manage, throttle:admin-privilege-write` |
@@ -266,10 +261,6 @@ owner: backend-platform
 | 管理端 / 其他 | `GET` | `/api/v2/admin/schedule-queue-jobs` | `App\Http\Controllers\Admin\V2\ScheduleTaskController@queueJobs` | `admin` | `api, auth:sanctum, ensure.admin, permission:schedule.view` |
 | 管理端 / 其他 | `DELETE` | `/api/v2/admin/schedule-queue-jobs/{queue}` | `App\Http\Controllers\Admin\V2\ScheduleTaskController@clearQueueJobs` | `admin` | `api, auth:sanctum, ensure.admin, permission:schedule.queue_manage` |
 | 管理端 / 其他 | `DELETE` | `/api/v2/admin/schedule-queue-jobs/{queue}/{jobId}` | `App\Http\Controllers\Admin\V2\ScheduleTaskController@deleteQueueJob` | `admin` | `api, auth:sanctum, ensure.admin, permission:schedule.queue_manage` |
-| 管理端 / 其他 | `GET` | `/api/v2/admin/schedule-runs` | `App\Http\Controllers\Admin\V2\ScheduleTaskController@index` | `admin` | `api, auth:sanctum, ensure.admin, permission:schedule.view` |
-| 管理端 / 其他 | `GET` | `/api/v2/admin/schedule-runs/{run}` | `App\Http\Controllers\Admin\V2\ScheduleTaskController@show` | `admin` | `api, auth:sanctum, ensure.admin, permission:schedule.view` |
-| 管理端 / 其他 | `POST` | `/api/v2/admin/schedule-runs/{run}/retry` | `App\Http\Controllers\Admin\V2\ScheduleTaskController@retry` | `admin` | `api, auth:sanctum, ensure.admin, permission:schedule.retry` |
-| 管理端 / 其他 | `GET` | `/api/v2/admin/system/readiness` | `App\Http\Controllers\Admin\V2\SystemReadinessController@show` | `admin` | `api, auth:sanctum, ensure.admin, permission:database.view` |
 | 管理端 / 内容 | `GET` | `/api/v2/admin/content/articles` | `App\Http\Controllers\Admin\V2\ContentArticleController@index` | `admin` | `api, auth:sanctum, ensure.admin, permission:content.list` |
 | 管理端 / 内容 | `POST` | `/api/v2/admin/content/articles` | `App\Http\Controllers\Admin\V2\ContentArticleController@store` | `admin` | `api, auth:sanctum, ensure.admin, permission:content.manage` |
 | 管理端 / 内容 | `DELETE` | `/api/v2/admin/content/articles/{article}` | `App\Http\Controllers\Admin\V2\ContentArticleController@destroy` | `admin` | `api, auth:sanctum, ensure.admin, permission:content.manage` |
@@ -329,8 +320,6 @@ owner: backend-platform
 | 管理端 / 用户 | `GET` | `/api/v2/admin/users/{user}` | `App\Http\Controllers\Admin\V2\UserController@show` | `admin` | `api, auth:sanctum, ensure.admin, permission:user.detail` |
 | 管理端 / 用户 | `PUT` | `/api/v2/admin/users/{user}` | `App\Http\Controllers\Admin\V2\UserController@update` | `admin` | `api, auth:sanctum, ensure.admin, permission:user.manage` |
 | 管理端 / 用户 | `GET` | `/api/v2/admin/users/{user}/email-logs` | `App\Http\Controllers\Admin\V2\UserController@emailLogs` | `admin` | `api, auth:sanctum, ensure.admin, permission:user.detail` |
-| 管理端 / 用户 | `GET` | `/api/v2/admin/users/{user}/invoices` | `App\Http\Controllers\Admin\V2\UserController@invoices` | `admin` | `api, auth:sanctum, ensure.admin, permission:user.detail` |
-| 管理端 / 用户 | `GET` | `/api/v2/admin/users/{user}/invoices/{invoice}` | `App\Http\Controllers\Admin\V2\UserController@invoiceDetail` | `admin` | `api, auth:sanctum, ensure.admin, permission:user.detail` |
 | 管理端 / 用户 | `POST` | `/api/v2/admin/users/{user}/invoices/{invoice}/manual-reversal` | `App\Http\Controllers\Admin\V2\UserController@storeManualReversal` | `admin` | `api, auth:sanctum, ensure.admin, permission:finance.manual_reversal, throttle:20,1,admin-manual-reversal` |
 | 管理端 / 用户 | `POST` | `/api/v2/admin/users/{user}/login-as` | `App\Http\Controllers\Admin\V2\UserController@loginAs` | `admin` | `api, auth:sanctum, ensure.admin, permission:user.login_as` |
 | 管理端 / 用户 | `POST` | `/api/v2/admin/users/{user}/manual-invoices` | `App\Http\Controllers\Admin\V2\UserController@storeManualInvoice` | `admin` | `api, auth:sanctum, ensure.admin, permission:invoice.manual_entry, throttle:20,1,admin-manual-invoice` |
@@ -392,10 +381,11 @@ owner: backend-platform
 | 管理端 / 设置 | `POST` | `/api/v2/admin/notification-templates/sms/provider-template/import-defaults` | `App\Http\Controllers\Admin\V2\SettingController@importDefaultSmsProviderTemplates` | `admin` | `api, auth:sanctum, ensure.admin, permission:settings.manage, throttle:admin-privilege-write, throttle:20,1` |
 | 管理端 / 设置 | `GET` | `/api/v2/admin/notification-templates/sms/provider-template/list` | `App\Http\Controllers\Admin\V2\SettingController@listSmsProviderTemplates` | `admin` | `api, auth:sanctum, ensure.admin, permission:settings.view` |
 | 管理端 / 设置 | `POST` | `/api/v2/admin/notification-templates/sms/provider-template/submit-all` | `App\Http\Controllers\Admin\V2\SettingController@submitAllSmsProviderTemplates` | `admin` | `api, auth:sanctum, ensure.admin, permission:settings.manage, throttle:admin-privilege-write, throttle:20,1` |
-| 管理端 / 设置 | `POST` | `/api/v2/admin/notification-templates/sms/provider-template/{id}/deletion` | `App\Http\Controllers\Admin\V2\SettingController@deleteSmsProviderTemplate` | `admin` | `api, auth:sanctum, ensure.admin, permission:settings.manage, throttle:admin-privilege-write` |
+| 管理端 / 设置 | `DELETE` | `/api/v2/admin/notification-templates/sms/provider-template/{id}` | `App\Http\Controllers\Admin\V2\SettingController@deleteSmsProviderTemplate` | `admin` | `api, auth:sanctum, ensure.admin, permission:settings.manage, throttle:admin-privilege-write` |
+| 管理端 / 设置 | `PUT` | `/api/v2/admin/notification-templates/sms/provider-template/{id}` | `App\Http\Controllers\Admin\V2\SettingController@updateSmsProviderTemplate` | `admin` | `api, auth:sanctum, ensure.admin, permission:settings.manage, throttle:admin-privilege-write` |
 | 管理端 / 设置 | `POST` | `/api/v2/admin/notification-templates/sms/provider-template/{id}/refresh` | `App\Http\Controllers\Admin\V2\SettingController@refreshSmsProviderTemplateById` | `admin` | `api, auth:sanctum, ensure.admin, permission:settings.manage, throttle:admin-privilege-write, throttle:20,1` |
 | 管理端 / 设置 | `POST` | `/api/v2/admin/notification-templates/sms/provider-template/{id}/submit` | `App\Http\Controllers\Admin\V2\SettingController@submitSmsProviderTemplateForReview` | `admin` | `api, auth:sanctum, ensure.admin, permission:settings.manage, throttle:admin-privilege-write, throttle:20,1` |
-| 管理端 / 设置 | `POST` | `/api/v2/admin/notification-templates/sms/provider-template/{id}/update` | `App\Http\Controllers\Admin\V2\SettingController@updateSmsProviderTemplate` | `admin` | `api, auth:sanctum, ensure.admin, permission:settings.manage, throttle:admin-privilege-write` |
+| 管理端 / 设置 | `POST` | `/api/v2/admin/notification-templates/sms/verify-code-sync` | `App\Http\Controllers\Admin\V2\SettingController@syncSmsVerifyCodeTemplates` | `admin` | `api, auth:sanctum, ensure.admin, permission:settings.manage, throttle:admin-privilege-write, throttle:20,1` |
 | 管理端 / 设置 | `POST` | `/api/v2/admin/notification-templates/sms/{code}/provider-link` | `App\Http\Controllers\Admin\V2\SettingController@linkSmsProviderTemplate` | `admin` | `api, auth:sanctum, ensure.admin, permission:settings.manage, throttle:admin-privilege-write` |
 | 管理端 / 设置 | `POST` | `/api/v2/admin/notification-templates/test-send` | `App\Http\Controllers\Admin\V2\SettingController@testNotificationTemplate` | `admin` | `api, auth:sanctum, ensure.admin, permission:settings.manage, throttle:admin-privilege-write` |
 | 管理端 / 设置 | `GET` | `/api/v2/admin/settings` | `App\Http\Controllers\Admin\V2\SettingController@index` | `admin` | `api, auth:sanctum, ensure.admin, permission:settings.view` |
@@ -403,14 +393,8 @@ owner: backend-platform
 | 管理端 / 设置 | `GET` | `/api/v2/admin/settings/{group}/secrets/{key}` | `App\Http\Controllers\Admin\V2\SettingController@revealSecret` | `admin` | `api, auth:sanctum, ensure.admin, permission:settings.secret_reveal, throttle:10,1` |
 | 管理端 / 调度 | `POST` | `/api/v2/admin/schedule-triggers` | `App\Http\Controllers\Admin\V2\ScheduleTaskController@trigger` | `admin` | `api, auth:sanctum, ensure.admin, permission:schedule.trigger` |
 | 管理端 / 调度 | `GET` | `/api/v2/admin/schedules/overview` | `App\Http\Controllers\Admin\V2\ScheduleTaskController@overview` | `admin` | `api, auth:sanctum, ensure.admin, permission:schedule.view` |
-| 管理端 / 财务 | `GET` | `/api/v2/admin/finance/ledger` | `App\Http\Controllers\Admin\V2\FinanceLedgerController@index` | `admin` | `api, auth:sanctum, ensure.admin, permission:invoice.list` |
-| 管理端 / 财务 | `GET` | `/api/v2/admin/finance/ledger/summary` | `App\Http\Controllers\Admin\V2\FinanceLedgerController@summary` | `admin` | `api, auth:sanctum, ensure.admin, permission:invoice.list` |
-| 管理端 / 财务 | `GET` | `/api/v2/admin/finance/ledger/{id}` | `App\Http\Controllers\Admin\V2\FinanceLedgerController@show` | `admin` | `api, auth:sanctum, ensure.admin, permission:invoice.detail` |
 | 管理端 / 财务 | `GET` | `/api/v2/admin/finance/new-customer-daily-summary` | `App\Http\Controllers\Admin\V2\FinanceMenuController@newCustomerDailySummary` | `admin` | `api, auth:sanctum, ensure.admin, permission:finance.report` |
-| 管理端 / 财务 | `GET` | `/api/v2/admin/finance/product-income-summary` | `App\Http\Controllers\Admin\V2\FinanceMenuController@productIncomeSummary` | `admin` | `api, auth:sanctum, ensure.admin, permission:finance.report` |
 | 管理端 / 财务 | `GET` | `/api/v2/admin/finance/recharges` | `App\Http\Controllers\Admin\V2\FinanceMenuController@recharges` | `admin` | `api, auth:sanctum, ensure.admin, permission:invoice.list` |
-| 管理端 / 财务 | `GET` | `/api/v2/admin/finance/renewal-orders` | `App\Http\Controllers\Admin\V2\FinanceMenuController@renewalOrders` | `admin` | `api, auth:sanctum, ensure.admin, permission:invoice.list` |
-| 管理端 / 财务 | `GET` | `/api/v2/admin/finance/upgrade-orders` | `App\Http\Controllers\Admin\V2\FinanceMenuController@upgradeOrders` | `admin` | `api, auth:sanctum, ensure.admin, permission:invoice.list` |
 | 管理端 / 账单 | `GET` | `/api/v2/admin/invoices` | `App\Http\Controllers\Admin\V2\InvoiceController@index` | `admin` | `api, auth:sanctum, ensure.admin, permission:invoice.list` |
 | 管理端 / 账单 | `GET` | `/api/v2/admin/invoices/{invoice}` | `App\Http\Controllers\Admin\V2\InvoiceController@show` | `admin` | `api, auth:sanctum, ensure.admin, permission:invoice.detail` |
 | 管理端 / 账单 | `POST` | `/api/v2/admin/invoices/{invoice}/cancellations` | `App\Http\Controllers\Admin\V2\InvoiceController@cancel` | `admin` | `api, auth:sanctum, ensure.admin, permission:invoice.manage, throttle:20,1,admin-invoice-cancel` |

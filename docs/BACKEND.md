@@ -1,6 +1,6 @@
 ---
 status: current
-updated: 2026-11-03
+updated: 2026-11-07
 owner: backend-platform
 ---
 
@@ -164,6 +164,10 @@ API 治理必须同时覆盖请求入口和响应出口。新增或重构接口�
 
 ### 文档同步
 
+- **Apifox 是接口文档的唯一载体**（项目「caiwu 创欧云 API」，projectId `9019820`）。任何接口新增、删除、修改——路由、FormRequest 参数、Resource 响应字段、错误码、鉴权——都必须经 Apifox MCP 执行器落到该项目，代码与接口文档两侧都完成才算完成。
+- 接口类改动顺序：改代码 → Apifox MCP 写入（`createEndpoint` / `updateEndpoint` / `deleteEndpoint` 走 `deleteMethod`）→ `getEndpoint` 回读确认 → 运行验证。
+- 数据模型、响应组件、安全方案、公共参数的增删改同样走 Apifox MCP；删除前必须查引用方，Apifox 不会级联清理。
+- MCP 不可用或同步失败时，必须在改动摘要里明确列出未同步的接口与原因，不得静默跳过。
 - API 请求/响应规则变化时，优先更新 `docs/参考资料/接口/API格式规范.md`。
 - 路由清单变化时按脚本重刷 `docs/自动生成/接口/后端API清单.md`，禁止手工编辑该文件。
 - 影响前端字段时，必须同步前端调用和测试建议。
@@ -277,7 +281,7 @@ composer check:strict-types
 - 新增第三方 provider 或调整 provider 接入方式。
 - 修改支付、实名、ZJMF 财务/ZJMF 云、短信、对象存储等集成边界。
 - 修改 API 响应格式、错误码、分页结构、权限码。
-- 修改 API 请求参数、响应字段、Resource、FormRequest、Request DTO、Response DTO。
+- 修改 API 请求参数、响应字段、Resource、FormRequest、Request DTO、Response DTO（必须同时经 Apifox MCP 写入，见 §5 文档同步）。
 - 修改 API 错误 `message`、前端用户可见提示、字段校验错误等简体中文体验规则。
 - 修改审查闭环、防漏审、防审完不报规则。
 - 修改队列、调度、回调、部署假设。
@@ -288,6 +292,7 @@ composer check:strict-types
 
 - 项目规则：`AGENTS.md`，仅在规则升级且确认为仓库级硬约束时更新。
 - 后端文档：`docs/BACKEND.md`。
+- 接口文档（唯一载体）：Apifox 项目 `9019820`，经 Apifox MCP 写入。
 - API 格式：`docs/参考资料/接口/API格式规范.md`。
 - API 分组导航：`docs/参考资料/接口/API清单导航.md`。
 - caiwu 主技能：本机 `~/.agents/skills/caiwu/SKILL.md`。
