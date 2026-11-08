@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * 演练版数据脱敏：从本地 idc 库复制出 idc_demo 副本库，在副本上做脱敏。
+ * 在线演示数据脱敏：从本地 idc 库复制出 idc_demo 副本库，在副本上做脱敏。
  *
  * 原则：
  * - 只读 idc，只写 idc_demo；最后断言当前连接库名，防止误伤源库。
@@ -116,7 +116,7 @@ run($pdo, "UPDATE users SET
     alipay_account = NULL,
     id_card = CONCAT('DEMO-ID-', LPAD(id, 10, '0')),
     verification_certify_id = '',
-    verification_message = '演练版示例',
+    verification_message = '示例备注',
     last_login_ip = '127.0.0.1',
     admin_note = NULL,
     password = ".$pdo->quote($fakeHash).'
@@ -161,36 +161,36 @@ scrubFreeText($pdo, $targetDb, 'tickets', [
     'close_reason' => 'NULL',
 ]);
 scrubFreeText($pdo, $targetDb, 'ticket_replies', [
-    'content' => $pdo->quote('这是演练版中的示例回复，用于演示界面效果。'),
+    'content' => $pdo->quote('这是在线演示中的示例回复，用于演示界面效果。'),
 ]);
 scrubFreeText($pdo, $targetDb, 'message_logs', [
     'recipient' => "CONCAT('demo-', id, '@example.test')",
     'subject' => "CONCAT('演示消息 #', id)",
-    'content' => $pdo->quote('这是演练版中的示例消息内容。'),
+    'content' => $pdo->quote('这是在线演示中的示例消息内容。'),
     'params_json' => 'NULL',
     'error_msg' => 'NULL',
 ]);
 scrubFreeText($pdo, $targetDb, 'user_notifications', [
     'title' => "CONCAT('演示通知 #', id)",
-    'content' => $pdo->quote('这是演练版中的示例通知。'),
+    'content' => $pdo->quote('这是在线演示中的示例通知。'),
     'data' => 'NULL',
 ]);
 scrubFreeText($pdo, $targetDb, 'service_tracking_records', [
-    'content' => $pdo->quote('演练版示例记录'),
+    'content' => $pdo->quote('示例记录'),
     'images' => 'NULL',
 ]);
 scrubFreeText($pdo, $targetDb, 'sms_provider_templates', [
-    'content' => $pdo->quote('演练版示例短信模板'),
+    'content' => $pdo->quote('示例短信模板'),
     'remark' => 'NULL',
     'raw_json' => 'NULL',
 ]);
 scrubFreeText($pdo, $targetDb, 'notification_templates', [
     'subject' => "CONCAT('演示通知 ', id)",
-    'content' => $pdo->quote('演练版示例通知模板'),
+    'content' => $pdo->quote('示例通知模板'),
     'description' => 'NULL',
 ]);
 scrubFreeText($pdo, $targetDb, 'activity_logs', [
-    'description' => "CONCAT('演练版示例活动 #', id)",
+    'description' => "CONCAT('示例活动 #', id)",
     'actor_name' => "CONCAT('演示操作员', id)",
     'ip_address' => "'127.0.0.1'",
     'context' => 'NULL',
@@ -205,23 +205,23 @@ scrubFreeText($pdo, $targetDb, 'schedule_task_runs', [
 // 内容文章：保留标题（官网演示需要真实文案感），正文换成示例段落
 scrubFreeText($pdo, $targetDb, 'content_articles', [
     'summary' => 'NULL',
-    'excerpt' => $pdo->quote('演练版示例摘要'),
-    'content' => "CONCAT('<p>这是演练版中的示例内容 #', id, '。真实内容请访问生产站点。</p>')",
+    'excerpt' => $pdo->quote('示例摘要'),
+    'content' => "CONCAT('<p>这是在线演示中的示例内容 #', id, '。真实内容请访问生产站点。</p>')",
     'remark' => 'NULL',
     'operator' => 'NULL',
 ]);
-scrubFreeText($pdo, $targetDb, 'content_categories', ['description' => "CONCAT('演练版示例分类 ', id)"]);
+scrubFreeText($pdo, $targetDb, 'content_categories', ['description' => "CONCAT('示例分类 ', id)"]);
 
 // 商品与营销
 foreach (['first_product_groups', 'second_product_groups', 'third_product_groups', 'marketing_product_groups'] as $table) {
     scrubFreeText($pdo, $targetDb, $table, ['description' => 'NULL']);
 }
 scrubFreeText($pdo, $targetDb, 'coupon_campaigns', ['description' => 'NULL', 'remark' => 'NULL']);
-scrubFreeText($pdo, $targetDb, 'coupons', ['description' => "CONCAT('演练版示例优惠券 ', id)", 'remark' => 'NULL']);
+scrubFreeText($pdo, $targetDb, 'coupons', ['description' => "CONCAT('示例优惠券 ', id)", 'remark' => 'NULL']);
 scrubFreeText($pdo, $targetDb, 'member_levels', ['remark' => 'NULL']);
 scrubFreeText($pdo, $targetDb, 'promotion_ambassadors', ['remark' => 'NULL']);
 scrubFreeText($pdo, $targetDb, 'user_coupons', ['remark' => 'NULL']);
-scrubFreeText($pdo, $targetDb, 'products', ['remark' => "CONCAT('演练版示例商品 ', id)"]);
+scrubFreeText($pdo, $targetDb, 'products', ['remark' => "CONCAT('示例商品 ', id)"]);
 
 // 订单/账单/支付及财务
 foreach (['orders', 'invoices', 'payments', 'recharge_records', 'refunds', 'finance_ledger_entries', 'referral_account_logs', 'referral_rewards', 'referral_withdrawals'] as $table) {
@@ -275,7 +275,7 @@ scrubFreeText($pdo, $targetDb, 'suppliers', [
     'contact_name' => "CONCAT('演示联系人', id)",
     'contact_phone' => "'13900000000'",
     'contact_email' => "CONCAT('supplier-', id, '@example.test')",
-    'notes' => $pdo->quote('演练版示例供应商'),
+    'notes' => $pdo->quote('示例供应商'),
     'website' => 'NULL',
 ]);
 scrubFreeText($pdo, $targetDb, 'media_files', ['uploaded_by' => '0']);

@@ -1,5 +1,5 @@
 {
-  "_comment": "演练版导出清单：每个 app 列出要序列化的接口。键为 \"METHOD path\"，path 里可用 * 占位一个路径段，导出时会替换成数据集里第一条真实记录的 id。",
+  "_comment": "在线演示导出清单：每个 app 列出要序列化的接口。键为 \"METHOD path\"，path 里可用 * 占位一个路径段，导出时会替换成数据集里第一条真实记录的 id。",
   "admin": [
     "GET /v2/admin/auth/info",
     "GET /v2/admin/dashboard/stats",

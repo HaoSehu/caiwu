@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * 演练版数据集导出：在脱敏副本库上以真实控制器序列化响应，写成静态 JSON。
+ * 在线演示数据集导出：在脱敏副本库上以真实控制器序列化响应，写成静态 JSON。
  *
  * 前置：先跑 demo_anonymize.php（生成脱敏副本库，默认 idc_test）。
  * 用法：cd backend && php scripts/demo_export.php [--caiwu-root=<path>]
@@ -81,7 +81,7 @@ function exportEndpoint(HttpKernel $kernel, string $method, string $path, ?strin
 
 /**
  * 后端序列化器会把 /media/xxx 拼成 API 绝对域名（UploadUrl::resolve）。
- * 演练版不连后端，统一改写为站内相对路径 /demo/media/xxx。
+ * 在线演示不连后端，统一改写为站内相对路径 /demo/media/xxx。
  */
 function rewriteMediaUrls(mixed $value): mixed
 {
