@@ -35,6 +35,62 @@ class BillingNotificationRegressionTest extends TestCase
 {
     use DatabaseTransactions;
 
+    /**
+     * 本用例组验证「支付完成通知走 email 渠道」的链路，需要 `order_paid` 场景的
+     * email 渠道处于启用状态。
+     *
+     * 该状态在开发库中由历史操作累积而来（管理端开过开关），全新库上种子迁移
+     * 只按模板 `is_enabled` 建配置——模板若在配置建立之后才补，渠道就是关闭的。
+     * 用例不应依赖这种外部遗留状态，这里显式开启，保证在任意数据库上可重复。
+     */
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->enableChannel('customer', 'order_paid', 'email');
+        $this->enableChannel('customer', 'invoice_payment_reminder', 'email');
+    }
+
+    /**
+     * 就地启用某个场景的某个渠道（只改 enabled 位，不动其余配置）。
+     */
+    private function enableChannel(string $audience, string $scene, string $channel): void
+    {
+        $repository = app(MessageConfigurationRepository::class);
+        $stored = $repository->get($audience, $scene);
+        $configurations = $stored['configurations'] ?? [];
+
+        $groups = MessageGroups::fromStored($audience, MessageTypeCatalog::get($audience, $scene), $configurations);
+        if ($groups === []) {
+            return;
+        }
+
+        $changed = false;
+        foreach ($groups as $index => $group) {
+            if (! isset($group['configurations'][$channel])) {
+                continue;
+            }
+
+            if (($group['configurations'][$channel]['enabled'] ?? false) === true) {
+                continue;
+            }
+
+            $groups[$index]['configurations'][$channel]['enabled'] = true;
+            $changed = true;
+        }
+
+        if (! $changed) {
+            return;
+        }
+
+        $repository->save(
+            $audience,
+            $scene,
+            (int) ($stored['revision'] ?? 0),
+            ['_groups' => $groups],
+        );
+    }
+
     public function test_渲染器支持_logo_条件区段(): void
     {
         $out = MessageTemplateRenderer::render(

@@ -264,6 +264,80 @@ class AdminOrderNotificationFailureTest extends TestCase
         ));
     }
 
+    /**
+     * 全员邮箱非法时必须抛异常，不能静默返回。
+     *
+     * 静默返回会让队列任务显示成功，管理员永远收不到账单通知且无人知晓；
+     * 抛异常让 Job 进 failed_jobs，至少能被告警和人工发现。
+     */
+    public function test_all_invalid_emails_throws_instead_of_silently_skipping(): void
+    {
+        $this->makeAdmin('test@123456', '唯一管理员且邮箱非法');
+
+        $dispatcher = $this->makeDispatcher();
+        [$invoice] = $this->makeInvoice();
+
+        try {
+            $this->notifyPaid($dispatcher, (int) $invoice->id);
+            $this->fail('全员邮箱非法时必须抛异常，不得静默返回');
+        } catch (\RuntimeException $exception) {
+            $this->assertStringContainsString('无可用收件人', $exception->getMessage());
+            $this->assertStringContainsString('test@123456', $exception->getMessage());
+            $this->assertStringContainsString('邮箱不可用', $exception->getMessage());
+        }
+
+        $this->assertSame([], $dispatcher->sent, '不得向任何人发送');
+    }
+
+    /**
+     * 有权限但没填邮箱的管理员：属于配置缺失，同样要抛（否则永远收不到）。
+     */
+    public function test_privileged_admin_without_email_also_throws(): void
+    {
+        $this->makeAdmin('', '有权限但没邮箱的管理员');
+
+        $dispatcher = $this->makeDispatcher();
+        [$invoice] = $this->makeInvoice();
+
+        try {
+            $this->notifyPaid($dispatcher, (int) $invoice->id);
+            $this->fail('有权限管理员全员无可用邮箱时必须抛异常');
+        } catch (\RuntimeException $exception) {
+            $this->assertStringContainsString('无可用收件人', $exception->getMessage());
+            $this->assertStringContainsString('(未填写邮箱)', $exception->getMessage());
+        }
+
+        $this->assertSame([], $dispatcher->sent);
+    }
+
+    /**
+     * 没有有订单权限的管理员时不抛异常：这是正常配置状态，不该无限重试。
+     */
+    public function test_no_privileged_admin_does_not_throw(): void
+    {
+        // 只造一个无订单权限的管理员
+        $role = Role::query()->create([
+            'name' => 'no_order_perm_'.bin2hex(random_bytes(4)),
+            'label' => '无订单权限角色',
+            'permissions' => [],
+        ]);
+        AdminUser::query()->create([
+            'username' => 'no_perm_'.bin2hex(random_bytes(4)),
+            'password' => 'secret123',
+            'nickname' => '无权限管理员',
+            'email' => 'no-perm@example.test',
+            'status' => 1,
+            'role_id' => (int) $role->id,
+        ]);
+
+        $dispatcher = $this->makeDispatcher();
+        [$invoice] = $this->makeInvoice();
+
+        $this->notifyPaid($dispatcher, (int) $invoice->id);
+
+        $this->assertSame([], $this->sentTestEmails($dispatcher));
+    }
+
     public function test_invoice_created_branch_throws_aggregate_too(): void
     {
         $admin = $this->makeAdmin('created-fail@example.test', '新订单失败管理员');
@@ -277,6 +351,81 @@ class AdminOrderNotificationFailureTest extends TestCase
             $this->assertStringContainsString('新订单通知发送失败 1 位管理员', $exception->getMessage());
             $this->assertStringContainsString('admin#'.(int) $admin->id, $exception->getMessage());
         }
+    }
+
+    /**
+     * 历史脏数据：管理员邮箱是 `test@123456` 这类非邮箱格式。
+     *
+     * 修复前它会被当作正常收件人送进传输层，得到 recipient_invalid 后
+     * 计入 failures，整批抛出 RuntimeException，Job 反复重试到耗尽；
+     * 而其他管理员早就收到了，只有重试白跑。
+     * 修复后非法邮箱在收件人解析阶段就被排除，且必须留 warning 让人去改。
+     */
+    public function test_invalid_admin_email_is_skipped_and_does_not_fail_the_batch(): void
+    {
+        $this->makeAdmin('test@123456', '邮箱格式错误管理员');
+        $this->makeAdmin('valid-beside-invalid@example.test', '正常管理员');
+
+        $dispatcher = $this->makeDispatcher();
+        [$invoice] = $this->makeInvoice();
+
+        // 不得抛异常：非法邮箱不是发送失败，不该触发队列重试
+        $this->notifyPaid($dispatcher, (int) $invoice->id);
+
+        $this->assertSame(
+            ['valid-beside-invalid@example.test'],
+            $this->sentTestEmails($dispatcher),
+            '非法邮箱必须被跳过，正常管理员必须收到'
+        );
+        $this->assertNotContains('test@123456', array_column($dispatcher->sent, 'email'));
+    }
+
+    /**
+     * 非法邮箱也不得占用幂等记录：否则管理员修好邮箱后，同一张账单永远补发不到他。
+     *
+     * 必须同时存在一个合法收件人：全部非法时整批会抛异常（见
+     * test_all_invalid_emails_throws_instead_of_silently_skipping），
+     * 走不到「部分跳过 + 部分发送」这条路径。
+     */
+    public function test_invalid_admin_email_does_not_consume_idempotency_record(): void
+    {
+        $invalid = $this->makeAdmin('test@123456', '邮箱格式错误管理员');
+        $this->makeAdmin('idempotent-ok@example.test', '正常管理员');
+
+        $dispatcher = $this->makeDispatcher();
+        [$invoice] = $this->makeInvoice();
+
+        $this->notifyPaid($dispatcher, (int) $invoice->id);
+
+        $this->assertSame(['idempotent-ok@example.test'], $this->sentTestEmails($dispatcher), '正常管理员必须收到');
+
+        $this->assertFalse(
+            AutomationLog::hasRecord(
+                'admin-order-notification',
+                'invoice_paid',
+                'invoice',
+                (int) $invoice->id,
+                'admin:'.(int) $invalid->id,
+            ),
+            '被跳过的非法邮箱不得写入发送记录，修好邮箱后应能补发'
+        );
+    }
+
+    /**
+     * 新订单分支同样要跳过非法邮箱，不能只修付款分支。
+     */
+    public function test_invalid_admin_email_is_skipped_on_invoice_created_branch(): void
+    {
+        $this->makeAdmin('test@123456', '邮箱格式错误管理员');
+        $this->makeAdmin('created-valid@example.test', '新订单正常管理员');
+
+        $dispatcher = $this->makeDispatcher();
+        [$invoice] = $this->makeInvoice(InvoiceStatus::UNPAID);
+
+        (new AdminOrderNotificationService($dispatcher))->notifyInvoiceCreatedNow((int) $invoice->id);
+
+        $this->assertSame(['created-valid@example.test'], $this->sentTestEmails($dispatcher));
+        $this->assertNotContains('test@123456', array_column($dispatcher->sent, 'email'));
     }
 
     /**

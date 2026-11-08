@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Middleware;
 
+use App\Models\User;
 use App\Support\ApiResponseBuilder;
 use Closure;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
@@ -38,7 +39,7 @@ class EnsureEmailIsVerified
 
     private function hasCompletedIdentityVerification(object $user): bool
     {
-        return (int) ($user->is_verified ?? 0) === 1 || (int) ($user->verification_status ?? 0) === 2;
+        return (int) ($user->is_verified ?? 0) === 1 || (int) ($user->verification_status ?? 0) === User::VERIFICATION_STATUS_VERIFIED;
     }
 
     private function forbiddenResponse(string $message): Response

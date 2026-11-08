@@ -8,6 +8,7 @@ use App\Constants\InvoiceStatus;
 use App\Constants\InvoiceType;
 use App\Constants\OrderStatus;
 use App\Constants\PaymentGatewayCode;
+use App\Constants\PaymentStatus;
 use App\Jobs\SendPaidInvoiceAdminNotificationJob;
 use App\Models\AdminUser;
 use App\Models\AutomationLog;
@@ -17,6 +18,7 @@ use App\Models\Payment;
 use App\Services\Messaging\MessageDispatcher;
 use App\Services\ProductCatalog\ProductFullPathResolver;
 use App\Services\System\NotificationService;
+use App\Support\AccountIdentifier;
 use App\Support\AdminPermissions;
 use App\Support\BillingCycleLabels;
 use App\Support\PaymentChannelLabel;
@@ -102,7 +104,7 @@ class AdminOrderNotificationService
         $payment = Payment::query()
             ->where('invoice_id', $invoice->id)
             ->whereRaw($channelScopeSql, $channelScopeBindings)
-            ->where('status', 1)
+            ->where('status', PaymentStatus::SUCCESS)
             ->orderByDesc('paid_at')
             ->orderByDesc('id')
             ->first(Payment::gatewayProjectionColumns([
@@ -114,9 +116,7 @@ class AdminOrderNotificationService
             ]));
 
         $recipients = $this->resolveRecipients();
-        if ($recipients->isEmpty()) {
-            return;
-        }
+        $this->assertRecipientsUsable('付款通知', $invoice, $recipients);
 
         $failures = [];
 
@@ -214,9 +214,7 @@ class AdminOrderNotificationService
         }
 
         $recipients = $this->resolveRecipients();
-        if ($recipients->isEmpty()) {
-            return;
-        }
+        $this->assertRecipientsUsable('新订单通知', $invoice, $recipients);
 
         $failures = [];
 
@@ -320,29 +318,112 @@ class AdminOrderNotificationService
         );
     }
 
+    /**
+     * 解析账单通知的管理员收件人。
+     *
+     * 邮箱必须能投递：历史上存在「email = test@123456」这类脏数据
+     * （管理端保存时已有 email 校验，但这些行早于校验或来自导入），
+     * 它们走到传输层只会得到 recipient_invalid，进而让整批通知抛异常、
+     * Job 反复重试直到耗尽。非法邮箱在这里直接排除，并留一条 warning
+     * 说明是谁被跳过——不能静默丢弃，管理员需要知道自己的邮箱配错了。
+     */
     private function resolveRecipients(): Collection
     {
-        return AdminUser::query()
+        $invalidEmails = [];
+
+        $recipients = AdminUser::query()
             ->with('role')
-            ->where('status', 1)
+            ->where('status', PaymentStatus::SUCCESS)
             ->whereNotNull('email')
             ->orderBy('id')
             ->get(['id', 'username', 'nickname', 'email', 'role_id'])
-            ->filter(function (AdminUser $admin) {
+            ->filter(function (AdminUser $admin) use (&$invalidEmails) {
                 $email = trim((string) ($admin->email ?? ''));
+                if ($email === '') {
+                    return false;
+                }
 
-                return $email !== ''
-                    && (
-                        $admin->hasPermission(AdminPermissions::ORDER_LIST)
-                        || $admin->hasPermission(AdminPermissions::ORDER_DETAIL)
-                        || $admin->hasPermission(AdminPermissions::ORDER_MANAGE)
-                        || $admin->hasPermission(AdminPermissions::INVOICE_LIST)
-                        || $admin->hasPermission(AdminPermissions::INVOICE_DETAIL)
-                        || $admin->hasPermission(AdminPermissions::INVOICE_MANAGE)
-                    );
+                if (! AccountIdentifier::isValidEmail($email)) {
+                    $invalidEmails[] = [
+                        'admin_id' => (int) $admin->id,
+                        'username' => (string) $admin->username,
+                        'email' => $email,
+                    ];
+
+                    return false;
+                }
+
+                return $this->hasOrderNotificationPermission($admin);
             })
             ->unique(fn (AdminUser $admin) => mb_strtolower(trim((string) $admin->email)))
             ->values();
+
+        if ($invalidEmails !== []) {
+            Log::warning('[管理员账单通知] 跳过邮箱格式非法的管理员，请修正其后台邮箱', [
+                'admins' => $invalidEmails,
+            ]);
+        }
+
+        return $recipients;
+    }
+
+    /**
+     * 收件人集合为空时绝不能静默返回。
+     *
+     * 空集合的成因必须分辨清楚：
+     * - 全库根本没有「有订单权限且在用的管理员」→ 配置问题，不该反复重试，静默返回；
+     * - 有这类管理员、但他们的邮箱全部不合法 → 数据问题，抛异常进 failed_jobs；
+     * - 有这类管理员、邮箱也合法、却仍然解析为空 → 属未知异常，抛异常。
+     *
+     * 只判「非法邮箱是否存在」不够：当库里有非法邮箱管理员、而另一位有权限的
+     * 管理员恰好没填邮箱时，会误报成「全员非法」。这里改为按权限基数判断。
+     */
+    private function assertRecipientsUsable(string $label, Invoice $invoice, Collection $recipients): void
+    {
+        if ($recipients->isNotEmpty()) {
+            return;
+        }
+
+        $candidates = AdminUser::query()
+            ->with('role')
+            ->where('status', PaymentStatus::SUCCESS)
+            ->get(['id', 'username', 'email', 'role_id'])
+            ->filter(fn (AdminUser $admin): bool => $this->hasOrderNotificationPermission($admin));
+
+        if ($candidates->isEmpty()) {
+            // 库里没有有权限的管理员：正常配置状态，不重试
+            return;
+        }
+
+        $invalid = $candidates
+            ->filter(fn (AdminUser $admin): bool => ! AccountIdentifier::isValidEmail((string) ($admin->email ?? '')))
+            ->map(fn (AdminUser $admin): string => trim((string) ($admin->email ?? '')) !== ''
+                ? (string) $admin->email
+                : '(未填写邮箱)')
+            ->values()
+            ->all();
+
+        throw new \RuntimeException(sprintf(
+            '%s无可用收件人：%d 位有订单权限的管理员中有 %d 位邮箱不可用（%s），账单 %s 未发送',
+            $label,
+            $candidates->count(),
+            count($invalid),
+            implode('、', array_slice($invalid, 0, 5)),
+            (string) ($invoice->invoice_no ?? ('#'.(int) $invoice->id)),
+        ));
+    }
+
+    /**
+     * 管理员是否有权接收订单/账单通知。
+     */
+    private function hasOrderNotificationPermission(AdminUser $admin): bool
+    {
+        return $admin->hasPermission(AdminPermissions::ORDER_LIST)
+            || $admin->hasPermission(AdminPermissions::ORDER_DETAIL)
+            || $admin->hasPermission(AdminPermissions::ORDER_MANAGE)
+            || $admin->hasPermission(AdminPermissions::INVOICE_LIST)
+            || $admin->hasPermission(AdminPermissions::INVOICE_DETAIL)
+            || $admin->hasPermission(AdminPermissions::INVOICE_MANAGE);
     }
 
     private function resolveOrderProductDisplayText(Order $order): string

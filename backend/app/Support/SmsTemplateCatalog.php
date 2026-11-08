@@ -44,9 +44,6 @@ final class SmsTemplateCatalog
     /** 服务删除（与邮件 100008 同号） */
     public const TEMPLATE_SERVICE_TERMINATED = '100008';
 
-    /** 系统重装成功（与邮件 100009 同号） */
-    public const TEMPLATE_SERVICE_REINSTALLED = '100009';
-
     /** 订单创建（与邮件 100010 同号） */
     public const TEMPLATE_CLIENT_ORDER_CREATED = '100010';
 
@@ -64,9 +61,6 @@ final class SmsTemplateCatalog
 
     /** 续费/服务到期提醒（与邮件 100018 同号） */
     public const TEMPLATE_SERVICE_RENEW_REMINDER = '100018';
-
-    /** 信用额账单已生成（与邮件 100020 同号） */
-    public const TEMPLATE_CREDIT_INVOICE_NOTICE = '100020';
 
     /** 管理员新订单（与邮件 100021 同号） */
     public const TEMPLATE_ADMIN_ORDER_CREATED = '100021';

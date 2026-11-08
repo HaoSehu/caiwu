@@ -190,7 +190,6 @@ class MessageTemplateCodeConsistencyTest extends TestCase
             SmsTemplateCatalog::TEMPLATE_ORDER_REFUND => '订单退款',
             SmsTemplateCatalog::TEMPLATE_MANUAL_PAYMENT_CONFIRM => '账单支付',
             SmsTemplateCatalog::TEMPLATE_SERVICE_RENEW_REMINDER => '续费成功提醒(用户)',
-            SmsTemplateCatalog::TEMPLATE_CREDIT_INVOICE_NOTICE => '信用额账单提醒',
             SmsTemplateCatalog::TEMPLATE_TICKET_CREATED => '提交工单',
             SmsTemplateCatalog::TEMPLATE_TICKET_CLIENT_REPLY => '工单回复',
             SmsTemplateCatalog::TEMPLATE_TICKET_AUTO_CLOSED => '工单自动关闭',

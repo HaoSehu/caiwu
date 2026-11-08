@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Sms;
 
 use App\Exceptions\BusinessException;
+use App\Services\Integrations\Plugins\IntegrationDriverBindingResolver;
 use App\Services\Integrations\Plugins\PluginDomain;
 use App\Services\Integrations\Plugins\PluginRuntimeRegistry;
 use App\Services\System\NotificationTemplateService;
@@ -25,30 +26,27 @@ use Throwable;
 final class SmsVerifyCodeTemplateSyncService
 {
     /**
-     * 号码认证场景 purpose => [系统业务模板编码, 运营商模板 ID]。
+     * 号码认证场景 purpose => 系统业务模板编码。
      *
-     * 数组键 '100001' 会被 PHP 归一化为整数，故用 int|string 声明。
-     * 第二个元素是阿里云号码认证赠送模板的编号（100001–100005），
-     * 插件 action 只返回文案不返回编号，此处按阿里云后台的固定对应关系补齐。
+     * 第二个值曾用于回填阿里云号码认证赠送模板编号（100001–100005），
+     * 但那是阿里云专有编号：插件只是文本通道时（如 MC云短信）根本没有
+     * 运营商模板号，写进去会让发送解析命中一个不存在的模板。因此这里
+     * 不再写 provider_template_id，只按场景覆盖业务模板正文。
      *
-     * @var array<int|string, array{0: string, 1: string}>
+     * @var array<string, string>
      */
     private const PURPOSE_BY_TEMPLATE = [
-        // 登录/注册验证码（阿里云 100001）
-        'generic' => ['100001', '100001'],
-        // 找回密码（阿里云 100003）
-        'reset' => ['100001', '100003'],
-        // 修改绑定手机号（阿里云 100002）
-        'change_phone' => ['100004', '100002'],
-        // 绑定新手机号（阿里云 100004）
-        'bind_phone' => ['100048', '100004'],
-        // 验证绑定手机号（阿里云 100005）
-        'verify_bound_phone' => ['100048', '100005'],
+        'generic' => '100001',
+        'reset' => '100001',
+        'change_phone' => '100004',
+        'bind_phone' => '100048',
+        'verify_bound_phone' => '100048',
     ];
 
     public function __construct(
         private readonly PluginRuntimeRegistry $runtime,
         private readonly NotificationTemplateService $templates,
+        private readonly IntegrationDriverBindingResolver $bindingResolver,
     ) {}
 
     /**
@@ -58,7 +56,9 @@ final class SmsVerifyCodeTemplateSyncService
      */
     public function pull(?string $pluginKey = null): array
     {
-        $pluginKey = trim((string) ($pluginKey ?? 'aliyun'));
+        // 未显式指定时用当前绑定驱动，而不是硬编码 aliyun：
+        // 绑定的是哪个插件就从哪个插件拉，否则切到别的短信通道后按钮必然报错。
+        $pluginKey = trim((string) ($pluginKey ?? $this->bindingResolver->smsDriverKey()));
         if ($pluginKey === '') {
             throw new BusinessException('短信插件未绑定，无法拉取验证码模板');
         }
@@ -98,6 +98,8 @@ final class SmsVerifyCodeTemplateSyncService
      * 把插件模板写回业务模板的正文。
      *
      * 插件按 ${code} / ${min} 占位，系统短信模板用 {code} 单括号语法，写入前统一转换。
+     * 不再写 provider_template_id：该列是运营商模板编号，只有阿里云这类
+     * 有号码认证模板的通道才存在；文本通道写进去会让发送解析命中不存在的模板。
      *
      * @param  array<string, string>  $purposes
      */
@@ -106,7 +108,7 @@ final class SmsVerifyCodeTemplateSyncService
         $applied = 0;
         $seen = [];
 
-        foreach (self::PURPOSE_BY_TEMPLATE as $purpose => [$templateCode, $providerTemplateId]) {
+        foreach (self::PURPOSE_BY_TEMPLATE as $purpose => $templateCode) {
             if (! isset($purposes[$purpose]) || isset($seen[$templateCode])) {
                 continue;
             }
@@ -117,7 +119,7 @@ final class SmsVerifyCodeTemplateSyncService
                 $purposes[$purpose]
             );
 
-            if ($this->templates->updateSmsTemplateContent((string) $templateCode, $content, $providerTemplateId)) {
+            if ($this->templates->updateSmsTemplateContent((string) $templateCode, $content)) {
                 $seen[$templateCode] = true;
                 $applied++;
             }

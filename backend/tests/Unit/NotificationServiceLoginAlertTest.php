@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace Tests\Unit;
 
+use App\Jobs\SendTemplateEmailJob;
 use App\Models\Setting;
 use App\Services\Integrations\Plugins\IntegrationDriverBindingResolver;
 use App\Services\Mail\MailDriverManager;
 use App\Services\System\NotificationService;
 use App\Services\System\NotificationTemplateService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Facades\Queue;
 use Tests\Fixtures\Mail\FakeMailDriver;
 use Tests\TestCase;
 
@@ -129,5 +131,52 @@ class NotificationServiceLoginAlertTest extends TestCase
         );
 
         $this->assertStringContainsString('上次IP：无历史记录', $this->sentHtml());
+    }
+
+    /**
+     * 管理员登录提醒：邮箱格式非法时不得派发队列任务。
+     *
+     * 派发出去的 Job 查不到收件人只会失败并堆进 failed_jobs，
+     * 登录本身不应因此受影响，也不该制造无意义的失败记录。
+     */
+    public function test_admin_login_alert_skips_invalid_email(): void
+    {
+        Queue::fake();
+
+        $service = $this->makeService();
+
+        $service->sendAdminLoginEmailAlertToAddress(
+            'test@123456',
+            '测试管理员',
+            'test',
+            '203.0.113.9',
+            'Mozilla/5.0'
+        );
+
+        Queue::assertNotPushed(SendTemplateEmailJob::class);
+    }
+
+    /**
+     * 合法邮箱照常派发（对照组，防止上面的守卫把正常路径也挡掉）。
+     */
+    public function test_admin_login_alert_sends_for_valid_email(): void
+    {
+        Queue::fake();
+
+        $service = $this->makeService();
+
+        $service->sendAdminLoginEmailAlertToAddress(
+            'admin@example.com',
+            '测试管理员',
+            'test',
+            '203.0.113.9',
+            'Mozilla/5.0'
+        );
+
+        Queue::assertPushed(
+            SendTemplateEmailJob::class,
+            static fn (SendTemplateEmailJob $job): bool => $job->email === 'admin@example.com'
+                && $job->templateCode === NotificationService::TEMPLATE_ADMIN_LOGIN_ALERT
+        );
     }
 }

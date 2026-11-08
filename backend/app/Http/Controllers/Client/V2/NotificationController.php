@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Client\V2;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Client\V2\Action\ClientActionRequest;
 use App\Http\Requests\Client\V2\Notification\ListNotificationFeedRequest;
 use App\Http\Requests\Client\V2\Notification\ListNotificationsRequest;
 use App\Http\Requests\Client\V2\Notification\ShowNotificationUnreadCountRequest;
+use App\Http\Resources\V2\ActionResultResource;
+use App\Services\Client\V2\ClientActionV2Service;
 use App\Services\Content\ContentV2QueryService;
 use App\Services\Notification\InboxService;
 use Illuminate\Http\Request;
@@ -17,7 +20,15 @@ class NotificationController extends Controller
     public function __construct(
         private readonly ContentV2QueryService $contentQueryService,
         private readonly InboxService $inboxService,
+        private readonly ClientActionV2Service $actions,
     ) {}
+
+    public function markRead(ClientActionRequest $request, int $notification)
+    {
+        return $this->success(ActionResultResource::make(
+            $this->actions->markNotificationRead($request->user(), $notification)
+        )->resolve(), '消息已标记为已读');
+    }
 
     public function index(ListNotificationsRequest $request)
     {

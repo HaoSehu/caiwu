@@ -243,11 +243,6 @@ class SmsService
         }
     }
 
-    public function getDriverManager(): SmsDriverManager
-    {
-        return $this->driverManager;
-    }
-
     /**
      * message_logs 告警文案中的渠道名。
      */

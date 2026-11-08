@@ -26,7 +26,6 @@ use App\Services\Finance\InvoiceService;
 use App\Services\Order\ClientOrderQueryService;
 use App\Services\Order\PaidOrderBusinessFlowDispatcher;
 use App\Services\ProductCatalog\ProductAdminService;
-use App\Services\User\UserService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\Support\SeedsFinanceBalance;
 use Tests\TestCase;
@@ -162,8 +161,10 @@ class BalancePaymentChannelDisplayTest extends TestCase
 
         app(BalanceInvoicePaymentService::class)->payByBalance($invoice, $user);
 
-        // 管理端用户详情账单列表：payment_summary 由 UserService 单独组装
-        $row = app(UserService::class)->invoices($user, [])->items()[0];
+        // 管理端账单列表：payment_summary 由 InvoiceService 统一组装
+        $row = app(InvoiceService::class)
+            ->adminList(['user_id' => (int) $user->id], 20)
+            ->items()[0];
         $this->assertSame('余额支付', $row['payment_summary']['channel_name'] ?? null);
     }
 

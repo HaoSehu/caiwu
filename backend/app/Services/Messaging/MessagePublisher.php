@@ -7,6 +7,7 @@ namespace App\Services\Messaging;
 use App\Exceptions\BusinessException;
 use App\Models\AdminUser;
 use App\Models\User;
+use App\Support\AccountIdentifier;
 use App\Support\MessageGroups;
 use App\Support\MessageTypeCatalog;
 use App\Support\MessageVariables;
@@ -172,13 +173,17 @@ final class MessagePublisher
             default => $this->founderAdmins(),
         };
 
-        return $admins->map(static fn (AdminUser $admin): array => [
-            'id' => (int) $admin->id,
-            'target_key' => 'admin:'.$admin->id,
-            'email' => (string) ($admin->email ?? ''),
-            'mobile' => '',
-            'name' => (string) ($admin->nickname ?: $admin->username),
-        ])->values()->all();
+        return $admins
+            // 非法邮箱在展开阶段就排除：它到传输层只会得到 recipient_invalid，
+            // 在异步发布链路里表现为一条失败的投递记录，用户侧看不到任何原因。
+            ->filter(static fn (AdminUser $admin): bool => AccountIdentifier::isValidEmail((string) ($admin->email ?? '')))
+            ->map(static fn (AdminUser $admin): array => [
+                'id' => (int) $admin->id,
+                'target_key' => 'admin:'.$admin->id,
+                'email' => (string) ($admin->email ?? ''),
+                'mobile' => '',
+                'name' => (string) ($admin->nickname ?: $admin->username),
+            ])->values()->all();
     }
 
     /** @return Collection<int, AdminUser> */

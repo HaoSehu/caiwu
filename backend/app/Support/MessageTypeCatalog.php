@@ -142,7 +142,7 @@ final class MessageTypeCatalog
             'login_alert' => ['登录提醒', '客户登录成功后发送安全提醒', ['email', 'sms', 'message'], ['display_name', 'email', 'account', 'login_at', 'attempt_at', 'ip', 'previous_ip', 'device']],
             'registration_success' => ['注册成功', '客户注册成功后发送欢迎通知', ['email', 'sms', 'message'], ['display_name', 'email', 'registered_at']],
             'service_activated' => ['服务开通成功', '服务交付完成后通知客户，不包含实例密码', ['email', 'sms', 'message'], ['service_name', 'product_name', 'hostname', 'product_main_ip', 'product_username', 'operating_system', 'activated_at', 'expires_at', 'billing_cycle_label']],
-            'service_reinstalled' => ['系统重装成功', '产品重装系统成功后通知客户', ['email', 'sms', 'message'], ['service_name', 'product_name', 'operating_system', 'product_main_ip', 'product_username', 'completed_at']],
+            'service_reinstalled' => ['系统重装成功', '产品重装系统成功后通知客户', ['message'], ['service_name', 'product_name', 'operating_system', 'product_main_ip', 'product_username', 'completed_at']],
             'service_suspended' => ['服务暂停', '服务暂停后通知客户处理', ['email', 'sms', 'message'], ['service_name', 'product_name', 'reason', 'expires_at', 'suspended_at']],
             'service_resumed' => ['服务恢复', '服务续费成功恢复后通知客户', ['email', 'sms', 'message'], ['service_name', 'product_name', 'resumed_at', 'expires_at']],
             'service_suspend_failed' => ['解除停用失败', '产品解除停用失败后通知客户', ['email', 'sms', 'message'], ['service_name', 'product_name', 'failure_reason', 'failed_at']],
@@ -156,15 +156,15 @@ final class MessageTypeCatalog
             'auto_renew_notice' => ['自动续费通知', '自动续费订单生成或扣款时发送通知', ['email', 'message'], ['service_name', 'product_name', 'order_no', 'invoice_no', 'amount', 'order_amount', 'renewed_at', 'notice_message']],
             'service_due' => ['服务即将到期', '服务到期前提醒客户续费', ['email', 'sms', 'message'], ['service_name', 'product_name', 'days_left', 'expires_at', 'billing_cycle_label', 'urgency_message']],
             'service_expired' => ['服务已到期', '服务到期后通知客户，区别于到期前的续费提醒', ['email', 'sms', 'message'], ['service_name', 'product_name', 'expires_at']],
-            'credit_invoice_created' => ['信用额账单已生成', '信用额账单生成后发送通知', ['email', 'sms', 'message'], ['invoice_no', 'product_name', 'amount', 'due_at', 'due_date', 'notice_message']],
+            'credit_invoice_created' => ['信用额账单已生成', '信用额账单生成后发送通知', ['message'], ['invoice_no', 'product_name', 'amount', 'due_at', 'due_date', 'notice_message']],
             'ticket_opened' => ['工单开通', '客户工单创建成功后发送通知', ['email', 'sms', 'message'], ['ticket_id', 'ticket_subject', 'department', 'priority', 'ticket_created_at', 'message_preview', 'tickets_url', 'login_tip']],
             'ticket_replied' => ['工单回复', '工作人员回复工单后通知客户', ['email', 'sms', 'message'], ['ticket_id', 'ticket_subject', 'status', 'staff_name', 'message_preview', 'login_tip']],
             'ticket_auto_closed' => ['工单自动关闭', '工单自动关闭后发送通知', ['email', 'sms', 'message'], ['ticket_id', 'ticket_subject', 'ticket_closed_at', 'close_reason']],
             'ticket_pending_reminder' => ['工单待处理提醒', '客服已回复、超时未跟进将自动关闭时提醒客户', ['email', 'sms', 'message'], ['ticket_subject', 'hours_left', 'display_name']],
-            'ticket_reopened' => ['工单重新开启', '工单被重新开启后通知客户继续跟进', ['email', 'sms', 'message'], ['ticket_subject', 'display_name']],
+            'ticket_reopened' => ['工单重新开启', '工单被重新开启后通知客户继续跟进', ['message'], ['ticket_subject', 'display_name']],
             'account_bound' => ['账号绑定', '客户账号绑定成功后发送提醒', ['email', 'sms', 'message'], []],
             'real_name_approved' => ['实名认证通过', '实名认证审核通过后通知客户', ['email', 'sms', 'message'], ['username', 'display_name']],
-            'real_name_rejected' => ['实名认证未通过', '实名认证审核未通过后通知客户补充资料', ['email', 'sms', 'message'], ['reason']],
+            'real_name_rejected' => ['实名认证未通过', '实名认证审核未通过后通知客户补充资料', ['message'], ['reason']],
         ]);
     }
 

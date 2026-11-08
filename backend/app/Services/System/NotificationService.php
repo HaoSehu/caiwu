@@ -9,6 +9,7 @@ use App\Models\Setting;
 use App\Services\Integrations\Plugins\IntegrationDriverBindingResolver;
 use App\Services\Mail\MailDriverManager;
 use App\Services\System\Concerns\InteractsWithMessageLogs;
+use App\Support\AccountIdentifier;
 use App\Support\EmailNotificationTemplateDefaults;
 use App\Support\PublicUrl;
 use App\Support\SiteConfigPayload;
@@ -41,8 +42,6 @@ class NotificationService
 
     public const TEMPLATE_SERVICE_TERMINATED = '100008';
 
-    public const TEMPLATE_SERVICE_REINSTALL_SUCCESS = '100009';
-
     /** 新订单待支付：与 TEMPLATE_INVOICE_NOTICE 共用数据库模板 100010 */
     public const TEMPLATE_CLIENT_ORDER_PENDING = '100010';
 
@@ -69,8 +68,6 @@ class NotificationService
 
     public const TEMPLATE_SERVICE_SECOND_RENEW_REMINDER = '100019';
 
-    public const TEMPLATE_CREDIT_INVOICE_CREATED = '100020';
-
     /** 管理员新订单通知（账单创建后提醒跟进开通/支付） */
     public const TEMPLATE_ADMIN_ORDER_CREATED = '100021';
 
@@ -88,9 +85,6 @@ class NotificationService
 
     /** 工单待处理提醒（客服已回复、超时未跟进将自动关闭） */
     public const TEMPLATE_TICKET_PENDING_REMINDER = '100063';
-
-    /** 工单重新开启 */
-    public const TEMPLATE_TICKET_REOPENED = '100064';
 
     public const TEMPLATE_ADMIN_LOGIN_ALERT = '100028';
 
@@ -337,7 +331,9 @@ class NotificationService
         ?string $userAgent = null
     ): void {
         $email = trim($email);
-        if ($email === '') {
+        // 未配置或格式非法都静默跳过：登录提醒不应使登录流程失败，
+        // 但把非法地址送进队列会让任务必然失败并堆在 failed_jobs。
+        if (! AccountIdentifier::isValidEmail($email)) {
             return;
         }
 

@@ -34,7 +34,6 @@ class SendTicketNotificationEmailJob implements ShouldQueue
         NotificationService::TEMPLATE_TICKET_CREATED => ['admin_ticket_created', 'admin'],
         NotificationService::TEMPLATE_TICKET_CLIENT_REPLY => ['admin_ticket_replied', 'admin'],
         NotificationService::TEMPLATE_TICKET_PENDING_REMINDER => ['ticket_pending_reminder', 'customer'],
-        NotificationService::TEMPLATE_TICKET_REOPENED => ['ticket_reopened', 'customer'],
     ];
 
     /**
@@ -50,8 +49,30 @@ class SendTicketNotificationEmailJob implements ShouldQueue
         $this->afterCommit();
     }
 
+    /**
+     * 已随业务下线、不再有邮件载体的模板码。
+     *
+     * 升级窗口内队列里可能还残留删除前派发的任务；它们若走下面的旧路径回退，
+     * 会因为模板已被迁移删除而抛「邮件模板不存在」，把失败堆进 failed_jobs。
+     * 这类任务直接丢弃并留痕即可，重试没有意义。
+     *
+     * @var list<string>
+     */
+    private const RETIRED_TEMPLATE_CODES = [
+        '100064', // 工单重新开启：2026-11-07 起只发站内消息
+    ];
+
     public function handle(MessageDispatcher $dispatcher): void
     {
+        if (in_array($this->templateCode, self::RETIRED_TEMPLATE_CODES, true)) {
+            Log::info('[工单通知] 模板已下线，丢弃残留队列任务', array_merge($this->context, [
+                'to_email' => $this->to,
+                'template_code' => $this->templateCode,
+            ]));
+
+            return;
+        }
+
         $scene = self::SCENE_BY_TEMPLATE[$this->templateCode] ?? null;
 
         if ($scene === null) {
