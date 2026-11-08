@@ -18,8 +18,8 @@ import './permission';
 
 const app = createApp(App);
 
-// 演练版：没有后端，预置假凭证让路由守卫放行；
-// /v2/client/auth/info 由静态数据集返回演示用户。
+// 演练版假凭证在 permission.ts（守卫所在模块）里预置，必须早于首次导航；
+// 这里保留幂等写入作为兜底。
 if (import.meta.env.MODE === 'demo') {
   setClientToken('demo-client-token');
 }
