@@ -46,8 +46,9 @@ class SiteProductQuoteService
         $couponBaseAmount = max((float) ($memberDiscount['final_amount'] ?? $catalogAmount), 0.0);
         // P3-11 叠加开关：本单实际享受会员折扣减免且券声明互斥（is_discount=0）时，券不参与
         $memberDiscountApplied = $memberDiscountAmount > 0;
-        $coupon = $userId > 0
-            ? $this->couponService->previewOwnedCoupon(
+        $coupon = null;
+        if ($userId > 0) {
+            $selectedPayload = $this->couponService->previewOwnedCoupon(
                 isset($validated['user_coupon_id']) ? (int) $validated['user_coupon_id'] : null,
                 $userId,
                 $product,
@@ -55,8 +56,12 @@ class SiteProductQuoteService
                 $couponBaseAmount,
                 'new',
                 $memberDiscountApplied
-            )
-            : null;
+            );
+            // 与 available_coupons 使用同一规范形状，资源层只做透传
+            $coupon = is_array($selectedPayload)
+                ? $this->couponService->clientCouponOption($selectedPayload)
+                : null;
+        }
         $availableCoupons = $userId > 0
             ? $this->couponService->availableCouponsForCheckout(
                 $userId,
@@ -76,7 +81,7 @@ class SiteProductQuoteService
         $quote['discount_amount'] = number_format($discountAmount, 2, '.', '');
         $quote['total_amount'] = number_format(max($catalogAmount - $memberDiscountAmount - $discountAmount, 0), 2, '.', '');
         $quote['coupon'] = $coupon;
-        $quote['user_coupon_id'] = (int) ($coupon['user_coupon_id'] ?? 0);
+        $quote['user_coupon_id'] = (int) ($coupon['id'] ?? 0);
         $quote['available_coupons'] = $availableCoupons;
 
         $securityPayload = $this->checkoutSecurityService->issueQuoteToken(

@@ -14,7 +14,7 @@ final class AccountIdentifier
     public static function detectType(?string $value): ?string
     {
         $email = self::normalizeEmail($value);
-        if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        if (self::isValidEmail($email)) {
             return 'email';
         }
 
@@ -24,6 +24,20 @@ final class AccountIdentifier
         }
 
         return null;
+    }
+
+    /**
+     * 邮箱地址是否可投递。
+     *
+     * 收件人合法性判断散落在服务、传输层、请求校验多处，各自写一份
+     * filter_var 很容易漏（管理员收件人解析就漏了两处）。
+     * 统一从这里取，新增发送入口时不必重新判断一遍。
+     */
+    public static function isValidEmail(?string $value): bool
+    {
+        $email = trim((string) $value);
+
+        return $email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL) !== false;
     }
 
     public static function normalizeAccount(?string $value): string

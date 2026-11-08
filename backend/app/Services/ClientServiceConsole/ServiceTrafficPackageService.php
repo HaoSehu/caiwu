@@ -767,7 +767,7 @@ class ServiceTrafficPackageService
             ->with('supplier')
             ->tap(fn ($query) => $this->applyProductGroupScope($query, $secondProductGroupId, $thirdProductGroupId))
             ->when(trim($productType) !== '', fn ($query) => $query->where('product_type', trim($productType)))
-            ->where('status', 1)
+            ->onSale()
             ->tap(fn (Builder $query) => $this->applyHasUpstreamProductBindingScope($query))
             ->orderByDesc('id')
             ->first();

@@ -73,33 +73,6 @@ class ClientPaymentQueryService
 
     /**
      * @param  array<string, mixed>  $expiredContext
-     * @return array<string, int>
-     */
-    public function summary(int $userId, array $expiredContext): array
-    {
-        $this->payments->cancelExpiredPendingRechargesForUser($userId, $expiredContext);
-
-        $row = Payment::query()
-            ->where('user_id', $userId)
-            ->where($this->visiblePaymentScope())
-            ->selectRaw('COUNT(*) AS total')
-            ->selectRaw('SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS pending', [PaymentStatus::PENDING])
-            ->selectRaw('SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS success', [PaymentStatus::SUCCESS])
-            ->selectRaw('SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS refunded', [PaymentStatus::REFUNDED])
-            ->selectRaw('SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS cancelled', [PaymentStatus::CANCELLED])
-            ->first();
-
-        return [
-            'total' => (int) ($row?->total ?? 0),
-            'pending' => (int) ($row?->pending ?? 0),
-            'success' => (int) ($row?->success ?? 0),
-            'refunded' => (int) ($row?->refunded ?? 0),
-            'cancelled' => (int) ($row?->cancelled ?? 0),
-        ];
-    }
-
-    /**
-     * @param  array<string, mixed>  $expiredContext
      * @return array<string, mixed>
      */
     public function detail(int $userId, int $paymentId, array $expiredContext): array

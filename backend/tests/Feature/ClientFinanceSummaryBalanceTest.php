@@ -8,7 +8,6 @@ use App\Constants\InvoiceStatus;
 use App\Models\Invoice;
 use App\Models\User;
 use App\Models\UserAccount;
-use App\Services\Finance\ClientFinanceQueryService;
 use App\Services\Finance\FinanceLedgerQueryService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\Support\SeedsFinanceBalance;
@@ -31,18 +30,18 @@ class ClientFinanceSummaryBalanceTest extends TestCase
     {
         $user = $this->makeUser();
         $this->makeAccount($user, '0.00');
-        $service = app(ClientFinanceQueryService::class);
+        $service = app(FinanceLedgerQueryService::class);
 
-        $this->assertSame('0.00', $service->balanceLogSummary($user, [])['cash_balance']);
+        $this->assertSame('0.00', $service->summaryForClient($user, [])['cash_balance']);
 
         // 模拟充值到账：余额经财务内核入账后立即重查，内层缓存命中也必须重读余额
         $this->seedFinanceBalance($user, 123.45);
         $user->unsetRelation('account');
 
-        $after = $service->balanceLogSummary($user, []);
+        $after = $service->summaryForClient($user, []);
         $this->assertSame('123.45', $after['cash_balance']);
 
-        // 两个汇总端点共享同一份 summary，同一时刻余额一致
+        // 汇总内部 30s 缓存命中时仍会重读余额，连续两次调用余额一致
         $ledger = app(FinanceLedgerQueryService::class)->summaryForClient($user, []);
         $this->assertSame($after['cash_balance'], $ledger['cash_balance']);
     }
@@ -55,7 +54,7 @@ class ClientFinanceSummaryBalanceTest extends TestCase
         $this->makeInvoice((int) $user->id, InvoiceStatus::PAID, '50.00', '50.00');
         $this->makeInvoice((int) $user->id, InvoiceStatus::CANCELLED, '70.00', '0.00');
 
-        $summary = app(ClientFinanceQueryService::class)->balanceLogSummary($user, []);
+        $summary = app(FinanceLedgerQueryService::class)->summaryForClient($user, []);
 
         $this->assertSame('100.00', $summary['unpaid_amount']);
         $this->assertSame(1, $summary['unpaid_count']);

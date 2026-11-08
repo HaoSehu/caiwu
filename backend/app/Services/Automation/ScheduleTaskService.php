@@ -3,7 +3,6 @@
 namespace App\Services\Automation;
 
 use App\Models\ScheduleRunLog;
-use App\Models\ScheduleTaskRun;
 use App\Services\Automation\Heartbeat\Contracts\ScheduledTask;
 use App\Services\Automation\Heartbeat\Contracts\ScheduledTaskCadence;
 use App\Services\Automation\Heartbeat\HeartbeatTaskRegistry;
@@ -18,8 +17,6 @@ use App\Support\AutomationScheduleExpression;
 use App\Support\BackupQueue;
 use App\Support\QueueTopology;
 use App\Support\SchemaMetadataCache;
-use Illuminate\Contracts\Pagination\LengthAwarePaginator;
-use Illuminate\Pagination\LengthAwarePaginator as ConcreteLengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -87,28 +84,6 @@ class ScheduleTaskService
             'recent_logs' => $this->recentLogs(),
             'settings_snapshot' => $this->buildSettingsSnapshot(),
         ];
-    }
-
-    /**
-     * 查询运行台账。表尚未在当前环境落库时返回空分页，避免只读管理端被基础设施状态拖垮。
-     *
-     * @param  array<string, mixed>  $filters
-     */
-    public function paginateRuns(array $filters, int $page = 1, int $perPage = 20): LengthAwarePaginator
-    {
-        $page = max(1, $page);
-        $perPage = max(1, min(100, $perPage));
-
-        if (! $this->taskRuns->tableReady()) {
-            return new ConcreteLengthAwarePaginator([], 0, $perPage, $page);
-        }
-
-        return $this->taskRuns->paginateRuns($filters, $page, $perPage);
-    }
-
-    public function runDetail(int $runId): ?ScheduleTaskRun
-    {
-        return $this->taskRuns->findRun($runId);
     }
 
     /**

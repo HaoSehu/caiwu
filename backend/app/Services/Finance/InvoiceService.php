@@ -43,6 +43,82 @@ class InvoiceService
     ) {}
 
     /**
+     * 账单查询的预载关系集（列表 / 详情 / 管理端 / 客户端共用一份定义）。
+     *
+     * 四处调用方原本各自复制同一段关系链，差异收敛为下面四个开关：
+     * - detail：详情多预载 items、退款记录与下单快照列；
+     * - withUser：客户端视图不需要 user（避免把他人资料带进响应）；
+     * - productWithCustomDisplayName：一旦预载 custom_display_name，
+     *   Product::getNameAttribute() 会提前命中「已加载自定义展示名」分支，
+     *   把带规格后缀的展示名换成裸自定义名 —— 客户端详情与用户侧列表刻意不带该列；
+     * - orderWithAmounts：客户端详情要展示实付/折扣等金额列，管理端列表由 invoices 主表提供。
+     *
+     * @param  array{detail?: bool, withUser?: bool, productWithCustomDisplayName?: bool, orderWithAmounts?: bool, orderWithSnapshots?: bool}  $options
+     * @return array<int, string>
+     */
+    private function invoiceRelations(array $options = []): array
+    {
+        $detail = $options['detail'] ?? false;
+        $withUser = $options['withUser'] ?? true;
+        $productWithCustomDisplayName = $options['productWithCustomDisplayName'] ?? true;
+        $orderWithAmounts = $options['orderWithAmounts'] ?? false;
+        $orderWithSnapshots = $options['orderWithSnapshots'] ?? $detail;
+
+        $productColumns = array_values(array_unique(array_merge(
+            ['id'],
+            Product::optionalSelectColumns([
+                'product_type',
+                'service_type_code',
+                'product_group_id',
+                ...($productWithCustomDisplayName ? ['custom_display_name'] : []),
+                'remark',
+                'purchase_requires',
+            ]),
+        )));
+        $productProjection = implode(',', $productColumns);
+
+        $orderColumns = 'order_no,status,type,service_id,paid_at,product_id,billing_cycle';
+        if ($orderWithAmounts) {
+            $orderColumns .= ',amount,discount,paid_amount,quantity';
+        }
+        if ($orderWithSnapshots) {
+            $orderColumns .= ',product_spec_snapshot,product_type_snapshot,config_snapshot';
+        }
+        // 客户端详情会把订单的下单快照一并下发给前端；管理端列表不需要。
+        if ($orderWithAmounts) {
+            $orderColumns .= ',config_pricing_snapshot';
+        }
+
+        $relations = [
+            'order:id,'.$orderColumns,
+            'order.product:'.$productProjection,
+            'order.product.productGroup:id,second_product_group_id,name',
+            'order.product.productGroup.secondProductGroup:id,first_product_group_id,name',
+            'order.product.productGroup.secondProductGroup.firstProductGroup:id,code,name',
+            'product:'.$productProjection,
+            'product.productGroup:id,second_product_group_id,name',
+            'product.productGroup.secondProductGroup:id,first_product_group_id,name',
+            'product.productGroup.secondProductGroup.firstProductGroup:id,code,name',
+            'service:id,name,status,expires_at',
+            // 渠道名要走回调证据（历史账单的 gateway_key 为空），预取避免逐行回查。
+            'payments.callbacks:payment_id,callback_type,payload_json',
+            // 余额支付没有 Payment 记录，渠道要从扣款台账派生（见 InvoicePaymentSummary::fromBalanceLedger）。
+            'ledgerEntries:id,source_type,source_id,event_type,change_amount,operator_type,trace_id,remark',
+        ];
+
+        if ($withUser) {
+            array_unshift($relations, 'user:id,email,nickname,phone');
+        }
+
+        if ($detail) {
+            $relations[] = 'items';
+            $relations[] = 'refunds:id,invoice_id,refund_no,amount,status,funds_moved,data_origin,reason,operator_name,refunded_at';
+        }
+
+        return $relations;
+    }
+
+    /**
      * 根据订单创建账单
      */
     public function createFromOrder(Order $order): Invoice
@@ -204,33 +280,18 @@ class InvoiceService
      */
     public function adminList(array $filters, int $perPage = 20)
     {
-        $query = Invoice::with([
-            'user:id,email,nickname,phone',
-            'order:id,order_no,status,type,service_id,paid_at,product_id,billing_cycle',
-            'order.product:id,product_type,service_type_code,product_group_id,custom_display_name,remark,purchase_requires',
-            'order.product.productGroup:id,second_product_group_id,name',
-            'order.product.productGroup.secondProductGroup:id,first_product_group_id,name',
-            'order.product.productGroup.secondProductGroup.firstProductGroup:id,code,name',
-            'product:id,product_type,service_type_code,product_group_id,custom_display_name,remark,purchase_requires',
-            'product.productGroup:id,second_product_group_id,name',
-            'product.productGroup.secondProductGroup:id,first_product_group_id,name',
-            'product.productGroup.secondProductGroup.firstProductGroup:id,code,name',
-            'service:id,name,status,expires_at',
-            'payments.callbacks:payment_id,callback_type,payload_json',
-            // 余额支付没有 Payment 记录，渠道要从扣款台账派生（见 InvoicePaymentSummary::fromBalanceLedger）。
-            'ledgerEntries:id,source_type,source_id,event_type,change_amount,operator_type,trace_id,remark',
-            // 列表路径不加载仅详情使用的 items（buildInvoiceItems 只在详情路径调用）
-        ])->select('invoices.*')->selectSub(
-            // 退款状态派生（列表轻量口径）：已完成退款累计，单子查询预加载无 N+1。
-            // 必须用 selectSub 显式命名：withSum 生成的属性名是 refunds_sum_amount，
-            // 读取点取 refund_completed_total 会恒为 NULL，退化成逐行聚合查询。
-            // 前置 select('invoices.*') 不可省：addSelect 在没有列清单时会把整行投影顶掉。
-            FinanceRefund::query()
-                ->selectRaw('COALESCE(SUM(amount), 0)')
-                ->whereColumn('finance_refunds.invoice_id', 'invoices.id')
-                ->where('status', FinanceRefund::STATUS_COMPLETED),
-            'refund_completed_total'
-        );
+        $query = Invoice::with($this->invoiceRelations())
+            ->select('invoices.*')->selectSub(
+                // 退款状态派生（列表轻量口径）：已完成退款累计，单子查询预加载无 N+1。
+                // 必须用 selectSub 显式命名：withSum 生成的属性名是 refunds_sum_amount，
+                // 读取点取 refund_completed_total 会恒为 NULL，退化成逐行聚合查询。
+                // 前置 select('invoices.*') 不可省：addSelect 在没有列清单时会把整行投影顶掉。
+                FinanceRefund::query()
+                    ->selectRaw('COALESCE(SUM(amount), 0)')
+                    ->whereColumn('finance_refunds.invoice_id', 'invoices.id')
+                    ->where('status', FinanceRefund::STATUS_COMPLETED),
+                'refund_completed_total'
+            );
 
         if (! empty($filters['invoice_no'])) {
             $query->where('invoice_no', $filters['invoice_no']);
@@ -285,6 +346,10 @@ class InvoiceService
         if (! empty($filters['product_id'])) {
             $query->where('product_id', $filters['product_id']);
         }
+        // 服务控制台「相关账单」按实例过滤；不传时行为不变。
+        if (! empty($filters['service_id'])) {
+            $query->where('service_id', (int) $filters['service_id']);
+        }
         $this->applyDateFilter($query, $filters);
 
         $paginator = $query->orderByDesc('id')->paginate($perPage);
@@ -302,28 +367,16 @@ class InvoiceService
 
     public function adminDetail(int $id): array
     {
-        $invoice = Invoice::with([
-            'user:id,email,nickname,phone',
-            'order:id,order_no,status,type,service_id,paid_at,product_id,billing_cycle,product_spec_snapshot,product_type_snapshot,config_snapshot',
-            'order.product:id,product_type,service_type_code,product_group_id,custom_display_name,remark,purchase_requires',
-            'order.product.productGroup:id,second_product_group_id,name',
-            'order.product.productGroup.secondProductGroup:id,first_product_group_id,name',
-            'order.product.productGroup.secondProductGroup.firstProductGroup:id,code,name',
-            'product:id,product_type,service_type_code,product_group_id,custom_display_name,remark,purchase_requires',
-            'service:id,name,status,expires_at',
-            'payments.callbacks:payment_id,callback_type,payload_json',
-            'items',
-            'refunds:id,invoice_id,refund_no,amount,status,funds_moved,data_origin,reason,operator_name,refunded_at',
-            // 余额支付没有 Payment 记录，渠道要从扣款台账派生（见 InvoicePaymentSummary::fromBalanceLedger）。
-            'ledgerEntries:id,source_type,source_id,event_type,change_amount,operator_type,trace_id,remark',
-        ])->findOrFail($id);
+        $invoice = Invoice::with($this->invoiceRelations(['detail' => true]))->findOrFail($id);
 
-        $scene = $this->resolveInvoiceScene($invoice);
-        $paymentSummary = $this->resolveInvoicePaymentSummary($invoice);
-        $displayStatus = $this->resolveInvoiceDisplayStatus($invoice, $paymentSummary);
-        $productDisplayName = $this->resolveInvoiceProductDisplayName($invoice);
-        $productSpecDisplay = $this->resolveInvoiceProductSpecDisplay($invoice, $scene, $productDisplayName);
-        $combinedDisplayName = $this->resolveInvoiceCombinedDisplayName($invoice, $productDisplayName);
+        [
+            'scene' => $scene,
+            'payment_summary' => $paymentSummary,
+            'display_status' => $displayStatus,
+            'product_display_name' => $productDisplayName,
+            'product_spec_display' => $productSpecDisplay,
+            'combined_display_name' => $combinedDisplayName,
+        ] = $this->resolveDetailContext($invoice);
 
         // 可退额唯一真源：一律取 InvoiceRefundService（与真退款的提交守卫同口径，
         // 实收基数 − 已转余额 − 已完成退款）。本服务不能构造注入它——会经
@@ -475,32 +528,53 @@ class InvoiceService
         ];
     }
 
-    public function clientDetail(Invoice $invoice): array
+    /**
+     * 账单详情共用的派生上下文：场景、支付摘要、展示态、商品展示名三件套。
+     *
+     * 管理端详情与客户端详情此前各自重复计算这六个值，任何一处口径调整都得改两遍。
+     *
+     * @return array{
+     *     scene: array<string, mixed>,
+     *     payment_summary: ?array<string, mixed>,
+     *     display_status: array<string, mixed>,
+     *     product_display_name: string,
+     *     product_spec_display: string,
+     *     combined_display_name: string
+     * }
+     */
+    private function resolveDetailContext(Invoice $invoice): array
     {
-        $invoice->loadMissing([
-            'order:id,order_no,status,type,service_id,paid_at,product_id,billing_cycle,amount,discount,paid_amount,quantity,product_spec_snapshot,product_type_snapshot,config_snapshot,config_pricing_snapshot',
-            'order.product:id,product_type,service_type_code,product_group_id,remark,purchase_requires',
-            'order.product.productGroup:id,second_product_group_id,name',
-            'order.product.productGroup.secondProductGroup:id,first_product_group_id,name',
-            'order.product.productGroup.secondProductGroup.firstProductGroup:id,code,name',
-            'product:id,product_type,service_type_code,product_group_id,remark,purchase_requires',
-            'product.productGroup:id,second_product_group_id,name',
-            'product.productGroup.secondProductGroup:id,first_product_group_id,name',
-            'product.productGroup.secondProductGroup.firstProductGroup:id,code,name',
-            'service:id,name,status,expires_at',
-            // 渠道名要走回调证据（历史账单的 gateway_key 为空），预取避免逐行回查。
-            'payments.callbacks:payment_id,callback_type,payload_json',
-            // 余额支付没有 Payment 记录，渠道要从扣款台账派生（见 InvoicePaymentSummary::fromBalanceLedger）。
-            'ledgerEntries:id,source_type,source_id,event_type,change_amount,operator_type,trace_id,remark',
-            'items',
-        ]);
-
         $scene = $this->resolveInvoiceScene($invoice);
         $paymentSummary = $this->resolveInvoicePaymentSummary($invoice);
-        $displayStatus = $this->resolveInvoiceDisplayStatus($invoice, $paymentSummary);
         $productDisplayName = $this->resolveInvoiceProductDisplayName($invoice);
-        $productSpecDisplay = $this->resolveInvoiceProductSpecDisplay($invoice, $scene, $productDisplayName);
-        $combinedDisplayName = $this->resolveInvoiceCombinedDisplayName($invoice, $productDisplayName);
+
+        return [
+            'scene' => $scene,
+            'payment_summary' => $paymentSummary,
+            'display_status' => $this->resolveInvoiceDisplayStatus($invoice, $paymentSummary),
+            'product_display_name' => $productDisplayName,
+            'product_spec_display' => $this->resolveInvoiceProductSpecDisplay($invoice, $scene, $productDisplayName),
+            'combined_display_name' => $this->resolveInvoiceCombinedDisplayName($invoice, $productDisplayName),
+        ];
+    }
+
+    public function clientDetail(Invoice $invoice): array
+    {
+        $invoice->loadMissing($this->invoiceRelations([
+            'detail' => true,
+            'withUser' => false,
+            'productWithCustomDisplayName' => false,
+            'orderWithAmounts' => true,
+        ]));
+
+        [
+            'scene' => $scene,
+            'payment_summary' => $paymentSummary,
+            'display_status' => $displayStatus,
+            'product_display_name' => $productDisplayName,
+            'product_spec_display' => $productSpecDisplay,
+            'combined_display_name' => $combinedDisplayName,
+        ] = $this->resolveDetailContext($invoice);
 
         return [
             'id' => (int) $invoice->id,
@@ -573,21 +647,11 @@ class InvoiceService
 
     public function adminListItem(Invoice $invoice): array
     {
-        $invoice->loadMissing([
-            'user:id,email,nickname,phone',
-            'order:id,order_no,status,type,service_id,paid_at,product_id,billing_cycle,product_spec_snapshot,product_type_snapshot,config_snapshot',
-            'order.product:id,product_type,service_type_code,product_group_id,remark,purchase_requires',
-            'order.product.productGroup:id,second_product_group_id,name',
-            'order.product.productGroup.secondProductGroup:id,first_product_group_id,name',
-            'order.product.productGroup.secondProductGroup.firstProductGroup:id,code,name',
-            'product:id,product_type,service_type_code,product_group_id,remark,purchase_requires',
-            'service:id,name,status,expires_at',
-            // 渠道名要走回调证据（历史账单的 gateway_key 为空），预取避免逐行回查。
-            'payments.callbacks:payment_id,callback_type,payload_json',
-            // 余额支付没有 Payment 记录，渠道要从扣款台账派生（见 InvoicePaymentSummary::fromBalanceLedger）。
-            'ledgerEntries:id,source_type,source_id,event_type,change_amount,operator_type,trace_id,remark',
-            // 列表路径不加载仅详情使用的 items
-        ]);
+        $invoice->loadMissing($this->invoiceRelations([
+            'withUser' => true,
+            'productWithCustomDisplayName' => false,
+            'orderWithSnapshots' => true,
+        ]));
 
         return $this->transformAdminInvoiceListItem($invoice);
     }

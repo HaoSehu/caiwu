@@ -363,17 +363,7 @@ class ProductGroupV2QueryService
 
     private function attachCpuModelPayloads(LengthAwarePaginator $paginator): LengthAwarePaginator
     {
-        foreach ($paginator->items() as $item) {
-            if (! $item instanceof Product) {
-                continue;
-            }
-
-            foreach ($this->siteProducts->cpuModelPayloadForProduct($item) as $key => $value) {
-                $item->setAttribute($key, $value);
-            }
-        }
-
-        return $paginator;
+        return $this->siteProducts->attachCpuModelPayloads($paginator);
     }
 
     private function productTreeCountSubquery(string $outerColumn, int $level): Builder

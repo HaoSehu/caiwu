@@ -12,10 +12,9 @@ use App\Http\Requests\Admin\V2\Role\ListPermissionsRequest;
 use App\Http\Requests\Admin\V2\Role\ListRolesRequest;
 use App\Http\Requests\Admin\V2\Role\ShowRoleRequest;
 use App\Http\Requests\Admin\V2\Role\UpdateRoleRequest;
-use App\Http\Resources\Admin\V2\AdminActionResultResource;
 use App\Http\Resources\Admin\V2\AdminPermissionCatalogResource;
 use App\Http\Resources\Admin\V2\AdminRoleDetailResource;
-use App\Http\Resources\Admin\V2\AdminRoleListItemResource;
+use App\Http\Resources\V2\ActionResultResource;
 use App\Models\Role;
 use App\Services\Admin\Rbac\AdminRoleService;
 use App\Services\Admin\Rbac\PermissionCatalogService;
@@ -42,7 +41,7 @@ class RoleController extends Controller
 
     public function index(ListRolesRequest $request)
     {
-        $list = AdminRoleListItemResource::collection($this->roles->list($request->filters()))->resolve();
+        $list = AdminRoleDetailResource::collection($this->roles->list($request->filters()))->resolve();
 
         // 全量角色列表无真实分页，统一经标准分页器出信封（page=1、page_size=条目数）。
         $total = count($list);
@@ -80,6 +79,6 @@ class RoleController extends Controller
     {
         $result = $this->actions->copyRole($role, $request->user());
 
-        return $this->success(AdminActionResultResource::make($result)->resolve(), (string) $result['message']);
+        return $this->success(ActionResultResource::make($result)->resolve(), (string) $result['message']);
     }
 }

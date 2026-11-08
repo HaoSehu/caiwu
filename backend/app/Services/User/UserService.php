@@ -7,18 +7,12 @@ namespace App\Services\User;
 use App\Constants\FinanceLedgerEventType;
 use App\Constants\InvoiceStatus;
 use App\Constants\OrderStatus;
-use App\Constants\PaymentGatewayCode;
-use App\Constants\PaymentStatus;
 use App\Constants\ServiceStatus;
 use App\Exceptions\BusinessException;
 use App\Models\ActivityLog;
-use App\Models\FinanceRefund;
 use App\Models\Invoice;
 use App\Models\MemberLevel;
 use App\Models\MessageLog;
-use App\Models\Order;
-use App\Models\Payment;
-use App\Models\Product;
 use App\Models\PromotionAmbassador;
 use App\Models\RechargeRecord;
 use App\Models\ReferralReward;
@@ -33,20 +27,17 @@ use App\Services\Finance\Core\FinanceAccountService;
 use App\Services\Finance\FinanceLedgerQueryService;
 use App\Services\Finance\InvoiceService;
 use App\Services\Finance\TradeLifecycleService;
-use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Services\Referral\ReferralService;
 use App\Services\System\OperationLogService;
 use App\Services\System\SettingService;
+use App\Services\Ticket\TicketService;
 use App\Services\User\Concerns\HandlesAdminUserServices;
 use App\Support\AccountIdentifier;
-use App\Support\InvoicePaymentSummary;
 use App\Support\LikeEscape;
 use App\Support\Money;
-use App\Support\PaymentChannelLabel;
 use App\Support\SchemaMetadataCache;
 use App\Support\TextSanitizer;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 
@@ -393,12 +384,12 @@ class UserService
                 'services as service_active' => fn ($query) => $query->whereIn('status', [ServiceStatus::PENDING, ServiceStatus::ACTIVE, ServiceStatus::SUSPENDED]),
                 'services as service_total',
                 'orders as order_total',
-                'orders as order_pending' => fn ($query) => $query->where('status', 0),
-                'tickets as ticket_open' => fn ($query) => $query->whereIn('status', [0, 1, 2]),
-                'tickets as ticket_closed' => fn ($query) => $query->where('status', 3),
+                'orders as order_pending' => fn ($query) => $query->where('status', OrderStatus::PENDING),
+                'tickets as ticket_open' => fn ($query) => $query->whereIn('status', [TicketService::STATUS_OPEN, TicketService::STATUS_CLIENT_REPLY, TicketService::STATUS_STAFF_REPLY]),
+                'tickets as ticket_closed' => fn ($query) => $query->where('status', TicketService::STATUS_CLOSED),
                 'tickets as ticket_total',
-                'invoices as invoice_unpaid' => fn ($query) => $query->where('status', 0),
-                'invoices as invoice_paid' => fn ($query) => $query->where('status', 1),
+                'invoices as invoice_unpaid' => fn ($query) => $query->where('status', InvoiceStatus::UNPAID),
+                'invoices as invoice_paid' => fn ($query) => $query->where('status', InvoiceStatus::PAID),
             ])
             ->first();
         $orderTotal = (int) ($countStats?->order_total ?? 0);
@@ -476,97 +467,6 @@ class UserService
                 ])->values()->all(),
             ],
         ];
-    }
-
-    /**
-     * 用户账单列表
-     */
-    public function invoices(User $user, array $filters, int $perPage = 20)
-    {
-        $query = $user->invoices()->with([
-            // 账单行会逐个读取 user / 支付回调 / 商品展示名，必须在父集合一次预载，
-            // 否则每行各发一次 users、payment_callbacks、products 查询（N+1）。
-            'user:id,email,nickname,phone',
-            'order:id,order_no,status,type,service_id,paid_at,product_id,billing_cycle',
-            // 商品投影刻意不含 custom_display_name：该列一旦随投影加载，Product::getNameAttribute()
-            // 会直接返回裸自定义名，丢掉规格后缀，改变用户账单既有响应值；展示名所需列改为
-            // 分页后由解析器按 id 一次 whereIn 预载（见下方 preloadInvoiceProductDisplayNames）。
-            'order.product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
-            // 账单行输出的 product_full_path 会经 ProductFullPathResolver 读取订单商品的三级分组，
-            'order.product.productGroup:id,second_product_group_id,name',
-            'order.product.productGroup.secondProductGroup:id,first_product_group_id,name',
-            'order.product.productGroup.secondProductGroup.firstProductGroup:id,code,name',
-            // 未预载时每个商品实例各发三条查询（third/second/first_product_groups）。注意放大口径是
-            // 「当页不同商品数」而非行数：同一商品在多张账单间共享 Product 实例，只会懒加载一次。
-            'product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
-            'service:id,name,status,expires_at',
-            'payments.callbacks:payment_id,callback_type,payload_json',
-            // 余额支付没有 Payment 记录，渠道要从扣款台账派生（见 InvoicePaymentSummary::fromBalanceLedger）。
-            'ledgerEntries:id,source_type,source_id,event_type,change_amount,operator_type,trace_id,remark',
-            'items',
-        ])->select('invoices.*')->selectSub(
-            // 退款投影（列表轻量口径）与财务/客户端账单列表同源，单子查询预加载避免逐行 N+1。
-            // 必须用 selectSub 显式命名：withSum 生成的属性名是 refunds_sum_amount，
-            // 读取点取 refund_completed_total 会恒为 NULL，退化成逐行聚合查询。
-            FinanceRefund::query()
-                ->selectRaw('COALESCE(SUM(amount), 0)')
-                ->whereColumn('finance_refunds.invoice_id', 'invoices.id')
-                ->where('status', FinanceRefund::STATUS_COMPLETED),
-            'refund_completed_total'
-        );
-
-        if (($filters['status'] ?? '') === '5') {
-            $query->where(function ($builder) {
-                $builder->whereHas('payments', fn ($paymentQuery) => $paymentQuery
-                    ->whereGatewayKeyIn(PaymentGatewayCode::thirdPartyGateways())
-                    ->where('status', PaymentStatus::REFUNDED))
-                    ->orWhereHas('order', fn ($orderQuery) => $orderQuery->where('status', OrderStatus::REFUNDED));
-            });
-        } elseif (isset($filters['status']) && $filters['status'] !== '') {
-            if ((int) $filters['status'] === InvoiceStatus::PARTIAL_PAID) {
-                // 派生展示态「部分已付」：库内仍为待支付，按已付金额介于 (0, 应付) 命中。
-                $query->where('status', InvoiceStatus::UNPAID)
-                    ->where('paid_amount', '>', 0)
-                    ->whereColumn('paid_amount', '<', 'amount');
-            } else {
-                $query->where('status', $filters['status']);
-            }
-        }
-        if (! empty($filters['type'])) {
-            $type = (string) $filters['type'];
-            if (in_array($type, ['new', 'normal'], true)) {
-                $query->whereIn('type', ['new', 'normal']);
-            } else {
-                $query->where('type', $type);
-            }
-        }
-
-        // 服务控制台按实例维度列出账单：invoice.service_id 直接落列并建有索引，
-        // 不再经 order 二次关联，避免同一订单多账单时漏选。
-        $serviceId = (int) ($filters['service_id'] ?? 0);
-        if ($serviceId > 0) {
-            $query->where('service_id', $serviceId);
-        }
-
-        $paginator = $query->orderByDesc('id')->paginate($perPage);
-
-        // 账单行的展示名由 ProductDisplayNameResolver 解析：拆分商品的源商品、以及未随投影取出的
-        // custom_display_name 都会逐行单查，随每页行数放大成 N 次往返。按当页两类商品一次预载，
-        // 解析阶段只读内存，行输出不变。
-        $this->preloadInvoiceProductDisplayNames($paginator->items());
-
-        $paginator->setCollection(
-            $paginator->getCollection()->map(fn (Invoice $invoice) => $this->transformInvoiceListItem($invoice))
-        );
-
-        return $paginator;
-    }
-
-    public function invoiceDetail(User $user, int $invoiceId): array
-    {
-        $this->findUserInvoice($user, $invoiceId);
-
-        return $this->invoiceService->adminDetail($invoiceId);
     }
 
     /**
@@ -801,127 +701,5 @@ class UserService
         }
 
         return [];
-    }
-
-    private function findUserInvoice(User $user, int $invoiceId): Invoice
-    {
-        return $user->invoices()
-            ->whereKey($invoiceId)
-            ->firstOrFail();
-    }
-
-    /**
-     * 按当页账单一次性预载展示名解析所需的商品数据（源商品 + custom_display_name）。
-     *
-     * @param  array<int, Model>  $invoices  分页器 items() 的静态类型是基类 Model
-     */
-    private function preloadInvoiceProductDisplayNames(array $invoices): void
-    {
-        $products = collect($invoices)
-            ->filter(static fn ($invoice): bool => $invoice instanceof Invoice)
-            ->flatMap(static function (Invoice $invoice): array {
-                // 只读已预载关系，避免把一次预载退化成又一轮逐行查询。
-                $products = [];
-
-                $order = $invoice->getRelation('order');
-                if ($order instanceof Order && $order->getRelation('product') instanceof Product) {
-                    $products[] = $order->getRelation('product');
-                }
-                if ($invoice->getRelation('product') instanceof Product) {
-                    $products[] = $invoice->getRelation('product');
-                }
-
-                return $products;
-            })
-            ->filter()
-            ->unique(static fn (Product $product): int => (int) $product->id)
-            ->values();
-
-        if ($products->isEmpty()) {
-            return;
-        }
-
-        $resolver = app(ProductDisplayNameResolver::class);
-        $resolver->preloadSourceProducts($products);
-        $resolver->preloadCustomDisplayNames($products);
-    }
-
-    private function transformInvoiceListItem(Invoice $invoice): array
-    {
-        $detail = $this->invoiceService->adminListItem($invoice);
-        $paymentSummary = $this->buildInvoicePaymentSummary($invoice);
-
-        return [
-            ...$detail,
-            'created_at' => (string) ($detail['created_at'] ?? $invoice->created_at?->format('Y-m-d H:i:s')),
-            'due_date' => (string) ($detail['due_date'] ?? $invoice->due_date?->format('Y-m-d')),
-            'paid_at' => (string) ($detail['paid_at'] ?? $invoice->paid_at?->format('Y-m-d H:i:s')),
-            'payment_summary' => $detail['payment_summary'] ?? $paymentSummary,
-        ];
-    }
-
-    private function buildInvoicePaymentSummary(Invoice $invoice): ?array
-    {
-        if (! $invoice->relationLoaded('payments')) {
-            $invoice->loadMissing(['payments' => fn ($query) => $query->orderByDesc('id')]);
-        }
-
-        $payment = $this->resolvePrimaryInvoicePayment($invoice->payments);
-
-        if (! $payment instanceof Payment) {
-            // 余额支付不产生 Payment（ARCHITECTURE.md），渠道只能从扣款台账派生，
-            // 否则管理端用户详情的「支付方式」列对余额支付恒为空。
-            return InvoicePaymentSummary::fromBalanceLedger($invoice);
-        }
-
-        $refund = (array) data_get((array) ($payment->callback_raw ?? []), 'refund', []);
-
-        return [
-            'id' => (int) $payment->id,
-            'payment_no' => (string) $payment->payment_no,
-            'gateway' => PaymentChannelLabel::resolveGatewayKey($payment),
-            'gateway_key' => PaymentChannelLabel::resolveGatewayKey($payment),
-            'gateway_label' => PaymentChannelLabel::channelNameFromPayment($payment),
-            'plugin_name' => PaymentChannelLabel::pluginNameFromPayment($payment),
-            'channel_name' => PaymentChannelLabel::channelNameFromPayment($payment),
-            'trade_no' => (string) ($payment->trade_no ?? ''),
-            'amount' => number_format((float) $payment->amount, 2, '.', ''),
-            'status' => (int) $payment->status,
-            'status_label' => $this->resolvePaymentStatusLabel((int) $payment->status),
-            'paid_at' => $payment->paid_at?->format('Y-m-d H:i:s'),
-            'refund_method' => (string) ($refund['refund_method'] ?? ''),
-            'refund_method_label' => (string) ($refund['refund_method_label'] ?? ''),
-            'refund_reason' => (string) ($refund['refund_reason'] ?? ''),
-            'refunded_at' => (string) ($refund['refunded_at'] ?? ($refund['gmt_refund_pay'] ?? '')),
-        ];
-    }
-
-    private function resolvePrimaryInvoicePayment(iterable $payments): ?Payment
-    {
-        // 与 InvoiceService::channelPayments 同口径：渠道能从快照或回调证据还原即可展示，
-        // 不按「第三方真实资金流入」过滤，否则旧库迁入的历史账单会看不到支付方式。
-        $collection = collect($payments)
-            ->filter(fn (Payment $payment) => PaymentChannelLabel::hasKnownChannel($payment))
-            ->values();
-
-        // 已转入余额的异常支付（重复支付/超额支付）不作为主支付单：
-        // 其金额已退回用户余额，展示与退款决策均不应再按该支付单处理。
-        $isRefundablePayment = fn (Payment $payment): bool => in_array((int) $payment->status, [PaymentStatus::SUCCESS, PaymentStatus::REFUNDED], true)
-            && ! (bool) data_get((array) ($payment->callback_raw ?? []), 'credited_to_balance', false);
-
-        return $collection
-            ->first(fn (Payment $payment) => $isRefundablePayment($payment)
-                && ! (bool) data_get((array) ($payment->callback_raw ?? []), 'duplicate_paid', false))
-            ?? $collection->first($isRefundablePayment);
-    }
-
-    private function resolvePaymentStatusLabel(int $status): string
-    {
-        return match ($status) {
-            PaymentStatus::SUCCESS => '已支付',
-            PaymentStatus::REFUNDED => '已退款',
-            PaymentStatus::CANCELLED => '已取消',
-            default => '未支付',
-        };
     }
 }

@@ -18,10 +18,9 @@ class ListSuppliersRequest extends AdminFormRequest
     public function rules(): array
     {
         return [
+            ...$this->paginationRules(presence: 'sometimes'),
             'keyword' => ['sometimes', 'nullable', 'string', 'max:120'],
             'status' => ['sometimes', 'nullable', Rule::in(['0', '1', 0, 1])],
-            'page' => ['sometimes', 'integer', 'min:1'],
-            'page_size' => ['sometimes', 'integer', 'min:1', 'max:'.Pagination::MAX_PAGE_SIZE],
             'pageSize' => ['prohibited'],
             'per_page' => ['prohibited'],
         ];

@@ -11,7 +11,7 @@ class ShowPaymentRequest extends ClientFormRequest
     public function rules(): array
     {
         return [
-            'id' => ['required', 'integer', 'min:1'],
+            'payment' => ['required', 'integer', 'min:1'],
             'page' => ['prohibited'],
             'page_size' => ['prohibited'],
             'pageSize' => ['prohibited'],
@@ -22,7 +22,7 @@ class ShowPaymentRequest extends ClientFormRequest
     public function validationData(): array
     {
         return array_merge(parent::validationData(), [
-            'id' => $this->route('id'),
+            'payment' => $this->route('id'),
         ]);
     }
 }

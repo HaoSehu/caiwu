@@ -22,34 +22,33 @@ class FinanceLedgerSummaryCacheTest extends TestCase
 
     public function test_summary_varies_with_keyword_filter_within_ttl(): void
     {
-        [$userA, $userB] = $this->makeUsersWithLedger();
+        [$userA] = $this->makeUsersWithLedger();
 
         $service = app(FinanceLedgerQueryService::class);
 
-        $summaryA = $service->summaryForAdmin(['keyword' => (string) $userA->id]);
-        $this->assertSame('100.00', $summaryA['total_in']);
-        $this->assertSame('30.00', $summaryA['total_out']);
-        $this->assertSame(2, $summaryA['total_count']);
+        $all = $service->summaryForClient($userA, []);
+        $this->assertSame('100.00', $all['total_in']);
+        $this->assertSame('30.00', $all['total_out']);
+        $this->assertSame(2, $all['total_count']);
 
-        // 修复前：与上一条共用缓存键，此处会错误返回 A 的汇总数字
-        $summaryB = $service->summaryForAdmin(['keyword' => (string) $userB->id]);
-        $this->assertSame('0.00', $summaryB['total_in']);
-        $this->assertSame('50.00', $summaryB['total_out']);
-        $this->assertSame(1, $summaryB['total_count']);
+        // 同一用户、不同 event_type 筛选必须各自成键；
+        // 修复前：指纹只含部分过滤字段，30s TTL 内不同筛选会共享同一份汇总金额。
+        $rechargeOnly = $service->summaryForClient($userA, ['event_type' => 'recharge']);
+        $this->assertSame('100.00', $rechargeOnly['total_in']);
+        $this->assertSame('0.00', $rechargeOnly['total_out']);
+        $this->assertSame(1, $rechargeOnly['total_count']);
     }
 
     public function test_summary_varies_with_invoice_no_filter_within_ttl(): void
     {
         [$userA] = $this->makeUsersWithLedger();
-        $userC = $this->makeUser('c');
-        $this->makeTransaction($userC, 'recharge', 88.00, 'payment', null);
 
         $service = app(FinanceLedgerQueryService::class);
         $invoiceNo = 'ZZFIX'.date('YmdHis').mt_rand(100000, 999999);
         $invoice = $this->makeInvoice((int) $userA->id, $invoiceNo);
         $this->makeTransaction($userA, 'invoice_payment', -30.00, 'invoice', $invoice->id);
 
-        $hit = $service->summaryForAdmin(['invoice_no' => $invoiceNo]);
+        $hit = $service->summaryForClient($userA, ['invoice_no' => $invoiceNo]);
         $this->assertSame(1, $hit['total_count']);
         $this->assertSame('30.00', $hit['total_out']);
     }

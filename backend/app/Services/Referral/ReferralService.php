@@ -559,21 +559,8 @@ class ReferralService
         $paginator = ReferralReward::query()
             ->with(array_merge(
                 $this->referralUserWithRelations('referredUser'),
-                [
-                    'invoice:id,invoice_no,product_id,product_spec_snapshot,config_snapshot,paid_at',
-                    'order:id,order_no,type,product_id,product_spec_snapshot,config_snapshot,paid_at',
-                    // 展示名解析会回溯 order.product 与三级分组；不预载则逐行懒加载（N+1）。
-                    'order.product:id,product_type,service_type_code,product_group_id,custom_display_name,config_options,purchase_requires',
-                    'order.product.productGroup:id,second_product_group_id,name',
-                    'order.product.productGroup.secondProductGroup:id,first_product_group_id,name',
-                    'order.product.productGroup.secondProductGroup.firstProductGroup:id,code,name',
-                    // 奖励商品自身刻意不带 custom_display_name：一旦带上，Product::getNameAttribute()
-                    // 会提前命中「已加载自定义展示名」分支，把带规格后缀的展示名改成裸自定义名，改变响应值。
-                    'product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
-                    'product.productGroup:id,second_product_group_id,name',
-                    'product.productGroup.secondProductGroup:id,first_product_group_id,name',
-                    'product.productGroup.secondProductGroup.firstProductGroup:id,code,name',
-                ]
+                $this->rewardLogRelations(),
+                ['invoice:id,invoice_no,product_id,product_spec_snapshot,config_snapshot,paid_at']
             ))
             ->where('referrer_user_id', $user->id)
             ->orderByDesc('rewarded_at')
@@ -583,6 +570,32 @@ class ReferralService
         $this->preloadRewardProductDisplayNames($paginator->items());
 
         return $paginator;
+    }
+
+    /**
+     * 奖励列表的公共预载关系（客户端「我的奖励」与管理端「奖励记录」共用）。
+     *
+     * 展示名解析会回溯 order.product 与三级分组，不预载则逐行懒加载（N+1）。
+     * 奖励商品自身刻意不带 custom_display_name：一旦带上，Product::getNameAttribute()
+     * 会提前命中「已加载自定义展示名」分支，把带规格后缀的展示名改成裸自定义名，改变响应值。
+     *
+     * @param  bool  $withOrderTimeline  管理端不需要 paid_at / type，客户端列表需要
+     * @return array<int, string>
+     */
+    private function rewardLogRelations(bool $withOrderTimeline = true): array
+    {
+        return [
+            'order:id,'.($withOrderTimeline ? 'order_no,type,product_id' : 'order_no,product_id')
+                .',product_spec_snapshot,config_snapshot'.($withOrderTimeline ? ',paid_at' : ''),
+            'order.product:id,product_type,service_type_code,product_group_id,custom_display_name,config_options,purchase_requires',
+            'order.product.productGroup:id,second_product_group_id,name',
+            'order.product.productGroup.secondProductGroup:id,first_product_group_id,name',
+            'order.product.productGroup.secondProductGroup.firstProductGroup:id,code,name',
+            'product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
+            'product.productGroup:id,second_product_group_id,name',
+            'product.productGroup.secondProductGroup:id,first_product_group_id,name',
+            'product.productGroup.secondProductGroup.firstProductGroup:id,code,name',
+        ];
     }
 
     public function accountLogs(User $user, array $filters, int $perPage = 20): LengthAwarePaginator
@@ -709,19 +722,7 @@ class ReferralService
             ->with(array_merge(
                 $this->referralUserWithRelations('referrer'),
                 $this->referralUserWithRelations('referredUser'),
-                [
-                    'order:id,order_no,product_id,product_spec_snapshot,config_snapshot',
-                    // 同客户端列表：展示名解析回溯 order.product 与三级分组，必须一次预载。
-                    'order.product:id,product_type,service_type_code,product_group_id,custom_display_name,config_options,purchase_requires',
-                    'order.product.productGroup:id,second_product_group_id,name',
-                    'order.product.productGroup.secondProductGroup:id,first_product_group_id,name',
-                    'order.product.productGroup.secondProductGroup.firstProductGroup:id,code,name',
-                    // 同上：奖励商品自身不带 custom_display_name，展示名仍由解析器按需补规格后缀。
-                    'product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
-                    'product.productGroup:id,second_product_group_id,name',
-                    'product.productGroup.secondProductGroup:id,first_product_group_id,name',
-                    'product.productGroup.secondProductGroup.firstProductGroup:id,code,name',
-                ]
+                $this->rewardLogRelations(withOrderTimeline: false)
             ));
 
         if (($filters['status'] ?? null) !== null && $filters['status'] !== '') {

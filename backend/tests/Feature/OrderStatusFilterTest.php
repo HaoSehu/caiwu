@@ -6,10 +6,10 @@ namespace Tests\Feature;
 
 use App\Constants\InvoiceStatus;
 use App\Constants\OrderStatus;
+use App\Constants\OrderType;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\User;
-use App\Services\Finance\AdminFinanceQueryService;
 use App\Services\Finance\OrderV2QueryService;
 use App\Services\Order\ClientOrderQueryService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -25,17 +25,6 @@ class OrderStatusFilterTest extends TestCase
 {
     use DatabaseTransactions;
 
-    public function test_admin_finance_order_filter_matches_exact_status(): void
-    {
-        $keyword = $this->makeOrdersForFilter();
-
-        $service = app(AdminFinanceQueryService::class);
-
-        foreach (array_keys(OrderStatus::$labels) as $status) {
-            $this->assertSame(1, $service->paginateOrders(['status' => $status, 'keyword' => $keyword])->total());
-        }
-    }
-
     public function test_admin_v2_order_filter_matches_exact_status(): void
     {
         $keyword = $this->makeOrdersForFilter();
@@ -47,14 +36,22 @@ class OrderStatusFilterTest extends TestCase
         }
     }
 
-    public function test_admin_upgrade_order_filter_matches_exact_status(): void
+    public function test_admin_v2_upgrade_order_filter_matches_exact_status(): void
     {
         $keyword = $this->makeOrdersForFilter('upgrade');
 
-        $service = app(AdminFinanceQueryService::class);
+        $service = app(OrderV2QueryService::class);
 
-        $this->assertSame(1, $service->paginateUpgradeOrders(['status' => OrderStatus::PAID, 'keyword' => $keyword])->total());
-        $this->assertSame(1, $service->paginateUpgradeOrders(['status' => OrderStatus::CANCELLED, 'keyword' => $keyword])->total());
+        $this->assertSame(1, $service->paginateAdminOrders([
+            'type' => OrderType::UPGRADE,
+            'status' => OrderStatus::PAID,
+            'keyword' => $keyword,
+        ])->total());
+        $this->assertSame(1, $service->paginateAdminOrders([
+            'type' => OrderType::UPGRADE,
+            'status' => OrderStatus::CANCELLED,
+            'keyword' => $keyword,
+        ])->total());
     }
 
     public function test_client_order_filter_matches_exact_status(): void
@@ -68,39 +65,22 @@ class OrderStatusFilterTest extends TestCase
         }
     }
 
-    public function test_client_summary_counts_paid_only(): void
+    public function test_client_order_status_counts_are_exact_per_status(): void
     {
         [$userId] = $this->makeOrdersForClient();
 
-        $summary = app(ClientOrderQueryService::class)->summary($userId, []);
+        $service = app(ClientOrderQueryService::class);
 
-        $this->assertSame(1, $summary['pending']);
-        $this->assertSame(1, $summary['paid']);
-        $this->assertSame(1, $summary['cancelled']);
-        $this->assertSame(1, $summary['refunded']);
-        $this->assertArrayNotHasKey('processing', $summary);
-        $this->assertArrayNotHasKey('completed', $summary);
-    }
+        // 订单计数维度：各状态分别计数，不存在合并态（无开通中/已完成内部子状态）。
+        $counts = [];
+        foreach (array_keys(OrderStatus::$labels) as $status) {
+            $counts[$status] = (int) $service->paginate($userId, ['status' => $status], [])['total'];
+        }
 
-    public function test_client_summary_amounts_read_invoice_as_source_of_truth(): void
-    {
-        $user = $this->makeUser('amounts');
-        $userId = (int) $user->id;
-
-        // 部分支付的未付账单：欠款 = 100 - 40 = 60（GREATEST 防负）
-        $this->makeInvoice($user, 'new', '100.00', '40.00', InvoiceStatus::UNPAID);
-        // 充值账单：不属于消费，既不计欠款口径校验也不计入本月消费
-        $this->makeInvoice($user, 'recharge', '200.00', '0.00', InvoiceStatus::PAID);
-        // 本月已付续费账单：计入本月消费
-        $this->makeInvoice($user, 'renew', '88.00', '88.00', InvoiceStatus::PAID);
-        // 已取消账单不计任何口径
-        $this->makeInvoice($user, 'new', '55.00', '0.00', InvoiceStatus::CANCELLED);
-
-        $summary = app(ClientOrderQueryService::class)->summary($userId, []);
-
-        $this->assertSame('60.00', $summary['unpaid_amount'], '待付金额 = 未付账单应付余额');
-        // 100 + 88 + 55 = 243：与原订单口径一致不排除已取消（充值 recharge 类型被排除）。
-        $this->assertSame('243.00', $summary['month_amount'], '本月消费 = 本月消费类账单合计，充值不计入');
+        $this->assertSame(1, $counts[OrderStatus::PENDING] ?? 0);
+        $this->assertSame(1, $counts[OrderStatus::PAID] ?? 0);
+        $this->assertSame(1, $counts[OrderStatus::CANCELLED] ?? 0);
+        $this->assertSame(1, $counts[OrderStatus::REFUNDED] ?? 0);
     }
 
     private function makeInvoice(User $user, string $type, string $amount, string $paidAmount, int $status): Invoice

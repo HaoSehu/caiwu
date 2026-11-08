@@ -10,8 +10,8 @@ use App\Http\Requests\Admin\V2\Log\ListLogsRequest;
 use App\Http\Requests\Admin\V2\Log\ShowLogCleanupOverviewRequest;
 use App\Http\Requests\Admin\V2\Log\ShowLogRequest;
 use App\Http\Requests\Admin\V2\Log\SummarizeLogsRequest;
-use App\Http\Resources\Admin\V2\AdminActionResultResource;
 use App\Http\Resources\Admin\V2\AdminLogDetailResource;
+use App\Http\Resources\V2\ActionResultResource;
 use App\Services\Admin\V2\AdminOperationalActionV2Service;
 use App\Services\System\AdminLogV2QueryService;
 
@@ -58,6 +58,6 @@ class LogController extends Controller
     {
         $result = $this->actions->cleanupLogs($request->payload());
 
-        return $this->success(AdminActionResultResource::make($result)->resolve(), (string) $result['message']);
+        return $this->success(ActionResultResource::make($result)->resolve(), (string) $result['message']);
     }
 }

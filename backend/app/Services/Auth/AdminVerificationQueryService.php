@@ -67,10 +67,10 @@ class AdminVerificationQueryService
     {
         $stats = User::query()
             ->selectRaw('COUNT(*) as total')
-            ->selectRaw('COALESCE(SUM(CASE WHEN verification_status = 2 THEN 1 ELSE 0 END), 0) as verified')
-            ->selectRaw('COALESCE(SUM(CASE WHEN verification_status = 4 THEN 1 ELSE 0 END), 0) as pending')
-            ->selectRaw('COALESCE(SUM(CASE WHEN verification_status = 3 THEN 1 ELSE 0 END), 0) as failed')
-            ->selectRaw('COALESCE(SUM(CASE WHEN verification_status = 5 THEN 1 ELSE 0 END), 0) as unbound')
+            ->selectRaw('COALESCE(SUM(CASE WHEN verification_status = ? THEN 1 ELSE 0 END), 0) as verified', [User::VERIFICATION_STATUS_VERIFIED])
+            ->selectRaw('COALESCE(SUM(CASE WHEN verification_status = ? THEN 1 ELSE 0 END), 0) as pending', [User::VERIFICATION_STATUS_PENDING_REVIEW])
+            ->selectRaw('COALESCE(SUM(CASE WHEN verification_status = ? THEN 1 ELSE 0 END), 0) as failed', [User::VERIFICATION_STATUS_FAILED])
+            ->selectRaw('COALESCE(SUM(CASE WHEN verification_status = ? THEN 1 ELSE 0 END), 0) as unbound', [User::VERIFICATION_STATUS_UNBOUND])
             ->first();
 
         return [

@@ -9,8 +9,8 @@ use App\Http\Requests\Admin\V2\Database\ExportDatabaseBackupRequest;
 use App\Http\Requests\Admin\V2\Database\OptimizeDatabaseTablesRequest;
 use App\Http\Requests\Admin\V2\Database\ShowDatabaseBackupTaskRequest;
 use App\Http\Requests\Admin\V2\Database\ShowDatabaseStatusRequest;
-use App\Http\Resources\Admin\V2\AdminActionResultResource;
 use App\Http\Resources\Admin\V2\AdminDatabaseStatusResource;
+use App\Http\Resources\V2\ActionResultResource;
 use App\Services\System\DatabaseBackupTaskService;
 use App\Services\System\DatabaseStatusService;
 use Illuminate\Http\JsonResponse;
@@ -50,7 +50,7 @@ class DatabaseStatusController extends Controller
         }
 
         return $this->success(
-            AdminActionResultResource::make($result)->resolve(),
+            ActionResultResource::make($result)->resolve(),
             (string) $result['message']
         );
     }
@@ -74,7 +74,7 @@ class DatabaseStatusController extends Controller
         }
 
         return $this->success(
-            AdminActionResultResource::make($result)->resolve(),
+            ActionResultResource::make($result)->resolve(),
             (string) $result['message']
         );
     }

@@ -20,7 +20,6 @@ use App\Http\Requests\Admin\V2\User\LoginAsUserRequest;
 use App\Http\Requests\Admin\V2\User\RechargeUserRequest;
 use App\Http\Requests\Admin\V2\User\ServicePasswordResetActionRequest;
 use App\Http\Requests\Admin\V2\User\ServicePowerActionRequest;
-use App\Http\Requests\Admin\V2\User\ShowUserInvoiceRequest;
 use App\Http\Requests\Admin\V2\User\ShowUserRequest;
 use App\Http\Requests\Admin\V2\User\StoreManualInvoiceRequest;
 use App\Http\Requests\Admin\V2\User\StoreManualOrderRequest;
@@ -28,24 +27,24 @@ use App\Http\Requests\Admin\V2\User\StoreManualReversalRequest;
 use App\Http\Requests\Admin\V2\User\StoreUserRequest;
 use App\Http\Requests\Admin\V2\User\UpdateUserRequest;
 use App\Http\Requests\Admin\V2\User\UpdateUserStatusRequest;
-use App\Http\Resources\Admin\V2\AdminActionResultResource;
 use App\Http\Resources\Admin\V2\AdminInvoiceSummaryResource;
 use App\Http\Resources\Admin\V2\AdminLoginAsResource;
 use App\Http\Resources\Admin\V2\AdminOrderSummaryResource;
 use App\Http\Resources\Admin\V2\AdminOsOptionsResource;
 use App\Http\Resources\Admin\V2\AdminUserDetailResource;
-use App\Http\Resources\Admin\V2\AdminUserInvoiceDetailResource;
 use App\Http\Resources\Admin\V2\AdminUserListItemResource;
 use App\Http\Resources\Admin\V2\AdminUserNotificationLogResource;
 use App\Http\Resources\Admin\V2\AdminUserOperationLogResource;
 use App\Http\Resources\Admin\V2\AdminUserRechargeRecordResource;
 use App\Http\Resources\Admin\V2\AdminUserTicketResource;
+use App\Http\Resources\V2\ActionResultResource;
 use App\Models\AdminUser;
 use App\Models\Order;
 use App\Models\User;
 use App\Services\Admin\V2\AdminManualEntryV2Service;
 use App\Services\Admin\V2\AdminUserActionV2Service;
 use App\Services\Auth\AuthService;
+use App\Services\Finance\InvoiceV2QueryService;
 use App\Services\Finance\OrderV2QueryService;
 use App\Services\Finance\RechargePaymentService;
 use App\Services\ProductCatalog\ProductFullPathResolver;
@@ -59,6 +58,7 @@ class UserController extends Controller
         private readonly AdminUserActionV2Service $actions,
         private readonly AdminManualEntryV2Service $manualEntries,
         private readonly OrderV2QueryService $orderQueries,
+        private readonly InvoiceV2QueryService $invoiceQueries,
         private readonly UserService $users,
         private readonly AuthService $auth,
         private readonly RechargePaymentService $payments,
@@ -110,7 +110,7 @@ class UserController extends Controller
     {
         $result = $this->actions->updateStatus($user, $request->enabled());
 
-        return $this->success(AdminActionResultResource::make($result)->resolve(), (string) $result['message']);
+        return $this->success(ActionResultResource::make($result)->resolve(), (string) $result['message']);
     }
 
     public function adjustMemberLevel(AdjustMemberLevelRequest $request, User $user): JsonResponse
@@ -181,7 +181,7 @@ class UserController extends Controller
 
         $label = $amount > 0 ? '增加' : '扣减';
 
-        return $this->success(AdminActionResultResource::make([
+        return $this->success(ActionResultResource::make([
             'id' => (int) $user->id,
             'status' => 'completed',
             'message' => "余额{$label}成功",
@@ -223,20 +223,25 @@ class UserController extends Controller
     {
         $result = $this->actions->servicePower($user, $service, $request->action(), $request);
 
-        return $this->success(AdminActionResultResource::make($result)->resolve(), (string) $result['message']);
+        return $this->success(ActionResultResource::make($result)->resolve(), (string) $result['message']);
     }
 
     public function resetServicePassword(ServicePasswordResetActionRequest $request, User $user, int $service): JsonResponse
     {
         $result = $this->actions->resetServicePassword($user, $service, $request->payload(), $request);
 
-        return $this->success(AdminActionResultResource::make($result)->resolve(), (string) $result['message']);
+        return $this->success(ActionResultResource::make($result)->resolve(), (string) $result['message']);
     }
 
     public function invoices(ListUserInvoicesRequest $request, User $user): JsonResponse
     {
+        $filters = $request->filters();
+        // 详情页口径：用户由路由绑定锁定，禁止透传其他 user_id。
+        $filters['user_id'] = (int) $user->id;
+        $filters['page_size'] = $request->perPage();
+
         return $this->paginate(
-            $this->users->invoices($user, $request->filters(), $request->perPage()),
+            $this->invoiceQueries->paginateAdminInvoices($filters),
             AdminInvoiceSummaryResource::class,
         );
     }
@@ -273,7 +278,7 @@ class UserController extends Controller
             'ip_address' => (string) $request->ip(),
         ]);
 
-        return $this->success(AdminActionResultResource::make($result)->resolve(), (string) $result['message']);
+        return $this->success(ActionResultResource::make($result)->resolve(), (string) $result['message']);
     }
 
     public function storeManualOrder(StoreManualOrderRequest $request, User $user): JsonResponse
@@ -287,7 +292,7 @@ class UserController extends Controller
             'ip_address' => (string) $request->ip(),
         ]);
 
-        return $this->success(AdminActionResultResource::make($result)->resolve(), (string) $result['message']);
+        return $this->success(ActionResultResource::make($result)->resolve(), (string) $result['message']);
     }
 
     public function storeManualReversal(StoreManualReversalRequest $request, User $user, int $invoice): JsonResponse
@@ -301,12 +306,7 @@ class UserController extends Controller
             'ip_address' => (string) $request->ip(),
         ]);
 
-        return $this->success(AdminActionResultResource::make($result)->resolve(), (string) $result['message']);
-    }
-
-    public function invoiceDetail(ShowUserInvoiceRequest $request, User $user, int $invoice): JsonResponse
-    {
-        return $this->success(AdminUserInvoiceDetailResource::make($this->users->invoiceDetail($user, $invoice))->resolve());
+        return $this->success(ActionResultResource::make($result)->resolve(), (string) $result['message']);
     }
 
     public function tickets(ListUserTicketsRequest $request, User $user): JsonResponse

@@ -16,13 +16,13 @@ use App\Http\Requests\Admin\V2\Ticket\ReplyTicketRequest;
 use App\Http\Requests\Admin\V2\Ticket\ShowTicketRequest;
 use App\Http\Requests\Admin\V2\Ticket\ShowTicketSummaryRequest;
 use App\Http\Requests\Admin\V2\Ticket\UploadTicketImageRequest;
-use App\Http\Resources\Admin\V2\AdminActionResultResource;
 use App\Http\Resources\Ticket\V2\TicketAdminUserOptionResource;
 use App\Http\Resources\Ticket\V2\TicketDetailResource;
 use App\Http\Resources\Ticket\V2\TicketListItemResource;
 use App\Http\Resources\Ticket\V2\TicketReplyResource;
 use App\Http\Resources\Ticket\V2\TicketSummaryResource;
 use App\Http\Resources\Ticket\V2\TicketUploadAttachmentResource;
+use App\Http\Resources\V2\ActionResultResource;
 use App\Models\Ticket;
 use App\Services\Admin\V2\AdminTicketActionV2Service;
 use App\Services\Ticket\TicketService;
@@ -104,27 +104,27 @@ class TicketController extends Controller
     {
         $result = $this->actions->close($ticket);
 
-        return $this->success(AdminActionResultResource::make($result)->resolve(), (string) $result['message']);
+        return $this->success(ActionResultResource::make($result)->resolve(), (string) $result['message']);
     }
 
     public function reopen(ReopenTicketRequest $request, Ticket $ticket): JsonResponse
     {
         $result = $this->actions->reopen($ticket, 'admin');
 
-        return $this->success(AdminActionResultResource::make($result)->resolve(), (string) $result['message']);
+        return $this->success(ActionResultResource::make($result)->resolve(), (string) $result['message']);
     }
 
     public function assign(AssignTicketRequest $request, Ticket $ticket): JsonResponse
     {
         $result = $this->actions->assign($ticket, $request->assigneeId());
 
-        return $this->success(AdminActionResultResource::make($result)->resolve(), (string) $result['message']);
+        return $this->success(ActionResultResource::make($result)->resolve(), (string) $result['message']);
     }
 
     public function recall(RecallTicketReplyRequest $request, Ticket $ticket, int $replyId): JsonResponse
     {
         $result = $this->actions->recallReply($ticket, $replyId, (int) $request->user()->id);
 
-        return $this->success(AdminActionResultResource::make($result)->resolve(), (string) $result['message']);
+        return $this->success(ActionResultResource::make($result)->resolve(), (string) $result['message']);
     }
 }

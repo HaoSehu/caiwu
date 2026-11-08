@@ -72,14 +72,6 @@ class SiteHomeService
     }
 
     /**
-     * @return array{slides: array<int, array<string, mixed>>, features: array<int, array<string, mixed>>}
-     */
-    public function hero(): array
-    {
-        return $this->homeHeroService->getHero();
-    }
-
-    /**
      * @param  array<int, array<string, mixed>>  $groups
      * @return array<int, array<string, mixed>>
      */

@@ -29,6 +29,7 @@ use App\Services\Auth\SendAccountCodeService;
 use App\Services\Auth\VerificationCodeService;
 use App\Services\User\AccountPolicyService;
 use App\Support\AccountIdentifier;
+use App\Support\ClientPlatform;
 use Illuminate\Http\Request;
 use Laravel\Sanctum\PersonalAccessToken;
 
@@ -357,7 +358,7 @@ class AuthController extends Controller
     {
         $data = $request->validated();
 
-        $this->loginFlowService->assertCaptchaVerified($request->input('captcha'), (string) $request->ip());
+        $this->assertCaptchaUnlessApp($request);
 
         $this->sendAccountCodeService->sendPhoneCode(
             $this->resolveOptionalUser($request),
@@ -403,7 +404,7 @@ class AuthController extends Controller
     {
         $data = $request->validated();
 
-        $this->loginFlowService->assertCaptchaVerified($request->input('captcha'), (string) $request->ip());
+        $this->assertCaptchaUnlessApp($request);
 
         $this->sendAccountCodeService->sendEmailCode(
             $this->resolveOptionalUser($request),
@@ -447,6 +448,23 @@ class AuthController extends Controller
         );
 
         return $this->success(null, '密码修改成功');
+    }
+
+    /**
+     * 原生 App 发验证码不做人机验证，网页端保持原有强制校验。
+     *
+     * App 不加载 Geetest SDK，原先 sendPhoneCode/sendEmailCode 的无条件校验会让
+     * App 的验证码登录与找回密码完全不可用。放行的代价由发送限流承担：
+     * SendAccountCodeService 仍按 channel+目标+IP 限流，且登录/重置场景对未注册
+     * 账号静默不发码，枚举与频发刷量不受影响。
+     */
+    private function assertCaptchaUnlessApp(Request $request): void
+    {
+        if (ClientPlatform::isApp($request)) {
+            return;
+        }
+
+        $this->loginFlowService->assertCaptchaVerified($request->input('captcha'), (string) $request->ip());
     }
 
     private function clientOperationContext(Request $request): array

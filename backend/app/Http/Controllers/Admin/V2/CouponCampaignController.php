@@ -12,10 +12,10 @@ use App\Http\Requests\Admin\V2\CouponCampaign\ShowCouponCampaignSummaryRequest;
 use App\Http\Requests\Admin\V2\CouponCampaign\StoreCouponCampaignRequest;
 use App\Http\Requests\Admin\V2\CouponCampaign\UpdateCouponCampaignRequest;
 use App\Http\Requests\Admin\V2\CouponCampaign\UpdateCouponCampaignStatusRequest;
-use App\Http\Resources\Admin\V2\AdminActionResultResource;
 use App\Http\Resources\Admin\V2\AdminCouponCampaignDetailResource;
 use App\Http\Resources\Admin\V2\AdminCouponCampaignListResource;
 use App\Http\Resources\Admin\V2\AdminCouponCampaignSummaryResource;
+use App\Http\Resources\V2\ActionResultResource;
 use App\Models\CouponCampaign;
 use App\Services\Admin\V2\AdminCatalogActionV2Service;
 use App\Services\Finance\CouponCampaignService;
@@ -69,7 +69,7 @@ class CouponCampaignController extends Controller
             $this->context($request)
         );
 
-        return $this->success(AdminActionResultResource::make($result)->resolve(), (string) $result['message']);
+        return $this->success(ActionResultResource::make($result)->resolve(), (string) $result['message']);
     }
 
     public function runTask(RunCouponCampaignTaskRequest $request, CouponCampaign $couponCampaign)
@@ -81,7 +81,7 @@ class CouponCampaignController extends Controller
             $this->context($request)
         );
 
-        return $this->success(AdminActionResultResource::make($result)->resolve(), (string) $result['message']);
+        return $this->success(ActionResultResource::make($result)->resolve(), (string) $result['message']);
     }
 
     public function destroy(DeleteCouponCampaignRequest $request, CouponCampaign $couponCampaign)

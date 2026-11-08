@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Http\Requests\Admin\V2\Verification;
 
 use App\Http\Requests\Admin\V2\Common\AdminFormRequest;
-use App\Support\Pagination;
 use Illuminate\Validation\Validator;
 
 class ListVerificationsRequest extends AdminFormRequest
@@ -13,11 +12,10 @@ class ListVerificationsRequest extends AdminFormRequest
     public function rules(): array
     {
         return [
+            ...$this->paginationRules(),
             'keyword' => ['nullable', 'string', 'max:100'],
             'is_verified' => ['nullable', 'in:0,1'],
             'verification_status' => ['nullable', 'in:0,1,2,3,4,5'],
-            'page' => ['nullable', 'integer', 'min:1'],
-            'page_size' => ['nullable', 'integer', 'min:1', 'max:'.Pagination::MAX_PAGE_SIZE],
             'per_page' => ['prohibited'],
             'pageSize' => ['prohibited'],
         ];

@@ -6,7 +6,6 @@ namespace App\Http\Requests\Admin\V2\Product;
 
 use App\Constants\ProductType;
 use App\Http\Requests\Admin\V2\Common\AdminFormRequest;
-use App\Support\Pagination;
 use Illuminate\Validation\Rule;
 
 class ListProductsRequest extends AdminFormRequest
@@ -56,6 +55,7 @@ class ListProductsRequest extends AdminFormRequest
     public function rules(): array
     {
         return [
+            ...$this->paginationRules(presence: 'sometimes'),
             'keyword' => ['sometimes', 'nullable', 'string', 'max:120'],
             'status' => ['sometimes', 'nullable', 'integer', Rule::in([0, 1])],
             'lifecycle_status' => ['sometimes', 'nullable', 'string', Rule::in(['active', 'deleted', 'all'])],
@@ -65,8 +65,6 @@ class ListProductsRequest extends AdminFormRequest
             'first_product_group_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
             'second_product_group_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
             'third_product_group_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
-            'page' => ['sometimes', 'integer', 'min:1'],
-            'page_size' => ['sometimes', 'integer', 'min:1', 'max:'.Pagination::MAX_PAGE_SIZE],
             'sort_by' => ['sometimes', 'nullable', 'string', Rule::in(['price', 'stock', 'services_count'])],
             'sort_order' => ['sometimes', 'nullable', 'string', Rule::in(['asc', 'desc'])],
             'pageSize' => ['prohibited'],

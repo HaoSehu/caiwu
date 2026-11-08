@@ -26,7 +26,7 @@ class MediaStorageRewriteUrlsCommandTest extends TestCase
 {
     use DatabaseTransactions;
 
-    private const OLD_URL = 'http://154.219.97.172/media/img_155342_g76d3jXT.jpg';
+    private const OLD_URL = 'http://192.0.2.10/media/img_155342_g76d3jXT.jpg';
 
     private const NEW_URL = 'https://media.example.com/media/img_155342_g76d3jXT.jpg';
 

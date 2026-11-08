@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Http\Requests\Admin\V2\CouponProductGroup;
 
 use App\Http\Requests\Admin\V2\Common\AdminFormRequest;
-use App\Support\Pagination;
 use Illuminate\Validation\Rule;
 
 class ListCouponProductGroupChildrenRequest extends AdminFormRequest
@@ -18,10 +17,9 @@ class ListCouponProductGroupChildrenRequest extends AdminFormRequest
     public function rules(): array
     {
         return [
+            ...$this->paginationRules(),
             'group' => ['required', 'integer', 'min:1'],
             'level' => ['required', 'integer', Rule::in([1, 2])],
-            'page' => ['nullable', 'integer', 'min:1'],
-            'page_size' => ['nullable', 'integer', 'min:1', 'max:'.Pagination::MAX_PAGE_SIZE],
             'per_page' => ['prohibited'],
             'keyword' => ['nullable', 'string', 'max:100'],
             'status' => ['nullable', 'integer', Rule::in([0, 1])],

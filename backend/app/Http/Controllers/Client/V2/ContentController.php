@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Client\V2;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Client\V2\Action\ClientActionRequest;
 use App\Http\Requests\V2\Content\ListPublishedContentRequest;
 use App\Http\Requests\V2\Content\ShowContentOverviewRequest;
 use App\Http\Requests\V2\Content\ShowPublishedContentRequest;
+use App\Http\Resources\V2\ActionResultResource;
 use App\Models\ContentArticle;
+use App\Services\Client\V2\ClientActionV2Service;
 use App\Services\Content\ContentV2QueryService;
 use App\Services\Content\NoticeReadService;
 use Illuminate\Http\Request;
@@ -18,7 +21,15 @@ class ContentController extends Controller
     public function __construct(
         private readonly ContentV2QueryService $contentQueryService,
         private readonly NoticeReadService $noticeReadService,
+        private readonly ClientActionV2Service $actions,
     ) {}
+
+    public function markNoticeRead(ClientActionRequest $request, int $article)
+    {
+        return $this->success(ActionResultResource::make(
+            $this->actions->markNoticeRead($request->user(), $article)
+        )->resolve(), '公告已标记为已读');
+    }
 
     public function overview(ShowContentOverviewRequest $request)
     {

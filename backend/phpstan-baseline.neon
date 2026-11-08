@@ -157,12 +157,6 @@ parameters:
 			path: app/Http/Controllers/Admin/V2/IntegrationPluginController.php
 
 		-
-			message: '#^Using nullsafe property access "\?\-\>id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Http/Controllers/Admin/V2/IntegrationPluginController.php
-
-		-
 			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
@@ -255,12 +249,6 @@ parameters:
 		-
 			message: '#^Access to an undefined property App\\Models\\AdminUser\|App\\Models\\User\:\:\$name\.$#'
 			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Admin/V2/SupplierController.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Http/Controllers/Admin/V2/SupplierController.php
 
@@ -631,12 +619,6 @@ parameters:
 			path: app/Http/Resources/Admin/V2/AdminRoleDetailResource.php
 
 		-
-			message: '#^Parameter \#1 \$array \(array\{\}\|array\{string\}\) of array_values is already a list, call has no effect\.$#'
-			identifier: arrayValues.list
-			count: 1
-			path: app/Http/Resources/Admin/V2/AdminRoleListItemResource.php
-
-		-
 			message: '#^Cannot call method format\(\) on string\.$#'
 			identifier: method.nonObject
 			count: 1
@@ -647,18 +629,6 @@ parameters:
 			identifier: notIdentical.alwaysTrue
 			count: 1
 			path: app/Http/Resources/Admin/V2/AdminStaffDetailResource.php
-
-		-
-			message: '#^Cannot call method format\(\) on string\.$#'
-			identifier: method.nonObject
-			count: 1
-			path: app/Http/Resources/Admin/V2/AdminStaffListItemResource.php
-
-		-
-			message: '#^Strict comparison using \!\=\= between int\<0, max\> and null will always evaluate to true\.$#'
-			identifier: notIdentical.alwaysTrue
-			count: 1
-			path: app/Http/Resources/Admin/V2/AdminStaffListItemResource.php
 
 		-
 			message: '#^Using nullsafe property access "\?\-\>label" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
@@ -1025,7 +995,6 @@ parameters:
 			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Models/ReferralWithdrawal.php
-
 
 		-
 			message: '#^Call to function is_array\(\) with array\<string, mixed\> will always evaluate to true\.$#'
@@ -1586,12 +1555,6 @@ parameters:
 			path: app/Services/ClientServiceConsole/ClientServiceConsoleService.php
 
 		-
-			message: '#^Right side of && is always true\.$#'
-			identifier: booleanAnd.rightAlwaysTrue
-			count: 2
-			path: app/Services/ClientServiceConsole/ClientServiceConsoleService.php
-
-		-
 			message: '#^Call to an undefined method App\\Services\\Upstream\\Contracts\\ProvidesConsoleRuntime\:\:getText\(\)\.$#'
 			identifier: method.notFound
 			count: 1
@@ -2122,13 +2085,13 @@ parameters:
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$email\.$#'
 			identifier: property.notFound
-			count: 2
+			count: 1
 			path: app/Services/Finance/AdminFinanceQueryService.php
 
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
 			identifier: property.notFound
-			count: 4
+			count: 3
 			path: app/Services/Finance/AdminFinanceQueryService.php
 
 		-
@@ -2158,12 +2121,6 @@ parameters:
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$phone\.$#'
 			identifier: property.notFound
-			count: 2
-			path: app/Services/Finance/AdminFinanceQueryService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$product_type\.$#'
-			identifier: property.notFound
 			count: 1
 			path: app/Services/Finance/AdminFinanceQueryService.php
 
@@ -2186,12 +2143,6 @@ parameters:
 			path: app/Services/Finance/AdminFinanceQueryService.php
 
 		-
-			message: '#^Cannot call method format\(\) on string\.$#'
-			identifier: method.nonObject
-			count: 2
-			path: app/Services/Finance/AdminFinanceQueryService.php
-
-		-
 			message: '#^Offset ''combined_display…'' on array\{product_display_name\: string, product_spec_display\: string, custom_display_name\: string, cpu_memory_display\: string, cpu_memory_slug_display\: string, combined_display_name\: string, instance_spec_text\: string, cpu_display\: string, \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
 			count: 1
@@ -2210,18 +2161,6 @@ parameters:
 			path: app/Services/Finance/AdminFinanceQueryService.php
 
 		-
-			message: '#^Parameter \#1 \$collection of method Illuminate\\Pagination\\AbstractPaginator\<int,App\\Models\\Order\>\:\:setCollection\(\) expects Illuminate\\Support\\Collection\<int, App\\Models\\Order\>, Illuminate\\Support\\Collection\<int, array\> given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Services/Finance/AdminFinanceQueryService.php
-
-		-
-			message: '#^Parameter \#1 \$collection of method Illuminate\\Pagination\\AbstractPaginator\<int,App\\Models\\Order\>\:\:setCollection\(\) expects Illuminate\\Support\\Collection\<int, App\\Models\\Order\>, Illuminate\\Support\\Collection\<int, non\-empty\-array\> given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Services/Finance/AdminFinanceQueryService.php
-
-		-
 			message: '#^Parameter \#1 \$collection of method Illuminate\\Pagination\\AbstractPaginator\<int,App\\Models\\Payment\>\:\:setCollection\(\) expects Illuminate\\Support\\Collection\<int, App\\Models\\Payment\>, Illuminate\\Support\\Collection\<int, array\> given\.$#'
 			identifier: argument.type
 			count: 1
@@ -2230,7 +2169,7 @@ parameters:
 		-
 			message: '#^Using nullsafe property access "\?\-\>product_type" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
-			count: 2
+			count: 1
 			path: app/Services/Finance/AdminFinanceQueryService.php
 
 		-
@@ -2354,36 +2293,6 @@ parameters:
 			path: app/Services/Finance/ClientInvoicePaymentWorkflowService.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Payment\:\:\$cancelled\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Finance/ClientPaymentQueryService.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Payment\:\:\$pending\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Finance/ClientPaymentQueryService.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Payment\:\:\$refunded\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Finance/ClientPaymentQueryService.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Payment\:\:\$success\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Finance/ClientPaymentQueryService.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Payment\:\:\$total\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Finance/ClientPaymentQueryService.php
-
-		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$amount\.$#'
 			identifier: property.notFound
 			count: 1
@@ -2420,12 +2329,6 @@ parameters:
 			path: app/Services/Finance/ClientPaymentQueryService.php
 
 		-
-			message: '#^Using nullsafe property access "\?\-\>cancelled" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Services/Finance/ClientPaymentQueryService.php
-
-		-
 			message: '#^Using nullsafe property access "\?\-\>id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
@@ -2433,30 +2336,6 @@ parameters:
 
 		-
 			message: '#^Using nullsafe property access "\?\-\>invoice_no" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Services/Finance/ClientPaymentQueryService.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>pending" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Services/Finance/ClientPaymentQueryService.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>refunded" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Services/Finance/ClientPaymentQueryService.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>success" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Services/Finance/ClientPaymentQueryService.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>total" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Services/Finance/ClientPaymentQueryService.php
@@ -2510,12 +2389,6 @@ parameters:
 			path: app/Services/Finance/CouponCampaignService.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$first_order_only\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Finance/Coupons/CouponOwnershipService.php
-
-		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
 			identifier: property.notFound
 			count: 1
@@ -2558,16 +2431,22 @@ parameters:
 			path: app/Services/Finance/CouponService.php
 
 		-
-			message: '#^Using nullsafe property access "\?\-\>first_order_only" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Services/Finance/Coupons/CouponOwnershipService.php
-
-		-
 			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Services/Finance/CouponService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$first_order_only\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Services/Finance/Coupons/CouponOwnershipService.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>first_order_only" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Services/Finance/Coupons/CouponOwnershipService.php
 
 		-
 			message: '#^Access to an undefined property App\\Models\\FinanceLedgerEntry\:\:\$invoice_payment_out\.$#'
@@ -2636,92 +2515,8 @@ parameters:
 			path: app/Services/Finance/FinanceLedgerQueryService.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Finance/FinanceLedgerQueryService.php
-
-		-
-			message: '#^Cannot call method format\(\) on string\.$#'
-			identifier: method.nonObject
-			count: 4
-			path: app/Services/Finance/FinanceLedgerQueryService.php
-
-		-
-			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,App\\Models\\PaymentCallback\>\:\:map\(\) contains unresolvable type\.$#'
-			identifier: argument.unresolvableType
-			count: 1
-			path: app/Services/Finance/FinanceLedgerQueryService.php
-
-		-
-			message: '#^Parameter \#1 \$record of method App\\Services\\Finance\\FinanceLedgerQueryService\:\:buildClientDetailPayload\(\) expects App\\Models\\FinanceLedgerEntry, Illuminate\\Database\\Eloquent\\Model given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Services/Finance/FinanceLedgerQueryService.php
-
-		-
-			message: '#^Parameter \#1 \$record of method App\\Services\\Finance\\FinanceLedgerQueryService\:\:buildDetailPayload\(\) expects App\\Models\\FinanceLedgerEntry, Illuminate\\Database\\Eloquent\\Model given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Services/Finance/FinanceLedgerQueryService.php
-
-		-
-			message: '#^Parameter \#1 \$service of method App\\Services\\Finance\\FinanceLedgerQueryService\:\:serviceProvisionData\(\) expects App\\Models\\Service\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Services/Finance/FinanceLedgerQueryService.php
-
-		-
-			message: '#^Parameter \#1 \$service of static method App\\Support\\ServiceHostname\:\:resolveDisplayDomain\(\) expects App\\Models\\Service\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Services/Finance/FinanceLedgerQueryService.php
-
-		-
-			message: '#^Parameter \#1 \$service of static method App\\Support\\ServiceHostname\:\:resolveInstanceName\(\) expects App\\Models\\Service\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Services/Finance/FinanceLedgerQueryService.php
-
-		-
 			message: '#^Strict comparison using \!\=\= between mixed and null will always evaluate to true\.$#'
 			identifier: notIdentical.alwaysTrue
-			count: 1
-			path: app/Services/Finance/FinanceLedgerQueryService.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>amount" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 2
-			path: app/Services/Finance/FinanceLedgerQueryService.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>billing_cycle" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 2
-			path: app/Services/Finance/FinanceLedgerQueryService.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>config_pricing_snapshot" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 2
-			path: app/Services/Finance/FinanceLedgerQueryService.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>config_snapshot" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 2
-			path: app/Services/Finance/FinanceLedgerQueryService.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>display_product_name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 2
-			path: app/Services/Finance/FinanceLedgerQueryService.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Services/Finance/FinanceLedgerQueryService.php
 
@@ -2738,24 +2533,6 @@ parameters:
 			path: app/Services/Finance/FinanceLedgerQueryService.php
 
 		-
-			message: '#^Using nullsafe property access "\?\-\>payment_no" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Services/Finance/FinanceLedgerQueryService.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>product_spec_snapshot" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 2
-			path: app/Services/Finance/FinanceLedgerQueryService.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>quantity" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 2
-			path: app/Services/Finance/FinanceLedgerQueryService.php
-
-		-
 			message: '#^Using nullsafe property access "\?\-\>recharge_in" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
@@ -2765,12 +2542,6 @@ parameters:
 			message: '#^Using nullsafe property access "\?\-\>refund_in" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
-			path: app/Services/Finance/FinanceLedgerQueryService.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>service_id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 2
 			path: app/Services/Finance/FinanceLedgerQueryService.php
 
 		-
@@ -2821,13 +2592,11 @@ parameters:
 			count: 1
 			path: app/Services/Finance/InvoicePaidOrchestrator.php
 
-
 		-
 			message: '#^Using nullsafe property access "\?\-\>display_product_name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Services/Finance/InvoicePaidOrchestrator.php
-
 
 		-
 			message: '#^Using nullsafe property access "\?\-\>id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
@@ -2835,13 +2604,11 @@ parameters:
 			count: 3
 			path: app/Services/Finance/InvoicePaidOrchestrator.php
 
-
 		-
 			message: '#^Using nullsafe property access "\?\-\>service_id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Services/Finance/InvoicePaidOrchestrator.php
-
 
 		-
 			message: '#^Using nullsafe property access "\?\-\>type" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
@@ -3144,36 +2911,6 @@ parameters:
 			path: app/Services/Notification/InboxService.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Order\:\:\$cancelled\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Order/ClientOrderQueryService.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Order\:\:\$paid\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Order/ClientOrderQueryService.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Order\:\:\$pending\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Order/ClientOrderQueryService.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Order\:\:\$refunded\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Order/ClientOrderQueryService.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Order\:\:\$total\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Order/ClientOrderQueryService.php
-
-		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$code\.$#'
 			identifier: property.notFound
 			count: 1
@@ -3222,37 +2959,7 @@ parameters:
 			path: app/Services/Order/ClientOrderQueryService.php
 
 		-
-			message: '#^Using nullsafe property access "\?\-\>cancelled" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Services/Order/ClientOrderQueryService.php
-
-		-
 			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Services/Order/ClientOrderQueryService.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>paid" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Services/Order/ClientOrderQueryService.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>pending" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Services/Order/ClientOrderQueryService.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>refunded" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Services/Order/ClientOrderQueryService.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>total" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Services/Order/ClientOrderQueryService.php
@@ -3844,7 +3551,6 @@ parameters:
 			identifier: return.type
 			count: 1
 			path: app/Services/ProductCatalog/ProductSyncService.php
-
 
 		-
 			message: '#^Offset ''product_display_name'' on array\{product_display_name\: string, product_spec_display\: string, custom_display_name\: string, cpu_memory_display\: string, cpu_memory_slug_display\: string, combined_display_name\: string, instance_spec_text\: string, cpu_display\: string, \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'
@@ -5023,12 +4729,6 @@ parameters:
 			path: app/Services/System/DashboardService.php
 
 		-
-			message: '#^Using nullsafe property access "\?\-\>email" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Services/System/DashboardService.php
-
-		-
 			message: '#^Using nullsafe property access "\?\-\>month_income" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
@@ -5042,12 +4742,6 @@ parameters:
 
 		-
 			message: '#^Using nullsafe property access "\?\-\>month_new_users" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Services/System/DashboardService.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>nickname" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Services/System/DashboardService.php
@@ -5743,38 +5437,8 @@ parameters:
 			path: app/Services/User/UserService.php
 
 		-
-			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<Illuminate\\Database\\Eloquent\\Model\>\:\:whereGatewayKeyIn\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: app/Services/User/UserService.php
-
-		-
-			message: '#^Cannot call method format\(\) on string\.$#'
-			identifier: method.nonObject
-			count: 1
-			path: app/Services/User/UserService.php
-
-		-
 			message: '#^Instanceof between App\\Models\\Invoice and App\\Models\\Invoice will always evaluate to true\.$#'
 			identifier: instanceof.alwaysTrue
-			count: 1
-			path: app/Services/User/UserService.php
-
-		-
-			message: '#^Method App\\Services\\User\\UserService\:\:findUserInvoice\(\) should return App\\Models\\Invoice but returns Illuminate\\Database\\Eloquent\\Model\.$#'
-			identifier: return.type
-			count: 1
-			path: app/Services/User/UserService.php
-
-		-
-			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:map\(\) expects callable\(Illuminate\\Database\\Eloquent\\Model, int\)\: array, Closure\(App\\Models\\Invoice\)\: array given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Services/User/UserService.php
-
-		-
-			message: '#^Parameter \#1 \$collection of method Illuminate\\Pagination\\AbstractPaginator\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:setCollection\(\) expects Illuminate\\Support\\Collection\<int, Illuminate\\Database\\Eloquent\\Model\>, Illuminate\\Support\\Collection\<int, array\> given\.$#'
-			identifier: argument.type
 			count: 1
 			path: app/Services/User/UserService.php
 

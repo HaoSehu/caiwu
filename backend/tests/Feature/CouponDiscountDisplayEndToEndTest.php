@@ -67,6 +67,13 @@ class CouponDiscountDisplayEndToEndTest extends TestCase
         $this->assertSame(self::COUPON_DISCOUNT, (string) $quote['discount_amount']);
         $this->assertSame(self::PAYABLE_AMOUNT, (string) $quote['total_amount']);
 
+        // 已选券契约：券文案横幅读 code/discount_label/discount_amount，
+        // id 为 user_coupons.id（与候选券列表同一规范形状）
+        $applied = (array) ($quote['coupon'] ?? []);
+        $this->assertSame($userCouponId, (int) ($applied['id'] ?? 0), '报价已选券缺 id（= user_coupon_id）');
+        $this->assertSame('8 折优惠', (string) ($applied['discount_label'] ?? ''), '报价已选券缺 discount_label');
+        $this->assertSame(self::COUPON_DISCOUNT, (string) ($applied['discount_amount'] ?? ''), '报价已选券缺 discount_amount');
+
         // 落库口径：两类折扣分列，且 amount 是应付价（三者相加还原目录价）
         $this->assertSame(self::PAYABLE_AMOUNT, number_format((float) $invoice->amount, 2, '.', ''));
         $this->assertSame(self::COUPON_DISCOUNT, number_format((float) $invoice->discount, 2, '.', ''));
@@ -109,6 +116,34 @@ class CouponDiscountDisplayEndToEndTest extends TestCase
         // 管理端读接口（已支付状态）
         Sanctum::actingAs($this->makeAdmin());
         $this->assertAdminSurfaces($order->id, $invoice->id, $coupon);
+    }
+
+    public function test_quote_available_coupons_expose_id_and_label_for_frontend_picker(): void
+    {
+        [$user, $product, $coupon] = $this->fixture();
+
+        // fixture() 只建券模板（public 券不发放持有记录），用户手里还没有券，
+        // 必须先真实领取一张，才能断言报价返回的候选券结构
+        Sanctum::actingAs($user);
+        $userCouponId = (int) $this->postJson("/api/v2/client/coupons/{$coupon['id']}/claim")
+            ->assertOk()
+            ->json('data.id');
+        $this->assertGreaterThan(0, $userCouponId);
+
+        // 不选券报价：候选券列表必须带 id（前端下拉 value）与 discount_label（选项文案），
+        // 否则官网页面的券下拉全是 undefined，用户无法选券
+        $quote = $this->postJson("/api/v2/site/products/{$product->id}/quote", [
+            'billing_cycle' => 'monthly',
+            'quantity' => 1,
+        ])->assertOk()->json('data');
+
+        $available = (array) ($quote['available_coupons'] ?? []);
+        $this->assertNotEmpty($available, '报价未返回可用券列表');
+
+        $matched = collect($available)->firstWhere('id', $userCouponId);
+        $this->assertIsArray($matched, '可用券列表缺该券的 id（前端下拉 value 会是 undefined）');
+        $this->assertSame('8 折优惠', (string) ($matched['discount_label'] ?? ''), '可用券缺 discount_label');
+        $this->assertSame(self::COUPON_DISCOUNT, (string) ($matched['discount_amount'] ?? ''), '可用券缺 discount_amount');
     }
 
     public function test_coupon_is_consumed_after_payment_and_cannot_be_reused(): void

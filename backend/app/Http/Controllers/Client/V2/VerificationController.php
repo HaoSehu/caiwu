@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Client\V2\Verification\InitVerificationRequest;
 use App\Http\Requests\Client\V2\Verification\QrcodeRequest;
 use App\Http\Requests\Client\V2\Verification\StatusRequest;
+use App\Models\User;
 use App\Services\Auth\VerificationService;
 use App\Support\PublicUrl;
 use Illuminate\Http\Request;
@@ -139,8 +140,8 @@ class VerificationController extends Controller
             return $this->error(40000, '您已完成实名认证');
         }
 
-        // 仅“认证失败”状态允许复用资料重新发起；待认证/未提交等状态应先查询结果或重新提交。
-        if ((int) $user->verification_status !== 3) {
+        // 仅「认证失败」状态允许复用资料重新发起；待认证/未提交等状态应先查询结果或重新提交。
+        if ((int) $user->verification_status !== User::VERIFICATION_STATUS_FAILED) {
             return $this->error(42200, '当前状态不支持重新认证，请先查询认证结果');
         }
 

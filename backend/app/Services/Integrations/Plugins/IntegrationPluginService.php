@@ -254,6 +254,170 @@ class IntegrationPluginService
     }
 
     /**
+     * 提交短信模板到运营商审核（官方 POST /sms/templates；带 id 表示修改）。
+     *
+     * 支持两种入参：
+     * - `templates`：预置模板数组（管理端从 {@see smsTemplatePresets()} 勾选后提交），逐条提交；
+     * - 顶层 `name`/`content`：单条提交（保留给自定义场景）。
+     *
+     * 单条失败不阻断其余，失败原因原样带回，由管理端逐条展示。
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    public function submitSmsTemplate(IntegrationPlugin $plugin, array $payload): array
+    {
+        if (! SchemaMetadataCache::hasTable('integration_plugins')) {
+            throw new BusinessException('插件系统尚未初始化', 42200);
+        }
+
+        if (! $plugin->isEnabled()) {
+            throw new BusinessException('插件未启用，无法提交短信模板', 42200);
+        }
+
+        $items = $this->normalizeTemplateSubmissions($payload);
+        if ($items === []) {
+            throw new BusinessException('模板名称与内容不能为空', 42200);
+        }
+
+        $submitted = 0;
+        $failed = 0;
+        $results = [];
+        foreach ($items as $item) {
+            $name = trim((string) ($item['name'] ?? ''));
+            $content = trim((string) ($item['content'] ?? ''));
+            if ($name === '' || $content === '') {
+                $failed++;
+                $results[] = ['name' => $name, 'success' => false, 'message' => '模板名称与内容不能为空'];
+
+                continue;
+            }
+
+            try {
+                $result = $this->runtimeRegistry->execute(
+                    domain: (string) $plugin->domain,
+                    slugOrKey: (string) $plugin->slug,
+                    action: 'sms.templates.push',
+                    payload: [
+                        'title' => $name,
+                        'content' => $content,
+                        'remark' => trim((string) ($item['remark'] ?? '')),
+                        'scene' => trim((string) ($item['scene'] ?? '')),
+                        'sample_image' => trim((string) ($item['sample_image'] ?? '')),
+                        'provider_template_id' => trim((string) ($item['provider_template_id'] ?? '')),
+                    ],
+                );
+
+                if (($result['success'] ?? false) === true) {
+                    $submitted++;
+                    $results[] = [
+                        'name' => $name,
+                        'success' => true,
+                        'provider_template_id' => (string) ($result['data']['provider_template_id'] ?? ''),
+                        'status' => (string) ($result['data']['status'] ?? 'pending'),
+                    ];
+                } else {
+                    $failed++;
+                    $results[] = ['name' => $name, 'success' => false, 'message' => (string) ($result['message'] ?? '提交失败')];
+                }
+            } catch (\Throwable $exception) {
+                $failed++;
+                $results[] = ['name' => $name, 'success' => false, 'message' => $exception->getMessage()];
+            }
+        }
+
+        return [
+            'success' => $failed === 0,
+            'submitted' => $submitted,
+            'failed' => $failed,
+            'results' => $results,
+            'message' => $failed === 0
+                ? sprintf('已提交 %d 条模板，等待审核', $submitted)
+                : sprintf('提交完成：成功 %d 条，失败 %d 条', $submitted, $failed),
+            'data' => [
+                'success' => $failed === 0,
+                'submitted' => $submitted,
+                'failed' => $failed,
+                'results' => $results,
+            ],
+        ];
+    }
+
+    /**
+     * 归一提交入参：批量 `templates` 优先，其次单条顶层字段。
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<int, array<string, mixed>>
+     */
+    private function normalizeTemplateSubmissions(array $payload): array
+    {
+        $templates = $payload['templates'] ?? null;
+        if (is_array($templates) && $templates !== []) {
+            return array_values(array_filter($templates, static fn (mixed $item): bool => is_array($item)));
+        }
+
+        if (trim((string) ($payload['name'] ?? '')) === '' && trim((string) ($payload['content'] ?? '')) === '') {
+            return [];
+        }
+
+        return [[
+            'name' => $payload['name'] ?? '',
+            'content' => $payload['content'] ?? '',
+            'scene' => $payload['scene'] ?? '',
+            'remark' => $payload['remark'] ?? '',
+            'sample_image' => $payload['sample_image'] ?? '',
+            'provider_template_id' => $payload['provider_template_id'] ?? '',
+        ]];
+    }
+
+    /**
+     * 查询运营商模板列表（官方 GET /sms/templates），用于提交后确认。
+     *
+     * @return array<string, mixed>
+     */
+    public function listSmsTemplates(IntegrationPlugin $plugin): array
+    {
+        if (! SchemaMetadataCache::hasTable('integration_plugins')) {
+            throw new BusinessException('插件系统尚未初始化', 42200);
+        }
+
+        if (! $plugin->isEnabled()) {
+            throw new BusinessException('插件未启用，无法查询短信模板', 42200);
+        }
+
+        return $this->runtimeRegistry->execute(
+            domain: (string) $plugin->domain,
+            slugOrKey: (string) $plugin->slug,
+            action: 'sms.templates.pull',
+        );
+    }
+
+    /**
+     * 读取插件预置的短信模板种子（供管理端选择提交，而不是手工填写）。
+     *
+     * 种子由插件 `sms.templates.defaults` 提供，与「导入默认模板」同源，
+     * 保证管理端看到的清单与插件实际支持的业务场景一致。
+     *
+     * @return array<string, mixed>
+     */
+    public function smsTemplatePresets(IntegrationPlugin $plugin): array
+    {
+        if (! SchemaMetadataCache::hasTable('integration_plugins')) {
+            throw new BusinessException('插件系统尚未初始化', 42200);
+        }
+
+        if (! $plugin->isEnabled()) {
+            throw new BusinessException('插件未启用，无法读取预置模板', 42200);
+        }
+
+        return $this->runtimeRegistry->execute(
+            domain: (string) $plugin->domain,
+            slugOrKey: (string) $plugin->slug,
+            action: 'sms.templates.defaults',
+        );
+    }
+
+    /**
      * @param  array<string, mixed>  $payload
      * @return array<string, mixed>
      */

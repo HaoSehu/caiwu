@@ -13,10 +13,9 @@ use App\Http\Requests\Admin\V2\Staff\ResetStaffPasswordRequest;
 use App\Http\Requests\Admin\V2\Staff\ShowStaffRequest;
 use App\Http\Requests\Admin\V2\Staff\UpdateStaffRequest;
 use App\Http\Requests\Admin\V2\Staff\UpdateStaffStatusRequest;
-use App\Http\Resources\Admin\V2\AdminActionResultResource;
 use App\Http\Resources\Admin\V2\AdminStaffDetailResource;
-use App\Http\Resources\Admin\V2\AdminStaffListItemResource;
 use App\Http\Resources\Admin\V2\AdminStaffRoleOptionResource;
+use App\Http\Resources\V2\ActionResultResource;
 use App\Models\AdminUser;
 use App\Services\Admin\Rbac\AdminStaffService;
 use App\Services\Admin\V2\AdminRbacActionV2Service;
@@ -32,7 +31,7 @@ class StaffController extends Controller
     {
         return $this->paginate(
             $this->staffService->list($request->filters(), $request->perPage()),
-            AdminStaffListItemResource::class,
+            AdminStaffDetailResource::class,
         );
     }
 
@@ -77,14 +76,14 @@ class StaffController extends Controller
     {
         $result = $this->actions->updateStaffStatus($staff, $request->enabled(), $request->user(), $request->ip());
 
-        return $this->success(AdminActionResultResource::make($result)->resolve(), (string) $result['message']);
+        return $this->success(ActionResultResource::make($result)->resolve(), (string) $result['message']);
     }
 
     public function resetPassword(ResetStaffPasswordRequest $request, AdminUser $staff)
     {
         $result = $this->actions->resetStaffPassword($staff, $request->password(), $request->user(), $request->ip());
 
-        return $this->success(AdminActionResultResource::make($result)->resolve(), (string) $result['message']);
+        return $this->success(ActionResultResource::make($result)->resolve(), (string) $result['message']);
     }
 
     public function destroy(DeleteStaffRequest $request, AdminUser $staff)

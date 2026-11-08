@@ -9,7 +9,6 @@ use App\Http\Controllers\Admin\V2\CouponProductGroupController;
 use App\Http\Controllers\Admin\V2\CpuModelCatalogController;
 use App\Http\Controllers\Admin\V2\DashboardController;
 use App\Http\Controllers\Admin\V2\DatabaseStatusController;
-use App\Http\Controllers\Admin\V2\FinanceLedgerController;
 use App\Http\Controllers\Admin\V2\FinanceMenuController;
 use App\Http\Controllers\Admin\V2\HomeHeroController;
 use App\Http\Controllers\Admin\V2\InstanceSpecCatalogController;
@@ -35,7 +34,6 @@ use App\Http\Controllers\Admin\V2\ServiceController;
 use App\Http\Controllers\Admin\V2\SettingController;
 use App\Http\Controllers\Admin\V2\StaffController;
 use App\Http\Controllers\Admin\V2\SupplierController;
-use App\Http\Controllers\Admin\V2\SystemReadinessController;
 use App\Http\Controllers\Admin\V2\TicketController;
 use App\Http\Controllers\Admin\V2\UserController;
 use App\Http\Controllers\Admin\V2\UserServiceController;
@@ -63,7 +61,6 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
 
     Route::middleware(['permission:'.AdminPermissions::DASHBOARD_VIEW])->group(function (): void {
         Route::get('/dashboard/stats', [DashboardController::class, 'stats']);
-        Route::get('/dashboard/recent-invoices', [DashboardController::class, 'recentInvoices']);
         Route::get('/dashboard/monthly-revenue', [DashboardController::class, 'monthlyRevenue']);
     });
 
@@ -84,16 +81,11 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
 
     Route::middleware(['permission:'.AdminPermissions::INVOICE_LIST])->group(function (): void {
         Route::get('/invoices', [InvoiceController::class, 'index']);
-        Route::get('/finance/ledger', [FinanceLedgerController::class, 'index']);
-        Route::get('/finance/ledger/summary', [FinanceLedgerController::class, 'summary']);
         Route::get('/finance/recharges', [FinanceMenuController::class, 'recharges']);
-        Route::get('/finance/renewal-orders', [FinanceMenuController::class, 'renewalOrders']);
-        Route::get('/finance/upgrade-orders', [FinanceMenuController::class, 'upgradeOrders']);
     });
 
     Route::middleware(['permission:'.AdminPermissions::INVOICE_DETAIL])->group(function (): void {
         Route::get('/invoices/{invoice}', [InvoiceController::class, 'show']);
-        Route::get('/finance/ledger/{id}', [FinanceLedgerController::class, 'show']);
     });
 
     Route::middleware(['permission:'.AdminPermissions::INVOICE_MANAGE])->group(function (): void {
@@ -129,7 +121,6 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
 
     Route::middleware(['permission:'.AdminPermissions::FINANCE_REPORT])->group(function (): void {
         Route::get('/finance/new-customer-daily-summary', [FinanceMenuController::class, 'newCustomerDailySummary']);
-        Route::get('/finance/product-income-summary', [FinanceMenuController::class, 'productIncomeSummary']);
     });
 
     Route::middleware(['permission:'.AdminPermissions::USER_LIST])->group(function (): void {
@@ -139,8 +130,6 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
     Route::middleware(['permission:'.AdminPermissions::USER_DETAIL])->group(function (): void {
         Route::get('/users/{user}', [UserController::class, 'show']);
         Route::get('/users/{user}/services', [UserServiceController::class, 'index']);
-        Route::get('/users/{user}/invoices', [UserController::class, 'invoices']);
-        Route::get('/users/{user}/invoices/{invoice}', [UserController::class, 'invoiceDetail']);
         Route::get('/users/{user}/orders', [UserController::class, 'orders']);
         Route::get('/users/{user}/recharge-records', [UserController::class, 'rechargeRecords']);
         Route::get('/users/{user}/tickets', [UserController::class, 'tickets']);
@@ -313,17 +302,11 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
 
     Route::middleware(['permission:'.AdminPermissions::SCHEDULE_VIEW])->group(function (): void {
         Route::get('/schedules/overview', [ScheduleTaskController::class, 'overview']);
-        Route::get('/schedule-runs', [ScheduleTaskController::class, 'index']);
-        Route::get('/schedule-runs/{run}', [ScheduleTaskController::class, 'show']);
         Route::get('/schedule-queue-jobs', [ScheduleTaskController::class, 'queueJobs']);
     });
 
     Route::middleware(['permission:'.AdminPermissions::SCHEDULE_TRIGGER])->group(function (): void {
         Route::post('/schedule-triggers', [ScheduleTaskController::class, 'trigger']);
-    });
-
-    Route::middleware(['permission:'.AdminPermissions::SCHEDULE_RETRY])->group(function (): void {
-        Route::post('/schedule-runs/{run}/retry', [ScheduleTaskController::class, 'retry']);
     });
 
     Route::middleware(['permission:'.AdminPermissions::SCHEDULE_QUEUE_MANAGE])->group(function (): void {
@@ -460,10 +443,10 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
         Route::post('/notification-templates/sms/provider-template/import-defaults', [SettingController::class, 'importDefaultSmsProviderTemplates'])->middleware('throttle:20,1');
         Route::post('/notification-templates/sms/provider-template/submit-all', [SettingController::class, 'submitAllSmsProviderTemplates'])->middleware('throttle:20,1');
         Route::post('/notification-templates/sms/provider-template', [SettingController::class, 'createSmsProviderTemplate']);
-        Route::post('/notification-templates/sms/provider-template/{id}/update', [SettingController::class, 'updateSmsProviderTemplate']);
+        Route::put('/notification-templates/sms/provider-template/{id}', [SettingController::class, 'updateSmsProviderTemplate']);
         Route::post('/notification-templates/sms/provider-template/{id}/submit', [SettingController::class, 'submitSmsProviderTemplateForReview'])->middleware('throttle:20,1');
         Route::post('/notification-templates/sms/provider-template/{id}/refresh', [SettingController::class, 'refreshSmsProviderTemplateById'])->middleware('throttle:20,1');
-        Route::post('/notification-templates/sms/provider-template/{id}/deletion', [SettingController::class, 'deleteSmsProviderTemplate']);
+        Route::delete('/notification-templates/sms/provider-template/{id}', [SettingController::class, 'deleteSmsProviderTemplate']);
         Route::post('/notification-templates/sms/{code}/provider-link', [SettingController::class, 'linkSmsProviderTemplate']);
         Route::post('/settings', [SettingController::class, 'update']);
     });
@@ -474,7 +457,6 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
 
     Route::middleware(['permission:'.AdminPermissions::DATABASE_VIEW])->group(function (): void {
         Route::get('/database/status', [DatabaseStatusController::class, 'status']);
-        Route::get('/system/readiness', [SystemReadinessController::class, 'show']);
     });
 
     Route::middleware(['permission:'.AdminPermissions::DATABASE_MANAGE, 'throttle:admin-privilege-write'])->group(function (): void {

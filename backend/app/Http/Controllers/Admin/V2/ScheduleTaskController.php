@@ -7,15 +7,11 @@ namespace App\Http\Controllers\Admin\V2;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\V2\Schedule\ClearQueueJobsRequest;
 use App\Http\Requests\Admin\V2\Schedule\ListQueueJobsRequest;
-use App\Http\Requests\Admin\V2\Schedule\ListScheduleTaskRunsRequest;
-use App\Http\Requests\Admin\V2\Schedule\RetryScheduleTaskRunRequest;
 use App\Http\Requests\Admin\V2\Schedule\ShowScheduleOverviewRequest;
-use App\Http\Requests\Admin\V2\Schedule\ShowScheduleTaskRunRequest;
 use App\Http\Requests\Admin\V2\Schedule\TriggerScheduleTaskRequest;
-use App\Http\Resources\Admin\V2\AdminActionResultResource;
 use App\Http\Resources\Admin\V2\AdminQueueJobResource;
 use App\Http\Resources\Admin\V2\AdminScheduleOverviewResource;
-use App\Http\Resources\Admin\V2\AdminScheduleTaskRunResource;
+use App\Http\Resources\V2\ActionResultResource;
 use App\Services\Admin\V2\AdminOperationalActionV2Service;
 use App\Services\Automation\QueueJobService;
 use App\Services\Automation\ScheduleTaskService;
@@ -49,52 +45,7 @@ class ScheduleTaskController extends Controller
             return $this->error(42200, $exception->getMessage());
         }
 
-        return $this->success(AdminActionResultResource::make($result)->resolve(), (string) $result['message']);
-    }
-
-    public function index(ListScheduleTaskRunsRequest $request): JsonResponse
-    {
-        $filters = $request->validated();
-        $filters['status'] = $request->statuses();
-        $page = max(1, (int) ($filters['page'] ?? 1));
-        $perPage = max(1, min(100, (int) ($filters['page_size'] ?? 20)));
-
-        return $this->paginate(
-            $this->scheduleTasks->paginateRuns($filters, $page, $perPage),
-            AdminScheduleTaskRunResource::class,
-        );
-    }
-
-    public function show(ShowScheduleTaskRunRequest $request, int $run): JsonResponse
-    {
-        $taskRun = $this->scheduleTasks->runDetail($run);
-        if ($taskRun === null) {
-            return $this->error(40400, '运行记录不存在');
-        }
-
-        return $this->success([
-            'run' => AdminScheduleTaskRunResource::make($taskRun)->resolve(),
-        ]);
-    }
-
-    public function retry(RetryScheduleTaskRunRequest $request, int $run): JsonResponse
-    {
-        if ($this->scheduleTasks->runDetail($run) === null) {
-            return $this->error(40400, '运行记录不存在');
-        }
-
-        try {
-            $result = $this->actions->retryScheduleTaskRun(
-                runId: $run,
-                adminUserId: $request->user()?->id ? (int) $request->user()->id : null,
-                reason: $request->reason(),
-                ipAddress: $request->ip(),
-            );
-        } catch (InvalidArgumentException $exception) {
-            return $this->error(42200, $exception->getMessage());
-        }
-
-        return $this->success(AdminActionResultResource::make($result)->resolve(), (string) $result['message']);
+        return $this->success(ActionResultResource::make($result)->resolve(), (string) $result['message']);
     }
 
     public function queueJobs(ListQueueJobsRequest $request): JsonResponse
@@ -124,7 +75,7 @@ class ScheduleTaskController extends Controller
             return $this->error(42200, $exception->getMessage());
         }
 
-        return $this->success(AdminActionResultResource::make([
+        return $this->success(ActionResultResource::make([
             'id' => (int) ($job['id'] ?? 0),
             'status' => 'completed',
             'message' => '队列任务已删除',
@@ -151,7 +102,7 @@ class ScheduleTaskController extends Controller
             return $this->error(42200, $exception->getMessage());
         }
 
-        return $this->success(AdminActionResultResource::make([
+        return $this->success(ActionResultResource::make([
             'id' => 0,
             'status' => 'completed',
             'message' => '队列已清空',

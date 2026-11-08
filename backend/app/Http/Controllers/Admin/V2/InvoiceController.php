@@ -9,9 +9,9 @@ use App\Http\Requests\Admin\V2\Invoice\CancelInvoiceActionRequest;
 use App\Http\Requests\Admin\V2\Invoice\ListInvoicesRequest;
 use App\Http\Requests\Admin\V2\Invoice\RefundInvoiceToBalanceRequest;
 use App\Http\Requests\Admin\V2\Invoice\ShowInvoiceRequest;
-use App\Http\Resources\Admin\V2\AdminActionResultResource;
 use App\Http\Resources\Admin\V2\AdminInvoiceDetailResource;
 use App\Http\Resources\Admin\V2\AdminInvoiceSummaryResource;
+use App\Http\Resources\V2\ActionResultResource;
 use App\Models\AdminUser;
 use App\Models\Invoice;
 use App\Models\User;
@@ -48,7 +48,7 @@ class InvoiceController extends Controller
     {
         $result = $this->actions->cancel($invoice, $request);
 
-        return $this->success(AdminActionResultResource::make($result)->resolve(), (string) $result['message']);
+        return $this->success(ActionResultResource::make($result)->resolve(), (string) $result['message']);
     }
 
     /**
@@ -77,7 +77,7 @@ class InvoiceController extends Controller
         // trace_id，且幂等重放不重复写）。此处再写 finance.refund_balance.executed
         // 会让同一笔退款产生两条审计记录，已在 2026-10-21 收敛为单写。
 
-        return $this->success(AdminActionResultResource::make([
+        return $this->success(ActionResultResource::make([
             'id' => (int) ($result['refund_id'] ?? $result['refund_invoice_id'] ?? $invoice->id),
             'status' => $alreadyRefunded ? 'already_refunded' : 'completed',
             'message' => $message,

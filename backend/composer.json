@@ -12,6 +12,7 @@
   "require-dev": {
     "fakerphp/faker": "^1.23",
     "larastan/larastan": "^3.0",
+    "laravel/boost": "^2.10",
     "laravel/pint": "^1.13",
     "laravel/sail": "^1.26",
     "mockery/mockery": "^1.6",
@@ -47,9 +48,6 @@
     "audit:admin-routes": [
       "@php artisan audit:admin-routes"
     ],
-    "api:spec": [
-      "@php scripts/upload_apifox_openapi.php --dry-run --output=storage/app/openapi.json"
-    ],
     "api:inventory": [
       "@php scripts/export_api_inventory.php"
     ],
@@ -65,7 +63,6 @@
       "@check:strict-types",
       "@audit:plugins",
       "@audit:admin-routes",
-      "@api:spec",
       "@api:check",
       "@php artisan test"
     ],

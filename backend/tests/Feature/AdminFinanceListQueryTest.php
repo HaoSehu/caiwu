@@ -11,6 +11,7 @@ use App\Models\Order;
 use App\Models\Payment;
 use App\Models\User;
 use App\Services\Finance\AdminFinanceQueryService;
+use App\Services\Finance\OrderV2QueryService;
 use App\Services\System\DatabaseStatusService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
@@ -71,7 +72,7 @@ class AdminFinanceListQueryTest extends TestCase
         $this->assertStringContainsString('gateway_key', $mainQuery);
     }
 
-    public function test_renewal_order_list_query_excludes_discarded_snapshot_columns(): void
+    public function test_admin_order_list_query_excludes_discarded_snapshot_columns(): void
     {
         $user = $this->makeUser();
         $this->makeOrder($user, OrderStatus::PAID, OrderType::RENEW);
@@ -82,18 +83,16 @@ class AdminFinanceListQueryTest extends TestCase
         });
 
         // 共用 idc_test 库存在既有数据：以造数用户唯一邮箱作 keyword 隔离。
-        $paginator = app(AdminFinanceQueryService::class)->paginateOrders(
-            ['keyword' => $user->email],
-            20,
-            OrderType::RENEW
-        );
+        $paginator = app(OrderV2QueryService::class)->paginateAdminOrders([
+            'keyword' => $user->email,
+            'type' => OrderType::RENEW,
+        ]);
 
         $this->assertSame(1, $paginator->total());
         // 无消费者的 JSON 快照列不得进任何 SQL（含关系预取）。
         foreach ($sqlList as $sql) {
             $this->assertStringNotContainsString('coupon_snapshot', $sql);
             $this->assertStringNotContainsString('service_snapshot', $sql);
-            $this->assertStringNotContainsString('config_pricing_snapshot', $sql);
         }
         // 产品名/路径解析真实消费的快照列必须保留，列表展示不回退；
         // 用 limit 区分分页主查询与 count(*) 聚合。
@@ -106,7 +105,7 @@ class AdminFinanceListQueryTest extends TestCase
         $this->assertStringContainsString('product_spec_snapshot', $mainQuery);
     }
 
-    public function test_upgrade_order_list_keeps_pricing_snapshot_meta(): void
+    public function test_admin_order_list_keeps_pricing_snapshot_meta(): void
     {
         $user = $this->makeUser();
         $this->makeOrder($user, OrderStatus::PAID, OrderType::UPGRADE, [
@@ -115,24 +114,28 @@ class AdminFinanceListQueryTest extends TestCase
         // 续费单不应混入附加配置列表。
         $this->makeOrder($user, OrderStatus::PAID, OrderType::RENEW);
 
-        $service = app(AdminFinanceQueryService::class);
+        $service = app(OrderV2QueryService::class);
         // 共用 idc_test 库存在既有数据：以造数用户唯一邮箱作 keyword 隔离。
-        $paginator = $service->paginateUpgradeOrders(['keyword' => $user->email]);
+        $paginator = $service->paginateAdminOrders([
+            'keyword' => $user->email,
+            'type' => OrderType::UPGRADE,
+        ]);
 
         $this->assertSame(1, $paginator->total());
-        $item = $paginator->getCollection()->first();
-        $this->assertSame('traffic_package', $item['upgrade_kind']);
-        $this->assertSame('流量包', $item['upgrade_kind_label']);
-        $this->assertSame('流量包 100G', $item['upgrade_target_label']);
-        $this->assertSame('renew', $item['upgrade_mode']);
+        $order = $paginator->getCollection()->first();
+        $this->assertSame('traffic_package', (string) data_get($order->config_pricing_snapshot ?? [], 'meta.kind'));
+        $this->assertSame('流量包 100G', (string) data_get($order->config_pricing_snapshot ?? [], 'meta.target_label'));
+        $this->assertSame('renew', (string) data_get($order->config_pricing_snapshot ?? [], 'meta.mode'));
 
         // kind 筛选走 SQL 层 JSON 提取，与列投影解耦，仍需正常工作。
-        $this->assertSame(1, $service->paginateUpgradeOrders([
+        $this->assertSame(1, $service->paginateAdminOrders([
             'keyword' => $user->email,
+            'type' => OrderType::UPGRADE,
             'upgrade_kind' => 'traffic_package',
         ])->total());
-        $this->assertSame(0, $service->paginateUpgradeOrders([
+        $this->assertSame(0, $service->paginateAdminOrders([
             'keyword' => $user->email,
+            'type' => OrderType::UPGRADE,
             'upgrade_kind' => 'unknown',
         ])->total());
     }

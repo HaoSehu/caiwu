@@ -28,7 +28,7 @@ class ListTicketRepliesRequest extends FormRequest
     public function validationData(): array
     {
         return array_merge(parent::validationData(), [
-            'ticket' => $this->route('ticket'),
+            'ticket' => $this->route('id'),
         ]);
     }
 }

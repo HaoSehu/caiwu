@@ -18,6 +18,7 @@ use App\Services\Finance\AdminFinanceQueryService;
 use App\Services\Finance\CheckoutService;
 use App\Services\Finance\ClientInvoicePaymentWorkflowService;
 use App\Services\Finance\InvoiceV2QueryService;
+use App\Support\AdminPermissions;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -140,7 +141,8 @@ class InvoicePaymentStatusFilterTest extends TestCase
 
     public function test_user_invoice_type_filter_accepts_detail_page_options(): void
     {
-        Sanctum::actingAs($this->makeAdmin());
+        // 用户发票列表已合并到 /admin/invoices?user_id=，该入口由 INVOICE_LIST 守卫。
+        Sanctum::actingAs($this->makeAdmin([AdminPermissions::USER_DETAIL, AdminPermissions::INVOICE_LIST]));
         $user = $this->makeUser('type-filter');
         $refund = $this->makeInvoice($user, InvoiceStatus::PAID, InvoiceType::REFUND);
 
@@ -157,10 +159,10 @@ class InvoicePaymentStatusFilterTest extends TestCase
         ];
 
         foreach ($options as $type) {
-            $this->getJson("/api/v2/admin/users/{$user->id}/invoices?type={$type}")->assertOk();
+            $this->getJson("/api/v2/admin/invoices?user_id={$user->id}&type={$type}")->assertOk();
         }
 
-        $this->getJson("/api/v2/admin/users/{$user->id}/invoices?type=".InvoiceType::REFUND)
+        $this->getJson("/api/v2/admin/invoices?user_id={$user->id}&type=".InvoiceType::REFUND)
             ->assertOk()
             ->assertJsonPath('data.total', 1)
             ->assertJsonPath('data.list.0.invoice_no', (string) $refund->invoice_no);

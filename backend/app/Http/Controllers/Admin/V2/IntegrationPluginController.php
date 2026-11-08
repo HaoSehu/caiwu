@@ -15,7 +15,7 @@ use App\Http\Requests\Admin\V2\IntegrationPlugin\ShowIntegrationPluginRequest;
 use App\Http\Requests\Admin\V2\IntegrationPlugin\UpdateIntegrationPluginConfigRequest;
 use App\Http\Requests\Admin\V2\IntegrationPlugin\UpdateIntegrationPluginStatusRequest;
 use App\Http\Requests\Admin\V2\IntegrationPlugin\UpgradeIntegrationPluginRequest;
-use App\Http\Resources\Admin\V2\AdminActionResultResource;
+use App\Http\Resources\V2\ActionResultResource;
 use App\Models\AdminUser;
 use App\Models\IntegrationPlugin;
 use App\Services\Admin\V2\AdminConfigurationV2QueryService;
@@ -51,21 +51,17 @@ class IntegrationPluginController extends Controller
     {
         $result = $this->queryService->pluginSecret($plugin, $request->secretKey());
 
-        // 密钥 reveal 统一审计：记录谁在何时查看了哪个敏感字段。
-        $this->operationLogService->write(
-            userId: (int) ($request->user()?->id ?? 0),
-            userType: 'admin',
-            action: 'secret.reveal',
-            module: 'secret',
+        $this->operationLogService->writeSecretReveal(
+            secretType: 'plugin',
+            secretKey: (string) $request->secretKey(),
             targetId: (int) $plugin->id,
-            detail: [
-                'secret_type' => 'plugin',
-                'secret_key' => (string) $request->secretKey(),
+            subject: [
                 'plugin_id' => (int) $plugin->id,
                 'plugin_name' => (string) ($plugin->name ?? ''),
-                'operator_name' => (string) ($request->user()?->username ?? $request->user()?->name ?? ''),
-                'trace_id' => (string) $request->header('X-Request-Id', ''),
             ],
+            operatorId: $request->user()?->id,
+            operatorName: (string) ($request->user()?->username ?? $request->user()?->name ?? ''),
+            traceId: (string) $request->header('X-Request-Id', ''),
             ipAddress: (string) $request->ip(),
         );
 
@@ -76,7 +72,7 @@ class IntegrationPluginController extends Controller
     {
         $result = $this->queryService->scanPlugins($request->domain());
 
-        return $this->success(AdminActionResultResource::make($result)->resolve(), (string) $result['message']);
+        return $this->success(ActionResultResource::make($result)->resolve(), (string) $result['message']);
     }
 
     public function install(InstallIntegrationPluginRequest $request)
@@ -120,20 +116,20 @@ class IntegrationPluginController extends Controller
     {
         $result = $this->queryService->uninstallPlugin($plugin, $request->force());
 
-        return $this->success(AdminActionResultResource::make($result)->resolve(), (string) $result['message']);
+        return $this->success(ActionResultResource::make($result)->resolve(), (string) $result['message']);
     }
 
     public function updateStatus(UpdateIntegrationPluginStatusRequest $request, IntegrationPlugin $plugin)
     {
         $result = $this->queryService->updatePluginStatus($plugin, $request->enabled());
 
-        return $this->success(AdminActionResultResource::make($result)->resolve(), (string) $result['message']);
+        return $this->success(ActionResultResource::make($result)->resolve(), (string) $result['message']);
     }
 
     public function runTask(RunIntegrationPluginTaskRequest $request, IntegrationPlugin $plugin)
     {
         $result = $this->queryService->runPluginTask($plugin, $request->taskType(), $request->payload());
 
-        return $this->success(AdminActionResultResource::make($result)->resolve(), (string) $result['message']);
+        return $this->success(ActionResultResource::make($result)->resolve(), (string) $result['message']);
     }
 }

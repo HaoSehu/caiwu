@@ -30,7 +30,8 @@ class AdminServiceConsoleTabsTest extends TestCase
 
     public function test_invoices_can_be_filtered_by_service_id(): void
     {
-        Sanctum::actingAs($this->makeAdmin([AdminPermissions::USER_DETAIL]));
+        // 用户发票列表已合并到 /admin/invoices?user_id=，该入口由 INVOICE_LIST 守卫。
+        Sanctum::actingAs($this->makeAdmin([AdminPermissions::USER_DETAIL, AdminPermissions::INVOICE_LIST]));
 
         $user = $this->makeUser('console-invoices');
         $service = $this->makeService($user, '目标实例');
@@ -39,7 +40,7 @@ class AdminServiceConsoleTabsTest extends TestCase
         $invoice = $this->makeInvoice($user, (int) $service->id);
         $this->makeInvoice($user, (int) $otherService->id);
 
-        $this->getJson("/api/v2/admin/users/{$user->id}/invoices?service_id={$service->id}")
+        $this->getJson("/api/v2/admin/invoices?user_id={$user->id}&service_id={$service->id}")
             ->assertOk()
             ->assertJsonPath('data.total', 1)
             ->assertJsonPath('data.list.0.invoice_no', (string) $invoice->invoice_no);

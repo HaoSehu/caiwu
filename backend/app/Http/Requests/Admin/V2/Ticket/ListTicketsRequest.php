@@ -5,19 +5,17 @@ declare(strict_types=1);
 namespace App\Http\Requests\Admin\V2\Ticket;
 
 use App\Http\Requests\Admin\V2\Common\AdminFormRequest;
-use App\Support\Pagination;
 
 class ListTicketsRequest extends AdminFormRequest
 {
     public function rules(): array
     {
         return [
+            ...$this->paginationRules(presence: 'sometimes'),
             'keyword' => ['sometimes', 'nullable', 'string', 'max:100'],
             'status' => ['sometimes', 'nullable'],
             'priority' => ['sometimes', 'nullable', 'integer', 'in:1,2,3,4'],
             'department' => ['sometimes', 'nullable', 'string', 'in:sales,support,billing,abuse'],
-            'page' => ['sometimes', 'integer', 'min:1'],
-            'page_size' => ['sometimes', 'integer', 'min:1', 'max:'.Pagination::MAX_PAGE_SIZE],
             'per_page' => ['prohibited'],
             'pageSize' => ['prohibited'],
         ];

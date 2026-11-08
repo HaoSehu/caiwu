@@ -6,17 +6,14 @@ namespace App\Services\Finance;
 
 use App\Constants\InvoiceStatus;
 use App\Constants\OrderStatus;
-use App\Constants\OrderType;
 use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
 use App\Exceptions\BusinessException;
 use App\Models\FinanceRefund;
 use App\Models\Invoice;
-use App\Models\Order;
 use App\Models\Payment;
 use App\Models\Product;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
-use App\Services\ProductCatalog\ProductFullPathResolver;
 use App\Support\AdminPrivacy;
 use App\Support\Concerns\FiltersDateRange;
 use App\Support\LikeEscape;
@@ -30,56 +27,9 @@ class AdminFinanceQueryService
 {
     use FiltersDateRange;
 
-    private const UPGRADE_KIND_LABELS = [
-        'traffic_package' => '流量包',
-    ];
-
     public function __construct(
         private readonly ProductDisplayNameResolver $productDisplayNameResolver,
-        private readonly ?ProductFullPathResolver $productFullPathResolver = null,
     ) {}
-
-    public function paginateOrders(array $filters, int $perPage = 20, ?string $forcedType = null): LengthAwarePaginator
-    {
-        $query = Order::query()
-            // 列表显式投影（D1B-05）：只取转换与产品路径解析真实消费的列，
-            // config_pricing_snapshot/coupon_snapshot/service_snapshot 在列表路径无消费者，不再整列读取。
-            ->select($this->orderListProjectionColumns())
-            ->with([
-                'user:id,email,nickname,phone',
-                'invoice:id,invoice_no,order_id,type,status,amount,paid_amount,paid_at,due_date,created_at',
-                'product:id,product_type,service_type_code,product_group_id,remark,config_options,purchase_requires',
-                'product.productGroup:id,second_product_group_id,name',
-                'product.productGroup.secondProductGroup:id,first_product_group_id,name',
-                'product.productGroup.secondProductGroup.firstProductGroup:id,code,name',
-                'service:id,name,domain,status,expires_at',
-            ]);
-
-        $type = $forcedType ?: trim((string) ($filters['type'] ?? ''));
-        if ($type !== '') {
-            $query->where('type', $type);
-        }
-
-        if (isset($filters['status']) && $filters['status'] !== '') {
-            $query->where('status', (int) $filters['status']);
-        }
-
-        $this->applyKeywordFilter($query, trim((string) ($filters['keyword'] ?? '')));
-        $this->applyDateFilter($query, $filters, 'created_at');
-
-        $paginator = $query->orderByDesc('id')->paginate($perPage);
-
-        // 无 product_spec_snapshot 的订单，transformOrder() 会经 ProductFullPathResolver 逐行回源解析
-        // 展示名与全路径；拆分商品的源商品、以及商品投影刻意未取的 custom_display_name 都是逐行单查，
-        // 会随每页行数放大成 N 次往返。按当页商品一次预载，行输出不变。
-        $this->preloadOrderProductDisplayNames($paginator->items());
-
-        $paginator->setCollection(
-            $paginator->getCollection()->map(fn (Order $order) => $this->transformOrder($order))
-        );
-
-        return $paginator;
-    }
 
     public function paginateRecharges(array $filters, int $perPage = 20): LengthAwarePaginator
     {
@@ -260,100 +210,6 @@ class AdminFinanceQueryService
         ];
     }
 
-    public function paginateUpgradeOrders(array $filters, int $perPage = 20): LengthAwarePaginator
-    {
-        $query = Order::query()
-            // 与续费列表同款投影，另保留 config_pricing_snapshot：
-            // 附加配置列表真实消费 meta.kind/target_label/mode（resolveUpgradeKind 与列表标签）。
-            ->select($this->orderListProjectionColumns(withPricingSnapshot: true))
-            ->with([
-                'user:id,email,nickname,phone',
-                'invoice:id,invoice_no,order_id,type,status,amount,paid_amount,paid_at,due_date,created_at',
-                'product:id,product_type,service_type_code,product_group_id,remark,config_options,purchase_requires',
-                // 附加配置行同样输出 product_full_path：缺三级分组预载时，
-                // ProductFullPathResolver::segmentsForProduct() 会对每行 loadMissing 三次分组查询。
-                'product.productGroup:id,second_product_group_id,name',
-                'product.productGroup.secondProductGroup:id,first_product_group_id,name',
-                'product.productGroup.secondProductGroup.firstProductGroup:id,code,name',
-                'service:id,name,domain,status,expires_at',
-            ])
-            ->where('type', OrderType::UPGRADE);
-
-        $kind = trim((string) ($filters['upgrade_kind'] ?? ''));
-        if ($kind !== '' && $kind !== 'all') {
-            $query->where('config_pricing_snapshot->meta->kind', $kind);
-        }
-
-        if (isset($filters['status']) && $filters['status'] !== '') {
-            $query->where('status', (int) $filters['status']);
-        }
-
-        $this->applyKeywordFilter($query, trim((string) ($filters['keyword'] ?? '')));
-        $this->applyDateFilter($query, $filters, 'created_at');
-
-        $paginator = $query->orderByDesc('id')->paginate($perPage);
-
-        // 同续费列表：附加配置行同样经 transformOrder() 逐行回源解析展示名与全路径。
-        $this->preloadOrderProductDisplayNames($paginator->items());
-
-        $paginator->setCollection(
-            $paginator->getCollection()->map(function (Order $order): array {
-                $item = $this->transformOrder($order);
-                $kind = $this->resolveUpgradeKind($order);
-                $item['upgrade_kind'] = $kind;
-                $item['upgrade_kind_label'] = self::UPGRADE_KIND_LABELS[$kind] ?? ($kind !== '' ? $kind : '附加配置');
-                $item['upgrade_target_label'] = (string) data_get($order->config_pricing_snapshot ?? [], 'meta.target_label', '');
-                $item['upgrade_mode'] = (string) data_get($order->config_pricing_snapshot ?? [], 'meta.mode', '');
-
-                return $item;
-            })
-        );
-
-        return $paginator;
-    }
-
-    /**
-     * 管理端订单列表的显式列投影（D1B-05，范式同 OrderV2QueryService::paginateAdminOrders）：
-     * 覆盖 transformOrder 消费的展示列、user/product/service 关系外键，
-     * 以及 ProductFullPathResolver 解析产品名/路径必需的 config_snapshot、
-     * product_spec_snapshot、product_type_snapshot（config_snapshot 被真实消费，不属于丢弃快照）。
-     *
-     * @return list<string>
-     */
-    private function orderListProjectionColumns(bool $withPricingSnapshot = false): array
-    {
-        $columns = [
-            'id',
-            'order_no',
-            'user_id',
-            'product_id',
-            'service_id',
-            'type',
-            'status',
-            'amount',
-            'discount',
-            'member_discount_amount',
-            'coupon_code',
-            'paid_amount',
-            'billing_cycle',
-            'quantity',
-            'trace_id',
-            'product_type_snapshot',
-            'product_spec_snapshot',
-            'config_snapshot',
-            'paid_at',
-            'created_at',
-            'updated_at',
-        ];
-
-        if ($withPricingSnapshot) {
-            // 附加配置列表消费 config_pricing_snapshot->meta（kind/target_label/mode）。
-            $columns[] = 'config_pricing_snapshot';
-        }
-
-        return $columns;
-    }
-
     /**
      * @return array{0: CarbonImmutable, 1: CarbonImmutable}
      */
@@ -449,87 +305,6 @@ class AdminFinanceQueryService
                 $days[$day][$key] = (int) $total;
             }
         }
-    }
-
-    private function applyKeywordFilter(Builder $query, string $keyword): void
-    {
-        if ($keyword === '') {
-            return;
-        }
-
-        $query->where(function (Builder $query) use ($keyword): void {
-            $query->where('order_no', 'like', LikeEscape::contains($keyword))
-                ->orWhere('id', $keyword)
-                ->orWhere('product_spec_snapshot', 'like', LikeEscape::contains($keyword))
-                ->orWhereHas('user', function (Builder $userQuery) use ($keyword): void {
-                    $userQuery->where('email', 'like', LikeEscape::contains($keyword))
-                        ->orWhere('nickname', 'like', LikeEscape::contains($keyword))
-                        ->orWhere('phone', 'like', LikeEscape::contains($keyword));
-                })
-                ->orWhereHas('invoice', function (Builder $invoiceQuery) use ($keyword): void {
-                    $invoiceQuery->where('invoice_no', 'like', LikeEscape::contains($keyword));
-                })
-                ->orWhereHas('service', function (Builder $serviceQuery) use ($keyword): void {
-                    $serviceQuery->where('name', 'like', LikeEscape::contains($keyword))
-                        ->orWhere('domain', 'like', LikeEscape::contains($keyword));
-                });
-        });
-    }
-
-    private function transformOrder(Order $order): array
-    {
-        $privacy = AdminPrivacy::current();
-
-        return [
-            'id' => (int) $order->id,
-            'order_no' => (string) $order->order_no,
-            'user_id' => (int) $order->user_id,
-            'user' => $order->user ? [
-                'id' => (int) $order->user->id,
-                'email' => $privacy->email($order->user->email),
-                'nickname' => (string) ($order->user->nickname ?? ''),
-                'phone' => $privacy->phone($order->user->phone),
-            ] : null,
-            'invoice' => $order->invoice ? [
-                'id' => (int) $order->invoice->id,
-                'invoice_no' => (string) $order->invoice->invoice_no,
-                'status' => (int) $order->invoice->status,
-                'amount' => $this->money($order->invoice->amount),
-                'paid_amount' => $this->money($order->invoice->paid_amount),
-                'paid_at' => $order->invoice->paid_at?->format('Y-m-d H:i:s'),
-                'trace_id' => (string) ($order->invoice->trace_id ?? ''),
-                'refund_trace_id' => (string) ($order->invoice->refund_trace_id ?? ''),
-            ] : null,
-            'product_id' => (int) ($order->product_id ?? 0),
-            'product_name' => $this->productFullPathResolver()->nameForOrder($order),
-            'product_full_path' => $this->productFullPathResolver()->pathForOrder($order),
-            'product_type' => (string) ($order->product_type_snapshot ?? $order->product?->product_type ?? ''),
-            'service' => $order->service ? [
-                'id' => (int) $order->service->id,
-                'name' => (string) $order->service->name,
-                'domain' => (string) ($order->service->domain ?? ''),
-                'status' => (int) $order->service->status,
-                'expires_at' => $order->service->expires_at?->format('Y-m-d H:i:s'),
-            ] : null,
-            'type' => (string) $order->type,
-            'type_label' => $this->orderTypeLabel((string) $order->type),
-            'status' => (int) $order->status,
-            'status_label' => $this->orderStatusLabel((int) $order->status),
-            'amount' => $this->money($order->amount),
-            'discount' => $this->money($order->discount),
-            // 折扣分列：券减免（discount）与会员折扣（member_discount_amount）来源不同
-            'member_discount_amount' => $this->money($order->member_discount_amount),
-            'coupon_code' => (string) ($order->coupon_code ?? ''),
-            'paid_amount' => $this->money($order->paid_amount),
-            'billing_cycle' => (string) ($order->billing_cycle ?? ''),
-            'quantity' => (int) ($order->quantity ?? 1),
-            'paid_at' => $order->paid_at?->format('Y-m-d H:i:s'),
-            'created_at' => $order->created_at?->format('Y-m-d H:i:s'),
-            'updated_at' => $order->updated_at?->format('Y-m-d H:i:s'),
-            'trace_id' => (string) ($order->trace_id ?? ''),
-            'config_snapshot' => (array) ($order->config_snapshot ?? []),
-            'config_pricing_snapshot' => (array) ($order->config_pricing_snapshot ?? []),
-        ];
     }
 
     private function transformRechargePayment(Payment $payment): array
@@ -641,32 +416,6 @@ class AdminFinanceQueryService
         return $productId > 0 ? "产品 #{$productId}" : '未配置产品';
     }
 
-    private function resolveUpgradeKind(Order $order): string
-    {
-        return trim((string) data_get($order->config_pricing_snapshot ?? [], 'meta.kind', ''));
-    }
-
-    private function orderTypeLabel(string $type): string
-    {
-        return match ($type) {
-            OrderType::NEW, 'normal' => '新购',
-            OrderType::RENEW => '续费',
-            OrderType::UPGRADE => '附加配置',
-            default => $type !== '' ? $type : '普通',
-        };
-    }
-
-    private function orderStatusLabel(int $status): string
-    {
-        return match ($status) {
-            OrderStatus::PENDING => '待支付',
-            OrderStatus::PAID => '已支付',
-            OrderStatus::CANCELLED => '已取消',
-            OrderStatus::REFUNDED => '已退款',
-            default => (string) $status,
-        };
-    }
-
     private function invoiceStatusLabel(int $status): string
     {
         return match ($status) {
@@ -692,36 +441,5 @@ class AdminFinanceQueryService
     private function money(mixed $value): string
     {
         return number_format((float) ($value ?? 0), 2, '.', '');
-    }
-
-    private function productFullPathResolver(): ProductFullPathResolver
-    {
-        // 必须与容器单例一致：它内部持有同一个 ProductDisplayNameResolver 单例，
-        // 预载写进容器实例后这里若再 new 一个孤儿实例，整页预载就全被架空。
-        return $this->productFullPathResolver ?? app(ProductFullPathResolver::class);
-    }
-
-    /**
-     * 按当页订单一次预载商品展示名解析所需的商品数据。
-     *
-     * transformOrder() 内 nameForOrder()/pathForOrder() 在订单缺 product_spec_snapshot 时会逐行回源：
-     * 拆分商品的源商品按 purchase_requires.upstream_split.source_product_id 单查、
-     * 商品投影刻意未取的 custom_display_name 也会按 id 单查，条数随每页行数线性增长（N+1）。
-     * 预载后解析阶段只读内存，行输出不变。
-     *
-     * @param  array<int, Order>  $orders
-     */
-    private function preloadOrderProductDisplayNames(array $orders): void
-    {
-        $products = collect($orders)
-            ->map(static function (Order $order): ?Product {
-                $product = $order->product;
-
-                return $product instanceof Product ? $product : null;
-            })
-            ->filter();
-
-        $this->productDisplayNameResolver->preloadSourceProducts($products);
-        $this->productDisplayNameResolver->preloadCustomDisplayNames($products);
     }
 }

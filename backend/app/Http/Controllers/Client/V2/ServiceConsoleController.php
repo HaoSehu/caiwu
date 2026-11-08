@@ -11,8 +11,13 @@ use App\Http\Requests\Client\V2\Service\ListServiceOperationLogsRequest;
 use App\Http\Requests\Client\V2\Service\ModuleStatusRequest;
 use App\Http\Requests\Client\V2\Service\MonitorBatchRequest;
 use App\Http\Requests\Client\V2\Service\MonitorRequest;
+use App\Http\Requests\Client\V2\Service\PasswordResetActionRequest;
+use App\Http\Requests\Client\V2\Service\PowerActionRequest;
+use App\Http\Requests\Client\V2\Service\ReinstallationRequest;
 use App\Http\Requests\Client\V2\Service\UpdateNameRequest;
 use App\Http\Requests\Client\V2\Service\UpdateRemarkRequest;
+use App\Http\Resources\V2\ActionResultResource;
+use App\Services\Client\V2\ClientActionV2Service;
 use App\Services\ClientServiceConsole\ClientServiceConsoleService;
 use App\Support\PublicUrl;
 use App\Support\RequestContext;
@@ -22,7 +27,29 @@ class ServiceConsoleController extends Controller
 {
     public function __construct(
         private ClientServiceConsoleService $clientServiceConsoleService,
+        private ClientActionV2Service $actions,
     ) {}
+
+    public function power(PowerActionRequest $request, int $id)
+    {
+        return $this->success(ActionResultResource::make(
+            $this->actions->powerAction($request->user(), $id, (string) $request->validated()['action'], $request)
+        )->resolve(), '操作已提交');
+    }
+
+    public function resetPassword(PasswordResetActionRequest $request, int $id)
+    {
+        return $this->success(ActionResultResource::make(
+            $this->actions->resetPassword($request->user(), $id, $request->validated(), $request)
+        )->resolve(), '重置密码指令已提交');
+    }
+
+    public function reinstall(ReinstallationRequest $request, int $id)
+    {
+        return $this->success(ActionResultResource::make(
+            $this->actions->reinstall($request->user(), $id, $request->validated(), $request)
+        )->resolve(), '重装系统任务已提交');
+    }
 
     public function index(IndexRequest $request)
     {

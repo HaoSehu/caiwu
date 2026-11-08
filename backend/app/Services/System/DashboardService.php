@@ -13,7 +13,6 @@ use App\Models\ReferralWithdrawal;
 use App\Models\Service;
 use App\Models\Ticket;
 use App\Models\User;
-use App\Support\AdminPrivacy;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -22,13 +21,6 @@ class DashboardService
 {
     /** 服务即将到期的观察窗口（天） */
     private const EXPIRING_SOON_DAYS = 7;
-
-    /** 待认证口径与 AdminVerificationQueryService 汇总保持一致：verification_status = 4 */
-    private const VERIFICATION_STATUS_PENDING = 4;
-
-    private const OVERVIEW_RECENT_INVOICES_CACHE_KEY = 'dashboard:overview:recent_invoices';
-
-    private const OVERVIEW_RECENT_INVOICES_CACHE_TTL_SECONDS = 30; // 30秒：发票列表
 
     private const OVERVIEW_STATS_CACHE_KEY = 'dashboard:overview:stats';
 
@@ -41,33 +33,12 @@ class DashboardService
      */
     private const NET_INCOME_SQL = 'GREATEST(COALESCE(NULLIF(invoices.paid_amount, 0), invoices.amount, 0) - COALESCE(invoice_refund_totals.refunded_total, 0), 0)';
 
-    public function overview(): array
-    {
-        return array_merge(
-            $this->stats(),
-            [
-                'recent_invoices' => $this->recentInvoices(),
-            ]
-        );
-    }
-
     public function stats(): array
     {
         return Cache::remember(
             self::OVERVIEW_STATS_CACHE_KEY,
             now()->addSeconds(self::OVERVIEW_STATS_CACHE_TTL_SECONDS),
             fn () => $this->buildOverviewStats()
-        );
-    }
-
-    public function recentInvoices(): array
-    {
-        $privacy = AdminPrivacy::current();
-
-        return Cache::remember(
-            self::OVERVIEW_RECENT_INVOICES_CACHE_KEY.':raw:'.($privacy->allowsRaw() ? '1' : '0'),
-            now()->addSeconds(self::OVERVIEW_RECENT_INVOICES_CACHE_TTL_SECONDS),
-            fn () => $this->buildRecentInvoices()
         );
     }
 
@@ -131,7 +102,7 @@ class DashboardService
                 'unpaid_invoices' => Invoice::query()->where('status', InvoiceStatus::UNPAID)->count(),
                 'open_tickets' => (int) ($ticketStats?->open_tickets ?? 0),
                 'pending_verifications' => User::query()
-                    ->where('verification_status', self::VERIFICATION_STATUS_PENDING)
+                    ->where('verification_status', User::VERIFICATION_STATUS_PENDING_REVIEW)
                     ->count(),
                 'pending_withdrawals' => ReferralWithdrawal::query()
                     ->where('status', ReferralWithdrawal::STATUS_PENDING)
@@ -161,49 +132,6 @@ class DashboardService
                 'new_invoices' => (int) ($invoiceCountStats?->month_new_invoices ?? 0),
             ],
         ];
-    }
-
-    private function buildRecentInvoices(): array
-    {
-        $privacy = AdminPrivacy::current();
-
-        return Invoice::query()
-            ->with('user:id,email,nickname')
-            ->select([
-                'id',
-                'invoice_no',
-                'user_id',
-                'product_id',
-                'service_id',
-                'type',
-                'amount',
-                'discount',
-                'paid_amount',
-                'billing_cycle',
-                'status',
-                'paid_at',
-                'created_at',
-            ])
-            ->orderByDesc('id')
-            ->limit(10)
-            ->get()
-            ->map(function (Invoice $invoice) use ($privacy) {
-                return [
-                    'id' => (int) $invoice->id,
-                    'invoice_no' => (string) $invoice->invoice_no,
-                    'amount' => number_format((float) $invoice->amount, 2, '.', ''),
-                    'status' => (int) $invoice->status,
-                    'status_label' => InvoiceStatus::$labels[$invoice->status] ?? (string) $invoice->status,
-                    'type' => (string) ($invoice->type ?? ''),
-                    'created_at' => $invoice->created_at?->format('Y-m-d H:i:s'),
-                    'user' => [
-                        'nickname' => (string) ($invoice->user?->nickname ?? ''),
-                        'email' => $privacy->email($invoice->user?->email ?? ''),
-                    ],
-                ];
-            })
-            ->values()
-            ->all();
     }
 
     public function monthlyRevenue(): array

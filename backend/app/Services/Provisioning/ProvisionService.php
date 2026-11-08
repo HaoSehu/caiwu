@@ -252,17 +252,6 @@ class ProvisionService
         return $this->submitUpstreamProvision($order, $service, true, $leaseToken);
     }
 
-    public function retryFailedProvisionByInvoice(Invoice $invoice): Service
-    {
-        $invoice->loadMissing(['order', 'service']);
-
-        if ($invoice->order instanceof Order) {
-            return $this->retryFailedProvision($invoice->order);
-        }
-
-        throw new BusinessException('账单未关联订单，暂不支持重新提交上游开通');
-    }
-
     /**
      * @param  string|null  $leaseToken  调用方已抢占的租约；为 null 时由本方法自行抢占
      */

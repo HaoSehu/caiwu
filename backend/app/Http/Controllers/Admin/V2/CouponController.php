@@ -11,10 +11,10 @@ use App\Http\Requests\Admin\V2\Coupon\ShowCouponSummaryRequest;
 use App\Http\Requests\Admin\V2\Coupon\StoreCouponRequest;
 use App\Http\Requests\Admin\V2\Coupon\UpdateCouponRequest;
 use App\Http\Requests\Admin\V2\Coupon\UpdateCouponStatusRequest;
-use App\Http\Resources\Admin\V2\AdminActionResultResource;
 use App\Http\Resources\Admin\V2\AdminCouponDetailResource;
 use App\Http\Resources\Admin\V2\AdminCouponListResource;
 use App\Http\Resources\Admin\V2\AdminCouponSummaryResource;
+use App\Http\Resources\V2\ActionResultResource;
 use App\Models\Coupon;
 use App\Services\Admin\V2\AdminCatalogActionV2Service;
 use App\Services\Finance\CouponService;
@@ -67,7 +67,7 @@ class CouponController extends Controller
     {
         $result = $this->actions->updateCouponStatus($coupon, $request->enabled(), $this->context($request));
 
-        return $this->success(AdminActionResultResource::make($result)->resolve(), (string) $result['message']);
+        return $this->success(ActionResultResource::make($result)->resolve(), (string) $result['message']);
     }
 
     public function destroy(DeleteCouponRequest $request, Coupon $coupon)

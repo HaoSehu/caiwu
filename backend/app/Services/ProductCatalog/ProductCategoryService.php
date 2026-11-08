@@ -41,7 +41,7 @@ class ProductCategoryService
                 'third_product_groups_total' => ThirdProductGroup::query()->count(),
                 'products_total' => Product::query()->count(),
                 'products_deleted' => Product::onlyTrashed()->count(),
-                'products_active' => Product::query()->where('status', 1)->count(),
+                'products_active' => Product::query()->onSale()->count(),
                 'products_low_stock' => Product::query()->where('stock', '>=', 0)->where('stock', '<=', 5)->count(),
             ]
         );

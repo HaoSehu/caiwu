@@ -20,13 +20,18 @@ abstract class AdminFormRequest extends FormRequest
     }
 
     /**
+     * 标准分页参数规则。
+     *
+     * @param  string  $presence  分页参数的「存在性」规则。nullable 与 sometimes 对
+     *                            这两个可选字段校验结果等价，两者并存只是历史写法差异；
+     *                            统一走本方法，避免每个列表请求各写一遍。
      * @return array<string, list<string>>
      */
-    protected function paginationRules(int $maxPageSize = Pagination::MAX_PAGE_SIZE): array
+    protected function paginationRules(int $maxPageSize = Pagination::MAX_PAGE_SIZE, string $presence = 'nullable'): array
     {
         return [
-            'page' => ['nullable', 'integer', 'min:1'],
-            'page_size' => ['nullable', 'integer', 'min:1', 'max:'.$maxPageSize],
+            'page' => [$presence, 'integer', 'min:1'],
+            'page_size' => [$presence, 'integer', 'min:1', 'max:'.$maxPageSize],
         ];
     }
 

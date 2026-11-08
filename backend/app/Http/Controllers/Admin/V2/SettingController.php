@@ -12,8 +12,8 @@ use App\Http\Requests\Admin\V2\Setting\SmsProviderTemplateFormRequest;
 use App\Http\Requests\Admin\V2\Setting\SmsProviderTemplateLinkRequest;
 use App\Http\Requests\Admin\V2\Setting\TestNotificationTemplateSendRequest;
 use App\Http\Requests\Admin\V2\Setting\UpdateSettingsRequest;
-use App\Http\Resources\Admin\V2\AdminActionResultResource;
 use App\Http\Resources\Admin\V2\AdminNotificationTemplateResource;
+use App\Http\Resources\V2\ActionResultResource;
 use App\Services\Admin\V2\AdminConfigurationV2QueryService;
 use App\Services\Sms\SmsProviderTemplateService;
 use App\Services\Sms\SmsVerifyCodeTemplateSyncService;
@@ -197,20 +197,14 @@ class SettingController extends Controller
         $key = $request->secretKey();
         $result = $this->queryService->settingSecret($group, $key);
 
-        // 密钥 reveal 统一审计：记录谁在何时查看了哪个敏感字段。
-        $this->operationLogService->write(
-            userId: (int) ($request->user()->id ?? 0),
-            userType: 'admin',
-            action: 'secret.reveal',
-            module: 'secret',
-            targetId: 0,
-            detail: [
-                'secret_type' => 'setting',
-                'secret_key' => $key,
-                'group' => $group,
-                'operator_name' => (string) ($request->user()->username ?? ''),
-                'trace_id' => (string) $request->header('X-Request-Id', ''),
-            ],
+        $this->operationLogService->writeSecretReveal(
+            secretType: 'setting',
+            secretKey: $key,
+            targetId: null,
+            subject: ['group' => $group],
+            operatorId: $request->user()?->id,
+            operatorName: (string) ($request->user()->username ?? ''),
+            traceId: (string) $request->header('X-Request-Id', ''),
             ipAddress: (string) $request->ip(),
         );
 
@@ -222,7 +216,7 @@ class SettingController extends Controller
         $group = $request->group();
         $this->settings->saveGroupSettings($group, $request->settings());
 
-        return $this->success(AdminActionResultResource::make([
+        return $this->success(ActionResultResource::make([
             'id' => 'settings',
             'status' => 'completed',
             'message' => '配置已更新',

@@ -69,7 +69,24 @@ class AdminOrderSummaryResource extends JsonResource
             // 待支付仍在进行中，不下发（前端显示占位符）。
             'finished_at' => $this->finishedAt($order),
             'created_at' => $order->created_at?->format('Y-m-d H:i:s'),
+            // 附加配置订单的配置类型；非升级订单为空字符串，前端按 mode=upgrade 展示。
+            'upgrade_kind' => $this->upgradeMeta($order, 'kind'),
+            'upgrade_kind_label' => $this->upgradeKindLabel($order),
+            'upgrade_target_label' => $this->upgradeMeta($order, 'target_label'),
+            'upgrade_mode' => $this->upgradeMeta($order, 'mode'),
         ];
+    }
+
+    private function upgradeMeta(Order $order, string $key): string
+    {
+        return (string) data_get($order->config_pricing_snapshot ?? [], 'meta.'.$key, '');
+    }
+
+    private function upgradeKindLabel(Order $order): string
+    {
+        $kind = $this->upgradeMeta($order, 'kind');
+
+        return $kind === 'traffic_package' ? '流量包' : ($kind !== '' ? $kind : '附加配置');
     }
 
     /**

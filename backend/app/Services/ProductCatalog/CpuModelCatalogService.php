@@ -5,13 +5,15 @@ namespace App\Services\ProductCatalog;
 use App\Exceptions\BusinessException;
 use App\Models\Product;
 use App\Models\Setting;
+use App\Services\ProductCatalog\Concerns\HandlesCatalogBindings;
 use App\Support\CacheKey;
-use App\Support\SchemaMetadataCache;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
 class CpuModelCatalogService
 {
+    use HandlesCatalogBindings;
+
     public const SETTING_GROUP = 'product';
 
     public const SETTING_KEY = 'cpu_model_catalog';
@@ -245,35 +247,6 @@ class CpuModelCatalogService
         return mb_substr($normalized, 0, 80);
     }
 
-    /**
-     * @return array{cycle: string, amount: string}
-     */
-    private function normalizeBindingPrice(mixed $price): array
-    {
-        if (! is_array($price)) {
-            return [
-                'cycle' => '',
-                'amount' => '0.00',
-            ];
-        }
-
-        $cycle = $this->limitText((string) ($price['cycle'] ?? ''), 40);
-        $amount = trim((string) ($price['amount'] ?? '0.00'));
-
-        if ($amount === '') {
-            $amount = '0.00';
-        } elseif (is_numeric($amount)) {
-            $amount = number_format((float) $amount, 2, '.', '');
-        } else {
-            $amount = $this->limitText($amount, 40);
-        }
-
-        return [
-            'cycle' => $cycle,
-            'amount' => $amount,
-        ];
-    }
-
     private function normalizeBinaryStatus(mixed $status): int
     {
         return (int) ((int) $status === 1 ? 1 : 0);
@@ -314,48 +287,6 @@ class CpuModelCatalogService
     }
 
     /**
-     * @return array{
-     *     display_name: string,
-     *     custom_display_name: string,
-     *     cpu_memory_display: string,
-     *     cpu_memory_slug_display: string,
-     *     product_spec_display: string,
-     *     combined_display_name: string
-     * }
-     */
-    private function resolveBindingDisplayPayload(int $productId, array $displayProducts): array
-    {
-        $fallback = $productId > 0 ? '未配置规格 #'.$productId : '';
-        if ($productId <= 0) {
-            return $this->emptyBindingDisplayPayload($fallback);
-        }
-
-        $product = $displayProducts[$productId] ?? null;
-
-        if (! $product instanceof Product) {
-            return $this->emptyBindingDisplayPayload($fallback);
-        }
-
-        $resolved = $this->resolveProductDisplayNameResolver()->resolveForProduct($product);
-        $customDisplayName = trim((string) ($resolved['custom_display_name'] ?? ''));
-        $cpuMemorySlugDisplay = trim((string) ($resolved['cpu_memory_slug_display'] ?? ''));
-        $productSpecDisplay = trim((string) ($resolved['product_spec_display'] ?? ''));
-        $cpuMemoryDisplay = trim((string) ($resolved['cpu_memory_display'] ?? ''));
-        $combinedDisplayName = trim((string) ($resolved['combined_display_name'] ?? ''));
-        $displayName = $customDisplayName
-            ?: ($cpuMemorySlugDisplay ?: ($productSpecDisplay ?: ($cpuMemoryDisplay ?: ($combinedDisplayName ?: $fallback))));
-
-        return [
-            'display_name' => $displayName,
-            'custom_display_name' => $customDisplayName,
-            'cpu_memory_display' => $cpuMemoryDisplay,
-            'cpu_memory_slug_display' => $cpuMemorySlugDisplay,
-            'product_spec_display' => $productSpecDisplay,
-            'combined_display_name' => $combinedDisplayName,
-        ];
-    }
-
-    /**
      * @param  array<int, mixed>  $catalog
      * @return array<int, bool>
      */
@@ -383,56 +314,5 @@ class CpuModelCatalogService
         }
 
         return $productIds;
-    }
-
-    /**
-     * @param  array<int, bool>  $productIds
-     * @return array<int, Product>
-     */
-    private function loadDisplayProducts(array $productIds): array
-    {
-        if ($productIds === [] || ! SchemaMetadataCache::hasTable('products')) {
-            return [];
-        }
-
-        $products = Product::query()
-            ->select(['id', 'purchase_requires', 'config_options', 'custom_display_name'])
-            ->whereIn('id', array_keys($productIds))
-            ->get()
-            ->keyBy('id')
-            ->all();
-
-        // 拆分商品的展示名依赖 upstream_split.source_product_id 回源，必须整批预载；
-        // 逐条解析时解析器会各自 find() 一次，绑定行数越多越慢。
-        $this->resolveProductDisplayNameResolver()->preloadSourceProducts($products);
-
-        return $products;
-    }
-
-    private function resolveProductDisplayNameResolver(): ProductDisplayNameResolver
-    {
-        return $this->productDisplayNameResolver ?? app(ProductDisplayNameResolver::class);
-    }
-
-    /**
-     * @return array{
-     *     display_name: string,
-     *     custom_display_name: string,
-     *     cpu_memory_display: string,
-     *     cpu_memory_slug_display: string,
-     *     product_spec_display: string,
-     *     combined_display_name: string
-     * }
-     */
-    private function emptyBindingDisplayPayload(string $fallback): array
-    {
-        return [
-            'display_name' => $fallback,
-            'custom_display_name' => '',
-            'cpu_memory_display' => $fallback,
-            'cpu_memory_slug_display' => '',
-            'product_spec_display' => '',
-            'combined_display_name' => '',
-        ];
     }
 }

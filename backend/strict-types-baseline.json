@@ -103,11 +103,6 @@
             "recorded_at": "2026-10-26"
         },
         {
-            "file": "app/Http/Controllers/Client/V2/FinanceController.php",
-            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
-            "recorded_at": "2026-10-26"
-        },
-        {
             "file": "app/Http/Controllers/Client/V2/PaymentCallbackController.php",
             "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
             "recorded_at": "2026-10-26"
@@ -443,11 +438,6 @@
             "recorded_at": "2026-10-26"
         },
         {
-            "file": "app/Jobs/SendTemplateEmailJob.php",
-            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
-            "recorded_at": "2026-10-26"
-        },
-        {
             "file": "app/Models/ActivityLog.php",
             "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
             "recorded_at": "2026-10-26"
@@ -744,11 +734,6 @@
         },
         {
             "file": "app/Services/Content/NoticeReadService.php",
-            "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
-            "recorded_at": "2026-10-26"
-        },
-        {
-            "file": "app/Services/Finance/ClientFinanceQueryService.php",
             "reason": "尚未补充 declare(strict_types=1)。基线登记时该文件已存在，逐个补齐会改变隐式类型转换行为，需随所属模块回归后逐个移出清单。",
             "recorded_at": "2026-10-26"
         },

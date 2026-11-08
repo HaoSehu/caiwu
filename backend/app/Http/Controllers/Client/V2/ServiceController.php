@@ -20,12 +20,12 @@ class ServiceController extends Controller
         private readonly ClientServiceConsoleService $services,
     ) {}
 
-    public function show(ShowServiceRequest $request, int $service): JsonResponse
+    public function show(ShowServiceRequest $request, int $id): JsonResponse
     {
         $detail = $this->services->sanitizeClientDetail(
             $this->services->getDetailForUser(
                 $request->user(),
-                $service,
+                $id,
                 $request->boolean('refresh'),
                 true
             )
@@ -36,19 +36,19 @@ class ServiceController extends Controller
         ]);
     }
 
-    public function connection(ShowServiceConnectionRequest $request, int $service): JsonResponse
+    public function connection(ShowServiceConnectionRequest $request, int $id): JsonResponse
     {
-        $detail = $this->services->getBaseDetailForUser($request->user(), $service, true);
+        $detail = $this->services->getBaseDetailForUser($request->user(), $id, true);
 
         return $this->success([
             'connection' => (new ServiceConnectionResource((array) ($detail['connection'] ?? []), true))->resolve(),
         ]);
     }
 
-    public function runtime(ShowServiceRuntimeRequest $request, int $service): JsonResponse
+    public function runtime(ShowServiceRuntimeRequest $request, int $id): JsonResponse
     {
         $detail = $this->services->sanitizeClientDetail(
-            $this->services->getRemoteStatusPatchForUser($request->user(), $service, true)
+            $this->services->getRemoteStatusPatchForUser($request->user(), $id, true)
         );
 
         return $this->success([

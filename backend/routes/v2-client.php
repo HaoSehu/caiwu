@@ -1,12 +1,9 @@
 <?php
 
 use App\Constants\PaymentGatewayCode;
-use App\Http\Controllers\Client\V2\ActionController;
 use App\Http\Controllers\Client\V2\AuthController;
 use App\Http\Controllers\Client\V2\ContentController;
 use App\Http\Controllers\Client\V2\CouponController;
-use App\Http\Controllers\Client\V2\FinanceController;
-use App\Http\Controllers\Client\V2\FinanceLedgerController;
 use App\Http\Controllers\Client\V2\InvoiceController;
 use App\Http\Controllers\Client\V2\InvoiceWorkflowController;
 use App\Http\Controllers\Client\V2\LedgerController;
@@ -20,7 +17,6 @@ use App\Http\Controllers\Client\V2\ServiceBillingController;
 use App\Http\Controllers\Client\V2\ServiceConsoleController;
 use App\Http\Controllers\Client\V2\ServiceController;
 use App\Http\Controllers\Client\V2\ServiceNetworkController;
-use App\Http\Controllers\Client\V2\TicketController;
 use App\Http\Controllers\Client\V2\TicketWorkflowController;
 use App\Http\Controllers\Client\V2\VerificationController;
 use Illuminate\Support\Facades\Route;
@@ -71,13 +67,11 @@ Route::middleware(['auth:sanctum', 'ensure.client'])->group(function (): void {
     Route::get('/verification/status', [VerificationController::class, 'status']);
     Route::post('/verification/restart', [VerificationController::class, 'restart'])->middleware('throttle:client-verification-init');
 
-    Route::get('/balance-logs', [FinanceController::class, 'balanceLogs']);
-    Route::get('/balance-logs/summary', [FinanceController::class, 'balanceLogsSummary']);
     Route::get('/invoices', [InvoiceController::class, 'index']);
     Route::get('/invoices/summary', [InvoiceWorkflowController::class, 'summary']);
     Route::post('/invoices', [InvoiceWorkflowController::class, 'store'])->middleware('throttle:8,1,client-invoices-store');
-    Route::get('/invoices/{invoice}', [InvoiceController::class, 'show']);
-    Route::post('/invoices/{invoice}/cancellations', [ActionController::class, 'cancelInvoice'])
+    Route::get('/invoices/{id}', [InvoiceController::class, 'show']);
+    Route::post('/invoices/{id}/cancellations', [InvoiceController::class, 'cancel'])
         ->middleware('throttle:10,1,client-invoices-cancel');
     Route::post('/invoices/{id}/pay/balance', [InvoiceWorkflowController::class, 'payByBalance'])->middleware('throttle:10,1,client-invoices-pay-balance');
     Route::post('/invoices/{id}/pay/mix', [InvoiceWorkflowController::class, 'payByBalanceAndAlipay'])->middleware('throttle:10,1,client-invoices-pay-mix');
@@ -85,9 +79,6 @@ Route::middleware(['auth:sanctum', 'ensure.client'])->group(function (): void {
     Route::get('/invoices/{id}/pay/alipay/status', [InvoiceWorkflowController::class, 'queryAlipayStatus'])->middleware('throttle:30,1,client-invoices-pay-alipay-status');
 
     Route::get('/ledger', [LedgerController::class, 'index']);
-    Route::get('/finance/ledger', [FinanceLedgerController::class, 'index']);
-    Route::get('/finance/ledger/summary', [FinanceLedgerController::class, 'summary']);
-    Route::get('/finance/ledger/{id}', [FinanceLedgerController::class, 'show']);
 
     Route::get('/coupons', [CouponController::class, 'index']);
     Route::get('/coupons/summary', [CouponController::class, 'summary']);
@@ -100,13 +91,11 @@ Route::middleware(['auth:sanctum', 'ensure.client'])->group(function (): void {
     Route::get('/recharge/{paymentNo}/status', [RechargeController::class, 'status'])->middleware('throttle:30,1,client-recharge-status');
 
     Route::get('/payments', [PaymentController::class, 'index']);
-    Route::get('/payments/summary', [PaymentController::class, 'summary']);
     Route::get('/payments/{id}', [PaymentController::class, 'show']);
 
     Route::get('/orders', [OrderController::class, 'index']);
-    Route::get('/orders/summary', [OrderController::class, 'summary']);
     Route::get('/orders/{id}', [OrderController::class, 'show']);
-    Route::post('/orders/{order}/cancellations', [ActionController::class, 'cancelOrder'])
+    Route::post('/orders/{id}/cancellations', [OrderController::class, 'cancel'])
         ->middleware('throttle:10,1,client-orders-cancel');
 
     Route::get('/content/overview', [ContentController::class, 'overview']);
@@ -114,14 +103,14 @@ Route::middleware(['auth:sanctum', 'ensure.client'])->group(function (): void {
     Route::get('/notices/unread-count', [ContentController::class, 'noticeUnreadCount']);
     Route::post('/notices/mark-all-read', [ContentController::class, 'markAllNoticesRead']);
     Route::get('/notices/{article}', [ContentController::class, 'noticeDetail']);
-    Route::put('/notices/{article}/read-state', [ActionController::class, 'markNoticeRead']);
+    Route::put('/notices/{article}/read-state', [ContentController::class, 'markNoticeRead']);
     Route::get('/help-articles', [ContentController::class, 'helpArticles']);
     Route::get('/help-articles/{article}', [ContentController::class, 'helpDetail']);
     Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
     Route::get('/notifications/feed', [NotificationController::class, 'feed']);
     Route::get('/notifications', [NotificationController::class, 'index']);
     Route::post('/notifications/mark-all-read', [NotificationController::class, 'markAllRead']);
-    Route::put('/notifications/{notification}/read-state', [ActionController::class, 'markNotificationRead']);
+    Route::put('/notifications/{notification}/read-state', [NotificationController::class, 'markRead']);
 
     Route::get('/referral/overview', [ReferralController::class, 'overview']);
     Route::get('/referral/rewards', [ReferralController::class, 'rewards']);
@@ -161,24 +150,24 @@ Route::middleware(['auth:sanctum', 'ensure.client'])->group(function (): void {
     Route::post('/services/{id}/security-groups/{groupId}/rules', [ServiceNetworkController::class, 'createSecurityRule'])->middleware('throttle:10,1,client-service-security-rule-create');
     Route::delete('/services/{id}/security-groups/{groupId}/rules/{ruleId}', [ServiceNetworkController::class, 'deleteSecurityRule'])->middleware('throttle:10,1,client-service-security-rule-delete');
     Route::get('/services/{id}/vnc', [ServiceConsoleController::class, 'vnc']);
-    Route::get('/services/{service}/connection', [ServiceController::class, 'connection']);
-    Route::get('/services/{service}/runtime', [ServiceController::class, 'runtime']);
-    Route::get('/services/{service}', [ServiceController::class, 'show']);
-    Route::post('/services/{service}/power-actions', [ActionController::class, 'power'])
+    Route::get('/services/{id}/connection', [ServiceController::class, 'connection']);
+    Route::get('/services/{id}/runtime', [ServiceController::class, 'runtime']);
+    Route::get('/services/{id}', [ServiceController::class, 'show']);
+    Route::post('/services/{id}/power-actions', [ServiceConsoleController::class, 'power'])
         ->middleware('throttle:10,1,client-service-power');
-    Route::post('/services/{service}/password-resets', [ActionController::class, 'resetPassword'])
+    Route::post('/services/{id}/password-resets', [ServiceConsoleController::class, 'resetPassword'])
         ->middleware('throttle:6,1,client-service-password-reset');
-    Route::post('/services/{service}/reinstallations', [ActionController::class, 'reinstall'])
+    Route::post('/services/{id}/reinstallations', [ServiceConsoleController::class, 'reinstall'])
         ->middleware('throttle:6,1,client-service-reinstall');
 
     Route::get('/tickets', [TicketWorkflowController::class, 'index']);
     Route::get('/tickets/service-options', [TicketWorkflowController::class, 'serviceOptions']);
     Route::post('/tickets', [TicketWorkflowController::class, 'store'])->middleware('throttle:10,1,client-ticket-store');
     Route::post('/tickets/upload-images', [TicketWorkflowController::class, 'uploadImage'])->middleware('throttle:12,1,client-ticket-upload-image');
-    Route::get('/tickets/{ticket}/replies', [TicketController::class, 'replies']);
-    Route::get('/tickets/{ticket}', [TicketController::class, 'show']);
+    Route::get('/tickets/{id}/replies', [TicketWorkflowController::class, 'replies']);
+    Route::get('/tickets/{id}', [TicketWorkflowController::class, 'show']);
     Route::post('/tickets/{id}/replies', [TicketWorkflowController::class, 'reply'])->middleware('throttle:10,1,client-ticket-reply');
-    Route::post('/tickets/{ticket}/replies/{reply}/recalls', [ActionController::class, 'recallTicketReply'])
+    Route::post('/tickets/{id}/replies/{reply}/recalls', [TicketWorkflowController::class, 'recallReply'])
         ->middleware('throttle:10,1,client-ticket-recall');
     Route::post('/tickets/{id}/closures', [TicketWorkflowController::class, 'close'])->middleware('throttle:10,1,client-ticket-close');
     Route::post('/tickets/{id}/reopen', [TicketWorkflowController::class, 'reopen'])->middleware('throttle:10,1,client-ticket-reopen');

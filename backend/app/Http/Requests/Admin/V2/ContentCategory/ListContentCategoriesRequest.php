@@ -6,7 +6,6 @@ namespace App\Http\Requests\Admin\V2\ContentCategory;
 
 use App\Http\Requests\Admin\V2\Common\AdminFormRequest;
 use App\Models\ContentArticle;
-use App\Support\Pagination;
 use Illuminate\Validation\Rule;
 
 class ListContentCategoriesRequest extends AdminFormRequest
@@ -14,10 +13,9 @@ class ListContentCategoriesRequest extends AdminFormRequest
     public function rules(): array
     {
         return [
+            ...$this->paginationRules(presence: 'sometimes'),
             'content_type' => ['required', Rule::in([ContentArticle::TYPE_NOTICE, ContentArticle::TYPE_HELP])],
             'type' => ['prohibited'],
-            'page' => ['sometimes', 'integer', 'min:1'],
-            'page_size' => ['sometimes', 'integer', 'min:1', 'max:'.Pagination::MAX_PAGE_SIZE],
             'pageSize' => ['prohibited'],
             'per_page' => ['prohibited'],
         ];

@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace App\Services\Order;
 
 use App\Constants\InvoiceStatus;
-use App\Constants\InvoiceType;
 use App\Constants\OrderStatus;
 use App\Constants\OrderType;
 use App\Constants\PaymentStatus;
+use App\Http\Resources\Client\V2\ClientOrderListItemResource;
 use App\Models\Coupon;
 use App\Models\Invoice;
 use App\Models\Order;
@@ -75,60 +75,12 @@ class ClientOrderQueryService
 
         return [
             'list' => collect($paginator->items())
-                ->map(fn (Order $order): array => $this->listItem($order))
+                ->map(fn (Order $order): array => (new ClientOrderListItemResource($this->listItem($order)))->resolve())
                 ->values()
                 ->all(),
             'total' => $paginator->total(),
             'page' => $paginator->currentPage(),
             'page_size' => $paginator->perPage(),
-        ];
-    }
-
-    /**
-     * @param  array<string, mixed>  $expiredContext
-     * @return array<string, int|string>
-     */
-    public function summary(int $userId, array $expiredContext): array
-    {
-        $this->orders->cancelExpiredPendingOrdersForUser($userId, $expiredContext);
-
-        // 计数维度仍是订单（履约工单），金额口径收敛到账单（资金真源）。
-        $row = Order::query()
-            ->where('user_id', $userId)
-            ->selectRaw('COUNT(*) AS total')
-            ->selectRaw('SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS pending', [OrderStatus::PENDING])
-            ->selectRaw('SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS paid', [OrderStatus::PAID])
-            ->selectRaw('SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS cancelled', [OrderStatus::CANCELLED])
-            ->selectRaw('SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS refunded', [OrderStatus::REFUNDED])
-            ->first();
-
-        $now = now();
-
-        // 待付金额：未付账单的应付余额（部分支付的账单按 amount - paid_amount 计）。
-        $unpaidAmount = Invoice::query()
-            ->where('user_id', $userId)
-            ->where('status', InvoiceStatus::UNPAID)
-            ->selectRaw('SUM(GREATEST(COALESCE(amount, 0) - COALESCE(paid_amount, 0), 0)) AS unpaid_amount')
-            ->value('unpaid_amount');
-
-        // 本月消费：本月创建账单的应付金额合计（订单金额列是创建时快照，不再作为计算依据）。
-        // 类型白名单与订单消费值域（new/renew/upgrade，normal 为存量新购读取兼容）对齐，
-        // 充值/返利/扣款/退款红字/手工账单不属于消费，不得计入。
-        $monthAmount = Invoice::query()
-            ->where('user_id', $userId)
-            ->whereIn('type', [InvoiceType::NEW_PURCHASE, InvoiceType::RENEW, InvoiceType::UPGRADE, 'normal'])
-            ->whereYear('created_at', $now->year)
-            ->whereMonth('created_at', $now->month)
-            ->sum('amount');
-
-        return [
-            'total' => (int) ($row?->total ?? 0),
-            'pending' => (int) ($row?->pending ?? 0),
-            'paid' => (int) ($row?->paid ?? 0),
-            'cancelled' => (int) ($row?->cancelled ?? 0),
-            'refunded' => (int) ($row?->refunded ?? 0),
-            'unpaid_amount' => number_format((float) ($unpaidAmount ?? 0), 2, '.', ''),
-            'month_amount' => number_format((float) $monthAmount, 2, '.', ''),
         ];
     }
 

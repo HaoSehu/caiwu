@@ -6,7 +6,6 @@ namespace App\Http\Requests\Admin\V2\Finance;
 
 use App\Http\Requests\Admin\V2\Common\AdminFormRequest;
 use App\Http\Requests\Concerns\HasDateRangeFilter;
-use App\Support\Pagination;
 use Illuminate\Validation\Validator;
 
 class ListFinanceRechargesRequest extends AdminFormRequest
@@ -16,13 +15,12 @@ class ListFinanceRechargesRequest extends AdminFormRequest
     public function rules(): array
     {
         return [
+            ...$this->paginationRules(),
             'keyword' => ['nullable', 'string', 'max:80'],
             'status' => ['nullable', 'integer'],
             'start_date' => ['nullable', 'date_format:Y-m-d'],
             'end_date' => ['nullable', 'date_format:Y-m-d'],
             'date_range' => ['prohibited'],
-            'page' => ['nullable', 'integer', 'min:1'],
-            'page_size' => ['nullable', 'integer', 'min:1', 'max:'.Pagination::MAX_PAGE_SIZE],
             'per_page' => ['prohibited'],
             'pageSize' => ['prohibited'],
         ];

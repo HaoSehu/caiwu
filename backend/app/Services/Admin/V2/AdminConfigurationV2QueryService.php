@@ -184,6 +184,9 @@ class AdminConfigurationV2QueryService
             RunIntegrationPluginTaskRequest::TYPE_HEALTH_CHECK => $this->pluginService->healthCheck($plugin),
             RunIntegrationPluginTaskRequest::TYPE_TEST_EMAIL => $this->pluginService->testEmail($plugin, $payload),
             RunIntegrationPluginTaskRequest::TYPE_TEST_SMS => $this->pluginService->testSms($plugin, $payload),
+            RunIntegrationPluginTaskRequest::TYPE_SMS_TEMPLATE_SUBMIT => $this->pluginService->submitSmsTemplate($plugin, $payload),
+            RunIntegrationPluginTaskRequest::TYPE_SMS_TEMPLATE_LIST => $this->pluginService->listSmsTemplates($plugin),
+            RunIntegrationPluginTaskRequest::TYPE_SMS_TEMPLATE_PRESETS => $this->pluginService->smsTemplatePresets($plugin),
             default => throw new BusinessException('不支持的插件任务', 42200),
         };
 
@@ -640,6 +643,9 @@ class AdminConfigurationV2QueryService
             RunIntegrationPluginTaskRequest::TYPE_HEALTH_CHECK => '插件健康检查完成',
             RunIntegrationPluginTaskRequest::TYPE_TEST_EMAIL => '测试邮件发送成功',
             RunIntegrationPluginTaskRequest::TYPE_TEST_SMS => '测试短信发送成功',
+            RunIntegrationPluginTaskRequest::TYPE_SMS_TEMPLATE_SUBMIT => '模板已提交，等待审核',
+            RunIntegrationPluginTaskRequest::TYPE_SMS_TEMPLATE_LIST => '模板列表已刷新',
+            RunIntegrationPluginTaskRequest::TYPE_SMS_TEMPLATE_PRESETS => '预置模板已加载',
             default => '插件任务执行完成',
         };
     }
@@ -662,6 +668,19 @@ class AdminConfigurationV2QueryService
             'entry_class',
             'provider_class',
             'trace_id',
+            // 短信模板提交 / 列表确认
+            'provider_template_id',
+            'content',
+            'variables',
+            'templates',
+            'synced_at',
+            // 批量提交结果与预置模板种子
+            'defaults',
+            'submitted',
+            'failed',
+            'results',
+            'code',
+            'remark',
         ];
 
         return array_filter(

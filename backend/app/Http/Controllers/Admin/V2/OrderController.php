@@ -10,9 +10,9 @@ use App\Http\Requests\Admin\V2\Invoice\RefundInvoiceToBalanceRequest;
 use App\Http\Requests\Admin\V2\Order\CancelOrderActionRequest;
 use App\Http\Requests\Admin\V2\Order\ListOrdersRequest;
 use App\Http\Requests\Admin\V2\Order\ShowOrderRequest;
-use App\Http\Resources\Admin\V2\AdminActionResultResource;
 use App\Http\Resources\Admin\V2\AdminOrderDetailResource;
 use App\Http\Resources\Admin\V2\AdminOrderSummaryResource;
+use App\Http\Resources\V2\ActionResultResource;
 use App\Models\AdminUser;
 use App\Models\Order;
 use App\Models\User;
@@ -74,7 +74,7 @@ class OrderController extends Controller
             ? '该账单已退款到余额，未重复操作'
             : sprintf('已退款 %s 元至会员余额', number_format((float) ($refund['refund_amount'] ?? 0), 2, '.', ''));
 
-        return $this->success(AdminActionResultResource::make($result)->resolve(), $message);
+        return $this->success(ActionResultResource::make($result)->resolve(), $message);
     }
 
     /**
@@ -85,7 +85,7 @@ class OrderController extends Controller
     {
         $result = $this->actions->cancel($order, $request);
 
-        return $this->success(AdminActionResultResource::make($result)->resolve(), (string) $result['message']);
+        return $this->success(ActionResultResource::make($result)->resolve(), (string) $result['message']);
     }
 
     private function resolveAdminActor(Request $request): array

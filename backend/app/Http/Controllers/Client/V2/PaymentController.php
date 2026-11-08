@@ -7,7 +7,6 @@ namespace App\Http\Controllers\Client\V2;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Client\V2\Payment\ListPaymentsRequest;
 use App\Http\Requests\Client\V2\Payment\ShowPaymentRequest;
-use App\Http\Requests\Client\V2\Payment\SummarizePaymentsRequest;
 use App\Services\Finance\ClientPaymentQueryService;
 
 class PaymentController extends Controller
@@ -21,14 +20,6 @@ class PaymentController extends Controller
         return $this->success($this->payments->paginate(
             (int) $request->user()->id,
             $request->validated(),
-            $this->paymentWindowExpiredContext(),
-        ));
-    }
-
-    public function summary(SummarizePaymentsRequest $request)
-    {
-        return $this->success($this->payments->summary(
-            (int) $request->user()->id,
             $this->paymentWindowExpiredContext(),
         ));
     }

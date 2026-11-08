@@ -18,7 +18,7 @@ class HealthController extends Controller
 
     public function ready(ProductionReadinessService $readiness): JsonResponse
     {
-        // 公开探针只暴露结论，避免 checks 明细被用于基础设施侦察；明细由管理端 /system/readiness 输出。
+        // 公开探针只暴露结论，避免 checks 明细被用于基础设施侦察；明细仅供运维在服务器本地查看。
         if ($readiness->check()['ready']) {
             return ApiResponseBuilder::success(['status' => 'ready'], '服务已就绪');
         }

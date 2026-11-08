@@ -80,8 +80,23 @@ class HostingPanelApiDnsResolutionTest extends TestCase
 
     public function test_unresolvable_host_throws_and_writes_negative_cache(): void
     {
+        // 解析失败必须由「解析返回空」驱动，不能依赖真实 DNS：本机若装了 Clash 类代理，
+        // fake-ip DNS 会把任意域名解析成 198.18.x.x，.invalid 也一样，用例就会假失败。
+        $transport = new class extends HostingPanelApiTransport
+        {
+            /** @return array<int, string> */
+            protected function lookupHostAddresses(string $host): array
+            {
+                // 与真实实现保持一致：解析不到就抛业务异常，供 resolveHostAddresses 写负缓存。
+                throw new BusinessException('无法解析供应商接口域名', 42200);
+            }
+        };
+
+        $method = new ReflectionMethod(HostingPanelApiTransport::class, 'resolveHostAddresses');
+        $method->setAccessible(true);
+
         try {
-            $this->invoke('resolveHostAddresses', 'no-such-host.invalid');
+            $method->invoke($transport, 'no-such-host.invalid');
             $this->fail('解析失败时应抛出业务异常');
         } catch (BusinessException $exception) {
             $this->assertSame(42200, $exception->getErrorCode());

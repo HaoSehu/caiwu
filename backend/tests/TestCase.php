@@ -4,7 +4,9 @@ namespace Tests;
 
 use App\Services\Mail\MailDriverManager;
 use App\Support\Cache\VolatileStore;
+use App\Support\Upgrade\VersionManifest;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
+use Illuminate\Support\Facades\DB;
 use Tests\Fixtures\Mail\FakeMailDriver;
 
 abstract class TestCase extends BaseTestCase
@@ -15,6 +17,35 @@ abstract class TestCase extends BaseTestCase
 
         $this->swapVolatileCacheStoreToArray();
         $this->swapMailDriverToFake();
+        $this->adoptUpgradeLedgerForTests();
+    }
+
+    /**
+     * 测试库视为「已采纳」的数据库。
+     *
+     * `test:prepare` 只跑 `migrate:fresh`，不会执行 `db:upgrade --adopt`（那是
+     * `install_db.py` 的职责）。但 `UpgradeLedger::currentVersion()` 在未采纳时返回
+     * null，会让 `PluginCompatibility` 跳过宿主版本校验——依赖该校验的用例
+     * （插件兼容性、升级账本）就会在干净测试库上误失败。
+     *
+     * 这里统一写入采纳行，使测试环境与「已按 install_db 初始化过」的生产一致。
+     * 用 updateOrInsert 保证幂等：DatabaseTransactions 用例回滚后重复 setUp 不会冲突。
+     */
+    private function adoptUpgradeLedgerForTests(): void
+    {
+        if (! DB::getSchemaBuilder()->hasTable('system_installation')) {
+            return;
+        }
+
+        DB::table('system_installation')->updateOrInsert(
+            ['id' => 1],
+            [
+                'app_version' => VersionManifest::load()->version,
+                'adopted_at' => now(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        );
     }
 
     /**

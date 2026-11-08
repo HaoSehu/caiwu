@@ -15,12 +15,12 @@ use App\Http\Requests\Admin\V2\Supplier\ShowSupplierRequest;
 use App\Http\Requests\Admin\V2\Supplier\ShowSupplierSummaryRequest;
 use App\Http\Requests\Admin\V2\Supplier\UpdateSupplierStatusRequest;
 use App\Http\Requests\Admin\V2\Supplier\UpsertSupplierRequest;
-use App\Http\Resources\Admin\V2\AdminActionResultResource;
 use App\Http\Resources\Admin\V2\AdminSupplierBalanceResource;
 use App\Http\Resources\Admin\V2\AdminSupplierProductConfigTemplateResource;
 use App\Http\Resources\Admin\V2\AdminSupplierProviderTypesResource;
 use App\Http\Resources\Admin\V2\AdminSupplierRemoteProductsResource;
 use App\Http\Resources\Admin\V2\AdminSupplierSummaryResource;
+use App\Http\Resources\V2\ActionResultResource;
 use App\Models\Supplier;
 use App\Services\Admin\V2\AdminConfigurationV2QueryService;
 use App\Services\System\OperationLogService;
@@ -75,28 +75,24 @@ class SupplierController extends Controller
     {
         $result = $this->queryService->deleteSupplier($supplier);
 
-        return $this->success(AdminActionResultResource::make($result)->resolve(), (string) $result['message']);
+        return $this->success(ActionResultResource::make($result)->resolve(), (string) $result['message']);
     }
 
     public function revealSecret(RevealSupplierSecretRequest $request, Supplier $supplier)
     {
         $result = $this->queryService->supplierSecret($supplier, $request->secretKey());
 
-        // 密钥 reveal 统一审计：记录谁在何时查看了哪个敏感字段。
-        $this->operationLogService->write(
-            userId: (int) ($request->user()?->id ?? 0),
-            userType: 'admin',
-            action: 'secret.reveal',
-            module: 'secret',
+        $this->operationLogService->writeSecretReveal(
+            secretType: 'supplier',
+            secretKey: (string) $request->secretKey(),
             targetId: (int) $supplier->id,
-            detail: [
-                'secret_type' => 'supplier',
-                'secret_key' => (string) $request->secretKey(),
+            subject: [
                 'supplier_id' => (int) $supplier->id,
                 'supplier_name' => (string) ($supplier->name ?? ''),
-                'operator_name' => (string) ($request->user()?->username ?? $request->user()?->name ?? ''),
-                'trace_id' => (string) $request->header('X-Request-Id', ''),
             ],
+            operatorId: $request->user()?->id,
+            operatorName: (string) ($request->user()?->username ?? $request->user()?->name ?? ''),
+            traceId: (string) $request->header('X-Request-Id', ''),
             ipAddress: (string) $request->ip(),
         );
 
@@ -107,7 +103,7 @@ class SupplierController extends Controller
     {
         $result = $this->queryService->updateSupplierStatus($supplier, $request->enabled());
 
-        return $this->success(AdminActionResultResource::make($result)->resolve(), (string) $result['message']);
+        return $this->success(ActionResultResource::make($result)->resolve(), (string) $result['message']);
     }
 
     public function balance(ShowSupplierRemoteResourceRequest $request, Supplier $supplier)
@@ -140,6 +136,6 @@ class SupplierController extends Controller
     {
         $result = $this->queryService->runSupplierTask($supplier, $request->taskType(), $request->payload());
 
-        return $this->success(AdminActionResultResource::make($result)->resolve(), (string) $result['message']);
+        return $this->success(ActionResultResource::make($result)->resolve(), (string) $result['message']);
     }
 }

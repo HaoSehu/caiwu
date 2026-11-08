@@ -92,14 +92,14 @@ class MediaReferenceRewriterTest extends TestCase
     {
         // HTTP → HTTPS 换域名的真实场景：协议与主机同时变化，路径段保持不变。
         $map = $this->rewriter->buildPathMap(
-            'http://154.219.97.172/media/img_155342_g76d3jXT.jpg',
-            'http://154.219.97.172/media/img_155342_g76d3jXT.jpg',
+            'http://192.0.2.10/media/img_155342_g76d3jXT.jpg',
+            'http://192.0.2.10/media/img_155342_g76d3jXT.jpg',
             'https://media.example.com/media/img_155342_g76d3jXT.jpg'
         );
 
         $this->assertSame(
             'https://media.example.com/media/img_155342_g76d3jXT.jpg',
-            $this->rewriter->applyPathMap('http://154.219.97.172/media/img_155342_g76d3jXT.jpg', $map)
+            $this->rewriter->applyPathMap('http://192.0.2.10/media/img_155342_g76d3jXT.jpg', $map)
         );
     }
 }

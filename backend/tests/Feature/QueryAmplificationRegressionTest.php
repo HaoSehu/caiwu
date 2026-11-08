@@ -13,7 +13,6 @@ use App\Models\Setting;
 use App\Models\User;
 use App\Services\Automation\Heartbeat\HeartbeatTaskRegistry;
 use App\Services\Automation\ScheduleHookService;
-use App\Services\Finance\AdminFinanceQueryService;
 use App\Services\Finance\CouponService;
 use App\Services\Finance\InvoiceService;
 use App\Services\Finance\PaymentCallbackProjector;
@@ -147,7 +146,7 @@ class QueryAmplificationRegressionTest extends TestCase
         $this->seedInvoicesWithPayments(3, true);
         $this->actingAsAdmin();
 
-        $this->capture(fn () => $this->getJson('/api/v2/admin/users/'.$this->uid.'/invoices?page_size=50')->assertOk());
+        $this->capture(fn () => $this->getJson('/api/v2/admin/invoices?user_id='.$this->uid.'&page_size=50')->assertOk());
 
         $count = $this->countSqlContaining('select sum(`amount`) as aggregate from `finance_refunds`');
         $this->assertSame(
@@ -161,11 +160,14 @@ class QueryAmplificationRegressionTest extends TestCase
         // with() 中一次性预载。这里断言「每张分组表在一次请求内只被查询 1 次」：预载是 1 次批量，
         // 逐行懒加载则会按账单条数递增。
         foreach (['third_product_groups', 'second_product_groups', 'first_product_groups'] as $table) {
+            // 账单有两个商品外键：invoices.product_id（账单自身商品）与 order.product_id（订单商品），
+            // 两条关系链的读取点不同（product_full_path 走 order.product，账单行商品走 invoice.product），
+            // 各自批量预载一次，合计恒为 2 次。真正的 N+1 会随账单行数增长到 3 次以上。
             $count = $this->countSqlContaining('from `'.$table.'`');
             $this->assertSame(
-                1,
+                2,
                 $count,
-                sprintf('%s 表查询次数随账单行数增长：实测 %d 次（3 行数据；预载应恒为 1 次批量查询），应在账单查询的 with() 中预载商品三级分组。', $table, $count)
+                sprintf('%s 表查询次数随账单行数增长：实测 %d 次（3 行数据；两条商品链各预载 1 次应恒为 2 次），应在账单查询的 with() 中预载商品三级分组。', $table, $count)
             );
         }
     }
@@ -651,20 +653,6 @@ class QueryAmplificationRegressionTest extends TestCase
             .'预载写在容器实例上、解析发生在孤儿实例上，逐行解析仍会各发一次源商品查询。'
         );
 
-        $finance = new AdminFinanceQueryService(
-            app(ProductDisplayNameResolver::class),
-            null,
-        );
-
-        $financeResolver = new ReflectionMethod($finance, 'productFullPathResolver');
-        $financeResolver->setAccessible(true);
-        $this->assertSame(
-            app(ProductFullPathResolver::class),
-            $financeResolver->invoke($finance),
-            'AdminFinanceQueryService 的兜底分支未取用容器内的 ProductFullPathResolver 单例：'
-            .'其内部持有的展示名解析器会与预载实例脱钩。'
-        );
-
         // 账单列表与优惠券列表的预载同样写在解析器单例上：兜底新建实例会让整页预载变成孤儿缓存。
         $invoiceResolver = new ReflectionMethod(InvoiceService::class, 'resolveProductDisplayNameResolver');
         $invoiceResolver->setAccessible(true);
@@ -995,77 +983,6 @@ class QueryAmplificationRegressionTest extends TestCase
             $this->countSqlStartsWith('select `id`, `purchase_requires`, `config_options` from `products` where `id` in ('),
             '管理端订单列表未走拆分商品源商品批量预载，查询计数断言测不到任何东西。'
         );
-    }
-
-    /**
-     * N14 财务续费订单列表：与订单列表同一条回源链路，另外商品投影刻意未取 custom_display_name，
-     * 解析时还会逐行补查该列。
-     *
-     * 修复前：3 行续费订单实测源商品单查 24 次、custom_display_name 单查 3 次；20 行分别为
-     * 160 次与 20 次。订单不带 product_spec_snapshot 时才会走回源分支，造数刻意保持为空。
-     */
-    public function test_admin_finance_renewal_orders_do_not_query_product_display_name_per_row(): void
-    {
-        $this->seedClientOrdersWithSplitProducts(3, 'renew');
-        $this->actingAsAdmin();
-
-        $this->capture(fn () => $this->getJson('/api/v2/admin/finance/renewal-orders?page_size=50')->assertOk());
-
-        $sourceLookups = $this->countSqlStartsWith('select `id`, `purchase_requires`, `config_options` from `products` where `products`.`id` =');
-        $this->assertSame(
-            0,
-            $sourceLookups,
-            sprintf('products 源商品逐行查询随续费订单行数增长：实测 %d 次（3 行订单，修复前 24 次），应按当页商品的源商品一次 whereIn 预载。', $sourceLookups)
-        );
-
-        $displayNames = $this->countSqlStartsWith('select `custom_display_name` from `products` where `products`.`id` =');
-        $this->assertSame(
-            0,
-            $displayNames,
-            sprintf('products.custom_display_name 逐行回源随续费订单行数增长：实测 %d 次（3 行订单，修复前 3 次），应在逐行解析前按当页商品批量预载该列。', $displayNames)
-        );
-
-        // 防假绿：两条批量预载都必须真的发生，否则上面的 0 次可能只是没走到展示名解析分支。
-        $this->assertSame(
-            1,
-            $this->countSqlStartsWith('select `id`, `purchase_requires`, `config_options` from `products` where `id` in ('),
-            '财务续费订单列表未走拆分商品源商品批量预载，查询计数断言测不到任何东西。'
-        );
-        $this->assertSame(
-            1,
-            $this->countSqlStartsWith('select `custom_display_name`, `id` from `products` where `id` in ('),
-            '财务续费订单列表未走 custom_display_name 批量预载，查询计数断言测不到任何东西。'
-        );
-    }
-
-    /**
-     * N14 财务附加配置（升级）单列表：与续费列表同一条回源链路，商品三级分组曾逐行懒加载。
-     *
-     * 修复前：每出现一个新的商品，ProductFullPathResolver::segmentsForProduct() 就为该商品
-     * 各发三次分组查询（3 行 3 个商品实测 third/second/first 各 3 次），随当页不同商品数增长。
-     */
-    public function test_admin_finance_upgrade_orders_do_not_lazy_load_product_groups_per_row(): void
-    {
-        $this->seedClientOrdersWithSplitProducts(3, 'upgrade');
-        $this->actingAsAdmin();
-
-        $this->capture(fn () => $this->getJson('/api/v2/admin/finance/upgrade-orders?page_size=50')->assertOk());
-
-        foreach (['third_product_groups', 'second_product_groups', 'first_product_groups'] as $table) {
-            $lazy = $this->countSqlStartsWith('select * from `'.$table.'`');
-            $this->assertSame(
-                0,
-                $lazy,
-                sprintf('%s 表逐行懒加载随附加配置行数增长：实测 %d 次（3 行数据，修复前每行一次），应在附加配置查询的 with() 中预载商品三级分组。', $table, $lazy)
-            );
-
-            // 防假绿：分组关系必须真的被预载过，否则上面的 0 次可能只是没走到 product_full_path 分支。
-            $this->assertSame(
-                1,
-                $this->countSqlContaining('from `'.$table.'` where `'.$table.'`.`id` in ('),
-                '附加配置列表未走商品三级分组批量预载，查询计数断言测不到任何东西。'
-            );
-        }
     }
 
     /**

@@ -6,11 +6,14 @@ namespace App\Http\Controllers\Client\V2;
 
 use App\Constants\InvoiceStatus;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Client\V2\Action\ClientActionRequest;
 use App\Http\Requests\Client\V2\Invoice\ListInvoicesRequest;
 use App\Http\Requests\Client\V2\Invoice\ShowInvoiceRequest;
 use App\Http\Resources\Client\V2\ClientInvoiceDetailResource;
 use App\Http\Resources\Client\V2\ClientInvoiceSummaryResource;
+use App\Http\Resources\V2\ActionResultResource;
 use App\Models\Invoice;
+use App\Services\Client\V2\ClientActionV2Service;
 use App\Services\Finance\CheckoutSecurityService;
 use App\Services\Finance\CheckoutService;
 use App\Services\Finance\ClientInvoicePaymentWorkflowService;
@@ -25,7 +28,15 @@ class InvoiceController extends Controller
         private readonly CheckoutService $checkoutService,
         private readonly CheckoutSecurityService $checkoutSecurityService,
         private readonly ClientInvoicePaymentWorkflowService $invoicePayments,
+        private readonly ClientActionV2Service $actions,
     ) {}
+
+    public function cancel(ClientActionRequest $request, int $id)
+    {
+        return $this->success(ActionResultResource::make(
+            $this->actions->cancelInvoice($request->user(), $id, $request)
+        )->resolve(), '账单已取消');
+    }
 
     public function index(ListInvoicesRequest $request): JsonResponse
     {
@@ -41,10 +52,10 @@ class InvoiceController extends Controller
         );
     }
 
-    public function show(ShowInvoiceRequest $request, int $invoice): JsonResponse
+    public function show(ShowInvoiceRequest $request, int $id): JsonResponse
     {
         $userId = (int) $request->user()->id;
-        $model = $this->invoices->findClientInvoice($userId, $invoice);
+        $model = $this->invoices->findClientInvoice($userId, $id);
         $updated = $this->checkoutService->cancelExpiredUnpaidInvoice(
             $model,
             $this->paymentWindowExpiredContext($request)

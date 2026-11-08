@@ -19,9 +19,8 @@ class ListIntegrationPluginsRequest extends AdminFormRequest
     public function rules(): array
     {
         return [
+            ...$this->paginationRules(50, 'sometimes'),
             'domain' => ['sometimes', 'nullable', 'string', Rule::in(PluginDomain::values())],
-            'page' => ['sometimes', 'integer', 'min:1'],
-            'page_size' => ['sometimes', 'integer', 'min:1', 'max:50'],
             'pageSize' => ['prohibited'],
             'per_page' => ['prohibited'],
         ];

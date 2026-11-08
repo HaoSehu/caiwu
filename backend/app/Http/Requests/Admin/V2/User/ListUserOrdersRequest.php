@@ -13,6 +13,7 @@ class ListUserOrdersRequest extends AdminFormRequest
         return array_merge($this->paginationRules(), [
             'status' => ['nullable', 'in:0,1,4,5'],
             'type' => ['nullable', 'in:new,renew,upgrade'],
+            'upgrade_kind' => ['nullable', 'string', 'max:80'],
         ], $this->legacyPaginationRules());
     }
 
@@ -24,6 +25,7 @@ class ListUserOrdersRequest extends AdminFormRequest
         return $this->safe()->only([
             'status',
             'type',
+            'upgrade_kind',
         ]);
     }
 }

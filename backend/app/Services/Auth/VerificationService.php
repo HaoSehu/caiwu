@@ -78,11 +78,6 @@ class VerificationService
         $this->driverManager = $driverManager;
     }
 
-    public function getDriverManager(): VerificationDriverManager
-    {
-        return $this->driverManager;
-    }
-
     public function initVerification(User $user, string $realname, string $idcard, string $certType = 'IDENTITY_CARD'): array
     {
         $verification = $this->getVerificationSnapshot($user);
@@ -224,13 +219,13 @@ class VerificationService
             }
 
             if (($result['status'] ?? null) === self::RESULT_STATUS_SUCCESS) {
-                $payload['verification_status'] = 2;
+                $payload['verification_status'] = User::VERIFICATION_STATUS_VERIFIED;
                 $payload['verification_message'] = (string) ($result['msg'] ?? '审核通过');
                 $payload['verified_at'] = now();
                 // 实名通过即把用户名落成真实姓名（真实姓名 > 自定义）；用户之后在个人中心
                 // 改回自定义昵称仍然生效，解绑不回滚。只在「未认证 → 已认证」的跃迁上写，
                 // 已认证用户再次触发查询时不得把用户改过的昵称覆盖回真实姓名。
-                if ($verification['verification_status'] !== 2) {
+                if ($verification['verification_status'] !== User::VERIFICATION_STATUS_VERIFIED) {
                     $realNameNickname = $this->resolvedRealNameNickname($verification);
                     if ($realNameNickname !== null) {
                         $payload['nickname'] = $realNameNickname;
@@ -245,7 +240,7 @@ class VerificationService
             } elseif (($result['status'] ?? null) === self::RESULT_STATUS_PENDING) {
                 $payload['verification_status'] = self::RESULT_STATUS_PENDING;
             } else {
-                $payload['verification_status'] = 3;
+                $payload['verification_status'] = User::VERIFICATION_STATUS_FAILED;
                 $payload['verified_at'] = null;
             }
 
@@ -352,7 +347,7 @@ class VerificationService
         $resolvedRejectReason = trim((string) $rejectReason);
         $rejectMessage = $resolvedRejectReason !== '' ? $resolvedRejectReason : '管理员驳回';
 
-        if ($verification['verification_status'] !== 2) {
+        if ($verification['verification_status'] !== User::VERIFICATION_STATUS_VERIFIED) {
             throw new BusinessException('该用户未通过实名认证，无法解绑', 42200);
         }
 
@@ -396,24 +391,6 @@ class VerificationService
             'operator' => $adminName ?? '系统',
             'reject_reason' => $rejectMessage,
         ];
-    }
-
-    public function findUserByCertifyId(string $certifyId): ?User
-    {
-        $certifyId = trim($certifyId);
-        if ($certifyId === '') {
-            return null;
-        }
-
-        $user = User::query()
-            ->where('verification_certify_id', $certifyId)
-            ->first();
-
-        if ($user) {
-            return $user;
-        }
-
-        return null;
     }
 
     private function getCertifyId(string $realname, string $idcard, string $certType): VerificationInitializeResult

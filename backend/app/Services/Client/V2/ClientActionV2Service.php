@@ -6,7 +6,6 @@ namespace App\Services\Client\V2;
 
 use App\Constants\InvoiceStatus;
 use App\Constants\OrderStatus;
-use App\Exceptions\BusinessException;
 use App\Models\ContentArticle;
 use App\Models\Invoice;
 use App\Models\Order;
@@ -14,15 +13,13 @@ use App\Models\Ticket;
 use App\Models\User;
 use App\Models\UserNotification;
 use App\Services\ClientServiceConsole\ClientServiceConsoleService;
+use App\Services\ClientServiceConsole\ServiceActionLock;
 use App\Services\Content\NoticeReadService;
 use App\Services\Finance\CheckoutService;
 use App\Services\Notification\UserNotificationService;
 use App\Services\Order\OrderService;
 use App\Services\Ticket\TicketService;
-use App\Support\CacheKey;
-use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
 
 class ClientActionV2Service
 {
@@ -33,6 +30,7 @@ class ClientActionV2Service
         private readonly NoticeReadService $noticeReadService,
         private readonly UserNotificationService $userNotificationService,
         private readonly TicketService $ticketService,
+        private readonly ServiceActionLock $serviceActionLock,
     ) {}
 
     /**
@@ -258,14 +256,12 @@ class ClientActionV2Service
 
     private function executeLockedServiceAction(Request $request, int $serviceId, string $action, callable $callback): mixed
     {
-        $userId = (int) ($request->user()?->id ?? 0);
-        $lockKey = CacheKey::lock('lock:client:service', sprintf('%d:%d:%s', $userId, $serviceId, sha1($action)));
-
-        try {
-            return Cache::lock($lockKey, 20)->block(3, $callback);
-        } catch (LockTimeoutException) {
-            throw new BusinessException('操作处理中，请勿重复提交', 40900, 409);
-        }
+        return $this->serviceActionLock->execute(
+            (int) ($request->user()?->id ?? 0),
+            $serviceId,
+            $action,
+            $callback,
+        );
     }
 
     /**

@@ -26,7 +26,6 @@ Route::get('/v2/site/products/{product}', [V2SiteProductController::class, 'show
 Route::get('/v2/site/product-purchase-context', [V2SiteProductController::class, 'purchaseContext'])->middleware('throttle:site-product-browse');
 Route::get('/v2/site/config', [V2SiteHomeController::class, 'config']);
 Route::get('/v2/site/home', [V2SiteHomeController::class, 'home']);
-Route::get('/v2/site/home-hero', [V2SiteHomeController::class, 'hero']);
 Route::get('/v2/site/content/overview', [V2SiteContentController::class, 'overview']);
 Route::get('/v2/site/notices', [V2SiteContentController::class, 'notices'])->middleware('throttle:30,1');
 Route::get('/v2/site/notices/{article}', [V2SiteContentController::class, 'noticeDetail']);

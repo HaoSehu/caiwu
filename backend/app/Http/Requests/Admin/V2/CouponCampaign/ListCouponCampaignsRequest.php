@@ -5,15 +5,13 @@ declare(strict_types=1);
 namespace App\Http\Requests\Admin\V2\CouponCampaign;
 
 use App\Http\Requests\Admin\V2\Common\AdminFormRequest;
-use App\Support\Pagination;
 
 class ListCouponCampaignsRequest extends AdminFormRequest
 {
     public function rules(): array
     {
         return [
-            'page' => ['sometimes', 'integer', 'min:1'],
-            'page_size' => ['sometimes', 'integer', 'min:1', 'max:'.Pagination::MAX_PAGE_SIZE],
+            ...$this->paginationRules(presence: 'sometimes'),
             'per_page' => ['prohibited'],
             'pageSize' => ['prohibited'],
             'keyword' => ['nullable', 'string', 'max:100'],

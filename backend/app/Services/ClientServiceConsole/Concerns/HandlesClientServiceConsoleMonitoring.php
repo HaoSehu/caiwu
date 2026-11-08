@@ -20,7 +20,18 @@ trait HandlesClientServiceConsoleMonitoring
 
     private const MONITOR_UPSTREAM_TIMEOUT_SECONDS = 8;
 
-    public function getMonitorForUser(User $user, int $serviceId, array $filters = []): array
+    /**
+     * 单条与批量监控共用的入口准备：定位实例、判定可管理、解析时间范围、读响应缓存。
+     *
+     * 两个方法此前各自重复这套前置（约 25 行 × 2），任何一处改了缓存键或可管理判定
+     * 都会两边漂移。差异中的 cacheKey 由调用方按自己的维度构造。
+     *
+     * @param  array<string, mixed>  $filters
+     * @param  callable(Service, array<string, mixed>): string  $cacheKeyBuilder
+     * @return array{service: Service, started_at: float, range: array<string, mixed>, cache_key: string, cached: ?array<string, mixed>}|null
+     *                                                                                                                                        返回 null 表示当前实例不支持监控，调用方按自己的响应结构构造空响应。
+     */
+    private function prepareMonitorRequest(User $user, int $serviceId, array $filters, bool $fresh, callable $cacheKeyBuilder): ?array
     {
         $service = $this->findUserService($user, $serviceId, [
             'product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
@@ -30,22 +41,57 @@ trait HandlesClientServiceConsoleMonitoring
 
         $startedAt = microtime(true);
         $range = $this->resolveMonitorRange($filters);
+
+        if (! $this->canManageService($service)) {
+            return null;
+        }
+
+        $cacheKey = $cacheKeyBuilder($service, $range);
+
+        $cached = null;
+        if (! $fresh) {
+            $cachedResponse = Cache::get($cacheKey);
+            if (is_array($cachedResponse) && $cachedResponse !== []) {
+                $cached = $cachedResponse;
+            }
+        }
+
+        return [
+            'service' => $service,
+            'started_at' => $startedAt,
+            'range' => $range,
+            'cache_key' => $cacheKey,
+            'cached' => $cached,
+        ];
+    }
+
+    public function getMonitorForUser(User $user, int $serviceId, array $filters = []): array
+    {
         $selectedType = trim((string) ($filters['type'] ?? ''));
         $fresh = (bool) ($filters['fresh'] ?? false);
 
-        if (! $this->canManageService($service)) {
-            return $this->buildEmptyMonitorResponse($range, '当前服务暂不支持监控图表');
+        $prepared = $this->prepareMonitorRequest(
+            $user,
+            $serviceId,
+            $filters,
+            $fresh,
+            fn (Service $service, array $range): string => $this->buildMonitorResponseCacheKey($service, [
+                'type' => $selectedType,
+                'range' => $range,
+            ])
+        );
+
+        if ($prepared === null) {
+            return $this->buildEmptyMonitorResponse($this->resolveMonitorRange($filters), '当前服务暂不支持监控图表');
         }
 
-        $responseCacheKey = $this->buildMonitorResponseCacheKey($service, [
-            'type' => $selectedType,
-            'range' => $range,
-        ]);
-        if (! $fresh) {
-            $cachedResponse = Cache::get($responseCacheKey);
-            if (is_array($cachedResponse) && $cachedResponse !== []) {
-                return $cachedResponse;
-            }
+        $service = $prepared['service'];
+        $startedAt = $prepared['started_at'];
+        $range = $prepared['range'];
+        $responseCacheKey = $prepared['cache_key'];
+
+        if ($prepared['cached'] !== null) {
+            return $prepared['cached'];
         }
 
         if (! $fresh && $this->canManageService($service)) {
@@ -173,14 +219,6 @@ trait HandlesClientServiceConsoleMonitoring
 
     public function getMonitorBatchForUser(User $user, int $serviceId, array $filters = []): array
     {
-        $service = $this->findUserService($user, $serviceId, [
-            'product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
-            'product.productGroup.secondProductGroup.firstProductGroup',
-            'product.supplier',
-        ]);
-
-        $startedAt = microtime(true);
-        $range = $this->resolveMonitorRange($filters);
         $fresh = (bool) ($filters['fresh'] ?? false);
         $requestedTypes = collect($filters['types'] ?? [])
             ->map(fn ($item) => trim((string) $item))
@@ -190,27 +228,36 @@ trait HandlesClientServiceConsoleMonitoring
             ->all();
         $requestedLimit = max((int) ($filters['limit'] ?? 0), 0);
 
-        if (! $this->canManageService($service)) {
+        $prepared = $this->prepareMonitorRequest(
+            $user,
+            $serviceId,
+            $filters,
+            $fresh,
+            fn (Service $service, array $range): string => $this->buildMonitorBatchResponseCacheKey($service, [
+                'types' => $requestedTypes,
+                'limit' => $requestedLimit,
+                'range' => $range,
+            ])
+        );
+
+        if ($prepared === null) {
             return [
                 'supported' => false,
                 'message' => '当前服务暂不支持监控图表',
                 'error' => '',
                 'options' => [],
-                'range' => $range,
+                'range' => $this->resolveMonitorRange($filters),
                 'charts' => [],
             ];
         }
 
-        $responseCacheKey = $this->buildMonitorBatchResponseCacheKey($service, [
-            'types' => $requestedTypes,
-            'limit' => $requestedLimit,
-            'range' => $range,
-        ]);
-        if (! $fresh) {
-            $cachedResponse = Cache::get($responseCacheKey);
-            if (is_array($cachedResponse) && $cachedResponse !== []) {
-                return $cachedResponse;
-            }
+        $service = $prepared['service'];
+        $startedAt = $prepared['started_at'];
+        $range = $prepared['range'];
+        $responseCacheKey = $prepared['cache_key'];
+
+        if ($prepared['cached'] !== null) {
+            return $prepared['cached'];
         }
 
         if (! $fresh && $this->canManageService($service)) {

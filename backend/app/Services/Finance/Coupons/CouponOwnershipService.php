@@ -18,15 +18,6 @@ use App\Models\UserCoupon;
  */
 final class CouponOwnershipService
 {
-    /**
-     * 视为「已消耗」的账单状态：已支付 = 核销完成；已退款 = 全额退款落地后券不返还
-     * （防「购-付-退」循环薅券，取消路径不受影响仍回落可复用）。
-     */
-    private const USED_INVOICE_STATUSES = [
-        InvoiceStatus::PAID,
-        InvoiceStatus::REFUNDED,
-    ];
-
     public static function hasUserPlacedOrder(int $userId): bool
     {
         // 首单资格只认「真实购买且已成交」的账单：充值/补录/扣款等非购买账单不算下过单，
@@ -36,7 +27,7 @@ final class CouponOwnershipService
         return Invoice::query()
             ->where('user_id', $userId)
             ->whereIn('type', [InvoiceType::NEW_PURCHASE, 'normal', InvoiceType::RENEW])
-            ->whereIn('status', self::USED_INVOICE_STATUSES)
+            ->whereIn('status', CouponUsageStatuses::usedInvoiceStatuses())
             ->exists();
     }
 
@@ -87,7 +78,7 @@ final class CouponOwnershipService
         return Invoice::query()
             ->where('user_id', $userId)
             ->where('user_coupon_id', $userCouponId)
-            ->whereIn('status', self::USED_INVOICE_STATUSES)
+            ->whereIn('status', CouponUsageStatuses::usedInvoiceStatuses())
             ->exists();
     }
 
@@ -122,7 +113,7 @@ final class CouponOwnershipService
     {
         return (int) Invoice::query()
             ->where('coupon_id', $couponId)
-            ->whereIn('status', self::USED_INVOICE_STATUSES)
+            ->whereIn('status', CouponUsageStatuses::usedInvoiceStatuses())
             ->count();
     }
 
@@ -131,7 +122,7 @@ final class CouponOwnershipService
         $order = Invoice::query()
             ->select(['paid_at', 'updated_at'])
             ->where('user_coupon_id', $userCouponId)
-            ->whereIn('status', self::USED_INVOICE_STATUSES)
+            ->whereIn('status', CouponUsageStatuses::usedInvoiceStatuses())
             ->orderByDesc('paid_at')
             ->orderByDesc('updated_at')
             ->first();

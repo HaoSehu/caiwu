@@ -21,9 +21,8 @@ class ListLogsRequest extends AdminFormRequest
     public function rules(): array
     {
         return [
+            ...$this->paginationRules(presence: 'sometimes'),
             'channel' => ['required', Rule::in(AdminLogV2QueryService::channels())],
-            'page' => ['sometimes', 'integer', 'min:1'],
-            'page_size' => ['sometimes', 'integer', 'min:1', 'max:'.Pagination::MAX_PAGE_SIZE],
             'include_summary' => ['sometimes', 'boolean'],
             // 复用基类 trait 的旧分页参数禁用规则，替代手抄的 per_page/pageSize prohibited。
             ...$this->legacyPaginationRules(),

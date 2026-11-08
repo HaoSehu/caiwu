@@ -9,8 +9,8 @@ use App\Http\Requests\Admin\V2\ReferralWithdrawal\ApproveReferralWithdrawalReque
 use App\Http\Requests\Admin\V2\ReferralWithdrawal\ConfirmWithdrawalPaymentRequest;
 use App\Http\Requests\Admin\V2\ReferralWithdrawal\ListReferralWithdrawalsRequest;
 use App\Http\Requests\Admin\V2\ReferralWithdrawal\RejectReferralWithdrawalRequest;
-use App\Http\Resources\Admin\V2\AdminActionResultResource;
 use App\Http\Resources\Referral\V2\ReferralWithdrawalListItemResource;
+use App\Http\Resources\V2\ActionResultResource;
 use App\Models\ReferralWithdrawal;
 use App\Services\Admin\V2\AdminReferralWithdrawalActionV2Service;
 use App\Services\Referral\ReferralService;
@@ -46,7 +46,7 @@ class ReferralWithdrawalController extends Controller
             traceId: (string) $request->header('X-Request-Id', ''),
         );
 
-        return $this->success(AdminActionResultResource::make($result)->resolve(), (string) $result['message']);
+        return $this->success(ActionResultResource::make($result)->resolve(), (string) $result['message']);
     }
 
     public function reject(RejectReferralWithdrawalRequest $request, ReferralWithdrawal $withdrawal): JsonResponse
@@ -58,7 +58,7 @@ class ReferralWithdrawalController extends Controller
             traceId: (string) $request->header('X-Request-Id', ''),
         );
 
-        return $this->success(AdminActionResultResource::make($result)->resolve(), (string) $result['message']);
+        return $this->success(ActionResultResource::make($result)->resolve(), (string) $result['message']);
     }
 
     public function confirmPayment(ConfirmWithdrawalPaymentRequest $request, ReferralWithdrawal $withdrawal): JsonResponse
@@ -71,6 +71,6 @@ class ReferralWithdrawalController extends Controller
             traceId: (string) $request->header('X-Request-Id', ''),
         );
 
-        return $this->success(AdminActionResultResource::make($result)->resolve(), (string) $result['message']);
+        return $this->success(ActionResultResource::make($result)->resolve(), (string) $result['message']);
     }
 }

@@ -132,7 +132,7 @@ class ServiceRenewService
         $selectedCoupon = null;
         if ($renewCouponBinding === null && $effectiveProduct instanceof Product && $userCouponId > 0) {
             try {
-                $selectedCoupon = $this->couponService->previewOwnedCoupon(
+                $selectedPayload = $this->couponService->previewOwnedCoupon(
                     $userCouponId,
                     (int) $user->id,
                     $effectiveProduct,
@@ -141,6 +141,10 @@ class ServiceRenewService
                     'renew',
                     $selectedMemberDiscountApplied
                 );
+                // 与 available_coupons / 官网报价同一形状，避免同一张券在三处出现三种契约
+                $selectedCoupon = is_array($selectedPayload)
+                    ? $this->couponService->clientCouponOption($selectedPayload)
+                    : null;
             } catch (\Throwable) {
                 $selectedCoupon = null;
             }
@@ -209,7 +213,7 @@ class ServiceRenewService
             'cycles' => $cycles,
             'default_cycle' => $resolvedBillingCycle,
             'available_coupons' => $availableCoupons,
-            'selected_user_coupon_id' => (int) ($selectedCoupon['user_coupon_id'] ?? 0),
+            'selected_user_coupon_id' => (int) ($selectedCoupon['id'] ?? 0),
             'selected_coupon' => $selectedCoupon,
             'renew_coupon_binding' => $renewCouponBinding === null ? null : [
                 'coupon_id' => $renewCouponBinding['coupon_id'],

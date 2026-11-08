@@ -61,6 +61,9 @@ class SiteProductQuoteResource extends JsonResource
     }
 
     /**
+     * 券字段直接透传 CouponService::clientCouponOption 的规范形状（唯一真源），
+     * 资源层不再挑字段：否则服务端增删字段时这里会静默补空串，且与续费端契约分叉。
+     *
      * @return array<string, mixed>|null
      */
     private function coupon(mixed $coupon): ?array
@@ -70,10 +73,18 @@ class SiteProductQuoteResource extends JsonResource
         }
 
         return [
-            'user_coupon_id' => (int) ($coupon['user_coupon_id'] ?? 0),
-            'coupon_id' => (int) ($coupon['coupon_id'] ?? $coupon['id'] ?? 0),
+            'id' => (int) ($coupon['id'] ?? 0),
+            'coupon_id' => (int) ($coupon['coupon_id'] ?? 0),
+            'code' => (string) ($coupon['code'] ?? ''),
             'name' => (string) ($coupon['name'] ?? ''),
+            'description' => (string) ($coupon['description'] ?? ''),
+            'discount_type' => (string) ($coupon['discount_type'] ?? ''),
+            'discount_label' => (string) ($coupon['discount_label'] ?? ''),
             'discount_amount' => $this->money($coupon['discount_amount'] ?? 0),
+            'final_amount' => $this->money($coupon['final_amount'] ?? 0),
+            'product_scope_text' => (string) ($coupon['product_scope_text'] ?? ''),
+            'billing_cycle_text' => (string) ($coupon['billing_cycle_text'] ?? ''),
+            'validity_text' => (string) ($coupon['validity_text'] ?? ''),
         ];
     }
 

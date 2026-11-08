@@ -13,6 +13,7 @@ use App\Services\ProductCatalog\Concerns\HandlesProductCatalogHelpers;
 use App\Support\Money;
 use App\Support\ProductGroupHierarchyFields;
 use App\Support\SiteProductGroupQuery;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator as LengthAwarePaginatorContract;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Cache;
 
@@ -487,6 +488,25 @@ class ProductSiteService
     public function cpuModelPayloadForProduct(Product $product): array
     {
         return $this->resolveCpuModelPayload($product);
+    }
+
+    /**
+     * 给站点商品分页的每一行挂上 CPU 型号展示字段。
+     * 站点全量列表与分组列表共用同一口径，避免两处各自实现后字段漂移。
+     */
+    public function attachCpuModelPayloads(LengthAwarePaginatorContract $paginator): LengthAwarePaginatorContract
+    {
+        foreach ($paginator->items() as $item) {
+            if (! $item instanceof Product) {
+                continue;
+            }
+
+            foreach ($this->cpuModelPayloadForProduct($item) as $key => $value) {
+                $item->setAttribute($key, $value);
+            }
+        }
+
+        return $paginator;
     }
 
     /**

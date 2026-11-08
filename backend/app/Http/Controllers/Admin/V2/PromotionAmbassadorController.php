@@ -10,7 +10,6 @@ use App\Http\Requests\Admin\V2\PromotionAmbassador\DeletePromotionAmbassadorRequ
 use App\Http\Requests\Admin\V2\PromotionAmbassador\ListPromotionAmbassadorsRequest;
 use App\Http\Requests\Admin\V2\PromotionAmbassador\UpdatePromotionAmbassadorRequest;
 use App\Http\Resources\Admin\V2\AdminPromotionAmbassadorDetailResource;
-use App\Http\Resources\Admin\V2\AdminPromotionAmbassadorListItemResource;
 use App\Models\PromotionAmbassador;
 use App\Services\Referral\PromotionAmbassadorService;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -21,7 +20,7 @@ class PromotionAmbassadorController extends Controller
 
     public function index(ListPromotionAmbassadorsRequest $request)
     {
-        $list = AdminPromotionAmbassadorListItemResource::collection($this->ambassadors->list())->resolve();
+        $list = AdminPromotionAmbassadorDetailResource::collection($this->ambassadors->list())->resolve();
 
         // 全量档位列表无真实分页，统一经标准分页器出信封（page=1、page_size=条目数）。
         $total = count($list);

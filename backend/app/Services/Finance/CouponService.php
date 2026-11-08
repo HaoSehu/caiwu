@@ -21,12 +21,15 @@ use App\Services\Finance\Concerns\ResolvesCouponProductDisplay;
 use App\Services\Finance\Coupons\CouponAdminGuardService;
 use App\Services\Finance\Coupons\CouponNormalizer;
 use App\Services\Finance\Coupons\CouponOwnershipService;
+use App\Services\Finance\Coupons\CouponUsageStatuses;
 use App\Services\ProductCatalog\InstanceSpecCatalogService;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Support\LikeEscape;
 use App\Support\Money;
 use App\Support\SchemaMetadataCache;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -42,16 +45,6 @@ class CouponService
     ) {}
 
     /**
-     * 视为「已消耗」的账单状态：已支付 = 核销完成；已退款 = 全额退款落地后券不返还
-     * （防「购-付-退」循环薅券，取消路径不受影响仍回落可复用）。
-     * 占用拦截、展示状态、核销计数（used_count）、删除拦截共用本判定。
-     */
-    private const USED_INVOICE_STATUSES = [
-        InvoiceStatus::PAID,
-        InvoiceStatus::REFUNDED,
-    ];
-
-    /**
      * 使持有券不可再次使用的账单状态：待支付=结算占用（挂账）；已支付=已核销，
      * 或已核销但异步同步尚未完成；已退款=退款后券已消耗（同步未完成的窗口内同样拦截）。
      * 列表排除、分组归属、展示状态、占用拦截四处共用。
@@ -60,14 +53,6 @@ class CouponService
         InvoiceStatus::UNPAID,
         InvoiceStatus::PAID,
         InvoiceStatus::REFUNDED,
-    ];
-
-    /**
-     * 视为「已消耗」的订单状态：与 USED_INVOICE_STATUSES 同口径（券按账单核销，订单侧只做汇总展示）。
-     */
-    private const USED_ORDER_STATUSES = [
-        OrderStatus::PAID,
-        OrderStatus::REFUNDED,
     ];
 
     public function adminSummary(array $filters = []): array
@@ -89,15 +74,7 @@ class CouponService
 
         return [
             'total' => (clone $query)->count(),
-            'active' => (clone $query)
-                ->where('status', CouponStatus::ACTIVE)
-                ->where(function ($builder) use ($now) {
-                    $builder->whereNull('starts_at')->orWhere('starts_at', '<=', $now);
-                })
-                ->where(function ($builder) use ($now) {
-                    $builder->whereNull('expires_at')->orWhere('expires_at', '>=', $now);
-                })
-                ->count(),
+            'active' => $this->countWithWindowConstraint(clone $query, $now),
             'expired' => (clone $query)
                 ->where('status', CouponStatus::ACTIVE)
                 ->whereNotNull('expires_at')
@@ -129,8 +106,8 @@ class CouponService
             ->withCount([
                 'orders',
                 'userCoupons',
-                'orders as used_orders_count' => fn ($query) => $query->whereIn('status', self::USED_ORDER_STATUSES),
-                'invoices as used_invoices_count' => fn ($query) => $query->whereIn('status', self::USED_INVOICE_STATUSES),
+                'orders as used_orders_count' => fn ($query) => $query->whereIn('status', CouponUsageStatuses::usedOrderStatuses()),
+                'invoices as used_invoices_count' => fn ($query) => $query->whereIn('status', CouponUsageStatuses::usedInvoiceStatuses()),
                 'userCoupons as used_user_coupons_count' => fn ($query) => $query->whereNotNull('last_used_at'),
                 'orders as deletion_blocking_orders_count' => fn ($query) => $query->where('status', '!=', OrderStatus::CANCELLED),
                 'invoices as deletion_blocking_invoices_count' => fn ($query) => $query->where('status', '!=', InvoiceStatus::CANCELLED),
@@ -489,19 +466,7 @@ class CouponService
                 try {
                     $payload = $this->buildOwnedCouponPayload($userCoupon, $product, $billingCycle, $amount, $userId, $orderType, $memberDiscountApplied);
 
-                    return [
-                        'id' => (int) $userCoupon->id,
-                        'coupon_id' => (int) ($payload['coupon_id'] ?? 0),
-                        'name' => (string) ($payload['name'] ?? ''),
-                        'description' => (string) ($payload['description'] ?? ''),
-                        'discount_type' => (string) ($payload['discount_type'] ?? ''),
-                        'discount_label' => (string) ($payload['discount_label'] ?? ''),
-                        'discount_amount' => (string) ($payload['discount_amount'] ?? '0.00'),
-                        'final_amount' => (string) ($payload['final_amount'] ?? '0.00'),
-                        'product_scope_text' => (string) ($payload['product_scope_text'] ?? ''),
-                        'billing_cycle_text' => (string) ($payload['billing_cycle_text'] ?? ''),
-                        'validity_text' => (string) ($payload['validity_text'] ?? ''),
-                    ];
+                    return $this->clientCouponOption($payload);
                 } catch (BusinessException) {
                     // 业务性不适用（门槛/周期/范围/首单限制等）：静默剔除属预期行为
                     return null;
@@ -666,7 +631,7 @@ class CouponService
                     // 视为已消耗不返还（取消 CANCELLED 不在此列，取消账单仍可回落复用）
                     $hasActivePaidInvoice = Invoice::query()
                         ->where('user_coupon_id', $userCouponId)
-                        ->whereIn('status', self::USED_INVOICE_STATUSES)
+                        ->whereIn('status', CouponUsageStatuses::usedInvoiceStatuses())
                         ->exists();
 
                     if ($hasActivePaidInvoice) {
@@ -756,14 +721,8 @@ class CouponService
                 }
 
                 if ($statusFilter === '1') {
-                    $query
-                        ->where('status', CouponStatus::ACTIVE)
-                        ->where(function ($builder) use ($now) {
-                            $builder->whereNull('starts_at')->orWhere('starts_at', '<=', $now);
-                        })
-                        ->where(function ($builder) use ($now) {
-                            $builder->whereNull('expires_at')->orWhere('expires_at', '>=', $now);
-                        });
+                    $query->where('status', CouponStatus::ACTIVE);
+                    $this->applyCouponWindowConstraint($query, '', $now);
 
                     return;
                 }
@@ -896,6 +855,40 @@ class CouponService
         return $coupons->map(fn (Coupon $coupon) => $this->transformPublicCouponForUser($coupon, $productNameMap));
     }
 
+    /**
+     * 在给定查询上叠加「启用 + 时间窗口有效」条件后统计条数。
+     *
+     * 汇总口径（可用券数量）在多处重复同一条件；把它们收敛到一个入口，
+     * 避免某处漏掉 starts_at/expires_at 判定导致计数不一致。
+     *
+     * @param  Builder|\Illuminate\Database\Query\Builder  $query
+     */
+    private function countWithWindowConstraint($query, $now): int
+    {
+        $query->where('status', CouponStatus::ACTIVE);
+        $this->applyCouponWindowConstraint($query, '', $now);
+
+        return $query->count();
+    }
+
+    /**
+     * 券自身有效时间窗口：未开始或已过期都算不可用。
+     *
+     * 持券视图（user_coupons）与公开可领视图（coupons）的「可用/已用完」判定都依赖它，
+     * 只是表前缀不同 —— 两处此前各写一份，改动容易漂移。
+     *
+     * @param  Builder|\Illuminate\Database\Query\Builder  $query
+     * @param  Carbon  $now
+     */
+    private function applyCouponWindowConstraint($query, string $columnPrefix, $now): void
+    {
+        $query->where(function ($windowQuery) use ($columnPrefix, $now) {
+            $windowQuery->whereNull($columnPrefix.'starts_at')->orWhere($columnPrefix.'starts_at', '<=', $now);
+        })->where(function ($windowQuery) use ($columnPrefix, $now) {
+            $windowQuery->whereNull($columnPrefix.'expires_at')->orWhere($columnPrefix.'expires_at', '>=', $now);
+        });
+    }
+
     private function applyOwnedCouponStatusFilter($query, string $statusFilter, bool $hasPlacedOrder, int $userId): void
     {
         $now = now();
@@ -940,13 +933,9 @@ class CouponService
                 $builder->where('user_coupons.status', 2)
                     ->orWhere(function ($ownedQuery) use ($now, $firstOrderBlocked, $userId) {
                         $ownedQuery->where('user_coupons.status', 1)
-                            ->where('coupons.status', CouponStatus::ACTIVE)
-                            ->where(function ($windowQuery) use ($now) {
-                                $windowQuery->whereNull('coupons.starts_at')->orWhere('coupons.starts_at', '<=', $now);
-                            })
-                            ->where(function ($windowQuery) use ($now) {
-                                $windowQuery->whereNull('coupons.expires_at')->orWhere('coupons.expires_at', '>=', $now);
-                            })
+                            ->where('coupons.status', CouponStatus::ACTIVE);
+                        $this->applyCouponWindowConstraint($ownedQuery, 'coupons.', $now);
+                        $ownedQuery
                             ->where(function ($grantQuery) {
                                 $grantQuery->where('coupons.distribution_type', '!=', 'private')
                                     ->orWhere('user_coupons.receive_type', 'grant');
@@ -1032,13 +1021,8 @@ class CouponService
             return;
         }
 
-        $query->where('status', CouponStatus::ACTIVE)
-            ->where(function ($builder) use ($now) {
-                $builder->whereNull('starts_at')->orWhere('starts_at', '<=', $now);
-            })
-            ->where(function ($builder) use ($now) {
-                $builder->whereNull('expires_at')->orWhere('expires_at', '>=', $now);
-            });
+        $query->where('status', CouponStatus::ACTIVE);
+        $this->applyCouponWindowConstraint($query, '', $now);
 
         if ($statusFilter === 'used_up') {
             $query->where('total_usage_limit', '>', 0)
@@ -1330,6 +1314,35 @@ class CouponService
             'billing_cycle_text' => CouponLabelFormatter::formatBillingCycleText($rawBillingCycles),
             'validity_text' => CouponLabelFormatter::formatValidityText($coupon),
             'expires_at' => $coupon->expires_at?->format('Y-m-d H:i:s'),
+        ];
+    }
+
+    /**
+     * 客户端可选券的统一输出形状（唯一真源）：官网报价、续费预览等所有面向客户端
+     * 的「可选优惠券」都必须经过本方法，禁止各自挑选字段。
+     *
+     * 关键约定：`id` 是 user_coupons.id（前端选券后原样回传 user_coupon_id），
+     * `coupon_id` 是优惠券模板 ID。buildOwnedCouponPayload 的 `id` 是模板 ID，
+     * 两者语义相反，故此处显式改写，调用方不得依赖原始载荷的 `id`。
+     *
+     * @param  array<string, mixed>  $payload  buildOwnedCouponPayload 的输出
+     * @return array<string, mixed>
+     */
+    public function clientCouponOption(array $payload): array
+    {
+        return [
+            'id' => (int) ($payload['user_coupon_id'] ?? 0),
+            'coupon_id' => (int) ($payload['coupon_id'] ?? 0),
+            'code' => (string) ($payload['code'] ?? ''),
+            'name' => (string) ($payload['name'] ?? ''),
+            'description' => (string) ($payload['description'] ?? ''),
+            'discount_type' => (string) ($payload['discount_type'] ?? ''),
+            'discount_label' => (string) ($payload['discount_label'] ?? ''),
+            'discount_amount' => (string) ($payload['discount_amount'] ?? '0.00'),
+            'final_amount' => (string) ($payload['final_amount'] ?? '0.00'),
+            'product_scope_text' => (string) ($payload['product_scope_text'] ?? ''),
+            'billing_cycle_text' => (string) ($payload['billing_cycle_text'] ?? ''),
+            'validity_text' => (string) ($payload['validity_text'] ?? ''),
         ];
     }
 

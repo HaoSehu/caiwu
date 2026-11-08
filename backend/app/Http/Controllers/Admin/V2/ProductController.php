@@ -19,12 +19,12 @@ use App\Http\Requests\Admin\V2\Product\ShowProductSummaryRequest;
 use App\Http\Requests\Admin\V2\Product\StoreProductRequest;
 use App\Http\Requests\Admin\V2\Product\UpdateProductRequest;
 use App\Http\Requests\Admin\V2\Product\UpdateProductStatusRequest;
-use App\Http\Resources\Admin\V2\AdminActionResultResource;
 use App\Http\Resources\Admin\V2\AdminProductDetailResource;
 use App\Http\Resources\Admin\V2\AdminProductOperationPayloadResource;
 use App\Http\Resources\Admin\V2\AdminProductOwnerPageResource;
 use App\Http\Resources\Admin\V2\AdminProductSummaryResource;
 use App\Http\Resources\Admin\V2\AdminProductSummaryStatsResource;
+use App\Http\Resources\V2\ActionResultResource;
 use App\Models\Product;
 use App\Services\Admin\V2\AdminCatalogActionV2Service;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
@@ -88,7 +88,7 @@ class ProductController extends Controller
     {
         $result = $this->actions->deleteProduct($product);
 
-        return $this->success(AdminActionResultResource::make($result)->resolve(), (string) $result['message']);
+        return $this->success(ActionResultResource::make($result)->resolve(), (string) $result['message']);
     }
 
     public function restore(DeleteProductRequest $request, int $product): JsonResponse
@@ -104,14 +104,14 @@ class ProductController extends Controller
     {
         $result = $this->actions->forceDeleteProduct($product);
 
-        return $this->success(AdminActionResultResource::make($result)->resolve(), (string) $result['message']);
+        return $this->success(ActionResultResource::make($result)->resolve(), (string) $result['message']);
     }
 
     public function updateStatus(UpdateProductStatusRequest $request, Product $product): JsonResponse
     {
         $result = $this->actions->updateProductStatus($product, $request->enabled());
 
-        return $this->success(AdminActionResultResource::make($result)->resolve(), (string) $result['message']);
+        return $this->success(ActionResultResource::make($result)->resolve(), (string) $result['message']);
     }
 
     public function reorder(ProductReorderRequest $request): JsonResponse

@@ -280,7 +280,7 @@ class User extends Authenticatable
      */
     public function hasCompletedVerification(): bool
     {
-        return (int) $this->verification_status === 2
+        return (int) $this->verification_status === self::VERIFICATION_STATUS_VERIFIED
             || ((int) $this->verification_status === 0 && (int) $this->is_verified === 1);
     }
 
@@ -299,24 +299,42 @@ class User extends Authenticatable
         $currentStatus = (int) ($this->attributes['verification_status'] ?? 0);
 
         if ($verified === 1) {
-            $this->attributes['verification_status'] = 2;
+            $this->attributes['verification_status'] = self::VERIFICATION_STATUS_VERIFIED;
 
             return;
         }
 
         // 仅在「未认证/待认证」区间内回落，避免把认证失败(3)、已解绑(5) 抹平
-        if (in_array($currentStatus, [0, 1, 2], true)) {
-            $this->attributes['verification_status'] = 0;
+        if (in_array($currentStatus, [self::VERIFICATION_STATUS_NONE, self::VERIFICATION_STATUS_PENDING_SUBMIT, self::VERIFICATION_STATUS_VERIFIED], true)) {
+            $this->attributes['verification_status'] = self::VERIFICATION_STATUS_NONE;
         }
     }
 
+    public const VERIFICATION_STATUS_NONE = 0;
+
+    public const VERIFICATION_STATUS_PENDING_SUBMIT = 1;
+
+    public const VERIFICATION_STATUS_VERIFIED = 2;
+
+    public const VERIFICATION_STATUS_FAILED = 3;
+
+    public const VERIFICATION_STATUS_PENDING_REVIEW = 4;
+
+    public const VERIFICATION_STATUS_UNBOUND = 5;
+
+    /**
+     * 实名认证状态标签。
+     *
+     * 1 与 4 都显示「待认证」：1 是用户尚未提交材料，4 是已提交待上游审核，
+     * 管理端「待认证」待办口径只统计 4（见 AdminVerificationQueryService）。
+     */
     public const VERIFICATION_STATUS_LABELS = [
-        0 => '未认证',
-        1 => '待认证',
-        2 => '已认证',
-        3 => '认证失败',
-        4 => '待认证',
-        5 => '已解绑',
+        self::VERIFICATION_STATUS_NONE => '未认证',
+        self::VERIFICATION_STATUS_PENDING_SUBMIT => '待认证',
+        self::VERIFICATION_STATUS_VERIFIED => '已认证',
+        self::VERIFICATION_STATUS_FAILED => '认证失败',
+        self::VERIFICATION_STATUS_PENDING_REVIEW => '待认证',
+        self::VERIFICATION_STATUS_UNBOUND => '已解绑',
     ];
 
     public static function verificationStatusLabel(int $status): string

@@ -331,8 +331,8 @@ foreach (['personal_access_tokens', 'sessions', 'failed_jobs', 'jobs', 'password
     run($pdo, 'TRUNCATE TABLE '.quoteIdent($table), $targetDb);
 }
 
-// 媒体表：ftp 绝对地址改相对路径
-run($pdo, "UPDATE media_files SET path = REPLACE(path, 'http://154.219.97.172', ''), url = REPLACE(url, 'http://154.219.97.172', '')", $targetDb);
+// 媒体表：历史 ftp 绝对地址（http://主机/media/...）统一改站内相对路径，不绑定具体主机 IP
+run($pdo, "UPDATE media_files SET path = REGEXP_REPLACE(path, '^https?://[^/]+', ''), url = REGEXP_REPLACE(url, '^https?://[^/]+', '')", $targetDb);
 run($pdo, "UPDATE media_files SET url = CONCAT('/demo/media/', filename) WHERE url LIKE 'http%'", $targetDb);
 run($pdo, "UPDATE media_files SET url = CONCAT('/demo/media/', filename) WHERE disk = 'ftp'", $targetDb);
 

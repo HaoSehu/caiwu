@@ -43,6 +43,15 @@ class OrderV2QueryService
                 'quantity',
                 'paid_at',
                 'created_at',
+                // 展示名与商品全路径解析真正消费的快照列：AdminOrderSummaryResource 经
+                // ProductFullPathResolver 读 config_snapshot / product_spec_snapshot，
+                // product_type_snapshot 是类型列的兜底来源；缺任何一列都会退化成逐行回源商品（N+1）。
+                'config_snapshot',
+                'product_spec_snapshot',
+                'product_type_snapshot',
+                // 附加配置订单的配置类型（upgrade_kind）与展示字段来源；
+                // 同时供 upgrade_kind 的 JSON 路径筛选使用。
+                'config_pricing_snapshot',
             ])
             ->with([
                 'user:id,email,nickname,phone',
@@ -158,6 +167,13 @@ class OrderV2QueryService
 
         if (isset($filters['status']) && $filters['status'] !== '') {
             $query->where('status', (int) $filters['status']);
+        }
+
+        // 附加配置订单的配置类型筛选（订单页 upgrade 视图使用）；
+        // all 与空值同义，表示不按配置类型收窄。
+        $upgradeKind = trim((string) ($filters['upgrade_kind'] ?? ''));
+        if ($upgradeKind !== '' && $upgradeKind !== 'all') {
+            $query->where('config_pricing_snapshot->meta->kind', $upgradeKind);
         }
 
         $this->applyKeywordFilter($query, trim((string) ($filters['keyword'] ?? '')));

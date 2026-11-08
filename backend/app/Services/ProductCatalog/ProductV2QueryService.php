@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\ProductCatalog;
 
 use App\Constants\ProductType;
+use App\Constants\ServiceStatus;
 use App\Exceptions\BusinessException;
 use App\Models\Product;
 use App\Models\SecondProductGroup;
@@ -57,7 +58,7 @@ class ProductV2QueryService
             ->withCount([
                 'orders',
                 'services as total_services_count',
-                'services as active_services_count' => fn (Builder $query) => $query->where('status', 1),
+                'services as active_services_count' => fn (Builder $query) => $query->where('status', ServiceStatus::ACTIVE),
             ])
             ->find($productId);
 
@@ -263,16 +264,6 @@ class ProductV2QueryService
 
     private function attachCpuModelPayloads(LengthAwarePaginator $paginator): LengthAwarePaginator
     {
-        foreach ($paginator->items() as $item) {
-            if (! $item instanceof Product) {
-                continue;
-            }
-
-            foreach ($this->siteProducts->cpuModelPayloadForProduct($item) as $key => $value) {
-                $item->setAttribute($key, $value);
-            }
-        }
-
-        return $paginator;
+        return $this->siteProducts->attachCpuModelPayloads($paginator);
     }
 }

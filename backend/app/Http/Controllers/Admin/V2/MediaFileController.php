@@ -9,8 +9,8 @@ use App\Http\Requests\Admin\V2\Content\ReindexMediaFilesRequest;
 use App\Http\Requests\Admin\V2\MediaFile\DeleteMediaFileRequest;
 use App\Http\Requests\Admin\V2\MediaFile\ListMediaFilesRequest;
 use App\Http\Requests\Admin\V2\MediaFile\StoreMediaFileRequest;
-use App\Http\Resources\Admin\V2\AdminActionResultResource;
 use App\Http\Resources\Admin\V2\AdminMediaFileResource;
+use App\Http\Resources\V2\ActionResultResource;
 use App\Models\MediaFile;
 use App\Services\Admin\V2\AdminOperationalActionV2Service;
 use App\Services\Content\MediaFileService;
@@ -86,7 +86,7 @@ class MediaFileController extends Controller
     {
         $result = $this->actions->reindexMediaFiles((int) $request->user()->id);
 
-        return $this->success(AdminActionResultResource::make($result)->resolve(), (string) $result['message']);
+        return $this->success(ActionResultResource::make($result)->resolve(), (string) $result['message']);
     }
 
     private function heroVideoResponse(ListMediaFilesRequest $request, array $filters): JsonResponse

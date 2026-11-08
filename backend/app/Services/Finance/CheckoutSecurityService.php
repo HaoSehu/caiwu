@@ -58,7 +58,8 @@ class CheckoutSecurityService
             'setup_fee' => Money::format($quotePayload['setup_fee'] ?? 0),
             'discount_amount' => Money::format($quotePayload['discount_amount'] ?? 0),
             'member_discount_amount' => Money::format($quotePayload['member_discount_amount'] ?? 0),
-            'user_coupon_id' => (int) ($quotePayload['coupon']['user_coupon_id'] ?? $quotePayload['user_coupon_id'] ?? 0),
+            // 券字段取 clientCouponOption 规范形状：id 即 user_coupons.id
+            'user_coupon_id' => (int) ($quotePayload['coupon']['id'] ?? $quotePayload['user_coupon_id'] ?? 0),
             'user_id' => max((int) ($context['user_id'] ?? 0), 0),
             'request_id' => trim((string) ($context['request_id'] ?? '')),
             'ip_address' => trim((string) ($context['ip_address'] ?? '')),

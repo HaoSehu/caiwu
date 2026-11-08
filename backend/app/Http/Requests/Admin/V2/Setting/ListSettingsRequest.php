@@ -17,9 +17,8 @@ class ListSettingsRequest extends AdminFormRequest
     public function rules(): array
     {
         return [
+            ...$this->paginationRules(presence: 'sometimes'),
             'group' => ['sometimes', 'nullable', 'string', 'max:50'],
-            'page' => ['sometimes', 'integer', 'min:1'],
-            'page_size' => ['sometimes', 'integer', 'min:1', 'max:'.Pagination::MAX_PAGE_SIZE],
             'per_page' => ['prohibited'],
             'pageSize' => ['prohibited'],
         ];

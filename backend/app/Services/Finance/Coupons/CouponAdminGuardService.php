@@ -21,20 +21,6 @@ use App\Support\SchemaMetadataCache;
  */
 final class CouponAdminGuardService
 {
-    /**
-     * 视为「已消耗」的账单状态：已支付 = 核销完成；已退款 = 全额退款落地后券不返还
-     * （防「购-付-退」循环薅券，取消路径不受影响仍回落可复用）。
-     */
-    private const USED_INVOICE_STATUSES = [
-        InvoiceStatus::PAID,
-        InvoiceStatus::REFUNDED,
-    ];
-
-    private const USED_ORDER_STATUSES = [
-        OrderStatus::PAID,
-        OrderStatus::REFUNDED,
-    ];
-
     public static function loadCouponForAdmin(?Coupon $coupon): Coupon
     {
         throw_if(! $coupon, new BusinessException('优惠券不存在或已删除'));
@@ -45,8 +31,8 @@ final class CouponAdminGuardService
             ->loadCount([
                 'orders',
                 'userCoupons',
-                'orders as used_orders_count' => fn ($query) => $query->whereIn('status', self::USED_ORDER_STATUSES),
-                'invoices as used_invoices_count' => fn ($query) => $query->whereIn('status', self::USED_INVOICE_STATUSES),
+                'orders as used_orders_count' => fn ($query) => $query->whereIn('status', CouponUsageStatuses::usedOrderStatuses()),
+                'invoices as used_invoices_count' => fn ($query) => $query->whereIn('status', CouponUsageStatuses::usedInvoiceStatuses()),
                 'userCoupons as used_user_coupons_count' => fn ($query) => $query->whereNotNull('last_used_at'),
                 'orders as deletion_blocking_orders_count' => fn ($query) => $query->where('status', '!=', OrderStatus::CANCELLED),
                 'invoices as deletion_blocking_invoices_count' => fn ($query) => $query->where('status', '!=', InvoiceStatus::CANCELLED),
@@ -186,11 +172,11 @@ final class CouponAdminGuardService
 
         return Order::query()
             ->where('coupon_id', $couponId)
-            ->whereIn('status', self::USED_ORDER_STATUSES)
+            ->whereIn('status', CouponUsageStatuses::usedOrderStatuses())
             ->exists()
             || Invoice::query()
                 ->where('coupon_id', $couponId)
-                ->whereIn('status', self::USED_INVOICE_STATUSES)
+                ->whereIn('status', CouponUsageStatuses::usedInvoiceStatuses())
                 ->exists();
     }
 

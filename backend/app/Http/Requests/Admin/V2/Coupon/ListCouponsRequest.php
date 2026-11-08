@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Http\Requests\Admin\V2\Coupon;
 
 use App\Http\Requests\Admin\V2\Common\AdminFormRequest;
-use App\Support\Pagination;
 use Illuminate\Validation\Rule;
 
 class ListCouponsRequest extends AdminFormRequest
@@ -13,8 +12,7 @@ class ListCouponsRequest extends AdminFormRequest
     public function rules(): array
     {
         return [
-            'page' => ['sometimes', 'integer', 'min:1'],
-            'page_size' => ['sometimes', 'integer', 'min:1', 'max:'.Pagination::MAX_PAGE_SIZE],
+            ...$this->paginationRules(presence: 'sometimes'),
             'per_page' => ['prohibited'],
             'pageSize' => ['prohibited'],
             'keyword' => ['nullable', 'string', 'max:100'],

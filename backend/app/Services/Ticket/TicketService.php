@@ -298,22 +298,6 @@ class TicketService
 
         $updatedTicket = $ticket->fresh() ?? $ticket;
 
-        // 邮件：受管理端「工单重新开启」场景的邮件开关控制
-        $reopenUser = $updatedTicket->user;
-        $reopenEmail = trim((string) ($reopenUser->email ?? ''));
-        if ($reopenEmail !== '') {
-            SendTicketNotificationEmailJob::dispatch(
-                $reopenEmail,
-                NotificationService::TEMPLATE_TICKET_REOPENED,
-                [
-                    'display_name' => (string) ($reopenUser->display_name ?? '客户'),
-                    'ticket_id' => (int) $updatedTicket->id,
-                    'ticket_subject' => (string) $updatedTicket->subject,
-                ],
-                ['scene' => 'ticket_reopened', 'ticket_id' => (int) $updatedTicket->id]
-            );
-        }
-
         // 站内消息：受管理端「工单重新开启」场景的站内消息开关控制
         $this->userNotificationService->createForScene(
             (int) ($updatedTicket->user_id ?? 0),

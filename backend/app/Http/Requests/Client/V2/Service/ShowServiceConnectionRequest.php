@@ -27,7 +27,7 @@ class ShowServiceConnectionRequest extends FormRequest
     public function validationData(): array
     {
         return array_merge(parent::validationData(), [
-            'service' => $this->route('service'),
+            'service' => $this->route('id'),
         ]);
     }
 }

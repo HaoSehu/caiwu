@@ -3,12 +3,13 @@
 declare(strict_types=1);
 
 /**
- * 校验三处接口真源是否一致，供 CI 与本地使用。
+ * 校验两处接口真源是否一致，供 CI 与本地使用。
  *
  * 真源：
  *   1. Laravel 路由表            —— 唯一事实来源
- *   2. backend/storage/app/openapi.json —— 由 composer api:spec 生成（构建产物，不入库）
- *   3. docs/自动生成/接口/后端API清单.md —— 由 export_api_inventory.php 生成（构建产物，不入库）
+ *   2. docs/自动生成/接口/后端API清单.md —— 由 export_api_inventory.php 生成（构建产物，不入库）
+ *
+ * Apifox 侧契约由 MCP 维护，不在本脚本校验范围内。
  *
  * 退出码：0 一致；1 存在漂移（打印差异明细）。
  */
@@ -56,33 +57,7 @@ foreach (RouteFacade::getRoutes()->getRoutes() as $route) {
     }
 }
 
-// ---------- 源 2：openapi.json ----------
-$openapiPath = $basePath.'/storage/app/openapi.json';
-$openapiOps = [];
-if (is_file($openapiPath)) {
-    $spec = json_decode((string) file_get_contents($openapiPath), true);
-    if (! is_array($spec)) {
-        fwrite(STDERR, '无法解析 '.$openapiPath.'：不是合法 JSON。'.PHP_EOL);
-        exit(1);
-    }
-    foreach (($spec['paths'] ?? []) as $path => $item) {
-        if (! is_array($item)) {
-            continue;
-        }
-        foreach ($item as $method => $operation) {
-            $method = strtoupper((string) $method);
-            if (! in_array($method, ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'], true)) {
-                continue;
-            }
-            $openapiOps[implode(' ', normalizeOperation((string) $path, $method))] = true;
-        }
-    }
-} else {
-    fwrite(STDERR, '缺少 '.$openapiPath.'，请先运行 composer api:spec。'.PHP_EOL);
-    exit(1);
-}
-
-// ---------- 源 3：后端 API 清单（构建产物，可能不存在） ----------
+// ---------- 源 2：后端 API 清单（构建产物，可能不存在） ----------
 $inventoryPath = dirname($basePath).'/docs/自动生成/接口/后端API清单.md';
 $inventoryOps = [];
 if (is_file($inventoryPath)) {
@@ -120,27 +95,6 @@ function diffOps(array $left, array $right): array
     return array_values(array_diff(array_keys($left), array_keys($right)));
 }
 
-$specMissing = diffOps($routeOps, $openapiOps);   // 路由有、openapi 无
-$specExtra = diffOps($openapiOps, $routeOps);     // openapi 有、路由无
-
-if ($specMissing !== [] || $specExtra !== []) {
-    $failures++;
-    fwrite(STDERR, sprintf(
-        '[openapi.json] 与路由表不一致：路由 %d 条，openapi %d 条。%s',
-        count($routeOps),
-        count($openapiOps),
-        PHP_EOL
-    ));
-    foreach (array_slice($specMissing, 0, 20) as $op) {
-        fwrite(STDERR, '  路由有、openapi 缺：'.$op.PHP_EOL);
-    }
-    foreach (array_slice($specExtra, 0, 20) as $op) {
-        fwrite(STDERR, '  openapi 有、路由无：'.$op.PHP_EOL);
-    }
-} else {
-    fwrite(STDOUT, sprintf('openapi.json 与路由表一致（%d 条）。%s', count($routeOps), PHP_EOL));
-}
-
 if ($inventoryOps !== []) {
     $invMissing = diffOps($routeOps, $inventoryOps);
     $invExtra = diffOps($inventoryOps, $routeOps);
@@ -163,7 +117,8 @@ if ($inventoryOps !== []) {
         fwrite(STDOUT, sprintf('后端 API 清单与路由表一致（%d 条）。%s', count($inventoryOps), PHP_EOL));
     }
 } else {
-    fwrite(STDOUT, '后端 API 清单不存在，跳过比对（该文件是构建产物，不入库）。'.PHP_EOL);
+    fwrite(STDERR, '后端 API 清单不存在或为空，请先运行 composer api:inventory。'.PHP_EOL);
+    $failures++;
 }
 
 if ($failures > 0) {

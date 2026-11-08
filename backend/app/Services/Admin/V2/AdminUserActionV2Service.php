@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Admin\V2;
 
 use App\Models\User;
+use App\Services\ClientServiceConsole\ServiceActionLock;
 use App\Services\User\UserService;
 use Illuminate\Http\Request;
 
@@ -12,6 +13,7 @@ class AdminUserActionV2Service
 {
     public function __construct(
         private readonly UserService $users,
+        private readonly ServiceActionLock $serviceActionLock,
     ) {}
 
     /**
@@ -42,7 +44,12 @@ class AdminUserActionV2Service
      */
     public function servicePower(User $user, int $serviceId, string $action, Request $request): array
     {
-        $detail = $this->users->servicePower($user, $serviceId, $action, $this->actorContext($request));
+        $detail = $this->serviceActionLock->execute(
+            (int) $user->id,
+            $serviceId,
+            'power_'.$action,
+            fn (): array => $this->users->servicePower($user, $serviceId, $action, $this->actorContext($request)),
+        );
 
         return $this->result($serviceId, 'queued', '操作已提交', [
             'type' => 'power',
@@ -57,7 +64,12 @@ class AdminUserActionV2Service
      */
     public function resetServicePassword(User $user, int $serviceId, array $payload, Request $request): array
     {
-        $detail = $this->users->serviceResetPassword($user, $serviceId, $payload, $this->actorContext($request));
+        $detail = $this->serviceActionLock->execute(
+            (int) $user->id,
+            $serviceId,
+            'password_reset',
+            fn (): array => $this->users->serviceResetPassword($user, $serviceId, $payload, $this->actorContext($request)),
+        );
 
         return $this->result($serviceId, 'queued', '重置密码指令已提交', [
             'type' => 'password_reset',

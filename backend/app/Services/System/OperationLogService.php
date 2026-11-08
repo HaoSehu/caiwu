@@ -60,6 +60,40 @@ class OperationLogService
     }
 
     /**
+     * 记录一次敏感字段查看（管理员在后台揭示了某个密钥/密钥类配置）。
+     *
+     * 插件、供应商、系统设置三处的 revealSecret 原本各自内联同一段审计代码，
+     * 任何一处改了字段口径都会与另外两处漂移；统一收敛到这里。
+     *
+     * @param  array<string, mixed>  $subject  类型专属字段，如 plugin_id / plugin_name
+     */
+    public function writeSecretReveal(
+        string $secretType,
+        string $secretKey,
+        ?int $targetId,
+        array $subject,
+        ?int $operatorId,
+        ?string $operatorName,
+        ?string $traceId = null,
+        ?string $ipAddress = null,
+    ): void {
+        $this->write(
+            userId: $operatorId ?? 0,
+            userType: 'admin',
+            action: 'secret.reveal',
+            module: 'secret',
+            targetId: $targetId,
+            detail: array_merge($subject, [
+                'secret_type' => $secretType,
+                'secret_key' => $secretKey,
+                'operator_name' => (string) ($operatorName ?? ''),
+                'trace_id' => (string) ($traceId ?? ''),
+            ]),
+            ipAddress: $ipAddress,
+        );
+    }
+
+    /**
      * 写服务实例维度的操作日志（自动补齐实例名/产品名/订单号/操作者字段）。
      *
      * $strict=true 时转入 writeStrict()：写入失败向上抛出，供强审计场景把业务一并回滚。
