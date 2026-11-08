@@ -235,14 +235,4 @@ export const financeMenuApi = {
       url: '/v2/admin/finance/new-customer-daily-summary',
       params,
     }),
-  renewalOrders: (params: OrderListParams) =>
-    request.get<{ list?: OrderRecord[]; total?: number; page?: number; page_size?: number }>({
-      url: '/v2/admin/finance/renewal-orders',
-      params,
-    }),
-  upgradeOrders: (params: OrderListParams) =>
-    request.get<{ list?: OrderRecord[]; total?: number; page?: number; page_size?: number }>({
-      url: '/v2/admin/finance/upgrade-orders',
-      params,
-    }),
 };

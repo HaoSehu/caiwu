@@ -273,6 +273,12 @@
       font-family: monospace;
       font-size: 16px; /* 避免 iOS 聚焦输入框时自动放大页面 */
     }
+    .panel_hint {
+      margin-top: 8px;
+      font-size: 12px;
+      line-height: 1.5;
+      color: #666;
+    }
     /* 剪贴板显式发送：不能只依赖 textarea 的 change（失焦才触发），
        移动端键盘弹出时用户很难通过“点别处”产生一次可靠的 change。 */
     .noVNC_panel_actions {
@@ -613,8 +619,10 @@
   <div class="noVNC_panel" id="panel_clipboard">
     <div class="panel_heading">剪贴板</div>
     <textarea id="clipboard_text" placeholder="在此编辑剪贴板内容..."></textarea>
+    <div class="panel_hint">「键入到远程」直接按键盘输入，适用于登录框等接收键入的窗口；「同步剪贴板」需在远程系统内粘贴（Ctrl+V 或 Shift+Insert）才可见。</div>
     <div class="noVNC_panel_actions">
-      <button type="button" id="btn_clipboard_send">发送到远程</button>
+      <button type="button" id="btn_clipboard_type">键入到远程</button>
+      <button type="button" id="btn_clipboard_send">同步剪贴板</button>
     </div>
   </div>
 </div>
@@ -660,6 +668,7 @@
   const panelClipboard = document.getElementById('panel_clipboard')
   const clipboardText  = document.getElementById('clipboard_text')
   const btnClipboardSend = document.getElementById('btn_clipboard_send')
+  const btnClipboardType = document.getElementById('btn_clipboard_type')
 
   let rfb = null
   let rfbConnected = false
@@ -938,7 +947,13 @@
 
   // ---- 剪贴板同步 ----
   // textarea 的 change 只在失焦时触发，移动端键盘弹出期间用户很难制造一次可靠失焦，
-  // 因此面板里补一个显式「发送到远程」按钮；change 保留为桌面端编辑后的自动同步。
+  // 因此面板里补显式按钮；change 保留为桌面端编辑后的自动同步。
+  //
+  // 两种语义必须拆开：
+  // - 同步剪贴板（clipboardPasteFrom）：只更新远端剪贴板，需用户到远端系统内粘贴才可见；
+  //   tty 登录框、部分只读窗口根本没有剪贴板机制，同步过去永远“没反应”。
+  // - 键入到远程（逐字符 sendKey）：等价于在远端键盘上打字，登录界面等焦点窗口可直接收到。
+  // 之前面板只有一个按钮且只做剪贴板同步，用户点它输入密码自然完全无效。
   function syncClipboardToRemote(showFeedback) {
     if (!(rfb && rfbConnected)) {
       if (showFeedback) showStatus('远程桌面尚未连接，请先重新连接', 'warn', 2500)
@@ -951,23 +966,125 @@
       return
     }
 
-    if (text === lastSentClipboard) {
-      if (showFeedback) showStatus('剪贴板内容未变化，无需重复发送', 'normal', 1800)
-      return
-    }
+    // 判重只服务 change 的自动同步；显式点击必须真的发送，
+    // 否则用户第一次点按钮就会看到“未变化，无需重复发送”，误以为发送失败。
+    if (!showFeedback && text === lastSentClipboard) return
 
     lastSentClipboard = text
     rfb.clipboardPasteFrom(text)
-    if (showFeedback) showStatus('剪贴板内容已发送到远程桌面', 'normal', 2000)
+    if (showFeedback) showStatus('剪贴板内容已同步到远程，请在远程系统内粘贴（Ctrl+V 或 Shift+Insert）', 'normal', 3500)
+  }
+
+  // change 自动同步延迟执行：点击面板按钮会让 textarea 先失焦产生 change，
+  // 若立刻同步，同一次点击会先自动发一遍、再被显式发送发一遍。防抖后由点击取消它，
+  // 一次点击只发送一次；用户直接失焦离开时仍会自动同步。
+  let autoSyncTimer = null
+  function cancelAutoSync() {
+    if (autoSyncTimer !== null) {
+      clearTimeout(autoSyncTimer)
+      autoSyncTimer = null
+    }
+  }
+
+  // 键入到远程：把文本逐字符翻译成 keysym 按键注入。
+  // 与剪贴板同步的区别在于它会真的“打字”，登录/密码框等接收键盘输入的窗口可立即生效。
+  function typeToRemote() {
+    cancelAutoSync()
+    if (!requireRemoteReady()) return
+
+    const text = clipboardText.value
+    if (text === '') {
+      showStatus('剪贴板内容为空，未发送', 'warn', 1800)
+      return
+    }
+
+    let typed = 0
+    let unsupported = 0
+    for (const char of text) {
+      if (char === '\r') continue
+      if (char === '\n') {
+        rfb.sendKey(0xFF0D, 'Enter')
+        typed++
+        continue
+      }
+      if (typeOneChar(char)) typed++
+      else unsupported++
+    }
+
+    if (typed === 0) {
+      showStatus('内容中没有可键入的字符（中文等请改用同步剪贴板，再到远程系统内粘贴）', 'warn', 3500)
+      return
+    }
+    if (unsupported > 0) {
+      showStatus(`已键入 ${typed} 个字符，${unsupported} 个字符不支持直接键入（中文等请改用同步剪贴板）`, 'warn', 4000)
+      return
+    }
+    showStatus(`已键入 ${typed} 个字符到远程`, 'normal', 2000)
+  }
+
+  // ASCII 可打印字符 → keysym + DOM code + 是否需要 Shift。
+  // 大写字母与上档符号显式补发 ShiftLeft，和真实键盘一致；
+  // keysym 采用 X11 约定：可打印 ASCII 的 keysym 等于其码点。
+  const ASCII_KEYMAP = (() => {
+    const map = new Map()
+    const add = (char, code, shift) => map.set(char, { keysym: char.codePointAt(0), code, shift: Boolean(shift) })
+    const lower = 'abcdefghijklmnopqrstuvwxyz'
+    const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+    const digits = '0123456789'
+    for (let i = 0; i < 26; i++) {
+      add(lower[i], 'Key' + upper[i], false)
+      add(upper[i], 'Key' + upper[i], true)
+    }
+    for (let i = 0; i < 10; i++) add(digits[i], 'Digit' + digits[i], false)
+    const shiftedDigits = ')!@#$%^&*('
+    for (let i = 0; i < 10; i++) add(shiftedDigits[i], 'Digit' + digits[i], true)
+
+    add(' ', 'Space', false)
+    // [基础键 code, 该键上是否需要 Shift]
+    const punctuation = {
+      '-': ['Minus', false], '_': ['Minus', true],
+      '=': ['Equal', false], '+': ['Equal', true],
+      '[': ['BracketLeft', false], '{': ['BracketLeft', true],
+      ']': ['BracketRight', false], '}': ['BracketRight', true],
+      '\\': ['Backslash', false], '|': ['Backslash', true],
+      ';': ['Semicolon', false], ':': ['Semicolon', true],
+      "'": ['Quote', false], '"': ['Quote', true],
+      ',': ['Comma', false], '<': ['Comma', true],
+      '.': ['Period', false], '>': ['Period', true],
+      '/': ['Slash', false], '?': ['Slash', true],
+      '`': ['Backquote', false], '~': ['Backquote', true],
+    }
+    for (const [char, [code, shift]] of Object.entries(punctuation)) add(char, code, shift)
+    return map
+  })()
+
+  function typeOneChar(char) {
+    const entry = ASCII_KEYMAP.get(char)
+    if (!entry) return false
+    if (entry.shift) rfb.sendKey(0xFFE1, 'ShiftLeft', true)
+    rfb.sendKey(entry.keysym, entry.code, true)
+    rfb.sendKey(entry.keysym, entry.code, false)
+    if (entry.shift) rfb.sendKey(0xFFE1, 'ShiftLeft', false)
+    return true
   }
 
   btnClipboardSend.addEventListener('click', (e) => {
     e.stopPropagation()
+    cancelAutoSync()
     syncClipboardToRemote(true)
   })
 
+  btnClipboardType.addEventListener('click', (e) => {
+    e.stopPropagation()
+    typeToRemote()
+  })
+
   clipboardText.addEventListener('change', () => {
-    syncClipboardToRemote(false)
+    cancelAutoSync()
+    autoSyncTimer = setTimeout(() => {
+      autoSyncTimer = null
+      syncClipboardToRemote(false)
+    }, 400)
   })
 
   // ---- 错误/成功状态 ----
@@ -976,6 +1093,7 @@
     btnCad.disabled = !yes
     btnDisconnect.disabled = !yes
     btnClipboardSend.disabled = !yes
+    btnClipboardType.disabled = !yes
   }
 
   function showError(msg) {

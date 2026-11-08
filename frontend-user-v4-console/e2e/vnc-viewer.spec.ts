@@ -30,7 +30,10 @@ export default class RFB {
   }
   sendCtrlAltDel() { window.__vncCalls.push('cad'); }
   clipboardPasteFrom(text) { window.__vncCalls.push('clip:' + text); }
-  sendKey(keysym, code) { window.__vncCalls.push('key:' + keysym + ':' + code); }
+  sendKey(keysym, code, down) {
+    const state = down === undefined ? 'press' : (down ? 'down' : 'up');
+    window.__vncCalls.push('key:' + keysym + ':' + code + ':' + state);
+  }
   sendCredentials() {}
   focus() { window.__vncCalls.push('focus'); }
   disconnect() { window.__vncCalls.push('disconnect'); this.emit('disconnect', { detail: { clean: true } }); }
@@ -163,7 +166,7 @@ test.describe('VNC 查看器移动端控制栏', () => {
       const proxy = document.getElementById('noVNC_kbd_proxy') as HTMLTextAreaElement;
       proxy.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', isComposing: true, bubbles: true }));
     });
-    await expect.poll(() => rfbCalls(page)).not.toContain('key:65293:Enter');
+    await expect.poll(async () => (await rfbCalls(page)).filter((call) => call.startsWith('key:65293'))).toEqual([]);
 
     // 组合结束才提交最终文本。
     await page.evaluate(() => {
@@ -175,7 +178,7 @@ test.describe('VNC 查看器移动端控制栏', () => {
 
     // 回车必须是真正的 Enter 按键（0xFF0D），不能只粘贴一个换行字符。
     await page.keyboard.press('Enter');
-    await expect.poll(() => rfbCalls(page)).toContain('key:65293:Enter');
+    await expect.poll(() => rfbCalls(page)).toContain('key:65293:Enter:press');
 
     // 空剪贴板不发送，也不清空远端剪贴板。
     await page.locator('#btn_clipboard').tap();
@@ -207,5 +210,68 @@ test.describe('VNC 查看器移动端控制栏', () => {
     // 关键：用户要能看到上游不可用，而不是只能看到「连接已中断」干等
     await expect(page.locator('#noVNC_error_message')).toContainText('上游 VNC 无响应');
     await expect(page.locator('#noVNC_error_message')).not.toContainText('目标地址');
+  });
+
+  test('键入到远程：逐字符按键注入，登录界面可直接输入密码', async ({ page }) => {
+    await openViewer(page);
+    await page.locator('#noVNC_control_bar_handle').tap();
+    await page.locator('#btn_clipboard').tap();
+    await page.locator('#clipboard_text').fill('Pa55w0rd!');
+
+    await page.locator('#btn_clipboard_type').tap();
+
+    // 必须发送真实按键（down + up 成对），而不是只同步剪贴板；
+    // 否则 tty 登录界面这类没有剪贴板机制的焦点窗口永远收不到密码。
+    // 大写字母与上档符号须显式补发 Shift（keysym 0xffe1 / ShiftLeft）。
+    const expectedKeys = [
+      'key:65505:ShiftLeft:down',
+      'key:80:KeyP:down',
+      'key:80:KeyP:up',
+      'key:65505:ShiftLeft:up',
+      'key:97:KeyA:down',
+      'key:97:KeyA:up',
+      'key:53:Digit5:down',
+      'key:53:Digit5:up',
+      'key:53:Digit5:down',
+      'key:53:Digit5:up',
+      'key:119:KeyW:down',
+      'key:119:KeyW:up',
+      'key:48:Digit0:down',
+      'key:48:Digit0:up',
+      'key:114:KeyR:down',
+      'key:114:KeyR:up',
+      'key:100:KeyD:down',
+      'key:100:KeyD:up',
+      'key:65505:ShiftLeft:down',
+      'key:33:Digit1:down',
+      'key:33:Digit1:up',
+      'key:65505:ShiftLeft:up',
+    ];
+    await expect
+      .poll(async () => (await rfbCalls(page)).filter((call) => call.startsWith('key:')))
+      .toEqual(expectedKeys);
+    // 键入不应顺带把内容写进远端剪贴板，两种语义不能混用。
+    await expect.poll(async () => (await rfbCalls(page)).filter((call) => call.startsWith('clip:'))).toEqual([]);
+    await expect(page.locator('#noVNC_status')).toContainText('已键入 9 个字符');
+  });
+
+  test('同一内容重复发送不被判重拦截', async ({ page }) => {
+    await openViewer(page);
+    await page.locator('#noVNC_control_bar_handle').tap();
+    await page.locator('#btn_clipboard').tap();
+    await page.locator('#clipboard_text').fill('same-once');
+
+    // 第一次点击：失焦 change 可能已静默同步一次，点击仍须能成功发送/键入。
+    await page.locator('#btn_clipboard_send').tap();
+    await expect
+      .poll(async () => (await rfbCalls(page)).filter((call) => call.startsWith('clip:')))
+      .toEqual(['clip:same-once']);
+
+    // 第二次点击同一内容：用户重试时必须真的再发一次，而不是弹「无需重复发送」。
+    await page.locator('#btn_clipboard_send').tap();
+    await expect
+      .poll(async () => (await rfbCalls(page)).filter((call) => call.startsWith('clip:')))
+      .toEqual(['clip:same-once', 'clip:same-once']);
+    await expect(page.locator('#noVNC_status')).not.toContainText('无需重复发送');
   });
 });

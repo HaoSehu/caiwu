@@ -231,4 +231,37 @@ export const pluginsApi = {
       url: `/v2/admin/integration-plugins/${id}/tasks`,
       data: { type: 'test_sms', payload: data },
     }),
+  submitSmsTemplate: (
+    id: number | string,
+    data: {
+      name: string;
+      scene?: 'verify' | 'notify' | 'marketing';
+      content: string;
+      remark?: string;
+      sample_image?: string;
+      provider_template_id?: string;
+    },
+  ) =>
+    request.post<IntegrationPluginActionResult>({
+      url: `/v2/admin/integration-plugins/${id}/tasks`,
+      data: { type: 'sms_template_submit', payload: data },
+    }),
+  submitSmsTemplates: (
+    id: number | string,
+    templates: Array<{ name: string; content: string; scene?: string; remark?: string }>,
+  ) =>
+    request.post<IntegrationPluginActionResult>({
+      url: `/v2/admin/integration-plugins/${id}/tasks`,
+      data: { type: 'sms_template_submit', payload: { templates } },
+    }),
+  listSmsTemplates: (id: number | string) =>
+    request.post<IntegrationPluginActionResult>({
+      url: `/v2/admin/integration-plugins/${id}/tasks`,
+      data: { type: 'sms_template_list' },
+    }),
+  listSmsTemplatePresets: (id: number | string) =>
+    request.post<IntegrationPluginActionResult>({
+      url: `/v2/admin/integration-plugins/${id}/tasks`,
+      data: { type: 'sms_template_presets' },
+    }),
 };

@@ -327,6 +327,61 @@
             <t-button block variant="outline" :loading="smsTesting" @click="sendTestSms"> 发送测试短信 </t-button>
           </t-space>
         </div>
+
+        <div v-if="canTestPlugins && currentPlugin.domain === 'sms'" class="plugin-test-section">
+          <t-divider />
+          <div class="plugin-test-section__header">
+            <strong>提交短信模板</strong>
+            <span class="plugin-test-section__hint">勾选插件预置模板批量提交审核，已提交过的会自动跳过</span>
+          </div>
+          <t-space direction="vertical" style="width: 100%">
+            <t-space style="width: 100%">
+              <t-button block variant="text" :loading="smsPresetsLoading" @click="loadSmsPresets">
+                {{ smsPresets.length ? '重新加载预置模板' : '加载预置模板' }}
+              </t-button>
+              <t-button block variant="outline" :loading="smsTemplateLoading" @click="loadSmsTemplates">
+                刷新已提交列表
+              </t-button>
+            </t-space>
+
+            <div v-if="smsPresets.length" class="plugin-test-section__hint">
+              共 {{ smsPresets.length }} 条预置模板，已选 {{ selectedPresetCount }} 条
+            </div>
+            <t-checkbox-group v-model="selectedPresetCodes" class="sms-preset-group">
+              <t-checkbox
+                v-for="preset in smsPresets"
+                :key="preset.code"
+                :value="preset.code"
+                :disabled="presetSubmitted(preset.code)"
+              >
+                <span class="sms-preset-item">
+                  <strong>{{ preset.title }}</strong>
+                  <span v-if="presetSubmitted(preset.code)" class="sms-preset-item__state">已提交</span>
+                  <span class="sms-preset-item__content">{{ preset.content }}</span>
+                </span>
+              </t-checkbox>
+            </t-checkbox-group>
+
+            <t-space style="width: 100%">
+              <t-button
+                block
+                theme="primary"
+                variant="outline"
+                :loading="smsTemplateSubmitting"
+                :disabled="!selectedPresetCount"
+                @click="submitSmsTemplate"
+              >
+                提交选中模板
+              </t-button>
+            </t-space>
+
+            <div v-if="smsTemplates.length" class="plugin-test-section__hint">
+              <div v-for="item in smsTemplates" :key="item.provider_template_id">
+                #{{ item.provider_template_id }} {{ item.content }} · {{ smsTemplateStatusLabel(item.status) }}
+              </div>
+            </div>
+          </t-space>
+        </div>
       </template>
     </t-drawer>
 
@@ -492,6 +547,14 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/;
 
 const smsTestPhone = ref('');
 const smsTesting = ref(false);
+const smsTemplateSubmitting = ref(false);
+const smsTemplateLoading = ref(false);
+const smsPresetsLoading = ref(false);
+const smsTemplates = ref<Array<{ provider_template_id?: string; content?: string; status?: string }>>([]);
+const smsPresets = ref<
+  Array<{ code?: string; title?: string; content?: string; remark?: string; variables?: string[] }>
+>([]);
+const selectedPresetCodes = ref<string[]>([]);
 const smtpAccountPasswordEdited = ref(false);
 const MASKED_SECRET_VALUE = '********';
 const visibleSecretKeys = reactive<Record<string, boolean>>({});
@@ -1211,6 +1274,104 @@ async function sendTestSms() {
     MessagePlugin.error(errorMessage(error, '测试短信发送失败'));
   } finally {
     smsTesting.value = false;
+  }
+}
+
+function smsTemplateStatusLabel(status?: string) {
+  switch (status) {
+    case 'approved':
+      return '已通过';
+    case 'rejected':
+      return '已拒绝';
+    case 'deleted':
+      return '已删除';
+    default:
+      return '审核中';
+  }
+}
+
+const selectedPresetCount = computed(() => selectedPresetCodes.value.length);
+
+/** 预置模板是否已在运营商侧提交过（按正文比对，运营商侧不回传业务键） */
+function presetSubmitted(code?: string) {
+  if (!code) return false;
+  const preset = smsPresets.value.find((item) => item.code === code);
+  const content = (preset?.content || '').trim();
+  if (!content) return false;
+  return smsTemplates.value.some((item) => (item.content || '').trim() === content);
+}
+
+async function loadSmsPresets() {
+  if (!canTestPlugins.value || !currentPlugin.value?.id) return;
+
+  smsPresetsLoading.value = true;
+  try {
+    const result = await pluginsApi.listSmsTemplatePresets(currentPlugin.value.id);
+    const payload = (result as { data?: { result?: { defaults?: unknown } } })?.data?.result;
+    const list = Array.isArray(payload?.defaults) ? payload.defaults : [];
+    smsPresets.value = list as typeof smsPresets.value;
+    selectedPresetCodes.value = [];
+    // 同步一次已提交列表，用于把已提交项置灰
+    await loadSmsTemplates();
+  } catch (error) {
+    MessagePlugin.error(errorMessage(error, '加载预置模板失败'));
+  } finally {
+    smsPresetsLoading.value = false;
+  }
+}
+
+async function submitSmsTemplate() {
+  if (!canTestPlugins.value || !currentPlugin.value?.id) return;
+
+  const selected = smsPresets.value.filter((item) => item.code && selectedPresetCodes.value.includes(item.code));
+  if (!selected.length) {
+    MessagePlugin.error('请先勾选要提交的模板');
+    return;
+  }
+
+  smsTemplateSubmitting.value = true;
+  try {
+    const result = await pluginsApi.submitSmsTemplates(
+      currentPlugin.value.id,
+      selected.map((item) => ({
+        name: (item.title || '').trim(),
+        content: (item.content || '').trim(),
+        remark: (item.remark || '').trim(),
+      })),
+    );
+    const payload = (result as { data?: { result?: { submitted?: number; failed?: number } } })?.data?.result;
+    const submitted = Number(payload?.submitted ?? 0);
+    const failed = Number(payload?.failed ?? 0);
+
+    if (failed > 0) {
+      MessagePlugin.warning(`提交完成：成功 ${submitted} 条，失败 ${failed} 条`);
+    } else {
+      MessagePlugin.success(`已提交 ${submitted} 条模板，等待审核`);
+    }
+
+    selectedPresetCodes.value = [];
+    // 提交后用运营商列表接口确认结果
+    await loadSmsTemplates();
+  } catch (error) {
+    MessagePlugin.error(errorMessage(error, '提交模板失败'));
+  } finally {
+    smsTemplateSubmitting.value = false;
+  }
+}
+
+async function loadSmsTemplates() {
+  if (!canTestPlugins.value || !currentPlugin.value?.id) return;
+
+  smsTemplateLoading.value = true;
+  try {
+    const result = await pluginsApi.listSmsTemplates(currentPlugin.value.id);
+    const payload = (result as { data?: { result?: { templates?: unknown } } })?.data?.result;
+    const list = Array.isArray(payload?.templates) ? payload.templates : [];
+    smsTemplates.value = list as Array<{ provider_template_id?: string; content?: string; status?: string }>;
+  } catch (error) {
+    MessagePlugin.error(errorMessage(error, '获取模板列表失败'));
+  } finally {
+    smsTemplateLoading.value = false;
   }
 }
 

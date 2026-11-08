@@ -8,7 +8,6 @@ import type { AxiosRequestConfig } from 'axios';
 
 import type {
   ApiEnvelope,
-  BalanceLog,
   ClientFinanceListParams,
   ConsoleConnectionInfo,
   ConsoleServiceDetail,
@@ -328,11 +327,8 @@ const clientApi = {
     getEnvelope<ServiceVncPayload>(`/v2/client/services/${id}/vnc`, config),
   vncToken: (token: string) => request.get(`/v2/client/vnc-tokens/${token}`),
 
-  balanceLogs: (params?: QueryParams) => getEnvelope<PagedList<BalanceLog>>('/v2/client/balance-logs', { params }),
-  balanceLogsSummary: (params?: QueryParams) => request.get('/v2/client/balance-logs/summary', { params }),
   financeLedger: (params?: QueryParams) => v2FinanceLedger(params),
   financeLedgerSummary: (params?: QueryParams) => v2FinanceLedgerSummary(params),
-  financeLedgerDetail: (id: number | string) => request.get(`/v2/client/finance/ledger/${id}`),
   coupons: (params?: QueryParams) => getEnvelope<PagedList<CouponRecord>>('/v2/client/coupons', { params }),
   couponsSummary: (params?: QueryParams) => getEnvelope<CouponSummary>('/v2/client/coupons/summary', { params }),
   publicCoupons: (params?: QueryParams) =>

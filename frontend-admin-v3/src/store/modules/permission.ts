@@ -192,7 +192,7 @@ const ADMIN_MENU_GROUPS: MenuGroupConfig[] = [
       {
         path: '/admin/menu/system-settings/notification-templates',
         title: { zh_CN: '通知模板', en_US: 'Notification Templates' },
-        children: ['/admin/notifications', '/admin/notifications/api-directory'],
+        children: ['/admin/notifications'],
       },
       {
         path: '/admin/menu/system-settings/integration-plugins',

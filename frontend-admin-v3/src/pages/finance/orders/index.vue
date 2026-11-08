@@ -246,13 +246,9 @@ const {
   enableQuickFilter: true,
   onError: (error) => MessagePlugin.error(errorMessage(error, '加载订单列表失败')),
   fetch: async () => {
-    const apiCall =
-      mode.value === 'renewals'
-        ? adminApi.financeMenu.renewalOrders
-        : mode.value === 'upgrade'
-          ? adminApi.financeMenu.upgradeOrders
-          : adminApi.orders.list;
-    const response = await apiCall(buildParams());
+    const params = buildParams();
+    const type = mode.value === 'renewals' ? 'renew' : mode.value === 'upgrade' ? 'upgrade' : undefined;
+    const response = await adminApi.orders.list(type ? { ...params, type } : params);
     return response;
   },
 });

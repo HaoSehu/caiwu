@@ -215,8 +215,8 @@ export const userApi = {
       .then(normalizeV2ServicePayload),
   invoices: (id: number | string, params: PageParams) =>
     request.get<{ list?: Record<string, unknown>[]; total?: number; page?: number; page_size?: number }>({
-      url: `/v2/admin/users/${id}/invoices`,
-      params,
+      url: '/v2/admin/invoices',
+      params: { user_id: id, ...params },
     }),
   orders: (id: number | string, params: PageParams) =>
     request.get<{ list?: Record<string, unknown>[]; total?: number; page?: number; page_size?: number }>({
@@ -232,8 +232,6 @@ export const userApi = {
     request.post<{ message?: string }>({ url: `/v2/admin/users/${id}/manual-invoices`, data }),
   storeManualOrder: (id: number | string, data: UserManualOrderPayload) =>
     request.post<{ message?: string }>({ url: `/v2/admin/users/${id}/manual-orders`, data }),
-  invoiceDetail: (id: number | string, invoiceId: number | string) =>
-    request.get<Record<string, unknown>>({ url: `/v2/admin/users/${id}/invoices/${invoiceId}` }),
   tickets: (id: number | string, params: PageParams) =>
     request.get<{
       list?: Record<string, unknown>[];

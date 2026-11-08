@@ -38,8 +38,6 @@ declare module 'vue-router' {
     productTab?: 'catalog' | 'suppliers' | 'traffic-packages';
     /** 推广页默认标签 */
     referralTab?: 'overview' | 'rewards' | 'withdrawals';
-    /** 通知页默认标签 */
-    notificationTab?: 'api-directory';
     /** 优惠券页默认标签 */
     couponTab?: 'coupons' | 'campaigns';
     /** 用户实名认证面板默认视图 */

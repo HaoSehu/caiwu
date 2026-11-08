@@ -1,272 +1,269 @@
 <template>
   <div class="notifications-page">
-    <api-directory-panel v-if="isApiDirectory" />
-    <template v-else>
-      <t-card :bordered="false" :loading="templatesLoading">
-        <div class="template-toolbar">
-          <div>
-            <h2>消息配置</h2>
-            <p>按发送对象维护每类消息在邮件、短信与站内消息上的启用状态与模板内容。</p>
-          </div>
+    <t-card :bordered="false" :loading="templatesLoading">
+      <div class="template-toolbar">
+        <div>
+          <h2>消息配置</h2>
+          <p>按发送对象维护每类消息在邮件、短信与站内消息上的启用状态与模板内容。</p>
         </div>
+      </div>
 
-        <div class="page-tabs-toolbar">
-          <t-tabs :value="templateAudience" @change="handleAudienceChange">
-            <t-tab-panel v-for="item in templateAudienceOptions" :key="item.value" :value="item.value">
-              <template #label>{{ item.label }}</template>
-            </t-tab-panel>
-          </t-tabs>
-          <t-space v-if="canManage">
-            <t-button theme="default" variant="outline" :loading="pullingTemplates" @click="pullProviderTemplates">
-              <template #icon><refresh-icon /></template>
-              从插件拉取模板
-            </t-button>
-            <t-button
-              theme="default"
-              variant="outline"
-              :disabled="templatesLoading || !filteredTemplates.length"
-              @click="openBatchDialog"
-            >
-              <template #icon><setting-icon /></template>
-              批量配置
-            </t-button>
-          </t-space>
-        </div>
-
-        <div v-if="!isMobile" class="table-scroll">
-          <t-table
-            row-key="code"
-            :data="filteredTemplates"
-            :columns="templateColumns"
-            :loading="templatesLoading"
-            hover
-            table-layout="fixed"
-            aria-label="消息配置列表"
-            @row-click="openTemplate"
+      <div class="page-tabs-toolbar">
+        <t-tabs :value="templateAudience" @change="handleAudienceChange">
+          <t-tab-panel v-for="item in templateAudienceOptions" :key="item.value" :value="item.value">
+            <template #label>{{ item.label }}</template>
+          </t-tab-panel>
+        </t-tabs>
+        <t-space v-if="canManage">
+          <t-button theme="default" variant="outline" :loading="pullingTemplates" @click="pullProviderTemplates">
+            <template #icon><refresh-icon /></template>
+            从插件拉取模板
+          </t-button>
+          <t-button
+            theme="default"
+            variant="outline"
+            :disabled="templatesLoading || !filteredTemplates.length"
+            @click="openBatchDialog"
           >
-            <template #empty>
-              <t-empty :description="templatesLoading ? '加载中…' : '暂无数据'" />
-            </template>
-            <template #name="{ row }">
-              <div class="stack-cell">
-                <strong>{{ row.name }}</strong>
-                <span>{{ row.description }}</span>
-              </div>
-            </template>
-            <template #email="{ row }">
-              <span v-if="'email' in (row.channels || {})" class="channel-switch" @click.stop>
-                <t-switch
-                  :value="row.channels.email && isSendable(row, 'email')"
-                  :custom-value="[true, false]"
-                  :disabled="!canManage || !isSendable(row, 'email')"
-                  :loading="channelSavingKey === `${row.code}:email`"
-                  size="small"
-                  @change="(value: unknown) => toggleChannel(row, 'email', value)"
-                />
-              </span>
-              <span v-else class="muted-text">-</span>
-            </template>
-            <template #sms="{ row }">
-              <t-tooltip v-if="lockReason(row, 'sms')" :content="lockReason(row, 'sms')">
-                <span class="channel-switch is-locked">
-                  <t-switch :value="false" :custom-value="[true, false]" disabled size="small" />
-                </span>
-              </t-tooltip>
-              <span v-else-if="'sms' in (row.channels || {})" class="channel-switch" @click.stop>
-                <t-switch
-                  :value="row.channels.sms && isSendable(row, 'sms')"
-                  :custom-value="[true, false]"
-                  :disabled="!canManage || !isSendable(row, 'sms')"
-                  :loading="channelSavingKey === `${row.code}:sms`"
-                  size="small"
-                  @change="(value: unknown) => toggleChannel(row, 'sms', value)"
-                />
-              </span>
-              <span v-else class="muted-text">-</span>
-            </template>
-            <template #inbox="{ row }">
-              <span v-if="'message' in (row.channels || {})" class="channel-switch" @click.stop>
-                <t-switch
-                  :value="row.channels.message && isSendable(row, 'message')"
-                  :custom-value="[true, false]"
-                  :disabled="!canManage || !isSendable(row, 'message')"
-                  :loading="channelSavingKey === `${row.code}:message`"
-                  size="small"
-                  @change="(value: unknown) => toggleChannel(row, 'message', value)"
-                />
-              </span>
-              <span v-else class="muted-text">-</span>
-            </template>
-            <template #actions="{ row }">
-              <t-space v-if="canManage" size="small">
-                <t-button variant="text" :loading="testSendLoadingKey === row.code" @click.stop="openTestSend(row)">
-                  测试发送
-                </t-button>
-                <t-button theme="primary" variant="text" @click.stop="openTemplate(row)">编辑</t-button>
-              </t-space>
-              <t-button v-else theme="primary" variant="text" @click.stop="openTemplate(row)">查看</t-button>
-            </template>
-          </t-table>
-        </div>
+            <template #icon><setting-icon /></template>
+            批量配置
+          </t-button>
+        </t-space>
+      </div>
 
-        <div v-else class="mobile-list" data-mobile-view="card">
-          <article v-for="row in filteredTemplates" :key="row.code" class="template-mobile-card">
-            <div class="template-mobile-card__head">
+      <div v-if="!isMobile" class="table-scroll">
+        <t-table
+          row-key="code"
+          :data="filteredTemplates"
+          :columns="templateColumns"
+          :loading="templatesLoading"
+          hover
+          table-layout="fixed"
+          aria-label="消息配置列表"
+          @row-click="openTemplate"
+        >
+          <template #empty>
+            <t-empty :description="templatesLoading ? '加载中…' : '暂无数据'" />
+          </template>
+          <template #name="{ row }">
+            <div class="stack-cell">
               <strong>{{ row.name }}</strong>
+              <span>{{ row.description }}</span>
             </div>
-            <p>{{ row.description }}</p>
-            <dl>
-              <div v-for="channel in templateChannelColumns" :key="`${row.code}-${channel.value}`">
-                <dt>{{ channel.label }}</dt>
-                <dd>
-                  <t-switch
-                    v-if="channel.key in (row.channels || {})"
-                    :value="row.channels[channel.key] && isSendable(row, channel.key)"
-                    :custom-value="[true, false]"
-                    :disabled="!canManage || !isSendable(row, channel.key)"
-                    :loading="channelSavingKey === `${row.code}:${channel.key}`"
-                    size="small"
-                    @change="(value: unknown) => toggleChannel(row, channel.key, value)"
-                  />
-                  <span v-else class="muted-text">-</span>
-                  <small v-if="lockReason(row, channel.key)" class="channel-lock-hint">
-                    {{ lockReason(row, channel.key) }}
-                  </small>
-                </dd>
-              </div>
-            </dl>
-            <div class="template-mobile-card__actions">
-              <t-button
-                v-if="canManage"
-                variant="outline"
-                :loading="testSendLoadingKey === row.code"
-                @click="openTestSend(row)"
-              >
+          </template>
+          <template #email="{ row }">
+            <span v-if="'email' in (row.channels || {})" class="channel-switch" @click.stop>
+              <t-switch
+                :value="row.channels.email && isSendable(row, 'email')"
+                :custom-value="[true, false]"
+                :disabled="!canManage || !isSendable(row, 'email')"
+                :loading="channelSavingKey === `${row.code}:email`"
+                size="small"
+                @change="(value: unknown) => toggleChannel(row, 'email', value)"
+              />
+            </span>
+            <span v-else class="muted-text">-</span>
+          </template>
+          <template #sms="{ row }">
+            <t-tooltip v-if="lockReason(row, 'sms')" :content="lockReason(row, 'sms')">
+              <span class="channel-switch is-locked">
+                <t-switch :value="false" :custom-value="[true, false]" disabled size="small" />
+              </span>
+            </t-tooltip>
+            <span v-else-if="'sms' in (row.channels || {})" class="channel-switch" @click.stop>
+              <t-switch
+                :value="row.channels.sms && isSendable(row, 'sms')"
+                :custom-value="[true, false]"
+                :disabled="!canManage || !isSendable(row, 'sms')"
+                :loading="channelSavingKey === `${row.code}:sms`"
+                size="small"
+                @change="(value: unknown) => toggleChannel(row, 'sms', value)"
+              />
+            </span>
+            <span v-else class="muted-text">-</span>
+          </template>
+          <template #inbox="{ row }">
+            <span v-if="'message' in (row.channels || {})" class="channel-switch" @click.stop>
+              <t-switch
+                :value="row.channels.message && isSendable(row, 'message')"
+                :custom-value="[true, false]"
+                :disabled="!canManage || !isSendable(row, 'message')"
+                :loading="channelSavingKey === `${row.code}:message`"
+                size="small"
+                @change="(value: unknown) => toggleChannel(row, 'message', value)"
+              />
+            </span>
+            <span v-else class="muted-text">-</span>
+          </template>
+          <template #actions="{ row }">
+            <t-space v-if="canManage" size="small">
+              <t-button variant="text" :loading="testSendLoadingKey === row.code" @click.stop="openTestSend(row)">
                 测试发送
               </t-button>
-              <t-button theme="primary" variant="outline" @click="openTemplate(row)">
-                {{ canManage ? '编辑' : '查看' }}
-              </t-button>
-            </div>
-          </article>
-        </div>
-      </t-card>
+              <t-button theme="primary" variant="text" @click.stop="openTemplate(row)">编辑</t-button>
+            </t-space>
+            <t-button v-else theme="primary" variant="text" @click.stop="openTemplate(row)">查看</t-button>
+          </template>
+        </t-table>
+      </div>
 
-      <scene-detail-drawer
-        :visible="drawerVisible"
-        :row="drawerRow"
-        :audience="templateAudience"
-        :channel="drawerChannel"
-        :can-manage="canManage"
-        @close="closeDrawer"
-        @saved="handleDrawerSaved"
-        @channel-change="handleDrawerChannelChange"
-        @test-send="openTestSendFromDrawer"
-      />
-
-      <t-dialog
-        v-model:visible="pullResultVisible"
-        header="从插件拉取模板"
-        width="min(480px, calc(100vw - 32px))"
-        :confirm-btn="{ content: '知道了' }"
-        @confirm="pullResultVisible = false"
-        @close="pullResultVisible = false"
-      >
-        <div class="pull-result">
-          <p class="pull-result__lead">已从当前短信插件的号码认证参数配置拉取验证码模板。</p>
+      <div v-else class="mobile-list" data-mobile-view="card">
+        <article v-for="row in filteredTemplates" :key="row.code" class="template-mobile-card">
+          <div class="template-mobile-card__head">
+            <strong>{{ row.name }}</strong>
+          </div>
+          <p>{{ row.description }}</p>
           <dl>
-            <div>
-              <dt>插件</dt>
-              <dd>{{ pullResult?.plugin_key || '-' }}</dd>
-            </div>
-            <div>
-              <dt>已写回业务模板</dt>
-              <dd>{{ pullResult?.applied ?? 0 }} 条</dd>
-            </div>
-            <div>
-              <dt>拉取到的场景文案</dt>
-              <dd>{{ Object.keys(pullResult?.purposes || {}).length }} 条</dd>
+            <div v-for="channel in templateChannelColumns" :key="`${row.code}-${channel.value}`">
+              <dt>{{ channel.label }}</dt>
+              <dd>
+                <t-switch
+                  v-if="channel.key in (row.channels || {})"
+                  :value="row.channels[channel.key] && isSendable(row, channel.key)"
+                  :custom-value="[true, false]"
+                  :disabled="!canManage || !isSendable(row, channel.key)"
+                  :loading="channelSavingKey === `${row.code}:${channel.key}`"
+                  size="small"
+                  @change="(value: unknown) => toggleChannel(row, channel.key, value)"
+                />
+                <span v-else class="muted-text">-</span>
+                <small v-if="lockReason(row, channel.key)" class="channel-lock-hint">
+                  {{ lockReason(row, channel.key) }}
+                </small>
+              </dd>
             </div>
           </dl>
-          <div v-if="pullResult?.purposes" class="pull-result__list">
-            <div v-for="(content, purpose) in pullResult.purposes" :key="purpose" class="pull-result__item">
-              <strong>{{ purposeLabel(String(purpose)) }}</strong>
-              <span>{{ content }}</span>
-            </div>
-          </div>
-          <p class="pull-result__hint">
-            插件内置的验证码模板已写回对应业务模板正文，并由插件接管（管理端只读）。如需调整请联系插件维护方。
-          </p>
-        </div>
-      </t-dialog>
-
-      <batch-channel-dialog
-        :visible="batchVisible"
-        :rows="filteredTemplates"
-        :audience="templateAudience"
-        @close="batchVisible = false"
-        @saved="handleBatchSaved"
-      />
-
-      <t-dialog
-        v-model:visible="testSendVisible"
-        :header="testSendDialogTitle"
-        width="min(560px, calc(100vw - 32px))"
-        :confirm-btn="{ content: '确定', loading: testSending }"
-        @confirm="submitTestSend"
-      >
-        <div class="template-test-dialog">
-          <div v-if="testSendTarget" class="template-test-target">
-            <strong>{{ testSendTarget.name }}</strong>
-            <span>{{ testSendTarget.channel === 'sms' ? '短信模板' : '邮件模板' }} · {{ testSendTarget.code }}</span>
-          </div>
-          <t-form label-align="right">
-            <t-form-item v-if="testSendChannelOptions.length > 1" label="发送渠道">
-              <t-radio-group
-                :value="testSendChannel"
-                variant="default-filled"
-                @change="(value: unknown) => switchTestSendChannel(value)"
-              >
-                <t-radio-button v-for="option in testSendChannelOptions" :key="option.value" :value="option.value">
-                  {{ option.label }}
-                </t-radio-button>
-              </t-radio-group>
-            </t-form-item>
-            <t-form-item :label="testSendChannel === 'sms' ? '接收手机号' : '接收邮箱地址'">
-              <t-input
-                v-model="testSendRecipient"
-                :placeholder="testSendPlaceholder"
-                clearable
-                :type="testSendChannel === 'sms' ? 'tel' : 'email'"
-                @input="testSendResult = null"
-              />
-            </t-form-item>
-          </t-form>
-
-          <div
-            v-if="testSendResult"
-            class="template-test-feedback"
-            :class="`template-test-feedback--${testSendResult.status}`"
-          >
-            <strong>{{ testSendSummaryText }}</strong>
-            <span>成功 {{ testSendResult.success_count }} 条，失败 {{ testSendResult.failed_count }} 条</span>
-          </div>
-          <div v-if="testSendResult?.results?.length" class="template-test-results">
-            <div
-              v-for="item in testSendResult.results"
-              :key="`${item.recipient}:${item.status}`"
-              class="template-test-result-row"
+          <div class="template-mobile-card__actions">
+            <t-button
+              v-if="canManage"
+              variant="outline"
+              :loading="testSendLoadingKey === row.code"
+              @click="openTestSend(row)"
             >
-              <span>{{ item.recipient }}</span>
-              <t-tag :theme="item.status === 'success' ? 'success' : 'danger'" variant="light">
-                {{ item.status === 'success' ? '成功' : '失败' }}
-              </t-tag>
-              <small v-if="item.error">{{ item.error }}</small>
-            </div>
+              测试发送
+            </t-button>
+            <t-button theme="primary" variant="outline" @click="openTemplate(row)">
+              {{ canManage ? '编辑' : '查看' }}
+            </t-button>
+          </div>
+        </article>
+      </div>
+    </t-card>
+
+    <scene-detail-drawer
+      :visible="drawerVisible"
+      :row="drawerRow"
+      :audience="templateAudience"
+      :channel="drawerChannel"
+      :can-manage="canManage"
+      @close="closeDrawer"
+      @saved="handleDrawerSaved"
+      @channel-change="handleDrawerChannelChange"
+      @test-send="openTestSendFromDrawer"
+    />
+
+    <t-dialog
+      v-model:visible="pullResultVisible"
+      header="从插件拉取模板"
+      width="min(480px, calc(100vw - 32px))"
+      :confirm-btn="{ content: '知道了' }"
+      @confirm="pullResultVisible = false"
+      @close="pullResultVisible = false"
+    >
+      <div class="pull-result">
+        <p class="pull-result__lead">已从当前短信插件的号码认证参数配置拉取验证码模板。</p>
+        <dl>
+          <div>
+            <dt>插件</dt>
+            <dd>{{ pullResult?.plugin_key || '-' }}</dd>
+          </div>
+          <div>
+            <dt>已写回业务模板</dt>
+            <dd>{{ pullResult?.applied ?? 0 }} 条</dd>
+          </div>
+          <div>
+            <dt>拉取到的场景文案</dt>
+            <dd>{{ Object.keys(pullResult?.purposes || {}).length }} 条</dd>
+          </div>
+        </dl>
+        <div v-if="pullResult?.purposes" class="pull-result__list">
+          <div v-for="(content, purpose) in pullResult.purposes" :key="purpose" class="pull-result__item">
+            <strong>{{ purposeLabel(String(purpose)) }}</strong>
+            <span>{{ content }}</span>
           </div>
         </div>
-      </t-dialog>
-    </template>
+        <p class="pull-result__hint">
+          插件内置的验证码模板已写回对应业务模板正文，并由插件接管（管理端只读）。如需调整请联系插件维护方。
+        </p>
+      </div>
+    </t-dialog>
+
+    <batch-channel-dialog
+      :visible="batchVisible"
+      :rows="filteredTemplates"
+      :audience="templateAudience"
+      @close="batchVisible = false"
+      @saved="handleBatchSaved"
+    />
+
+    <t-dialog
+      v-model:visible="testSendVisible"
+      :header="testSendDialogTitle"
+      width="min(560px, calc(100vw - 32px))"
+      :confirm-btn="{ content: '确定', loading: testSending }"
+      @confirm="submitTestSend"
+    >
+      <div class="template-test-dialog">
+        <div v-if="testSendTarget" class="template-test-target">
+          <strong>{{ testSendTarget.name }}</strong>
+          <span>{{ testSendTarget.channel === 'sms' ? '短信模板' : '邮件模板' }} · {{ testSendTarget.code }}</span>
+        </div>
+        <t-form label-align="right">
+          <t-form-item v-if="testSendChannelOptions.length > 1" label="发送渠道">
+            <t-radio-group
+              :value="testSendChannel"
+              variant="default-filled"
+              @change="(value: unknown) => switchTestSendChannel(value)"
+            >
+              <t-radio-button v-for="option in testSendChannelOptions" :key="option.value" :value="option.value">
+                {{ option.label }}
+              </t-radio-button>
+            </t-radio-group>
+          </t-form-item>
+          <t-form-item :label="testSendChannel === 'sms' ? '接收手机号' : '接收邮箱地址'">
+            <t-input
+              v-model="testSendRecipient"
+              :placeholder="testSendPlaceholder"
+              clearable
+              :type="testSendChannel === 'sms' ? 'tel' : 'email'"
+              @input="testSendResult = null"
+            />
+          </t-form-item>
+        </t-form>
+
+        <div
+          v-if="testSendResult"
+          class="template-test-feedback"
+          :class="`template-test-feedback--${testSendResult.status}`"
+        >
+          <strong>{{ testSendSummaryText }}</strong>
+          <span>成功 {{ testSendResult.success_count }} 条，失败 {{ testSendResult.failed_count }} 条</span>
+        </div>
+        <div v-if="testSendResult?.results?.length" class="template-test-results">
+          <div
+            v-for="item in testSendResult.results"
+            :key="`${item.recipient}:${item.status}`"
+            class="template-test-result-row"
+          >
+            <span>{{ item.recipient }}</span>
+            <t-tag :theme="item.status === 'success' ? 'success' : 'danger'" variant="light">
+              {{ item.status === 'success' ? '成功' : '失败' }}
+            </t-tag>
+            <small v-if="item.error">{{ item.error }}</small>
+          </div>
+        </div>
+      </div>
+    </t-dialog>
   </div>
 </template>
 <script setup lang="ts">
@@ -286,7 +283,6 @@ import { MOBILE_MEDIA_QUERY, useMediaQuery } from '@/hooks/useMediaQuery';
 import { hasAdminPermission } from '@/utils/permission';
 import { errorMessage } from '@/utils/userMessage';
 
-import ApiDirectoryPanel from './components/ApiDirectoryPanel.vue';
 import BatchChannelDialog from './components/BatchChannelDialog.vue';
 import SceneDetailDrawer from './components/SceneDetailDrawer.vue';
 
@@ -316,10 +312,6 @@ const canManage = computed(() => hasAdminPermission(AdminPermissions.SETTINGS_MA
 // 场景数据源受众为 customer/admin；query.tab 兼容旧 user 值。
 const templateAudience = ref<MessageAudience>(normalizeAudience(route.query.tab));
 const isMobile = useMediaQuery(MOBILE_MEDIA_QUERY);
-// 两条路由复用本组件：/admin/notifications 为统一「消息配置」页，
-// /admin/notifications/api-directory 保留原接口目录面板。
-const isApiDirectory = computed(() => route.meta?.notificationTab === 'api-directory');
-
 const {
   list: sceneSummaries,
   loading: templatesLoading,
@@ -672,23 +664,23 @@ watch(
   },
 );
 
-// 两条路由共用本组件与同一个 keep-alive 槽位，切换时必须重新判断视图并按需加载模板列表。
+// keep-alive 复用组件，重新进入本页时收起浮层并刷新模板列表。
 watch(
-  () => [route.meta?.notificationTab, route.meta?.keepAliveName],
+  () => route.meta?.keepAliveName,
   () => {
     if (!isOwnRoute()) return;
     drawerVisible.value = false;
     batchVisible.value = false;
-    if (!isApiDirectory.value) void loadTemplates();
+    void loadTemplates();
   },
 );
 
-/** 当前路由是否落在本页：两条列表路由共用 keepAliveName=AdminNotificationList */
+/** 当前路由是否落在本页（keepAliveName 由路由 meta 声明） */
 function isOwnRoute(): boolean {
   return route.meta?.keepAliveName === 'AdminNotificationList';
 }
 
 onMounted(() => {
-  if (!isApiDirectory.value) void loadTemplates();
+  void loadTemplates();
 });
 </script>

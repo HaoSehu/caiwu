@@ -144,18 +144,4 @@ export const contentRoutes: RouteRecordRaw[] = [
       keepAliveName: 'AdminNotificationList',
     },
   },
-  {
-    path: 'notifications/api-directory',
-    name: 'AdminNotificationApiDirectory',
-    component: () => import('@/pages/notifications/index.vue'),
-    meta: {
-      title: {
-        zh_CN: 'API 接口',
-        en_US: 'API Directory',
-      },
-      permission: AdminPermissions.SETTINGS_VIEW,
-      notificationTab: 'api-directory',
-      keepAliveName: 'AdminNotificationList',
-    },
-  },
 ];

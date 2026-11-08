@@ -356,3 +356,34 @@
   color: var(--td-text-color-placeholder);
   font-size: var(--td-font-size-size-1, 12px);
 }
+
+/* 短信预置模板勾选列表 */
+.sms-preset-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--td-comp-margin-s);
+  width: 100%;
+  max-height: 320px;
+  padding: var(--td-comp-paddingTB-s) var(--td-comp-paddingLR-s);
+  overflow-y: auto;
+  border: 1px solid var(--td-component-stroke);
+  border-radius: var(--td-radius-medium);
+}
+
+.sms-preset-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-start;
+
+  &__state {
+    color: var(--td-success-color);
+    font-size: var(--td-font-size-size-1, 12px);
+  }
+
+  &__content {
+    color: var(--td-text-color-secondary);
+    font-size: var(--td-font-size-size-1, 12px);
+    line-height: 1.5;
+  }
+}

@@ -167,7 +167,10 @@ export function useDashboardSecondary(fetchUnreadCount: (silent?: boolean) => Pr
       balanceLogsLoaded.value = false;
       tasks.push(
         fetchAllPagedList<BalanceLog>(
-          (params) => clientApi.balanceLogs({ ...last7DaysRange(), ...params }),
+          // 不传 tab：这张图是「近 7 天每日消费」，按 change_amount < 0 聚合。
+          // tab=balance 只含充值/调整类事件，会把账单支付扣款（invoice_payment）
+          // 整个排除，导致消费金额常年少报。
+          (params) => clientApi.financeLedger({ ...last7DaysRange(), ...params }),
           {},
           10,
           'balance-daily',
