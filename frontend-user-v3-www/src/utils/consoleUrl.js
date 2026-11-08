@@ -1,4 +1,9 @@
 function normalizeConsoleOrigin() {
+  // 演练版三端同站：控制台在 /demo/console/，不跳生产域名
+  if (import.meta.env.MODE === "demo") {
+    return "/demo/console";
+  }
+
   const configuredOrigin = String(import.meta.env.VITE_CONSOLE_SITE_URL || "")
     .trim()
     .replace(/\/+$/, "");
