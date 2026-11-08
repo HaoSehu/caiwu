@@ -58,9 +58,12 @@ class Session extends ChangeNotifier {
   }
 
   /// 登录成功后写入。
+  ///
+  /// 同时置 [loaded]：登录态已经确定，路由守卫不必再等本地恢复。
   Future<void> applyLogin(String token, Map<String, dynamic> user) async {
     _token = token;
     _user = user;
+    _loaded = true;
     await _secureStorage.write(key: _tokenKey, value: token);
     await _writeUser(user);
     notifyListeners();
@@ -77,6 +80,7 @@ class Session extends ChangeNotifier {
   Future<void> clear() async {
     _token = null;
     _user = null;
+    _loaded = true;
     try {
       await _secureStorage.delete(key: _tokenKey);
       final prefs = await SharedPreferences.getInstance();

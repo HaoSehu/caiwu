@@ -321,7 +321,7 @@ class _RechargePageState extends State<RechargePage> {
   Widget build(BuildContext context) {
     final padding = context.pagePadding;
     // 区块间距：平板 32，手机 24。
-    final sectionGap = context.isTablet ? 32.0 : AppSpacing.gapXl;
+    final sectionGap = AppSpacing.sectionGap(context.isTablet);
     // 表单页在平板上限宽居中，避免输入行过长。
     final form = ListView(
       padding: EdgeInsets.fromLTRB(
@@ -403,7 +403,8 @@ class _RechargePageState extends State<RechargePage> {
                   style: AppType.caption(theme),
                 ),
                 trailing: TButton(
-                  size: TButtonSize.extraSmall,
+                  // 支付链路的关键操作，触控高度不能低于 44。
+                  size: TButtonSize.medium,
                   variant: TButtonVariant.text,
                   colorPreset: TButtonColorPreset.primary,
                   onPressed: () => _copyPayUrl(created.payUrl),
@@ -449,7 +450,8 @@ class _RechargePageState extends State<RechargePage> {
             style: AppType.money(theme),
           ),
           trailing: TButton(
-            size: TButtonSize.extraSmall,
+            // 余额核对是支付后的高频动作，用 medium 保证 44 高热区。
+            size: TButtonSize.medium,
             variant: TButtonVariant.text,
             colorPreset: TButtonColorPreset.primary,
             icon: const Icon(TIcons.refresh, size: 16),

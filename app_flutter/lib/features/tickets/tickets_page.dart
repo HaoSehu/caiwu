@@ -224,7 +224,7 @@ class _TicketsPageState extends State<TicketsPage> {
               ),
             ),
           ),
-          const SizedBox(height: AppSpacing.gapM),
+          const SizedBox(height: AppSpacing.gapS),
           Expanded(child: _buildBody(context)),
         ],
       ),
@@ -279,7 +279,9 @@ class _TicketsPageState extends State<TicketsPage> {
               sliver: SliverToBoxAdapter(
                 // 少于 4 条不拆栏：两栏各一条会让右半边空出大片，
                 // 单栏通栏读起来更顺。
-                child: context.isTablet && _tickets.length >= 4
+                // 双栏只在横屏平板（>= 840）启用：600–839 竖屏两栏各约 270，
+                // 副标题「技术支持 · 优先级中 · 2026-…」会被截断。
+                child: context.isExpanded && _tickets.length >= 4
                     ? _buildTwoColumnList(context)
                     : TCellGroup(
                         cells: [
@@ -308,29 +310,26 @@ class _TicketsPageState extends State<TicketsPage> {
     );
   }
 
-  /// 平板横屏两栏列表：左右各一个 `TCellGroup`，按奇偶交替分栏。
-  /// 这样按行阅读即是原始时间顺序（左 1、右 2、左 3…），
-  /// 触底追加的新数据只会出现在两列末尾，已有条目不会换列。
+  /// 平板横屏两栏列表：按奇偶交替分到左右两栏，各一个 `TCellGroup`。
+  ///
+  /// 必须按奇偶、不能按「前半/后半」：列表是分页追加的，中点切分会
+  /// 让每多加载一页就整批换列。奇偶切分下第 i 条永远落在同一栏。
   Widget _buildTwoColumnList(BuildContext context) {
-    final left = <Map<String, dynamic>>[];
-    final right = <Map<String, dynamic>>[];
-    for (var i = 0; i < _tickets.length; i++) {
-      (i.isEven ? left : right).add(_tickets[i]);
-    }
+    final columns = splitIntoTwoColumns(_tickets);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
           child: TCellGroup(
-            cells: [for (final ticket in left) _buildTicketCell(ticket)],
+            cells: [for (final ticket in columns.left) _buildTicketCell(ticket)],
           ),
         ),
         const SizedBox(width: AppSpacing.gapL),
         Expanded(
-          child: right.isEmpty
+          child: columns.right.isEmpty
               ? const SizedBox.shrink()
               : TCellGroup(
-                  cells: [for (final ticket in right) _buildTicketCell(ticket)],
+                  cells: [for (final ticket in columns.right) _buildTicketCell(ticket)],
                 ),
         ),
       ],

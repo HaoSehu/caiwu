@@ -10,29 +10,6 @@ class AuthApi {
 
   final dynamic _client;
 
-  /// 是否需要图形验证码（Geetest）。首版 App 不做 Geetest 渲染。
-  Future<Map<String, dynamic>> captchaConfig() async {
-    final data = await _client.get('/v2/client/auth/captcha-config');
-    return _asMap(data);
-  }
-
-  /// 账号密码登录。
-  Future<Map<String, dynamic>> login({
-    required String account,
-    required String password,
-    String? captcha,
-  }) async {
-    final data = await _client.post(
-      '/v2/client/login',
-      data: {
-        'account': account,
-        'password': password,
-        if (captcha != null && captcha.isNotEmpty) 'captcha': captcha,
-      },
-    );
-    return _asMap(data);
-  }
-
   /// 发送短信验证码。
   Future<void> sendPhoneCode(String phone, {String purpose = 'login'}) async {
     await _client.post(
@@ -596,8 +573,11 @@ class FinanceApi {
     int pageSize = 15,
     String? eventType,
   }) async {
+    // 不传 tab：本方法服务的「余额流水」页要看全部账户变动。
+    // 传 tab=balance 会把 invoice_payment / invoice_refund 排除掉，
+    // 而这正是用户最常发生的余额变动（付账单扣款），页面会看起来「少了很多记录」。
     final data = await _client.get(
-      '/v2/client/balance-logs',
+      '/v2/client/ledger',
       query: {
         'page': page,
         'page_size': pageSize,

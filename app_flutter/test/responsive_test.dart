@@ -37,4 +37,26 @@ void main() {
     await pumpAt(tester, const Size(320, 568));
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('手机横屏（844×390）仍走手机版式', (tester) async {
+    await pumpAt(tester, const Size(844, 390));
+    expect(tester.takeException(), isNull);
+    expect(find.text('Caiwu 云控制台'), findsOneWidget);
+  });
+
+  testWidgets('大字号（textScale 2.0）被夹到 1.6 不破版', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      MediaQuery(
+        data: const MediaQueryData(textScaler: TextScaler.linear(2)),
+        child: const CaiwuApp(),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(tester.takeException(), isNull);
+  });
 }

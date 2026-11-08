@@ -749,14 +749,22 @@ class _TicketCreatePageState extends State<TicketCreatePage> {
                         ),
                 ),
                 Positioned(
-                  top: 4,
-                  right: 4,
-                  child: GestureDetector(
+                  top: 0,
+                  right: 0,
+                  child: InkWell(
                     onTap: () => unawaited(_removeImage(image)),
-                    child: Icon(
-                      TIcons.close_circle,
-                      size: 18,
-                      color: theme.textColorPrimary,
+                    customBorder: const CircleBorder(),
+                    // 图标仍是 18，命中区补到 44，避免手指点不中。
+                    child: SizedBox(
+                      width: AppSpacing.minTapTarget,
+                      height: AppSpacing.minTapTarget,
+                      child: Center(
+                        child: Icon(
+                          TIcons.close_circle,
+                          size: 18,
+                          color: theme.textColorPrimary,
+                        ),
+                      ),
                     ),
                   ),
                 ),

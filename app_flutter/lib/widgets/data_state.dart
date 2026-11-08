@@ -1,5 +1,7 @@
 import 'package:tdesign_flutter/tdesign_flutter.dart';
 
+import '../core/theme/app_tokens.dart';
+
 /// 统一的加载/错误/空三态容器，对齐 v4-console 的 DataState 语义：
 /// 空态必须提供行动路径（例如「暂无服务实例，[前往选购]」）。
 class DataState extends StatelessWidget {
@@ -24,31 +26,40 @@ class DataState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = context.tTheme;
     if (loading) {
-      return const Center(
+      return Center(
         child: SizedBox(
           width: 28,
           height: 28,
-          child: CircularProgressIndicator(strokeWidth: 2.5),
+          child: const CircularProgressIndicator(strokeWidth: 2.5),
         ),
       );
     }
     if (error != null && error!.isNotEmpty) {
       return Center(
         child: Padding(
-          padding: const EdgeInsets.all(32),
+          padding: const EdgeInsets.all(AppSpacing.gapXl),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TText(
+              Icon(
+                TIcons.error_circle,
+                size: 32,
+                color: theme.textColorPlaceholder,
+              ),
+              const SizedBox(height: AppSpacing.gapS),
+              Text(
                 error!,
                 textAlign: TextAlign.center,
-                style: TextStyle(color: context.tTheme.textColorSecondary),
+                style: AppType.body(theme)
+                    .copyWith(color: theme.textColorSecondary),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.gapL),
               if (retry != null)
                 TButton(
-                  size: TButtonSize.small,
+                  // 重试是错误态的主动作，触控高度必须够。
+                  size: TButtonSize.medium,
                   variant: TButtonVariant.outline,
                   onPressed: retry,
                   child: const Text('重试'),
@@ -62,7 +73,7 @@ class DataState extends StatelessWidget {
       // TDesign 官方空态组件：图标、文案、操作位都由组件排版。
       return Center(
         child: Padding(
-          padding: const EdgeInsets.all(32),
+          padding: const EdgeInsets.all(AppSpacing.gapXl),
           child: TEmpty(
             emptyText: emptyText,
             operation: emptyAction,

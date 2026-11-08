@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:provider/provider.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
 
+import '../../core/config/web_preview.dart';
 import '../../core/layout/responsive.dart';
 import '../../core/net/api_exception.dart';
 import '../../core/net/app_services.dart';
@@ -41,6 +42,11 @@ class _CaiwuAppState extends State<CaiwuApp> {
   }
 
   Future<void> _bootstrap() async {
+    // Web 预览：没有真实登录态，直接注入演示会话（仅 kIsWeb 的调试产物）。
+    if (WebPreview.enabled) {
+      await _session.applyLogin(WebPreview.demoToken, WebPreview.demoUser);
+      return;
+    }
     try {
       await _session.restore();
     } catch (_) {
@@ -85,13 +91,27 @@ class _CaiwuAppState extends State<CaiwuApp> {
         builder: (context, child) {
           // 统一页面底色（DESIGN.md：页面底 #F5F7FB），并把窗口断点注入子树，
           // 供页面按手机/平板切换布局。
-          final size = MediaQuery.sizeOf(context);
+          final media = MediaQuery.of(context);
+          final size = media.size;
+          // 字体缩放上限：系统字号放到 1.6 倍以上时，固定 48 高的按钮与
+          // 密集列表会开始重叠；1.6 以内（Android 的「大号」「特大号」两档）
+          // 布局仍然完整，不至于把无障碍设置一刀切掉。
+          final scaled = media.copyWith(
+            textScaler: media.textScaler.clamp(maxScaleFactor: 1.6),
+          );
           return ColoredBox(
             color: context.tTheme.bgColorPage,
-            child: WindowSizeProvider(
-              size: Breakpoints.of(size.width),
-              width: size.width,
-              child: child ?? const SizedBox.shrink(),
+            child: MediaQuery(
+              data: scaled,
+              child: WindowSizeProvider(
+                // 以短边判定设备类别：手机横屏仍是手机，不能切平板版式。
+                size: Breakpoints.resolve(size),
+                width: size.width,
+                isLandscapePhone:
+                    size.shortestSide < Breakpoints.medium &&
+                    size.width >= Breakpoints.medium,
+                child: child ?? const SizedBox.shrink(),
+              ),
             ),
           );
         },

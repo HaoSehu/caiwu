@@ -312,7 +312,8 @@ class _NoticesPageState extends State<NoticesPage> {
         physics: const AlwaysScrollableScrollPhysics(),
         children: [
           // 少于 4 条不拆栏：两栏各一两条会让半屏空白，单栏通栏更耐读。
-          if (context.isTablet && _items.length >= 4)
+          // 双栏只在横屏平板启用：竖屏两栏下摘要只剩十来个字，没有阅读价值。
+          if (context.isExpanded && _items.length >= 4)
             _buildTwoColumnGroups(theme)
           else
             _buildCellGroup(theme, _items),
@@ -343,7 +344,7 @@ class _NoticesPageState extends State<NoticesPage> {
   Widget _buildCellGroup(TThemeData theme, List<Map<String, dynamic>> items) {
     return Container(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(AppRadius.card),
+        borderRadius: BorderRadius.circular(context.tTheme.radiusLarge),
         border: Border.all(color: theme.borderLevel1Color),
       ),
       clipBehavior: Clip.antiAlias,
@@ -379,8 +380,9 @@ class _NoticesPageState extends State<NoticesPage> {
       ),
       title: Text(
         title,
-        style: TextStyle(
+        style: AppType.cardTitle(theme).copyWith(
           fontWeight: unread ? FontWeight.w600 : FontWeight.w400,
+          color: theme.textColorPrimary,
         ),
       ),
       subtitle: Text(

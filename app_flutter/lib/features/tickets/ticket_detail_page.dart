@@ -338,7 +338,7 @@ class _TicketDetailPageState extends State<TicketDetailPage> {
     }
     final padding = context.pagePadding;
     // 区块间距：平板 32，手机 24。
-    final sectionGap = context.isTablet ? 32.0 : AppSpacing.gapXl;
+    final sectionGap = AppSpacing.sectionGap(context.isTablet);
     final infoGroup = _buildInfoGroup(context);
     final conversation = _buildConversation(context);
     final inputBar = _closed
@@ -925,15 +925,29 @@ class _TicketDetailPageState extends State<TicketDetailPage> {
           Positioned(
             top: 2,
             right: 2,
-            child: GestureDetector(
+            child: InkWell(
               onTap: () => _removeReplyImage(index),
-              child: Container(
-                padding: const EdgeInsets.all(1),
-                decoration: const BoxDecoration(
-                  color: Colors.black54,
-                  shape: BoxShape.circle,
+              customBorder: const CircleBorder(),
+              // 缩略图只有 72，删除按钮视觉仍是 18，但命中区外扩到 44：
+              // 误触删除要重新上传，比视觉略大更值得。
+              child: SizedBox(
+                width: AppSpacing.minTapTarget,
+                height: AppSpacing.minTapTarget,
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.all(1),
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white70),
+                    ),
+                    child: const Icon(
+                      TIcons.close,
+                      size: 12,
+                      color: Colors.white,
+                    ),
+                  ),
                 ),
-                child: const Icon(TIcons.close, size: 12, color: Colors.white),
               ),
             ),
           ),

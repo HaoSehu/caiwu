@@ -7,6 +7,7 @@ import 'package:xterm/xterm.dart';
 
 import '../../core/net/app_services.dart';
 import '../../core/theme/app_tokens.dart';
+import '../../core/theme/console_theme.dart';
 import '../../widgets/app_feedback.dart';
 import '../../widgets/app_kit.dart';
 import '../../widgets/data_state.dart';
@@ -14,12 +15,12 @@ import 'host_store.dart';
 import 'session_registry.dart';
 import 'ssh_session.dart';
 
-/// 终端底色（全屏深色终端，DESIGN 允许 SSH 终端使用深色终端风格）。
-const Color _terminalBackground = Color(0xFF1F1F1F);
-const Color _barBackground = Color(0xFF2A2A31);
-const Color _barText = Color(0xFFE5E7EB);
-const Color _barSubtle = Color(0xFFB0B0B8);
-const Color _barDivider = Color(0xFF3A3A42);
+// 深色控制台配色统一取自 ConsoleColors，SSH 与 VNC 两页共用一套。
+const Color _terminalBackground = ConsoleColors.canvas;
+const Color _barBackground = ConsoleColors.bar;
+const Color _barText = ConsoleColors.barText;
+const Color _barSubtle = ConsoleColors.barSubtle;
+const Color _barDivider = ConsoleColors.barDivider;
 
 /// 深色沉浸式页面的状态栏样式：透明底 + 浅色图标，避免顶栏上方出现白条。
 const SystemUiOverlayStyle _darkOverlayStyle = SystemUiOverlayStyle(
@@ -422,6 +423,10 @@ class _SshPageState extends State<SshPage> {
                     ? _buildTerminal(terminal)
                     : _buildStatusBody(),
               ),
+              // 工具条必须常驻：Ctrl / Esc / Tab / 方向键正是打字时最需要的，
+              // 键盘一弹就把它们摘掉，用户得先收起键盘才能按。
+              // 高度换来的是这几行终端可视区，但键盘本身已占了 300 左右，
+              // 再省 44 行并不能真正「看到上下文」，反而牺牲了控制键。
               if (connected) _buildToolbar(),
             ],
           ),
@@ -570,12 +575,12 @@ class _SshPageState extends State<SshPage> {
                 size: 48,
               )
             else
-              const SizedBox(
+              SizedBox(
                 width: 48,
                 height: 48,
                 child: CircularProgressIndicator(
                   strokeWidth: 3,
-                  color: Color(0xFF4B8DFF),
+                  color: context.tTheme.brandColor,
                 ),
               ),
             const SizedBox(height: AppSpacing.gapXl),
@@ -591,7 +596,7 @@ class _SshPageState extends State<SshPage> {
                 textAlign: TextAlign.center,
                 style: AppType.secondary(
                   theme,
-                ).copyWith(color: const Color(0xFFB0B0B8)),
+                ).copyWith(color: _barSubtle),
               ),
             ],
             const SizedBox(height: AppSpacing.gapXl),
@@ -675,7 +680,8 @@ class _SshPageState extends State<SshPage> {
           splashColor: Colors.white.withValues(alpha: 0.08),
           highlightColor: Colors.white.withValues(alpha: 0.06),
           child: Container(
-            height: 40,
+            // 终端/桌面工具条是高频点按区，高度与最小宽度都取 44。
+            height: 44,
             constraints: const BoxConstraints(minWidth: 44),
             alignment: Alignment.center,
             padding: const EdgeInsets.symmetric(horizontal: 12),

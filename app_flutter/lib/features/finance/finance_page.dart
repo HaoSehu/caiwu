@@ -224,10 +224,7 @@ class _FinancePageState extends State<FinancePage> {
       title: '账单与订单',
       body: Column(
         children: [
-          Padding(
-            padding: EdgeInsets.fromLTRB(padding, AppSpacing.gapS, padding, 0),
-            child: _buildBalanceRow(context, session),
-          ),
+          _buildBalanceRow(context, session),
           Padding(
             padding: EdgeInsets.symmetric(horizontal: padding),
             child: AppSegmentedTabs(
@@ -257,7 +254,7 @@ class _FinancePageState extends State<FinancePage> {
           title: const Text('账户余额'),
           note: Text(
             formatMoneyText(session.balance),
-            style: AppType.money(theme, size: 17),
+            style: AppType.amountRow(theme),
           ),
           trailing: Text(
             '充值',
@@ -303,7 +300,8 @@ class _FinancePageState extends State<FinancePage> {
     final padding = context.pagePadding;
     // 财务记录行 trailing 同时有金额与状态标签，比工单行更宽：
     // 两栏仅在横屏平板（>= 840）启用，600–839 仍保持单栏避免单号被挤压。
-    final twoColumn = context.isExpanded;
+    // 少于 4 条不拆栏：一两条时分到两栏会让右半屏整片空白。
+    final twoColumn = context.isExpanded && state.items.length >= 4;
     return RefreshList(
       onRefresh: () => _fetchFirst(state, showLoading: false),
       child: CustomScrollView(
@@ -351,9 +349,9 @@ class _FinancePageState extends State<FinancePage> {
           else ...[
             SliverPadding(
               padding: EdgeInsets.fromLTRB(
-                padding,
+                twoColumn ? padding : 0,
                 AppSpacing.gapM,
-                padding,
+                twoColumn ? padding : 0,
                 0,
               ),
               sliver: SliverToBoxAdapter(
@@ -386,33 +384,30 @@ class _FinancePageState extends State<FinancePage> {
     );
   }
 
-  /// 平板横屏两栏列表：左右各一个 `TCellGroup`，按奇偶交替分栏。
-  /// 这样按行阅读即是原始时间顺序（左 1、右 2、左 3…），
-  /// 触底追加的新数据只会出现在两列末尾，已有条目不会换列。
+  /// 平板横屏两栏列表：按奇偶交替分到左右两栏，各一个 `TCellGroup`。
+  ///
+  /// 必须按奇偶、不能按「前半/后半」：列表是分页追加的，中点切分会
+  /// 让每多加载一页就整批换列。奇偶切分下第 i 条永远落在同一栏。
   Widget _buildTwoColumnList(BuildContext context, _FinanceTabState state) {
-    final left = <Map<String, dynamic>>[];
-    final right = <Map<String, dynamic>>[];
-    for (var i = 0; i < state.items.length; i++) {
-      (i.isEven ? left : right).add(state.items[i]);
-    }
+    final columns = splitIntoTwoColumns(state.items);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
           child: TCellGroup(
             cells: [
-              for (final item in left)
+              for (final item in columns.left)
                 _buildRecordCell(context, state.index, item),
             ],
           ),
         ),
         const SizedBox(width: AppSpacing.gapL),
         Expanded(
-          child: right.isEmpty
+          child: columns.right.isEmpty
               ? const SizedBox.shrink()
               : TCellGroup(
                   cells: [
-                    for (final item in right)
+                    for (final item in columns.right)
                       _buildRecordCell(context, state.index, item),
                   ],
                 ),
@@ -485,14 +480,19 @@ class _FinancePageState extends State<FinancePage> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(amount, style: AppType.money(theme, color: amountColor)),
-              if (amountNote != null && amountNote.isNotEmpty)
-                Text(amountNote, style: AppType.caption(theme)),
-            ],
+          // 金额列定宽：双栏或长单号并行时，「¥0.00」与「¥25.00」宽度不同，
+          // 不定宽会让每行金额的左缘跟着漂，扫读时对不齐。
+          ConstrainedBox(
+            constraints: const BoxConstraints(minWidth: 76),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(amount, style: AppType.money(theme, color: amountColor)),
+                if (amountNote != null && amountNote.isNotEmpty)
+                  Text(amountNote, style: AppType.caption(theme)),
+              ],
+            ),
           ),
           if (statusLabel.trim().isNotEmpty) ...[
             const SizedBox(width: AppSpacing.gapS),

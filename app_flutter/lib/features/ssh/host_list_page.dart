@@ -8,6 +8,7 @@ import '../../core/theme/app_tokens.dart';
 import '../../core/util/format.dart';
 import '../../widgets/app_feedback.dart';
 import '../../widgets/app_kit.dart';
+import '../../widgets/data_state.dart';
 import 'host_store.dart';
 import 'session_registry.dart';
 
@@ -30,6 +31,9 @@ class _SshHostListPageState extends State<SshHostListPage> {
   String _keyword = '';
   bool _loadDone = false;
 
+  /// 本地存储读取失败的原因；非空时列表区显示错误态与重试。
+  String? _loadError;
+
   @override
   void initState() {
     super.initState();
@@ -48,7 +52,13 @@ class _SshHostListPageState extends State<SshHostListPage> {
   }
 
   Future<void> _boot() async {
-    await _store.load();
+    try {
+      await _store.load();
+    } catch (_) {
+      // 本地存储读取失败（Keystore 不可用、数据损坏）必须落到错误态：
+      // 否则 loaded 永远为 false，页面会一直转圈或者误显「还没有服务器」。
+      if (mounted) setState(() => _loadError = '服务器列表读取失败');
+    }
     _loadDone = true;
     if (!mounted) _store.dispose();
   }
@@ -276,14 +286,19 @@ class _SshHostListPageState extends State<SshHostListPage> {
   }
 
   Widget _buildBody(TThemeData theme) {
-    if (!_store.loaded) {
-      return const Center(
-        child: SizedBox(
-          width: 28,
-          height: 28,
-          child: CircularProgressIndicator(strokeWidth: 2.5),
-        ),
+    if (_loadError != null) {
+      return DataState(
+        loading: false,
+        error: _loadError,
+        retry: () {
+          setState(() => _loadError = null);
+          unawaited(_boot());
+        },
+        child: const SizedBox.shrink(),
       );
+    }
+    if (!_store.loaded) {
+      return const DataState(loading: true, child: SizedBox.shrink());
     }
     if (_store.hosts.isEmpty) return _buildEmpty(theme);
 

@@ -267,15 +267,15 @@ class _ServicesPageState extends State<ServicesPage> {
       body: Column(
         children: [
           _buildHeader(theme),
-          const SizedBox(height: AppSpacing.gapS),
-          _buildSearchRow(theme),
           const SizedBox(height: AppSpacing.gapM),
+          _buildSearchRow(theme),
+          const SizedBox(height: AppSpacing.gapS),
           _buildFilters(theme),
           if (_filterExpanded) ...[
             const SizedBox(height: AppSpacing.gapS),
             _buildMoreFilters(theme),
           ],
-          const SizedBox(height: AppSpacing.gapXs),
+          const SizedBox(height: AppSpacing.gapS),
           Expanded(
             child: RefreshIndicator(
               color: theme.brandColor,
@@ -293,7 +293,7 @@ class _ServicesPageState extends State<ServicesPage> {
     return Padding(
       padding: EdgeInsets.fromLTRB(
         context.pagePadding,
-        AppSpacing.gapM,
+        AppSpacing.gapL,
         context.pagePadding,
         0,
       ),
@@ -313,19 +313,24 @@ class _ServicesPageState extends State<ServicesPage> {
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: context.pagePadding),
       child: context.isTablet
-          // 平板：输入框限宽 400 并左对齐，「筛选」紧跟其后，不拉到两边。
+          // 平板：输入框限宽并左对齐，「筛选」紧跟其后，不拉到两边。
+          // 用 maxWidth 而不是固定宽度，600–839 竖屏下才不会占掉 2/3 行宽。
           ? Align(
               alignment: Alignment.centerLeft,
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  SizedBox(width: 400, child: field),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 400),
+                    child: SizedBox(width: 400, child: field),
+                  ),
                   const SizedBox(width: AppSpacing.gapS),
                   _buildFilterToggle(),
                 ],
               ),
             )
           : Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Expanded(child: field),
                 const SizedBox(width: AppSpacing.gapS),
@@ -384,18 +389,15 @@ class _ServicesPageState extends State<ServicesPage> {
   /// 「筛选」胶囊：与状态胶囊同一套 `TTag` 形态，选中时品牌浅底填充。
   Widget _buildFilterToggle() {
     final active = _filterExpanded || _quickFilter != null;
+    // 与状态胶囊共用 AppChip：同一套视觉与命中区，也保证与搜索框等高。
     return Semantics(
       button: true,
+      expanded: _filterExpanded,
       label: _filterExpanded ? '收起筛选' : '更多筛选',
-      child: TTag(
-        active && _quickFilter != null ? '筛选 · 1' : '筛选',
+      child: AppChip(
+        label: active && _quickFilter != null ? '筛选 · 1' : '筛选',
         icon: TIcons.filter,
-        size: TTagSize.large,
-        variant: active ? TTagVariant.light : TTagVariant.lightOutline,
-        colorPreset: active
-            ? TTagColorPreset.primary
-            : TTagColorPreset.defaultTheme,
-        shape: TTagShape.round,
+        selected: active,
         onTap: _toggleFilterPanel,
       ),
     );
@@ -442,16 +444,17 @@ class _ServicesPageState extends State<ServicesPage> {
       );
     } else {
       // 全部条目放在同一个 TDesign Cell 组内：通栏、行高、分割线由组件决定。
-      // 平板时按奇偶拆成左右两栏，两栏共用一个滚动视图，避免一列过长。
-      // 条目少于 4 条时不拆栏：两栏各放不下两条会让右半边整片空白。
-      final tablet = context.isTablet && _items.length >= 4;
-      final group = tablet
+      // 平板时按顺序切成左右两栏（前半 / 后半），两栏共用一个滚动视图，
+      // 避免一列过长。不能按奇偶切：那样左右横跳，扫读顺序会乱。
+      // 条目少于 4 条时不拆栏：两栏各放不下两条会让右半边整片空白；
+      // 600–839 竖屏也不拆栏，两栏各约 270 会让单元格挤成一团。
+      final twoColumn = context.isExpanded && _items.length >= 4;
+      final group = twoColumn
           ? _buildTwoColumnList(theme)
           : _buildSingleColumnList(theme);
       slivers.add(
         SliverPadding(
           padding: EdgeInsets.only(
-            top: AppSpacing.gapS,
             left: context.isTablet ? context.pagePadding : 0,
             right: context.isTablet ? context.pagePadding : 0,
           ),
@@ -497,13 +500,13 @@ class _ServicesPageState extends State<ServicesPage> {
     );
   }
 
-  /// 平板双栏：按奇偶把条目分到左右两栏，每栏独立 `TCellGroup`。
+  /// 平板双栏：按奇偶交替分到左右两栏，每栏独立 `TCellGroup`。
+  ///
+  /// 必须按奇偶、不能按「前半/后半」：列表是分页追加的，
+  /// 用中点切分时每多加载一页中点就右移，已渲染的行会整批从左栏跳到右栏。
+  /// 奇偶切分下第 i 条永远落在同一栏，追加只会出现在两栏末尾。
   Widget _buildTwoColumnList(TThemeData theme) {
-    final left = <Map<String, dynamic>>[];
-    final right = <Map<String, dynamic>>[];
-    for (var index = 0; index < _items.length; index++) {
-      (index.isEven ? left : right).add(_items[index]);
-    }
+    final columns = splitIntoTwoColumns(_items);
     Widget columnOf(List<Map<String, dynamic>> items) {
       if (items.isEmpty) return const SizedBox.shrink();
       return TCellGroup(
@@ -514,9 +517,9 @@ class _ServicesPageState extends State<ServicesPage> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(child: columnOf(left)),
+        Expanded(child: columnOf(columns.left)),
         const SizedBox(width: AppSpacing.gapL),
-        Expanded(child: columnOf(right)),
+        Expanded(child: columnOf(columns.right)),
       ],
     );
   }

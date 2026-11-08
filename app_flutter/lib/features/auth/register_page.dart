@@ -267,7 +267,7 @@ class _RegisterPageState extends State<RegisterPage> {
                       : _sendCode,
                   child: Text(
                     _countdown > 0 ? '${_countdown}s' : '发送验证码',
-                    style: const TextStyle(fontSize: 13),
+                    style: AppType.body(theme),
                   ),
                 ),
               ),
@@ -357,7 +357,10 @@ class _RegisterPageState extends State<RegisterPage> {
         child,
         if (error != null) ...[
           const SizedBox(height: 4),
-          Text(error, style: TextStyle(fontSize: 12, color: theme.errorColor)),
+          Text(
+            error,
+            style: AppType.caption(theme).copyWith(color: theme.errorColor),
+          ),
         ],
       ],
     );

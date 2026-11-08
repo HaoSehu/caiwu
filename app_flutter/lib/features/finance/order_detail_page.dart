@@ -95,7 +95,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     final showTimeline = status == 0 || status == 1;
     final padding = context.pagePadding;
     // 区块间距：平板 32，手机 24。
-    final sectionGap = context.isTablet ? 32.0 : AppSpacing.gapXl;
+    final sectionGap = AppSpacing.sectionGap(context.isTablet);
 
     final infoColumn = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -287,7 +287,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
           title: Text('实付金额', style: AppType.secondary(theme)),
           note: Text(
             formatMoneyText(order['paid_amount']),
-            style: AppType.stat(theme, size: 24),
+            style: AppType.amountLarge(theme),
           ),
         ),
       ],

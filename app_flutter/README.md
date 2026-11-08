@@ -38,30 +38,52 @@ ContentWidthLimiter(child:)   // 平板限宽 840 居中（AppScaffold 已内置
 Breakpoints.formMaxWidth      // 表单限宽 560
 ```
 
-各页的平板形态：
+各页的平板形态（双栏与左右分栏只在 `expanded`（≥840）启用；600–839 竖屏保持单列）：
 
 | 页面 | 手机 | 平板 |
 | --- | --- | --- |
 | 底部导航 | 底部 TTabBar | **左侧导航栏**（88 宽，图标+文字） |
-| 首页 | 工具 5 列、事件横滑 | 工具 6/8 列、事件一行铺满、费用卡左右分栏 |
-| 服务列表 | 单栏 | 两栏 TCellGroup、搜索框限宽 400 |
-| 服务详情 | 上下堆叠 | 左信息操作 / 右页签分栏 |
-| 工单 | 单栏 | 列表两栏；详情左信息 320 + 右对话 |
-| 财务 | 单栏 | 详情页信息与金额并排、按钮限宽 360 靠右 |
-| 我的 | 竖排 | 左头像卡 320 + 右功能列表 |
-| 认证三页 | 原版式 | 限宽 420 居中；横屏左品牌右表单 |
+| 首页 | 平实页头 + 工具 5 列 + 事件四等分 | 同结构；工具 5 列、事件一行四格、费用卡左右分栏 |
+| 服务列表 | 单栏 | 横屏双栏 TCellGroup（按前半/后半切分）、搜索框限宽 400 |
+| 服务详情 | 上下堆叠 | 左信息操作 / 右页签分栏；操作日志手机为列表、平板为表格 |
+| 工单 | 单栏 | 横屏列表两栏；详情左信息 + 右对话 |
+| 财务 | 单栏 | 详情页信息与金额并排 |
+| 我的 | 竖排 | 左头像卡 + 右功能列表 |
+| 认证三页 | 原版式（键盘弹出收起品牌头） | 限宽 420 居中；横屏左品牌右表单 |
 
-验证：`test/responsive_layout_test.dart`（断点与限宽单测）+ `test/responsive_test.dart`
-（390/834/1194/320 四种尺寸下 App 构建无溢出）。
+验证：`test/responsive_layout_test.dart`（断点、限宽、热区、字段列数单测）+ `test/responsive_test.dart`
+（390/834/1194/320/844×390 与 2 倍字号下 App 构建无溢出）。
+
+### 本地 UI 预览（不推真机）
+
+改样式时用 Web 产物在浏览器里验收，比反复装 APK 快得多：
+
+```bash
+cd app_flutter
+flutter build web --dart-define=ENABLE_WEB_PREVIEW=true
+python -m http.server 8099 --directory build/web
+# 打开 http://localhost:8099，用浏览器设备模式切 390×844 / 834×1112 / 1194×834
+```
+
+`ENABLE_WEB_PREVIEW=true` 会进入**预览态**（`lib/core/config/web_preview.dart`）：注入演示会话 +
+`lib/core/net/web_preview_mock.dart` 的本地 mock 数据，首页/服务/工单/财务/我的无需登录即可完整渲染。
+
+**默认关闭，必须显式开启**：预览会接管全部请求、显示假余额与假凭据，一旦随正式
+Web 产物发布，公网上就是一个假控制台。Android 原生构建里 `kIsWeb` 为 false，
+预览态与 mock 适配器恒不启用（由 `test/web_preview_guard_test.dart` 守住）；
+出正式 Web 产物时不传该 define 即可。
 
 ## 首页布局（对齐阿里云 App）
 
 底部 Tab 第一项为「控制台」，页面结构：
 
-1. **顶部**：标题「控制台」+ 问候语 + 消息角标 + 打开会话入口
-2. **工具宫格**（两行 × 5）：**SSH 工具**（最左）、工单、账单、充值、全部工具 / 云服务器、我的服务、进行中工单、我的账号、更多
-3. **概览页签**：概览 / 运维监控 / 费用成本 / 我的订阅
-4. **概览内容**：待处理事件（横向卡片）→ 费用监控（余额 + 三项指标）→ 我的服务 → 公告
+1. **页面头**：标题「控制台」+ 问候语 + 消息角标 + 打开会话入口（不画底色/渐变）
+2. **工具宫格**（通栏白底，两行 × 5）：**SSH 工具**（最左）、工单、账单、充值、全部工具 / 云服务器、我的服务、进行中工单、我的账号、更多
+3. **概览页签**：概览 / 运维监控 / 费用成本 / 我的订阅（下划线选中态，40 高）
+4. **概览内容**：待处理事件（一块白底内四等分，竖线分隔）→ 费用监控（余额 + 三项指标，通栏白底）→ 我的服务 → 公告
+
+视觉总纲是**平实的移动端列表流**：白色通栏块 + 极淡分割线 + 页面底色带交替，
+不做渐变头区、不做「一堆浮起的小卡片」、不做发光/玻璃拟态；详见 `docs/DESIGN.md` §2 的 App 端补充条款。
 
 数据口径：首页只展示**未删除**的服务（status≠3），分组计数按过滤后的可见条目计算，
 与「服务」页默认视图一致。
@@ -94,6 +116,7 @@ Breakpoints.formMaxWidth      // 表单限宽 560
 ## 硬性约束（反目标）
 
 - **禁止任何 WebView / 网页嵌套**：`tool/check_no_webview.dart` 守卫，CI/提交前运行。
+- **视觉基线防回退**：`tool/check_visual_rules.dart` 拦截渐变头/投影浮卡/玻璃拟态等装饰回流，并强制深色控制台色值集中在 `ConsoleColors`。
 - 不混用其它 UI 框架；视觉遵循 `docs/DESIGN.md`（主色 `#165DFF`、浅色企业控制台、财务页无指标卡片）。
 - 不改后端接口结构（唯一后端改动：VNC relay 的 App Origin 白名单）。
 
@@ -213,6 +236,7 @@ relay 进程需以 `php artisan vnc:relay` 独立运行（生产见部署指南�
 flutter analyze                              # 静态分析，0 error
 flutter test                                 # 单测（RFB 协议、格式化口径、App 可构建）
 dart run tool/check_no_webview.dart          # 原生渲染守卫
+dart run tool/check_visual_rules.dart        # 视觉基线守卫
 flutter build apk --debug                    # 构建
 ```
 
@@ -269,8 +293,10 @@ Windows + 非系统盘组合下，Kotlin 增量缓存文件句柄有时无法释
 
 ### 已知限制
 
-- **Geetest 行为验证**：后端已启用（`captcha-config.enabled=true`），且密码失败 1 次即触发。
-  按约定 App 不内嵌网页验证；触发时提示「请改用密码登录 / 完成行为验证后重试」。
+- **Geetest 行为验证**：后端已启用（`captcha-config.enabled=true`）。App **只提供验证码登录**，
+  不设密码入口——发码接口按 `X-Client-Platform: android` 对 App 免除人机验证，所以验证码通道
+  可用；密码登录在有行为验证的站点会直接不可用，故不提供给 App。需要密码时走「忘记密码」的
+  验证码重置。
 - VNC 仅支持 None / VNC Authentication 安全类型（macOS ARD、VeNCrypt 暂不支持）。
 - 公告正文按纯文本渲染（后端下发 Markdown，首版未引入 Markdown 渲染库）。
 
@@ -284,6 +310,6 @@ Windows + 非系统盘组合下，Kotlin 增量缓存文件句柄有时无法释
 
 - 仅 Android；iOS 代码跨端，构建适配后补。
 - 不含：产品选购下单、实名认证、推荐返利、优惠券领取、帮助中心、NAT/安全组编辑、推送、深色模式。
-- Geetest 图形验证不内嵌（与"禁止网页嵌套"冲突）；触发时提示改用密码登录。
+- Geetest 图形验证不内嵌（与"禁止网页嵌套"冲突）；App 因此只做验证码登录，不出密码入口。
 - VNC 只实现 Raw/CopyRect 编码（RFB 规范要求服务端支持 Raw）；服务端若强制 Tight/ZRLE 需后续扩展。
 - Release 签名当前复用 debug keystore，上线前需替换正式 keystore。

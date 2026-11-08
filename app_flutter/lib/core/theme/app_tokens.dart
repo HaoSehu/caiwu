@@ -24,6 +24,22 @@ class AppSpacing {
 
   /// 兼容别名：卡片内边距（与 Cell 左右内边距一致）。
   static const double cardPadding = cellHorizontal;
+
+  /// 触控最小热区（Material / WCAG 建议 44×44，iOS HIG 48×48）。
+  ///
+  /// 视觉尺寸可以更小，但命中区不得低于此值：图标按钮、文字链、
+  /// 胶囊标签都必须用它兜底。
+  static const double minTapTarget = 44;
+
+  /// 区块之间的纵向间距：手机 20，平板 28。
+  ///
+  /// 列表流页面里，区块之间是一段页面底色带；24/32 在实机上看会让页面
+  /// 显得断裂、需要更多滚动，收到 20/28 后节奏更紧、同屏信息更多。
+  static double sectionGap(bool tablet) => tablet ? 28 : 20;
+
+  /// 列表分组标题的上下留白（标题紧贴自己的白色块，不额外撑开灰带）。
+  static const double sectionHeaderTop = gapS;
+  static const double sectionHeaderBottom = gapXs;
 }
 
 /// 兼容别名：值对齐 TDesign 官方圆角令牌。
@@ -83,11 +99,14 @@ class AppType {
         color: theme.textColorSecondary,
       );
 
-  /// 辅助文字/时间戳：`fontBodySmall`（12/20）。
+  /// 辅助文字/时间戳：`fontBodySmall`（12/20）+ 次色。
+  ///
+  /// 时间、到期日、状态说明都属于可读信息，必须用次色（对比度 4.5:1 以上）；
+  /// 占位色只留给真正的输入占位文本，否则小字在灰底上糊成一片。
   static TextStyle caption(TThemeData theme) => TextStyle(
         fontSize: theme.fontBodySmall?.size ?? 12,
         height: theme.fontBodySmall?.height ?? 20 / 12,
-        color: theme.textColorPlaceholder,
+        color: theme.textColorSecondary,
       );
 
   /// 数值强调（等宽数字，刷新不抖动）。
@@ -97,6 +116,23 @@ class AppType {
         height: 1.2,
         fontWeight: FontWeight.w600,
         color: color ?? theme.textColorPrimary,
+        fontFeatures: const [FontFeature.tabularFigures()],
+      );
+
+  /// 等宽通用样式：IP、指纹、序列号等技术标识。
+  ///
+  /// 与 [money] 同为等宽数字，但字重正常——金额用中等字重强调，
+  /// 技术标识只需要对齐，不需要加粗。
+  static TextStyle mono(
+    TThemeData theme, {
+    double size = 14,
+    Color? color,
+    FontWeight weight = FontWeight.w400,
+  }) =>
+      TextStyle(
+        fontSize: size,
+        color: color ?? theme.textColorPrimary,
+        fontWeight: weight,
         fontFeatures: const [FontFeature.tabularFigures()],
       );
 
@@ -113,4 +149,20 @@ class AppType {
         color: color ?? theme.textColorPrimary,
         fontFeatures: const [FontFeature.tabularFigures()],
       );
+
+  /// 金额阶梯：页面级大额（账单应付、订单实付）。
+  static TextStyle amountDisplay(TThemeData theme, {Color? color}) =>
+      stat(theme, size: 32, color: color);
+
+  /// 金额阶梯：卡片内主金额（余额、页头余额）。
+  static TextStyle amountLarge(TThemeData theme, {Color? color}) =>
+      stat(theme, size: 24, color: color);
+
+  /// 金额阶梯：列表行金额。
+  static TextStyle amountRow(TThemeData theme, {Color? color}) =>
+      money(theme, size: 16, color: color);
+
+  /// 金额阶梯：辅助金额（小字备注、折扣后价格）。
+  static TextStyle amountSmall(TThemeData theme, {Color? color}) =>
+      money(theme, size: 14, color: color);
 }

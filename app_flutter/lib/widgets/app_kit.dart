@@ -51,31 +51,42 @@ class AppScaffold extends StatelessWidget {
           Expanded(
             child: body == null
                 ? const SizedBox.shrink()
-                // 平板/横屏时限制内容宽度并居中，避免行宽过长难以扫读。
+                // 平板/手机横屏时限制内容宽度并居中，避免行宽过长难以扫读。
                 : ContentWidthLimiter(child: body!),
           ),
         ],
       ),
-      bottomNavigationBar: bottomBar == null
-          ? null
-          : Container(
-              decoration: BoxDecoration(
-                color: theme.bgColorContainer,
-                border: Border(top: BorderSide(color: theme.borderLevel1Color)),
-              ),
-              child: SafeArea(
-                top: false,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.page,
-                    AppSpacing.gapM,
-                    AppSpacing.page,
-                    AppSpacing.gapM,
-                  ),
-                  child: bottomBar,
-                ),
-              ),
+      bottomNavigationBar:
+          bottomBar == null ? null : _buildBottomBar(context, theme),
+    );
+  }
+
+  /// 底部固定操作区：平板/手机横屏时按钮限宽居中，避免通栏按钮拉得过长。
+  Widget _buildBottomBar(BuildContext context, TThemeData theme) {
+    final bar = Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.page,
+        AppSpacing.gapM,
+        AppSpacing.page,
+        AppSpacing.gapM,
+      ),
+      child: bottomBar!,
+    );
+    final limited = !context.isTablet && !context.needsLandscapeLimiter
+        ? bar
+        : Center(
+            child: ConstrainedBox(
+              constraints:
+                  const BoxConstraints(maxWidth: Breakpoints.formMaxWidth),
+              child: bar,
             ),
+          );
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.bgColorContainer,
+        border: Border(top: BorderSide(color: theme.borderLevel1Color)),
+      ),
+      child: SafeArea(top: false, child: limited),
     );
   }
 
@@ -88,9 +99,11 @@ class AppScaffold extends StatelessWidget {
   }
 }
 
-/// 白色内容块：圆角与描边取自 TDesign Token（`radiusLarge` / `borderLevel1`）。
+/// 白色内容块。
 ///
-/// 这是 TDesign「卡片」的默认观感：**9 圆角、1px 描边、无投影**。
+/// 移动端卡片靠「白底 + 极淡描边」与页面底色区分，不加投影：
+/// 投影会让每个块都像浮起的卡片，堆多了就是模板感。
+/// [flat] 用于通栏块（工具宫格、分组列表），直接铺白底、不带圆角与描边。
 class AppCard extends StatelessWidget {
   const AppCard({
     super.key,
@@ -99,6 +112,8 @@ class AppCard extends StatelessWidget {
     this.onTap,
     this.margin,
     this.highlight = false,
+    this.flat = false,
+    this.radius,
   });
 
   final Widget child;
@@ -107,26 +122,36 @@ class AppCard extends StatelessWidget {
   final EdgeInsetsGeometry? margin;
   final bool highlight;
 
+  /// 通栏块：无圆角、无描边，只有白底。
+  final bool flat;
+
+  /// 覆盖默认圆角。
+  final double? radius;
+
   @override
   Widget build(BuildContext context) {
     final theme = context.tTheme;
-    final radius = BorderRadius.circular(theme.radiusLarge);
+    final shape = flat
+        ? BorderRadius.zero
+        : BorderRadius.circular(radius ?? theme.radiusLarge);
     final card = Container(
       margin: margin,
       padding: padding,
       decoration: BoxDecoration(
         color: highlight ? theme.brandColorLight : theme.bgColorContainer,
-        borderRadius: radius,
-        border: Border.all(
-          color: highlight ? theme.brandColorFocus : theme.borderLevel1Color,
-        ),
+        borderRadius: shape,
+        border: flat
+            ? null
+            : Border.all(
+                color: highlight ? theme.brandColorFocus : theme.borderLevel1Color,
+              ),
       ),
       child: child,
     );
     if (onTap == null) return card;
     return Material(
       color: Colors.transparent,
-      borderRadius: radius,
+      borderRadius: shape,
       clipBehavior: Clip.antiAlias,
       child: InkWell(onTap: onTap, child: card),
     );
@@ -134,6 +159,9 @@ class AppCard extends StatelessWidget {
 }
 
 /// 区块标题：`TText` 标题样式 + 可选右侧动作。
+///
+/// 右侧动作包成 44 高、最小 44 宽的命中区（视觉仍是 13 号字 + 小箭头），
+/// 因为「全部 / 查看全部」出现在几乎每个区块上，是全 App 点击最频繁的目标之一。
 class AppSectionHeader extends StatelessWidget {
   const AppSectionHeader({
     super.key,
@@ -154,27 +182,32 @@ class AppSectionHeader extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.gapXs,
-        AppSpacing.gapS,
+        AppSpacing.sectionHeaderTop,
         AppSpacing.gapXs,
-        AppSpacing.gapS,
+        AppSpacing.sectionHeaderBottom,
       ),
       child: Row(
         children: [
           Expanded(child: Text(title, style: AppType.section(theme))),
           if (trailing != null) trailing!,
           if (actionText != null)
-            GestureDetector(
+            InkWell(
               onTap: onAction,
-              behavior: HitTestBehavior.opaque,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
+              borderRadius: BorderRadius.circular(theme.radiusDefault),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  minHeight: AppSpacing.minTapTarget,
+                  minWidth: AppSpacing.minTapTarget,
+                ),
                 child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
                       actionText!,
-                      style: AppType.secondary(theme).copyWith(
+                      style: AppType.caption(theme).copyWith(
                         color: theme.brandColor,
-                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                     Icon(TIcons.chevron_right, size: 16, color: theme.brandColor),
@@ -224,16 +257,21 @@ class AppKeyValue extends StatelessWidget {
   }
 }
 
-/// 两列字段网格：上标签（12 次色）+ 下取值（14 主色）。
+/// 字段网格：上标签（12 次色）+ 下取值（14 主色）。
+///
+/// 默认列数随断点走：手机 2 列、平板 3 列、平板横屏 4 列。
+/// 详情页字段在平板上继续排两列会留下大片空白，与阿里云 App 的信息密度不符。
 class AppFieldGrid extends StatelessWidget {
   const AppFieldGrid({
     super.key,
     required this.items,
-    this.columns = 2,
+    this.columns,
   });
 
   final List<(String label, String value)> items;
-  final int columns;
+
+  /// 显式列数；不传时按窗口断点自动取 2 / 3 / 4。
+  final int? columns;
 
   @override
   Widget build(BuildContext context) {
@@ -242,17 +280,22 @@ class AppFieldGrid extends StatelessWidget {
         .where((item) => item.$2.trim().isNotEmpty && item.$2.trim() != '--')
         .toList();
     if (visible.isEmpty) return const SizedBox.shrink();
+    final count = columns ?? context.fieldColumns;
     return LayoutBuilder(
       builder: (context, constraints) {
-        final width =
-            (constraints.maxWidth - (columns - 1) * AppSpacing.gapL) / columns;
+        // 极窄容器（嵌套在分栏的窄列里、或平板分屏的小窗）下，
+        // (maxWidth - 间距) 可能为负，SizedBox(width: 负数) 会直接抛断言。
+        // 退化成一列，宽度取容器宽度。
+        final available =
+            constraints.maxWidth - (count - 1) * AppSpacing.gapL;
+        final width = available <= 0 ? constraints.maxWidth : available / count;
         return Wrap(
           spacing: AppSpacing.gapL,
           runSpacing: AppSpacing.gapL,
           children: [
             for (final item in visible)
               SizedBox(
-                width: width,
+                width: width < 0 ? 0 : width,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -337,65 +380,113 @@ class AppDot extends StatelessWidget {
   }
 }
 
-/// 页内分段器：TDesign `TTabBar`（text 型），外观与官方 Tab 一致。
+/// 页内分段器：文字页签，选中项用下划线标记。
 ///
-/// 用于详情页页签、列表筛选等场景，替代自绘下划线。
+/// 不用 `TTabBar` 的文字型：它的固定条高 56 且自带上下留白，
+/// 放在列表页顶部会把内容推得过远；这里按移动端常见规格（44 高、均分、
+/// 下划线 2px）自绘，视觉与手势都更贴合原生。
 class AppSegmentedTabs extends StatelessWidget {
   const AppSegmentedTabs({
     super.key,
     required this.labels,
     required this.current,
     required this.onChanged,
-    this.scrollable = false,
   });
 
   final List<String> labels;
   final int current;
   final ValueChanged<int> onChanged;
-  final bool scrollable;
 
   @override
   Widget build(BuildContext context) {
-    final tabs = TTabBar(
-      type: TTabBarType.text,
-      value: current,
-      onChanged: onChanged,
-      useSafeArea: false,
-      navigationTabs: [
-        for (final label in labels) TTabBarItemConfig(tabText: label),
+    final theme = context.tTheme;
+    final tabs = Row(
+      children: [
+        for (var index = 0; index < labels.length; index++)
+          Expanded(
+            child: InkWell(
+              onTap: () => onChanged(index),
+              child: SizedBox(
+                // 与 AppSpacing.minTapTarget 保持一致：页签是常点目标，
+                // 不能因为「看起来更紧凑」把命中区压到 40。
+                height: AppSpacing.minTapTarget,
+                child: Container(
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    // 下划线取整列宽度：文字宽度各列不同，取文字宽会让
+                    // 选中条长度忽长忽短，看起来像没对齐。
+                    border: Border(
+                      bottom: BorderSide(
+                        color: index == current
+                            ? theme.brandColor
+                            : Colors.transparent,
+                        width: 2,
+                      ),
+                    ),
+                  ),
+                  child: Text(
+                    labels[index],
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppType.body(theme).copyWith(
+                      fontWeight: index == current
+                          ? FontWeight.w600
+                          : FontWeight.w400,
+                      color: index == current
+                          ? theme.brandColor
+                          : theme.textColorSecondary,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
       ],
     );
-    return Container(
-      color: context.tTheme.bgColorContainer,
-      child: tabs,
-    );
+    return Container(color: theme.bgColorContainer, child: tabs);
   }
 }
 
 /// 可选胶囊：TDesign `TTag` 的选中/未选中两种形态。
+///
+/// 命中区由外层 InkWell 兜底到 44 高（TTag 本体只有 24–32 高），
+/// 视觉尺寸不变，但手指点得中。
 class AppChip extends StatelessWidget {
   const AppChip({
     super.key,
     required this.label,
     required this.selected,
     required this.onTap,
+    this.icon,
   });
 
   final String label;
   final bool selected;
   final VoidCallback onTap;
 
+  /// 可选前置图标（如「筛选」的漏斗）。
+  final IconData? icon;
+
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return InkWell(
       onTap: onTap,
-      child: TTag(
-        label,
-        size: TTagSize.large,
-        variant: selected ? TTagVariant.light : TTagVariant.lightOutline,
-        colorPreset:
-            selected ? TTagColorPreset.primary : TTagColorPreset.defaultTheme,
-        shape: TTagShape.round,
+      borderRadius: BorderRadius.circular(AppRadius.pill),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: AppSpacing.minTapTarget),
+        child: Center(
+          widthFactor: 1,
+          heightFactor: 1,
+          child: TTag(
+            label,
+            icon: icon,
+            size: TTagSize.large,
+            variant: selected ? TTagVariant.light : TTagVariant.lightOutline,
+            colorPreset:
+                selected ? TTagColorPreset.primary : TTagColorPreset.defaultTheme,
+            shape: TTagShape.round,
+          ),
+        ),
       ),
     );
   }

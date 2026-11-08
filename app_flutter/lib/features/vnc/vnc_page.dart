@@ -10,17 +10,18 @@ import 'package:tdesign_flutter/tdesign_flutter.dart';
 import '../../core/config/env.dart';
 import '../../core/net/app_services.dart';
 import '../../core/theme/app_tokens.dart';
+import '../../core/theme/console_theme.dart';
 import '../../widgets/app_feedback.dart';
 import '../../widgets/app_kit.dart';
 import 'rfb/rfb_client.dart';
 
-/// VNC 页面深色底色与工具条配色（沉浸式控制台，不套浅色卡片）。
-const Color _desktopBackground = Color(0xFF1F1F24);
-const Color _barBackground = Color(0xFF2A2A31);
-const Color _toolBackground = Color(0xFF35353D);
-const Color _barText = Color(0xFFE5E7EB);
-const Color _barSubtle = Color(0xFFB0B0B8);
-const Color _barDivider = Color(0xFF3A3A42);
+// 深色控制台配色统一取自 ConsoleColors，SSH 与 VNC 两页共用一套。
+const Color _desktopBackground = ConsoleColors.desktopCanvas;
+const Color _barBackground = ConsoleColors.bar;
+const Color _barText = ConsoleColors.barText;
+const Color _barSubtle = ConsoleColors.barSubtle;
+const Color _barDivider = ConsoleColors.barDivider;
+const Color _toolBackground = ConsoleColors.toolBar;
 
 /// 深色沉浸式页面的状态栏样式：透明底 + 浅色图标。
 const SystemUiOverlayStyle _darkOverlayStyle = SystemUiOverlayStyle(
@@ -602,12 +603,12 @@ class _VncPageState extends State<VncPage> {
                 size: 48,
               )
             else
-              const SizedBox(
+              SizedBox(
                 width: 48,
                 height: 48,
                 child: CircularProgressIndicator(
                   strokeWidth: 3,
-                  color: Color(0xFF165DFF),
+                  color: context.tTheme.brandColor,
                 ),
               ),
             const SizedBox(height: AppSpacing.gapXl),
@@ -622,7 +623,7 @@ class _VncPageState extends State<VncPage> {
                 description,
                 textAlign: TextAlign.center,
                 style: AppType.secondary(theme)
-                    .copyWith(color: const Color(0xFFB0B0B8)),
+                    .copyWith(color: _barSubtle),
               ),
             ],
             const SizedBox(height: AppSpacing.gapXl),
@@ -657,7 +658,7 @@ class _VncPageState extends State<VncPage> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFF000000).withValues(alpha: 0.62),
+        color: ConsoleColors.scrim,
         borderRadius: BorderRadius.circular(AppRadius.pill),
       ),
       child: Text(
@@ -849,7 +850,8 @@ class _VncPageState extends State<VncPage> {
           splashColor: Colors.white.withValues(alpha: 0.08),
           highlightColor: Colors.white.withValues(alpha: 0.06),
           child: Container(
-            height: 40,
+            // 终端/桌面工具条是高频点按区，高度与最小宽度都取 44。
+            height: 44,
             constraints: const BoxConstraints(minWidth: 44),
             alignment: Alignment.center,
             padding: const EdgeInsets.symmetric(horizontal: 12),

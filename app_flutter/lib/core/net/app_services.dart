@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../features/ssh/host_store.dart';
+import '../config/web_preview.dart';
 import '../store/session.dart';
 import 'api_client.dart';
 import 'api_exception.dart';
 import 'api_services.dart';
+import 'web_preview_mock.dart';
 
 /// 依赖注入根：持有 ApiClient、Session 与各领域 API，并负责 401 时的统一登出跳转。
 class AppServices {
@@ -16,6 +18,8 @@ class AppServices {
     client = ApiClient(
       tokenProvider: () => session.token,
       onUnauthorized: onUnauthorized,
+      // Web 预览：拦截所有请求并记录 URL，交给本地 mock 服务返回固定数据。
+      httpClientAdapter: WebPreview.useMockApi ? MockHttpAdapter() : null,
     );
     auth = AuthApi(client);
     services = ServiceApi(client);

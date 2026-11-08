@@ -743,7 +743,8 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
       colorPreset: preset,
       icon: icon,
       onPressed: enabled ? onTap : null,
-      child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+      // 不截断：字号放大后宁可换行成两行，也不要把「强制关机」显示成「强…」。
+      child: Text(label, textAlign: TextAlign.center),
     );
   }
 
@@ -762,8 +763,13 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
     }
     return LayoutBuilder(
       builder: (context, constraints) {
-        // 按钮 medium 高 40、左右内边距各 16，可行宽度至少 88 才不截断两字文案。
-        const minItemWidth = 88.0;
+        // 按钮 medium 高 40、左右内边距各 16、图标 16 + 间距 4：固定开销约 52。
+        // 文案侧按「最长标签 4 个汉字」估算，并乘以当前字体缩放——
+        // 写死 88 只在 1.0 倍字号下成立，1.3 倍时「强制关机」会被截成「强…」。
+        final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+        final labelWidth = 4 * 14 * scale;
+        const fixedChrome = 52.0;
+        final minItemWidth = (fixedChrome + labelWidth + 8).clamp(88.0, 200.0);
         final columns =
             ((constraints.maxWidth + AppSpacing.gapS) /
                     (minItemWidth + AppSpacing.gapS))
@@ -1056,20 +1062,14 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                               strOf(entry, 'name'),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                              ),
+                              style: AppType.cardTitle(context.tTheme),
                             ),
                             if (strOf(entry, 'group_name').isNotEmpty)
                               Padding(
                                 padding: const EdgeInsets.only(top: 2),
                                 child: Text(
                                   strOf(entry, 'group_name'),
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: context.tTheme.textColorSecondary,
-                                  ),
+                                  style: AppType.caption(context.tTheme),
                                 ),
                               ),
                           ],
@@ -1318,18 +1318,12 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                       Expanded(
                         child: Text(
                           label,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                          ),
+                          style: AppType.cardTitle(context.tTheme),
                         ),
                       ),
                       Text(
                         formatMoneyText(amount),
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: context.tTheme.textColorPrimary,
-                        ),
+                        style: AppType.amountSmall(context.tTheme),
                       ),
                       const SizedBox(width: 4),
                       Icon(
@@ -1876,8 +1870,40 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
     ];
   }
 
-  /// 操作日志表格：时间 / 操作 / 摘要。
+  /// 操作日志：手机用列表、平板用表格。
+  ///
+  /// 三列的最小宽合计 384，360dp 手机减去页面边距只剩约 328，
+  /// 表格会横向溢出；手机改成一格一条（时间 + 操作在上、摘要在下），
+  /// 既不出横向滚动条，也不用横向拖拽才能读完整条日志。
   Widget _buildLogTable() {
+    if (!context.isTablet) {
+      return TCellGroup(
+        cells: [
+          for (final log in _logs)
+            TCell(
+              title: Text(
+                formatDateTime(log['created_at']),
+                style: AppType.mono(context.tTheme, size: 14),
+              ),
+              note: Text(
+                strOf(log, 'action_label').trim().isEmpty
+                    ? '--'
+                    : strOf(log, 'action_label').trim(),
+                style: AppType.caption(context.tTheme),
+              ),
+              subtitle: Text(
+                strOf(log, 'summary').trim().isEmpty
+                    ? '--'
+                    : strOf(log, 'summary').trim(),
+                style: AppType.body(context.tTheme),
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+              ),
+              align: TCellAlign.top,
+            ),
+        ],
+      );
+    }
     return TTable<Map<String, dynamic>>(
       columns: [
         TTableColumn<Map<String, dynamic>>(

@@ -30,6 +30,12 @@ GoRouter createRouter(Session session) {
   return GoRouter(
     initialLocation: '/home',
     redirect: (context, state) {
+      // 会话尚未从本地存储恢复完成时一律停在登录页：
+      // 否则 initialLocation 会先构建 /home 分支，未登录用户会看到一帧
+      // 「0 台服务 / 0 张账单」的空壳首页再被弹回登录页。
+      if (!session.loaded) {
+        return state.matchedLocation == '/login' ? null : '/login';
+      }
       final loggedIn = session.isLoggedIn;
       final loggingIn = state.matchedLocation == '/login' ||
           state.matchedLocation == '/register' ||

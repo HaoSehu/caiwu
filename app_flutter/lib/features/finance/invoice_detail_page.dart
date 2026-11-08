@@ -334,7 +334,7 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
     }
     final padding = context.pagePadding;
     // 区块间距：平板 32，手机 24。
-    final sectionGap = context.isTablet ? 32.0 : AppSpacing.gapXl;
+    final sectionGap = AppSpacing.sectionGap(context.isTablet);
     return RefreshIndicator(
       onRefresh: () => _load(showLoading: false),
       child: ListView(
@@ -520,7 +520,7 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
           title: Text('应付金额', style: AppType.secondary(theme)),
           note: Text(
             formatMoneyText(_financial['payable_amount']),
-            style: AppType.stat(theme, size: 32, color: theme.brandColor),
+            style: AppType.amountDisplay(theme, color: theme.brandColor),
           ),
         ),
       ],

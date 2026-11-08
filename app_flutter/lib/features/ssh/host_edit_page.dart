@@ -8,6 +8,7 @@ import '../../core/layout/responsive.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../widgets/app_feedback.dart';
 import '../../widgets/app_kit.dart';
+import '../../widgets/data_state.dart';
 import 'host_store.dart';
 
 /// SSH 主机新增/编辑页。
@@ -42,6 +43,9 @@ class _SshHostEditPageState extends State<SshHostEditPage> {
   bool _loading = true;
   bool _loadDone = false;
   bool _missing = false;
+
+  /// 本地存储读取失败的原因；非空时显示错误态。
+  String? _loadError;
   bool _hasSavedSecret = false;
 
   SshAuthType _authType = SshAuthType.password;
@@ -81,7 +85,20 @@ class _SshHostEditPageState extends State<SshHostEditPage> {
   }
 
   Future<void> _load() async {
-    await _store.load();
+    try {
+      await _store.load();
+    } catch (_) {
+      // 本地存储读取失败时不能停在 _loading：页面会永远转圈。
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _loadError = '服务器配置读取失败';
+        });
+      }
+      _loadDone = true;
+      if (!mounted) _store.dispose();
+      return;
+    }
     _loadDone = true;
     if (!mounted) {
       _store.dispose();
@@ -229,16 +246,27 @@ class _SshHostEditPageState extends State<SshHostEditPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (_loadError != null) {
+      return AppScaffold(
+        title: _isEdit ? '编辑服务器' : '添加服务器',
+        body: DataState(
+          loading: false,
+          error: _loadError,
+          retry: () {
+            setState(() {
+              _loadError = null;
+              _loading = true;
+            });
+            unawaited(_load());
+          },
+          child: const SizedBox.shrink(),
+        ),
+      );
+    }
     if (_loading) {
       return AppScaffold(
         title: _isEdit ? '编辑服务器' : '添加服务器',
-        body: const Center(
-          child: SizedBox(
-            width: 28,
-            height: 28,
-            child: CircularProgressIndicator(strokeWidth: 2.5),
-          ),
-        ),
+        body: const DataState(loading: true, child: SizedBox.shrink()),
       );
     }
     if (_missing) {

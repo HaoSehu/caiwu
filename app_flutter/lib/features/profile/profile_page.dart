@@ -22,7 +22,9 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
-  static const String _appVersion = '0.2.1';
+  /// 展示版本号。**必须与 pubspec.yaml 的 version 保持同步**，
+  /// 由 test/app_version_test.dart 守门（此前一度漂移成 0.2.1 vs 0.4.1）。
+  static const String _appVersion = '0.5.0';
 
   bool _loggingOut = false;
 
@@ -278,20 +280,24 @@ class _ProfilePageState extends State<ProfilePage> {
         onRefresh: _refresh,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: EdgeInsets.fromLTRB(
-            context.pagePadding,
-            AppSpacing.gapM,
-            context.pagePadding,
-            AppSpacing.pageBottom,
-          ),
+          padding: const EdgeInsets.only(bottom: AppSpacing.pageBottom),
           children: [
             if (context.isTablet)
-              _buildWideLayout(session)
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  context.pagePadding,
+                  AppSpacing.gapM,
+                  context.pagePadding,
+                  0,
+                ),
+                child: _buildWideLayout(session),
+              )
             else ...[
+              // 手机：头像区与功能列表都是通栏白块，与首页/服务页同一套列表流。
               _buildProfileCard(session),
-              const SizedBox(height: AppSpacing.gapM),
+              const SizedBox(height: AppSpacing.gapS),
               _buildMenuCard(),
-              const SizedBox(height: AppSpacing.gapXl),
+              const SizedBox(height: AppSpacing.gapL),
               _buildLogoutButton(),
             ],
           ],
@@ -341,32 +347,45 @@ class _ProfilePageState extends State<ProfilePage> {
     final avatarLetter = displayName.isNotEmpty
         ? displayName.characters.first
         : '用';
+    // 「编辑资料」是唯一的资料入口：视觉是胶囊，命中区补到 44 高。
     final editChip = InkWell(
       onTap: _editProfile,
       borderRadius: BorderRadius.circular(AppRadius.pill),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: theme.bgColorContainer,
-          borderRadius: BorderRadius.circular(AppRadius.pill),
-          border: Border.all(color: theme.borderLevel1Color),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(TIcons.edit, size: 13, color: theme.brandColor),
-            const SizedBox(width: 3),
-            Text(
-              '编辑资料',
-              style: AppType.caption(theme).copyWith(color: theme.brandColor),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: AppSpacing.minTapTarget),
+        child: Center(
+          widthFactor: 1,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: theme.bgColorContainer,
+              borderRadius: BorderRadius.circular(AppRadius.pill),
+              border: Border.all(color: theme.borderLevel1Color),
             ),
-          ],
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(TIcons.edit, size: 14, color: theme.brandColor),
+                const SizedBox(width: AppSpacing.gapXs),
+                Text(
+                  '编辑资料',
+                  style: AppType.caption(theme).copyWith(
+                    color: theme.brandColor,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
     return AppCard(
-      padding: const EdgeInsets.all(20),
-      highlight: true,
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.cellHorizontal,
+        vertical: AppSpacing.gapL,
+      ),
+      flat: true,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -382,11 +401,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 ),
                 child: Text(
                   avatarLetter,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: AppType.stat(theme, size: 22, color: Colors.white),
                 ),
               ),
               const SizedBox(width: AppSpacing.gapM),
@@ -424,7 +439,7 @@ class _ProfilePageState extends State<ProfilePage> {
               Expanded(child: Text('账户余额', style: AppType.secondary(theme))),
               Text(
                 formatMoneyText(session.balance),
-                style: AppType.money(theme, size: 20),
+                style: AppType.amountLarge(theme),
               ),
             ],
           ),

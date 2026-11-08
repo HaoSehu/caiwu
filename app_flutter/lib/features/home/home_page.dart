@@ -197,7 +197,7 @@ class _HomePageState extends State<HomePage> {
     final theme = context.tTheme;
     final session = context.watch<Session>();
     // 平板区块间距 32，手机 24。
-    final sectionGap = context.isTablet ? 32.0 : AppSpacing.gapXl;
+    final sectionGap = AppSpacing.sectionGap(context.isTablet);
     return AppScaffold(
       showBack: false,
       body: Column(
@@ -209,40 +209,39 @@ class _HomePageState extends State<HomePage> {
               onRefresh: _refresh,
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                // 通栏列表（TCellGroup）直接铺在页面底色上，只有内容区块单独留边。
+                // 通栏列表直接铺在页面底色上，只有内容区块单独留边。
                 padding: const EdgeInsets.only(
-                  top: AppSpacing.gapS,
                   bottom: AppSpacing.pageBottom,
                 ),
+                // 宫格自带白底，头区之后直接开始，不留额外灰带。
                 children: [
-                  _padded(_buildToolGrid(theme)),
-                  const SizedBox(height: AppSpacing.gapS),
+                  _buildToolGrid(theme),
                   _buildTabs(theme),
-                  const SizedBox(height: AppSpacing.gapL),
-                  if (_tabIndex == 0) ...[
-                    _buildPendingEvents(theme),
-                    SizedBox(height: sectionGap),
-                    _buildCostMonitor(theme, session),
-                    SizedBox(height: sectionGap),
-                    DataState(
-                      loading: _loading,
-                      error: _error,
-                      retry: _refresh,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          _buildServicesSection(theme),
-                          SizedBox(height: sectionGap),
-                          _buildNoticesSection(theme),
-                        ],
+                    const SizedBox(height: AppSpacing.gapL),
+                    if (_tabIndex == 0) ...[
+                      _buildPendingEvents(theme),
+                      SizedBox(height: sectionGap),
+                      _buildCostMonitor(theme, session),
+                      SizedBox(height: sectionGap),
+                      DataState(
+                        loading: _loading,
+                        error: _error,
+                        retry: _refresh,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _buildServicesSection(theme),
+                            SizedBox(height: sectionGap),
+                            _buildNoticesSection(theme),
+                          ],
+                        ),
                       ),
-                    ),
-                  ] else if (_tabIndex == 1)
-                    _buildOpsTab(theme)
-                  else if (_tabIndex == 2)
-                    _buildCostTab(theme, session)
-                  else
-                    _buildSubscriptionTab(theme),
+                    ] else if (_tabIndex == 1)
+                      _buildOpsTab(theme)
+                    else if (_tabIndex == 2)
+                      _buildCostTab(theme, session)
+                    else
+                      _buildSubscriptionTab(theme),
                 ],
               ),
             ),
@@ -270,12 +269,16 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  /// 页面头：和平实的主页一样，一行标题 + 一行问候，右侧两个入口。
+  ///
+  /// 不画底色、不加圆角、不做渐变：顶部彩色大横幅是最容易显得「模板化」
+  /// 的一处，而移动端首页真正需要的是尽快把内容和入口推到眼前。
   Widget _buildHeader(TThemeData theme, Session session) {
     return Padding(
       padding: EdgeInsets.fromLTRB(
         context.pagePadding,
-        AppSpacing.gapM,
-        4,
+        AppSpacing.gapL,
+        context.pagePadding - AppSpacing.gapS,
         AppSpacing.gapS,
       ),
       child: Row(
@@ -284,7 +287,7 @@ class _HomePageState extends State<HomePage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('控制台', style: AppType.pageTitle(theme).copyWith(fontSize: 22)),
+                Text('控制台', style: AppType.pageTitle(theme)),
                 const SizedBox(height: 2),
                 Text(
                   '${_greeting()}，${session.displayName}',
@@ -302,13 +305,21 @@ class _HomePageState extends State<HomePage> {
             child: IconButton(
               tooltip: '消息',
               onPressed: () => context.push('/notices'),
-              icon: Icon(TIcons.mail, size: 24, color: theme.textColorPrimary),
+              icon: Icon(
+                TIcons.mail,
+                size: 22,
+                color: theme.textColorPrimary,
+              ),
             ),
           ),
           IconButton(
             tooltip: '打开的会话',
             onPressed: () => context.push('/sessions'),
-            icon: Icon(TIcons.grid_view, size: 24, color: theme.textColorPrimary),
+            icon: Icon(
+              TIcons.grid_view,
+              size: 22,
+              color: theme.textColorPrimary,
+            ),
           ),
         ],
       ),
@@ -320,6 +331,7 @@ class _HomePageState extends State<HomePage> {
   /// 参考阿里云/微信小程序宫格：只有 `TIcon` 图标 + 12px 文案，没有色块底。
   /// 工具共 10 个，用 5 列正好排满两行，任何宽度下都不会出现末行残缺
   /// （此前按断点算列数，平板 6 列/8 列会得到 6+4、8+2 的行尾空洞）。
+  /// 宫格浮在渐变头区下方：白色卡、轻微投影，是首页里最「实」的一层。
   Widget _buildToolGrid(TThemeData theme) {
     final tools = <_ToolItem>[
       _ToolItem('SSH 工具', TIcons.terminal, _openSshTool),
@@ -342,12 +354,21 @@ class _HomePageState extends State<HomePage> {
     const columns = 5;
     final spacing = tablet ? AppSpacing.gapL : 0.0;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.gapM),
+    // 宫格是一块通栏白底，下方用一条极淡分割线收口，与首页其余列表同一套语言。
+    return Container(
+      color: theme.bgColorContainer,
+      padding: EdgeInsets.fromLTRB(
+        context.pagePadding - (tablet ? 0 : AppSpacing.gapS),
+        AppSpacing.gapM,
+        context.pagePadding - (tablet ? 0 : AppSpacing.gapS),
+        AppSpacing.gapM,
+      ),
       child: LayoutBuilder(
         builder: (context, constraints) {
+          final available =
+              constraints.maxWidth - spacing * (columns - 1);
           final tileWidth =
-              (constraints.maxWidth - spacing * (columns - 1)) / columns;
+              available <= 0 ? constraints.maxWidth : available / columns;
           return Wrap(
             spacing: spacing,
             runSpacing: tablet ? AppSpacing.gapL : AppSpacing.gapXl,
@@ -461,7 +482,7 @@ class _HomePageState extends State<HomePage> {
               overflow: TextOverflow.ellipsis,
               style: AppType.caption(theme).copyWith(
                 color: theme.textColorPrimary,
-                fontSize: tablet ? 13 : null,
+                fontSize: tablet ? theme.fontSizeBodyMedium : null,
               ),
             ),
           ],
@@ -471,10 +492,17 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildTabs(TThemeData theme) {
-    return AppSegmentedTabs(
-      labels: const ['概览', '运维监控', '费用成本', '我的订阅'],
-      current: _tabIndex,
-      onChanged: (index) => setState(() => _tabIndex = index),
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: theme.borderLevel1Color, width: 0.5),
+        ),
+      ),
+      child: AppSegmentedTabs(
+        labels: const ['概览', '运维监控', '费用成本', '我的订阅'],
+        current: _tabIndex,
+        onChanged: (index) => setState(() => _tabIndex = index),
+      ),
     );
   }
 
@@ -508,64 +536,47 @@ class _HomePageState extends State<HomePage> {
         onTap: () => context.push('/notices'),
       ),
     ];
-    final tablet = context.isTablet;
 
-    Widget cellOf(_EventItem item) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(theme.radiusLarge),
-        child: TCell(
-          title: Text(
-            item.value,
-            style: AppType.stat(
-              theme,
-              size: 24,
-              color: item.value == '0'
-                  ? theme.textColorPrimary
-                  : theme.warningColor,
-            ),
-          ),
-          subtitle: Padding(
-            padding: const EdgeInsets.only(top: 2),
-            child: Text(
-              '${item.label}\n${item.hint}',
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: AppType.caption(theme),
-            ),
-          ),
+    Widget tileOf(_EventItem item) {
+      return Expanded(
+        child: InkWell(
           onTap: item.onTap,
-        ),
-      );
-    }
-
-    Widget content;
-    if (tablet) {
-      content = LayoutBuilder(
-        builder: (context, constraints) {
-          final width =
-              (constraints.maxWidth - AppSpacing.gapM * (items.length - 1)) /
-                  items.length;
-          return Wrap(
-            spacing: AppSpacing.gapM,
-            runSpacing: AppSpacing.gapM,
-            children: [
-              for (final item in items)
-                SizedBox(width: width, child: cellOf(item)),
-            ],
-          );
-        },
-      );
-    } else {
-      content = SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(),
-        child: Row(
-          children: [
-            for (final item in items) ...[
-              SizedBox(width: 132, child: cellOf(item)),
-              const SizedBox(width: AppSpacing.gapS),
-            ],
-          ],
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.gapM,
+              vertical: AppSpacing.gapM,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.value,
+                  style: AppType.stat(
+                    theme,
+                    size: 22,
+                    color: item.value == '0'
+                        ? theme.textColorPrimary
+                        : theme.warningColor,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.gapXs),
+                Text(
+                  item.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppType.caption(theme).copyWith(
+                    color: theme.textColorPrimary,
+                  ),
+                ),
+                Text(
+                  item.hint,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppType.caption(theme),
+                ),
+              ],
+            ),
+          ),
         ),
       );
     }
@@ -580,8 +591,25 @@ class _HomePageState extends State<HomePage> {
             onAction: () => context.push('/finance'),
           ),
         ),
-        // 四张等宽卡片并排：手机横滑、平板一行铺满。
-        _padded(content),
+        Container(
+          color: theme.bgColorContainer,
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (var index = 0; index < items.length; index++) ...[
+                  if (index > 0)
+                    VerticalDivider(
+                      width: 0.5,
+                      thickness: 0.5,
+                      color: theme.borderLevel1Color,
+                    ),
+                  tileOf(items[index]),
+                ],
+              ],
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -674,9 +702,9 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
         ),
-        _padded(
-          AppCard(
-            padding: EdgeInsets.zero,
+        AppCard(
+          flat: true,
+          padding: EdgeInsets.zero,
             // 整卡保留「点击进入账单」的旧行为；内部 Cell 行各自覆盖自己的跳转。
             onTap: () => context.push('/finance'),
             child: tablet
@@ -721,7 +749,6 @@ class _HomePageState extends State<HomePage> {
                       detailBlock,
                     ],
                   ),
-          ),
         ),
       ],
     );
@@ -882,6 +909,7 @@ class _HomePageState extends State<HomePage> {
       // 分组标题与 Cell 左缘对齐（默认组标题有 16 的独立内边距，这里直接沿用）。
       data: Theme.of(context).mergeExtension(
         const TCellThemeData(
+          backgroundColor: Colors.transparent,
           titlePadding: EdgeInsets.fromLTRB(
             AppSpacing.cellHorizontal,
             AppSpacing.gapM,
@@ -890,25 +918,30 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
       ),
-      child: TCellGroup(
+      // 组标题与行同属一块白底：否则标题悬在页面灰底上，
+      // 视觉上会被读成「上一个区块的结尾」而不是这组的开头。
+      child: Container(
+        color: theme.bgColorContainer,
+        child: TCellGroup(
         title: Row(
           children: [
             Expanded(child: Text(title.isEmpty ? '未分类' : title)),
             Text('${items.length} 个', style: AppType.caption(theme)),
           ],
         ),
-        cells: [
-          for (final item in items.take(2)) _buildServiceRow(theme, item),
-          if (items.length > 2)
-            TCell(
-              title: Text(
-                '查看全部 ${items.length} 个',
-                style: AppType.caption(theme).copyWith(color: theme.brandColor),
+          cells: [
+            for (final item in items.take(2)) _buildServiceRow(theme, item),
+            if (items.length > 2)
+              TCell(
+                title: Text(
+                  '查看全部 ${items.length} 个',
+                  style: AppType.caption(theme).copyWith(color: theme.brandColor),
+                ),
+                arrow: true,
+                onTap: () => context.go('/services'),
               ),
-              arrow: true,
-              onTap: () => context.go('/services'),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }

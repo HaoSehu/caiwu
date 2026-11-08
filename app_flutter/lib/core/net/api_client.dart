@@ -16,13 +16,22 @@ class ApiClient {
     required this.tokenProvider,
     this.onUnauthorized,
     Dio? dio,
+    /// 仅 Web 预览：替换底层 HTTP 适配器（mock 数据，不走网络）。
+    HttpClientAdapter? httpClientAdapter,
   }) : _dio = dio ??
             Dio(BaseOptions(
               baseUrl: Env.apiBase,
               connectTimeout: const Duration(seconds: 15),
               receiveTimeout: const Duration(seconds: 30),
-              headers: {'Accept': 'application/json'},
+              headers: {
+                'Accept': 'application/json',
+                // 后端据此识别原生 App，在发验证码接口免除网页行为验证（App 不加载 Geetest SDK）。
+                'X-Client-Platform': 'android',
+              },
             )) {
+    if (httpClientAdapter != null) {
+      _dio.httpClientAdapter = httpClientAdapter;
+    }
     _dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) {
         final token = tokenProvider();

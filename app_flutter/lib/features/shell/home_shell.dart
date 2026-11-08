@@ -117,7 +117,9 @@ class HomeShell extends StatelessWidget {
         for (var i = 0; i < _labels.length; i++)
           TTabBarItemConfig(
             tabText: _labels[i],
-            selectedIcon: Icon(_icons[i]),
+            // 选中态用实心图标：TTabBar 的 normal 样式不画胶囊底，
+            // 若两态图标相同，选中项只剩颜色差异，在灰底上很难分辨。
+            selectedIcon: Icon(_selectedIcons[i]),
             unselectedIcon: Icon(_icons[i]),
             // 重复点击当前 Tab 时回到该分支的根页面。
             notifyOnReselect: true,
@@ -174,7 +176,7 @@ class _SideBarItem extends StatelessWidget {
               Text(
                 label,
                 style: TextStyle(
-                  fontSize: 11,
+                  fontSize: context.tTheme.fontSizeBodySmall,
                   height: 1.3,
                   fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
                   color: selected ? theme.brandColor : theme.textColorSecondary,
