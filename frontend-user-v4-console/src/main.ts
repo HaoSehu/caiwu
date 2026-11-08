@@ -5,7 +5,7 @@ import App from './App.vue';
 import router from './router';
 import { store } from './store';
 import { initClientRuntimeConnectionHints } from './app/runtime/network';
-import { initClientSessionActivityTracking } from './app/runtime/session';
+import { initClientSessionActivityTracking, setClientToken } from './app/runtime/session';
 
 // TDesign 组件按需引入（见 vite.config.ts 的 createTDesignResolver）：
 // 模板里的 <t-xxx> 解析到 tdesign-vue-next/es/<组件>/index，子入口自带 import './style/css.mjs'；
@@ -17,6 +17,12 @@ import '@/style/index.less';
 import './permission';
 
 const app = createApp(App);
+
+// 演练版：没有后端，预置假凭证让路由守卫放行；
+// /v2/client/auth/info 由静态数据集返回演示用户。
+if (import.meta.env.MODE === 'demo') {
+  setClientToken('demo-client-token');
+}
 
 initClientSessionActivityTracking();
 // 接口域与站点跨域（VITE_API_BASE_URL），启动即预热 dns-prefetch / preconnect。
