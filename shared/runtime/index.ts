@@ -7,3 +7,4 @@ export * from "./http/core";
 export * from "./http/validationErrors";
 export * from "./http/userMessage";
 export * from "./http/client";
+export * from "./http/demoAdapter";
