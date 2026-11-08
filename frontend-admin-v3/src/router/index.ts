@@ -20,7 +20,8 @@ const defaultRouterList: Array<RouteRecordRaw> = [
   },
   {
     path: '/',
-    redirect: '/admin/login',
+    // 演练版没有登录流程：带假会话直接进仪表盘，避免停在登录页。
+    redirect: import.meta.env.MODE === 'demo' ? '/admin/dashboard' : '/admin/login',
   },
   {
     path: '/admin/403',

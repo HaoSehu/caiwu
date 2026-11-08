@@ -4,7 +4,7 @@ import { createApp } from 'vue';
 import App from './App.vue';
 import { setupGlobalErrorHandling } from './app/runtime/errorHandling';
 import { initAdminRuntimeConnectionHints } from './app/runtime/network';
-import { initAdminSessionActivityTracking, setAdminToken } from './app/runtime/session';
+import { initAdminSessionActivityTracking } from './app/runtime/session';
 import router from './router';
 import { store } from './store';
 import i18n from './locales';
@@ -18,12 +18,6 @@ import 'tdesign-vue-next/es/style/index.css';
 // theme.css（设计令牌）由 @/style/index.less 首行引入，与用户控制台保持同一级联顺序
 import '@/style/index.less';
 import './permission';
-
-// 演练版：没有后端，预置假凭证让路由守卫放行；
-// /v2/admin/auth/info 由静态数据集返回全权限管理员。
-if (import.meta.env.MODE === 'demo') {
-  setAdminToken('demo-admin-token');
-}
 
 const app = createApp(App);
 

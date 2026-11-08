@@ -310,6 +310,22 @@ run($pdo, "UPDATE settings SET item_value = REPLACE(REPLACE(item_value, 'https:/
 run($pdo, "UPDATE settings SET item_value = REPLACE(REPLACE(item_value, 'https://api.coyjs.cn/media/', '/demo/media/'), 'https://www.coyjs.cn/media/', '/demo/media/')
     WHERE group_key IN ('home_hero','site_home')", $targetDb);
 
+// 首页轮播视频可能以 http://127.0.0.1:8000/media/ 之类的绝对地址存库，统一改站内相对路径
+$absoluteMediaPatterns = [
+    'http://127.0.0.1:8000/media/' => '/demo/media/',
+    'http://localhost:8000/media/' => '/demo/media/',
+    'https://api.coyjs.cn/media/' => '/demo/media/',
+    'https://www.coyjs.cn/media/' => '/demo/media/',
+    'https://api.coyjs.cn/uploads/' => '/demo/media/',
+    'https://www.coyjs.cn/uploads/' => '/demo/media/',
+];
+foreach ($absoluteMediaPatterns as $from => $to) {
+    foreach (['home_hero', 'site_home'] as $group) {
+        $stmt = $pdo->prepare('UPDATE settings SET item_value = REPLACE(item_value, ?, ?) WHERE group_key = ?');
+        $stmt->execute([$from, $to, $group]);
+    }
+}
+
 // 会话与令牌类直接清空
 foreach (['personal_access_tokens', 'sessions', 'failed_jobs', 'jobs', 'password_reset_tokens', 'verification_challenges'] as $table) {
     run($pdo, 'TRUNCATE TABLE '.quoteIdent($table), $targetDb);

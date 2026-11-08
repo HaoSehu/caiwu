@@ -3,10 +3,17 @@ import 'nprogress/nprogress.css'; // progress bar style
 import NProgress from 'nprogress'; // progress bar
 import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 
+import { setAdminToken } from '@/app/runtime/session';
 import { hasPermissionInList } from '@/constants/permissions';
 import router from '@/router';
 import { getPermissionStore, useUserStore } from '@/store';
 import { toUserMessage } from '@/utils/userMessage';
+
+// 演练版：守卫注册（本文件 import）早于 main.ts 的入口逻辑，
+// 必须在守卫求值前就把假凭证写入 Cookie，否则首次导航会被踢回登录页。
+if (import.meta.env.MODE === 'demo') {
+  setAdminToken('demo-admin-token');
+}
 
 NProgress.configure({ showSpinner: false });
 

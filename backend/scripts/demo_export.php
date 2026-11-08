@@ -79,6 +79,27 @@ function exportEndpoint(HttpKernel $kernel, string $method, string $path, ?strin
     return is_array($payload['data'] ?? null) ? $payload['data'] : ['_value' => $payload['data'] ?? null];
 }
 
+/**
+ * 后端序列化器会把 /media/xxx 拼成 API 绝对域名（UploadUrl::resolve）。
+ * 演练版不连后端，统一改写为站内相对路径 /demo/media/xxx。
+ */
+function rewriteMediaUrls(mixed $value): mixed
+{
+    if (is_array($value)) {
+        return array_map('rewriteMediaUrls', $value);
+    }
+
+    if (is_string($value)) {
+        return preg_replace(
+            '#^https?://[^/\s"\\\']+/(media|uploads)/#',
+            '/demo/media/',
+            $value
+        );
+    }
+
+    return $value;
+}
+
 /** 拆出 "METHOD path?query|{json body}" 三段。 */
 function parseEndpointSpec(string $spec): array
 {
@@ -228,7 +249,10 @@ foreach (['admin', 'console', 'www'] as $appKey) {
     ];
     file_put_contents(
         $outputDir.DIRECTORY_SEPARATOR.$appKey.'.json',
-        json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT)
+        json_encode(
+            rewriteMediaUrls($payload),
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT
+        )
     );
 
     $summary[$appKey] = ['ok' => count($exported), 'failed' => $failures];
