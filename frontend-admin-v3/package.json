@@ -8,6 +8,7 @@
     "dev:ci": "vite --host 127.0.0.1 --mode dev",
     "build:test": "vite build --mode test",
     "build": "vue-tsc --noEmit && vite build --mode production",
+    "build:demo": "vite build --mode demo --outDir dist-demo",
     "build:type": "vue-tsc --noEmit",
     "build:e2e": "node ./scripts/build-e2e.mjs",
     "test:e2e": "npm run build:e2e && node ./scripts/e2e-run.mjs",
