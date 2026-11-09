@@ -1,5 +1,0 @@
-#!/usr/bin/env sh
-# 提交信息门禁。此前只有 pre-commit，commitlint 三份配置从未被执行，
-# 导致 Feat/Fix 与 feat/fix 两种风格长期混写（历史提交里两种都有）。
-# 统一以根 .commitlintrc.json 为唯一真源；两端子项目配置已删除，避免规则冲突。
-npx --no-install commitlint --edit "$1"

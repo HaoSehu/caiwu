@@ -61,11 +61,13 @@ foreach ($routes as $route) {
 }
 
 $target = dirname($basePath).'/docs/自动生成/接口/后端API清单.md';
-// Windows 下 PHP 文件系统 API 按系统 ANSI(GBK) 编码解析路径，
-// UTF-8 中文路径需转 GBK 才能正确打开，否则报 "Failed to open stream: No such file or directory"。
-$writeTarget = PHP_OS_FAMILY === 'Windows'
-    ? mb_convert_encoding($target, 'GBK', 'UTF-8')
-    : $target;
+// PHP 8 的 Windows 文件系统 API 按 UTF-8 解析路径，不要转 GBK：
+// 转码后的路径能通过 is_dir 但写入失败（"Failed to open stream"）。
+$writeTarget = $target;
+if (! is_dir(dirname($writeTarget))) {
+    // docs/ 不再入库，产物目录需现场创建，否则 CI 在干净检出上写文件失败。
+    mkdir(dirname($writeTarget), 0777, true);
+}
 
 if ($checkMode) {
     // 只比对接口集合与统计，忽略「生成时间」——它每次运行都不同，

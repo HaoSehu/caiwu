@@ -193,10 +193,10 @@ howstack-bos-main/
 # 与 AGENTS.md 共享同一套规则，必须入库（曾整条忽略导致新克隆没有任何项目规则）。
 .claude/
 
-# Local-only docs（短期文档，本地保留不上传）
-docs/_local/
-# docs 是唯一长期文档系统，主干（README/ARCHITECTURE/BACKEND/DATABASE/治理/设计文档/产品规格/自动生成）全部入库；
-# 曾整体忽略 docs/* 导致文档门禁空转、26 条 catalog 记录指向从未入库的文件（干净 clone 必报 missing file）
+# 仓库只分发源码（backend / 三端前端 / shared / app_flutter）。
+# docs 仅本地保留：曾整体入库并含生产库快照与运维细节，现与远端仓库解耦，不入库。
+# docs/自动生成 由 artisan / composer 脚本现场生成，同样不入库。
+/docs/
 
 
 # Codex CLI：本地代理人格模板与工具配置，非项目定制
