@@ -29,6 +29,11 @@ export interface CreateDemoAdapterOptions {
   fallbackData?: unknown;
   /** 命中回调（测试用） */
   onMatch?: (key: string) => void;
+  /**
+   * 关键接口的兜底载荷：命中失败（数据集未就绪/缺键）时也返回它。
+   * 用于权限这类「缺数据会把用户踢到错误页」的接口。
+   */
+  requiredFallbacks?: Record<string, unknown>;
 }
 
 const EMPTY_DATASET: DemoDataset = { endpoints: {} };
@@ -183,11 +188,33 @@ export function createDemoAdapter(options: CreateDemoAdapterOptions = {}): Axios
   return async (config: InternalAxiosRequestConfig) => {
     const current = await loadDataset();
     const method = String(config.method || "get");
-    const matched = matchDemoKey(current, method, resolveRequestPath(config));
+    const requestPath = resolveRequestPath(config);
+    const matched = matchDemoKey(current, method, requestPath);
 
     if (matched) {
       options.onMatch?.(matched.key);
+      // 命中但载荷为空（例如 auth/info 返回 {}）时同样走关键接口兜底，
+      // 否则空权限会把管理端整站踢到 403。
+      const isEmptyPayload =
+        matched.data === null ||
+        matched.data === undefined ||
+        (typeof matched.data === "object" &&
+          !Array.isArray(matched.data) &&
+          Object.keys(matched.data as Record<string, unknown>).length === 0);
+      if (isEmptyPayload) {
+        const fallback = options.requiredFallbacks?.[matched.key];
+        if (fallback !== undefined) {
+          return toAxiosResponse(config, SUCCESS_ENVELOPE(fallback));
+        }
+      }
       return toAxiosResponse(config, SUCCESS_ENVELOPE(matched.data));
+    }
+
+    const requiredFallback = options.requiredFallbacks?.[
+      buildDemoKey(method, requestPath)
+    ];
+    if (requiredFallback !== undefined) {
+      return toAxiosResponse(config, SUCCESS_ENVELOPE(requiredFallback));
     }
 
     return toAxiosResponse(config, SUCCESS_ENVELOPE(fallbackData));

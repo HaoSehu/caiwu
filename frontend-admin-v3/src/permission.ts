@@ -37,7 +37,11 @@ router.beforeEach(async (to, from, next) => {
     try {
       // 仅在菜单未构建时准备用户信息，避免每次导航都请求接口
       // （刷新或首次登录后 menuBuilt=false；后续跳转 menuBuilt=true 直接复用缓存）
-      if (!permissionStore.menuBuilt || !userStore.userInfo?.name) {
+      // 演练版额外条件：权限为空说明上次 auth/info 没拿到数据（数据集加载慢/失败），
+      // 必须回源修复，否则会带着空权限永久停在 403。
+      const demoNeedsPermissionRepair =
+        import.meta.env.MODE === 'demo' && (userStore.userInfo?.permissions?.length ?? 0) === 0;
+      if (!permissionStore.menuBuilt || !userStore.userInfo?.name || demoNeedsPermissionRepair) {
         // 刷新后 userInfo 已由 pinia 持久化恢复（profileHydrated=true），可直接用缓存权限重建菜单；
         // 只有资料尚未水合（首次登录、清缓存、换账号）时才补一次 /v2/admin/auth/info。
         // 这样刷新不再串行等待该接口，同时又保留了「无有效资料必须回源」的兜底。

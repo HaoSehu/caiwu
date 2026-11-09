@@ -45,7 +45,24 @@ const httpClient = createHttpClient({
   // 演练版（--mode demo）：请求不发出网络，由静态数据集响应；生产构建为 undefined。
   adapter:
     import.meta.env.MODE === 'demo'
-      ? createDemoAdapter({ dataUrl: import.meta.env.VITE_DEMO_DATA_URL as string | undefined })
+      ? createDemoAdapter({
+          dataUrl: import.meta.env.VITE_DEMO_DATA_URL as string | undefined,
+          // 权限接口兜底：数据集未就绪或该键为空时也必须给出全量权限，
+          // 否则管理端会整站跳到 403 且刷新无法自愈。
+          requiredFallbacks: {
+            'GET /v2/admin/auth/info': {
+              admin: {
+                id: 1,
+                username: 'demo-admin',
+                nickname: '演示管理员',
+                email: 'demo-admin@example.test',
+                role: '超级管理员',
+                permissions: ['*'],
+                mfa_enabled: false,
+              },
+            },
+          },
+        })
       : undefined,
 });
 

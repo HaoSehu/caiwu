@@ -74,4 +74,34 @@ assert.equal(matchDemoKey(dataset, 'DELETE', '/v2/admin/orders'), null)
   assert.deepEqual(hit.data.data, { list: [{ id: 1 }], total: 1 })
 }
 
+// 8. requiredFallbacks：数据集失败/缺键/空载荷时返回兜底，保住关键接口
+{
+  const fallback = { admin: { permissions: ['*'] } };
+
+  // 8a. 数据集加载失败
+  const broken = createDemoAdapter({
+    dataUrl: 'http://127.0.0.1:1/never.json',
+    requiredFallbacks: { 'GET /v2/admin/auth/info': fallback },
+  })
+  const r1 = await broken({ url: '/v2/admin/auth/info', method: 'get', headers: {} })
+  assert.deepEqual(r1.data, { code: 0, message: 'ok', data: fallback })
+
+  // 8b. 命中了但载荷是空对象（auth/info 返回 {}），也要兜底
+  const emptyHit = createDemoAdapter({
+    dataset: { endpoints: { 'GET /v2/admin/auth/info': {} } },
+    requiredFallbacks: { 'GET /v2/admin/auth/info': fallback },
+  })
+  const r2 = await emptyHit({ url: '/v2/admin/auth/info', method: 'get', headers: {} })
+  assert.deepEqual(r2.data, { code: 0, message: 'ok', data: fallback })
+
+  // 8c. 有真实载荷时不覆盖
+  const real = { admin: { permissions: ['dashboard.view'] } }
+  const realHit = createDemoAdapter({
+    dataset: { endpoints: { 'GET /v2/admin/auth/info': real } },
+    requiredFallbacks: { 'GET /v2/admin/auth/info': fallback },
+  })
+  const r3 = await realHit({ url: '/v2/admin/auth/info', method: 'get', headers: {} })
+  assert.deepEqual(r3.data, { code: 0, message: 'ok', data: real })
+}
+
 console.log('demo adapter tests passed')

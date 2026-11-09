@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 
 import { adminAuthApi } from '@/api/auth';
 import { getAdminToken, removeAdminToken, setAdminToken } from '@/app/runtime/session';
+import { AdminPermissions } from '@/constants/permissions';
 import type { UserInfo } from '@/types/interface';
 
 import { getPermissionStore } from './permission';
@@ -116,11 +117,19 @@ export const useUserStore = defineStore('user', {
       };
       const admin = res.admin || {};
       const role = typeof admin.role === 'string' && admin.role ? admin.role : '';
+      // 演练版没有真实后端：数据集未加载完或加载失败时 auth/info 会返回空载荷，
+      // 若照抄成 permissions: [] 会让整个后台落到 403 且刷新无法自愈。
+      // demo 构建下权限为空即兜底全量权限（生产构建此分支不参与编译）。
+      const demoFullAccess = import.meta.env.MODE === 'demo';
+      const resolvedPermissions =
+        demoFullAccess && (!Array.isArray(admin.permissions) || admin.permissions.length === 0)
+          ? [AdminPermissions.ALL]
+          : (admin.permissions || []);
       this.userInfo = {
         ...admin,
-        name: admin.nickname || admin.username || admin.email || '管理员',
+        name: admin.nickname || admin.username || admin.email || (demoFullAccess ? '演示管理员' : '管理员'),
         roles: role ? [role] : [],
-        permissions: admin.permissions || [],
+        permissions: resolvedPermissions,
       };
       // 与 Cookie 中的最新 token 保持一致，避免 localStorage 残留旧值
       this.syncTokenFromSession();
@@ -139,7 +148,11 @@ export const useUserStore = defineStore('user', {
     // 页面级复用入口：已水合时直接返回本地资料，未水合时复用同一个在途请求。
     // 与 getUserInfo 的区别是「不强制刷新」，需要最新资料的场景（如个人资料页）仍应调用 getUserInfo。
     async ensureUserInfo(): Promise<UserInfo> {
-      if (this.profileHydrated && this.userInfo?.name) {
+      // 演练版：持久化里可能残留空权限（数据集曾加载失败），此时即便 profileHydrated
+      // 为真也必须回源重取一次，否则会永久停在 403。
+      const demoNeedsRepair =
+        import.meta.env.MODE === 'demo' && (this.userInfo?.permissions?.length ?? 0) === 0;
+      if (this.profileHydrated && this.userInfo?.name && !demoNeedsRepair) {
         return this.userInfo;
       }
 
