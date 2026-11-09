@@ -35,6 +35,7 @@ use App\Support\PublicUrl;
 use App\Support\SchemaMetadataCache;
 use App\Support\TextSanitizer;
 use Carbon\CarbonInterface;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -984,6 +985,8 @@ class ReferralService
 
     private function findRewardByInvoice(Invoice $invoice): ?ReferralReward
     {
+        // order_id 与 invoice_id 均有唯一索引，同一订单至多一条奖励；
+        // invoice_id OR order_id 至多命中一行，不存在「取错记录」的歧义。
         return ReferralReward::query()
             ->where(function (Builder $query) use ($invoice) {
                 $query->where('invoice_id', $invoice->id)
@@ -1514,68 +1517,71 @@ class ReferralService
         ?string $remark = null,
         ?string $traceId = null,
     ): ReferralWithdrawal {
-        return DB::transaction(function () use (
-            $withdrawal,
-            $operatorUserId,
-            $operator,
-            $paymentNo,
-            $remark,
-            $traceId
-        ) {
-            $record = ReferralWithdrawal::query()->lockForUpdate()->findOrFail($withdrawal->id);
+        $resolvedPaymentNo = trim($paymentNo);
+        throw_if($resolvedPaymentNo === '', new BusinessException('打款单号不能为空'));
 
-            throw_if(
-                (int) $record->status !== ReferralWithdrawal::STATUS_APPROVED,
-                new BusinessException('仅审核通过的提现支持打款确认')
-            );
-            throw_if(
-                $record->method === ReferralWithdrawal::METHOD_BALANCE,
-                new BusinessException('余额提现无需打款确认')
-            );
+        // 同一支付宝流水号只能对应一张提现单：payment_no 无唯一索引（需兼容历史重复）。
+        // 命名锁必须包住整个事务：锁在事务内释放时，另一个请求可在本事务提交前拿到锁，
+        // 仍看不到未提交的 payment_no，从而把同一凭证写到第二张提现单。
+        try {
+            return Cache::lock(
+                CacheKey::lock('lock:referral:withdrawal:payment_no', md5($resolvedPaymentNo)),
+                15
+            )->block(5, function () use ($withdrawal, $operatorUserId, $operator, $resolvedPaymentNo, $remark, $traceId): ReferralWithdrawal {
+                return DB::transaction(function () use ($withdrawal, $operatorUserId, $operator, $resolvedPaymentNo, $remark, $traceId) {
+                    $record = ReferralWithdrawal::query()->lockForUpdate()->findOrFail($withdrawal->id);
 
-            $resolvedPaymentNo = trim($paymentNo);
-            throw_if($resolvedPaymentNo === '', new BusinessException('打款单号不能为空'));
+                    throw_if(
+                        (int) $record->status !== ReferralWithdrawal::STATUS_APPROVED,
+                        new BusinessException('仅审核通过的提现支持打款确认')
+                    );
+                    throw_if(
+                        $record->method === ReferralWithdrawal::METHOD_BALANCE,
+                        new BusinessException('余额提现无需打款确认')
+                    );
 
-            // 同一支付宝流水号只能对应一张提现单：payment_no 目前无唯一索引（需兼容历史重复），
-            // 在确认打款这一写入口做同号查重，避免同一笔打款凭证被复用到多张提现单而无法检出重复出账。
-            throw_if(
-                ReferralWithdrawal::query()
-                    ->where('payment_no', $resolvedPaymentNo)
-                    ->where('id', '!=', (int) $record->id)
-                    ->exists(),
-                new BusinessException('该打款流水号已被其他提现单使用'),
-            );
+                    throw_if(
+                        ReferralWithdrawal::query()
+                            ->where('payment_no', $resolvedPaymentNo)
+                            ->where('id', '!=', (int) $record->id)
+                            ->exists(),
+                        new BusinessException('该打款流水号已被其他提现单使用'),
+                    );
 
-            $record->forceFill([
-                'status' => ReferralWithdrawal::STATUS_PAID,
-                'payment_no' => $resolvedPaymentNo,
-                'paid_at' => now(),
-                'operator' => $operator,
-                'remark' => trim((string) $remark) !== '' ? trim((string) $remark) : ($record->remark ?: '后台确认打款'),
-                // trace_id 是 NOT NULL 列：调用方未传时保留该单原有追踪号，
-                // 直接写 null 会让整笔确认在数据库层失败（真实 500），而不是业务提示。
-                'trace_id' => trim((string) $traceId) !== '' ? (string) $traceId : (string) ($record->trace_id ?? ''),
-                'processed_at' => now(),
-            ])->save();
+                    $record->forceFill([
+                        'status' => ReferralWithdrawal::STATUS_PAID,
+                        'payment_no' => $resolvedPaymentNo,
+                        'paid_at' => now(),
+                        'operator' => $operator,
+                        'remark' => trim((string) $remark) !== '' ? trim((string) $remark) : ($record->remark ?: '后台确认打款'),
+                        // trace_id 是 NOT NULL 列：调用方未传时保留该单原有追踪号，
+                        // 直接写 null 会让整笔确认在数据库层失败（真实 500），而不是业务提示。
+                        'trace_id' => trim((string) $traceId) !== '' ? (string) $traceId : (string) ($record->trace_id ?? ''),
+                        'processed_at' => now(),
+                    ])->save();
 
-            $this->operationLogService->write(
-                userId: $operatorUserId,
-                userType: 'admin',
-                action: 'referral.withdraw.paid',
-                module: 'referral_withdrawal',
-                targetId: $record->id,
-                detail: [
-                    'amount' => $record->amount,
-                    'method' => $record->method,
-                    'payment_no' => $resolvedPaymentNo,
-                    'operator' => $operator,
-                    'remark' => $record->remark,
-                    'trace_id' => $traceId,
-                ],
-            );
+                    $this->operationLogService->write(
+                        userId: $operatorUserId,
+                        userType: 'admin',
+                        action: 'referral.withdraw.paid',
+                        module: 'referral_withdrawal',
+                        targetId: $record->id,
+                        detail: [
+                            'amount' => $record->amount,
+                            'method' => $record->method,
+                            'payment_no' => $resolvedPaymentNo,
+                            'operator' => $operator,
+                            'remark' => $record->remark,
+                            'trace_id' => $traceId,
+                        ],
+                    );
 
-            return $record->refresh()->load($this->referralUserWithRelations('user'));
-        });
+                    return $record->refresh()->load($this->referralUserWithRelations('user'));
+                });
+            });
+        } catch (LockTimeoutException) {
+            throw new BusinessException('打款确认处理中，请稍后重试');
+        }
     }
 
     /**

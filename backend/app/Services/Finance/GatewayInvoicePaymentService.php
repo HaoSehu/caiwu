@@ -11,6 +11,7 @@ use App\Exceptions\BusinessException;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\User;
+use App\Services\Integrations\Payments\Data\PaymentQueryTrust;
 use App\Services\Integrations\Payments\PaymentGatewayManager;
 use App\Services\Integrations\Payments\PaymentGatewayOperationService;
 use App\Services\Integrations\Plugins\PaymentGatewayBindingResolver;
@@ -420,7 +421,7 @@ class GatewayInvoicePaymentService
         // 仍返回结果，后端必须在入账前二次把关：标记缺失或非 true 一律降级为
         // 「仅通知不结算」——记录一条未验签回调证据，支付单保持 PENDING，由异步
         // 回调（独立验签 + 商户号 + 金额三道闸）完成入账，查询结果只作前端提示。
-        if (! $this->queryResultVerified($queryResult)) {
+        if (! PaymentQueryTrust::isVerified($queryResult)) {
             $this->callbackProjector->recordPaymentCallback($payment, 'payment', $queryPayload, false, $tradeNo);
 
             Log::warning("[{$gatewayLabel}主动查询] 响应未携带验签标记，仅记录回调不结算", array_merge(
@@ -468,23 +469,5 @@ class GatewayInvoicePaymentService
         if (($result['dispatch'] ?? false) && ($result['invoice'] ?? null) instanceof Invoice) {
             $this->paidInvoiceOrchestrator->handlePaidInvoice($result['invoice'], "{$gateway}_query:".($result['payment_no'] ?? $payment->payment_no));
         }
-    }
-
-    /**
-     * M-39：主动查询结果是否携带已验证签名标记。
-     * 网关插件只有在确认同步响应验签通过后才透传 verified=true（顶层或 raw 内），
-     * 仅布尔 true 视为已验签，字符串/数字等模糊值一律按未验签处理。
-     *
-     * @param  array<string, mixed>  $queryResult
-     */
-    private function queryResultVerified(array $queryResult): bool
-    {
-        if (($queryResult['verified'] ?? null) === true) {
-            return true;
-        }
-
-        $raw = $queryResult['raw'] ?? null;
-
-        return is_array($raw) && ($raw['verified'] ?? null) === true;
     }
 }

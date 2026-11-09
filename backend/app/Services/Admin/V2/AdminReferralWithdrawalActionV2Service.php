@@ -81,6 +81,26 @@ class AdminReferralWithdrawalActionV2Service
     /**
      * @return array<string, mixed>
      */
+    public function failPayment(
+        ReferralWithdrawal $withdrawal,
+        AdminUser $operator,
+        string $reason,
+        ?string $traceId = null,
+    ): array {
+        $record = $this->referrals->failWithdrawalPayment(
+            withdrawal: $withdrawal,
+            operatorUserId: (int) $operator->id,
+            operator: $operator->username ?: 'admin',
+            reason: $reason,
+            traceId: $traceId,
+        );
+
+        return $this->result($record, 'payment_failure', '已标记打款失败');
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
     private function result(ReferralWithdrawal $record, string $type, string $message): array
     {
         return [

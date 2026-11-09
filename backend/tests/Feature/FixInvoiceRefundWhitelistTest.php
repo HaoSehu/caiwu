@@ -10,6 +10,7 @@ use App\Exceptions\BusinessException;
 use App\Models\Invoice;
 use App\Models\User;
 use App\Services\Finance\InvoiceRefundService;
+use App\Services\Finance\InvoiceService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\Support\SeedsFinanceBalance;
 use Tests\TestCase;
@@ -104,6 +105,42 @@ class FixInvoiceRefundWhitelistTest extends TestCase
             $this->assertFalse((bool) ($result['already_refunded'] ?? true), "类型 {$type} 必须可退");
             $this->assertEqualsWithDelta(30.00, $this->financeBalance($user), 0.001, "类型 {$type} 退款必须到账");
         }
+    }
+
+    public function test_manual_invoice_paid_from_balance_can_be_refunded_to_balance(): void
+    {
+        $user = $this->makeUser();
+        $this->seedFinanceBalance($user, 0.00);
+        $invoice = $this->makeInvoice($user, 100.00, [
+            'type' => InvoiceType::MANUAL,
+            'config_snapshot' => ['admin_manual' => true, 'paid_from_balance' => true],
+        ]);
+        $invoice->forceFill(['status' => InvoiceStatus::PAID, 'paid_amount' => 100.00, 'paid_at' => now()])->save();
+
+        $detail = app(InvoiceService::class)->adminDetail((int) $invoice->id);
+        $this->assertTrue((bool) $detail['can_refund_to_balance'], '管理端详情必须展示退款入口');
+        $this->assertSame('100.00', (string) $detail['refundable_amount_for_balance']);
+
+        $result = app(InvoiceRefundService::class)->refundInvoiceToBalance($user, $invoice);
+
+        $this->assertFalse((bool) ($result['already_refunded'] ?? true));
+        $this->assertEqualsWithDelta(100.00, $this->financeBalance($user), 0.001, '余额扣款产生的补录账单必须能原路退回余额');
+        $this->assertSame(InvoiceStatus::REFUNDED, (int) $invoice->fresh()->status);
+    }
+
+    public function test_manual_invoice_without_balance_marker_is_still_refused(): void
+    {
+        $user = $this->makeUser();
+        $this->seedFinanceBalance($user, 0.00);
+        $invoice = $this->makeInvoice($user, 100.00, [
+            'type' => InvoiceType::MANUAL,
+            'config_snapshot' => ['admin_manual' => true],
+        ]);
+        $invoice->forceFill(['status' => InvoiceStatus::PAID, 'paid_amount' => 100.00, 'paid_at' => now()])->save();
+
+        $this->expectException(BusinessException::class);
+        $this->expectExceptionMessage('充值/补录账单不支持退回余额');
+        app(InvoiceRefundService::class)->refundInvoiceToBalance($user, $invoice);
     }
 
     public function test_refundable_amount_uses_paid_amount_when_partially_paid(): void

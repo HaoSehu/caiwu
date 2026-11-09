@@ -12,6 +12,7 @@ final readonly class PaymentQueryResult
         public string $outTradeNo,
         public string $totalAmount,
         public array $raw = [],
+        public bool $verified = false,
     ) {}
 
     public function toArray(): array
@@ -22,6 +23,7 @@ final readonly class PaymentQueryResult
             'out_trade_no' => $this->outTradeNo,
             'total_amount' => $this->totalAmount,
             'raw' => $this->raw,
+            'verified' => $this->verified,
         ];
     }
 }

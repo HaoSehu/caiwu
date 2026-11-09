@@ -192,6 +192,9 @@ class YiPayClient
             'out_trade_no' => (string) ($result['out_trade_no'] ?? $outTradeNo),
             'total_amount' => number_format((float) ($result['money'] ?? 0), 2, '.', ''),
             'raw' => $result,
+            // 查询响应若携带可验证签名（sign/sign_type）则按已验签透传；
+            // 易支付查询接口不保证签名，无签名时保持 false，由异步回调完成入账。
+            'verified' => $this->verifyNotify($result),
         ];
     }
 
@@ -363,21 +366,66 @@ class YiPayClient
 
     /**
      * IPv6 字面量在 parse_url 结果中带方括号（[::1]），这里统一去括号后判定。
+     *
+     * 除字面量外还必须解析域名：只比对字面 IP 时，配置一个解析到内网的域名
+     * （nip.io、DNS rebinding）即可把商户密钥发进内网，SSRF 闸形同虚设。
      */
     private function isPrivateOrLoopbackHost(string $host): bool
     {
         $host = strtolower(trim($host, '[]'));
 
-        if ($host === 'localhost' || $host === '::1') {
+        if ($host === '' || $host === 'localhost') {
             return true;
         }
 
-        if (filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) === false) {
-            return false;
+        if (filter_var($host, FILTER_VALIDATE_IP) !== false) {
+            return ! filter_var(
+                $host,
+                FILTER_VALIDATE_IP,
+                FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE
+            );
         }
 
-        // 127.0.0.0/8、10.0.0.0/8、192.168.0.0/16、172.16.0.0/12、169.254.0.0/16
-        return preg_match('/^(127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.)/', $host) === 1;
+        foreach ($this->resolveHostIps($host) as $ip) {
+            if (filter_var($ip, FILTER_VALIDATE_IP) === false) {
+                continue;
+            }
+
+            if (! filter_var(
+                $ip,
+                FILTER_VALIDATE_IP,
+                FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE
+            )) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * 解析域名对应的全部 IP（A + AAAA）。解析失败返回空数组：
+     * 离线/测试环境不因 DNS 不可用而阻断，但只要能解析出私网地址就必须拒绝。
+     *
+     * @return array<int, string>
+     */
+    protected function resolveHostIps(string $host): array
+    {
+        $ips = @gethostbynamel($host);
+        $ips = is_array($ips) ? $ips : [];
+
+        if (function_exists('dns_get_record')) {
+            $records = @dns_get_record($host, DNS_AAAA);
+            if (is_array($records)) {
+                foreach ($records as $record) {
+                    if (isset($record['ipv6'])) {
+                        $ips[] = (string) $record['ipv6'];
+                    }
+                }
+            }
+        }
+
+        return array_values(array_unique(array_filter($ips)));
     }
 
     private function resolveClientIp(): string

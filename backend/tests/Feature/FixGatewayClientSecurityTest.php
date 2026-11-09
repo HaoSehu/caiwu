@@ -240,6 +240,8 @@ class FixGatewayClientSecurityTest extends TestCase
             'class-b-private-high' => ['https://172.31.255.254/'],
             'link-local' => ['https://169.254.1.1/'],
             'ipv6-loopback' => ['https://[::1]/'],
+            'ipv6-ula' => ['https://[fc00::1]/'],
+            'ipv6-link-local' => ['https://[fe80::1]/'],
             'localhost' => ['https://localhost/'],
         ];
     }
@@ -260,6 +262,78 @@ class FixGatewayClientSecurityTest extends TestCase
         $client = $this->yipay(['api_endpoint' => 'https://pay.example.com/']);
 
         $this->assertTrue($client->isEnabled());
+    }
+
+    public function test_yipay_endpoint_rejects_hostname_resolving_to_private_ip(): void
+    {
+        try {
+            new class(['api_endpoint' => 'https://internal.example.com/']) extends YiPayClient
+            {
+                protected function resolveHostIps(string $host): array
+                {
+                    return ['10.1.2.3'];
+                }
+            };
+            $this->fail('解析到私网的域名未被拒绝');
+        } catch (BusinessException $exception) {
+            $this->assertSame('易支付接口地址不合法', $exception->getMessage());
+        }
+    }
+
+    public function test_yipay_endpoint_accepts_hostname_resolving_to_public_ip(): void
+    {
+        $client = new class(['api_endpoint' => 'https://internal.example.com/']) extends YiPayClient
+        {
+            protected function resolveHostIps(string $host): array
+            {
+                return ['93.184.216.34'];
+            }
+        };
+
+        $this->assertInstanceOf(YiPayClient::class, $client);
+    }
+
+    // ---- M-39：易支付查询响应带可验证签名时才标记 verified ----
+
+    public function test_yipay_query_without_signature_is_unverified(): void
+    {
+        Http::fake(['*' => Http::response([
+            'code' => '1',
+            'status' => 1,
+            'trade_no' => 'YP-T1',
+            'out_trade_no' => 'PAY-YP-1',
+            'money' => '10.00',
+        ])]);
+
+        $result = $this->yipay()->query('PAY-YP-1');
+
+        $this->assertSame('TRADE_SUCCESS', $result['trade_status']);
+        $this->assertFalse($result['verified'], '无签名的查询结果不得标记为已验签');
+    }
+
+    public function test_yipay_query_with_valid_md5_signature_is_verified(): void
+    {
+        $params = [
+            'code' => '1',
+            'status' => 1,
+            'trade_no' => 'YP-T2',
+            'out_trade_no' => 'PAY-YP-2',
+            'money' => '10.00',
+        ];
+        $canonical = $params;
+        ksort($canonical, SORT_STRING);
+        $pairs = [];
+        foreach ($canonical as $key => $value) {
+            $pairs[] = $key.'='.(string) $value;
+        }
+        $params['sign'] = md5(implode('&', $pairs).'test-merchant-key');
+        $params['sign_type'] = 'MD5';
+
+        Http::fake(['*' => Http::response($params)]);
+
+        $result = $this->yipay()->query('PAY-YP-2');
+
+        $this->assertTrue($result['verified'], '签名验证通过的查询结果必须标记 verified=true');
     }
 
     // ---- M-41：demo_pay 生产环境禁用 ----

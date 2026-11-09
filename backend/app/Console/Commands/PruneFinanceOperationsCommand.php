@@ -14,6 +14,8 @@ use Illuminate\Support\Carbon;
  *
  * 幂等表 finance_operations 会随退款/充值等操作持续增长；超过保留期的
  * SUCCEEDED 行可安全删除（重放已不可能命中），FAILED 行同样到期清理。
+ * ack_pending 表示资金已提交但终态写入失败、等待人工核对，必须保留到人工处理，
+ * 不参与 TTL 清理（与 FinanceOperation 模型注释口径一致）。
  * 默认 dry-run，--execute 才写库。
  */
 class PruneFinanceOperationsCommand extends Command
@@ -40,7 +42,9 @@ class PruneFinanceOperationsCommand extends Command
         }
 
         $cutoff = Carbon::now()->subDays($days);
-        $query = FinanceOperation::query()->where('created_at', '<', $cutoff);
+        $query = FinanceOperation::query()
+            ->where('created_at', '<', $cutoff)
+            ->where('status', '!=', FinanceOperation::STATUS_ACK_PENDING);
         $candidates = (clone $query)->count();
 
         if (! (bool) $this->option('execute')) {

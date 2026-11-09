@@ -196,6 +196,7 @@ class AlipayClient
         // 查询结果直接驱动入账，必须与异步通知同级验签；无签名时继续返回但留痕，
         // 验签失败则抛业务异常，由调用侧按「查询失败」处理而不是把钱记上账。
         $hasSignature = $this->hasResponseSignature($result);
+        $verified = false;
         if ($hasSignature && trim((string) $this->alipayPublicKey) !== '') {
             if (! $this->verifySignedPayload($result)) {
                 Log::warning('[支付宝主动查询] 查询响应验签失败', [
@@ -205,6 +206,8 @@ class AlipayClient
 
                 throw new BusinessException('支付宝查询响应验签失败');
             }
+
+            $verified = true;
         } elseif ($hasSignature) {
             Log::warning('[支付宝主动查询] 查询响应含签名但未配置公钥，无法验签', [
                 'out_trade_no' => $outTradeNo,
@@ -222,6 +225,7 @@ class AlipayClient
             'out_trade_no' => $data['out_trade_no'] ?? $outTradeNo,
             'total_amount' => $data['total_amount'] ?? '0.00',
             'raw' => $data,
+            'verified' => $verified,
         ];
     }
 

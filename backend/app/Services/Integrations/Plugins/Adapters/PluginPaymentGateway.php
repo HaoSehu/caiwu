@@ -141,6 +141,7 @@ final readonly class PluginPaymentGateway implements PaymentGatewayInterface, Pl
             outTradeNo: (string) ($data['out_trade_no'] ?? $outTradeNo),
             totalAmount: (string) ($data['total_amount'] ?? ''),
             raw: is_array($data['raw'] ?? null) ? $data['raw'] : $data,
+            verified: ($data['verified'] ?? false) === true,
         );
     }
 

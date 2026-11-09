@@ -83,7 +83,8 @@ class Fix2QuerySettlementRequiresVerifiedTest extends TestCase
             outTradeNo: '',
             totalAmount: '100.00',
             // 网关客户端已完成响应验签并透传标记：允许作为入账依据。
-            raw: ['stub' => true, 'verified' => true],
+            raw: ['stub' => true],
+            verified: true,
         ));
 
         $invoice = $this->makeInvoice($user, 100.00);
@@ -101,6 +102,26 @@ class Fix2QuerySettlementRequiresVerifiedTest extends TestCase
 
         $callback = PaymentCallback::query()->where('payment_id', (int) $payment->id)->firstOrFail();
         $this->assertSame(1, (int) $callback->is_verified);
+    }
+
+    public function test_payment_query_result_serializes_verified_flag(): void
+    {
+        $verified = new PaymentQueryResult(
+            tradeStatus: 'TRADE_SUCCESS',
+            tradeNo: 'T1',
+            outTradeNo: 'P1',
+            totalAmount: '1.00',
+            verified: true,
+        );
+        $unverified = new PaymentQueryResult(
+            tradeStatus: 'TRADE_SUCCESS',
+            tradeNo: 'T2',
+            outTradeNo: 'P2',
+            totalAmount: '1.00',
+        );
+
+        $this->assertTrue($verified->toArray()['verified']);
+        $this->assertFalse($unverified->toArray()['verified'], '默认必须是未验签，避免适配层静默放行');
     }
 
     /**
@@ -166,6 +187,7 @@ class Fix2QuerySettlementRequiresVerifiedTest extends TestCase
                     outTradeNo: $outTradeNo,
                     totalAmount: $this->queryResult->totalAmount,
                     raw: $this->queryResult->raw,
+                    verified: $this->queryResult->verified,
                 );
             }
 

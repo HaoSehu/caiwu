@@ -826,7 +826,8 @@ class InvoiceService
      */
     private function canRefundToBalance(Invoice $invoice, float $refundableAmount): bool
     {
-        if (! app(InvoiceRefundService::class)->isRefundToBalanceTypeAllowed((string) ($invoice->type ?? ''))) {
+        $refundService = app(InvoiceRefundService::class);
+        if (! $refundService->isInvoiceRefundToBalanceAllowed($invoice)) {
             return false;
         }
 
@@ -838,19 +839,24 @@ class InvoiceService
             return false;
         }
 
-        // 退款到余额必须有真实收款支付单（否则无「退的是哪笔钱」）
-        if (! $invoice->relationLoaded('payments') || $invoice->payments->isEmpty()) {
-            return false;
-        }
+        // 补录账单由管理员从用户余额扣款支付，资金证据是余额台账而非 Payment 行；
+        // 仅这一类账单允许跳过「必须有真实支付单」的展示门槛。
+        $balancePaidManual = (string) ($invoice->type ?? '') === InvoiceType::MANUAL
+            && $refundService->isPaidFromBalanceInvoice($invoice);
+        if (! $balancePaidManual) {
+            if (! $invoice->relationLoaded('payments') || $invoice->payments->isEmpty()) {
+                return false;
+            }
 
-        // 系统外收款（补录订单/手工入账）的支付单固定为 manual，资金从未进入系统：
-        // 能力位必须关闭，否则管理员看到的是一个点下去必然失败的入口。
-        $realPaymentCount = $invoice->payments
-            ->filter(fn ($payment): bool => $payment instanceof Payment
-                && $payment->gatewayKey() !== PaymentGatewayCode::MANUAL)
-            ->count();
-        if ($realPaymentCount === 0) {
-            return false;
+            // 系统外收款（补录订单/手工入账）的支付单固定为 manual，资金从未进入系统：
+            // 能力位必须关闭，否则管理员看到的是一个点下去必然失败的入口。
+            $realPaymentCount = $invoice->payments
+                ->filter(fn ($payment): bool => $payment instanceof Payment
+                    && $payment->gatewayKey() !== PaymentGatewayCode::MANUAL)
+                ->count();
+            if ($realPaymentCount === 0) {
+                return false;
+            }
         }
 
         return Money::greaterThan($refundableAmount, 0);

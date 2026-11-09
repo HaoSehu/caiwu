@@ -94,6 +94,34 @@ class InvoiceRefundService
     }
 
     /**
+     * 管理员手工开通实例时从用户余额扣款的标记（HandlesAdminUserServices 写入）。
+     */
+    public function isPaidFromBalanceInvoice(Invoice $invoice): bool
+    {
+        $snapshot = is_array($invoice->config_snapshot ?? null) ? $invoice->config_snapshot : [];
+
+        return filter_var($snapshot['paid_from_balance'] ?? false, FILTER_VALIDATE_BOOL);
+    }
+
+    /**
+     * 「退款到余额」的账单级判定：
+     * - 购买类账单（new/normal/renew/upgrade）走类型白名单；
+     * - 补录账单（MANUAL）仅在资金确实从用户余额扣出（paid_from_balance=true）时放行。
+     *
+     * 后者是余额扣款开通实例的唯一纠错通道：红字冲抵对这类账单会拒绝并提示
+     * 「请使用退款到余额」，若这里不放行，两条通道会互相拒绝形成死路。
+     */
+    public function isInvoiceRefundToBalanceAllowed(Invoice $invoice): bool
+    {
+        if ($this->isRefundToBalanceTypeAllowed((string) ($invoice->type ?? ''))) {
+            return true;
+        }
+
+        return (string) ($invoice->type ?? '') === InvoiceType::MANUAL
+            && $this->isPaidFromBalanceInvoice($invoice);
+    }
+
+    /**
      * 可退额实收基数：已实收优先，未实收（paid_amount=0）退回应收金额。
      *
      * 不能用 max(paid_amount, amount)：paid_amount 小于 amount 的 PAID 账单
@@ -155,7 +183,7 @@ class InvoiceRefundService
                             // 扣款（平台划扣）、推荐奖励（返利入账）都没有对应的资金流出，
                             // 退到余额等于凭空造钱。白名单与展示位 InvoiceService::canRefundToBalance 同源。
                             throw_if(
-                                ! $this->isRefundToBalanceTypeAllowed((string) $lockedInvoice->type),
+                                ! $this->isInvoiceRefundToBalanceAllowed($lockedInvoice),
                                 new BusinessException(
                                     in_array((string) $lockedInvoice->type, [InvoiceType::RECHARGE, InvoiceType::MANUAL], true)
                                         ? '充值/补录账单不支持退回余额'

@@ -10,10 +10,12 @@ use App\Constants\InvoiceType;
 use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
 use App\Contracts\Integrations\Payments\PaymentGatewayInterface;
+use App\Exceptions\BusinessException;
 use App\Models\FinanceLedgerEntry;
 use App\Models\IntegrationPlugin;
 use App\Models\Invoice;
 use App\Models\Payment;
+use App\Models\PaymentCallback;
 use App\Models\RechargeRecord;
 use App\Models\User;
 use App\Services\Finance\RechargePaymentService;
@@ -53,6 +55,7 @@ class RechargeCompletionTest extends TestCase
             outTradeNo: '',
             totalAmount: '50.00',
             raw: ['stub' => true],
+            verified: true,
         ));
 
         $payload = app(RechargePaymentService::class)->rechargeByGateway($user, 50.00, PaymentGatewayCode::ALIPAY);
@@ -114,12 +117,13 @@ class RechargeCompletionTest extends TestCase
             outTradeNo: '',
             totalAmount: '45.00',
             raw: ['stub' => true],
+            verified: true,
         ));
 
         $payload = app(RechargePaymentService::class)->rechargeByGateway($user, 50.00, PaymentGatewayCode::ALIPAY);
         $payment = Payment::query()->where('payment_no', $payload['payment_no'])->firstOrFail();
 
-        // 轮询路径不经过验签，金额比对是唯一防线：不符拒绝入账。
+        // 已验签但金额不符：金额比对仍必须拒绝入账。
         $result = app(RechargePaymentService::class)->queryRechargeStatus($payment);
         $this->assertFalse((bool) ($result['paid'] ?? false));
 
@@ -128,6 +132,53 @@ class RechargeCompletionTest extends TestCase
         $this->assertEqualsWithDelta(0.00, $this->financeBalance($user), 0.001);
         $this->assertSame(0, $this->countLedger($user, FinanceLedgerEventType::RECHARGE));
         $this->assertSame(0, Invoice::query()->where('user_id', (int) $user->id)->where('type', InvoiceType::RECHARGE)->count());
+    }
+
+    public function test_recharge_query_without_verified_marker_keeps_payment_pending(): void
+    {
+        $user = $this->makeUser();
+        $this->seedFinanceBalance($user, 0.00);
+        $this->registerStubGateway(new PaymentQueryResult(
+            tradeStatus: 'TRADE_SUCCESS',
+            tradeNo: 'STUBUNVERIFIED'.mt_rand(100000, 999999),
+            outTradeNo: '',
+            totalAmount: '50.00',
+            raw: ['stub' => true],
+        ));
+
+        $payload = app(RechargePaymentService::class)->rechargeByGateway($user, 50.00, PaymentGatewayCode::ALIPAY);
+        $payment = Payment::query()->where('payment_no', $payload['payment_no'])->firstOrFail();
+
+        $result = app(RechargePaymentService::class)->queryRechargeStatus($payment);
+
+        $this->assertFalse((bool) ($result['paid'] ?? false), '未验签的查询结果不得驱动充值入账');
+        $payment->refresh();
+        $this->assertSame(PaymentStatus::PENDING, (int) $payment->status);
+        $this->assertEqualsWithDelta(0.00, $this->financeBalance($user), 0.001);
+        $this->assertSame(0, $this->countLedger($user, FinanceLedgerEventType::RECHARGE));
+
+        $callback = PaymentCallback::query()->where('payment_id', (int) $payment->id)->firstOrFail();
+        $this->assertSame(0, (int) $callback->is_verified, '未验签查询必须留痕为未验签回调');
+        $callbackPayload = (array) $callback->payload_json;
+        $this->assertSame('active_query', (string) ($callbackPayload['source'] ?? ''));
+    }
+
+    public function test_recharge_query_exception_returns_unpaid_without_settlement(): void
+    {
+        $user = $this->makeUser();
+        $this->seedFinanceBalance($user, 0.00);
+        $this->registerStubGateway(throwOnQuery: true);
+
+        $payload = app(RechargePaymentService::class)->rechargeByGateway($user, 50.00, PaymentGatewayCode::ALIPAY);
+        $payment = Payment::query()->where('payment_no', $payload['payment_no'])->firstOrFail();
+
+        $result = app(RechargePaymentService::class)->queryRechargeStatus($payment);
+
+        $this->assertFalse((bool) ($result['paid'] ?? false));
+        $this->assertSame('query_unavailable', (string) ($result['trade_status'] ?? ''));
+        $payment->refresh();
+        $this->assertSame(PaymentStatus::PENDING, (int) $payment->status);
+        $this->assertEqualsWithDelta(0.00, $this->financeBalance($user), 0.001);
     }
 
     public function test_complete_recharge_payment_direct_call_is_idempotent(): void
@@ -203,7 +254,7 @@ class RechargeCompletionTest extends TestCase
      * 真实网关插件的 RSA 验签在测试环境无法替身，注册前先禁用支付域已启用插件
      * （DatabaseTransactions 会回滚插件状态）。
      */
-    private function registerStubGateway(?PaymentQueryResult $queryResult = null): void
+    private function registerStubGateway(?PaymentQueryResult $queryResult = null, bool $throwOnQuery = false): void
     {
         if (Schema::hasTable('integration_plugins')) {
             IntegrationPlugin::query()
@@ -211,10 +262,11 @@ class RechargeCompletionTest extends TestCase
                 ->update(['status' => IntegrationPlugin::STATUS_DISABLED]);
         }
 
-        app(PaymentGatewayRegistry::class)->register(new class($queryResult) implements PaymentGatewayInterface
+        app(PaymentGatewayRegistry::class)->register(new class($queryResult, $throwOnQuery) implements PaymentGatewayInterface
         {
             public function __construct(
                 private readonly ?PaymentQueryResult $queryResult,
+                private readonly bool $throwOnQuery,
             ) {}
 
             public function key(): string
@@ -253,12 +305,17 @@ class RechargeCompletionTest extends TestCase
 
             public function query(string $outTradeNo): PaymentQueryResult
             {
+                if ($this->throwOnQuery) {
+                    throw new BusinessException('网关查询暂时不可用');
+                }
+
                 return new PaymentQueryResult(
                     tradeStatus: $this->queryResult?->tradeStatus ?? 'WAIT_BUYER_PAY',
                     tradeNo: $this->queryResult?->tradeNo ?? '',
                     outTradeNo: $outTradeNo,
                     totalAmount: $this->queryResult?->totalAmount ?? '0.00',
                     raw: $this->queryResult?->raw ?? ['stub' => true],
+                    verified: $this->queryResult?->verified ?? false,
                 );
             }
 

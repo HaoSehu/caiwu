@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Admin\V2;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\V2\ReferralWithdrawal\ApproveReferralWithdrawalRequest;
 use App\Http\Requests\Admin\V2\ReferralWithdrawal\ConfirmWithdrawalPaymentRequest;
+use App\Http\Requests\Admin\V2\ReferralWithdrawal\FailWithdrawalPaymentRequest;
 use App\Http\Requests\Admin\V2\ReferralWithdrawal\ListReferralWithdrawalsRequest;
 use App\Http\Requests\Admin\V2\ReferralWithdrawal\RejectReferralWithdrawalRequest;
 use App\Http\Resources\Referral\V2\ReferralWithdrawalListItemResource;
@@ -68,6 +69,18 @@ class ReferralWithdrawalController extends Controller
             operator: $request->user(),
             paymentNo: $request->paymentNo(),
             remark: $request->remark(),
+            traceId: (string) $request->header('X-Request-Id', ''),
+        );
+
+        return $this->success(ActionResultResource::make($result)->resolve(), (string) $result['message']);
+    }
+
+    public function failPayment(FailWithdrawalPaymentRequest $request, ReferralWithdrawal $withdrawal): JsonResponse
+    {
+        $result = $this->actions->failPayment(
+            withdrawal: $withdrawal,
+            operator: $request->user(),
+            reason: $request->reason(),
             traceId: (string) $request->header('X-Request-Id', ''),
         );
 

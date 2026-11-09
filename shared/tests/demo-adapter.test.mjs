@@ -62,6 +62,21 @@ assert.equal(matchDemoKey(dataset, 'DELETE', '/v2/admin/orders'), null)
   assert.deepEqual(quote.data.data, { total: '99.00' })
 }
 
+// 3c. 退出登录是认证写请求，但只清本地会话、无服务端副作用：演示环境必须成功，
+//     否则退出时会弹「演示环境不可执行该操作」的误导错误
+{
+  const adapter = createDemoAdapter({ dataset })
+  const clientLogout = await adapter({ url: '/v2/client/auth/logout', method: 'post', headers: {} })
+  assert.equal(clientLogout.data.code, 0, '客户端退出登录在演示环境必须成功')
+  assert.equal(clientLogout.data.data, null)
+
+  const adminLogout = await adapter({ url: '/v2/admin/auth/logout', method: 'post', headers: {} })
+  assert.equal(adminLogout.data.code, 0, '管理端退出登录在演示环境必须成功')
+
+  const realWrite = await adapter({ url: '/v2/admin/refunds', method: 'post', headers: {}, data: '{}' })
+  assert.equal(realWrite.data.code, 42200, '除退出登录外的未登记写请求仍必须拒绝')
+}
+
 // 4. fallbackData 可定制
 {
   const adapter = createDemoAdapter({ dataset, fallbackData: { list: [], total: 0 } })

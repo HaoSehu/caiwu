@@ -16,6 +16,7 @@ use App\Models\User;
 use App\Services\Finance\Core\Data\FinanceOperationResult;
 use App\Services\Finance\Core\FinanceAccountService;
 use App\Services\Finance\Core\FinanceIdempotencyService;
+use App\Services\Integrations\Payments\Data\PaymentQueryTrust;
 use App\Services\Integrations\Payments\PaymentGatewayManager;
 use App\Services\Integrations\Payments\PaymentGatewayOperationService;
 use App\Services\Integrations\Plugins\PaymentGatewayBindingResolver;
@@ -329,10 +330,23 @@ class RechargePaymentService
         }
 
         $gateway = $payment->gatewayKey();
-        $result = $this->queryGatewayPayment($gateway, $payment->payment_no);
+        try {
+            $result = $this->queryGatewayPayment($gateway, $payment->payment_no);
+        } catch (\Throwable $exception) {
+            // 查询失败（网络异常/响应验签失败）不得把轮询接口打成 5xx：
+            // 按未支付返回，等异步回调（独立验签）完成入账。
+            Log::warning('[充值主动查询] 查询失败或响应不可信，本轮按未支付返回', [
+                'payment_no' => $payment->payment_no,
+                'gateway' => $gateway,
+                'message' => $exception->getMessage(),
+                'exception' => $exception::class,
+            ]);
+
+            return $this->rechargePollResult($payment, 'query_unavailable');
+        }
 
         if (in_array($result['trade_status'], ['TRADE_SUCCESS', 'TRADE_FINISHED', 'SUCCESS'], true)) {
-            // 金额校验：轮询路径不经过签名验证，必须与异步通知同级的金额比对，防止异常金额入账
+            // 金额校验：金额必须与充值单一致，防止异常金额入账
             $queryAmount = round((float) ($result['total_amount'] ?? 0), 2);
             $expectedAmount = round((float) $payment->amount, 2);
             if ($queryAmount <= 0 || ! Money::equals($queryAmount, $expectedAmount)) {
@@ -342,12 +356,32 @@ class RechargePaymentService
                     'query' => $queryAmount,
                 ]);
 
-                return [
-                    'paid' => false,
-                    'trade_status' => $result['trade_status'],
-                    'status' => (int) $payment->status,
-                    'status_label' => PaymentStatus::$labels[(int) $payment->status] ?? '未知',
-                ];
+                return $this->rechargePollResult($payment, (string) $result['trade_status']);
+            }
+
+            // M-39：与账单轮询同一口径，未携带验签标记的查询结果只留痕不结算。
+            if (! PaymentQueryTrust::isVerified($result)) {
+                $payload = array_merge(is_array($result['raw'] ?? null) ? $result['raw'] : [], [
+                    'out_trade_no' => $payment->payment_no,
+                    'trade_no' => (string) ($result['trade_no'] ?? ''),
+                    'trade_status' => (string) $result['trade_status'],
+                    'source' => 'active_query',
+                ]);
+                $this->callbackProjector->recordPaymentCallback(
+                    $payment,
+                    'payment',
+                    $payload,
+                    false,
+                    (string) ($result['trade_no'] ?? ''),
+                );
+
+                Log::warning('[充值主动查询] 响应未携带验签标记，仅记录回调不结算', [
+                    'payment_no' => $payment->payment_no,
+                    'gateway' => $gateway,
+                    'trade_status' => (string) $result['trade_status'],
+                ]);
+
+                return $this->rechargePollResult($payment, (string) $result['trade_status']);
             }
 
             $this->completeRechargePayment($payment, $result['trade_no'], $result['raw']);
@@ -360,9 +394,17 @@ class RechargePaymentService
             'actor_name' => 'recharge-status-poll',
         ]);
 
+        return $this->rechargePollResult($payment, (string) $result['trade_status']);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function rechargePollResult(Payment $payment, string $tradeStatus): array
+    {
         return [
             'paid' => false,
-            'trade_status' => $result['trade_status'],
+            'trade_status' => $tradeStatus,
             'status' => (int) $payment->status,
             'status_label' => PaymentStatus::$labels[(int) $payment->status] ?? '未知',
         ];

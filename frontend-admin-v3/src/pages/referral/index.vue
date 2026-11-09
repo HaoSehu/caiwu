@@ -263,6 +263,9 @@
                 <t-button theme="primary" variant="text" @click="openWithdrawalDialog('confirm-payment', row)">
                   确认打款
                 </t-button>
+                <t-button theme="danger" variant="text" @click="openWithdrawalDialog('fail-payment', row)">
+                  标记失败
+                </t-button>
               </t-space>
               <span v-else class="muted-text">已处理</span>
             </template>
@@ -303,6 +306,9 @@
               <t-button theme="primary" variant="outline" @click="openWithdrawalDialog('confirm-payment', row)">
                 确认打款
               </t-button>
+              <t-button theme="danger" variant="outline" @click="openWithdrawalDialog('fail-payment', row)">
+                标记失败
+              </t-button>
             </div>
           </article>
         </div>
@@ -326,7 +332,7 @@
       width="min(520px, calc(100vw - 32px))"
       :confirm-btn="{
         content: '确定',
-        theme: withdrawalDialog.mode === 'reject' ? 'danger' : 'primary',
+        theme: withdrawalDialog.mode === 'reject' || withdrawalDialog.mode === 'fail-payment' ? 'danger' : 'primary',
       }"
       :confirm-loading="withdrawalSubmitting"
       @confirm="submitWithdrawalAction"
@@ -372,7 +378,7 @@ import { errorMessage } from '@/utils/userMessage';
 defineOptions({ name: 'AdminReferral' });
 
 type ReferralTab = 'overview' | 'rewards' | 'withdrawals';
-type WithdrawalMode = 'approve' | 'reject' | 'confirm-payment';
+type WithdrawalMode = 'approve' | 'reject' | 'confirm-payment' | 'fail-payment';
 
 const route = useRoute();
 const validTabs: ReferralTab[] = ['overview', 'rewards', 'withdrawals'];
@@ -484,12 +490,14 @@ const withdrawalDialog = reactive<{
 const withdrawalDialogTitle = computed(() => {
   if (withdrawalDialog.mode === 'approve') return '通过提现申请';
   if (withdrawalDialog.mode === 'reject') return '拒绝提现申请';
+  if (withdrawalDialog.mode === 'fail-payment') return '标记打款失败';
   return '确认打款';
 });
 
 const withdrawalRemarkPlaceholder = computed(() => {
   if (withdrawalDialog.mode === 'approve') return '通过备注，可留空';
   if (withdrawalDialog.mode === 'reject') return '拒绝原因，必填';
+  if (withdrawalDialog.mode === 'fail-payment') return '打款失败原因，必填（如账号不存在、被退回）';
   return '打款备注，可留空';
 });
 
@@ -617,8 +625,8 @@ function confirmApproveWithdrawal(remark: string) {
 async function submitWithdrawalAction() {
   if (!withdrawalDialog.row) return;
   const remark = withdrawalDialog.remark.trim();
-  if (withdrawalDialog.mode === 'reject' && !remark) {
-    MessagePlugin.warning('请输入拒绝原因');
+  if ((withdrawalDialog.mode === 'reject' || withdrawalDialog.mode === 'fail-payment') && !remark) {
+    MessagePlugin.warning(withdrawalDialog.mode === 'reject' ? '请输入拒绝原因' : '请输入打款失败原因');
     return;
   }
   const paymentNo = withdrawalDialog.paymentNo.trim();
@@ -641,6 +649,9 @@ async function submitWithdrawalAction() {
         remark: remark || undefined,
       });
       MessagePlugin.success('打款已确认');
+    } else if (withdrawalDialog.mode === 'fail-payment') {
+      await adminApi.referral.failWithdrawalPayment(withdrawalDialog.row.id, { reason: remark });
+      MessagePlugin.success('已标记打款失败，资金已退回可提现余额');
     } else {
       await adminApi.referral.rejectWithdrawal(withdrawalDialog.row.id, { remark });
       MessagePlugin.success('提现申请已拒绝');

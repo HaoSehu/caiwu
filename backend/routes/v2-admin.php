@@ -515,5 +515,8 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
         // 打款确认不可撤销：限流防止误双击与脚本重放造成重复出款确认。
         Route::post('/referral-withdrawals/{withdrawal}/payment-confirmations', [ReferralWithdrawalController::class, 'confirmPayment'])
             ->middleware('throttle:10,1,admin-withdraw-confirm');
+        // 打款失败回退：仅审核通过的支付宝提现可标记，资金退回可提余额。
+        Route::post('/referral-withdrawals/{withdrawal}/payment-failures', [ReferralWithdrawalController::class, 'failPayment'])
+            ->middleware('throttle:10,1,admin-withdraw-fail');
     });
 });

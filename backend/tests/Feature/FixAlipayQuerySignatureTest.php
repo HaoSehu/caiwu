@@ -72,6 +72,7 @@ class FixAlipayQuerySignatureTest extends TestCase
         $this->assertSame('TRADE_SUCCESS', $result['trade_status']);
         $this->assertSame('2026110922001440000000000001', $result['trade_no']);
         $this->assertSame('128.00', $result['total_amount']);
+        $this->assertTrue($result['verified'] ?? false, '验签通过的查询结果必须携带 verified=true，否则 M-39 会拒绝所有真实支付宝查询');
     }
 
     public function test_query_with_tampered_payload_throws(): void
@@ -120,6 +121,7 @@ class FixAlipayQuerySignatureTest extends TestCase
 
         $this->assertSame('TRADE_SUCCESS', $result['trade_status']);
         $this->assertSame('5.00', $result['total_amount']);
+        $this->assertFalse($result['verified'] ?? false, '无签名的查询结果不得标记为已验签');
     }
 
     public function test_query_with_sign_but_no_configured_public_key_returns_result(): void
@@ -132,5 +134,6 @@ class FixAlipayQuerySignatureTest extends TestCase
         $result = $this->client(['alipay_public_key' => ''])->query('PAY-ALI-Q5');
 
         $this->assertSame('WAIT_BUYER_PAY', $result['trade_status']);
+        $this->assertFalse($result['verified'] ?? false, '未配置公钥无法验签，不得标记为已验签');
     }
 }

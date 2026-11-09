@@ -199,6 +199,16 @@ const DEMO_WRITE_REJECTED_ENVELOPE: {
 
 const WRITE_METHODS = new Set(["post", "put", "patch", "delete"]);
 
+/**
+ * 演示环境允许「无副作用成功」的认证写请求：退出登录只清本地会话，
+ * 服务端没有可写入的状态。若按未登记写请求统一拒绝，演示包点退出会弹
+ * 「演示环境不可执行该操作」的误导错误（本地仍会退出）。
+ */
+const DEMO_NOOP_WRITE_KEYS = new Set([
+  "POST /v2/client/auth/logout",
+  "POST /v2/admin/auth/logout",
+]);
+
 export function createDemoAdapter(options: CreateDemoAdapterOptions = {}): AxiosAdapter {
   const fallbackData = options.fallbackData ?? {};
   let dataset: DemoDataset | null = options.dataset ?? null;
@@ -272,6 +282,9 @@ export function createDemoAdapter(options: CreateDemoAdapterOptions = {}): Axios
     // 未登记的写请求一律拒绝：演示数据集是只读静态文件，返回成功只会让
     // 「退款/充值/审批」在演示里显示成功，误导体验者（M-49）。
     if (WRITE_METHODS.has(method.toLowerCase())) {
+      if (DEMO_NOOP_WRITE_KEYS.has(buildDemoKey(method, requestPath))) {
+        return toAxiosResponse(config, SUCCESS_ENVELOPE(null));
+      }
       return toAxiosResponse(config, DEMO_WRITE_REJECTED_ENVELOPE);
     }
 
