@@ -4,16 +4,10 @@ import { toUserMessage } from '@caiwu/shared/runtime';
 import NProgress from 'nprogress';
 import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 
-import { getClientToken, setClientToken } from '@/app/runtime/session';
+import { getClientToken } from '@/app/runtime/session';
 import router from '@/router';
 import { getPermissionStore, useSiteBrandingStore, useUserStore } from '@/store';
 import { CLIENT_LOGIN_PATH, resolveLoginRedirectPath } from '@/utils/loginRedirect';
-
-// 演练版：守卫注册（本文件 import）早于 main.ts 的入口逻辑，
-// 必须在守卫求值前就把假凭证写入 Cookie，否则首次导航会被踢回登录页。
-if (import.meta.env.MODE === 'demo') {
-  setClientToken('demo-client-token');
-}
 
 const DYNAMIC_IMPORT_RELOAD_KEY = 'client-router-dynamic-import-reload';
 const dynamicImportErrorPattern = /Failed to fetch dynamically imported module|Importing a module script failed/i;

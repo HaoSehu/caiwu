@@ -1,4 +1,4 @@
-import { createDemoAdapter, createHttpClient } from '@caiwu/shared/runtime';
+import { createHttpClient } from '@caiwu/shared/runtime';
 import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 
 import { getClientToken, removeClientToken } from '@/app/runtime/session';
@@ -112,11 +112,6 @@ const httpClient = createHttpClient({
     }
     return isPublicAuthRequest(requestUrl) ? null : getClientToken();
   },
-  // 演练版（--mode demo）：请求不发出网络，由静态数据集响应；生产构建为 undefined。
-  adapter:
-    import.meta.env.MODE === 'demo'
-      ? createDemoAdapter({ dataUrl: import.meta.env.VITE_DEMO_DATA_URL as string | undefined })
-      : undefined,
 });
 
 export default httpClient;

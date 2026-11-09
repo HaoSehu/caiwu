@@ -113,10 +113,7 @@ function resolveAssetFileName(assetInfo) {
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   // 资源与页面同源，去掉外部 CDN 相关变量（VITE_CDN_ASSET_HOST / VITE_ASSET_BASE_URL）。
-  // 演练版部署在 /demo/www/ 子路径：显式绝对 base，保证入口 HTML 与懒加载
-  // chunk 的依赖（含下方首屏预加载注入）都带同一前缀。
-  const assetBase =
-    mode === "demo" ? "/demo/www/" : resolveAssetBase(env.VITE_WWW_ASSET_BASE_URL || "");
+  const assetBase = resolveAssetBase(env.VITE_WWW_ASSET_BASE_URL || "");
 
   return {
     base: assetBase,
@@ -240,8 +237,7 @@ export default defineConfig(({ mode }) => {
           // 期间浏览器会报「preload 的资源未被使用」，且首屏样式仍要等 JS。
           const links = preloadFiles
             .map(({ file, kind, scope }) => {
-              // 必须带上部署 base：演练版挂在 /demo/www/ 子路径（相对 base 时为 ./），
-              // 写死根路径会让懒加载 chunk 的依赖 404。
+              // 必须带上部署 base，写死根路径会让懒加载 chunk 的依赖 404。
               const href = `${assetBase}${file}`;
               return kind === "style"
                 ? `<link rel="stylesheet" href="${href}" data-first-screen="${scope}" />`

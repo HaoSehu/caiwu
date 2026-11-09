@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:provider/provider.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
 
-import '../../core/config/web_preview.dart';
 import '../../core/layout/responsive.dart';
 import '../../core/net/api_exception.dart';
 import '../../core/net/app_services.dart';
@@ -42,11 +41,6 @@ class _CaiwuAppState extends State<CaiwuApp> {
   }
 
   Future<void> _bootstrap() async {
-    // Web 预览：没有真实登录态，直接注入演示会话（仅 kIsWeb 的调试产物）。
-    if (WebPreview.enabled) {
-      await _session.applyLogin(WebPreview.demoToken, WebPreview.demoUser);
-      return;
-    }
     try {
       await _session.restore();
     } catch (_) {

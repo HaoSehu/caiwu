@@ -54,25 +54,6 @@ Breakpoints.formMaxWidth      // 表单限宽 560
 验证：`test/responsive_layout_test.dart`（断点、限宽、热区、字段列数单测）+ `test/responsive_test.dart`
 （390/834/1194/320/844×390 与 2 倍字号下 App 构建无溢出）。
 
-### 本地 UI 预览（不推真机）
-
-改样式时用 Web 产物在浏览器里验收，比反复装 APK 快得多：
-
-```bash
-cd app_flutter
-flutter build web --dart-define=ENABLE_WEB_PREVIEW=true
-python -m http.server 8099 --directory build/web
-# 打开 http://localhost:8099，用浏览器设备模式切 390×844 / 834×1112 / 1194×834
-```
-
-`ENABLE_WEB_PREVIEW=true` 会进入**预览态**（`lib/core/config/web_preview.dart`）：注入演示会话 +
-`lib/core/net/web_preview_mock.dart` 的本地 mock 数据，首页/服务/工单/财务/我的无需登录即可完整渲染。
-
-**默认关闭，必须显式开启**：预览会接管全部请求、显示假余额与假凭据，一旦随正式
-Web 产物发布，公网上就是一个假控制台。Android 原生构建里 `kIsWeb` 为 false，
-预览态与 mock 适配器恒不启用（由 `test/web_preview_guard_test.dart` 守住）；
-出正式 Web 产物时不传该 define 即可。
-
 ## 首页布局（对齐阿里云 App）
 
 底部 Tab 第一项为「控制台」，页面结构：

@@ -2,11 +2,6 @@ import { defineComponent, h } from 'vue';
 import type { RouteRecordRaw } from 'vue-router';
 
 function resolvePublicSiteOrigin() {
-  // 演练版三端同站：官网门户在 /demo/www/，不跳生产域名
-  if (import.meta.env.MODE === 'demo') {
-    return '/demo/www';
-  }
-
   const configuredOrigin = String(import.meta.env.VITE_PUBLIC_SITE_URL || '')
     .trim()
     .replace(/\/+$/, '');

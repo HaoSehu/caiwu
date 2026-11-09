@@ -1,6 +1,6 @@
 import { isObject } from 'lodash-es';
 import type { RouteRecordRaw } from 'vue-router';
-import { createRouter, createWebHashHistory, createWebHistory } from 'vue-router';
+import { createRouter, createWebHistory } from 'vue-router';
 
 const env = import.meta.env.MODE || 'development';
 
@@ -20,8 +20,7 @@ const defaultRouterList: Array<RouteRecordRaw> = [
   },
   {
     path: '/',
-    // 演练版没有登录流程：带假会话直接进仪表盘，避免停在登录页。
-    redirect: import.meta.env.MODE === 'demo' ? '/admin/dashboard' : '/admin/login',
+    redirect: '/admin/login',
   },
   {
     path: '/admin/403',
@@ -76,12 +75,7 @@ export const getActive = (maxLevel = 3): string => {
 };
 
 const router = createRouter({
-  // 演练版部署在 GitHub Pages 的 /demo/admin/ 子目录，只有一个全局 404 回退，
-  // history 路由刷新会落到官网 404；demo 构建改 hash 路由，生产构建行为不变。
-  history:
-    import.meta.env.MODE === 'demo'
-      ? createWebHashHistory()
-      : createWebHistory(env === 'site' ? '/starter/vue-next/' : import.meta.env.VITE_BASE_URL),
+  history: createWebHistory(env === 'site' ? '/starter/vue-next/' : import.meta.env.VITE_BASE_URL),
   routes: allRoutes,
   scrollBehavior() {
     return {

@@ -28,12 +28,10 @@ frontend-admin-v3/*.out.log
 frontend-admin-v3/playwright-report/
 frontend-admin-v3/test-results/
 frontend-admin-v3/dist-e2e/
-frontend-admin-v3/dist-demo/
 frontend-admin-v3/.auth/
 frontend-user-v3-www/node_modules/
 frontend-user-v3-www/dist/
 frontend-user-v3-www/dist-e2e/
-frontend-user-v3-www/dist-demo/
 frontend-user-v3-www/test-results/
 frontend-user-v3-www/playwright-report/
 frontend-user-v3-www/public/novnc/
@@ -56,7 +54,6 @@ frontend-user-v4-console/*.out.log
 frontend-user-v4-console/playwright-report/
 frontend-user-v4-console/test-results/
 frontend-user-v4-console/dist-e2e/
-frontend-user-v4-console/dist-demo/
 frontend-user-v4-console/.auth/
 shared/node_modules/
 # unplugin 生成的类型声明文件（unplugin-auto-import / unplugin-vue-components 构建时自动重建）
@@ -69,11 +66,8 @@ frontend-admin-v3/.env*
 frontend-user-v3-www/.env*
 frontend-user-v4-console/.env*
 !frontend-admin-v3/.env.example
-!frontend-admin-v3/.env.demo
 !frontend-user-v3-www/.env.example
-!frontend-user-v3-www/.env.demo
 !frontend-user-v4-console/.env.example
-!frontend-user-v4-console/.env.demo
 # e2e 配置只含本地回环地址与空域名，不含任何凭据，需随仓库分发
 !frontend-user-v3-www/.env.e2e
 !frontend-user-v4-console/.env.e2e
@@ -114,8 +108,6 @@ mcloud/
 # docs 正文需要的结构说明写进 Markdown，不落 .sql。
 /docs/**/*.sql
 /docs/**/*.sql.gz
-# 演练版静态数据集由 backend/scripts/demo_export.php 从脱敏副本库现场生成，属构建产物不入库
-/demo-data/
 *.pen
 *.zip
 pencil-preview/

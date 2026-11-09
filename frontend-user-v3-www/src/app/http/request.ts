@@ -1,4 +1,4 @@
-import { createDemoAdapter, createHttpClient } from "@caiwu/shared/runtime";
+import { createHttpClient } from "@caiwu/shared/runtime";
 
 import { getClientToken } from "@/app/runtime/session";
 
@@ -55,11 +55,6 @@ const request = createHttpClient({
   baseURL: apiBaseUrl,
   showError,
   resolveToken: () => getClientToken(),
-  // 演练版（--mode demo）：请求不发出网络，由静态数据集响应；生产构建为 undefined。
-  adapter:
-    import.meta.env.MODE === "demo"
-      ? createDemoAdapter({ dataUrl: import.meta.env.VITE_DEMO_DATA_URL })
-      : undefined,
 });
 
 export default request;

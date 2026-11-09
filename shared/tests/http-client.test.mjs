@@ -311,27 +311,3 @@ assert.equal(toUserMessage(undefined, '自定义回退'), '自定义回退')
 }
 
 console.log('http client tests passed')
-
-// 通过 options.adapter 注入的 adapter 生效：请求不出网，信封解包仍按 unwrapEnvelope 处理
-{
-  const seen = []
-  const client = createHttpClient({
-    baseURL: 'https://api.example.test/api',
-    showError: () => {},
-    unwrapEnvelope: true,
-    adapter: (config) => {
-      seen.push(config.url)
-      return Promise.resolve({
-        data: { code: 0, message: 'ok', data: { picked: true } },
-        status: 200,
-        statusText: '200',
-        headers: {},
-        config,
-        request: {},
-      })
-    },
-  })
-  const result = await client.get('/v2/admin/ping')
-  assert.deepEqual(result, { picked: true })
-  assert.deepEqual(seen, ['/v2/admin/ping'])
-}

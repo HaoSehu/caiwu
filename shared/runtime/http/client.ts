@@ -1,5 +1,4 @@
 import axios, {
-  type AxiosAdapter,
   type AxiosInstance,
   type InternalAxiosRequestConfig,
 } from "axios";
@@ -87,11 +86,6 @@ export interface CreateHttpClientOptions {
   resolveToken?: (
     config: ClientRuntimeRequestConfig,
   ) => string | null | undefined;
-  /**
-   * 自定义 axios adapter。演示模式用它把请求接到静态数据集上，生产构建不传，
-   * axios 行为与原先完全一致。
-   */
-  adapter?: AxiosAdapter;
 }
 
 /**
@@ -151,7 +145,6 @@ export function createHttpClient(
     headers: {
       Accept: "application/json",
     },
-    adapter: options.adapter,
   });
 
   client.interceptors.request.use(

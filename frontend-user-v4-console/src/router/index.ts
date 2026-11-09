@@ -1,5 +1,5 @@
 import type { RouteRecordRaw } from 'vue-router';
-import { createRouter, createWebHashHistory, createWebHistory } from 'vue-router';
+import { createRouter, createWebHistory } from 'vue-router';
 
 const env = import.meta.env.MODE || 'development';
 
@@ -92,12 +92,7 @@ export const getActive = (maxLevel = 3): string => {
 };
 
 const router = createRouter({
-  // 演练版部署在 GitHub Pages 的 /demo/console/ 子目录，只有一个全局 404 回退，
-  // history 路由刷新会落到官网 404；demo 构建改 hash 路由，生产构建行为不变。
-  history:
-    import.meta.env.MODE === 'demo'
-      ? createWebHashHistory()
-      : createWebHistory(env === 'site' ? '/starter/vue-next/' : import.meta.env.VITE_BASE_URL),
+  history: createWebHistory(env === 'site' ? '/starter/vue-next/' : import.meta.env.VITE_BASE_URL),
   routes: allRoutes,
   // 主滚动容器是布局内部 .tdesign-starter-layout，回顶由 layouts/index.vue 统一处理；
   // 此处仅做窗口级瞬时归位，避免与容器回顶形成双重平滑滚动

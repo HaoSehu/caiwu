@@ -1,9 +1,4 @@
 function normalizeConsoleOrigin() {
-  // 演练版三端同站：控制台在 /demo/console/，不跳生产域名
-  if (import.meta.env.MODE === "demo") {
-    return "/demo/console";
-  }
-
   const configuredOrigin = String(import.meta.env.VITE_CONSOLE_SITE_URL || "")
     .trim()
     .replace(/\/+$/, "");
@@ -88,31 +83,12 @@ function appendQuery(url, query = {}) {
   return `${url}${separator}${search.toString()}`;
 }
 
-/**
- * 相对的控制台源站（仅演练版会出现：normalizeConsoleOrigin 在 demo 下返回 /demo/console）。
- * 演练版控制台构建用 hash 路由（GitHub Pages 只有一个 404 回退），落地路径必须带
- * `#` 前缀才不会 404；生产环境相对源站按 history 路由拼路径即可。
- */
-function isRelativeConsoleOrigin(origin) {
-  return origin.startsWith("/") && !origin.startsWith("//");
-}
-
 export function buildConsoleUrl(path = "/client/dashboard", query = {}) {
   const consolePath = normalizeConsolePath(path);
   const consoleOrigin = normalizeConsoleOrigin();
 
   if (!consoleOrigin) {
     return appendQuery(consolePath, query);
-  }
-
-  if (isRelativeConsoleOrigin(consoleOrigin)) {
-    // new URL 的 base 必须是绝对地址：相对源站此前直接抛错回落站内 /client/*，
-    // 调用方 isConsolePath 判定为真后误报「控制台地址未配置」，演练版购买跳转全断（M-13）。
-    const origin = consoleOrigin.replace(/\/+$/, "");
-    const target = import.meta.env.MODE === "demo"
-      ? `${origin}/#${consolePath}`
-      : `${origin}${consolePath}`;
-    return appendQuery(target, query);
   }
 
   try {

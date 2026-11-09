@@ -3,17 +3,10 @@ import 'nprogress/nprogress.css'; // progress bar style
 import NProgress from 'nprogress'; // progress bar
 import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 
-import { setAdminToken } from '@/app/runtime/session';
 import { hasPermissionInList } from '@/constants/permissions';
 import router from '@/router';
 import { getPermissionStore, useUserStore } from '@/store';
 import { toUserMessage } from '@/utils/userMessage';
-
-// 演练版：守卫注册（本文件 import）早于 main.ts 的入口逻辑，
-// 必须在守卫求值前就把假凭证写入 Cookie，否则首次导航会被踢回登录页。
-if (import.meta.env.MODE === 'demo') {
-  setAdminToken('demo-admin-token');
-}
 
 NProgress.configure({ showSpinner: false });
 
@@ -37,39 +30,30 @@ router.beforeEach(async (to, from, next) => {
     try {
       // 仅在菜单未构建时准备用户信息，避免每次导航都请求接口
       // （刷新或首次登录后 menuBuilt=false；后续跳转 menuBuilt=true 直接复用缓存）
-      // 演练版额外条件：权限为空说明上次 auth/info 没拿到数据（数据集加载慢/失败），
-      // 必须回源修复，否则会带着空权限永久停在 403。
-      const demoNeedsPermissionRepair =
-        import.meta.env.MODE === 'demo' && (userStore.userInfo?.permissions?.length ?? 0) === 0;
-      if (!permissionStore.menuBuilt || !userStore.userInfo?.name || demoNeedsPermissionRepair) {
+      if (!permissionStore.menuBuilt || !userStore.userInfo?.name) {
         // 刷新后 userInfo 已由 pinia 持久化恢复（profileHydrated=true），可直接用缓存权限重建菜单；
         // 只有资料尚未水合（首次登录、清缓存、换账号）时才补一次 /v2/admin/auth/info。
         // 这样刷新不再串行等待该接口，同时又保留了「无有效资料必须回源」的兜底。
-        // 演练版修复路径（demoNeedsPermissionRepair）必须回源，否则空权限永远修不好。
-        if (!userStore.profileHydrated || !userStore.userInfo?.name || demoNeedsPermissionRepair) {
+        if (!userStore.profileHydrated || !userStore.userInfo?.name) {
           await userStore.ensureUserInfo();
         }
         // 管理端路由为静态注册，此处只按权限重建菜单；页面级鉴权由下方 meta.permission 校验承担
         await permissionStore.setupMenus(userStore.userInfo?.permissions || []);
 
-        // 演练版修复路径不重定向：to 已是用户要去的页面，菜单刚重建完直接走下去。
-        // 重定向会再次进入本守卫，若资料仍未就绪就形成抖动循环（表现为页面被弹回且空白）。
-        if (!demoNeedsPermissionRepair) {
-          // 管理端路由全部静态注册，不存在「动态添加路由后需按 fullPath 重导航」的场景，
-          // 这里只需把落地 URL 补全（含 query.redirect 回跳），二次导航后 menuBuilt 即为 true。
-          let redirect = to.path;
-          try {
-            redirect = decodeURIComponent((from.query.redirect || to.path) as string);
-          } catch {
-            redirect = to.path;
-          }
-          // 仅接受站内绝对路径，拒绝 //evil.com 协议相对形态
-          if (!redirect.startsWith('/') || redirect.startsWith('//')) {
-            redirect = to.path;
-          }
-          next(to.path === redirect ? { ...to, replace: true } : { path: redirect, query: to.query });
-          return;
+        // 管理端路由全部静态注册，不存在「动态添加路由后需按 fullPath 重导航」的场景，
+        // 这里只需把落地 URL 补全（含 query.redirect 回跳），二次导航后 menuBuilt 即为 true。
+        let redirect = to.path;
+        try {
+          redirect = decodeURIComponent((from.query.redirect || to.path) as string);
+        } catch {
+          redirect = to.path;
         }
+        // 仅接受站内绝对路径，拒绝 //evil.com 协议相对形态
+        if (!redirect.startsWith('/') || redirect.startsWith('//')) {
+          redirect = to.path;
+        }
+        next(to.path === redirect ? { ...to, replace: true } : { path: redirect, query: to.query });
+        return;
       }
 
       // 权限校验：检查路由 meta.permission
