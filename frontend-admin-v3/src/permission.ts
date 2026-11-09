@@ -45,26 +45,31 @@ router.beforeEach(async (to, from, next) => {
         // 刷新后 userInfo 已由 pinia 持久化恢复（profileHydrated=true），可直接用缓存权限重建菜单；
         // 只有资料尚未水合（首次登录、清缓存、换账号）时才补一次 /v2/admin/auth/info。
         // 这样刷新不再串行等待该接口，同时又保留了「无有效资料必须回源」的兜底。
-        if (!userStore.profileHydrated || !userStore.userInfo?.name) {
+        // 演练版修复路径（demoNeedsPermissionRepair）必须回源，否则空权限永远修不好。
+        if (!userStore.profileHydrated || !userStore.userInfo?.name || demoNeedsPermissionRepair) {
           await userStore.ensureUserInfo();
         }
         // 管理端路由为静态注册，此处只按权限重建菜单；页面级鉴权由下方 meta.permission 校验承担
         await permissionStore.setupMenus(userStore.userInfo?.permissions || []);
 
-        // 管理端路由全部静态注册，不存在「动态添加路由后需按 fullPath 重导航」的场景，
-        // 这里只需把落地 URL 补全（含 query.redirect 回跳），二次导航后 menuBuilt 即为 true。
-        let redirect = to.path;
-        try {
-          redirect = decodeURIComponent((from.query.redirect || to.path) as string);
-        } catch {
-          redirect = to.path;
+        // 演练版修复路径不重定向：to 已是用户要去的页面，菜单刚重建完直接走下去。
+        // 重定向会再次进入本守卫，若资料仍未就绪就形成抖动循环（表现为页面被弹回且空白）。
+        if (!demoNeedsPermissionRepair) {
+          // 管理端路由全部静态注册，不存在「动态添加路由后需按 fullPath 重导航」的场景，
+          // 这里只需把落地 URL 补全（含 query.redirect 回跳），二次导航后 menuBuilt 即为 true。
+          let redirect = to.path;
+          try {
+            redirect = decodeURIComponent((from.query.redirect || to.path) as string);
+          } catch {
+            redirect = to.path;
+          }
+          // 仅接受站内绝对路径，拒绝 //evil.com 协议相对形态
+          if (!redirect.startsWith('/') || redirect.startsWith('//')) {
+            redirect = to.path;
+          }
+          next(to.path === redirect ? { ...to, replace: true } : { path: redirect, query: to.query });
+          return;
         }
-        // 仅接受站内绝对路径，拒绝 //evil.com 协议相对形态
-        if (!redirect.startsWith('/') || redirect.startsWith('//')) {
-          redirect = to.path;
-        }
-        next(to.path === redirect ? { ...to, replace: true } : { path: redirect, query: to.query });
-        return;
       }
 
       // 权限校验：检查路由 meta.permission
