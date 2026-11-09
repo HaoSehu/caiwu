@@ -35,7 +35,7 @@ const EMPTY_LIST = { list: [] as Record<string, unknown>[], total: 0, page: 1, p
 const JSON_HEADERS = { status: 200, contentType: 'application/json' };
 
 // 已通过待打款的支付宝提现：验证「确认打款 / 标记失败」两个动作都在 APPROVED 行可见
-const APPROVED_WITHDRAWAL = {
+const APPROVED_WITHDRAWAL: Record<string, unknown> = {
   id: 7,
   amount: '50.00',
   method: 'alipay',
