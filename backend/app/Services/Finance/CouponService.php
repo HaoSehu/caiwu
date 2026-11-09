@@ -10,6 +10,7 @@ use App\Constants\OrderStatus;
 use App\Constants\UserCouponStatus;
 use App\Exceptions\BusinessException;
 use App\Jobs\SyncInvoiceCouponUsageJob;
+use App\Models\AdminUser;
 use App\Models\Coupon;
 use App\Models\Invoice;
 use App\Models\Order;
@@ -24,6 +25,7 @@ use App\Services\Finance\Coupons\CouponOwnershipService;
 use App\Services\Finance\Coupons\CouponUsageStatuses;
 use App\Services\ProductCatalog\InstanceSpecCatalogService;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
+use App\Support\AdminPermissions;
 use App\Support\LikeEscape;
 use App\Support\Money;
 use App\Support\SchemaMetadataCache;
@@ -54,6 +56,12 @@ class CouponService
         InvoiceStatus::PAID,
         InvoiceStatus::REFUNDED,
     ];
+
+    /**
+     * 高额券阈值（面额 > 1000 需 coupon.high_value_grant）。
+     * 面额阈值体系尚未配置化，先按常量执行；后续接入配置时只替换此值。
+     */
+    private const HIGH_VALUE_GRANT_THRESHOLD = 1000.0;
 
     public function adminSummary(array $filters = []): array
     {
@@ -134,6 +142,7 @@ class CouponService
     public function createCoupon(array $payload, array $context = []): array
     {
         CouponAdminGuardService::assertCouponsTableAvailable();
+        $this->assertCouponAdminPermissions($payload);
 
         $coupon = DB::transaction(function () use ($payload, $context) {
             $coupon = Coupon::query()->create(
@@ -158,6 +167,7 @@ class CouponService
     public function updateCoupon(Coupon $coupon, array $payload, array $context = []): array
     {
         CouponAdminGuardService::assertCouponsTableAvailable();
+        $this->assertCouponAdminPermissions($payload, $coupon);
 
         $updatedCoupon = DB::transaction(function () use ($coupon, $payload, $context) {
             $lockedCoupon = Coupon::query()
@@ -507,6 +517,20 @@ class CouponService
 
         throw_if(! $userCoupon, new BusinessException('优惠券不存在或已失效'));
 
+        // 预览与占用共用同一组可占用闸门（M-88）：同券已有待支付/已支付账单或首单券
+        // 并发占用时，若预览照常给出折扣价，用户落单必被 reserve 拒绝（报价有折扣、
+        // 下单必失败）。预览保持「不抛异常」契约：不可用时返回 null，由报价层按无券展示。
+        // 续费预览豁免「占用类」判定（待支付账单/首单 pending）：续费建单的「复用同周期
+        // 未付账单」参数对账直接调用本方法，待支付账单正是被复用对象本身（见
+        // ServiceRenewCouponRegressionTest 复用用例），拒绝会把「重复提交复用同一账单」
+        // 变成「取消重建」；续费落单侧仍有 reserveOwnedCouponForInvoice 的完整闸门兜底。
+        // 「已支付未同步」不属占用而是已消耗，续费预览同样拦截。
+        try {
+            $this->assertCouponReservable($userCoupon, $userId, checkOccupancy: trim($orderType) !== 'renew');
+        } catch (BusinessException) {
+            return null;
+        }
+
         return $this->buildOwnedCouponPayload($userCoupon, $product, $billingCycle, $amount, $userId, $orderType, $memberDiscountApplied);
     }
 
@@ -535,32 +559,7 @@ class CouponService
 
         throw_if(! $userCoupon, new BusinessException('优惠券不存在或已失效'));
 
-        // 防双花拦截：同券已有待支付账单（含预留已过期场景）时拒绝再占用，否则会建立
-        // 并存可支付账单，两张都支付即同一张券双重抵扣。预留过期后账单仍可能存活
-        // （续费账单豁免 5 分钟清理），只按 reserved_until 过滤会漏掉这种长期滞留。
-        // 与结账可用券列表、持有券展示状态同一判定，三处必须同步修改。
-        throw_if(
-            CouponOwnershipService::userCouponHasPendingInvoice($resolvedUserCouponId, $userId),
-            new BusinessException('该优惠券已有待支付账单，请先完成支付或取消后再使用')
-        );
-
-        // 首单券并发拦截：已有未付首单券订单时不得再占首单券，否则两张都支付即各享一次
-        // 首单优惠。只放在占用路径（不放 buildOwnedCouponPayload）——previewOwnedCoupon 被
-        // 续费复用校验直接调用，在那里抛错会让续费重提交整单失败。
-        $selectedCoupon = $userCoupon->coupon;
-        throw_if(
-            $selectedCoupon instanceof Coupon
-                && (bool) $selectedCoupon->first_order_only
-                && CouponOwnershipService::hasPendingFirstOrderCouponUsage($userId),
-            new BusinessException('该优惠券仅限首单使用')
-        );
-
-        // 防双花兜底：该券已有已支付账单但异步同步尚未完成（reserved_until 已过期的窗口），
-        // 直接拒绝再次占用，避免同一张券重复抵扣。与列表/分组/展示的「已使用」同一判定。
-        throw_if(
-            CouponOwnershipService::userCouponHasUsedInvoice($resolvedUserCouponId, $userId),
-            new BusinessException('优惠券已使用')
-        );
+        $this->assertCouponReservable($userCoupon, $userId);
 
         $payload = $this->buildOwnedCouponPayload($userCoupon, $product, $billingCycle, $amount, $userId, $orderType, $memberDiscountApplied);
         $userCoupon->forceFill([
@@ -568,6 +567,47 @@ class CouponService
         ])->save();
 
         return $payload;
+    }
+
+    /**
+     * 持有券可占用闸门：预览与 reserve 共用（历史上前者缺失导致「报价有折扣、落单必败」）。
+     *
+     * @param  bool  $checkOccupancy  是否校验占用类条件（待支付账单 / 首单 pending）。
+     *                                续费预览复用对账传 false（待支付账单是被复用对象本身），
+     *                                reserve 路径恒为 true
+     */
+    private function assertCouponReservable(UserCoupon $userCoupon, int $userId, bool $checkOccupancy = true): void
+    {
+        $userCouponId = (int) $userCoupon->id;
+
+        // 防双花拦截：同券已有待支付账单（含预留已过期场景）时拒绝再占用，否则会建立
+        // 并存可支付账单，两张都支付即同一张券双重抵扣。预留过期后账单仍可能存活
+        // （续费账单豁免 5 分钟清理），只按 reserved_until 过滤会漏掉这种长期滞留。
+        // 与结账可用券列表、持有券展示状态同一判定，多处必须同步修改。
+        if ($checkOccupancy) {
+            throw_if(
+                CouponOwnershipService::userCouponHasPendingInvoice($userCouponId, $userId),
+                new BusinessException('该优惠券已有待支付账单，请先完成支付或取消后再使用')
+            );
+
+            // 首单券并发拦截：已有未付首单券订单时不得再占首单券，否则两张都支付即各享一次
+            // 首单优惠。只作用于新购预览/占用——续费复用对账不走本闸门（见 previewOwnedCoupon）。
+            $selectedCoupon = $userCoupon->coupon;
+            throw_if(
+                $selectedCoupon instanceof Coupon
+                    && (bool) $selectedCoupon->first_order_only
+                    && CouponOwnershipService::hasPendingFirstOrderCouponUsage($userId),
+                new BusinessException('该优惠券仅限首单使用')
+            );
+        }
+
+        // 防双花兜底：该券已有已支付账单但异步同步尚未完成（reserved_until 已过期的窗口），
+        // 直接拒绝再次占用，避免同一张券重复抵扣。与列表/分组/展示的「已使用」同一判定。
+        // 这是「已消耗」而非「占用」：无论预览还是占用路径都必须拦截。
+        throw_if(
+            CouponOwnershipService::userCouponHasUsedInvoice($userCouponId, $userId),
+            new BusinessException('优惠券已使用')
+        );
     }
 
     public function releaseInvoiceCoupon(Invoice $invoice): void
@@ -1498,6 +1538,52 @@ class CouponService
         }
     }
 
+    /**
+     * 券写入口的细分权限校验（M-1）：定向发放 coupon.grant、高额发放 coupon.high_value_grant。
+     *
+     * 与 AdminPrivacy::canViewRaw 同款写法：只在有管理员上下文（request()->user() 是
+     * AdminUser）时校验；命令行/队列/测试等无登录场景跳过，避免后台任务被权限误伤。
+     * 无权限时抛 40300/403，与 CheckPermission 中间件同一错误码口径。
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    private function assertCouponAdminPermissions(array $payload, ?Coupon $existingCoupon = null): void
+    {
+        $admin = request()->user();
+        if (! $admin instanceof AdminUser) {
+            return;
+        }
+
+        $distributionType = trim((string) ($payload['distribution_type'] ?? ''));
+        if ($distributionType === '' && $existingCoupon instanceof Coupon) {
+            $distributionType = (string) ($existingCoupon->distribution_type ?? 'public');
+        }
+
+        if ($distributionType === 'private' && ! $admin->hasPermission(AdminPermissions::COUPON_GRANT)) {
+            throw new BusinessException('缺少定向发放权限（coupon.grant）', 40300, 403);
+        }
+
+        $discountType = trim((string) ($payload['discount_type'] ?? ''));
+        if ($discountType === '' && $existingCoupon instanceof Coupon) {
+            $discountType = (string) ($existingCoupon->discount_type ?? '');
+        }
+
+        if (! in_array($discountType, ['fixed', 'override'], true)) {
+            return;
+        }
+
+        $discountValue = array_key_exists('discount_value', $payload)
+            ? (float) $payload['discount_value']
+            : (float) ($existingCoupon === null ? 0 : $existingCoupon->discount_value);
+
+        if (
+            $discountValue > self::HIGH_VALUE_GRANT_THRESHOLD
+            && ! $admin->hasPermission(AdminPermissions::COUPON_HIGH_VALUE_GRANT)
+        ) {
+            throw new BusinessException('缺少高额发放权限（coupon.high_value_grant）', 40300, 403);
+        }
+    }
+
     private function grantCouponToUsers(Coupon $coupon, array $userIds, array $context = [], bool $replace = false): void
     {
         throw_if(! CouponAdminGuardService::hasUserCouponsTable(), new BusinessException('当前系统未启用已领优惠券功能'));
@@ -1521,9 +1607,13 @@ class CouponService
         $existingUserIds = $existing->keys()->map(fn ($id) => (int) $id)->all();
         $toCreate = array_values(array_diff($userIds, $existingUserIds));
         $toDelete = $replace ? array_values(array_diff($existingUserIds, $userIds)) : [];
+        // 只复活已回收且从未使用（REVOKED 且 last_used_at 为空）的行：已核销（USED）是
+        // 核销历史，重放 replace 不得把它重置回 OWNED 后再次抵扣（同一张券多次核销）；
+        // 曾使用过、后被「移除发放对象」回收成 REVOKED 的行同样不得借重新加入复活。
         $toReactivate = $existing
             ->filter(fn (UserCoupon $userCoupon, int|string $userId) => in_array((int) $userId, $userIds, true))
-            ->filter(fn (UserCoupon $userCoupon) => (int) ($userCoupon->status ?? 0) !== UserCouponStatus::OWNED);
+            ->filter(fn (UserCoupon $userCoupon) => (int) ($userCoupon->status ?? 0) === UserCouponStatus::REVOKED
+                && $userCoupon->last_used_at === null);
 
         if ($coupon->total_usage_limit) {
             $receivedCount = UserCoupon::query()->where('coupon_id', $coupon->id)->count();

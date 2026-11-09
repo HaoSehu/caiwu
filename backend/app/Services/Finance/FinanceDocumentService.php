@@ -226,27 +226,21 @@ class FinanceDocumentService
             ->where('invoice_id', (int) $invoice->id)
             ->whereIn('status', [PaymentStatus::SUCCESS, PaymentStatus::REFUNDED])
             ->sum('amount');
+        // 余额侧只认 source_type='invoice' + source_id=账单 ID 的台账行。
+        // 历史兜底曾把 source_id 也匹配 order_id，但 orders.id 与 invoices.id 是两套独立自增序列，
+        // 会误命中同用户名下 id 恰好等于 order_id 的他人账单台账，导致断言失败、整笔入账回滚。
+        // 已核实全仓（含历史版本）没有任何写入方把 order_id 写进台账 source_id；
+        // 并在迁移库快照（550 orders / 3079 invoices / 618 条 source_type=invoice 台账行）
+        // 上实查：source_id 落在「order 独有 id 区间」的行数为 0，该兜底确为死代码，
+        // 删除后余额侧口径只剩唯一真源。
         $balanceAmount = -1 * (float) FinanceLedgerEntry::query()
             ->where('user_id', (int) $invoice->user_id)
             ->whereIn('event_type', [
                 FinanceLedgerEventType::INVOICE_PAYMENT,
                 FinanceLedgerEventType::INVOICE_REFUND,
             ])
-            ->where(function ($query) use ($invoice): void {
-                $query->where(function ($sourceQuery) use ($invoice): void {
-                    $sourceQuery
-                        ->where('source_type', 'invoice')
-                        ->where('source_id', (int) $invoice->id);
-                });
-
-                if ((int) ($invoice->order_id ?? 0) > 0) {
-                    $query->orWhere(function ($sourceQuery) use ($invoice): void {
-                        $sourceQuery
-                            ->where('source_type', 'invoice')
-                            ->where('source_id', (int) $invoice->order_id);
-                    });
-                }
-            })
+            ->where('source_type', 'invoice')
+            ->where('source_id', (int) $invoice->id)
             ->sum('change_amount');
         $invoiceAmount = max((float) $invoice->amount, (float) $invoice->paid_amount);
 

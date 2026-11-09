@@ -94,16 +94,25 @@ export interface CreateHttpClientOptions {
   adapter?: AxiosAdapter;
 }
 
-function hasExplicitTimeout(config: Partial<ClientRuntimeRequestConfig>) {
-  return Number.isFinite(Number(config.timeout)) && Number(config.timeout) > 0;
-}
-
+/**
+ * 解析本次请求的实际超时。
+ *
+ * 不能用「config.timeout 有值」判断调用方是否显式设置：axios 在请求拦截器执行前
+ * 就把实例默认值（create 时的 DEFAULT_TIMEOUT）合并进 config.timeout，判定恒真，
+ * SAFE_TIMEOUT 与弱网加权永远不会生效（M-48）。改为与实例默认值比较：
+ * 只有调用方传入不同于默认值的超时才算显式指定。
+ */
 function resolveTimeout(
   config: Partial<ClientRuntimeRequestConfig>,
   safeRequest: boolean,
 ) {
-  if (hasExplicitTimeout(config)) {
-    return Number(config.timeout);
+  const configured = Number(config.timeout);
+  if (
+    Number.isFinite(configured) &&
+    configured > 0 &&
+    configured !== DEFAULT_TIMEOUT
+  ) {
+    return configured;
   }
 
   if (!safeRequest) {

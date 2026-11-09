@@ -48,8 +48,10 @@ class FinanceLedgerQueryService
             return $cached;
         }
 
+        // 兼容 2026-11-09 归一迁移前后的历史行：迁移前存量行 account_type='cash_balance'，
+        // 迁移后统一为 'cash'，两种命名都必须计入现金流水汇总。
         $baseQuery = FinanceLedgerEntry::query()
-            ->where('account_type', 'cash');
+            ->whereIn('account_type', ['cash', 'cash_balance']);
 
         $this->applyFilters($baseQuery, $filters);
 
@@ -164,8 +166,10 @@ class FinanceLedgerQueryService
      */
     private function buildQuery(array $filters, bool $withRelations = true, bool $forList = true): Builder
     {
+        // 兼容 2026-11-09 归一迁移前后的历史行：迁移前存量行 account_type='cash_balance'，
+        // 迁移后统一为 'cash'，列表在两种命名下都要可读。
         $query = FinanceLedgerEntry::query()
-            ->where('account_type', 'cash')
+            ->whereIn('account_type', ['cash', 'cash_balance'])
             ->select('finance_ledger_entries.*')
             ->selectRaw(
                 $this->normalizedEventTypeSql('finance_ledger_entries.event_type').' as normalized_event_type',

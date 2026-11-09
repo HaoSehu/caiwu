@@ -60,11 +60,12 @@
     "GET /v2/site/content/overview",
     "GET /v2/site/product-purchase-context",
     "GET /v2/site/products/*",
+    "GET /v2/site/products/*/stock",
     "GET /v2/site/product-groups/*/catalog",
     "GET /v2/site/product-groups/*/children",
-    "GET /v2/site/product-groups/*/products?level=2",
+    "GET /v2/site/product-groups/*/products",
     "GET /v2/site/notices/*",
     "GET /v2/site/help-articles/*",
-    "POST /v2/site/products/*/quote|{\"billing_cycle\":\"monthly\",\"quantity\":1}"
+    "POST /v2/site/products/*/quote"
   ]
 }

@@ -258,15 +258,23 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
   }
 
   /// 金额组：明细右对齐，实付金额用 `AppType.stat` 突出。
+  ///
+  /// 口径：后端 `order.amount` 是**已扣优惠后的应付合计**（订单表 amount 即净额），
+  /// 因此「原价」只能由 `amount + 会员优惠 + 券优惠` 反推，行与行之间必须自洽：
+  /// 原价 − 各项优惠 = 合计；实付金额为实际到账金额，单独展示。
   Widget _buildAmountGroup(BuildContext context, Map<String, dynamic> order) {
     final theme = context.tTheme;
     final memberDiscount =
         double.tryParse(strOf(order, 'member_discount_amount')) ?? 0;
     final discount = double.tryParse(strOf(order, 'discount')) ?? 0;
+    final amount = double.tryParse(strOf(order, 'amount')) ?? 0;
+    final originalAmount = amount + memberDiscount + discount;
+    final hasDiscount = memberDiscount > 0 || discount > 0;
     return TCellGroup(
       title: Text('金额', style: AppType.section(theme)),
       cells: [
-        _fieldCell('订单金额', formatMoneyText(order['amount']), mono: true),
+        if (hasDiscount)
+          _fieldCell('原价', formatMoneyText(originalAmount), mono: true),
         if (memberDiscount > 0)
           _fieldCell(
             '会员优惠',
@@ -283,6 +291,8 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
           ),
         if (strOf(order, 'coupon_name').isNotEmpty)
           _fieldCell('优惠券', strOf(order, 'coupon_name')),
+        // amount 是净额，标签必须是「合计」（扣优惠后），不能叫「订单金额」让人误以为还能再减
+        _fieldCell('合计', formatMoneyText(amount), mono: true),
         TCell(
           title: Text('实付金额', style: AppType.secondary(theme)),
           note: Text(

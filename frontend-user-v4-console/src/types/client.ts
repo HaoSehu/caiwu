@@ -1085,6 +1085,8 @@ export interface InvoiceRecord {
   id: number;
   invoice_no?: string;
   status?: number | string;
+  /** 库内真实状态（0 待支付/1 已支付/4 已取消/5 已退款）；status 是派生展示态（含 2 部分已付） */
+  raw_status?: number | string;
   type?: string;
   type_label?: string;
   amount?: number | string;

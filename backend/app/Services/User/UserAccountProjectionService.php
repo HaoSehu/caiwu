@@ -150,9 +150,8 @@ class UserAccountProjectionService
     private function buildAccountPayload(object $row, string $timestamp): array
     {
         // users 旧余额列已删除，缺失账户按默认 0 回填；余额真源为 user_accounts。
-        return [
+        $payload = [
             'user_id' => (int) $row->id,
-            'cash_balance' => '0.00',
             'credit_limit' => '0.00',
             'referral_frozen_balance' => '0.00',
             'referral_available_balance' => '0.00',
@@ -162,5 +161,13 @@ class UserAccountProjectionService
             'created_at' => $timestamp,
             'updated_at' => $timestamp,
         ];
+
+        // T+7 删列（000015）后列已不存在：insertOrIgnore 携带该键会 SQLSTATE 42S22，
+        // 只在热备列仍存在时回填默认现金余额。
+        if (SchemaMetadataCache::hasColumn('user_accounts', 'cash_balance')) {
+            $payload['cash_balance'] = '0.00';
+        }
+
+        return $payload;
     }
 }

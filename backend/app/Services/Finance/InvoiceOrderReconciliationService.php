@@ -329,7 +329,9 @@ class InvoiceOrderReconciliationService
 
         $suggestedAction = match (true) {
             $invoicePaid && $orderStatus === OrderStatus::REFUNDED => 'sync_invoice_status_from_refunded_order',
-            $invoicePaid && $orderStatus === OrderStatus::CANCELLED => 'sync_invoice_status_from_cancelled_order',
+            // 账单已付 + 订单已取消：两侧资金语义冲突（账单侧有实收、订单侧已作废），
+            // 自动收口无论是取消账单还是标记退款都会伪造资金事实，只进人工审查（M-58）。
+            $invoicePaid && $orderStatus === OrderStatus::CANCELLED => 'manual_review',
             $invoicePaid => 'sync_order_status_from_paid_invoice',
             // 退款/取消账单的资金已退回或已作废，不能按订单侧已付自动回填，只进人工审查
             in_array((int) $pair->invoice_status, [InvoiceStatus::REFUNDED, InvoiceStatus::CANCELLED], true) => 'manual_review',
@@ -446,9 +448,10 @@ class InvoiceOrderReconciliationService
             }
 
             if ((int) $pair->order_status === OrderStatus::CANCELLED) {
-                $this->tradeLifecycleService->cancelTrade($invoice);
-
-                return 1;
+                // 账单已 PAID + 订单已 CANCELLED（M-58）：不能调 cancelTrade——账单 PAID 会被
+                // 状态机拒绝并回滚整批修复；也不能 markInvoiceRefunded 伪造退款（资金并未退回，
+                // 会造出假退款记录）。该组合只能人工核对，归入审查报告，不产生资金副作用。
+                return 0;
             }
 
             $this->tradeLifecycleService->markInvoicePaid($invoice, [

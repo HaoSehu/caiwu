@@ -123,4 +123,20 @@ assert.equal(typeof resolveSafeRetryLimit(), 'number', '默认值应为数字')
   assert.ok(delay > 0 && delay <= 5000, 'retry-after 头应限制延迟上限')
 }
 
+// 15. 防缓存时间戳不参与去重键（M-48）：管理端每个 GET 都带新的 _t，
+//     若算进键，同一资源的并发请求永远无法合并
+{
+  const key1 = buildSafeRequestKey({ method: 'get', url: '/users', params: { page: 1, _t: 1730000000 } })
+  const key2 = buildSafeRequestKey({ method: 'get', url: '/users', params: { page: 1, _t: 1730009999 } })
+  assert.equal(key1, key2, '仅 _t 不同的同一请求必须生成相同去重键')
+
+  const key3 = buildSafeRequestKey({ method: 'get', url: '/users', params: { page: 2, _t: 1730000000 } })
+  assert.notEqual(key1, key3, '业务参数不同仍必须区分')
+
+  // 非对象 params（数组等）保持原样参与序列化
+  const arrayKey1 = buildSafeRequestKey({ method: 'get', url: '/users', params: [1, 2] })
+  const arrayKey2 = buildSafeRequestKey({ method: 'get', url: '/users', params: [1, 3] })
+  assert.notEqual(arrayKey1, arrayKey2, '数组参数不同必须区分')
+}
+
 console.log('http core tests passed')

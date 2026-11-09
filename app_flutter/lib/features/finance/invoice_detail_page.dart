@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
 
 import '../../core/layout/responsive.dart';
@@ -66,6 +68,13 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
   /// 本次下发链接的渠道：只有微信需要用户复制链接到微信内打开，
   /// 支付宝能直接唤起 App，给它挂复制按钮只是干扰。
   PaymentChannel _payChannel = PaymentChannel.other;
+
+  /// 轮询凭证持久化 key：进程被回收后「我已完成支付」入口不能丢（M-28②）。
+  /// 与 Web 控制台同口径，按账单 id 区分；SharedPreferences 是明文存储，
+  /// poll_token 本身是短 TTL 的查单凭证，不含支付能力，可接受。
+  static const _pollStoragePrefix = 'finance.invoice_poll.';
+
+  bool _restoredPoll = false;
 
   Map<String, dynamic> get _basic => mapOf(_invoice?['basic']);
   Map<String, dynamic> get _display => mapOf(_invoice?['display']);
@@ -136,8 +145,20 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
         _error = null;
         // 账单已支付/已取消后，之前发起的支付链接就失效了：不清掉会让底部
         // 「复制支付链接」按钮残留并复制出一张已经用不了的链接。
-        if (!_canPay) _payUrl = '';
+        if (!_canPay) {
+          _payUrl = '';
+          _paymentNo = '';
+          _pollToken = '';
+        }
       });
+      if (!_canPay) {
+        await _clearPollCredentials();
+      }
+      // 首次加载成功后恢复上次未完成的支付凭证（M-28②）
+      if (!_restoredPoll && _canPay) {
+        _restoredPoll = true;
+        await _restorePollCredentials();
+      }
     } catch (error) {
       if (!mounted || seq != _seq) return;
       final message = AppServices.errorText(error);
@@ -147,6 +168,63 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
         if (!hadData) _error = message;
       });
       if (hadData) AppFeedback.error(context, message);
+    }
+  }
+
+  String get _pollStorageKey => '$_pollStoragePrefix${widget.invoiceId}';
+
+  /// 持久化轮询凭证：App 被系统回收后重新进入详情页仍能继续查询支付结果。
+  Future<void> _persistPollCredentials() async {
+    if (_paymentNo.isEmpty || _pollToken.isEmpty) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        _pollStorageKey,
+        jsonEncode({
+          'payment_no': _paymentNo,
+          'poll_token': _pollToken,
+          'gateway': _payGateway,
+          'pay_url': _payUrl,
+          'channel': _payChannel.name,
+        }),
+      );
+    } catch (_) {
+      // 存储不可用时静默降级：只失去中断恢复能力，不影响本次支付
+    }
+  }
+
+  Future<void> _clearPollCredentials() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_pollStorageKey);
+    } catch (_) {
+      // 忽略存储异常
+    }
+  }
+
+  Future<void> _restorePollCredentials() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_pollStorageKey);
+      if (raw == null || raw.isEmpty) return;
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return;
+      final paymentNo = '${decoded['payment_no'] ?? ''}';
+      final pollToken = '${decoded['poll_token'] ?? ''}';
+      if (paymentNo.isEmpty || pollToken.isEmpty) return;
+      if (!mounted) return;
+      setState(() {
+        _paymentNo = paymentNo;
+        _pollToken = pollToken;
+        _payGateway = '${decoded['gateway'] ?? ''}';
+        _payUrl = '${decoded['pay_url'] ?? ''}';
+        _payChannel = PaymentChannel.values.firstWhere(
+          (value) => value.name == '${decoded['channel'] ?? ''}',
+          orElse: () => detectPaymentChannel(gateway: _payGateway),
+        );
+      });
+    } catch (_) {
+      // 解析失败视为无存档
     }
   }
 
@@ -224,8 +302,15 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
         _payUrl = url;
         _payChannel = channel;
       });
+      await _persistPollCredentials();
+      if (!mounted) return;
       if (url.isEmpty) {
         AppFeedback.toast(context, '已创建支付单，请在支付完成后点击「我已完成支付」');
+        return;
+      }
+      // 微信 https 收银台在微信外打开必然失败：不拉起，直接引导复制到微信内（M-28③）
+      if (channel == PaymentChannel.wechat && !canLaunchWechatUrl(url)) {
+        AppFeedback.toast(context, '微信支付只能在微信内完成：请点「复制支付链接」，粘贴到微信（可发给文件传输助手）后打开');
         return;
       }
       final opened = await launchPaymentUrl(url, channel: channel);
@@ -278,6 +363,7 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
       }
       setState(() => _showPaidBanner = true);
       AppFeedback.success(context, '支付成功');
+      await _clearPollCredentials();
       await _load(showLoading: false);
     } catch (error) {
       if (mounted) AppFeedback.error(context, AppServices.errorText(error));
@@ -477,11 +563,18 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
 
   /// 金额组：明细右对齐，应付金额用 `AppType.stat` 品牌色突出。
   /// 已支付状态补充支付时间与渠道，让用户回看时知道钱是怎么付的。
+  ///
+  /// 口径：后端 `financial.amount` 是**已扣优惠后的应付合计**（账单表 amount 即净额），
+  /// 因此「原价」只能由 `amount + 会员优惠 + 券优惠` 反推，行与行之间必须自洽：
+  /// 原价 − 各项优惠 = 合计，合计 − 已付 = 应付。
   Widget _buildAmountGroup(BuildContext context) {
     final theme = context.tTheme;
     final memberDiscount =
         double.tryParse(strOf(_display, 'member_discount_amount')) ?? 0;
     final discount = double.tryParse(strOf(_financial, 'discount')) ?? 0;
+    final amount = double.tryParse(strOf(_financial, 'amount')) ?? 0;
+    final originalAmount = amount + memberDiscount + discount;
+    final hasDiscount = memberDiscount > 0 || discount > 0;
     final paidAt = strOf(_financial, 'paid_at');
     final couponName = strOf(_display, 'coupon_name').trim();
     final channel = strOf(_paymentSummary, 'channel_name').isNotEmpty
@@ -491,7 +584,8 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
     return TCellGroup(
       title: Text('金额', style: AppType.section(theme)),
       cells: [
-        _fieldCell('账单金额', mono: true, formatMoneyText(_financial['amount'])),
+        if (hasDiscount)
+          _fieldCell('原价', mono: true, formatMoneyText(originalAmount)),
         if (couponName.isNotEmpty && couponName != '--')
           _fieldCell('优惠券', couponName),
         if (memberDiscount > 0)
@@ -508,6 +602,8 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
             mono: true,
             color: theme.successColor,
           ),
+        // amount 是净额，标签必须是「合计」（扣优惠后），不能叫「账单金额」让人误以为还能再减
+        _fieldCell('合计', mono: true, formatMoneyText(amount)),
         _fieldCell(
           '已付金额',
           mono: true,

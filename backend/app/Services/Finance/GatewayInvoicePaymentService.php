@@ -87,6 +87,10 @@ class GatewayInvoicePaymentService
                     ->whereGatewayKey($gateway)
                     ->where('status', PaymentStatus::PENDING)
                     ->where('amount', number_format($amount, 2, '.', ''))
+                    // 同一网关下的不同通道（如易支付 alipay / wxpay）不能复用彼此的
+                    // PENDING 单：复用它会让 payment_type 快照与实际二维码通道不一致，
+                    // 对账与渠道展示错乱（M-38）。未指定 payment_type 时保持旧行为。
+                    ->when($paymentType !== '', fn ($query) => $query->where('payment_type', $paymentType))
                     ->latest('id')
                     ->first();
 
@@ -320,12 +324,30 @@ class GatewayInvoicePaymentService
         $queryCacheKey = 'payment:gateway:query:'.$gateway.':'.hash('sha256', (string) $payment->payment_no);
         $result = Cache::get($queryCacheKey);
         if (! is_array($result)) {
-            $result = $this->queryGatewayPayment($gateway, $payment->payment_no);
+            try {
+                $result = $this->queryGatewayPayment($gateway, $payment->payment_no);
+            } catch (\Throwable $exception) {
+                // 查询失败（含 M-78 的响应验签失败）不得打断支付页轮询：
+                // 响应不可信时不能入账，但也不应把轮询接口打成 5xx/4xx——
+                // 按「未支付」返回，等异步回调（有独立验签）完成入账。
+                Log::warning("[{$gateway}主动查询] 查询失败或响应不可信，本轮按未支付返回", array_merge(
+                    PaymentChannelLabel::logContextForGateway($gateway, $payment),
+                    [
+                        'payment_no' => $payment->payment_no,
+                        'message' => $exception->getMessage(),
+                        'exception' => $exception::class,
+                    ],
+                ));
+
+                return ['paid' => false, 'trade_status' => 'query_unavailable'];
+            }
+
             Cache::put($queryCacheKey, $result, now()->addSeconds(self::PAYMENT_QUERY_CACHE_TTL_SECONDS));
         }
 
         if (in_array($result['trade_status'], ['TRADE_SUCCESS', 'TRADE_FINISHED', 'SUCCESS'], true)) {
-            // 主动查询确认已支付，直接走入账流程（不经过签名验证）
+            // 主动查询确认已支付，进入入账判定：未携带验签标记的结果只作前端提示，
+            // 不结算（见 completePaymentFromQuery 的 M-39 闸门）。
             $this->completePaymentFromQuery($payment, $result);
             $payment->refresh();
 
@@ -341,7 +363,8 @@ class GatewayInvoicePaymentService
 
     /**
      * 主动查询确认支付成功后的入账处理
-     * 与异步通知共享相同的入账逻辑，但跳过签名验证（主动查询响应无签名）
+     * 与异步通知共享相同的入账逻辑，但主动查询不经过回调验签：
+     * 只有查询结果显式携带 verified=true（网关客户端已完成响应验签）才允许入账（M-39）。
      *
      * @param  array<string, mixed>  $queryResult
      */
@@ -391,6 +414,27 @@ class GatewayInvoicePaymentService
                 "{$gateway}:query:{$payment->id}"
             ),
         ]);
+
+        // M-39：主动查询响应只有携带已验签标记才能作为入账依据。第一轮已在支付宝
+        // 客户端补响应验签（有 sign 必验、失败抛异常），但无 sign / 无公钥时客户端
+        // 仍返回结果，后端必须在入账前二次把关：标记缺失或非 true 一律降级为
+        // 「仅通知不结算」——记录一条未验签回调证据，支付单保持 PENDING，由异步
+        // 回调（独立验签 + 商户号 + 金额三道闸）完成入账，查询结果只作前端提示。
+        if (! $this->queryResultVerified($queryResult)) {
+            $this->callbackProjector->recordPaymentCallback($payment, 'payment', $queryPayload, false, $tradeNo);
+
+            Log::warning("[{$gatewayLabel}主动查询] 响应未携带验签标记，仅记录回调不结算", array_merge(
+                PaymentChannelLabel::logContextForGateway($gateway, $payment),
+                [
+                    'payment_no' => $payment->payment_no,
+                    'trade_no' => $tradeNo,
+                    'trade_status' => $tradeStatus,
+                ],
+            ));
+
+            return;
+        }
+
         $this->callbackProjector->recordPaymentCallback($payment, 'payment', $queryPayload, true, $tradeNo);
 
         // 充值类（无 invoice_id）走充值到账逻辑
@@ -424,5 +468,23 @@ class GatewayInvoicePaymentService
         if (($result['dispatch'] ?? false) && ($result['invoice'] ?? null) instanceof Invoice) {
             $this->paidInvoiceOrchestrator->handlePaidInvoice($result['invoice'], "{$gateway}_query:".($result['payment_no'] ?? $payment->payment_no));
         }
+    }
+
+    /**
+     * M-39：主动查询结果是否携带已验证签名标记。
+     * 网关插件只有在确认同步响应验签通过后才透传 verified=true（顶层或 raw 内），
+     * 仅布尔 true 视为已验签，字符串/数字等模糊值一律按未验签处理。
+     *
+     * @param  array<string, mixed>  $queryResult
+     */
+    private function queryResultVerified(array $queryResult): bool
+    {
+        if (($queryResult['verified'] ?? null) === true) {
+            return true;
+        }
+
+        $raw = $queryResult['raw'] ?? null;
+
+        return is_array($raw) && ($raw['verified'] ?? null) === true;
     }
 }

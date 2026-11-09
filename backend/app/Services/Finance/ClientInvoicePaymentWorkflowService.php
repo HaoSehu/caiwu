@@ -98,6 +98,12 @@ class ClientInvoicePaymentWorkflowService
     }
 
     /**
+     * 混付：余额扣一部分、剩余金额走用户所选第三方渠道。
+     *
+     * 渠道由控制器从请求体透传（与 pay/alipay 同一字段口径），空值回落 ALIPAY 兼容
+     * 旧客户端；非空但不在当前可用支付方式里必须拒绝，否则用户选的「易支付-微信」
+     * 会被悄悄换成真支付宝下单（资金渠道错配，M-22）。
+     *
      * @param  array<string, mixed>  $operationContext
      * @param  array<string, mixed>  $expiredContext
      * @return array<string, mixed>
@@ -107,6 +113,8 @@ class ClientInvoicePaymentWorkflowService
         int $invoiceId,
         string $paymentSessionToken,
         float $balanceAmount,
+        string $gateway,
+        string $paymentType,
         array $operationContext,
         array $expiredContext,
         string $ipAddress,
@@ -115,20 +123,33 @@ class ClientInvoicePaymentWorkflowService
         $invoice = $this->cancelExpiredInvoice($user, $invoiceId, $expiredContext);
         $this->checkoutSecurity->assertInvoicePaymentSessionToken($paymentSessionToken, $invoice, (int) $user->id);
 
-        $result = $this->mixPayments->payByBalanceAndGateway($invoice, $user, $balanceAmount, PaymentGatewayCode::ALIPAY, $operationContext);
+        $gateway = PaymentGatewayCode::normalize($gateway) ?: PaymentGatewayCode::ALIPAY;
+        $paymentType = trim($paymentType);
+        if ($this->gatewayOption($gateway, $paymentType) === null) {
+            throw new BusinessException('当前没有可用支付方式，请联系管理员开启支付渠道');
+        }
+
+        $mixContext = $paymentType !== '' ? array_merge($operationContext, ['payment_type' => $paymentType]) : $operationContext;
+        $result = $this->mixPayments->payByBalanceAndGateway($invoice, $user, $balanceAmount, $gateway, $mixContext);
         $invoice->refresh()->load($this->invoiceRelations());
         $payment = $this->findInvoicePayment(
             $user,
             $invoice,
             (string) ($result['payment_no'] ?? ''),
-            PaymentGatewayCode::ALIPAY,
+            $gateway,
         );
 
-        return [
-            ...$result,
-            ...$this->checkoutSecurity->issueInvoicePaymentPollToken($payment, $invoice, (int) $user->id, $ipAddress),
-            'invoice' => $this->invoicePayload($invoice),
-        ];
+        $gatewayPayload = ['gateway' => $gateway, 'gateway_key' => $gateway];
+        if ($paymentType !== '') {
+            $gatewayPayload['payment_type'] = $paymentType;
+        }
+
+        return array_merge(
+            $gatewayPayload,
+            $result,
+            $this->checkoutSecurity->issueInvoicePaymentPollToken($payment, $invoice, (int) $user->id, $ipAddress),
+            ['invoice' => $this->invoicePayload($invoice)],
+        );
     }
 
     /**

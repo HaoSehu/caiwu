@@ -1,4 +1,9 @@
-import { ACCOUNT_TRANSACTION_EVENT_MAP, getStatusLabel } from '@caiwu/shared/statusConfig';
+import {
+  ACCOUNT_TRANSACTION_EVENT_MAP,
+  WITHDRAWAL_STATUS_MAP,
+  getStatusLabel,
+  getStatusTagType,
+} from '@caiwu/shared/statusConfig';
 import { MessagePlugin } from 'tdesign-vue-next/es/message/plugin';
 import { computed, onActivated, onMounted, reactive, ref } from 'vue';
 
@@ -50,12 +55,16 @@ export function rewardStatus(status: unknown) {
 }
 
 export function withdrawStatus(status: unknown) {
-  const map: Record<number, { label: string; theme: TagTheme }> = {
-    0: { label: '审核中', theme: 'warning' },
-    1: { label: '已通过', theme: 'success' },
-    2: { label: '已拒绝', theme: 'danger' },
+  // 值域与口径统一走 shared 的 WITHDRAWAL_STATUS_MAP（含 3=已打款），
+  // 此前本函数只映射 0/1/2，管理员确认打款后用户端回退显示裸数字「3」。
+  const config = WITHDRAWAL_STATUS_MAP[Number(status)];
+  if (!config) return { label: String(status ?? '--'), theme: 'default' as TagTheme };
+  const theme = getStatusTagType(WITHDRAWAL_STATUS_MAP, Number(status));
+  return {
+    label: getStatusLabel(WITHDRAWAL_STATUS_MAP, Number(status)),
+    // TDesign 没有 success 以外的特殊主题：danger/warning 直接沿用，其余回落 default
+    theme: (theme === 'success' || theme === 'warning' || theme === 'danger' ? theme : 'default') as TagTheme,
   };
-  return map[Number(status)] || { label: String(status ?? '--'), theme: 'default' };
 }
 
 export function accountEventLabel(eventType: unknown) {

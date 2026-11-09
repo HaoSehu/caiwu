@@ -80,7 +80,7 @@
               </div>
               <strong>{{ row.discount_label || formatDiscount(row) }}</strong>
               <span>发放数量：{{ row.issue_quantity || 0 }} 张</span>
-              <span>最低消费：{{ moneyText(row.min_amount) }}</span>
+              <span>最低消费：{{ formatMoneyText(row.min_amount) }}</span>
               <span>{{ row.per_user_limit ? `每人可用 ${row.per_user_limit} 次` : '每人不限使用次数' }}</span>
             </div>
           </template>
@@ -329,6 +329,7 @@
 <script setup lang="ts">
 import './index.less';
 
+import { formatMoneyText } from '@caiwu/shared/finance';
 import { AddIcon, SearchIcon } from 'tdesign-icons-vue-next';
 import type { DropdownOption, FormInstanceFunctions, FormRule, PrimaryTableCol } from 'tdesign-vue-next';
 import { DialogPlugin } from 'tdesign-vue-next/es/dialog/plugin';
@@ -773,11 +774,7 @@ function discountScopeLabel(value: unknown) {
 
 function formatDiscount(row: CouponCampaignRecord) {
   const value = Number(row.discount_value_raw ?? row.discount_value ?? 0);
-  return row.discount_type === 'percentage' ? `${value}%` : moneyText(value);
-}
-
-function moneyText(value: unknown) {
-  return `¥${Number(value || 0).toFixed(2)}`;
+  return row.discount_type === 'percentage' ? `${value}%` : formatMoneyText(value);
 }
 
 function scheduleText(row: CouponCampaignRecord) {

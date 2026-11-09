@@ -15,6 +15,7 @@ use App\Services\Sms\Data\SmsSendRequest;
 use App\Services\Sms\SmsDriverManager;
 use App\Services\Sms\SmsTemplateResolver;
 use App\Services\System\Concerns\InteractsWithMessageLogs;
+use App\Support\AuditParamRedactor;
 use App\Support\SmsTemplateCatalog;
 use Illuminate\Support\Facades\Log;
 
@@ -71,13 +72,14 @@ class SmsService
             'purpose' => $purpose,
             'min' => $expireMinutes,
         ]);
+        // 验证码明文不进 message_logs（M-50）：visitor 默认角色带 log.list，
+        // 明文码等于任意账号可接管。日志只留掩码后的审计信息，发送仍用原码；
+        // 验证码校验走 VerificationCodeService 的缓存比对，不读 message_logs。
         $logParams = [
             'code' => $code,
             'min' => $expireMinutes,
             'purpose' => $purpose,
         ];
-
-        // 短信日志含验证码明文，管理端需完整真实审计信息，不做脱敏（项目红线）
 
         // 文案模板是短信驱动的协议能力：所有插件驱动都经 PluginSmsDriver 实现
         // ProvidesVerifyCodeTemplate，阿里云插件的 verifyCodeTemplate 匹配含 default
@@ -121,7 +123,8 @@ class SmsService
                 'request_id' => $result->bizId ?? $result->requestId,
                 'sent_at' => now(),
                 'template_code' => $providerTemplateCode !== '' ? $providerTemplateCode : 'aliyun_verify_code',
-                'params_json' => $updatedParams,
+                // 成功态会整列覆盖 params_json，必须同样掩码，否则 createSmsLog 的掩码被冲掉。
+                'params_json' => AuditParamRedactor::maskVerifyCodeParams($updatedParams),
             ]);
 
             $this->recordMessageAttempt(
@@ -394,6 +397,11 @@ class SmsService
     private function createSmsLog(string $phone, string $templateCode, string $content, array $params, string $provider, string $originType): array
     {
         $traceId = $this->notificationTraceId('sms', $templateCode);
+
+        // 验证码可能随模板文案出现在正文任意位置，按本次实际码值替换为掩码；
+        // params 里的 code 类键同样掩码，其余参数（min/purpose 等）原样保留。
+        $content = AuditParamRedactor::maskVerifyCodeValues($content, $params);
+        $params = AuditParamRedactor::maskVerifyCodeParams($params);
 
         try {
             $log = MessageLog::create(array_merge([

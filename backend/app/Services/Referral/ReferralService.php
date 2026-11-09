@@ -6,6 +6,7 @@ namespace App\Services\Referral;
 
 use App\Constants\FinanceLedgerEventType;
 use App\Constants\InvoiceStatus;
+use App\Constants\InvoiceType;
 use App\Constants\OrderStatus;
 use App\Exceptions\BusinessException;
 use App\Models\FinanceLedgerEntry;
@@ -61,6 +62,17 @@ class ReferralService
     public const REFUND_BLOCKED_REWARD_WITHDRAWN_CODE = 42211;
 
     public const REFUND_BLOCKED_FROZEN_INSUFFICIENT_CODE = 42212;
+
+    /** 奖励释放前冻结余额守恒断言失败（异常态账目，需人工核对，不得凭空生成可提现资金） */
+    public const FROZEN_RELEASE_INSUFFICIENT_CODE = 42213;
+
+    /**
+     * 提现「打款失败」状态值（别名，值域真源在 ReferralWithdrawal::STATUS_PAYMENT_FAILED）。
+     *
+     * 保留别名是为了让调用方继续以 ReferralService::WITHDRAWAL_STATUS_PAYMENT_FAILED 引用，
+     * 避免同一语义在服务层与模型层各写一个字面量而再次漂移。
+     */
+    public const WITHDRAWAL_STATUS_PAYMENT_FAILED = ReferralWithdrawal::STATUS_PAYMENT_FAILED;
 
     // 返利子域台账 event_type 统一引用 FinanceLedgerEventType 常量，避免裸字符串与台账值域脱节
     public const ACCOUNT_LOG_TYPE_REWARD_FROZEN = FinanceLedgerEventType::REFERRAL_REWARD_FROZEN;
@@ -343,9 +355,13 @@ class ReferralService
                     ? (float) $referrerProfile->total_sales_amount
                     : (float) $lockedReferrer->total_sales_amount;
                 $nextSalesAmount = round($currentSalesAmount + $amount, 2);
-                // 返利比例取推荐人所属推广大使档位的对应业务类型比例；未指派回退全局配置
+                // 返利比例取推荐人所属推广大使档位的对应业务类型比例；未指派回退全局配置。
+                // 已停用的档位（status=0）不按原费率计佣，等同未指派回退全局配置。
                 $currentAmbassador = $lockedReferrer->promotion_ambassador_id
-                    ? PromotionAmbassador::query()->find((int) $lockedReferrer->promotion_ambassador_id)
+                    ? PromotionAmbassador::query()
+                        ->where('id', (int) $lockedReferrer->promotion_ambassador_id)
+                        ->where('status', 1)
+                        ->first()
                     : null;
                 $currentRewardRate = $currentAmbassador === null
                     ? null
@@ -532,6 +548,7 @@ class ReferralService
 
         $referredUserIds = collect($paginator->items())->pluck('id')->filter()->all();
         $earnings = [];
+        $consumptions = [];
         if ($referredUserIds !== []) {
             $earnings = ReferralReward::query()
                 ->where('referrer_user_id', $referrerUserId)
@@ -540,10 +557,22 @@ class ReferralService
                 ->groupBy('referred_user_id')
                 ->pluck('total', 'referred_user_id')
                 ->all();
+
+            // 「客户消费」必须是下线用户本人作为买家的实付合计（扣减退款），
+            // 不能取 total_sales_amount——那是该用户作为推荐人产生的下线销售额，口径完全不同。
+            // 只统计业务消费账单，排除充值、返利入账等非消费类账单；'normal' 为新购的历史落值。
+            $consumptions = Invoice::query()
+                ->whereIn('user_id', $referredUserIds)
+                ->whereIn('type', [InvoiceType::NEW_PURCHASE, 'normal', InvoiceType::RENEW, InvoiceType::UPGRADE])
+                ->where('paid_amount', '>', 0)
+                ->selectRaw('user_id, COALESCE(SUM(GREATEST(paid_amount - COALESCE(refund_amount, 0), 0)), 0) as total')
+                ->groupBy('user_id')
+                ->pluck('total', 'user_id')
+                ->all();
         }
 
-        $paginator->setCollection($paginator->getCollection()->map(function (User $referredUser) use ($earnings) {
-            $referredUser->setAttribute('customer_consumption', (float) $referredUser->total_sales_amount);
+        $paginator->setCollection($paginator->getCollection()->map(function (User $referredUser) use ($earnings, $consumptions) {
+            $referredUser->setAttribute('customer_consumption', round((float) ($consumptions[$referredUser->id] ?? 0), 2));
             $referredUser->setAttribute('my_earnings', (float) ($earnings[$referredUser->id] ?? 0));
 
             return $referredUser;
@@ -638,13 +667,6 @@ class ReferralService
         throw_if($amount <= 0, new BusinessException('提现金额必须大于 0'));
         throw_if($amount < $minAmount, new BusinessException("奖励满 {$minAmount} 元才可提现"));
         throw_if((float) $user->referral_available_amount < $amount, new BusinessException('可提现奖励不足'));
-        throw_if(
-            ReferralWithdrawal::query()
-                ->where('user_id', $user->id)
-                ->where('status', ReferralWithdrawal::STATUS_PENDING)
-                ->exists(),
-            new BusinessException('已有待处理提现申请，请等待审核完成'),
-        );
 
         $method = trim((string) ($data['method'] ?? ReferralWithdrawal::METHOD_ALIPAY)) ?: ReferralWithdrawal::METHOD_ALIPAY;
         throw_if(
@@ -667,6 +689,16 @@ class ReferralService
             $account = $this->lockUserAccount($lockedUser->id);
 
             throw_if((float) $account->referral_available_balance < $amount, new BusinessException('可提现奖励不足'));
+
+            // 「单用户仅一笔待审提现」必须在 user 行锁内复查：事务外检查在并发下
+            // 双方都能通过，各自扣减可提余额并建 PENDING 单，抬高重复打款风险。
+            throw_if(
+                ReferralWithdrawal::query()
+                    ->where('user_id', $lockedUser->id)
+                    ->where('status', ReferralWithdrawal::STATUS_PENDING)
+                    ->exists(),
+                new BusinessException('已有待处理提现申请，请等待审核完成'),
+            );
 
             $account = $this->accounts()->updateAccount($account, [
                 'referral_available_balance' => round((float) $account->referral_available_balance - $amount, 2),
@@ -1148,6 +1180,193 @@ class ReferralService
         return $reward->refresh();
     }
 
+    /**
+     * 账单部分退款时按比例回退/冻结推广奖励（整笔撤销仍走 reverseRewardForRefundedInvoice）。
+     *
+     * 口径约定：$refundAmount 为本次退款金额，$refundableBase 为本次退款前的剩余可退金额，
+     * 比例 = refundAmount / refundableBase，作用于奖励记录的「剩余」order_amount / reward_amount；
+     * 每次部分退款都把奖励记录的这两列按比例扣减，因此多次部分退款的累计比例自然收敛到 1，
+     * 最后一次把剩余额扣到 0 时奖励置为已撤销。
+     *
+     * 扣款优先级：冻结中的奖励从 referral_frozen 扣；已释放的奖励优先 referral_available，
+     * 不足部分再尝试 referral_frozen。若账户两处余额合计仍不足（异常态/已提现），
+     * 只按实际可扣金额写台账并记操作日志标记缺口，不阻断退款主流程。
+     */
+    public function adjustRewardForPartialRefund(Invoice $invoice, float $refundAmount, float $refundableBase, string $traceId): void
+    {
+        $refundAmount = round($refundAmount, 2);
+        $refundableBase = round($refundableBase, 2);
+
+        if ($refundAmount <= 0 || $refundableBase <= 0) {
+            return;
+        }
+
+        $ratio = min(max($refundAmount / $refundableBase, 0.0), 1.0);
+        $lockKey = CacheKey::lock('lock:referral:reward:partial-refund:invoice', (string) $invoice->id);
+
+        Cache::lock($lockKey, 30)->block(5, function () use ($invoice, $ratio, $traceId, $refundAmount) {
+            DB::transaction(function () use ($invoice, $ratio, $traceId, $refundAmount) {
+                $reward = ReferralReward::query()
+                    ->lockForUpdate()
+                    ->where(function (Builder $query) use ($invoice) {
+                        $query->where('invoice_id', $invoice->id)
+                            ->when($invoice->order_id, fn (Builder $inner) => $inner->orWhere('order_id', $invoice->order_id));
+                    })
+                    ->first();
+
+                if (! $reward || (int) $reward->status === ReferralReward::STATUS_REVERSED) {
+                    return;
+                }
+
+                $remainingReward = round((float) $reward->reward_amount, 2);
+                $remainingSales = round((float) $reward->order_amount, 2);
+                if ($remainingReward <= 0) {
+                    return;
+                }
+
+                $rewardShare = min(round($remainingReward * $ratio, 2), $remainingReward);
+                $salesShare = min(round($remainingSales * $ratio, 2), $remainingSales);
+
+                $referrer = User::query()
+                    ->lockForUpdate()
+                    ->find((int) $reward->referrer_user_id);
+
+                if (! $referrer) {
+                    // 与全额退款不同，部分退款不阻断资金流：推荐人缺失只记审计，留给人工核对
+                    $this->operationLogService->write(
+                        userId: null,
+                        userType: 'system',
+                        action: 'referral.reward.partial_adjustment_blocked',
+                        module: 'referral',
+                        targetId: (int) $invoice->id,
+                        detail: [
+                            'reward_id' => (int) $reward->id,
+                            'referrer_user_id' => (int) $reward->referrer_user_id,
+                            'refund_amount' => number_format($refundAmount, 2, '.', ''),
+                            'reason' => 'referrer_missing',
+                        ],
+                    );
+
+                    return;
+                }
+
+                $referrerProfile = $this->hasReferralProfilesTable()
+                    ? $this->lockReferralProfile((int) $referrer->id)
+                    : null;
+                $referrerAccount = $this->lockUserAccount((int) $referrer->id);
+
+                if ((int) $reward->status === ReferralReward::STATUS_FROZEN) {
+                    // 冻结中的奖励只从冻结余额扣；不足为账目异常，按实际可扣额入账并标记缺口
+                    $frozenDeduct = min($rewardShare, max(round((float) $referrerAccount->referral_frozen_balance, 2), 0.0));
+                    $availableDeduct = 0.0;
+                } else {
+                    $availableDeduct = min($rewardShare, max(round((float) $referrerAccount->referral_available_balance, 2), 0.0));
+                    $frozenDeduct = min(
+                        round($rewardShare - $availableDeduct, 2),
+                        max(round((float) $referrerAccount->referral_frozen_balance, 2), 0.0)
+                    );
+                }
+
+                $deducted = round($availableDeduct + $frozenDeduct, 2);
+                $shortfall = round($rewardShare - $deducted, 2);
+
+                if ($deducted > 0) {
+                    $accountPayload = [];
+                    if ($availableDeduct > 0) {
+                        $accountPayload['referral_available_balance'] = round((float) $referrerAccount->referral_available_balance - $availableDeduct, 2);
+                    }
+                    if ($frozenDeduct > 0) {
+                        $accountPayload['referral_frozen_balance'] = round((float) $referrerAccount->referral_frozen_balance - $frozenDeduct, 2);
+                    }
+
+                    $referrerAccount = $this->accounts()->updateAccount($referrerAccount, $accountPayload);
+                }
+
+                // 销售额按比例扣减（min 到 0），与全额退款 reverseRewardRecord 的扣减口径一致
+                $currentSalesAmount = $referrerProfile
+                    ? (float) $referrerProfile->total_sales_amount
+                    : (float) $referrer->total_sales_amount;
+                $nextSalesAmount = max(round($currentSalesAmount - $salesShare, 2), 0);
+
+                if ($referrerProfile) {
+                    $referrerProfile->forceFill([
+                        'total_sales_amount' => $nextSalesAmount,
+                    ])->save();
+                    $this->syncUserFromReferralProfile($referrer, $referrerProfile);
+                } else {
+                    $referrer->forceFill([
+                        'total_sales_amount' => number_format($nextSalesAmount, 2, '.', ''),
+                    ])->save();
+                }
+                $this->resetUserAggregateRelations($referrer);
+
+                $nextRewardAmount = round($remainingReward - $rewardShare, 2);
+                $nextOrderAmount = max(round($remainingSales - $salesShare, 2), 0);
+                $fullyConsumed = $nextRewardAmount <= 0;
+
+                $reward->forceFill([
+                    'order_amount' => number_format($nextOrderAmount, 2, '.', ''),
+                    'reward_amount' => number_format($nextRewardAmount, 2, '.', ''),
+                    'status' => $fullyConsumed ? ReferralReward::STATUS_REVERSED : $reward->status,
+                    'remark' => $fullyConsumed
+                        ? '账单部分退款累计已覆盖全部奖励，推广奖励已撤销 #'.(string) ($invoice->invoice_no ?? $invoice->id)
+                        : '账单部分退款，推广奖励已按比例冲减 #'.(string) ($invoice->invoice_no ?? $invoice->id),
+                    'trace_id' => $traceId !== '' ? $traceId : $reward->trace_id,
+                ])->save();
+
+                if ($availableDeduct > 0) {
+                    $this->writeAccountLog(
+                        user: $referrer,
+                        type: self::ACCOUNT_LOG_TYPE_REWARD_REVERSED,
+                        amount: -$availableDeduct,
+                        remark: '账单部分退款，推广奖励按比例冲减 #'.(string) ($invoice->invoice_no ?? $invoice->id),
+                        relatedId: (int) $reward->id,
+                        relatedType: 'reward',
+                        operator: 'system',
+                        traceId: $traceId !== '' ? $traceId : $reward->trace_id,
+                        balances: $this->buildReferralBalanceSnapshot($referrerAccount),
+                        accountTypeOverride: 'referral_available',
+                    );
+                }
+
+                if ($frozenDeduct > 0) {
+                    $this->writeAccountLog(
+                        user: $referrer,
+                        type: self::ACCOUNT_LOG_TYPE_REWARD_REVERSED,
+                        amount: -$frozenDeduct,
+                        remark: '账单部分退款，推广奖励按比例冲减冻结余额 #'.(string) ($invoice->invoice_no ?? $invoice->id),
+                        relatedId: (int) $reward->id,
+                        relatedType: 'reward',
+                        operator: 'system',
+                        traceId: $traceId !== '' ? $traceId : $reward->trace_id,
+                        balances: $this->buildReferralBalanceSnapshot($referrerAccount),
+                        accountTypeOverride: 'referral_frozen',
+                    );
+                }
+
+                $this->operationLogService->write(
+                    userId: $referrer->id,
+                    userType: 'system',
+                    action: 'referral.reward.partial_adjusted',
+                    module: 'referral',
+                    targetId: (int) $reward->id,
+                    detail: [
+                        'invoice_id' => (int) $invoice->id,
+                        'invoice_no' => (string) ($invoice->invoice_no ?? ''),
+                        'refund_amount' => number_format($refundAmount, 2, '.', ''),
+                        'refund_ratio' => number_format($ratio, 4, '.', ''),
+                        'reward_share' => number_format($rewardShare, 2, '.', ''),
+                        'deducted_from_available' => number_format($availableDeduct, 2, '.', ''),
+                        'deducted_from_frozen' => number_format($frozenDeduct, 2, '.', ''),
+                        'shortfall' => number_format($shortfall, 2, '.', ''),
+                        'remaining_reward_amount' => number_format($nextRewardAmount, 2, '.', ''),
+                        'reversed' => $fullyConsumed,
+                    ],
+                );
+            });
+        });
+    }
+
     public function processWithdrawal(
         ReferralWithdrawal $withdrawal,
         string $action,
@@ -1317,13 +1536,25 @@ class ReferralService
             $resolvedPaymentNo = trim($paymentNo);
             throw_if($resolvedPaymentNo === '', new BusinessException('打款单号不能为空'));
 
+            // 同一支付宝流水号只能对应一张提现单：payment_no 目前无唯一索引（需兼容历史重复），
+            // 在确认打款这一写入口做同号查重，避免同一笔打款凭证被复用到多张提现单而无法检出重复出账。
+            throw_if(
+                ReferralWithdrawal::query()
+                    ->where('payment_no', $resolvedPaymentNo)
+                    ->where('id', '!=', (int) $record->id)
+                    ->exists(),
+                new BusinessException('该打款流水号已被其他提现单使用'),
+            );
+
             $record->forceFill([
                 'status' => ReferralWithdrawal::STATUS_PAID,
                 'payment_no' => $resolvedPaymentNo,
                 'paid_at' => now(),
                 'operator' => $operator,
                 'remark' => trim((string) $remark) !== '' ? trim((string) $remark) : ($record->remark ?: '后台确认打款'),
-                'trace_id' => $traceId,
+                // trace_id 是 NOT NULL 列：调用方未传时保留该单原有追踪号，
+                // 直接写 null 会让整笔确认在数据库层失败（真实 500），而不是业务提示。
+                'trace_id' => trim((string) $traceId) !== '' ? (string) $traceId : (string) ($record->trace_id ?? ''),
                 'processed_at' => now(),
             ])->save();
 
@@ -1339,6 +1570,85 @@ class ReferralService
                     'payment_no' => $resolvedPaymentNo,
                     'operator' => $operator,
                     'remark' => $record->remark,
+                    'trace_id' => $traceId,
+                ],
+            );
+
+            return $record->refresh()->load($this->referralUserWithRelations('user'));
+        });
+    }
+
+    /**
+     * 打款失败回退（支付宝方式）：审核通过（APPROVED）后线下打款失败/被退回时调用。
+     *
+     * 审核通过时资金已从「提现中」记入「已提取」，打款失败说明资金实际未出账：
+     * 把该金额从 referral_withdrawn 退回 referral_available，状态置为打款失败（4），
+     * 写返利子账本与操作审计，供财务重新发起提现。
+     */
+    public function failWithdrawalPayment(
+        ReferralWithdrawal $withdrawal,
+        int $operatorUserId,
+        string $operator,
+        string $reason,
+        ?string $traceId = null,
+    ): ReferralWithdrawal {
+        return DB::transaction(function () use ($withdrawal, $operatorUserId, $operator, $reason, $traceId) {
+            $record = ReferralWithdrawal::query()->lockForUpdate()->findOrFail($withdrawal->id);
+
+            throw_if(
+                (int) $record->status !== ReferralWithdrawal::STATUS_APPROVED,
+                new BusinessException('仅审核通过的提现支持标记打款失败')
+            );
+            throw_if(
+                $record->method === ReferralWithdrawal::METHOD_BALANCE,
+                new BusinessException('余额提现无打款失败场景')
+            );
+
+            $user = User::query()->lockForUpdate()->findOrFail($record->user_id);
+            $account = $this->lockUserAccount($user->id);
+            $amount = round((float) $record->amount, 2);
+            $resolvedReason = trim($reason) !== '' ? trim($reason) : '打款失败';
+
+            // 审核通过时 withdrawn 已加过该金额；退回时只把本次失败金额移回可提余额。
+            // withdrawn 侧 min 钳制防历史脏数据扣穿，available 侧全额回加（该金额确未出账）。
+            $account = $this->accounts()->updateAccount($account, [
+                'referral_withdrawn_balance' => max(round((float) $account->referral_withdrawn_balance - $amount, 2), 0),
+                'referral_available_balance' => round((float) $account->referral_available_balance + $amount, 2),
+            ]);
+
+            $this->resetUserAggregateRelations($user);
+
+            $record->forceFill([
+                'status' => self::WITHDRAWAL_STATUS_PAYMENT_FAILED,
+                'operator' => $operator,
+                'trace_id' => $traceId,
+                'remark' => $resolvedReason,
+                'processed_at' => now(),
+            ])->save();
+
+            $this->writeAccountLog(
+                user: $user,
+                type: self::ACCOUNT_LOG_TYPE_WITHDRAW_REJECTED,
+                amount: $amount,
+                remark: "推荐奖励提现打款失败，金额已退回可提现余额（{$resolvedReason}）",
+                relatedId: $record->id,
+                relatedType: 'withdrawal',
+                operator: $operator,
+                traceId: $traceId,
+                balances: $this->buildReferralBalanceSnapshot($account),
+            );
+
+            $this->operationLogService->write(
+                userId: $operatorUserId,
+                userType: 'admin',
+                action: 'referral.withdraw.payment_failed',
+                module: 'referral_withdrawal',
+                targetId: $record->id,
+                detail: [
+                    'amount' => $amount,
+                    'method' => $record->method,
+                    'operator' => $operator,
+                    'reason' => $resolvedReason,
                     'trace_id' => $traceId,
                 ],
             );
@@ -1414,6 +1724,16 @@ class ReferralService
 
                     $account = $this->lockUserAccount($user->id);
                     $amount = round((float) $freshReward->reward_amount, 2);
+
+                    // 守恒断言（对齐 reverseRewardRecord 的冻结侧校验）：冻结余额不足时
+                    // 不许把冻结侧钳到 0 同时全额加可提余额，否则差额就是凭空生成的可提现资金。
+                    throw_if(
+                        (float) $account->referral_frozen_balance + 0.00001 < $amount,
+                        new BusinessException(
+                            '推广冻结余额不足，无法释放奖励，请核对账目',
+                            self::FROZEN_RELEASE_INSUFFICIENT_CODE
+                        ),
+                    );
 
                     $account = $this->accounts()->updateAccount($account, [
                         'referral_frozen_balance' => max(round((float) $account->referral_frozen_balance - $amount, 2), 0),
@@ -1594,9 +1914,64 @@ class ReferralService
         return ["{$relation}:id,email,phone,nickname,real_name,verification_status,is_verified"];
     }
 
+    /**
+     * 推广注册链接的站点基址。
+     *
+     * 多域部署下不能写死单一域名：请求来源（Origin/Referer）命中 CORS 白名单
+     * （config/cors.php 的 allowed_origins / patterns，与跨域策略同一份清单）时使用该来源，
+     * 否则回退配置的官网域名，避免把推广链接固定指向错误站点。
+     */
     private function resolveFrontendBaseUrl(string $origin): string
     {
+        $normalized = $this->normalizePublicOrigin($origin);
+
+        if ($normalized !== '' && $this->isAllowedPublicOrigin($normalized)) {
+            return $normalized;
+        }
+
         return PublicUrl::website();
+    }
+
+    /**
+     * 归一为 scheme://host[:port]（非法输入返回空串），与 Cors 中间件的来源比较口径一致。
+     */
+    private function normalizePublicOrigin(string $origin): string
+    {
+        $parts = parse_url(trim($origin));
+        if (! is_array($parts)) {
+            return '';
+        }
+
+        $scheme = strtolower((string) ($parts['scheme'] ?? ''));
+        $host = strtolower((string) ($parts['host'] ?? ''));
+        if (! in_array($scheme, ['http', 'https'], true) || $host === '') {
+            return '';
+        }
+
+        $port = (int) ($parts['port'] ?? 0);
+        $defaultPort = $scheme === 'https' ? 443 : 80;
+
+        return $port > 0 && $port !== $defaultPort
+            ? sprintf('%s://%s:%d', $scheme, $host, $port)
+            : sprintf('%s://%s', $scheme, $host);
+    }
+
+    private function isAllowedPublicOrigin(string $origin): bool
+    {
+        foreach ((array) config('cors.allowed_origins', []) as $allowed) {
+            if ($this->normalizePublicOrigin((string) $allowed) === $origin) {
+                return true;
+            }
+        }
+
+        foreach ((array) config('cors.allowed_origins_patterns', []) as $pattern) {
+            $pattern = trim((string) $pattern);
+            if ($pattern !== '' && @preg_match($pattern, $origin) === 1) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function maskAccountNo(string $accountNo): string
@@ -1625,6 +2000,40 @@ class ReferralService
         ?string $traceId = null,
         ?array $balances = null,
         ?string $accountTypeOverride = null,
+    ): void {
+        // 返利子账本不走 FinanceLedgerService 唯一写口：历史约束下 account_id 恒为 null
+        // （返利余额落在 user_accounts 子列，不对应 finance_accounts 现金账户），
+        // 若强行走内核 append() 会破坏余额-批次口径。这里以事务断言替代框架级拦截：
+        // 台账必须与账户余额变动同事务落库，否则 balance_after 快照会与账户漂移。
+        if (DB::transactionLevel() <= 0) {
+            DB::transaction(fn () => $this->createAccountLogEntry(
+                $user, $type, $amount, $remark, $relatedId, $relatedType,
+                $operator, $traceId, $balances, $accountTypeOverride
+            ));
+
+            return;
+        }
+
+        $this->createAccountLogEntry(
+            $user, $type, $amount, $remark, $relatedId, $relatedType,
+            $operator, $traceId, $balances, $accountTypeOverride
+        );
+    }
+
+    /**
+     * writeAccountLog 的实际落库部分；事务边界由调用方保证（无事务时由 writeAccountLog 包一层）。
+     */
+    private function createAccountLogEntry(
+        User $user,
+        string $type,
+        float $amount,
+        string $remark,
+        ?int $relatedId,
+        ?string $relatedType,
+        ?string $operator,
+        ?string $traceId,
+        ?array $balances,
+        ?string $accountTypeOverride,
     ): void {
         $balances ??= [
             'frozen_balance' => round((float) $user->referral_frozen_amount, 2),

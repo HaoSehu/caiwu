@@ -10,6 +10,7 @@ use App\Services\Integrations\Payments\Concerns\BuildsGatewayHttpClient;
 use App\Services\Integrations\Payments\Concerns\WrapsPemKeys;
 use App\Services\System\GatewayLogService;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
@@ -125,17 +126,17 @@ class YiPayClient
         $result = $this->request('post', $this->endpoint('mapi.php'), $payload);
 
         if (! $this->isSuccessCode($result['code'] ?? null)) {
-            $this->recordFailure('precreate', (string) ($result['msg'] ?? '预下单失败'), $outTradeNo, $payload, $result);
+            $this->recordFailure('precreate', (string) ($result['msg'] ?? '预下单失败'), $outTradeNo, $this->maskedForLog($payload), $this->maskedForLog($result));
             throw new BusinessException('易支付预下单失败，请稍后重试');
         }
 
         $qrCode = $this->firstString($result, ['qrcode', 'img', 'payurl', 'urlscheme']);
         if ($qrCode === '') {
-            $this->recordFailure('precreate', '预下单响应缺少支付链接', $outTradeNo, $payload, $result);
+            $this->recordFailure('precreate', '预下单响应缺少支付链接', $outTradeNo, $this->maskedForLog($payload), $this->maskedForLog($result));
             throw new BusinessException('易支付预下单响应异常，请联系管理员处理');
         }
 
-        $this->recordSuccess('precreate', $outTradeNo, $payload, $result);
+        $this->recordSuccess('precreate', $outTradeNo, $this->maskedForLog($payload), $this->maskedForLog($result));
 
         return [
             'qr_code' => $qrCode,
@@ -179,7 +180,7 @@ class YiPayClient
         $result = $this->request('get', $this->endpoint('api.php'), $payload);
 
         if ((string) ($result['code'] ?? '') !== '1') {
-            $this->recordFailure('query', (string) ($result['msg'] ?? '订单查询失败'), $outTradeNo, $payload, $result);
+            $this->recordFailure('query', (string) ($result['msg'] ?? '订单查询失败'), $outTradeNo, $this->maskedForLog($payload), $this->maskedForLog($result));
             throw new BusinessException('易支付订单查询失败，请稍后重试');
         }
 
@@ -347,7 +348,36 @@ class YiPayClient
             return '';
         }
 
+        // 出站地址只允许公网主机：私网/回环地址等于把商户密钥发往内网，属于 SSRF 面
+        if ($this->isPrivateOrLoopbackHost($host)) {
+            throw new BusinessException('易支付接口地址不合法');
+        }
+
+        // https 强制：明文 http 会把签名请求暴露在链路中；仅本地与测试环境放行
+        if ($scheme !== 'https' && ! app()->environment(['local', 'testing'])) {
+            throw new BusinessException('易支付接口地址不合法');
+        }
+
         return rtrim($apiEndpoint, '/');
+    }
+
+    /**
+     * IPv6 字面量在 parse_url 结果中带方括号（[::1]），这里统一去括号后判定。
+     */
+    private function isPrivateOrLoopbackHost(string $host): bool
+    {
+        $host = strtolower(trim($host, '[]'));
+
+        if ($host === 'localhost' || $host === '::1') {
+            return true;
+        }
+
+        if (filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) === false) {
+            return false;
+        }
+
+        // 127.0.0.0/8、10.0.0.0/8、192.168.0.0/16、172.16.0.0/12、169.254.0.0/16
+        return preg_match('/^(127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.)/', $host) === 1;
     }
 
     private function resolveClientIp(): string
@@ -438,6 +468,15 @@ class YiPayClient
             ]);
 
             throw new BusinessException('易支付网关暂时不可用，请稍后重试', 42200, 422);
+        } catch (RequestException $exception) {
+            // 4xx/5xx 同样属于网关侧异常：不向上逃逸成 500，按统一业务错误返回
+            Log::error('[易支付] 网关响应异常', [
+                'url' => $url,
+                'http_status' => $exception->response->status(),
+                'body' => mb_substr($this->maskSecretInText($exception->response->body()), 0, 300),
+            ]);
+
+            throw new BusinessException('网关响应异常，请稍后重试', 42200, 422);
         }
 
         $result = $response->json();
@@ -448,7 +487,7 @@ class YiPayClient
         if (! is_array($result)) {
             Log::error('[易支付] 响应解析失败', [
                 'http_status' => $response->status(),
-                'body' => mb_substr($response->body(), 0, 500),
+                'body' => mb_substr($this->maskSecretInText($response->body()), 0, 500),
             ]);
 
             throw new BusinessException('易支付响应异常，请稍后重试', 42200, 422);
@@ -458,7 +497,7 @@ class YiPayClient
             'url' => $url,
             'method' => $method,
             'out_trade_no' => (string) ($payload['out_trade_no'] ?? ''),
-            'response' => $result,
+            'response' => $this->maskedForLog($result),
         ]);
 
         return $result;
@@ -467,6 +506,65 @@ class YiPayClient
     private function isSuccessCode(mixed $code): bool
     {
         return in_array((string) $code, ['1', '200'], true);
+    }
+
+    /**
+     * 交给日志层（Log::info / recordFailure）之前的本地脱敏：商户密钥不允许原样
+     * 进入应用日志或 gateway_logs。除键名 key/secret/sign 外，值恰好等于商户密钥
+     * 的字段同样掩码，防止换名字段绕过。保留前后各 4 字符便于核对凭据来源。
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function maskedForLog(array $payload): array
+    {
+        $masked = [];
+        foreach ($payload as $key => $value) {
+            if (is_array($value)) {
+                $masked[$key] = $this->maskedForLog($value);
+
+                continue;
+            }
+
+            $normalizedKey = strtolower(trim((string) $key));
+            // sign_type 的取值（MD5/RSA）是签名口径而非密文，维持原样；
+            // sign 本身是密文，虽无法反推密钥，泄漏签名仍等于泄漏一次可重放凭证。
+            $isCredentialKey = in_array($normalizedKey, ['key', 'sign', 'secret', 'merchant_key'], true)
+                || str_ends_with($normalizedKey, '_key')
+                || str_ends_with($normalizedKey, '_secret');
+
+            if (is_scalar($value) && (string) $value !== ''
+                && ($isCredentialKey || ($this->merchantKey !== '' && (string) $value === $this->merchantKey))) {
+                $masked[$key] = $this->maskSecret((string) $value);
+
+                continue;
+            }
+
+            $masked[$key] = $value;
+        }
+
+        return $masked;
+    }
+
+    private function maskSecret(string $value): string
+    {
+        if (strlen($value) <= 8) {
+            return '****';
+        }
+
+        return substr($value, 0, 4).'****'.substr($value, -4);
+    }
+
+    /**
+     * 自由文本（如网关错误响应体）中的商户密钥替换为掩码，防止异常日志泄漏明文。
+     */
+    private function maskSecretInText(string $text): string
+    {
+        if ($this->merchantKey !== '' && str_contains($text, $this->merchantKey)) {
+            return str_replace($this->merchantKey, $this->maskSecret($this->merchantKey), $text);
+        }
+
+        return $text;
     }
 
     /**

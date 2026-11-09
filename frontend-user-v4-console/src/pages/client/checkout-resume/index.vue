@@ -15,11 +15,24 @@
           </div>
 
           <div class="checkout-actions">
+            <t-button
+              v-if="status === 'confirm'"
+              theme="primary"
+              :loading="retrying"
+              @click="resumeCheckout"
+            >
+              确认创建账单
+            </t-button>
             <t-button v-if="status === 'error'" theme="primary" :loading="retrying" @click="resumeCheckout">
               重新创建账单
             </t-button>
+            <t-button v-if="status === 'error'" variant="outline" @click="backToProducts">
+              返回商品页重新选择
+            </t-button>
             <t-button v-if="status === 'empty'" theme="primary" @click="openProducts">去选购产品</t-button>
-            <t-button v-if="status !== 'loading'" variant="outline" @click="openInvoices">前往资金中心</t-button>
+            <t-button v-if="status !== 'loading' && status !== 'confirm'" variant="outline" @click="openInvoices">
+              前往资金中心
+            </t-button>
           </div>
         </div>
       </loading-state>
@@ -43,7 +56,7 @@ import clientApi from '@/api/client';
 import { formatBillingCycle } from '@/domains/finance/useRecords';
 import { getErrorMessage } from '@/utils/error';
 
-type ResumeStatus = 'loading' | 'empty' | 'error';
+type ResumeStatus = 'loading' | 'empty' | 'error' | 'confirm';
 
 const route = useRoute();
 const router = useRouter();
@@ -61,18 +74,21 @@ const orderPayload = computed(() => {
 const statusTheme = computed(() => {
   if (status.value === 'error') return 'danger';
   if (status.value === 'empty') return 'warning';
+  if (status.value === 'confirm') return 'warning';
   return 'primary';
 });
 
 const statusLabel = computed(() => {
   if (status.value === 'error') return '创建失败';
   if (status.value === 'empty') return '等待创建账单';
+  if (status.value === 'confirm') return '待确认';
   return '创建账单中';
 });
 
 const title = computed(() => {
   if (status.value === 'error') return '恢复购买信息失败';
   if (status.value === 'empty') return '没有待恢复的购买信息';
+  if (status.value === 'confirm') return '请确认购买信息';
   return '正在创建账单';
 });
 
@@ -82,6 +98,11 @@ const description = computed(() => {
   }
   if (status.value === 'empty') {
     return '请从产品页重新选择规格并创建账单。';
+  }
+  if (status.value === 'confirm') {
+    // URL 查询串是外部可写输入：链接被转发/重放时不能在对方不知情的情况下自动建单，
+    // 必须由当前用户看过购买信息后主动确认（M-12）。
+    return '链接中带有待恢复的购买信息，确认后将创建账单并进入支付页。请核对下方信息后再提交。';
   }
   return '创欧云正在恢复你刚才的购买信息，请不要关闭页面。';
 });
@@ -131,13 +152,18 @@ function applyPendingCouponFromQuery(payload: PendingWebsiteCheckout | null) {
   };
 }
 
+/** 本次购买信息是否来自 URL 查询串（外部可写，需要人工确认后才建单）。 */
+const payloadFromQuery = ref(false);
+
 function resolvePendingCheckout() {
   const queryPayload = typeof route.query.checkout_payload === 'string' ? route.query.checkout_payload : '';
   const decodedPayload = applyPendingCouponFromQuery(decodePendingWebsiteCheckout(queryPayload));
 
   if (decodedPayload) {
     savePendingWebsiteCheckout(decodedPayload);
+    payloadFromQuery.value = true;
     pendingCheckout.value = decodedPayload;
+    clearCheckoutQuery();
     return;
   }
 
@@ -148,8 +174,42 @@ function resolvePendingCheckout() {
   pendingCheckout.value = storedPayload;
 }
 
+/**
+ * 解析出载荷后清掉 URL 查询串：链接被刷新/转发时不再重复携带购买参数，
+ * 避免同一条链接在别的会话里被再次执行。
+ */
+function clearCheckoutQuery() {
+  const query = { ...route.query };
+  const hadPayload = 'checkout_payload' in query;
+  delete query.checkout_payload;
+  delete query.pending_coupon_id;
+  if (!hadPayload) {
+    return;
+  }
+  void router.replace({ path: route.path, query, hash: route.hash });
+}
+
 function openProducts() {
   router.push('/products');
+}
+
+/**
+ * 支付窗口/报价失效后的退路：本地待建单载荷已不可用，清掉并带商品与周期参数
+ * 回官网产品页重新选择（M-21）。
+ */
+function backToProducts() {
+  const payload = orderPayload.value || {};
+  const productId = Number(payload.product_id || 0);
+  const billingCycle = String(payload.billing_cycle || '').trim();
+  clearPendingWebsiteCheckout();
+  pendingCheckout.value = null;
+  if (productId > 0) {
+    const query: Record<string, string> = {};
+    if (billingCycle) query.billing_cycle = billingCycle;
+    router.push({ path: `/products/${productId}`, query });
+    return;
+  }
+  openProducts();
 }
 
 function openInvoices() {
@@ -190,6 +250,11 @@ onMounted(async () => {
   resolvePendingCheckout();
   if (!orderPayload.value) {
     status.value = 'empty';
+    return;
+  }
+
+  if (payloadFromQuery.value) {
+    status.value = 'confirm';
     return;
   }
 

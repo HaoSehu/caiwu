@@ -24,5 +24,9 @@ export function formatMoneyAmount(value: unknown): string {
 export function formatMoneyText(value: unknown): string {
   const amount = Number(value ?? 0);
   if (!Number.isFinite(amount)) return '¥0.00';
-  return `${amount < 0 ? '-' : ''}¥${formatMoneyAmount(Math.abs(amount))}`;
+  // 舍入到两位后为 0 的极小负数必须显示 ¥0.00 而不是 -¥0.00（M-24）；
+  // 用展示文本判零，保证与 formatMoneyAmount 的舍入口径完全一致。
+  const absText = formatMoneyAmount(Math.abs(amount));
+  const isRoundedZero = Number(absText.replace(/,/g, '')) === 0;
+  return `${amount < 0 && !isRoundedZero ? '-' : ''}¥${absText}`;
 }

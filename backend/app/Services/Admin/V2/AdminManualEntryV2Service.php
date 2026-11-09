@@ -8,6 +8,8 @@ use App\Constants\InvoiceStatus;
 use App\Constants\InvoiceType;
 use App\Constants\OrderStatus;
 use App\Constants\OrderType;
+use App\Constants\PaymentGatewayCode;
+use App\Constants\PaymentStatus;
 use App\Exceptions\BusinessException;
 use App\Models\Invoice;
 use App\Models\Order;
@@ -251,6 +253,8 @@ class AdminManualEntryV2Service
      * - 复用现有 refund 类型生成负数红字账单（amount/paid_amount 取负），origin_invoice_id 关联原单；
      * - 同原单至多一张有效红字：命名锁串行化 + 事务内按 (origin_invoice_id, type=refund) 复查幂等，
      *   重放不产生第二张（返回既有红字单）；
+     * - 可冲抵范围：无订单的补录账单，或补录订单产生的账单（order_id>0 且支付全部为 manual）；
+     *   余额扣款开通的账单拒绝（M-60），须走退款到余额；
      * - 不触碰原单、不删行、不动余额与台账（补录账单为系统外收款的纯记账凭证，本就无余额流水）；
      * - 审计：生成与执行各写一条 activity_logs。
      *
@@ -269,10 +273,30 @@ class AdminManualEntryV2Service
                     $original = Invoice::query()->lockForUpdate()->find($invoiceId);
                     throw_if(! $original instanceof Invoice, new BusinessException('账单不存在'));
                     throw_if((int) $original->user_id !== (int) $user->id, new BusinessException('账单与用户不匹配'));
+
+                    // 余额扣款开通实例产生的账单（M-60）：冲抵只平账面、余额不返还，
+                    // 必须走退款到余额，不能走红字冲抵。先于范围判定检查，
+                    // 保证这类账单无论建订单与否都得到明确纠错指引。
+                    $configSnapshot = is_array($original->config_snapshot ?? null) ? $original->config_snapshot : [];
                     throw_if(
-                        (string) $original->type !== InvoiceType::MANUAL || (int) ($original->order_id ?? 0) > 0,
+                        filter_var($configSnapshot['paid_from_balance'] ?? false, FILTER_VALIDATE_BOOL),
+                        new BusinessException('该账单由余额扣款产生，请使用退款到余额')
+                    );
+
+                    // 可冲抵范围（M-57b）：无订单的补录账单（原口径），或补录订单产生的账单
+                    // （order_id>0、订单带 admin_manual 补录标记、名下支付全部为 manual 网关）。
+                    // 后者此前被 order_id 闸永久拒绝，一次补录错误即让该周期账单无法纠错；
+                    // 真实网关收款的账单仍不允许走红字冲抵（资金在第三方，须走退款流程）。
+                    $orderId = (int) ($original->order_id ?? 0);
+                    $isPlainManualInvoice = (string) $original->type === InvoiceType::MANUAL && $orderId === 0;
+                    $isManualOrderInvoice = $orderId > 0
+                        && $this->isAdminManualOrderInvoice($original)
+                        && $this->hasOnlyManualGatewayPayments($original);
+                    throw_if(
+                        ! $isPlainManualInvoice && ! $isManualOrderInvoice,
                         new BusinessException('仅支持对补录账单发起红字冲抵')
                     );
+
                     throw_if(
                         (int) $original->status !== InvoiceStatus::PAID,
                         new BusinessException('当前账单状态不支持红字冲抵')
@@ -316,8 +340,9 @@ class AdminManualEntryV2Service
                         'user_id' => (int) $original->user_id,
                         'origin_invoice_id' => (int) $original->id,
                         // 与余额退款红字单一致：继承原单的实例归属，否则实例账单页签按
-                        // service_id 过滤时看不到这张冲抵单。补录单必然没有 order_id
-                        // （入口已拒绝 order_id > 0 的账单），故无需继承订单归属。
+                        // service_id 过滤时看不到这张冲抵单。补录订单产生的账单（M-57b）
+                        // 同样继承 service_id，不继承 order_id——红字单是独立冲抵凭证，
+                        // 挂回原订单会让对账把它当成该订单的第二张账单。
                         'service_id' => (int) ($original->service_id ?? 0) ?: null,
                         'type' => InvoiceType::REFUND,
                         'amount' => Money::format(-$reversalAmount),
@@ -389,6 +414,57 @@ class AdminManualEntryV2Service
         }
     }
 
+    /**
+     * 补录订单产生的账单判断：账单 config_snapshot.admin_manual（createFromOrder 从订单继承）
+     * 或关联订单带同一标记。
+     */
+    private function isAdminManualOrderInvoice(Invoice $invoice): bool
+    {
+        $invoiceSnapshot = $invoice->config_snapshot;
+        if (is_array($invoiceSnapshot) && filter_var($invoiceSnapshot['admin_manual'] ?? false, FILTER_VALIDATE_BOOL)) {
+            return true;
+        }
+
+        $orderSnapshot = $invoice->order?->config_snapshot;
+
+        return is_array($orderSnapshot) && filter_var($orderSnapshot['admin_manual'] ?? false, FILTER_VALIDATE_BOOL);
+    }
+
+    /**
+     * 补录订单账单的支付全部为 manual 网关（且至少有一笔成功入账）。
+     *
+     * 补录订单只能由 manual 支付单入账；出现任何第三方网关支付单即说明存在真实资金流，
+     * 其纠错必须走退款，不能红字冲抵。支付单按账单或订单双维度定位（历史行 order_id 可能为空）。
+     */
+    private function hasOnlyManualGatewayPayments(Invoice $invoice): bool
+    {
+        $payments = Payment::query()
+            ->where(function ($query) use ($invoice): void {
+                $query->where('invoice_id', (int) $invoice->id);
+                if ((int) ($invoice->order_id ?? 0) > 0) {
+                    $query->orWhere('order_id', (int) $invoice->order_id);
+                }
+            })
+            ->get(['id', 'gateway_key', 'status']);
+
+        if ($payments->isEmpty()) {
+            return false;
+        }
+
+        $hasManualSuccess = false;
+        foreach ($payments as $payment) {
+            if ($payment->gatewayKey() !== PaymentGatewayCode::MANUAL) {
+                return false;
+            }
+
+            if ((int) $payment->status === PaymentStatus::SUCCESS) {
+                $hasManualSuccess = true;
+            }
+        }
+
+        return $hasManualSuccess;
+    }
+
     private function assertTradeNoAvailable(int $userId, string $tradeNo): void
     {
         if ($tradeNo === '') {
@@ -400,6 +476,14 @@ class AdminManualEntryV2Service
             ->where('trade_no', $tradeNo)
             ->exists();
         throw_if($exists, new BusinessException('该交易号已存在于该用户的其他支付记录中，请核实后重新填写'));
+
+        // 交易号跨用户复用同样是错录信号。历史分期流水号可能重复出现，
+        // 因此只拦「同号不同用户」，不对全局唯一性做无差别拒绝。
+        $usedByOtherUser = Payment::query()
+            ->where('trade_no', $tradeNo)
+            ->where('user_id', '!=', $userId)
+            ->exists();
+        throw_if($usedByOtherUser, new BusinessException('该交易号已被其他用户使用，请核实'));
     }
 
     /**

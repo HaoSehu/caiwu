@@ -292,6 +292,124 @@ class MockHttpAdapter implements HttpClientAdapter {
     if (path.endsWith('/invoices/summary')) {
       return {'unpaid': 0, 'paid': 6, 'total_amount': '150.00'};
     }
+    // 账单详情：结构必须与 ClientInvoiceDetailResource 一致的嵌套白名单
+    // （basic/display/financial/payment_options/payment_chain），
+    // 此前未登记，预览里点进详情只拿到空壳、金额与支付入口全空（M-28④）。
+    final invoiceDetail = RegExp(r'/invoices/(\d+)$').firstMatch(path);
+    if (invoiceDetail != null) {
+      final id = int.tryParse(invoiceDetail.group(1)!) ?? 5002;
+      final isPaid = id != 5002;
+      return {
+        'invoice': {
+          'id': id,
+          'basic': {
+            'invoice_no': 'INV20261106000$id',
+            'type': 'new',
+            'type_label': '新购',
+            'status': isPaid ? 1 : 0,
+            'status_label': isPaid ? '已支付' : '待支付',
+            'billing_cycle': 'monthly',
+            'quantity': 1,
+            'due_date': '2026-11-13',
+          },
+          'display': {
+            'product_spec_snapshot': 'gscs-2vcpu-2gib',
+            'product_spec_display': '云服务器 · 2 核 2G',
+            'product_display_name': '云服务器 · 2 核 2G',
+            'combined_display_name': '云服务器 · 2 核 2G / gscs-2vcpu-2gib',
+            'product_full_path': '云服务器/美国/三网精品/gscs-2vcpu-2gib',
+            'member_discount_amount': '0.00',
+            'member_discount_snapshot': null,
+            'coupon_code': '',
+            'coupon_name': '',
+            'summary': {'headline': '云服务器 · 2 核 2G'},
+          },
+          'financial': {
+            'amount': isPaid ? '25.00' : '699.00',
+            'discount': '0.00',
+            'paid_amount': isPaid ? '25.00' : '0.00',
+            'payable_amount': isPaid ? '0.00' : '699.00',
+            'paid_at': isPaid ? '2026-11-06 03:38:10' : null,
+          },
+          'order': {
+            'id': 6001,
+            'order_no': 'ORD202611060001',
+            'status': isPaid ? 1 : 0,
+            'type': 'new',
+          },
+          'product': {'id': 74, 'name': '云服务器 · 2 核 2G', 'product_type': 'vps'},
+          'service': isPaid
+              ? {'id': 8801, 'name': 'gscs-2vcpu-2gib', 'status': 1, 'expires_at': '2026-12-06 03:37:27'}
+              : null,
+          'scene': <String, dynamic>{},
+          'configuration': {
+            'config_snapshot': <String, dynamic>{},
+            'config_pricing_snapshot': <String, dynamic>{},
+            'coupon': null,
+          },
+          'payment_chain': {
+            'payment_summary': isPaid
+                ? {
+                    'id': 6101,
+                    'payment_no': 'PAY202611060001',
+                    'gateway': 'alipay',
+                    'gateway_key': 'alipay',
+                    'gateway_label': '支付宝',
+                    'channel_name': '支付宝',
+                    'amount': '25.00',
+                    'status': 1,
+                    'status_label': '已支付',
+                    'paid_at': '2026-11-06 03:38:10',
+                  }
+                : null,
+            'payments': isPaid
+                ? [
+                    {
+                      'id': 6101,
+                      'payment_no': 'PAY202611060001',
+                      'gateway': 'alipay',
+                      'gateway_key': 'alipay',
+                      'gateway_label': '支付宝',
+                      'channel_name': '支付宝',
+                      'amount': '25.00',
+                      'status': 1,
+                      'status_label': '已支付',
+                      'paid_at': '2026-11-06 03:38:10',
+                    },
+                  ]
+                : <Map<String, dynamic>>[],
+          },
+          'payment_options': {
+            // 待支付账单给一条可点的余额支付；第三方渠道在预览里不拉起真实支付
+            'pay_methods': isPaid
+                ? <Map<String, dynamic>>[]
+                : [
+                    {
+                      'key': 'balance',
+                      'name': '余额支付',
+                      'label': '账户余额',
+                      'option_key': 'balance',
+                      'plugin_name': '',
+                      'channel_name': '余额支付',
+                    },
+                  ],
+            'payment_security': {
+              'can_pay': !isPaid,
+              'session_token': isPaid ? '' : 'preview_inv_session_token_0001',
+              'expires_at': null,
+            },
+            'can_cancel': !isPaid,
+            'service_id': isPaid ? 8801 : 0,
+          },
+          'items': <Map<String, dynamic>>[],
+          'logs': <Map<String, dynamic>>[],
+          'timestamps': {
+            'created_at': '2026-11-06 03:37:27',
+            'updated_at': '2026-11-06 03:38:10',
+          },
+        },
+      };
+    }
     if (path.endsWith('/invoices')) {
       return {
         'list': [
@@ -341,6 +459,45 @@ class MockHttpAdapter implements HttpClientAdapter {
         'page_size': pageSize,
       };
     }
+    // 订单详情：与 ClientOrderQueryService::detail 的字段对齐（此前未登记，
+    // 预览里点进订单详情只拿到空壳，M-28④）
+    final orderDetail = RegExp(r'/orders/(\d+)$').firstMatch(path);
+    if (orderDetail != null) {
+      final id = int.tryParse(orderDetail.group(1)!) ?? 6001;
+      return {
+        'order': {
+          'id': id,
+          'order_no': 'ORD202611060001',
+          'type': 'new',
+          'type_label': '新购',
+          'status': 1,
+          'status_label': '已支付',
+          'amount': '25.00',
+          'paid_amount': '25.00',
+          'discount': '0.00',
+          'member_discount_amount': '0.00',
+          'coupon_code': '',
+          'coupon_name': '',
+          'billing_cycle': 'monthly',
+          'quantity': 1,
+          'product_name': '云服务器 · 2 核 2G',
+          'product_full_path': '云服务器/美国/三网精品/gscs-2vcpu-2gib',
+          'service_name': 'gscs-2vcpu-2gib',
+          'gateway_label': '支付宝',
+          'channel_name': '支付宝',
+          'paid_at': '2026-11-06 03:38:10',
+          'finished_at': '2026-11-06 03:38:10',
+          'created_at': '2026-11-06 03:37:27',
+          'invoice': {
+            'id': 5001,
+            'invoice_no': 'INV202611060001',
+            'status': 1,
+            'amount': '25.00',
+            'payment_window_expired': false,
+          },
+        },
+      };
+    }
     if (path.endsWith('/payments')) {
       return {
         'list': [
@@ -375,12 +532,61 @@ class MockHttpAdapter implements HttpClientAdapter {
       };
     }
     if (path.endsWith('/recharge/gateways')) {
+      // 与后端 ClientRechargeWorkflowService::gatewayOptions() 同构：
+      // 返回键是 list，每项带 key/channel_name/payment_type/option_key（M-28④）
       return {
-        'gateways': [
-          {'id': 'alipay', 'name': '支付宝', 'enabled': true},
-          {'id': 'wechat', 'name': '微信支付', 'enabled': true},
+        'list': [
+          {
+            'key': 'alipay',
+            'label': '支付宝',
+            'channel_name': '支付宝',
+            'plugin_name': '支付宝',
+            'plugin_id': 0,
+            'plugin_key': 'alipay_f2f',
+            'option_key': 'alipay',
+          },
+          {
+            'key': 'yi_pay',
+            'label': '微信支付',
+            'channel_name': '微信支付',
+            'plugin_name': '易支付',
+            'plugin_id': 0,
+            'plugin_key': 'yi_pay',
+            'option_key': 'yi_pay:wxpay',
+            'payment_type': 'wxpay',
+          },
         ],
       };
+    }
+    if (RegExp(r'/recharge/[^/]+/status$').hasMatch(path)) {
+      // 与 ClientRechargeWorkflowService::status() 的字段对齐（paid/status/status_label）。
+      // 预览不做假到账：paid 恒 false，页面轮询会一直等到用户手动刷新。
+      return {'paid': false, 'status': 0, 'status_label': '待支付'};
+    }
+    if (RegExp(r'/invoices/\d+/pay/balance$').hasMatch(path)) {
+      // 余额支付只回结算摘要（invoice 由页面刷新详情再取），预览不虚构扣款结果
+      return {
+        'gateway': 'balance',
+        'amount': '0.00',
+        'paid_at': null,
+        'cash_balance': '${WebPreview.demoUser['cash_balance'] ?? '0.00'}',
+      };
+    }
+    if (RegExp(r'/invoices/\d+/pay/alipay$').hasMatch(path)) {
+      // 预览环境不能拉起真实支付：回一个不可扫的占位链接，提示走「我已完成支付」
+      return {
+        'gateway': 'alipay',
+        'gateway_key': 'alipay',
+        'gateway_label': '支付宝',
+        'channel_name': '支付宝',
+        'payment_no': 'PREVIEW-PAY-0001',
+        'poll_token': 'preview_poll_token_00000001',
+        'qr_code': '',
+        'amount': '0.00',
+      };
+    }
+    if (RegExp(r'/invoices/\d+/pay/alipay/status$').hasMatch(path)) {
+      return {'paid': false, 'status': 0, 'status_label': '待支付', 'message': '预览环境不会真正支付'};
     }
 
     // 消息公告

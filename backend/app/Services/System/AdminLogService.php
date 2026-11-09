@@ -18,6 +18,7 @@ use App\Services\Automation\Heartbeat\HeartbeatTaskRegistry;
 use App\Services\System\Concerns\HandlesAdminLogCleanup;
 use App\Support\AdminPrivacy;
 use App\Support\ApiAccessLogFile;
+use App\Support\AuditParamRedactor;
 use App\Support\LikeEscape;
 use App\Support\SchemaMetadataCache;
 use Carbon\Carbon;
@@ -115,14 +116,22 @@ class AdminLogService
             'page',
             max(1, $page),
         );
-        $logs->setCollection($logs->getCollection()->map(function ($log) {
+        // 用 through()（分页器自带的变换 API）而非 setCollection(map(...))：
+        // 这里把每行 Model 换成脱敏后的数组，元素类型与 setCollection 的 Model 契约本就不同，
+        // through() 正是为「把集合元素换成另一种形态」设计的，语义与类型都合适。
+        $logs->through(function ($log): array {
             $item = $log->toArray();
             $item['params_json'] = $this->normalizeNotificationParams($item['params_json'] ?? []);
             $item['params'] = $item['params_json'] ?? [];
             unset($item['params_json']);
 
+            // 验证码明文只进过历史行（M-50）：写库侧已掩码，读回时对存量数据兜底，
+            // 避免 visitor 默认角色（带 log.list）经日志页拿到可登录的明文码。
+            $item['content'] = AuditParamRedactor::maskVerifyCodeText((string) ($item['content'] ?? ''));
+            $item['params'] = AuditParamRedactor::maskVerifyCodeParams($item['params']);
+
             return $item;
-        }));
+        });
 
         return $this->buildPaginatorPayload($logs);
     }
@@ -745,7 +754,8 @@ class AdminLogService
         ]);
     }
 
-    // 管理端短信/邮件日志查询返回完整 content、params 与收件人，不做脱敏（项目红线：管理员需真实审计信息）
+    // 管理端短信/邮件日志查询返回完整 content、params 与收件人，不做脱敏（项目红线：管理员需真实审计信息）；
+    // 唯一例外是验证码明文（M-50）：内容侧掩码在 getSmsLogs() 读回时统一处理，本查询保持全量取数。
     private function buildSmsLogQuery(array $filters): ?Builder
     {
         if (! SchemaMetadataCache::hasTable('message_logs')) {

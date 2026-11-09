@@ -86,10 +86,18 @@ export interface SanitizeRenderedHtmlOptions {
 
 // 站内链接判定：锚点、以 / 开头（排除 // 协议相对）、./、../、无协议相对路径。
 // 站内链接保留权重（不加 nofollow、不强制新开标签），外链才收紧 rel。
-function isInternalHref(value: unknown): boolean {
-  const url = String(value || "")
+//
+// 反斜杠与浏览器解析口径对齐：WHATWG URL 把 `\` 当 `/`，`\\evil.com` 实际是
+// 协议相对站外地址；判定前先归一，避免把站外链接当站内、漏补 rel=noopener（M-47）。
+function normalizeHrefBackslashes(value: unknown): string {
+  return String(value || "")
     .trim()
-    .replace(/[\u0000-\u001F\u007F\s]+/g, "");
+    .replace(/[\u0000-\u001F\u007F\s]+/g, "")
+    .replace(/\\/g, "/");
+}
+
+function isInternalHref(value: unknown): boolean {
+  const url = normalizeHrefBackslashes(value);
   if (!url) return false;
   if (url.startsWith("#")) return true;
   if (url.startsWith("/") && !url.startsWith("//")) return true;
@@ -105,10 +113,16 @@ function normalizedUrl(value: unknown): string {
 }
 
 function isSafeUrl(value: unknown, tagName: string, attrName: string): boolean {
-  const url = normalizedUrl(value);
+  // HTTP(S) 链接的反斜杠归一成 / 再判定（M-47）：浏览器把 `\` 当 `/` 解析，
+  // `/\evil.com`、`\/evil.com`、`\\evil.com` 归一后都是协议相对地址；
+  // 此前 startsWith('/') 直接放行且 isInternalHref 判站内，不补 rel=noopener。
+  const url = normalizedUrl(value).replace(/\\/g, "/");
 
   if (!url) return false;
   if (/^(javascript|vbscript|file|data):/i.test(url)) return false;
+  // 协议相对（// 或 /// 开头）一律拒绝：归一后的反斜杠变体都落在这里
+  if (url.startsWith("//")) return false;
+  // 单个 / 开头才是站内路径
   if (
     url.startsWith("#") ||
     url.startsWith("/") ||
@@ -204,9 +218,17 @@ function cleanAttribute(
     return;
   }
 
-  if (URI_ATTRS.has(attrName) && !isSafeUrl(attr.value, tagName, attrName)) {
-    element.removeAttribute(attr.name);
-    return;
+  if (URI_ATTRS.has(attrName)) {
+    // 归一化后写回属性：判定与浏览器解析必须基于同一形态，否则 `\evil.com`
+    // 判定为站内、浏览器却按另一路径解析（M-47）。
+    const normalizedAttr = normalizedUrl(attr.value).replace(/\\/g, "/");
+    if (!isSafeUrl(normalizedAttr, tagName, attrName)) {
+      element.removeAttribute(attr.name);
+      return;
+    }
+    if (normalizedAttr !== attr.value) {
+      element.setAttribute(attr.name, normalizedAttr);
+    }
   }
 
   if (

@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\AppendSecurityHeaders;
 use App\Http\Middleware\CheckPermission;
+use App\Http\Middleware\ConfigureTrustedProxies;
 use App\Http\Middleware\EnsureAdminAuthenticated;
 use App\Http\Middleware\EnsureClientAuthenticated;
 use App\Http\Middleware\EnsureEmailIsVerified;
@@ -18,6 +19,7 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Exceptions\ThrottleRequestsException;
+use Illuminate\Http\Middleware\TrustProxies;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Validation\ValidationException;
@@ -67,22 +69,18 @@ return Application::configure(basePath: dirname(__DIR__))
             return '/';
         });
 
-        // 可信代理（B-10）：生产在 Nginx 反代之后，未声明可信代理时 $request->ip() 恒为
+        // 可信代理（B-10，M-42）：生产在 Nginx 反代之后，未声明可信代理时 $request->ip() 恒为
         // 反代地址，按 IP 的限流（含支付回调 60/min）退化为全站共用一个桶，轮询凭证的
         // IP 绑定也形同虚设。只信任 .env 显式列出的反代地址，不信任任意来源的 XFF。
-        $trustedProxies = array_values(array_filter(array_map(
-            static fn (string $ip): string => trim($ip),
-            explode(',', (string) env('TRUSTED_PROXIES', ''))
-        )));
-        if ($trustedProxies !== []) {
-            $middleware->trustProxies(
-                at: $trustedProxies,
-                headers: Request::HEADER_X_FORWARDED_FOR
-                    | Request::HEADER_X_FORWARDED_PROTO
-                    | Request::HEADER_X_FORWARDED_HOST
-                    | Request::HEADER_X_FORWARDED_PORT,
-            );
-        }
+        //
+        // 必须在 handle 期读 config 而不是这里读 env：withMiddleware 回调在容器
+        // make(HttpKernel) 时执行，此时 .env 尚未加载，env('TRUSTED_PROXIES') 恒为空。
+        // 同时要替换框架默认的全局 TrustProxies——它在本中间件之后执行，
+        // 会把可信列表重置为空，prepend 自己写的中间件等于被立刻抹掉。
+        $middleware->replace(
+            TrustProxies::class,
+            ConfigureTrustedProxies::class,
+        );
 
         // 维护模式豁免支付回调：窗口期 php artisan down 期间，网关回调必须仍能到达控制器，
         // 按正常链路落库并向网关 ack（否则网关重试耗尽、回调永久丢失）；业务端点仍返回 503。

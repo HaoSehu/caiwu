@@ -9,6 +9,10 @@ const SAFE_METHODS = new Set(["get", "head", "options"]);
 const WRITE_METHODS = new Set(["post", "put", "patch", "delete"]);
 const RETRYABLE_STATUS_CODES = new Set([408, 425, 429, 500, 502, 503, 504]);
 
+// 防缓存参数不参与去重键：管理端每个 GET 都会带新 `_t`，若把时间戳算进键，
+// 同一资源的并发请求永远无法合并（M-48）。
+const CACHE_BUSTER_PARAMS = new Set(["_t", "_", "timestamp", "ts"]);
+
 const pendingSafeRequests = new Map<string, Promise<AxiosResponse>>();
 
 export function isSafeRequest(method = "") {
@@ -45,6 +49,26 @@ export function serializeKeyPart(value: unknown): string {
   return String(value);
 }
 
+/**
+ * 去重键的请求参数归一：剔除防缓存时间戳等「只为击穿缓存」的参数，
+ * 其余参数按键排序参与序列化。
+ */
+export function stripCacheBusterParams(params: unknown): unknown {
+  if (!params || typeof params !== "object" || Array.isArray(params)) {
+    return params;
+  }
+
+  const filtered: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(params as Record<string, unknown>)) {
+    if (CACHE_BUSTER_PARAMS.has(key)) {
+      continue;
+    }
+    filtered[key] = value;
+  }
+
+  return filtered;
+}
+
 export function buildSafeRequestKey(
   config: AxiosRequestConfig & Record<string, unknown>,
 ) {
@@ -52,7 +76,7 @@ export function buildSafeRequestKey(
     String(config.method || "get").toLowerCase(),
     String(config.baseURL || ""),
     String(config.url || ""),
-    serializeKeyPart(config.params),
+    serializeKeyPart(stripCacheBusterParams(config.params)),
     serializeKeyPart(config.data),
     serializeKeyPart(config.responseType),
     serializeKeyPart(config.timeout),

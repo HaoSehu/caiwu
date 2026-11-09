@@ -117,14 +117,16 @@ export const useUserStore = defineStore('user', {
       };
       const admin = res.admin || {};
       const role = typeof admin.role === 'string' && admin.role ? admin.role : '';
-      // 演练版没有真实后端：数据集未加载完或加载失败时 auth/info 会返回空载荷，
+      // 【仅 demo 构建生效】演练版没有真实后端：数据集未加载完或加载失败时 auth/info 会返回空载荷，
       // 若照抄成 permissions: [] 会让整个后台落到 403 且刷新无法自愈。
-      // demo 构建下权限为空即兜底全量权限（生产构建此分支不参与编译）。
+      // demo 构建下权限为空即兜底全量权限。production 构建里 import.meta.env.MODE 被静态替换为
+      // 'production'，整个 demoFullAccess 分支会被常量折叠剔除；scripts/check-demo-fallbacks.mjs
+      // 校验 production 产物中不得出现本兜底（及 demoAdmin 等 demo 数据）的字符串。
       const demoFullAccess = import.meta.env.MODE === 'demo';
       const resolvedPermissions =
         demoFullAccess && (!Array.isArray(admin.permissions) || admin.permissions.length === 0)
           ? [AdminPermissions.ALL]
-          : (admin.permissions || []);
+          : admin.permissions || [];
       this.userInfo = {
         ...admin,
         name: admin.nickname || admin.username || admin.email || (demoFullAccess ? '演示管理员' : '管理员'),
@@ -150,8 +152,7 @@ export const useUserStore = defineStore('user', {
     async ensureUserInfo(): Promise<UserInfo> {
       // 演练版：持久化里可能残留空权限（数据集曾加载失败），此时即便 profileHydrated
       // 为真也必须回源重取一次，否则会永久停在 403。
-      const demoNeedsRepair =
-        import.meta.env.MODE === 'demo' && (this.userInfo?.permissions?.length ?? 0) === 0;
+      const demoNeedsRepair = import.meta.env.MODE === 'demo' && (this.userInfo?.permissions?.length ?? 0) === 0;
       if (this.profileHydrated && this.userInfo?.name && !demoNeedsRepair) {
         return this.userInfo;
       }

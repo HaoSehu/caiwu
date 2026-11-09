@@ -22,11 +22,15 @@ class ReferralWithdrawal extends Model
     /** 已打款：支付宝方式审核通过后，管理员确认打款并回填凭证。 */
     public const STATUS_PAID = 3;
 
+    /** 打款失败：审核通过后线下打款被退回，金额已退回可提余额，可重新申请。 */
+    public const STATUS_PAYMENT_FAILED = 4;
+
     public const STATUS_LABELS = [
         self::STATUS_PENDING => '待处理',
         self::STATUS_APPROVED => '已通过',
         self::STATUS_REJECTED => '已拒绝',
         self::STATUS_PAID => '已打款',
+        self::STATUS_PAYMENT_FAILED => '打款失败',
     ];
 
     public static function statusLabel(int $status): string

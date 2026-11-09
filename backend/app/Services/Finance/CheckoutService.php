@@ -454,15 +454,27 @@ class CheckoutService
             return $freshInvoice;
         }
 
+        // 0 元账单（全额优惠/免费商品）没有第三方支付入口，唯一收口方式是用户主动点余额支付；
+        // 被支付窗口清理掉就只能重新下单（M-5）。这里直接豁免，等用户/履约侧收口。
+        if ($freshInvoice->payableAmount() <= 0) {
+            return $freshInvoice;
+        }
+
         if (! $this->checkoutSecurityService->isPaymentSessionExpired($freshInvoice)) {
             return $freshInvoice;
         }
 
-        return $this->cancel($freshInvoice, array_merge([
-            'actor_type' => 'system',
-            'actor_name' => 'payment-window-expired',
-            'reason' => 'payment_window_expired',
-        ], $context));
+        try {
+            return $this->cancel($freshInvoice, array_merge([
+                'actor_type' => 'system',
+                'actor_name' => 'payment-window-expired',
+                'reason' => 'payment_window_expired',
+            ], $context));
+        } catch (BusinessException) {
+            // 部分核销的账单（paid_amount>0）拒绝自动取消（M-54）：懒清理运行在客户端列表/详情的
+            // GET 请求内，不能把守卫异常冒泡成 500，保留账单等待人工退款/红字冲抵处理。
+            return $freshInvoice;
+        }
     }
 
     public function cancelExpiredUnpaidInvoicesForUser(int $userId, array $context = []): int

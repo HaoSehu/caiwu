@@ -9,7 +9,8 @@ class ApplyWithdrawalRequest extends ClientFormRequest
     public function rules(): array
     {
         return [
-            'amount' => ['required', 'numeric', 'min:0.01'],
+            // decimal:0,2 与后端 number_format(…,2) 分位一致，避免 10.999 被静默舍入成 11.00
+            'amount' => ['required', 'numeric', 'min:0.01', 'decimal:0,2'],
             'method' => ['required', 'string', 'in:balance,alipay'],
             'account_name' => ['nullable', 'string', 'max:80'],
             'account_no' => ['nullable', 'regex:/^1[3-9]\d{9}$/'],

@@ -23,21 +23,7 @@ return [
     'version_retry_attempts' => (int) env('FINANCE_VERSION_RETRY_ATTEMPTS', 3),
     'version_retry_delay_ms' => (int) env('FINANCE_VERSION_RETRY_DELAY_MS', 20),
 
-    'funding' => [
-        /*
-         * 资金批次读取模式：
-         * - new：以 finance_funding_lots 为准（切换后默认）
-         * - legacy：回退旧口径（仅应急，需旧代码配合）
-         */
-        'read_mode' => (string) env('FINANCE_FUNDING_READ_MODE', 'new'),
-    ],
-
     'refund' => [
-        /*
-         * 可退额口径：legacy=旧公式，new=统一后的单套公式。
-         */
-        'read_mode' => (string) env('FINANCE_REFUND_READ_MODE', 'new'),
-
         /*
          * 交付状态守卫：off=不检查，warn=记录证据但放行，block=已交付拒绝退款。
          * 默认 block（2026-10-21 裁决）：已复现「服务仍在跑 + 全额退款」双吃，属资金损失；

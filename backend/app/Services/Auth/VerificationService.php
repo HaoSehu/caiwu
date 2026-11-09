@@ -724,17 +724,22 @@ class VerificationService
             return;
         }
 
+        // 锁序契约：资金链路统一先锁 users 再锁 finance_accounts（见 FinanceAccountService::lockAccount）。
+        // 本方法此前先 balanceCents(lock=true) 锁账户、再由 debit() 内部锁用户，
+        // 与支付/退款链路顺序相反，并发时会交叉死锁；这里先锁用户行对齐锁序。
+        $lockedUser = User::query()->lockForUpdate()->findOrFail($user->id);
+
         $accounts = $this->financeAccounts();
         $feeCents = Money::toCents($feeAmount);
         throw_if(
-            $accounts->balanceCents((int) $user->id, true) < $feeCents,
+            $accounts->balanceCents((int) $lockedUser->id, true) < $feeCents,
             new BusinessException('实名认证需要支付认证费用，当前余额不足', 42200)
         );
 
         // 系统按配置自动扣费；trace 取当前请求的 X-Request-Id（缺失时按平台约定生成 auto:uuid），
         // 保证认证费流水可与发起请求的日志串联。
         $accounts->debit(
-            (int) $user->id,
+            (int) $lockedUser->id,
             $feeCents,
             FinanceLedgerEventType::VERIFICATION_FEE,
             [

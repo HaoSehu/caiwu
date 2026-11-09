@@ -49,6 +49,7 @@ use App\Services\Finance\OrderV2QueryService;
 use App\Services\Finance\RechargePaymentService;
 use App\Services\ProductCatalog\ProductFullPathResolver;
 use App\Services\User\UserService;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -181,6 +182,12 @@ class UserController extends Controller
 
         $label = $amount > 0 ? '增加' : '扣减';
 
+        // 同键重放命中的是 finance_operations.result_payload（json 解码后的数组），
+        // 不是首次执行的 Eloquent 模型；数组与对象两种形态都要能取到 id，
+        // 否则资金已入账却抛「Attempt to read property on array」→ 500，
+        // 管理员会误判失败换新幂等键二次提交。
+        $rechargeRecord = $documents['recharge_record'] ?? null;
+
         return $this->success(ActionResultResource::make([
             'id' => (int) $user->id,
             'status' => 'completed',
@@ -195,12 +202,29 @@ class UserController extends Controller
                     'direction' => $amount > 0 ? 'increase' : 'decrease',
                 ],
                 'documents' => [
-                    'invoice_id' => (int) $documents['invoice']->id,
-                    'account_transaction_id' => (int) $documents['transaction']->id,
-                    'recharge_record_id' => $documents['recharge_record']?->id,
+                    'invoice_id' => $this->payloadDocumentId($documents['invoice'] ?? null),
+                    'account_transaction_id' => $this->payloadDocumentId($documents['transaction'] ?? null),
+                    'recharge_record_id' => $rechargeRecord === null ? null : $this->payloadDocumentId($rechargeRecord),
                 ],
             ],
         ])->resolve(), "余额{$label}成功");
+    }
+
+    /**
+     * 从余额调整结果中取文档 id：首次执行的载荷是模型对象，
+     * 幂等重放的载荷来自 finance_operations.result_payload（json 解码后的数组）。
+     */
+    private function payloadDocumentId(mixed $document): int
+    {
+        if (is_array($document)) {
+            return (int) ($document['id'] ?? 0);
+        }
+
+        if ($document instanceof Model) {
+            return (int) $document->getKey();
+        }
+
+        return 0;
     }
 
     public function loginAs(LoginAsUserRequest $request, User $user): JsonResponse

@@ -275,6 +275,12 @@ async function submitForm() {
   const payload = buildPayload();
   if (!payload) return;
 
+  // syncGroupDiscounts 是整表覆盖写，矩阵未加载成功就提交会把该等级原有折扣全部清空
+  if (form.id && !matrixLoaded.value) {
+    MessagePlugin.warning('折扣矩阵未加载成功，请重试');
+    return;
+  }
+
   saving.value = true;
   try {
     if (form.id) {
@@ -283,8 +289,8 @@ async function submitForm() {
       await adminApi.memberLevels.create(payload);
     }
 
-    // 编辑时折扣矩阵随等级一并保存；矩阵未加载完则跳过，保留线上原有折扣
-    if (form.id && matrixLoaded.value) {
+    // 编辑时折扣矩阵随等级一并保存（矩阵未加载成功的情况已在上方拦截）
+    if (form.id) {
       try {
         await adminApi.memberLevels.syncGroupDiscounts(form.id, buildDiscountRules());
       } catch (error) {
@@ -311,11 +317,16 @@ function buildPayload(): MemberLevelPayload | null {
   };
 }
 
+// 矩阵加载请求序号：连续打开不同等级时，旧响应不得覆盖新等级的矩阵与已加载标记
+let matrixRequestSeq = 0;
+
 async function loadMatrix(levelId: number | string) {
+  const seq = ++matrixRequestSeq;
   matrixLoaded.value = false;
   matrixGroups.value = [];
   try {
     const data = await adminApi.memberLevels.groupDiscounts(levelId);
+    if (seq !== matrixRequestSeq) return;
     matrixGroups.value = (data.groups || []).map((group) => {
       const rawType = group.discount ? Number(group.discount.discount_type) : 0;
 
@@ -327,10 +338,11 @@ async function loadMatrix(levelId: number | string) {
         discountValue: group.discount ? Number(group.discount.discount_value) : 0,
       };
     });
-  } catch (error) {
-    MessagePlugin.error(errorMessage(error, '加载折扣矩阵失败'));
-  } finally {
+    // 只有成功拿到数据才算已加载：失败时保持 false，避免保存时以空矩阵覆盖线上折扣
     matrixLoaded.value = true;
+  } catch (error) {
+    if (seq !== matrixRequestSeq) return;
+    MessagePlugin.error(errorMessage(error, '加载折扣矩阵失败'));
   }
 }
 

@@ -27,7 +27,7 @@
       :paid-amount="Number(invoice.paid_amount || 0)"
       :refunded-amount="Number(invoice.refund_amount || 0)"
       :refundable-amount="Number(invoice.refundable_amount_for_balance || 0)"
-      :can-refund="Boolean(invoice.can_refund_to_balance)"
+      :can-refund="canRefund"
       :submit="submitRefund"
     />
   </div>
@@ -44,6 +44,7 @@ import { adminApi } from '@/api/admin';
 import InvoiceDetailDrawer from '@/components/finance-record-detail/InvoiceDetailDrawer.vue';
 import RefundDialog from '@/components/finance-record-detail/RefundDialog.vue';
 import { AdminPermissions, hasPermissionInList } from '@/constants/permissions';
+import { useRefundMark } from '@/hooks/useRefundMark';
 import { useUserStore } from '@/store';
 import { fieldValue } from '@/utils/format';
 import { errorMessage } from '@/utils/userMessage';
@@ -97,6 +98,10 @@ const cancelable = computed(
 
 const refundVisible = ref(false);
 
+// 退款入口 = 本地 finance.refund 权限 ∧ 服务端 can_refund_to_balance，与订单详情页同口径
+const { hasRefundPermission } = useRefundMark();
+const canRefund = computed(() => hasRefundPermission.value && Boolean(invoice.value.can_refund_to_balance));
+
 async function load(): Promise<void> {
   const id = Number(route.params.id || 0);
   if (!id) {
@@ -123,6 +128,10 @@ async function load(): Promise<void> {
 }
 
 function openRefundDialog(): void {
+  if (!hasRefundPermission.value) {
+    MessagePlugin.warning('没有退款到余额的操作权限');
+    return;
+  }
   if (!invoice.value.can_refund_to_balance) {
     MessagePlugin.warning('该账单当前不支持退款到余额');
     return;

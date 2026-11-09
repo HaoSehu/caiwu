@@ -20,7 +20,8 @@ class StoreCouponCampaignRequest extends AdminFormRequest
             'description' => ['nullable', 'string', 'max:255'],
             'weekdays' => ['required', 'array', 'min:1'],
             'weekdays.*' => ['integer', 'between:0,6'],
-            'trigger_time' => ['required', 'string', 'regex:/^\\d{2}:\\d{2}(:\\d{2})?$/'],
+            // 除形态外必须校验真实取值：99:99 形态合法但会让调度 setTimeFromTimeString 抛异常
+            'trigger_time' => ['required', 'string', 'regex:/^([01]\\d|2[0-3]):[0-5]\\d(:[0-5]\\d)?$/'],
             'issue_quantity' => ['required', 'integer', 'min:1'],
             'valid_duration_hours' => ['nullable', 'integer', 'min:1', 'max:87600'],
             'discount_type' => ['required', Rule::in(['fixed', 'percentage', 'override'])],

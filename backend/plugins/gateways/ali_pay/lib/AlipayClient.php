@@ -8,6 +8,7 @@ use App\Services\Integrations\Payments\Concerns\BuildsGatewayHttpClient;
 use App\Services\Integrations\Payments\Concerns\WrapsPemKeys;
 use App\Services\System\GatewayLogService;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Log;
 
 class AlipayClient
@@ -35,6 +36,9 @@ class AlipayClient
     private bool $sslVerify;
 
     private string $caBundle;
+
+    /** 最近一次网关同步响应的原始报文（GBK 已转 UTF-8）：RSA2 签名覆盖的是节点原始 JSON 文本 */
+    private string $lastRawResponseBody = '';
 
     /**
      * @param  array<string, mixed>  $config
@@ -189,6 +193,29 @@ class AlipayClient
 
         $data = $result['alipay_trade_query_response'] ?? [];
 
+        // 查询结果直接驱动入账，必须与异步通知同级验签；无签名时继续返回但留痕，
+        // 验签失败则抛业务异常，由调用侧按「查询失败」处理而不是把钱记上账。
+        $hasSignature = $this->hasResponseSignature($result);
+        if ($hasSignature && trim((string) $this->alipayPublicKey) !== '') {
+            if (! $this->verifySignedPayload($result)) {
+                Log::warning('[支付宝主动查询] 查询响应验签失败', [
+                    'out_trade_no' => $outTradeNo,
+                    'trade_status' => (string) ($data['trade_status'] ?? ''),
+                ]);
+
+                throw new BusinessException('支付宝查询响应验签失败');
+            }
+        } elseif ($hasSignature) {
+            Log::warning('[支付宝主动查询] 查询响应含签名但未配置公钥，无法验签', [
+                'out_trade_no' => $outTradeNo,
+            ]);
+        } else {
+            Log::warning('[支付宝主动查询] 查询响应无签名', [
+                'out_trade_no' => $outTradeNo,
+                'trade_status' => (string) ($data['trade_status'] ?? ''),
+            ]);
+        }
+
         return [
             'trade_status' => $data['trade_status'] ?? '',
             'trade_no' => $data['trade_no'] ?? '',
@@ -216,7 +243,9 @@ class AlipayClient
 
         $stringToSign = urldecode(http_build_query($params));
 
-        $publicKeyResource = openssl_pkey_get_public($this->wrapPemKey((string) $this->alipayPublicKey, 'PUBLIC KEY'));
+        // 公钥可能是裸 base64，也可能是完整 PEM：统一经 pemWrappedPublicKey 规范化，
+        // 已带 BEGIN 头的 PEM 原样使用，避免二次包装导致 openssl 解析失败（M-35）。
+        $publicKeyResource = openssl_pkey_get_public($this->pemWrappedPublicKey((string) $this->alipayPublicKey));
         if ($publicKeyResource === false) {
             Log::warning('[支付宝回调] 公钥无效，签名验证失败');
 
@@ -226,6 +255,143 @@ class AlipayClient
         $algorithm = $signType === 'RSA2' ? OPENSSL_ALGO_SHA256 : OPENSSL_ALGO_SHA1;
 
         return openssl_verify($stringToSign, base64_decode($sign), $publicKeyResource, $algorithm) === 1;
+    }
+
+    /**
+     * 检查同步响应是否携带签名；支付宝在顶层（sign）或 *-response 节点内（sign）给出。
+     *
+     * @param  array<string, mixed>  $result
+     */
+    private function hasResponseSignature(array $result): bool
+    {
+        return $this->extractResponseSignature($result) !== '';
+    }
+
+    /**
+     * @param  array<string, mixed>  $result
+     */
+    private function extractResponseSignature(array $result): string
+    {
+        $sign = trim((string) ($result['sign'] ?? ''));
+        if ($sign !== '') {
+            return $sign;
+        }
+
+        foreach ($result as $key => $value) {
+            if (str_ends_with($key, '_response') && is_array($value)) {
+                $nodeSign = trim((string) ($value['sign'] ?? ''));
+                if ($nodeSign !== '') {
+                    return $nodeSign;
+                }
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * 校验同步响应签名。
+     *
+     * 支付宝同步响应的 sign 覆盖的是 *_response 节点的原始 JSON 文本（与异步通知的
+     * query-string 排序形态不同），不能用 json_decode 再 json_encode 重建——键序与
+     * 转义会变，验签必然失败。因此优先对 request() 留档的响应体做节点文本截取后验签；
+     * 节点文本不可用时退回与 verifyNotify 同口径的排序 query-string 验签。
+     * 两条路径都要求持有平台公钥，不降低真实性强度。
+     *
+     * @param  array<string, mixed>  $result
+     */
+    private function verifySignedPayload(array $result): bool
+    {
+        $sign = $this->extractResponseSignature($result);
+        if ($sign === '' || trim((string) $this->alipayPublicKey) === '') {
+            return false;
+        }
+
+        $decodedSign = base64_decode($sign, true);
+        $publicKeyResource = openssl_pkey_get_public($this->pemWrappedPublicKey($this->alipayPublicKey));
+        if ($decodedSign === false || $publicKeyResource === false) {
+            return false;
+        }
+
+        $nodeKey = '';
+        foreach ($result as $key => $value) {
+            if (str_ends_with($key, '_response') && is_array($value)) {
+                $nodeKey = $key;
+                break;
+            }
+        }
+
+        if ($nodeKey === '' || $this->lastRawResponseBody === '') {
+            return false;
+        }
+
+        $nodePattern = '/"'.preg_quote($nodeKey, '/').'"\s*:\s*\{/';
+        if (preg_match($nodePattern, $this->lastRawResponseBody, $matches, PREG_OFFSET_CAPTURE) === 1) {
+            $nodeStart = (int) $matches[0][1] + strlen((string) $matches[0][0]) - 1;
+            $nodeJson = $this->extractJsonNode(substr($this->lastRawResponseBody, $nodeStart));
+
+            if ($nodeJson !== null && openssl_verify($nodeJson, $decodedSign, $publicKeyResource, OPENSSL_ALGO_SHA256) === 1) {
+                return true;
+            }
+        }
+
+        // 退回异步通知同口径（排序 query-string）：兼容按 notify 规范签名的网关/联调环境
+        $node = $result[$nodeKey];
+        if (is_array($node)) {
+            unset($node['sign'], $node['sign_type']);
+            ksort($node);
+            $stringToSign = urldecode(http_build_query($node));
+
+            foreach ([OPENSSL_ALGO_SHA256, OPENSSL_ALGO_SHA1] as $algorithm) {
+                if (openssl_verify($stringToSign, $decodedSign, $publicKeyResource, $algorithm) === 1) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * 从「{」起始位置截取一个完整 JSON 对象文本，正确处理字符串内的花括号与转义。
+     */
+    private function extractJsonNode(string $json): ?string
+    {
+        $depth = 0;
+        $inString = false;
+        $length = strlen($json);
+
+        for ($i = 0; $i < $length; $i++) {
+            $char = $json[$i];
+
+            if ($inString) {
+                if ($char === '\\') {
+                    $i++;
+                } elseif ($char === '"') {
+                    $inString = false;
+                }
+
+                continue;
+            }
+
+            if ($char === '"') {
+                $inString = true;
+
+                continue;
+            }
+
+            if ($char === '{') {
+                $depth++;
+            } elseif ($char === '}') {
+                $depth--;
+
+                if ($depth === 0) {
+                    return substr($json, 0, $i + 1);
+                }
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -249,8 +415,20 @@ class AlipayClient
             ]);
 
             throw new BusinessException('支付网关暂时不可用，请稍后重试', 42200, 422);
+        } catch (RequestException $exception) {
+            // 4xx/5xx 不能逃逸成 500：按网关响应异常转业务错误，响应体只留状态码与摘要
+            Log::error('[支付宝当面付] 网关响应异常', [
+                'gateway' => $this->gateway,
+                'http_status' => $exception->response->status(),
+                'body' => mb_substr($exception->response->body(), 0, 300),
+            ]);
+
+            throw new BusinessException('网关响应异常，请稍后重试', 42200, 422);
         }
 
+        // 验签对象是 UTF-8 转码后的 *_response 节点文本：支付宝签名针对 UTF-8 内容，
+        // 官方 SDK 同样是先 iconv 再截取节点，必须在转码后、json_decode 前留档
+        $this->lastRawResponseBody = '';
         $body = $response->body();
 
         // 支付宝网关始终返回 GBK 编码，需转为 UTF-8 才能 json_decode
@@ -268,6 +446,8 @@ class AlipayClient
 
             return [];
         }
+
+        $this->lastRawResponseBody = $body;
 
         return $result;
     }
@@ -377,11 +557,16 @@ class AlipayClient
         ksort($params);
         $stringToSign = urldecode(http_build_query($params));
 
-        // 自动检测 PKCS8 / PKCS1 格式后统一做 PEM 规范化包装
-        $key = $this->privateKey;
-        $pemKey = str_starts_with($key, 'MIIEv')
-            ? $this->wrapPemKey($key, 'PRIVATE KEY')
-            : $this->wrapPemKey($key, 'RSA PRIVATE KEY');
+        // 私钥可能是完整 PEM 或裸 base64：完整 PEM 原样使用，裸 base64 按首字符
+        // 自动检测 PKCS8 / PKCS1 后包装，避免对 PEM 二次包装导致 openssl 解析失败
+        $key = trim($this->privateKey);
+        if (str_contains($key, '-----BEGIN')) {
+            $pemKey = $key;
+        } else {
+            $pemKey = str_starts_with($key, 'MIIEv')
+                ? $this->wrapPemKey($key, 'PRIVATE KEY')
+                : $this->wrapPemKey($key, 'RSA PRIVATE KEY');
+        }
 
         $algorithm = $this->signType === 'RSA2' ? OPENSSL_ALGO_SHA256 : OPENSSL_ALGO_SHA1;
 

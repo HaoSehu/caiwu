@@ -9,6 +9,7 @@ use App\Models\UserAccount;
 use App\Models\UserReferral;
 use App\Support\AdminPrivacy;
 use App\Support\SchemaMetadataCache;
+use Illuminate\Support\Facades\DB;
 
 class AdminReferralOverviewService
 {
@@ -31,6 +32,14 @@ class AdminReferralOverviewService
             ->selectRaw('COALESCE(SUM(CASE WHEN status = 0 THEN amount ELSE 0 END), 0) as withdrawing_amount')
             ->selectRaw('COALESCE(SUM(CASE WHEN status = 1 THEN amount ELSE 0 END), 0) as withdrawn_amount')
             ->selectRaw('COALESCE(SUM(CASE WHEN status = 2 THEN amount ELSE 0 END), 0) as rejected_amount')
+            ->first();
+
+        // 当前可提现总额必须以账户实时余额（user_accounts.referral_available_balance）为准：
+        // released_amount 是「终身累计已释放额」，已被提现/提现中占用的部分仍计入其中，
+        // 直接拿它当「可提现奖励」展示会高估运营可用资金。
+        // 用 DB::table 取聚合行并经 data_get 取值：聚合别名不是模型属性，走模型/直接属性访问会被静态分析判为未定义。
+        $availableSummary = DB::table('user_accounts')
+            ->selectRaw('COALESCE(SUM(referral_available_balance), 0) as available_amount')
             ->first();
 
         $topReferrersQuery = User::query()
@@ -78,6 +87,8 @@ class AdminReferralOverviewService
                 'total_reward_amount' => (float) ($rewardSummary?->total_reward_amount ?? 0),
                 'frozen_amount' => (float) ($rewardSummary?->frozen_amount ?? 0),
                 'released_amount' => (float) ($rewardSummary?->released_amount ?? 0),
+                // 口径：所有用户 referral_available_balance 合计（当前可提现），非终身已释放额
+                'available_amount' => (float) (data_get($availableSummary, 'available_amount') ?? 0),
                 'withdrawals_total' => (int) ($withdrawSummary?->withdrawals_total ?? 0),
                 'withdrawing_amount' => (float) ($withdrawSummary?->withdrawing_amount ?? 0),
                 'withdrawn_amount' => (float) ($withdrawSummary?->withdrawn_amount ?? 0),

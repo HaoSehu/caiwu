@@ -16,7 +16,10 @@ use Illuminate\Support\Facades\Schema;
  * activity_logs.context。修复落库侧之后，存量行仍需一次性清洗。
  *
  * 范围严格锁定：
- * - 只处理 module=integration_plugin（插件配置保存）；
+ * - 只处理插件配置保存的审计行。LogOperation 按请求路径首段取 module，
+ *   管理端路由是 /api/v2/admin/integration-plugins/...，实际落库值为
+ *   `integration-plugins`；历史调用方（如 AuditParamRedactorTest 造数）用的是
+ *   下划线形式 `integration_plugin`，两种都必须覆盖（M-43）；
  * - 只把凭据键的值替换为 [REDACTED]，不删行、不改其它字段；
  * - 默认 dry-run，--execute 才写库；--json 输出机器可读结果。
  */
@@ -41,7 +44,7 @@ class ScrubActivityLogSecretsCommand extends Command
 
         $execute = (bool) $this->option('execute');
         $rows = DB::table('activity_logs')
-            ->where('module', 'integration_plugin')
+            ->whereIn('module', ['integration-plugins', 'integration_plugin'])
             ->whereNotNull('context')
             ->orderBy('id')
             ->get(['id', 'context']);

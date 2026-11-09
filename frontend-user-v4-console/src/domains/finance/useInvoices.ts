@@ -94,9 +94,22 @@ export function resolveInvoiceNo(row: InvoiceRecord | null | undefined) {
   return normalizeText(row?.invoice_no) || `#${row?.id || 0}`;
 }
 
+/**
+ * 可支付判据：以库内真实状态 raw_status 为准。
+ *
+ * 详情/列表接口的 status 是派生展示态，混付预扣或部分核销后会变成 2（部分已付），
+ * 但库内仍是待支付（0）、后端 can_pay 也为 true —— 只认 status===0 会把这类账单
+ * 判成不可支付，刷新支付页即被踢回列表（M-23）。后端未下发 raw_status 时回落
+ * status，并把派生态 2 视为待支付。
+ */
 export function isPayableInvoice(row: InvoiceRecord | null | undefined) {
+  const rawStatus = row?.raw_status;
+  if (rawStatus !== undefined && rawStatus !== null && String(rawStatus).trim() !== '') {
+    return Number(rawStatus) === 0;
+  }
+
   const status = Number(row?.status);
-  return status === 0;
+  return status === 0 || status === 2;
 }
 
 /**
@@ -643,10 +656,14 @@ export function useInvoiceDetail() {
     const shouldUseBalanceDeduction = selectedIsAlipay.value && allowBalanceDeduction.value && canDeductBalance.value;
     paying.value = true;
     try {
+      // 混付同样要透传用户所选渠道（M-22）：此前只传余额与 token，后端硬编码真支付宝，
+      // 用户选「易支付-支付宝」时会被换成真支付宝下单，扫码付到错误商户。
       const res = shouldUseBalanceDeduction
         ? await clientApi.payInvoiceByBalanceAndAlipay(invoiceId.value, {
             payment_session_token: sessionToken,
             balance_amount: autoDeductionAmount.value,
+            gateway,
+            ...(selectedPaymentType.value ? { payment_type: selectedPaymentType.value } : {}),
           })
         : await clientApi.payInvoiceByAlipay(invoiceId.value, gatewayPayload);
       const payload = res.data;

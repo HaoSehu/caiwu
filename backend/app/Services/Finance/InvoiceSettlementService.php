@@ -120,7 +120,9 @@ class InvoiceSettlementService
                     return ['dispatch' => false, 'invoice' => $invoice, 'payment_no' => (string) $lockedPayment->payment_no];
                 }
 
-                if ($this->checkoutSecurityService->isPaymentSessionExpired($invoice)) {
+                // 过期分支只对未支付账单成立：已退款/其它状态的迟到捕获款走下方
+                // REFUNDED 分支或异常闸，避免在非待支付账单上回补预扣/尝试取消。
+                if ((int) $invoice->status === InvoiceStatus::UNPAID && $this->checkoutSecurityService->isPaymentSessionExpired($invoice)) {
                     $this->mixPaymentService->restoreReservedMixBalance($lockedPayment, [
                         'closed_reason' => 'payment_window_expired_captured',
                         'mark_payment_failed' => false,
@@ -131,6 +133,23 @@ class InvoiceSettlementService
                     $this->cancelExpiredInvoiceAfterCapturedPayment($invoice, $lockedPayment);
 
                     Log::warning("[{$logLabel}] 账单支付窗口已过期，已取消账单并拦截入账", array_merge(PaymentChannelLabel::logContextForGateway($lockedPayment->gatewayKey(), $lockedPayment), [
+                        'payment_no' => $lockedPayment->payment_no,
+                        'invoice_id' => $invoice->id,
+                        'order_id' => $invoice->order?->id,
+                    ]));
+
+                    return ['dispatch' => false, 'invoice' => $invoice, 'payment_no' => (string) $lockedPayment->payment_no];
+                }
+
+                // 已退款账单（M-55）：退款链不关闭历史 PENDING 支付单，用户此前生成的二维码
+                // 仍可能被支付成功。此时钱已在网关被扣，不能抛异常让回调永久失败——按已取消
+                // 账单同口径把捕获款转入余额并留凭证，账面可追溯。
+                // 这里不回补组合支付预扣：退款基数已按 paid_amount 全额退还（含预扣部分），
+                // 再退回预扣会形成重复返还，且 decrement 会破坏「累计退款 ≤ 实收」守恒。
+                if ((int) $invoice->status === InvoiceStatus::REFUNDED) {
+                    $this->mixPaymentService->creditCapturedPaymentToBalance($lockedPayment, $invoice, $tradeNo, $payload, 'invoice_refunded_late_capture');
+
+                    Log::warning("[{$logLabel}] 已退款账单收到支付回调，已拦截入账并转入余额", array_merge(PaymentChannelLabel::logContextForGateway($lockedPayment->gatewayKey(), $lockedPayment), [
                         'payment_no' => $lockedPayment->payment_no,
                         'invoice_id' => $invoice->id,
                         'order_id' => $invoice->order?->id,
@@ -164,10 +183,15 @@ class InvoiceSettlementService
                     return ['dispatch' => false, 'invoice' => $invoice, 'payment_no' => (string) $lockedPayment->payment_no];
                 }
 
+                // callback_raw 合并写而非整体覆盖（M-65）：组合支付预扣写入的
+                // mix_payment/balance_amount 是资金判定依据（resolveMixBalanceAmount 依赖），
+                // 被原始通知覆盖后退款/对账无法再还原这笔支付含多少余额预扣。
+                // 必须走审计镜像读取原始列：回调入口已先经 recordPaymentCallback 把通知载荷
+                // 写进 payment_callbacks 投影，普通访问器会优先返回该投影而丢掉 mix 标记。
                 $lockedPayment->forceFill([
                     'trade_no' => $tradeNo,
                     'status' => PaymentStatus::SUCCESS,
-                    'callback_raw' => $payload,
+                    'callback_raw' => array_merge(PaymentCallbackRaw::rawDecode($lockedPayment, true), $payload),
                     'paid_at' => now(),
                     'trace_id' => (string) ($payload['trace_id'] ?? $lockedPayment->trace_id),
                 ])->save();
@@ -226,8 +250,26 @@ class InvoiceSettlementService
 
     private function cancelExpiredInvoiceAfterCapturedPayment(Invoice $invoice, Payment $payment): void
     {
-        $this->tradeLifecycleService->cancelTrade($invoice);
+        // 先回补其他组合支付单的预扣余额再取消：预扣已计入 paid_amount，
+        // 取消守卫（paid_amount > 0 拒绝取消）会拦截未回补的账单。
         $this->closeOtherPendingPayments($invoice, (int) $payment->id, 'payment_window_expired', true);
+        $invoice->refresh();
+
+        // 已非待支付（并发入账/已取消等）时不再走取消：状态机自会拒绝，避免把
+        // 守卫异常抛进回调事务（回调会整笔回滚）。
+        if ((int) $invoice->status !== InvoiceStatus::UNPAID) {
+            return;
+        }
+
+        // 仍有入账款项（如部分手工核销）时不能取消：取消会让这笔收款失去所有纠错通道
+        // （M-54 同类悬空收款）。保留账单并打 requires_refund 标记，交人工处理。
+        if ((float) $invoice->paid_amount > 0) {
+            $invoice->forceFill(['requires_refund' => true])->save();
+
+            return;
+        }
+
+        $this->tradeLifecycleService->cancelTrade($invoice);
     }
 
     private function recordSuccessfulInvoicePayment(Payment $payment, Invoice $invoice): void

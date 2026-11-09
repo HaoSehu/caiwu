@@ -342,7 +342,8 @@ export const ACCOUNT_TRANSACTION_EVENT_MAP: StatusMap = {
   adjust: { label: "调账", tagType: "info", direction: "in" },
   reward_frozen: { label: "奖励冻结", tagType: "warning", direction: "in" },
   reward_released: { label: "奖励释放", tagType: "success", direction: "in" },
-  reward_reversed: { label: "奖励冲正", tagType: "danger", direction: "out" },
+  // 文案与后端 FinanceLedgerEventType::labels() 对齐（后端为「奖励反转」）
+  reward_reversed: { label: "奖励反转", tagType: "danger", direction: "out" },
   withdraw_apply: { label: "提现申请", tagType: "warning", direction: "out" },
   withdraw_approved: {
     label: "提现通过",
@@ -355,6 +356,18 @@ export const ACCOUNT_TRANSACTION_EVENT_MAP: StatusMap = {
     tagType: "success",
     direction: "out",
   },
+};
+
+// ===================== 推荐提现状态 =====================
+// 值域与文案必须与后端 App\Models\ReferralWithdrawal::STATUS_LABELS 一致：
+// 0 待处理 / 1 已通过 / 2 已拒绝 / 3 已打款 / 4 打款失败（失败时金额已退回可提余额）。
+// 缺失映射会让用户端把 3/4 直接显示成裸数字。
+export const WITHDRAWAL_STATUS_MAP: StatusMap = {
+  0: { label: "待处理", color: STATUS_COLORS.warning, tagType: "warning" },
+  1: { label: "已通过", color: STATUS_COLORS.success, tagType: "success" },
+  2: { label: "已拒绝", color: STATUS_COLORS.danger, tagType: "danger" },
+  3: { label: "已打款", color: STATUS_COLORS.success, tagType: "success" },
+  4: { label: "打款失败", color: STATUS_COLORS.danger, tagType: "danger" },
 };
 
 // ===================== 通用工具函数 =====================

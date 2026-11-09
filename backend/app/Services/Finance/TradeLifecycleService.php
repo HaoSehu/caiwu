@@ -90,7 +90,9 @@ class TradeLifecycleService
      * 取消交易：账单置 CANCELLED + 级联取消 PENDING 订单 + 券释放。
      *
      * 状态守卫（双保险）：已 CANCELLED 幂等跳过写入继续级联；PAID/REFUNDED
-     * 拒绝取消（已入账资金须走退款，不允许直接抹平），兜底未来调用方漏加守卫。
+     * 拒绝取消（已入账资金须走退款，不允许直接抹平），paid_amount > 0 的
+     * 待支付账单同样拒绝（部分入账的收款取消后将失去所有纠错通道），
+     * 兜底未来调用方漏加守卫。
      * 调用方负责关闭名下 PENDING 支付单（组合支付预扣回补属支付域，
      * 见 MixPaymentService::restoreReservedMixBalance）。
      * 券释放经 syncInvoiceCouponUsage 幂等重算：账单取消后券回落可复用。
@@ -106,6 +108,16 @@ class TradeLifecycleService
                 throw_if(
                     ! in_array((int) $lockedInvoice->status, [InvoiceStatus::UNPAID], true),
                     new BusinessException('当前账单状态不支持取消')
+                );
+
+                // 已有入账款项的账单不能直接取消：取消后这笔钱既不能退款（退款要求 PAID）、
+                // 也无法红字冲抵（要求补录语义），会变成只能改库的悬空收款（M-54）。
+                // 正常取消路径（CheckoutService/OrderService::cancel）会先回补组合支付预扣、
+                // 把 paid_amount 递减回 0，不受本守卫影响；已 CANCELLED 的历史账单走上方
+                // 幂等分支，不在这里二次拦截。
+                throw_if(
+                    (float) $lockedInvoice->paid_amount > 0,
+                    new BusinessException('账单已有入账款项，不能直接取消')
                 );
 
                 $lockedInvoice->forceFill(['status' => InvoiceStatus::CANCELLED])->save();

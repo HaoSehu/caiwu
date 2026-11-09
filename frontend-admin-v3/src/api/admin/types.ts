@@ -916,6 +916,9 @@ export interface ReferralWithdrawalRecord {
   account_name?: string | null;
   account_no?: string | null;
   status?: number | string;
+  /** 打款流水号：仅「已打款」有值 */
+  payment_no?: string | null;
+  paid_at?: string | null;
   operator?: string | null;
   remark?: string | null;
   created_at?: string | null;

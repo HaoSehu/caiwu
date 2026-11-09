@@ -11,6 +11,7 @@ use App\Constants\UserNotificationType;
 use App\Events\InvoicePaid;
 use App\Exceptions\BusinessException;
 use App\Jobs\ProcessPaidOrderReferralRewardJob;
+use App\Models\AutomationLog;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Product;
@@ -225,13 +226,7 @@ class InvoicePaidOrchestrator
             try {
                 $this->referralService->rewardForPaidInvoice($invoice, $traceId);
             } catch (\Throwable $exception) {
-                Log::error('[支付后推荐奖励] 基于账单的奖励处理失败', [
-                    'invoice_id' => $invoice->id,
-                    'invoice_no' => $invoice->invoice_no ?? '',
-                    'trace_id' => $traceId,
-                    'message' => $exception->getMessage(),
-                    'exception' => $exception::class,
-                ]);
+                $this->recordInvoiceReferralRewardFailure($invoice, $traceId, $exception, 'after_response');
             }
         };
 
@@ -242,6 +237,59 @@ class InvoicePaidOrchestrator
         }
 
         app()->terminating($callback);
+    }
+
+    /**
+     * 无订单账单返佣失败留痕：除原有日志外写一条 AutomationLog（executed_at 为空），
+     * 供补偿命令按 task_key='referral-reward' + action='failed' 扫描重试；
+     * after-response 同步路径在异步队列可用时补投一次既有返佣 Job（幂等由 ReferralService
+     * 锁 + invoice_id 兜底），不新建补偿表。
+     */
+    private function recordInvoiceReferralRewardFailure(Invoice $invoice, ?string $traceId, \Throwable $exception, string $stage): void
+    {
+        Log::error('[支付后推荐奖励] 基于账单的奖励处理失败', [
+            'invoice_id' => $invoice->id,
+            'invoice_no' => $invoice->invoice_no ?? '',
+            'trace_id' => $traceId,
+            'stage' => $stage,
+            'message' => $exception->getMessage(),
+            'exception' => $exception::class,
+        ]);
+
+        try {
+            // 认领键按「账单+失败阶段」固定：同一账单同一路径反复失败复用同一条待办，
+            // 成功补偿时按 invoice 统一收口（executed_at 置位），不按次堆积噪音。
+            AutomationLog::recordOnce(
+                'referral-reward',
+                'failed',
+                'invoice',
+                (int) $invoice->id,
+                'dispatch:'.$stage,
+                ['message' => mb_substr($exception->getMessage(), 0, 500)]
+            );
+        } catch (\Throwable $logException) {
+            Log::warning('[支付后推荐奖励] 失败记录写入 AutomationLog 异常', [
+                'invoice_id' => $invoice->id,
+                'message' => $logException->getMessage(),
+            ]);
+        }
+
+        // 队列路径（queued_job）自身已有 3 次重试与失败表，且同步驱动下重投会立即递归执行，
+        // 因此只对 after-response 同步路径补投一次；AutomationLog 记录对两种路径都保留，
+        // 作为补偿命令/巡检的统一待办来源。
+        if ($stage !== 'after_response' || ! $this->shouldQueueInvoiceReferralReward()) {
+            return;
+        }
+
+        try {
+            ProcessPaidOrderReferralRewardJob::dispatch(0, $traceId, (int) $invoice->id);
+        } catch (\Throwable $dispatchException) {
+            Log::warning('[支付后推荐奖励] 失败补偿入队异常', [
+                'invoice_id' => $invoice->id,
+                'message' => $dispatchException->getMessage(),
+                'exception' => $dispatchException::class,
+            ]);
+        }
     }
 
     private function shouldQueueInvoiceReferralReward(): bool
@@ -274,14 +322,17 @@ class InvoicePaidOrchestrator
 
         try {
             $this->referralService->rewardForPaidInvoice($invoice, $traceId);
+
+            // 补偿重试成功后收口此前落下的失败待补偿记录（executed_at 置位即离开补偿扫描范围）
+            AutomationLog::query()
+                ->where('task_key', 'referral-reward')
+                ->where('action', 'failed')
+                ->where('object_type', 'invoice')
+                ->where('object_id', (int) $invoice->id)
+                ->whereNull('executed_at')
+                ->update(['executed_at' => now()]);
         } catch (\Throwable $exception) {
-            Log::error('[支付后推荐奖励] 基于账单的奖励处理失败', [
-                'invoice_id' => $invoiceId,
-                'invoice_no' => $invoice->invoice_no ?? '',
-                'trace_id' => $traceId,
-                'message' => $exception->getMessage(),
-                'exception' => $exception::class,
-            ]);
+            $this->recordInvoiceReferralRewardFailure($invoice, $traceId, $exception, 'queued_job');
         }
     }
 

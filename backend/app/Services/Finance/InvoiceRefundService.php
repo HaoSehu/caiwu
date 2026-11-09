@@ -44,6 +44,9 @@ use Illuminate\Support\Facades\Log;
  */
 class InvoiceRefundService
 {
+    /** 单次退款写入原消费证据行的上限：超出视为异常数据，截断并告警（正常分摊远低于此值）。 */
+    private const REFUND_ALLOCATION_MAX_MARKS = 500;
+
     public function __construct(
         private FinanceAccountService $accounts,
         private FinanceDocumentService $financeDocumentService,
@@ -58,19 +61,49 @@ class InvoiceRefundService
     /**
      * 账单可退上限（累计口径）——全系统可退额的唯一真源。
      *
-     * 口径：实收基数 max(paid_amount, amount) − 已转余额的异常支付金额 − 已完成退款累计。
+     * 口径：实收基数（paid_amount > 0 ? paid_amount : amount） − 已转余额的异常支付金额 − 已完成退款累计。
      * 后台详情页的 refundable_amount / refundable_amount_for_balance / can_refund_to_balance
      * 一律调本方法（InvoiceService::adminDetail），提交时的 remainingRefundableAmount
      * 也建立在同一公式上（再扣一次已完成退款），因此展示值与守卫上限不再分叉。
      */
     public function markRefundableAmountOf(Invoice $invoice): float
     {
-        $gross = round(max((float) ($invoice->paid_amount ?? 0), (float) ($invoice->amount ?? 0)), 2);
+        $gross = round($this->refundableBaseAmount($invoice), 2);
 
         return round(
             max($gross - $this->invoiceCreditedToBalanceAmount($invoice) - $this->completedRefundAmount($invoice), 0),
             2
         );
+    }
+
+    /**
+     * 「可退回余额」的账单类型白名单：只有真实购买类账单（新购/续费/附加配置）的资金
+     * 曾经流出过，退回余额才是等额返还；充值/补录/扣款/推荐奖励等类型一律拒绝。
+     *
+     * 展示位 InvoiceService::canRefundToBalance 使用同一份名单（normal 经 normalize 归一为 new），
+     * 本方法为提交位真源；两处必须同步修改。（InvoiceService 不在本次改动域内，
+     * 其内联名单当前与本方法一致。）
+     */
+    public function isRefundToBalanceTypeAllowed(string $type): bool
+    {
+        return in_array(
+            InvoiceType::normalize($type !== '' ? $type : InvoiceType::NEW_PURCHASE),
+            [InvoiceType::NEW_PURCHASE, InvoiceType::RENEW, InvoiceType::UPGRADE],
+            true
+        );
+    }
+
+    /**
+     * 可退额实收基数：已实收优先，未实收（paid_amount=0）退回应收金额。
+     *
+     * 不能用 max(paid_amount, amount)：paid_amount 小于 amount 的 PAID 账单
+     * （部分支付/优惠后少付）会算出超过实收的可退额，退款等于凭空补差。
+     */
+    private function refundableBaseAmount(Invoice $invoice): float
+    {
+        $paid = (float) ($invoice->paid_amount ?? 0);
+
+        return $paid > 0 ? $paid : (float) ($invoice->amount ?? 0);
     }
 
     /**
@@ -116,11 +149,18 @@ class InvoiceRefundService
                                 new BusinessException('当前账单状态不支持退款')
                             );
 
-                            // 充值账单到账时余额已同步增加、补录账单为系统外收款凭证：
-                            // 两者退回余额都没有对应的资金流出，等于凭空增加余额，不得退回余额（需红字冲抵等其它方式）。
+                            // 类型闸必须是正向白名单（不是黑名单）：只有真实购买类账单
+                            // （new/normal/renew/upgrade）存在「钱从余额或网关付出」的资金流出，
+                            // 退回余额才是等额返还。充值（到账即加余额）、补录（系统外凭证）、
+                            // 扣款（平台划扣）、推荐奖励（返利入账）都没有对应的资金流出，
+                            // 退到余额等于凭空造钱。白名单与展示位 InvoiceService::canRefundToBalance 同源。
                             throw_if(
-                                in_array((string) $lockedInvoice->type, [InvoiceType::RECHARGE, InvoiceType::MANUAL], true),
-                                new BusinessException('充值/补录账单不支持退回余额')
+                                ! $this->isRefundToBalanceTypeAllowed((string) $lockedInvoice->type),
+                                new BusinessException(
+                                    in_array((string) $lockedInvoice->type, [InvoiceType::RECHARGE, InvoiceType::MANUAL], true)
+                                        ? '充值/补录账单不支持退回余额'
+                                        : '当前账单类型不支持退回余额（仅新购/续费/附加配置可退）'
+                                )
                             );
 
                             // 系统外收款闸（2026-10-21）：补录订单/手工入账的 Payment.gateway 固定
@@ -313,6 +353,17 @@ class InvoiceRefundService
                                     $refundMethod,
                                     (string) ($context['trace_id'] ?? ''),
                                 );
+
+                                // 部分退款同样要按比例回退推广奖励（M-29）：只回退全额退款会让
+                                // 「先拿全额返佣、再退 90%」白拿返佣。比例基数是本次退款前的可退额，
+                                // 多次部分退款按同一公式累乘收敛，最后一次可退额为 0 时不触发。
+                                $refundTraceId = trim((string) ($context['trace_id'] ?? ''));
+                                $this->referralService->adjustRewardForPartialRefund(
+                                    $lockedInvoice,
+                                    $refundAmount,
+                                    $refundableAmount,
+                                    $refundTraceId !== '' ? "refund:partial:{$refundTraceId}" : "refund:partial:invoice:{$lockedInvoice->id}",
+                                );
                             }
 
                             // 订单 REFUNDED 投影由状态机 markInvoiceRefunded 统一级联（原 scope 直写段已收敛）。
@@ -458,7 +509,8 @@ class InvoiceRefundService
         // 历史上「单笔支付单金额」分支在拆分支付（50+50）与补录+网关混合支付下会把可退额
         // 截断成单笔金额，导致退 50 就收口、剩余款永久不可退；混付分支口径本就正确，
         // 现统一收敛到同一公式，不再按支付单金额切分。
-        $grossRefundable = round(max((float) ($invoice->paid_amount ?? 0), (float) ($invoice->amount ?? 0)), 2);
+        // 实收基数取 paid_amount 优先（不能 max(paid, amount)：少付的 PAID 账单会虚高可退额）。
+        $grossRefundable = round($this->refundableBaseAmount($invoice), 2);
 
         // 扣除已转入余额的异常支付（重复支付/超额支付）金额：
         // 该部分已退回用户余额，若退款时未扣除会造成与"转入余额"重复返还。
@@ -543,8 +595,15 @@ class InvoiceRefundService
         // 原消费映射：amount 必须是「这一条消费本次分摊到的金额」，不是本次退款总额
         // （表定义：amount = 分配金额）。金额来自 markRefundedConsumptions 的 marks 明细，
         // 由 allocator 按 min(可追认额度, 剩余) 逐笔算好；一条退款跨多笔消费时各自一行、合计等于退款额。
-        // 保留 20 条上限：单次退款在上百条消费上分摊时不把证据表写爆，超出部分不落证据行。
-        foreach (array_slice($marks, 0, 20) as $mark) {
+        // 证据行数上限只防表被极端数据写爆（单次退款跨 500 条以上消费），
+        // 正常的百级分摊必须全量落库——静默截断会让证据合计小于退款额，账实对不上。
+        $truncatedMarks = [];
+        if (count($marks) > self::REFUND_ALLOCATION_MAX_MARKS) {
+            $truncatedMarks = array_slice($marks, self::REFUND_ALLOCATION_MAX_MARKS);
+            $marks = array_slice($marks, 0, self::REFUND_ALLOCATION_MAX_MARKS);
+        }
+
+        foreach ($marks as $mark) {
             $consumptionId = (int) $mark['consumption_id'];
             if ($consumptionId <= 0) {
                 continue;
@@ -561,8 +620,19 @@ class InvoiceRefundService
             ];
         }
 
-        foreach ($rows as $row) {
-            DB::table('finance_refund_allocations')->insertOrIgnore($row);
+        if ($truncatedMarks !== []) {
+            Log::warning('[账单退款] 原消费证据行超过单次上限，已截断', [
+                'refund_id' => $refundId,
+                'limit' => self::REFUND_ALLOCATION_MAX_MARKS,
+                'truncated_rows' => count($truncatedMarks),
+                'truncated_amount' => Money::formatCents((int) array_sum(array_column($truncatedMarks, 'amount_cents'))),
+            ]);
+        }
+
+        // 分批写入：单条 INSERT 的占位符数量有上限（MySQL 65535），
+        // 500 条证据行一次 insertOrIgnore 会超出；幂等键不变，重复调用仍被忽略。
+        foreach (array_chunk($rows, 100) as $chunk) {
+            DB::table('finance_refund_allocations')->insertOrIgnore($chunk);
         }
     }
 }

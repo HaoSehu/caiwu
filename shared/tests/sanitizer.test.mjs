@@ -254,4 +254,31 @@ const { sanitizeRenderedHtml } = await import('../htmlSanitizer.ts')
   assert.ok(benignResult.includes('color'), '无高危向量的转义写法应保留')
 }
 
+// 28. 反斜杠 href 必须按浏览器口径归一（M-47）：
+//     `/\evil.com`、`\/evil.com`、`///evil.com` 浏览器都会解析成站外地址，
+//     此前 startsWith('/') 直接放行且 isInternalHref 判站内、不补 rel=noopener
+{
+  const escapeCases = ['/\\evil.com', '\\/evil.com', '\\\\evil.com/x', '///evil.com/x']
+  for (const href of escapeCases) {
+    const result = sanitizeRenderedHtml(`<a href="${href}">Link</a>`)
+    // 要么被整条剥掉，要么（保留时）必须带上外链的 noopener
+    if (result.includes('href=')) {
+      assert.ok(
+        result.includes('rel="noopener noreferrer nofollow"'),
+        `反斜杠站外链接 [${href}] 必须补 rel=noopener，实际输出: ${result}`,
+      )
+      assert.equal(
+        result.includes('href="/evil.com"') || result.includes('href="//evil.com"') || result.includes('href="/evil.com/x"'),
+        false,
+        `反斜杠不得回落成站内路径 [${href}]`,
+      )
+    }
+  }
+
+  // 普通相对路径的 Windows 风格反斜杠归一成 / 后仍可识别为站内，不得误加 nofollow
+  const benign = sanitizeRenderedHtml('<a href="\\images\\a.png">Img</a>')
+  assert.ok(benign.includes('href="/images/a.png"'), '反斜杠相对路径应归一成 / 形式')
+  assert.equal(benign.includes('nofollow'), false, '归一后的站内路径不应被当作外链')
+}
+
 console.log('sanitizer tests passed')

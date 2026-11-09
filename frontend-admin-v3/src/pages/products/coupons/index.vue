@@ -92,8 +92,8 @@
                   </t-tag>
                 </div>
                 <strong>{{ row.discount_label || formatDiscount(row) }}</strong>
-                <span>最低消费：{{ moneyText(row.min_amount) }}</span>
-                <span v-if="row.max_discount_amount">最高优惠：{{ moneyText(row.max_discount_amount) }}</span>
+                <span>最低消费：{{ formatMoneyText(row.min_amount) }}</span>
+                <span v-if="row.max_discount_amount">最高优惠：{{ formatMoneyText(row.max_discount_amount) }}</span>
               </div>
             </template>
 
@@ -440,6 +440,7 @@
   </div>
 </template>
 <script setup lang="ts">
+import { formatMoneyText } from '@caiwu/shared/finance';
 import { AddIcon, SearchIcon } from 'tdesign-icons-vue-next';
 import type { DropdownOption, FormInstanceFunctions, FormRule, PrimaryTableCol } from 'tdesign-vue-next';
 import { DialogPlugin } from 'tdesign-vue-next/es/dialog/plugin';
@@ -962,7 +963,7 @@ function couponMobileRows(row: CouponRecord) {
         row.discount_scope_label || discountScopeLabel(row.discount_scope)
       }`,
     },
-    { label: '门槛', value: moneyText(row.min_amount) },
+    { label: '门槛', value: formatMoneyText(row.min_amount) },
     { label: '库存', value: row.total_usage_limit ? `${row.remaining_stock ?? 0} / ${row.total_usage_limit}` : '不限' },
     { label: '有效期', value: row.validity_text || validityText(row) },
     { label: '活动', value: row.coupon_campaign_name || '', show: Boolean(row.coupon_campaign_name) },
@@ -1033,11 +1034,7 @@ function statusLabel(row: CouponRecord) {
 
 function formatDiscount(row: CouponRecord) {
   const value = Number(row.discount_value_raw ?? row.discount_value ?? 0);
-  return row.discount_type === 'percentage' ? `${value}%` : moneyText(value);
-}
-
-function moneyText(value: unknown) {
-  return `¥${Number(value || 0).toFixed(2)}`;
+  return row.discount_type === 'percentage' ? `${value}%` : formatMoneyText(value);
 }
 
 function formatLimitText(limit: unknown, remain: unknown, label: string) {

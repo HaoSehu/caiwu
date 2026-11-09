@@ -351,7 +351,9 @@ class MixPaymentBalanceRestoreTest extends TestCase
             tradeNo: 'STUBTRADE'.mt_rand(100000, 999999),
             outTradeNo: '',
             totalAmount: '70.00',
-            raw: ['stub' => true],
+            // M-39：主动查询入账要求查询结果带 verified=true（验签通过的标记），
+            // 替身代表「验签通过的真实查询」，否则只会留证据不入账。
+            raw: ['stub' => true, 'verified' => true],
         ));
 
         // 组合支付下单后取消：余额退回一次（100），网关支付单保持已取消。

@@ -292,6 +292,24 @@ assert.equal(toUserMessage(undefined, '自定义回退'), '自定义回退')
   assert.equal(res.code, 0)
 }
 
+// SAFE_TIMEOUT 真正生效（M-48）：axios 会把实例默认 18s 合并进 config.timeout，
+// 修复前「有值即视为调用方显式设置」导致安全请求永远用 18s、弱网加权也失效
+{
+  const seen = []
+  const { client } = createTestClient((config) => {
+    seen.push(config.timeout)
+    return { response: envelopeResponse({ code: 0, message: 'ok', data: null }) }
+  })
+
+  await client.get('/safe')
+  await client.get('/safe', { timeout: 45000 })
+  await client.post('/write')
+
+  assert.equal(seen[0], 16000, '安全请求默认应使用 SAFE_TIMEOUT（16s）')
+  assert.equal(seen[1], 45000, '调用方显式传入的超时必须保留')
+  assert.equal(seen[2], 18000, '写请求默认超时保持 18s')
+}
+
 console.log('http client tests passed')
 
 // 通过 options.adapter 注入的 adapter 生效：请求不出网，信封解包仍按 unwrapEnvelope 处理

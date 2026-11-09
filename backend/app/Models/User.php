@@ -116,8 +116,11 @@ class User extends Authenticatable
         // 且避免逐行回查 finance_accounts 造成 N+1；未预载时才回源财务内核。
         // T+7 归档（000015 删列）后热备列不存在：必须回退内核余额，否则属性读取为空、
         // 管理端余额显示成 0.00。
+        // 必须同时满足 finance.hot_standby=true：Runbook 先置开关 false 再删列，
+        // 该窗口内列仍在但已停更，无条件优先读热备会让列表与详情金额互相矛盾。
         if (
-            $this->relationLoaded('account')
+            config('finance.hot_standby') === true
+            && $this->relationLoaded('account')
             && $this->getRelation('account') instanceof UserAccount
             && SchemaMetadataCache::hasColumn('user_accounts', 'cash_balance')
         ) {

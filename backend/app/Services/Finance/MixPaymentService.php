@@ -131,6 +131,9 @@ class MixPaymentService
                 ->whereGatewayKey($gateway)
                 ->where('status', PaymentStatus::PENDING)
                 ->where('amount', $remainingAmount)
+                // 同网关不同通道（易支付 alipay / wxpay）的 PENDING 单不可互相复用：
+                // 复用会让 payment_type 快照与实际收银台通道不一致（M-38）。
+                ->when($paymentType !== '', fn ($query) => $query->where('payment_type', $paymentType))
                 ->latest('id')
                 ->first();
 
@@ -312,6 +315,14 @@ class MixPaymentService
     public function restoreReservedMixBalance(Payment $payment, array $context = []): bool
     {
         return DB::transaction(function () use ($payment, $context) {
+            // 全库统一写锁序：Invoice → Payment（与 InvoiceSettlementService 入账引擎一致）。
+            // 先按未加锁读出的 invoice_id 锁定账单，再锁支付单，消除回补与入账引擎之间的
+            // ABBA 死锁窗口；invoice_id 创建后不再变更，未加锁读只用于确定加锁目标。
+            $invoiceId = (int) ($payment->invoice_id ?? 0);
+            $invoice = $invoiceId > 0
+                ? Invoice::query()->lockForUpdate()->with('order')->find($invoiceId)
+                : null;
+
             $lockedPayment = Payment::query()
                 ->lockForUpdate()
                 ->find((int) $payment->id);
@@ -332,9 +343,6 @@ class MixPaymentService
                 return false;
             }
 
-            $invoice = $lockedPayment->invoice_id
-                ? Invoice::query()->lockForUpdate()->with('order')->find((int) $lockedPayment->invoice_id)
-                : null;
             $lockedUser = User::query()
                 ->lockForUpdate()
                 ->find((int) $lockedPayment->user_id);

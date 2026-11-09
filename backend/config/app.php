@@ -13,6 +13,8 @@ return [
     'name' => env('APP_NAME', '创欧云'),
     'env' => env('APP_ENV', 'production'),
     'debug' => (bool) env('APP_DEBUG', false),
+    // 可信反代地址，逗号分隔。由 ConfigureTrustedProxies 在请求期读取（见 bootstrap/app.php）。
+    'trusted_proxies' => env('TRUSTED_PROXIES', ''),
     'url' => $normalizePublicUrl(env('APP_URL', 'http://127.0.0.1:8000')),
     'frontend_url' => $normalizePublicUrl(env('FRONTEND_URL', '')),
     'client_console_url' => $normalizePublicUrl(env('CLIENT_CONSOLE_URL', '')),

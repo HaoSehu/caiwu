@@ -10,6 +10,7 @@ use App\Models\Payment;
 use App\Models\RechargeRecord;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * 账户流水来源回填命令
@@ -48,6 +49,15 @@ class BackfillLedgerSourcesCommand extends Command
 
         $this->line('[流水来源回填] apply='.($apply ? 'true' : 'false'));
 
+        // T+7 归档（000016）后旧台账 account_transactions 改名为 archived_account_transactions，
+        // 继续查旧表会 1146。source_type 回填只针对旧台账，归档后该段自然退役；
+        // recharge 桥接仍可执行，仅跳过对旧台账 ID 的回读。
+        $legacyLedgerAvailable = Schema::hasTable('account_transactions');
+        if ($doSource && ! $legacyLedgerAvailable) {
+            $this->line('[source_type] 旧台账 account_transactions 已归档（T+7 后为 archived_account_transactions）：该段已退役，跳过。');
+            $doSource = false;
+        }
+
         $sourceResult = ['candidates' => 0, 'processed' => 0, 'failed' => 0];
         $bridgeResult = ['candidates' => 0, 'processed' => 0, 'skipped' => 0, 'failed' => 0];
 
@@ -56,7 +66,7 @@ class BackfillLedgerSourcesCommand extends Command
         }
 
         if ($doBridge) {
-            $bridgeResult = $this->backfillRechargeBridge($apply);
+            $bridgeResult = $this->backfillRechargeBridge($apply, $legacyLedgerAvailable);
         }
 
         $this->newLine();
@@ -112,7 +122,7 @@ class BackfillLedgerSourcesCommand extends Command
     /**
      * @return array{candidates: int, processed: int, skipped: int, failed: int}
      */
-    private function backfillRechargeBridge(bool $apply): array
+    private function backfillRechargeBridge(bool $apply, bool $legacyLedgerAvailable): array
     {
         $candidates = Invoice::query()
             ->where('type', 'recharge')
@@ -151,7 +161,7 @@ class BackfillLedgerSourcesCommand extends Command
             }
 
             try {
-                DB::transaction(function () use ($invoice, $payment): void {
+                DB::transaction(function () use ($invoice, $payment, $legacyLedgerAvailable): void {
                     $exists = RechargeRecord::query()
                         ->where('payment_id', (int) $payment->id)
                         ->exists();
@@ -159,10 +169,21 @@ class BackfillLedgerSourcesCommand extends Command
                         return;
                     }
 
-                    $transactionId = DB::table('account_transactions')
-                        ->where('source_type', 'invoice')
-                        ->where('source_id', (int) $invoice->id)
-                        ->value('id');
+                    // 旧台账 ID 只作来源回链。T+7 归档后旧表不可查，回退到新台账
+                    // finance_ledger_entries（rebuild 按原 id 复制，source_type/source_id 原样保留）；
+                    // 两者都不存在时置空——桥接记录仍应建立，外键已重指新台账。
+                    $transactionId = null;
+                    if ($legacyLedgerAvailable) {
+                        $transactionId = DB::table('account_transactions')
+                            ->where('source_type', 'invoice')
+                            ->where('source_id', (int) $invoice->id)
+                            ->value('id');
+                    } elseif (Schema::hasTable('finance_ledger_entries')) {
+                        $transactionId = DB::table('finance_ledger_entries')
+                            ->where('source_type', 'invoice')
+                            ->where('source_id', (int) $invoice->id)
+                            ->value('id');
+                    }
 
                     RechargeRecord::query()->create([
                         'record_no' => RechargeRecord::generateRecordNo(),

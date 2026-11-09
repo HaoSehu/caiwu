@@ -18,6 +18,7 @@ use App\Services\Mail\Contracts\MailDriver;
 use App\Services\Sms\Contracts\SmsDriver;
 use App\Services\Upstream\Contracts\UpstreamDriver;
 use App\Services\Verification\Contracts\VerificationDriver;
+use App\Support\AuditParamRedactor;
 use App\Support\PayloadLimiter;
 use App\Support\SchemaMetadataCache;
 use Illuminate\Contracts\Container\Container;
@@ -243,11 +244,11 @@ class PluginRuntimeRegistry
             return;
         }
 
-        // 运行日志按项目规则保留完整信息、不做脱敏（AGENTS.md：不在管理员端做脱敏，
-        // 不在日志做脱敏，都需要显示完整信息）；PayloadLimiter 只限量、不脱敏，
-        // 因此 payload/context 中出现 api_key、web_session_cookie 等敏感字段属预期行为
-        // （如 AdminConfigurationV2QueryService::runSupplierTask 传入的绑定投影）。
-        // 调用方若不想让某字段入日志，应在传入前自行裁剪；如需改变该语义须先取得项目裁决。
+        // 运行日志保留业务上下文供排查，但凭据类字段统一经 AuditParamRedactor 脱敏
+        // （见 docs/治理/WORKING_RULES.md 密钥不得进入日志）。payload/context 可能携带
+        // api_key、web_session_cookie 等敏感字段（如 AdminConfigurationV2QueryService::runSupplierTask
+        // 传入的绑定投影），这些等价于账号密码，不能以明文落在 runtime log 里；
+        // 其余业务字段仍按完整信息保留。PayloadLimiter 只限量、不脱敏，脱敏必须在这里先做。
         try {
             IntegrationPluginRuntimeLog::query()->create([
                 'trace_id' => $traceId !== '' ? $traceId : null,
@@ -268,7 +269,7 @@ class PluginRuntimeRegistry
                 'request_meta_json' => $this->runtimeMeta([
                     'payload' => $payload,
                     'context' => $context,
-                ]),
+                ], maskCredentials: true),
                 'response_meta_json' => $response === null ? null : $this->runtimeMeta($response),
                 'created_at' => now(),
             ]);
@@ -372,15 +373,23 @@ class PluginRuntimeRegistry
 
     /**
      * @param  array<string, mixed>  $payload
+     * @param  bool  $maskCredentials  是否对归一闪照里的凭据字段做掩码（运行日志请求侧必须开启）
      * @return array<string, mixed>
      */
-    private function runtimeMeta(array $payload): array
+    private function runtimeMeta(array $payload, bool $maskCredentials = false): array
     {
         // 对象/资源在 json_encode 时会被静默丢弃或产生无效结构（如 resolve_capability 返回的能力对象），
         // 先递归归一为可序列化的类快照，保证 runtime log 恒为可读 JSON。
         $jsonSafe = [];
         foreach ($payload as $key => $value) {
             $jsonSafe[$key] = $this->jsonSafeValue($value, new \WeakMap, 0);
+        }
+
+        // 凭据脱敏必须排在归一化之后：归一化会把嵌套对象展开成新的数组结构，
+        // 对象快照里的公开凭据属性、以及任意深度新增的键都要按同一口径覆盖；
+        // 先脱敏再归一化会漏掉对象展开后才出现的键。
+        if ($maskCredentials) {
+            $jsonSafe = AuditParamRedactor::maskCredentialFields($jsonSafe);
         }
 
         // 截断超大 meta：异常上游报文曾把单行 runtime log 撑到兆级（表均行宽 1.6KB 的主因之一）。

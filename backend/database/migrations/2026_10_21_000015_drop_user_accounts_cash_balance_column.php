@@ -52,13 +52,16 @@ return new class extends Migration
     /**
      * 扫描 app/ 下仍在直接写/读 user_accounts.cash_balance 的文件。
      *
-     * 白名单：迁移文件本身、重建命令（已归档护栏会先拒绝）、一致性检查（有 hasColumn 短路）。
+     * 白名单条目必须各自具备「列存在性判断」或「归档护栏」；纯文本扫描无法验证守卫
+     * 本身，守卫被移除时需同步删减名单。
      *
      * @return list<string>
      */
     private function findCashBalanceWriters(): array
     {
-        // 白名单：迁移期/重建期仍需要读旧列，且各自已有列存在性判断或归档护栏。
+        // 白名单：仍在源码中出现 'cash_balance' 数组键、但各自已按列存在性判断或归档护栏降级的文件。
+        // 本扫描是纯文本匹配，看不到条件守卫本身，「有守卫」是列入白名单的唯一理由：
+        // 守卫被删回无条件写入时，必须同时把对应文件从白名单移除，让扫描重新拦截。
         // FinanceAccountService 的写是「切换期热备」，必须随 FINANCE_HOT_STANDBY=false 一起退出，
         // 因此保留在名单内由热备开关控制（关闭后不再执行）。
         $allowlist = [
@@ -73,6 +76,9 @@ return new class extends Migration
             'Services/Finance/Core/FinanceAccountService.php',
             'Models/UserAccount.php',
             'Models/User.php',
+            // 默认账户插入已按 SchemaMetadataCache::hasColumn('user_accounts','cash_balance') 守卫
+            // （M-71）：列存在才写默认值，列删除后不再携带该键。列入白名单仅覆盖守卫保留时的
+            // 等价写法；若守卫被删回无条件写入，必须把对应文件从白名单移除，让扫描重新拦截。
             'Services/User/AccountService.php',
             'Services/User/UserAccountProjectionService.php',
             // 响应/投影字段名恰好叫 cash_balance，不是对 user_accounts 的读写
@@ -122,7 +128,9 @@ return new class extends Migration
 
         Schema::table('user_accounts', function (Blueprint $table): void {
             if (! Schema::hasColumn('user_accounts', 'cash_balance')) {
-                $table->decimal('cash_balance', 20, 2)->default(0)->comment('[已退役] 切换期热备列；真源 finance_accounts');
+                // 原列定义为 decimal(12,2)（与全库资金列一致），回滚必须还原同一精度：
+                // 用 20,2 会让旧内核写入超出真源精度的值，再次切换时被截断。
+                $table->decimal('cash_balance', 12, 2)->default(0)->comment('[已退役] 切换期热备列；真源 finance_accounts');
             }
         });
     }

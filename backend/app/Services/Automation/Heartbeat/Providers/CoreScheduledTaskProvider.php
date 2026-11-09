@@ -193,6 +193,9 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
                 triggers: [ScheduleRule::cron('15 4 * * *')],
                 handler: fn (): array => $this->runArtisan('finance:audit-ledger-consistency', [
                     '--json' => true,
+                    // 必须带 --strict：命令的 hasAnomaly 只认金额级账实不符，
+                    // 不传 strict 时明细照常输出但永远退出 0，金额级差异不会触发告警。
+                    '--strict' => true,
                 ]),
                 timeout: 600,
                 lockTtlSeconds: 900,
@@ -213,6 +216,30 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
                     '--json' => true,
                     '--tolerate-legacy' => true,
                 ]),
+                timeout: 300,
+                lockTtlSeconds: 420,
+                manualTriggerable: true,
+            ),
+            // 热备漂移对账（只读）：账户余额 vs 批次剩余合计 vs user_accounts.cash_balance。
+            // 排在 05:15，与 04:15 合计口径审计、04:45 快照对账错峰；分钟必须对齐
+            // 00/15/30/45（心跳槽位 15 分钟粒度），否则会被 ScheduledTaskValidator 剔除。
+            // finance.hot_standby=false 时热备列已停止同步（Runbook 随后删列），继续比对会产生
+            // 全量假漂移，因此调度层直接跳过；手动执行命令仍可显式检查。
+            $this->task(
+                key: 'finance-hot-standby-drift',
+                title: '财务热备漂移对账',
+                category: '财务',
+                description: '每日只读三方对账：账户余额、批次剩余合计与 user_accounts 热备列；存在未解决漂移时任务失败告警，hot_standby 关闭时跳过。',
+                triggers: [ScheduleRule::cron('15 5 * * *')],
+                handler: function (): array {
+                    if (! (bool) config('finance.hot_standby', true)) {
+                        return ['skipped' => true, 'reason' => 'finance.hot_standby=false'];
+                    }
+
+                    return $this->runArtisan('finance:hot-standby-drift', [
+                        '--json' => true,
+                    ]);
+                },
                 timeout: 300,
                 lockTtlSeconds: 420,
                 manualTriggerable: true,

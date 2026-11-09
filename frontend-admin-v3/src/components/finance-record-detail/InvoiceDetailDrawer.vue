@@ -22,7 +22,9 @@
       @update:active-tab="(value) => (activeTab = value)"
     >
       <template #toolbar-actions>
-        <t-button v-if="canRefund" theme="warning" variant="outline" @click="emit('mark-refund')"> 退款 </t-button>
+        <t-button v-if="canRefundAction" theme="warning" variant="outline" @click="emit('mark-refund')">
+          退款
+        </t-button>
         <t-button v-if="cancelable" theme="danger" variant="outline" :loading="cancelLoading" @click="emit('cancel')">
           取消账单
         </t-button>
@@ -149,7 +151,7 @@
             </div>
             <div v-if="invoice.refund_method" class="detail-kv-item">
               <span class="detail-kv-item__label">退款方式</span>
-              <strong class="detail-kv-item__value">退回余额</strong>
+              <strong class="detail-kv-item__value">{{ refundMethodLabel(invoice.refund_method) }}</strong>
             </div>
             <div v-if="invoice.refunded_at" class="detail-kv-item">
               <span class="detail-kv-item__label">最近退款时间</span>
@@ -252,6 +254,7 @@ import type { InvoiceRecord } from '@/api/admin';
 import type { RecordDetailMetric, RecordDetailTab } from '@/components/record-detail-page/index.vue';
 import RecordDetailPage from '@/components/record-detail-page/index.vue';
 import { MOBILE_MEDIA_QUERY, useMediaQuery } from '@/hooks/useMediaQuery';
+import { useRefundMark } from '@/hooks/useRefundMark';
 import { copyToClipboard, fieldValue, formatDateTime, formatMoney, toRecord } from '@/utils/format';
 
 const props = withDefaults(
@@ -337,7 +340,12 @@ const items = computed(() => {
 });
 
 // ─── 退款处理（2026-10-11）：标记 / 退到余额两种互斥方式 ───
+// 「可退余额」等只读信息跟服务端 can_refund_to_balance 走；
+// 退款按钮额外要求本地 finance.refund 权限，与订单详情页同口径，
+// 只判服务端字段等于把资金写入口暴露给无权限角色（服务端仍会拒绝，但入口不该出现）。
+const { hasRefundPermission } = useRefundMark();
 const canRefund = computed(() => Boolean(invoice.value.can_refund_to_balance));
+const canRefundAction = computed(() => hasRefundPermission.value && canRefund.value);
 const refundStatusValue = computed(() => Number(invoice.value.refund_status ?? REFUND_STATUS.NONE));
 const refundStatusLabel = computed(() => {
   if (refundStatusValue.value === REFUND_STATUS.FULL) return '已全额退款';
@@ -354,6 +362,17 @@ const refundReasonOfLatest = computed(() => {
   return first ? String(first.reason || '').trim() : '';
 });
 const hasRefundInfo = computed(() => refundStatusValue.value !== REFUND_STATUS.NONE || refundRecords.value.length > 0);
+
+/**
+ * 账单级 refund_method 取值映射：balance=余额退回、manual_mark=线下补标记（历史纯标记通道），
+ * 其余（如渠道回调写入的原路退款标记）按原值展示，不能一律显示「退回余额」。
+ */
+function refundMethodLabel(value: unknown): string {
+  const method = String(value ?? '').trim();
+  if (method === 'balance') return '退回余额';
+  if (method === 'manual_mark') return '线下补标记';
+  return fieldValue(method);
+}
 
 // 会员等级名仍用于基础信息区块的会员等级标签（账单侧只保留身份信息，不展示折扣金额）
 const memberLevelName = computed(() => {

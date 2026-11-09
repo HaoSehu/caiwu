@@ -434,12 +434,18 @@ class ServiceRenewService
 
                 // 同周期未付账单参数不一致或支付窗口已过：在服务行锁内取消后重建，避免残留同周期未付账单，
                 // 也避免把已过期的未付账单继续复用给用户。
-                app(CheckoutService::class)->cancel($concurrentInvoice, array_merge($context, [
-                    'actor_type' => 'system',
-                    'actor_user_id' => (int) $user->id,
-                    'actor_name' => (string) ($user->display_name ?? $user->nickname ?? $user->email ?? ''),
-                    'reason' => $concurrentWindowOpen ? 'renew_invoice_replaced' : 'payment_window_expired',
-                ]));
+                // 已部分核销的账单拒绝取消（M-54 状态机守卫），此时保留旧单、照常建新单，
+                // 旧单的收款由人工退款/红字冲抵处理，不能把异常冒泡打断续费建单。
+                try {
+                    app(CheckoutService::class)->cancel($concurrentInvoice, array_merge($context, [
+                        'actor_type' => 'system',
+                        'actor_user_id' => (int) $user->id,
+                        'actor_name' => (string) ($user->display_name ?? $user->nickname ?? $user->email ?? ''),
+                        'reason' => $concurrentWindowOpen ? 'renew_invoice_replaced' : 'payment_window_expired',
+                    ]));
+                } catch (BusinessException) {
+                    // 保留有入账款项的旧账单，继续创建新周期账单
+                }
             }
 
             $displayPayload = app(ProductDisplayNameResolver::class)->resolveForProduct($effectiveProduct);
@@ -1351,6 +1357,13 @@ class ServiceRenewService
             return null;
         }
 
+        // 管理端补录的续费单（order.config_snapshot.admin_manual 继承到账单）不阻塞自助续费（M-57）：
+        // 补录只记账、不触发履约，实例到期时间不会推进；若继续按「已付未履约」拦截，
+        // 该实例该周期会被一张永远不会履约的账单永久卡死，且补录单本身也不可纠错。
+        if ($this->isAdminManualRenewInvoice($latestPaidInvoice)) {
+            return null;
+        }
+
         // 已履约时服务到期已顺延，不阻塞正常续费。
         if ($this->isRenewInvoiceFulfilled($latestPaidInvoice, $service)) {
             return null;
@@ -1366,6 +1379,22 @@ class ServiceRenewService
 
         // pending/processing 或未知状态：仍视为履约处理中，复用已付账单防止双扣。
         return $latestPaidInvoice;
+    }
+
+    /**
+     * 补录续费账单判断：订单（createFromOrder 继承）或账单自身的 config_snapshot.admin_manual。
+     * 补录只记账不履约，不能作为「已付未履约」去阻塞同周期自助续费。
+     */
+    private function isAdminManualRenewInvoice(Invoice $invoice): bool
+    {
+        $orderSnapshot = $invoice->order?->config_snapshot;
+        if (is_array($orderSnapshot) && filter_var($orderSnapshot['admin_manual'] ?? false, FILTER_VALIDATE_BOOL)) {
+            return true;
+        }
+
+        $invoiceSnapshot = $invoice->config_snapshot;
+
+        return is_array($invoiceSnapshot) && filter_var($invoiceSnapshot['admin_manual'] ?? false, FILTER_VALIDATE_BOOL);
     }
 
     /**

@@ -122,6 +122,18 @@ Uri? httpsFallbackFromAlipayScheme(Uri uri) {
   return parsed;
 }
 
+/// 微信渠道链接能否由 App 直接拉起。
+///
+/// 只有 `weixin://` 等原生 scheme 才可能在微信外被系统处理；https 收银台是
+/// 公众号 JSAPI 支付页，在微信外打开会被 302 到微信 OAuth 并拒绝（invalid_source），
+/// 因此这类链接必须引导用户复制到微信内打开，不能「打开即视为成功」（M-28③）。
+/// 口径与 `frontend-user-v4-console/src/domains/finance/paymentLaunch.ts` 一致。
+bool canLaunchWechatUrl(String rawUrl) {
+  final normalized = normalizePaymentUrl(rawUrl).toLowerCase();
+  if (normalized.isEmpty) return false;
+  return !normalized.startsWith('http://') && !normalized.startsWith('https://');
+}
+
 /// 拉起支付链接。
 ///
 /// 顺序：按渠道打开支付入口 → 失败回退原始链接。

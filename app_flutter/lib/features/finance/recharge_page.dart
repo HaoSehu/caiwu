@@ -34,14 +34,21 @@ class RechargePage extends StatefulWidget {
   State<RechargePage> createState() => _RechargePageState();
 }
 
-/// 已创建的充值支付单（用于提交后展示）。
+/// 已创建的充值支付单（用于提交后展示与轮询）。
 class _CreatedRecharge {
   const _CreatedRecharge({
+    required this.paymentNo,
+    required this.pollToken,
     required this.amount,
     required this.gatewayLabel,
     required this.payUrl,
     required this.channel,
   });
+
+  final String paymentNo;
+
+  /// 查单凭证：后端 `/recharge/{paymentNo}/status` 强制校验，创建响应下发后必须保存。
+  final String pollToken;
 
   final String amount;
   final String gatewayLabel;
@@ -81,6 +88,15 @@ class _RechargePageState extends State<RechargePage> {
   String? _amountError;
   _CreatedRecharge? _created;
 
+  /// 轮询状态：每 5 秒查一次支付结果；连续失败或超时（5 分钟）即停。
+  Timer? _pollTimer;
+  bool _polling = false;
+  int _pollFailures = 0;
+  int _pollAttempts = 0;
+
+  /// 提示条是否已被手动关闭；关闭只影响展示，轮询仍在后台继续。
+  bool _createdNoticeDismissed = false;
+
   @override
   void initState() {
     super.initState();
@@ -89,6 +105,7 @@ class _RechargePageState extends State<RechargePage> {
 
   @override
   void dispose() {
+    _pollTimer?.cancel();
     _amountController.dispose();
     super.dispose();
   }
@@ -198,22 +215,31 @@ class _RechargePageState extends State<RechargePage> {
     return null;
   }
 
+  /// 金额变化即视为放弃旧支付单：旧单仍可能被支付，但面板上不能继续显示它，
+  /// 否则用户会拿旧二维码付款却以为在付新金额（M-28①）。
+  void _discardCreated() {
+    if (_created == null) return;
+    _stopPolling();
+    _created = null;
+    _createdNoticeDismissed = false;
+  }
+
   void _onAmountChanged(String raw) {
     final amount = raw.replaceAll(',', '').trim();
+    _discardCreated();
     setState(() {
       // 输入自定义金额即取消快捷金额选中，保持两者互斥。
       _quickAmount = null;
       _amountError = amount.isEmpty ? null : _validateAmount(amount);
-      _created = null;
     });
   }
 
   void _selectQuickAmount(String amount) {
+    _discardCreated();
     setState(() {
       _quickAmount = amount;
       _amountController.clear();
       _amountError = null;
-      _created = null;
     });
     FocusScope.of(context).unfocus();
   }
@@ -246,22 +272,35 @@ class _RechargePageState extends State<RechargePage> {
         paymentType: paymentType,
         channelName: selected['label'],
       );
+      final created = _CreatedRecharge(
+        paymentNo: strOf(result, 'payment_no'),
+        pollToken: strOf(result, 'poll_token'),
+        amount: amount,
+        gatewayLabel: selected['label'] ?? _gatewayLabel(_gateway),
+        payUrl: url,
+        channel: channel,
+      );
       setState(() {
-        _created = _CreatedRecharge(
-          amount: amount,
-          gatewayLabel: selected['label'] ?? _gatewayLabel(_gateway),
-          payUrl: url,
-          channel: channel,
-        );
+        // 旧支付单的轮询必须随新单一起废弃，否则两次充值结果会交叉写状态
+        _stopPolling();
+        _created = created;
+        _createdNoticeDismissed = false;
       });
+      _startPolling(created);
       if (url.isEmpty) {
-        AppFeedback.toast(context, '充值单已创建，请在支付完成后刷新余额');
+        AppFeedback.toast(context, '充值单已创建，正在等待支付结果');
+        return;
+      }
+      // 微信 https 收银台在微信外打开必然失败：不拉起，直接引导复制到微信内（M-28③）
+      if (channel == PaymentChannel.wechat && !canLaunchWechatUrl(url)) {
+        AppFeedback.toast(context, '微信支付只能在微信内完成：请点「复制链接」，粘贴到微信（可发给文件传输助手）后打开');
         return;
       }
       final opened = await launchPaymentUrl(url, channel: channel);
       if (!opened && mounted) {
         if (channel == PaymentChannel.wechat) {
           // 微信没有可用的外部唤起协议：提示复制链接到微信内打开，比「打不开」可操作。
+          // 微信外打开 https 收银台必然失败，不能视为成功（M-28③）。
           AppFeedback.toast(context, '微信支付需要在微信内完成，请复制链接到微信打开');
         } else {
           AppFeedback.toast(context, '无法打开支付页面，请在浏览器中完成支付');
@@ -271,6 +310,79 @@ class _RechargePageState extends State<RechargePage> {
       if (mounted) AppFeedback.error(context, AppServices.errorText(error));
     } finally {
       if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  /// 轮询充值支付结果（M-26）：创建响应带 payment_no + poll_token，
+  /// 每 5 秒查一次，到账即刷新余额并停止；连续失败 3 次停止并提示。
+  void _startPolling(_CreatedRecharge created) {
+    _pollTimer?.cancel();
+    _pollFailures = 0;
+    _pollAttempts = 0;
+    if (created.paymentNo.isEmpty || created.pollToken.isEmpty) return;
+    _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      unawaited(_pollRechargeStatus());
+    });
+  }
+
+  void _stopPolling() {
+    _pollTimer?.cancel();
+    _pollTimer = null;
+  }
+
+  Future<void> _pollRechargeStatus() async {
+    final created = _created;
+    if (_polling || created == null) return;
+    if (created.paymentNo.isEmpty || created.pollToken.isEmpty) {
+      _stopPolling();
+      return;
+    }
+    _polling = true;
+    final services = AppServices.of(context);
+    final session = context.read<Session>();
+    _pollAttempts += 1;
+    if (_pollAttempts > 60) {
+      // 5 分钟 × 5 秒/次：超过支付窗口后不再打扰，收敛为手动刷新入口
+      _stopPolling();
+      _polling = false;
+      if (mounted) AppFeedback.toast(context, '支付结果确认超时，请稍后手动刷新余额');
+      return;
+    }
+    try {
+      final result = await services.finance.rechargeStatus(
+        created.paymentNo,
+        pollToken: created.pollToken,
+      );
+      _pollFailures = 0;
+      if (!mounted) return;
+      if (result['paid'] == true) {
+        _stopPolling();
+        final balance = strOf(result, 'balance');
+        final user = session.user;
+        if (balance.isNotEmpty && user != null) {
+          await session.updateUser({...user, 'cash_balance': balance});
+        }
+        if (!mounted) return;
+        setState(() {
+          _created = null;
+          _createdNoticeDismissed = false;
+        });
+        AppFeedback.success(context, '充值已到账，余额已更新');
+        return;
+      }
+      // 后端在支付窗口过期后会把支付单置为已取消：此时继续轮询没有意义
+      if (intOf(result, 'status') == 4) {
+        _stopPolling();
+        if (mounted) AppFeedback.toast(context, '该充值单已失效，请重新发起充值');
+      }
+    } catch (_) {
+      _pollFailures += 1;
+      if (_pollFailures >= 3) {
+        _stopPolling();
+        if (mounted) AppFeedback.toast(context, '查询支付结果失败，请稍后手动刷新余额');
+      }
+    } finally {
+      _polling = false;
     }
   }
 
@@ -357,29 +469,32 @@ class _RechargePageState extends State<RechargePage> {
   }
 
   /// 提交成功后的提示条 + 支付单信息组：金额与渠道一目了然，
-  /// 并给出刷新余额的下一步。
+  /// 并给出刷新余额的下一步。关闭提示条不停止后台轮询——支付结果仍需自动确认。
   Widget _buildCreatedSection(BuildContext context) {
     final created = _created!;
     final theme = context.tTheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        TNoticeBar(
-          status: TNoticeBarStatus.success,
-          content: '支付单已创建，完成支付后刷新余额',
-          operation: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () => setState(() => _created = null),
-            child: Semantics(
-              button: true,
-              label: '关闭提示',
-              child: Padding(
-                padding: const EdgeInsets.all(4),
-                child: Icon(TIcons.close, size: 18, color: theme.successColor),
+        if (!_createdNoticeDismissed)
+          TNoticeBar(
+            status: TNoticeBarStatus.success,
+            content: _pollTimer != null
+                ? '支付单已创建，正在自动确认支付结果'
+                : '支付单已创建，完成支付后刷新余额',
+            operation: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => setState(() => _createdNoticeDismissed = true),
+              child: Semantics(
+                button: true,
+                label: '关闭提示',
+                child: Padding(
+                  padding: const EdgeInsets.all(4),
+                  child: Icon(TIcons.close, size: 18, color: theme.successColor),
+                ),
               ),
             ),
           ),
-        ),
         TCellGroup(
           cells: [
             TCell(
@@ -543,8 +658,13 @@ class _RechargePageState extends State<RechargePage> {
       );
     }
     return TRadioGroup<String>(
+      // 切换支付方式必须清掉旧支付面板与轮询：旧单未取消仍可被支付，
+      // 面板留着会诱导用户拿旧二维码付款（M-28①）。
       value: _gateway,
-      onChanged: (value) => setState(() => _gateway = value),
+      onChanged: (value) {
+        _discardCreated();
+        setState(() => _gateway = value);
+      },
       child: TCellGroup(
         title: Text('支付方式', style: AppType.section(theme)),
         cells: [
@@ -574,7 +694,10 @@ class _RechargePageState extends State<RechargePage> {
                 variant: TRadioVariant.inline,
                 size: TRadioSize.medium,
               ),
-              onTap: () => setState(() => _gateway = gateway['value'] ?? ''),
+              onTap: () {
+                _discardCreated();
+                setState(() => _gateway = gateway['value'] ?? '');
+              },
             ),
           TCell(
             enableFeedback: false,

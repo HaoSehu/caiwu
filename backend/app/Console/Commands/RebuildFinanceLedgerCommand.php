@@ -138,8 +138,9 @@ final class RebuildFinanceLedgerCommand extends Command
     {
         return [
             'ledger_rows' => DB::table('account_transactions')->count(),
-            'cash_rows' => DB::table('account_transactions')->where('account_type', 'cash')->count(),
-            'referral_rows' => DB::table('account_transactions')->where('account_type', '!=', 'cash')->count(),
+            // cash_balance 是现金的遗留命名（见 2026_11_09_000001 归一同口径），展示统计必须并入现金。
+            'cash_rows' => DB::table('account_transactions')->whereIn('account_type', ['cash', 'cash_balance'])->count(),
+            'referral_rows' => DB::table('account_transactions')->whereNotIn('account_type', ['cash', 'cash_balance'])->count(),
             'account_rows' => DB::table('user_accounts')->count(),
             'refund_rows' => DB::table('refunds')->count(),
             'refund_balance_rows' => DB::table('refunds')->where('refund_method', '<>', 'manual_mark')->count(),
@@ -184,7 +185,7 @@ final class RebuildFinanceLedgerCommand extends Command
     private function calibrationPreview(): array
     {
         $rows = DB::table('account_transactions')
-            ->selectRaw("user_id, SUM(CASE WHEN account_type = 'cash' THEN change_amount ELSE 0 END) AS ledger_sum")
+            ->selectRaw("user_id, SUM(CASE WHEN account_type IN ('cash','cash_balance') THEN change_amount ELSE 0 END) AS ledger_sum")
             ->groupBy('user_id')
             ->get();
 
@@ -222,7 +223,7 @@ final class RebuildFinanceLedgerCommand extends Command
 
         // 有台账但无账户行的用户，按台账合计建户，避免遗漏。
         $ledgerUsers = DB::table('account_transactions')
-            ->where('account_type', 'cash')
+            ->whereIn('account_type', ['cash', 'cash_balance'])
             ->selectRaw('user_id, SUM(change_amount) AS total')
             ->groupBy('user_id')
             ->get();
@@ -265,8 +266,17 @@ final class RebuildFinanceLedgerCommand extends Command
             $insert = [];
             foreach ($rows as $row) {
                 $userId = (int) $row->user_id;
-                $accountId = $accountMap[$userId] ?? null;
-                if ($accountId === null && (string) ($row->account_type ?: 'cash') === 'cash') {
+                $accountType = (string) ($row->account_type ?: 'cash');
+                // cash_balance 是现金的遗留命名：复制时直接归一为 cash，新账本不再保存
+                // 双命名（与 2026_11_09_000001 归一迁移同口径，迁移与重建任一先执行都能收敛）。
+                if ($accountType === 'cash_balance') {
+                    $accountType = 'cash';
+                }
+                // 表契约：account_id 只指向现金账户，返利等非现金子账户必须为空
+                // （与 ReferralService::writeAccountLog 新写入口径一致）。历史行此前被
+                // 回填成现金账户 id，按 account_id 聚合会把返利流水混入现金视图。
+                $accountId = $accountType === 'cash' ? ($accountMap[$userId] ?? null) : null;
+                if ($accountId === null && $accountType === 'cash') {
                     throw new RuntimeException("台账行 {$row->id} 的用户 {$userId} 没有对应现金账户");
                 }
 
@@ -275,7 +285,7 @@ final class RebuildFinanceLedgerCommand extends Command
                     'entry_no' => 'LG'.$row->id,
                     'account_id' => $accountId,
                     'user_id' => $userId,
-                    'account_type' => (string) ($row->account_type ?: 'cash'),
+                    'account_type' => $accountType,
                     'event_type' => (string) $row->event_type,
                     'change_amount' => (string) $row->change_amount,
                     'balance_after' => (string) $row->balance_after,

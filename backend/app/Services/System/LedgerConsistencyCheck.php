@@ -100,9 +100,12 @@ class LedgerConsistencyCheck
      */
     public function cashBalanceSumMismatches(int $limit = 200): array
     {
+        // 历史台账遗留 account_type='cash_balance'（M-7/P1-9）：归一等值迁移
+        // （2026_11_09_000001_normalize_ledger_account_type）执行前后两端口径都必须
+        // 把这些行计入现金合计，否则存量 527 行在迁移前被排除，账实误报。
         $ledgerSub = DB::table('finance_ledger_entries')
             ->select('user_id', DB::raw('SUM(change_amount) AS ledger_sum'))
-            ->where('account_type', 'cash')
+            ->whereIn('account_type', ['cash', 'cash_balance'])
             ->groupBy('user_id');
 
         $rows = DB::table('finance_accounts as fa')

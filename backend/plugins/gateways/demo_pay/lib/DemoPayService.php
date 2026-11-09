@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Caiwu\Plugins\Gateways\DemoPay\Lib;
 
 // PaymentGatewayInterface 契约由 PluginPaymentGateway 适配器实现
+use App\Exceptions\BusinessException;
 use App\Services\Integrations\Payments\Concerns\InteractsWithStandardPaymentActions;
 use App\Services\Integrations\Payments\Data\PaymentPrecreateRequest;
 use App\Services\Integrations\Payments\Data\PaymentPrecreateResult;
@@ -69,6 +70,12 @@ class DemoPayService
 
     public function precreate(PaymentPrecreateRequest $request): PaymentPrecreateResult
     {
+        // 第二道闸：isEnabled() 之外，即使调用方跳过启用判定（误配置/直连插件），
+        // 生产环境也不得签出可打开的演示收银台链接
+        if (function_exists('app') && app()->environment('production')) {
+            throw new BusinessException('演示支付网关在生产环境不可用');
+        }
+
         return new PaymentPrecreateResult(
             qrCode: 'https://example.test/pay/demo?out_trade_no='.rawurlencode($request->outTradeNo),
             outTradeNo: $request->outTradeNo,

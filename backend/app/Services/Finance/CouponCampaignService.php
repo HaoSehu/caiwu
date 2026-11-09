@@ -9,6 +9,8 @@ use App\Exceptions\BusinessException;
 use App\Models\AutomationLog;
 use App\Models\Coupon;
 use App\Models\CouponCampaign;
+use App\Models\Product;
+use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Support\LikeEscape;
 use App\Support\Money;
 use App\Support\SchemaMetadataCache;
@@ -43,6 +45,7 @@ class CouponCampaignService
 
     public function __construct(
         private CouponService $couponService,
+        private readonly ?ProductDisplayNameResolver $productDisplayNameResolver = null,
     ) {}
 
     public function adminSummary(array $filters = []): array
@@ -212,45 +215,60 @@ class CouponCampaignService
         ];
 
         foreach ($campaigns as $campaign) {
-            $scheduledAt = $this->resolveDueScheduleAt($campaign, $resolvedNow);
-            if (! $scheduledAt) {
-                $summary['skipped']++;
-
-                continue;
-            }
-
-            $ruleKey = $scheduledAt->format('YmdHi');
-            if (! AutomationLog::recordOnce(self::TASK_KEY, 'dispatch', 'coupon_campaign', (int) $campaign->id, $ruleKey, [
-                'scheduled_at' => $scheduledAt->format('Y-m-d H:i:s'),
-            ])) {
-                $summary['skipped']++;
-
-                continue;
-            }
-
+            // 单活动异常只记日志并跳过：历史脏数据（如非法 trigger_time）曾让
+            // resolveDueScheduleAt 在 try 之外抛异常，一个坏活动即中断整批调度，
+            // 排序其后的所有活动当日全部停发。
             try {
-                $result = $this->dispatchSingleCampaign($campaign, $scheduledAt, $ruleKey, $context, false);
-                if ($result === null) {
+                $scheduledAt = $this->resolveDueScheduleAt($campaign, $resolvedNow);
+                if (! $scheduledAt) {
                     $summary['skipped']++;
-                    AutomationLog::markExecuted(self::TASK_KEY, 'dispatch', 'coupon_campaign', (int) $campaign->id, $ruleKey, [
-                        'scheduled_at' => $scheduledAt->format('Y-m-d H:i:s'),
-                        'skipped_reason' => 'already_dispatched_today',
-                        'last_dispatched_at' => $campaign->fresh()?->last_dispatched_at?->format('Y-m-d H:i:s'),
-                    ]);
 
                     continue;
                 }
 
-                $summary['triggered']++;
-                $summary['coupon_ids'][] = (int) ($result['coupon']['id'] ?? 0);
+                $ruleKey = $scheduledAt->format('YmdHi');
+                if (! AutomationLog::recordOnce(self::TASK_KEY, 'dispatch', 'coupon_campaign', (int) $campaign->id, $ruleKey, [
+                    'scheduled_at' => $scheduledAt->format('Y-m-d H:i:s'),
+                ])) {
+                    $summary['skipped']++;
+
+                    continue;
+                }
+
+                try {
+                    $result = $this->dispatchSingleCampaign($campaign, $scheduledAt, $ruleKey, $context, false);
+                    if ($result === null) {
+                        $summary['skipped']++;
+                        AutomationLog::markExecuted(self::TASK_KEY, 'dispatch', 'coupon_campaign', (int) $campaign->id, $ruleKey, [
+                            'scheduled_at' => $scheduledAt->format('Y-m-d H:i:s'),
+                            'skipped_reason' => 'already_dispatched_today',
+                            'last_dispatched_at' => $campaign->fresh()?->last_dispatched_at?->format('Y-m-d H:i:s'),
+                        ]);
+
+                        continue;
+                    }
+
+                    $summary['triggered']++;
+                    $summary['coupon_ids'][] = (int) ($result['coupon']['id'] ?? 0);
+                } catch (\Throwable $exception) {
+                    $summary['failed']++;
+                    AutomationLog::forgetRecord(self::TASK_KEY, 'dispatch', 'coupon_campaign', (int) $campaign->id, $ruleKey);
+
+                    Log::error('[定时任务] 优惠券活动自动发放失败', [
+                        'campaign_id' => (int) $campaign->id,
+                        'campaign_name' => (string) $campaign->name,
+                        'scheduled_at' => $scheduledAt->format('Y-m-d H:i:s'),
+                        'error' => $exception->getMessage(),
+                        'exception' => $exception::class,
+                    ]);
+                }
             } catch (\Throwable $exception) {
                 $summary['failed']++;
-                AutomationLog::forgetRecord(self::TASK_KEY, 'dispatch', 'coupon_campaign', (int) $campaign->id, $ruleKey);
 
-                Log::error('[定时任务] 优惠券活动自动发放失败', [
+                Log::error('[定时任务] 优惠券活动调度判定失败，已跳过该活动', [
                     'campaign_id' => (int) $campaign->id,
                     'campaign_name' => (string) $campaign->name,
-                    'scheduled_at' => $scheduledAt->format('Y-m-d H:i:s'),
+                    'trigger_time' => (string) ($campaign->trigger_time ?? ''),
                     'error' => $exception->getMessage(),
                     'exception' => $exception::class,
                 ]);
@@ -415,13 +433,15 @@ class CouponCampaignService
         $minAmount = round((float) ($payload['min_amount'] ?? 0), 2);
         $maxDiscountAmount = $payload['max_discount_amount'] ?? null;
         $weekdays = $this->normalizeWeekdays((array) ($payload['weekdays'] ?? []));
-        $triggerTime = $this->normalizeTimeValue($payload['trigger_time'] ?? null);
+        $rawTriggerTime = trim((string) ($payload['trigger_time'] ?? ''));
+        $triggerTime = $this->normalizeTimeValue($rawTriggerTime);
         $issueQuantity = (int) ($payload['issue_quantity'] ?? 0);
         $validDurationHours = $this->normalizePositiveInteger($payload['valid_duration_hours'] ?? null);
 
         throw_if(trim((string) ($payload['name'] ?? '')) === '', new BusinessException('活动名称不能为空'));
         throw_if($weekdays === [], new BusinessException('至少选择一个发放星期'));
-        throw_if($triggerTime === '', new BusinessException('发放时间不能为空'));
+        throw_if($rawTriggerTime === '', new BusinessException('发放时间不能为空'));
+        throw_if($triggerTime === '', new BusinessException('触发时间不合法'));
         throw_if(! in_array($discountType, ['fixed', 'percentage', 'override'], true), new BusinessException('优惠类型不正确'));
         throw_if(! in_array($discountScope, ['first_month', 'recurring', 'renew'], true), new BusinessException('优惠阶段不正确'));
         throw_if($discountValue <= 0, new BusinessException('优惠值必须大于 0'));
@@ -490,10 +510,16 @@ class CouponCampaignService
             '活动批次：'.$dispatchAt->format('Y-m-d H:i'),
         ]);
 
+        // 活动名 120 字符上限 + 批次后缀会超出 coupons.name varchar(120)，MySQL strict
+        // 下插入失败会让该活动每轮调度都失败、券永远发不出去。按字符截断（不是字节），
+        // 中文名不会被截成半个字符。
+        $couponName = mb_substr(trim((string) $campaign->name).' '.$batchLabel, 0, 120);
+        $description = trim((string) ($campaign->description ?? ''));
+
         return [
             'coupon_campaign_id' => (int) $campaign->id,
-            'name' => trim((string) $campaign->name).' '.$batchLabel,
-            'description' => trim((string) ($campaign->description ?? '')) ?: null,
+            'name' => $couponName,
+            'description' => $description !== '' ? mb_substr($description, 0, 255) : null,
             'distribution_type' => 'public',
             'discount_scope' => (string) ($campaign->discount_scope ?? 'first_month'),
             'discount_type' => (string) ($campaign->discount_type ?? 'fixed'),
@@ -677,11 +703,65 @@ class CouponCampaignService
             return [];
         }
 
-        return DB::table('products')
-            ->whereIn('id', $productIds)
-            ->pluck('name', 'id')
-            ->mapWithKeys(fn ($name, $id) => [(int) $id => (string) $name])
-            ->all();
+        // products 表已无 name 列（只有 custom_display_name），旧实现按 name 取值会让
+        // 含「适用商品」的活动列表/详情整页 500（create 先落库再回读同样 500）。
+        // 这里走与券列表相同的 Product 模型 + 展示名解析；任何解析失败（单行或整批查询）
+        // 只降级为兜底文案，绝不向 transform 抛出异常。
+        try {
+            $selectColumns = array_merge(
+                ['id', 'pricing', 'purchase_requires', 'config_options'],
+                Product::optionalSelectColumns(['custom_display_name'])
+            );
+            $products = Product::query()
+                ->select($selectColumns)
+                ->whereIn('id', $productIds)
+                ->get();
+
+            $resolver = $this->resolveProductDisplayNameResolver();
+            $resolver->preloadSourceProducts($products);
+            $resolver->preloadCustomDisplayNames($products);
+
+            $nameMap = $products
+                ->mapWithKeys(function (Product $product) use ($resolver) {
+                    $productId = (int) $product->id;
+
+                    try {
+                        // resolveForProduct 的返回契约保证 product_display_name 恒为 string，
+                        // 不需要 ?? 兜底；异常兜底靠 catch，空串再走下面的降级链。
+                        $displayName = trim($resolver->resolveForProduct($product)['product_display_name']);
+                    } catch (\Throwable) {
+                        $displayName = '';
+                    }
+
+                    if ($displayName === '') {
+                        $displayName = trim((string) ($product->custom_display_name ?? ''));
+                    }
+
+                    return [$productId => $displayName !== '' ? $displayName : '商品#'.$productId];
+                })
+                ->all();
+
+            // 已删除/不存在的商品 id 也要落到「商品#id」：活动配置里的历史 id 不应静默消失
+            foreach ($productIds as $productId) {
+                $nameMap[$productId] = $nameMap[$productId] ?? '商品#'.$productId;
+            }
+
+            return $nameMap;
+        } catch (\Throwable $exception) {
+            Log::warning('[优惠券活动] 适用商品名解析失败，已降级为兜底文案', [
+                'product_ids' => $productIds,
+                'error' => $exception->getMessage(),
+                'exception' => $exception::class,
+            ]);
+
+            return [];
+        }
+    }
+
+    private function resolveProductDisplayNameResolver(): ProductDisplayNameResolver
+    {
+        // 必须与容器单例一致：预载写在单例上，new 实例会让预载架空、逐行解析各发一次查询
+        return $this->productDisplayNameResolver ?? app(ProductDisplayNameResolver::class);
     }
 
     private function normalizeWeekdays(array $weekdays): array
@@ -739,6 +819,14 @@ class CouponCampaignService
         return $number > 0 ? $number : null;
     }
 
+    /**
+     * 触发时间归一化：同时用于保存与读取。
+     *
+     * 除形态外必须校验真实取值——99:99 形态合法但 setTimeFromTimeString 会抛
+     * DateMalformedStringException。读取路径（管理端列表、调度判定）遇到历史上
+     * 已落库的坏值统一降级为空串，不得抛异常：单条坏配置不能让列表整页 500
+     * 或让整批活动停发。
+     */
     private function normalizeTimeValue(mixed $value): string
     {
         $text = trim((string) ($value ?? ''));
@@ -747,9 +835,17 @@ class CouponCampaignService
         }
 
         if (preg_match('/^\d{2}:\d{2}$/', $text)) {
-            return $text.':00';
+            $text .= ':00';
         }
 
-        return preg_match('/^\d{2}:\d{2}:\d{2}$/', $text) ? $text : '';
+        if (preg_match('/^(\d{2}):(\d{2}):(\d{2})$/', $text, $matches) !== 1) {
+            return '';
+        }
+
+        if ((int) $matches[1] > 23 || (int) $matches[2] > 59 || (int) $matches[3] > 59) {
+            return '';
+        }
+
+        return $text;
     }
 }

@@ -324,11 +324,12 @@ class InvoiceService
                     ->where('paid_amount', '>', 0)
                     ->whereColumn('paid_amount', '<', 'amount');
             } elseif ((int) $filters['status'] === InvoiceStatus::REFUNDED) {
-                // 「有过退款」语义（退款标记批 2026-10-11）：已收口 REFUNDED 或名下
-                // 存在已完成退款记录（含纯标记部分退款，账单仍 PAID）均命中，
-                // 与客户端 InvoiceV2QueryService 同口径。
+                // 「有过退款」语义（退款标记批 2026-10-11）：已收口 REFUNDED、第三方原路
+                // 退款（payment 已 REFUNDED），或名下存在已完成退款记录（含纯标记部分退款，
+                // 账单仍 PAID）均命中；与客户端 InvoiceV2QueryService 同口径（M-63）。
                 $query->where(function ($query) {
-                    $query->where('status', InvoiceStatus::REFUNDED)
+                    $query->whereHas('payments', fn ($paymentQuery) => $paymentQuery->where('status', PaymentStatus::REFUNDED))
+                        ->orWhere('status', InvoiceStatus::REFUNDED)
                         ->orWhereHas('refunds', fn ($refundQuery) => $refundQuery->where('status', FinanceRefund::STATUS_COMPLETED));
                 });
             } else {
@@ -446,8 +447,9 @@ class InvoiceService
             'is_partial_paid' => $displayStatus['is_partial_paid'],
             'raw_status' => (int) $invoice->status,
             'raw_status_label' => InvoiceStatus::$labels[$invoice->status] ?? (string) $invoice->status,
-            // 退款投影（详情完整口径）：退款累计只算已完成退款，与可退额同源。
-            'refund_amount' => number_format($this->refundCompletedTotal($invoice), 2, '.', ''),
+            // 退款投影（详情完整口径）：退款累计与列表同一公式 max(已完成退款聚合, invoices.refund_amount)。
+            // 只取聚合会让历史原路退款（payment 已 REFUNDED、finance_refunds 无行）在详情显示 ¥0.00（M-59）。
+            'refund_amount' => number_format(max($this->refundCompletedTotal($invoice), (float) ($invoice->refund_amount ?? 0)), 2, '.', ''),
             'refunded_at' => $this->formatRefundTime($invoice->refunded_at),
             'refund_method' => (string) ($invoice->refund_method ?? ''),
             'refund_status' => $this->resolveRefundStatus($invoice),
@@ -608,9 +610,17 @@ class InvoiceService
             'coupon_name' => $this->resolveInvoiceCouponName($invoice),
             'paid_amount' => number_format((float) ($invoice->paid_amount ?? 0), 2, '.', ''),
             'payable_amount' => Money::format($invoice->payableAmount()),
+            // 派生展示状态（混付预扣后会派生为「部分已付」=2，见 resolveInvoiceDisplayStatus）。
+            // 支付能力判定必须用 raw_status + can_pay，不得用 status：前端曾按 status=2
+            // 判不可支付，混付预扣后刷新支付页即被锁死（M-23）。
             'status' => (int) $displayStatus['status'],
             'status_label' => (string) $displayStatus['status_label'],
             'is_partial_paid' => $displayStatus['is_partial_paid'],
+            'raw_status' => (int) $invoice->status,
+            // 可支付性只看库内真实状态与支付窗口，paid_amount>0（部分已付/混付预扣）不影响：
+            // 剩余应付仍可通过余额支付/网关支付补足。
+            'can_pay' => (int) $invoice->status === InvoiceStatus::UNPAID
+                && ! app(CheckoutSecurityService::class)->isPaymentSessionExpired($invoice),
             'billing_cycle' => (string) ($invoice->billing_cycle ?? ''),
             'quantity' => (int) ($invoice->quantity ?? 1),
             'summary' => $this->buildInvoiceSummary($invoice, $scene),
@@ -811,11 +821,12 @@ class InvoiceService
      *
      * 可退额由调用方按 InvoiceRefundService::markRefundableAmountOf 的单一口径传入，
      * 本方法不再自带公式，避免两处口径分叉。
+     * 类型白名单同样取自 InvoiceRefundService::isRefundToBalanceTypeAllowed（提交位真源），
+     * 展示位不再内联一份副本——历史上两处各写一份，正是 referral_credit 能被退款的成因。
      */
     private function canRefundToBalance(Invoice $invoice, float $refundableAmount): bool
     {
-        $type = InvoiceType::normalize((string) ($invoice->type ?: InvoiceType::NEW_PURCHASE));
-        if (! in_array($type, [InvoiceType::NEW_PURCHASE, 'normal', InvoiceType::RENEW, InvoiceType::UPGRADE], true)) {
+        if (! app(InvoiceRefundService::class)->isRefundToBalanceTypeAllowed((string) ($invoice->type ?? ''))) {
             return false;
         }
 
@@ -1564,25 +1575,27 @@ class InvoiceService
             // 仅当本次结清剩余应付时才走 markInvoicePaid 终态（触发履约/服务开通，语义不变）。
             $isFullPayment = ! Money::greaterThan(abs($requestedAmount - $payableAmount), 0);
 
-            // 仅全额入账时关闭同账单待支付支付单：部分核销保留待支付窗口（补付入口二期开放）。
-            if ($isFullPayment) {
-                Payment::query()
-                    ->where('invoice_id', $lockedInvoice->id)
-                    ->where('status', PaymentStatus::PENDING)
-                    ->lockForUpdate()
-                    ->get()
-                    ->each(function (Payment $payment) use ($traceId): void {
-                        $callbackRaw = (array) ($payment->callback_raw ?? []);
-                        $callbackRaw['closed_reason'] = 'invoice_paid_manually';
-                        $callbackRaw['trace_id'] = $traceId !== '' ? $traceId : (string) ($payment->trace_id ?? '');
+            // 每次手工入账都关闭同账单既有 PENDING 网关支付单：部分核销后应付额已变化，
+            // 旧二维码的金额与新应付脱节，扫码整笔支付只能按金额不符转入余额（M-62）。
+            // 预扣余额不在此回补——它已计入 paid_amount，成为本次结清的一部分。
+            Payment::query()
+                ->where('invoice_id', $lockedInvoice->id)
+                ->where('status', PaymentStatus::PENDING)
+                ->lockForUpdate()
+                ->get()
+                ->each(function (Payment $payment) use ($traceId, $isFullPayment): void {
+                    $callbackRaw = (array) ($payment->callback_raw ?? []);
+                    $callbackRaw['closed_reason'] = $isFullPayment
+                        ? 'invoice_paid_manually'
+                        : 'invoice_partially_paid_manually';
+                    $callbackRaw['trace_id'] = $traceId !== '' ? $traceId : (string) ($payment->trace_id ?? '');
 
-                        $payment->forceFill([
-                            'status' => PaymentStatus::CANCELLED,
-                            'callback_raw' => $callbackRaw,
-                        ])->save();
-                        $this->callbackProjector->syncProjection($payment);
-                    });
-            }
+                    $payment->forceFill([
+                        'status' => PaymentStatus::CANCELLED,
+                        'callback_raw' => $callbackRaw,
+                    ])->save();
+                    $this->callbackProjector->syncProjection($payment);
+                });
 
             // 补一条 manual Payment 审计记录，保留 trade_no 与入账信息，供财务对账追溯。
             $manualPayment = new Payment([

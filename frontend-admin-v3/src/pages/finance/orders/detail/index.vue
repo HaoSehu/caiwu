@@ -52,11 +52,7 @@
         <t-button v-if="order.user_id" variant="outline" @click="router.push(`/admin/users/${order.user_id}`)">
           查看用户资料
         </t-button>
-        <t-button
-          v-if="order.service_id"
-          variant="outline"
-          @click="router.push(`/admin/services?service_id=${order.service_id}`)"
-        >
+        <t-button v-if="serviceId" variant="outline" @click="router.push(`/admin/services?service_id=${serviceId}`)">
           查看服务实例
         </t-button>
       </template>
@@ -178,16 +174,16 @@
               </div>
             </div>
 
-            <div v-if="order.service_id || order.service" class="detail-kv-item detail-kv-item--span-2">
+            <div v-if="serviceId || order.service" class="detail-kv-item detail-kv-item--span-2">
               <span class="detail-kv-item__label">关联服务实例</span>
               <div class="detail-kv-item__value detail-inline-action">
                 <strong>{{ serviceIdLabel(order.service) }}</strong>
                 <t-button
-                  v-if="order.service_id"
+                  v-if="serviceId"
                   size="small"
                   variant="text"
                   theme="primary"
-                  @click="router.push(`/admin/services?service_id=${order.service_id}`)"
+                  @click="router.push(`/admin/services?service_id=${serviceId}`)"
                 >
                   服务详情 →
                 </t-button>
@@ -467,6 +463,18 @@ const invoiceDrawer = reactive({
 });
 
 const isPaid = computed(() => Number(order.value.status) === 1);
+
+// 后端订单详情只内嵌 service 对象（AdminOrderSummaryResource::service()），不下发顶层 service_id；
+// 只读 order.service_id 会让「查看服务实例 / 服务详情」按钮永不渲染。兼容两种来源。
+const serviceId = computed<number | string | null>(() => {
+  const service = order.value.service;
+  if (service && typeof service === 'object') {
+    const id = (service as Record<string, unknown>).id;
+    if (id !== null && id !== undefined && id !== '') return id as number | string;
+  }
+  const fallback = order.value.service_id;
+  return fallback === null || fallback === undefined || fallback === '' ? null : (fallback as number | string);
+});
 
 const serviceSubtitle = computed(() => {
   const service = order.value.service;

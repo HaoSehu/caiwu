@@ -755,6 +755,15 @@ trait HandlesAdminUserServices
                     new BusinessException('余额不足，无法创建实例')
                 );
 
+                // 余额扣款事实写入账单快照：红字冲抵据此拒绝（冲抵只平账面不返还余额，M-60）。
+                // createFromOrder 分支从订单快照继承不到该标记，这里统一补写，保证两条建单路径
+                // 口径一致；0 元账单没有实际扣款，不写标记。
+                if ($amountCents > 0) {
+                    $invoiceSnapshot = is_array($invoice->config_snapshot ?? null) ? $invoice->config_snapshot : [];
+                    $invoiceSnapshot['paid_from_balance'] = true;
+                    $invoice->forceFill(['config_snapshot' => $invoiceSnapshot])->save();
+                }
+
                 if ($amountCents > 0) {
                     $mutation = $finance->debit(
                         (int) $lockedUser->id,

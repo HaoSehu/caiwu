@@ -7,6 +7,7 @@ namespace App\Services\System;
 use App\Models\GatewayLog;
 use App\Models\Payment;
 use App\Services\Integrations\Plugins\PaymentGatewayBindingResolver;
+use App\Support\AuditParamRedactor;
 use App\Support\GatewayDetailFile;
 use App\Support\PayloadLimiter;
 use App\Support\SchemaMetadataCache;
@@ -41,8 +42,9 @@ class GatewayLogService
             : $this->paymentGatewayBindingResolver->contextForGateway($gateway);
         $resolvedTraceId = trim((string) ($traceId ?? $payment?->trace_id ?? ''));
 
-        $requestDetail = $requestData;
-        $responseDetail = $responseData;
+        // 先剔除凭据再限量：商户密钥等不允许以明文进入 gateway_logs 与按日明细文件
+        $requestDetail = $this->redactGatewayDetail($requestData);
+        $responseDetail = $this->redactGatewayDetail($responseData);
         // 统一限量治理（叶子截断+整体摘要），文件与库内降级共用同一份结果，避免热路径重复计算
         $limitedRequest = $this->limitGatewayDetail($requestDetail);
         $limitedResponse = $this->limitGatewayDetail($responseDetail);
@@ -112,6 +114,81 @@ class GatewayLogService
             PayloadLimiter::DEFAULT_LEAF_MAX_BYTES,
             self::GATEWAY_DETAIL_MAX_BYTES,
             self::GATEWAY_DETAIL_PREVIEW_BYTES,
+        );
+    }
+
+    /**
+     * 网关明细落库/落文件前的凭据剔除。
+     *
+     * 敏感键的判定完全交给 AuditParamRedactor（与审计日志共用同一份名单与后缀规则：
+     * key/secret/token/password/private_key 族）；命中时输出保留前后各 4 字符的掩码，
+     * 而非整值占位，便于值班核对是哪一份凭据。字符串叶子覆盖「响应体原样塞进数组」
+     * 的形态，按 query-string / JSON 键值对掩码 sign/key 的取值。
+     *
+     * @param  array<string, mixed>  $detail
+     * @return array<string, mixed>
+     */
+    private function redactGatewayDetail(array $detail): array
+    {
+        /** @var array<string, mixed> $masked */
+        $masked = $this->maskAgainstRedacted($detail, AuditParamRedactor::redact($detail));
+
+        return $masked;
+    }
+
+    /**
+     * 以脱敏器的结果为敏感性判据，再把命中值替换成保留前后各 4 字符的掩码。
+     */
+    private function maskAgainstRedacted(mixed $original, mixed $redacted): mixed
+    {
+        if (is_array($redacted)) {
+            $originals = is_array($original) ? $original : [];
+            $result = [];
+            foreach ($redacted as $key => $value) {
+                $result[$key] = $this->maskAgainstRedacted($originals[$key] ?? null, $value);
+            }
+
+            return $result;
+        }
+
+        // 脱敏器只会在敏感键上改写值：与原文不同即命中，用部分掩码替代整值占位
+        if ($redacted !== $original && is_scalar($original) && (string) $original !== '') {
+            return $this->maskSecretValue((string) $original);
+        }
+
+        if (is_string($redacted)) {
+            return $this->maskCredentialPairs($redacted);
+        }
+
+        return $redacted;
+    }
+
+    private function maskSecretValue(string $value): string
+    {
+        if (strlen($value) <= 8) {
+            return '****';
+        }
+
+        return substr($value, 0, 4).'****'.substr($value, -4);
+    }
+
+    /**
+     * 只掩码 query-string / JSON 形态的 sign、key 取值；保留前后各 4 字符以便核对
+     * 是哪一份凭据。按「下划线边界/引号边界」匹配，避免误伤 monkey/hotkey 这类业务词。
+     */
+    private function maskCredentialPairs(string $value): string
+    {
+        return (string) preg_replace_callback(
+            '/(^|[?&"\'])(sign|key)(["\']?\s*[=:]\s*["\']?)([^&"\'\s]+)/i',
+            static function (array $matches): string {
+                $secret = $matches[4];
+                $keep = strlen($secret) > 8 ? 4 : 0;
+
+                return $matches[1].$matches[2].$matches[3].($keep > 0
+                    ? substr($secret, 0, $keep).'****'.substr($secret, -$keep)
+                    : '****');
+            },
+            $value,
         );
     }
 

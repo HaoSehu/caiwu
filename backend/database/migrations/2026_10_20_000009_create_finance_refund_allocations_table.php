@@ -13,6 +13,10 @@ use Illuminate\Support\Facades\Schema;
  * - new_lot：退款款进入账户时新建的批次（真实退款必有且仅有一条）；
  * - consumption_mark：追认该退款覆盖了哪几笔原消费（余额支付订单才产生）。
  *
+ * allocation_key 实际格式（与 InvoiceRefundService::recordRefundAllocations 的写入口径一致）：
+ * - new_lot：`refund:{refundId}:new_lot:{lotId}`
+ * - consumption_mark：`refund:{refundId}:consumption:{consumptionId}`
+ *
  * 使用 allocation_key 唯一键而非组合唯一：MySQL 唯一索引对 NULL 视为互不相等，
  * 组合键无法约束「同一退款同一批次只登记一次」。
  */
@@ -26,7 +30,7 @@ return new class extends Migration
 
         Schema::create('finance_refund_allocations', function (Blueprint $table): void {
             $table->id();
-            $table->string('allocation_key', 160)->comment('幂等键：refund_id:type:lot_id:consumption_id');
+            $table->string('allocation_key', 160)->comment('幂等键：refund:{refundId}:new_lot:{lotId} 或 refund:{refundId}:consumption:{consumptionId}');
             $table->unsignedBigInteger('refund_id')->comment('finance_refunds.id');
             $table->string('allocation_type', 24)->comment('分配类型：new_lot=退款新批次，consumption_mark=追认原消费');
             $table->unsignedBigInteger('lot_id')->nullable()->comment('关联资金批次 finance_funding_lots.id');

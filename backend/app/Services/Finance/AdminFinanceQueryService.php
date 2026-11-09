@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Finance;
 
 use App\Constants\InvoiceStatus;
+use App\Constants\InvoiceType;
 use App\Constants\OrderStatus;
 use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
@@ -26,6 +27,9 @@ use Illuminate\Support\Facades\DB;
 class AdminFinanceQueryService
 {
     use FiltersDateRange;
+
+    /** 日报最大统计跨度（天）：覆盖整年对账场景，同时限制逐日建行的内存/查询放大。 */
+    private const MAX_REPORT_SPAN_DAYS = 366;
 
     public function __construct(
         private readonly ProductDisplayNameResolver $productDisplayNameResolver,
@@ -60,6 +64,14 @@ class AdminFinanceQueryService
             ]);
         // 默认全渠道：充值单可属任意第三方网关（支付宝/易支付/微信/Stripe），
         // 此前硬编码 ALIPAY 导致其他渠道充值在管理端「充值记录」不可见（D1A-05）。
+        //
+        // 「充值记录」只列充值口径：充值账单（invoice.type=recharge）的支付，
+        // 或尚未挂账单的直达充值支付单（invoice_id 为空，充值下单先建 payments）。
+        // 新购/续费/升级等订单账单的支付不属于充值，否则「本月充值额」被购买额污染。
+        $query->where(function (Builder $query): void {
+            $query->whereNull('invoice_id')
+                ->orWhereHas('invoice', fn (Builder $invoiceQuery) => $invoiceQuery->where('type', InvoiceType::RECHARGE));
+        });
 
         if (isset($filters['status']) && $filters['status'] !== '') {
             $query->where('status', (int) $filters['status']);
@@ -102,9 +114,13 @@ class AdminFinanceQueryService
 
         $this->mergeDailyCounts($days, 'new_customers', $this->countsByDay('users', 'created_at', $start, $end));
         $this->mergeDailyCounts($days, 'new_orders', $this->countsByDay('orders', 'created_at', $start, $end));
-        $this->mergeDailyCounts($days, 'completed_orders', $this->countsByDay('orders', 'updated_at', $start, $end, ['status' => OrderStatus::PAID]));
+        // 已支付按 paid_at 归日：updated_at 可变（部分退款、对账回填、批量修复都会重写），
+        // 用它归日会让已封存的历史日报随后续操作漂移。
+        $this->mergeDailyCounts($days, 'completed_orders', $this->countsByDay('orders', 'paid_at', $start, $end, ['status' => OrderStatus::PAID]));
         $this->mergeDailyCounts($days, 'new_tickets', $this->countsByDay('tickets', 'created_at', $start, $end));
         $this->mergeDailyCounts($days, 'ticket_replies', $this->countsByDay('ticket_replies', 'created_at', $start, $end, ['is_staff' => 1]));
+        // 订单没有 cancelled_at 列（schema 只有 paid_at/refunded_at），取消请求只能继续按
+        // updated_at 归日；局限：取消后再次改动订单会把它挪到改动日，换列需先补迁移。
         $this->mergeDailyCounts($days, 'cancel_requests', $this->countsByDay('orders', 'updated_at', $start, $end, ['status' => OrderStatus::CANCELLED]));
 
         $list = array_values($days);
@@ -230,6 +246,14 @@ class AdminFinanceQueryService
             $start = CarbonImmutable::parse($monthOrStartDate)->startOfDay();
             $end = CarbonImmutable::parse($endDate)->endOfDay();
 
+            // 报表按「逐日建行 + 每日一次聚合」实现，跨度无上限时一次请求即可生成
+            // 海量日行并放大成同等数量级的分组查询（visitor 只读权限即可触发 OOM）。
+            // 按日期粒度比较（不含 endOfDay 的时分秒），366 天整的闰年窗口应放行。
+            throw_if(
+                $start->diffInDays($end->startOfDay()) > self::MAX_REPORT_SPAN_DAYS,
+                new BusinessException(sprintf('统计跨度不能超过 %d 天', self::MAX_REPORT_SPAN_DAYS))
+            );
+
             return [
                 $start,
                 $end,
@@ -268,6 +292,7 @@ class AdminFinanceQueryService
     private const DAILY_COUNT_SOURCES = [
         'users.created_at' => ['table' => 'users', 'column' => 'created_at'],
         'orders.created_at' => ['table' => 'orders', 'column' => 'created_at'],
+        'orders.paid_at' => ['table' => 'orders', 'column' => 'paid_at'],
         'orders.updated_at' => ['table' => 'orders', 'column' => 'updated_at'],
         'tickets.created_at' => ['table' => 'tickets', 'column' => 'created_at'],
         'ticket_replies.created_at' => ['table' => 'ticket_replies', 'column' => 'created_at'],

@@ -6,6 +6,7 @@ namespace App\Services\Order;
 
 use App\Constants\InvoiceStatus;
 use App\Constants\OrderStatus;
+use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
 use App\Exceptions\BusinessException;
 use App\Models\Invoice;
@@ -52,44 +53,43 @@ class OrderService
                 ->lockForUpdate()
                 ->findOrFail($order->id);
 
+            // 补录订单纠错通道（M-57c）：补录订单（config_snapshot.admin_manual）入账后即 PAID，
+            // 标准取消闸只放行 PENDING，导致一次金额/周期填错就永久占库存、且账单没有纠错入口。
+            // 只对管理员开放，且订单名下不得有任何第三方网关支付单（真实资金未进系统）；
+            // 无账单的 PAID 订单不属于补录路径（补录必然先建订单再建账单），维持原拒绝语义。
+            $adminManualPaidCancel = (int) $lockedOrder->status === OrderStatus::PAID
+                && (string) ($context['actor_type'] ?? '') === 'admin'
+                && $invoice instanceof Invoice
+                && (int) $invoice->status === InvoiceStatus::PAID
+                && $this->isAdminManualOrder($lockedOrder)
+                && ! $this->hasThirdPartyPayments($lockedOrder, $invoice);
+
             throw_if(
-                (int) $lockedOrder->status !== OrderStatus::PENDING,
+                ! $adminManualPaidCancel && (int) $lockedOrder->status !== OrderStatus::PENDING,
                 new BusinessException('仅待支付订单可取消')
             );
 
             $lockedOrder->setRelation('invoice', $invoice);
-            if ($invoice instanceof Invoice) {
+            if ($adminManualPaidCancel) {
+                // 账单保持 PAID 只打 requires_refund 标记：直接置 CANCELLED 会留下
+                // 「已取消 + paid_amount>0」的悬空收款（与 M-54 同类），且红字冲抵
+                // （要求原单 PAID）随之不可用；保持 PAID 则补录红字冲抵通道继续有效。
+                // 补录账单已在 M-57a 中对同周期自助续费豁免，不再阻塞续费。
+                // 进入本分支的前提已包含 $invoice instanceof Invoice，无需再判一次。
+                if (! (bool) $invoice->requires_refund) {
+                    $invoice->forceFill(['requires_refund' => true])->save();
+                }
+
+                $this->closePendingPaymentsForOrderCancel($invoice, $context);
+
+                $lockedOrder->forceFill(['status' => OrderStatus::CANCELLED])->save();
+            } elseif ($invoice instanceof Invoice) {
                 throw_if(
                     ! in_array((int) $invoice->status, [InvoiceStatus::UNPAID, InvoiceStatus::CANCELLED], true),
                     new BusinessException('当前账单状态不支持取消订单')
                 );
 
-                $pendingPayments = Payment::query()
-                    ->where('invoice_id', $invoice->id)
-                    ->where('status', PaymentStatus::PENDING)
-                    ->lockForUpdate()
-                    ->get();
-
-                foreach ($pendingPayments as $pendingPayment) {
-                    // 组合支付（余额+网关）先行扣除了余额，取消时需把预扣余额退回。
-                    if ($this->mixPaymentService->restoreReservedMixBalance($pendingPayment, [
-                        'trace_id' => (string) ($context['trace_id'] ?? ''),
-                        'closed_reason' => 'order_cancelled',
-                    ])) {
-                        continue;
-                    }
-
-                    $callbackRaw = (array) ($pendingPayment->callback_raw ?? []);
-                    $callbackRaw['closed_reason'] = 'order_cancelled';
-                    $callbackRaw['closed_by'] = (string) ($context['actor_type'] ?? 'system');
-                    $callbackRaw['trace_id'] = (string) ($context['trace_id'] ?? '');
-
-                    $pendingPayment->forceFill([
-                        'status' => PaymentStatus::CANCELLED,
-                        'callback_raw' => $callbackRaw,
-                    ])->save();
-                    $this->callbackProjector->syncProjection($pendingPayment);
-                }
+                $this->closePendingPaymentsForOrderCancel($invoice, $context);
 
                 // 状态联动与投影收敛到生命周期状态机：账单取消 + PENDING 订单级联 + 券释放。
                 $updatedInvoice = $this->tradeLifecycleService->cancelTrade($invoice, $context);
@@ -111,6 +111,10 @@ class OrderService
             $actorUserId = (int) $updatedOrder->user_id;
         }
 
+        // 先取出关联账单再判空：PHPStan 把 HasOne 关系判为必然非空，`?->` 反而触发
+        // nullsafe.neverNull；用局部变量判空既满足静态分析也保留运行期空安全。
+        $cancelledInvoice = $updatedOrder->invoice;
+
         $this->operationLogService->write(
             userId: $actorUserId > 0 ? $actorUserId : null,
             userType: $actorType,
@@ -120,13 +124,16 @@ class OrderService
             detail: [
                 'order_no' => (string) $updatedOrder->order_no,
                 'order_type' => (string) $updatedOrder->type,
-                'invoice_id' => (int) ($updatedOrder->invoice?->id ?? 0),
-                'invoice_no' => (string) ($updatedOrder->invoice?->invoice_no ?? ''),
+                'invoice_id' => $cancelledInvoice === null ? 0 : (int) $cancelledInvoice->id,
+                'invoice_no' => $cancelledInvoice === null ? '' : (string) $cancelledInvoice->invoice_no,
                 'product_id' => (int) ($updatedOrder->product_id ?? 0),
                 'product_name' => (string) $updatedOrder->display_product_name,
                 'actor_name' => (string) ($context['actor_name'] ?? ''),
                 'reason' => (string) ($context['reason'] ?? ''),
                 'trace_id' => (string) ($context['trace_id'] ?? ''),
+                // 补录 PAID 订单纠错取消（M-57c）：审计需能区分普通取消与
+                // 「订单取消、账单打 requires_refund 待人工退款/红字冲抵」的分支。
+                'requires_refund' => $cancelledInvoice !== null && (bool) $cancelledInvoice->requires_refund,
             ],
             ipAddress: ($context['ip_address'] ?? null) ? (string) $context['ip_address'] : null,
         );
@@ -155,18 +162,33 @@ class OrderService
             return $freshOrder;
         }
 
-        if (
-            $freshOrder->invoice instanceof Invoice
-            && ! in_array((int) $freshOrder->invoice->status, [InvoiceStatus::UNPAID, InvoiceStatus::CANCELLED], true)
-        ) {
-            return $freshOrder;
+        if ($freshOrder->invoice instanceof Invoice) {
+            $invoice = $freshOrder->invoice;
+
+            // 非待支付/已取消账单不能经订单清理连带取消；0 元账单豁免支付窗口（M-5），
+            // 与 CheckoutService::cancelExpiredUnpaidInvoice 同口径。
+            // 部分核销账单（paid_amount>0）由 cancel() 内的状态机守卫拒绝（M-54），
+            // 这里交给下方 try/catch 兜底，不提前返回——组合支付预扣的账单预扣可回补，
+            // 提前返回会把预扣余额永久冻结在过期账单上。
+            if (
+                ! in_array((int) $invoice->status, [InvoiceStatus::UNPAID, InvoiceStatus::CANCELLED], true)
+                || $invoice->payableAmount() <= 0
+            ) {
+                return $freshOrder;
+            }
         }
 
-        return $this->cancel($freshOrder, array_merge([
-            'actor_type' => 'system',
-            'actor_name' => 'payment-window-expired',
-            'reason' => 'payment_window_expired',
-        ], $context));
+        try {
+            return $this->cancel($freshOrder, array_merge([
+                'actor_type' => 'system',
+                'actor_name' => 'payment-window-expired',
+                'reason' => 'payment_window_expired',
+            ], $context));
+        } catch (BusinessException) {
+            // 部分核销的账单拒绝自动取消（M-54）：懒清理运行在客户端 GET 请求内，
+            // 不能把守卫异常冒泡成 500，保留订单/账单等待人工退款或红字冲抵处理。
+            return $freshOrder;
+        }
     }
 
     public function cancelExpiredPendingOrdersForUser(?int $userId = null, array $context = []): int
@@ -212,6 +234,72 @@ class OrderService
         }
 
         return filter_var($snapshot['admin_manual'] ?? false, FILTER_VALIDATE_BOOL);
+    }
+
+    /**
+     * 订单名下是否存在非补录（manual）网关的支付单（含支付中/已成功/已取消）。
+     *
+     * 取消补录 PAID 订单只允许「无真实资金流入」的场景：manual 网关只是记账凭证，
+     * 出现任何非 manual 支付行即说明资金真实进过系统（含 demo 等非标准网关），
+     * 必须走退款而不是取消。
+     */
+    private function hasThirdPartyPayments(Order $order, ?Invoice $invoice = null): bool
+    {
+        // 显式判空而不是 ?->：PHPStan 对「参数已声明可空但依赖注入链上游非空」的
+        // 推断不稳定，显式分支能同时满足静态分析与运行期语义。
+        $invoiceId = $invoice === null ? 0 : (int) $invoice->id;
+
+        $payments = Payment::query()
+            ->where(function ($query) use ($order, $invoiceId): void {
+                $query->where('order_id', (int) $order->id);
+                if ($invoiceId > 0) {
+                    $query->orWhere('invoice_id', $invoiceId);
+                }
+            })
+            ->get(['id', 'gateway_key']);
+
+        foreach ($payments as $payment) {
+            if ($payment->gatewayKey() !== PaymentGatewayCode::MANUAL) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * 取消订单前关闭账单名下 PENDING 支付单（组合支付预扣余额先行回补）。
+     *
+     * @param  array<string, mixed>  $context
+     */
+    private function closePendingPaymentsForOrderCancel(Invoice $invoice, array $context): void
+    {
+        $pendingPayments = Payment::query()
+            ->where('invoice_id', $invoice->id)
+            ->where('status', PaymentStatus::PENDING)
+            ->lockForUpdate()
+            ->get();
+
+        foreach ($pendingPayments as $pendingPayment) {
+            // 组合支付（余额+网关）先行扣除了余额，取消时需把预扣余额退回。
+            if ($this->mixPaymentService->restoreReservedMixBalance($pendingPayment, [
+                'trace_id' => (string) ($context['trace_id'] ?? ''),
+                'closed_reason' => 'order_cancelled',
+            ])) {
+                continue;
+            }
+
+            $callbackRaw = (array) ($pendingPayment->callback_raw ?? []);
+            $callbackRaw['closed_reason'] = 'order_cancelled';
+            $callbackRaw['closed_by'] = (string) ($context['actor_type'] ?? 'system');
+            $callbackRaw['trace_id'] = (string) ($context['trace_id'] ?? '');
+
+            $pendingPayment->forceFill([
+                'status' => PaymentStatus::CANCELLED,
+                'callback_raw' => $callbackRaw,
+            ])->save();
+            $this->callbackProjector->syncProjection($pendingPayment);
+        }
     }
 
     /**

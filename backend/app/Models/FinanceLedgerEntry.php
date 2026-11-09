@@ -7,9 +7,11 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use RuntimeException;
 
 /**
- * 不可变资金台账行。只插不改：模型禁用 updated_at，服务层不提供更新方法。
+ * 不可变资金台账行。只插不改：模型禁用 updated_at，服务层不提供更新方法；
+ * booted 守卫把「不可变」从服务层纪律下沉为模型层兜底。
  */
 class FinanceLedgerEntry extends Model
 {
@@ -39,6 +41,19 @@ class FinanceLedgerEntry extends Model
         'trace_id',
         'created_at',
     ];
+
+    protected static function booted(): void
+    {
+        // 资金台账行不可变：金额/余额/账户/事件类型/流水号任何写入一律拒绝。
+        // 其余列保留既有合法回填（如 FundingLotAllocator 写 funding_lot_id）。
+        static::updating(function (FinanceLedgerEntry $entry): void {
+            foreach (['change_amount', 'balance_after', 'account_id', 'event_type', 'entry_no'] as $attribute) {
+                if ($entry->isDirty($attribute)) {
+                    throw new RuntimeException('资金台账行不可修改');
+                }
+            }
+        });
+    }
 
     protected function casts(): array
     {

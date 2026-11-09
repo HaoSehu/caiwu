@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Constants\PaymentGatewayCode;
+use App\Constants\PaymentStatus;
 use App\Models\Concerns\EnsuresTraceId;
 use App\Models\Concerns\NormalizesTraceId;
 use App\Support\OrderInvoiceNoGenerator;
@@ -16,6 +17,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use InvalidArgumentException;
+use RuntimeException;
 
 /**
  * @property string|null $trade_no 第三方交易号（支付成功后回填）
@@ -78,6 +80,13 @@ class Payment extends Model
                 if (static::paymentColumnExists('gateway_key') && trim((string) ($payment->gateway_key ?? '')) === '') {
                     $payment->gateway_key = $gateway;
                 }
+            }
+        });
+
+        static::deleting(function (Payment $payment): void {
+            // 成功支付单是资金凭证，物理删除会断掉账单/退款/对账链路；确需清理走 DB::table 直连。
+            if ((int) $payment->status === PaymentStatus::SUCCESS) {
+                throw new RuntimeException('已成功的支付单不可删除');
             }
         });
     }

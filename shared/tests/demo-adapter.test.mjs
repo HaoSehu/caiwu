@@ -30,7 +30,7 @@ assert.equal(matchDemoKey(dataset, 'GET', '/v2/admin/products/12/gallery'), null
 // 方法必须一致
 assert.equal(matchDemoKey(dataset, 'DELETE', '/v2/admin/orders'), null)
 
-// 3. adapter 返回成功信封；未命中同样成功但 data 为空对象
+// 3. adapter 返回成功信封；未命中的读请求同样成功但 data 为空对象
 {
   const adapter = createDemoAdapter({ dataset })
   const hit = await adapter({ url: '/v2/admin/orders', method: 'get', headers: {} })
@@ -39,9 +39,27 @@ assert.equal(matchDemoKey(dataset, 'DELETE', '/v2/admin/orders'), null)
 
   const miss = await adapter({ url: '/v2/admin/nope', method: 'get', headers: {} })
   assert.deepEqual(miss.data, { code: 0, message: 'ok', data: {} })
+}
 
+// 3b. 未登记的写请求必须失败（M-49）：数据集是只读静态文件，
+//     返回成功会让「演示里点退款」显示成功，误导体验者
+{
+  const adapter = createDemoAdapter({ dataset })
   const write = await adapter({ url: '/v2/admin/orders', method: 'post', headers: {}, data: '{"x":1}' })
-  assert.equal(write.data.code, 0, '写操作未命中也要成功，避免页面卡在错误提示')
+  assert.equal(write.data.code, 42200, '未登记写请求必须返回失败信封')
+  assert.equal(write.data.message, '演示环境不可执行该操作')
+  assert.equal(write.data.data, null)
+
+  for (const method of ['put', 'patch', 'delete']) {
+    const res = await adapter({ url: '/v2/admin/orders/1', method, headers: {} })
+    assert.equal(res.data.code, 42200, `${method} 未登记也必须失败`)
+  }
+
+  // 已登记的写端点（如官网报价）仍然成功返回数据
+  const registered = createDemoAdapter({ dataset })
+  const quote = await registered({ url: '/v2/site/products/7/quote', method: 'post', headers: {}, data: '{}' })
+  assert.equal(quote.data.code, 0)
+  assert.deepEqual(quote.data.data, { total: '99.00' })
 }
 
 // 4. fallbackData 可定制

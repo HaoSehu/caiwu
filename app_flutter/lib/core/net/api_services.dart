@@ -613,8 +613,18 @@ class FinanceApi {
     return _asMap(data);
   }
 
-  Future<Map<String, dynamic>> rechargeStatus(String paymentNo) async {
-    final data = await _client.get('/v2/client/recharge/$paymentNo/status');
+  /// 充值支付单状态查询。
+  ///
+  /// 后端强制要求 `payment_no` + `poll_token`（20–120 位），两者都由充值创建响应
+  /// （`recharge()` 返回值）下发；创建后必须保存再轮询，否则后端直接拒绝 (M-26)。
+  Future<Map<String, dynamic>> rechargeStatus(
+    String paymentNo, {
+    required String pollToken,
+  }) async {
+    final data = await _client.get(
+      '/v2/client/recharge/$paymentNo/status',
+      query: {'poll_token': pollToken},
+    );
     return _asMap(data);
   }
 }

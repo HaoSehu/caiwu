@@ -14,6 +14,7 @@ use App\Models\MessageDeliveryAttempt;
 use App\Models\MessageLog;
 use App\Models\ScheduleRunLog;
 use App\Support\ApiAccessLogFile;
+use App\Support\AuditParamRedactor;
 use App\Support\GatewayDetailFile;
 use App\Support\SchemaMetadataCache;
 use Illuminate\Database\Eloquent\Model;
@@ -204,9 +205,15 @@ class AdminLogV2QueryService
             'channel' => $channel,
             'source' => 'message_logs',
             'fields' => $fields,
-            'message' => (string) ($row['content'] ?? ''),
+            // SMS 验证码明文只进过历史行（M-50）：写库侧已掩码，详情读回同样兜底，
+            // 否则 log.list 角色可直接从详情页拿到可登录的验证码。
+            'message' => $channel === 'sms'
+                ? AuditParamRedactor::maskVerifyCodeText((string) ($row['content'] ?? ''))
+                : (string) ($row['content'] ?? ''),
             'context' => [
-                'params' => $row['params_json'] ?? $row['params'] ?? [],
+                'params' => $channel === 'sms'
+                    ? AuditParamRedactor::maskVerifyCodeParams((array) ($row['params_json'] ?? $row['params'] ?? []))
+                    : ($row['params_json'] ?? $row['params'] ?? []),
                 'error_msg' => $row['error_msg'] ?? '',
                 'attempts' => $attempts,
             ],
@@ -499,7 +506,11 @@ class AdminLogV2QueryService
             ],
             'message' => (string) ($row['error_message'] ?? $row['action'] ?? ''),
             'context' => [
-                'request_meta' => $row['request_meta_json'] ?? [],
+                // 读回侧再脱敏一次（M-44，防历史明文）：写库侧已掩码，但存量行
+                // 仍可能有明文 api_key/web_session_cookie，且 visitor 默认角色带 log.list。
+                'request_meta' => AuditParamRedactor::maskCredentialFields(
+                    is_array($row['request_meta_json'] ?? null) ? $row['request_meta_json'] : []
+                ),
                 'response_meta' => $row['response_meta_json'] ?? [],
             ],
             'created_at' => $this->dateValue($model, 'created_at'),
@@ -620,7 +631,15 @@ class AdminLogV2QueryService
     {
         $value = $model->getAttribute($key);
 
-        return method_exists($value, 'format') ? $value->format('Y-m-d H:i:s') : ($value ? (string) $value : null);
+        // method_exists 的入参只能是 object|string：属性为 null（历史行缺时间列）时
+        // 直接传 null 会抛 TypeError，把日志详情整体打成 500。
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return is_object($value) && method_exists($value, 'format')
+            ? $value->format('Y-m-d H:i:s')
+            : (string) $value;
     }
 
     private function stripLogPrefix(string $log, string $prefix): int|string

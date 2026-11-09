@@ -5,24 +5,6 @@ function canUseSessionStorage() {
   return typeof window !== "undefined" && typeof sessionStorage !== "undefined";
 }
 
-export function savePendingWebsiteCoupon(userCouponId) {
-  if (!canUseSessionStorage()) return;
-
-  const couponId = Number(userCouponId || 0);
-  if (couponId <= 0) {
-    sessionStorage.removeItem(WEBSITE_PENDING_COUPON_KEY);
-    return;
-  }
-
-  sessionStorage.setItem(
-    WEBSITE_PENDING_COUPON_KEY,
-    JSON.stringify({
-      user_coupon_id: couponId,
-      created_at: Date.now(),
-    }),
-  );
-}
-
 export function getPendingWebsiteCouponId() {
   if (!canUseSessionStorage()) return 0;
 

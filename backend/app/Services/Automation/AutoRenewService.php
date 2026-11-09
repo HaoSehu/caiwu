@@ -2,8 +2,11 @@
 
 namespace App\Services\Automation;
 
+use App\Constants\InvoiceStatus;
+use App\Constants\OrderType;
 use App\Constants\ServiceStatus;
 use App\Models\AutomationLog;
+use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Service;
 use App\Services\Finance\BalanceInvoicePaymentService;
@@ -23,8 +26,10 @@ class AutoRenewService
     public function handle(): array
     {
         $aheadDays = (int) config('idc.auto_renew_days_before', 3);
-        // 自动续费在到期前 $aheadDays 天执行，窗口为当天
-        $targetDate = now()->addDays($aheadDays)->toDateString();
+        // 滚动窗口：到期前 $aheadDays 天内的服务都命中（而非仅第 N 天当天），
+        // 余额不足跨日充值后仍可重试；已过期转入「已暂停(reason=expired)」的服务
+        // 用 expires_at < now() 收口，使「过期后仍可自动续费」可达。
+        $windowEnd = now()->addDays($aheadDays)->endOfDay();
 
         $summary = [
             'matched' => 0,
@@ -39,19 +44,21 @@ class AutoRenewService
         Service::query()
             ->with(['user', 'product.supplier', 'order'])
             ->where('auto_renew', 1)
-            ->where(function ($query) {
-                // 到期未处理的服务现为"已暂停(reason=expired)"，与运行中一样保留自动续费窗口
-                $query->where('status', ServiceStatus::ACTIVE)
+            ->where(function ($query) use ($windowEnd) {
+                // 运行中：已进入续费窗口且尚未到期
+                $query->where(function ($inner) use ($windowEnd) {
+                    $inner->where('status', ServiceStatus::ACTIVE)
+                        ->where('expires_at', '>', now())
+                        ->where('expires_at', '<=', $windowEnd);
+                })
+                    // 到期未处理的服务现为"已暂停(reason=expired)"，过期后仍保留自动续费机会
                     ->orWhere(fn ($q) => $q->where('status', ServiceStatus::SUSPENDED)
-                        ->where('suspended_reason', 'expired'));
+                        ->where('suspended_reason', 'expired')
+                        ->where('expires_at', '<', now()));
             })
             ->whereNotNull('expires_at')
-            ->whereBetween('expires_at', [
-                $targetDate.' 00:00:00',
-                $targetDate.' 23:59:59',
-            ])
             ->orderBy('id')
-            ->chunkById(100, function ($services) use (&$summary, $aheadDays) {
+            ->chunkById(100, function ($services) use (&$summary) {
                 foreach ($services as $service) {
                     $summary['matched']++;
 
@@ -59,7 +66,10 @@ class AutoRenewService
                         ? $service->expires_at
                         : Carbon::parse($service->expires_at);
 
-                    $ruleKey = 'expiry:'.$expiresAt->format('Y-m-d').':auto_renew:'.$aheadDays;
+                    // 幂等键只取「服务+到期时间」：同一到期周期内至多成功扣款一次，
+                    // 失败/余额不足时 forgetRecord 允许跨日重试；不掺入日期或 aheadDays，
+                    // 避免改配置后对同一到期时间重复扣款。
+                    $ruleKey = 'expiry:'.$expiresAt->toDateString().':auto_renew';
                     if (! AutomationLog::recordOnce(
                         'auto_renew', 'charge', 'service', (int) $service->id, $ruleKey
                     )) {
@@ -128,6 +138,29 @@ class AutoRenewService
                                 return true;
                             }
 
+                            // 第二道防双扣闸：同服务同周期已存在「履约失败待人工退款」的已付续费账单时，
+                            // 上游续费失败后防双扣闸门会整体释放，重入若继续建单扣款将重复收款并二次调用上游。
+                            // 该账单资金结清（退款后状态变更/标记清除）前跳过自动扣款，记 blocked 供运营核对。
+                            if ($this->hasBlockingRequiresRefundInvoice($service, $resolvedCycle)) {
+                                $summary['blocked']++;
+                                // 阻断原因单独落一条可观测记录；本次认领标记回滚，
+                                // 待人工退款结清后下一个调度周期仍可自动续费。
+                                AutomationLog::markExecuted(
+                                    'auto_renew',
+                                    'charge',
+                                    'service',
+                                    (int) $service->id,
+                                    'blocked_requires_refund',
+                                    [
+                                        'billing_cycle' => $resolvedCycle,
+                                        'expires_at' => $expiresAt->format('Y-m-d H:i:s'),
+                                    ]
+                                );
+                                AutomationLog::forgetRecord('auto_renew', 'charge', 'service', (int) $service->id, $ruleKey);
+
+                                return true;
+                            }
+
                             if ((float) $service->user->balance < $payableAmount || $payableAmount <= 0) {
                                 $summary['pending']++;
                                 // 余额不足不标记 executed，下次调度可以重试
@@ -186,5 +219,23 @@ class AutoRenewService
             });
 
         return $summary;
+    }
+
+    /**
+     * 同服务同周期是否已存在「已支付但履约失败、待人工退款」的续费账单。
+     *
+     * 续费履约失败后 ServiceRenewService 会标记 requires_refund 并放行新建账单
+     * （防双扣闸门随之释放）；自动续费若仅依赖该闸门，重入时会再次扣款并二次调用上游续费。
+     * 该账单资金结清前必须阻断自动扣款。
+     */
+    private function hasBlockingRequiresRefundInvoice(Service $service, string $billingCycle): bool
+    {
+        return Invoice::query()
+            ->where('service_id', (int) $service->id)
+            ->where('type', OrderType::RENEW)
+            ->where('billing_cycle', $billingCycle)
+            ->where('status', InvoiceStatus::PAID)
+            ->where('requires_refund', true)
+            ->exists();
     }
 }

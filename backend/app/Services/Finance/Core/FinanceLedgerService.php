@@ -109,6 +109,11 @@ final class FinanceLedgerService
         int $sourceId,
         array $meta = [],
     ): array {
+        // restore 的 source 以入参为准：回补台账行必须落 source_type/source_id，
+        // 否则对账按 source 过滤（如账单结清断言）看不到这笔回补，账单会永久无法结清；
+        // 调用方 meta 里已有的键优先（个别链路需要在台账行上覆盖来源）。
+        $meta = array_merge(['source_type' => $sourceType, 'source_id' => $sourceId], $meta);
+
         $entry = $this->append($account, $eventType, $amountCents, $balanceAfterCents, $meta);
 
         $restored = $this->lots->restoreBySource(

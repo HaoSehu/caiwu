@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Resources\Admin\V2;
 
+use App\Support\AdminPrivacy;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -31,13 +32,17 @@ class AdminProductOwnerPageResource extends JsonResource
     private function ownerItem(mixed $item): array
     {
         $item = is_array($item) ? $item : [];
+        $privacy = AdminPrivacy::current();
+        $email = (string) ($item['email'] ?? '');
+        $phone = (string) ($item['phone'] ?? '');
 
         return [
             'id' => (int) ($item['id'] ?? 0),
-            'display_name' => (string) ($item['display_name'] ?? ''),
+            // display_name 在昵称不可读时会回落到 email/phone，必须与 email/phone 字段一起脱敏。
+            'display_name' => $privacy->displayName($item['display_name'] ?? '', $email, $phone),
             'nickname' => (string) ($item['nickname'] ?? ''),
-            'email' => (string) ($item['email'] ?? ''),
-            'phone' => (string) ($item['phone'] ?? ''),
+            'email' => $privacy->email($email),
+            'phone' => $privacy->phone($phone),
             'status' => (int) ($item['status'] ?? 0),
             'status_label' => (string) ($item['status_label'] ?? ''),
             'product_services_count' => (int) ($item['product_services_count'] ?? 0),

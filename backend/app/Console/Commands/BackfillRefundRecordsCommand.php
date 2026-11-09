@@ -11,6 +11,7 @@ use App\Models\Invoice;
 use App\Models\Payment;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * 退款记录回填命令
@@ -38,6 +39,15 @@ class BackfillRefundRecordsCommand extends Command
     {
         $apply = (bool) $this->option('apply');
         $limit = max(1, (int) $this->option('limit'));
+
+        // T+7 归档（000016）后旧表 refunds 改名为 archived_refunds，继续查旧表会 1146。
+        // 本命令只处理「支付已退款但旧 refunds 无记录」的历史场景；归档后该场景不再产生，
+        // 命令自然退役，优雅跳过而不是崩溃。
+        if (! Schema::hasTable('refunds')) {
+            $this->line('[退款回填] 旧表 refunds 已归档（T+7 后为 archived_refunds）：本命令已退役，无需执行。');
+
+            return self::SUCCESS;
+        }
 
         $candidates = Payment::query()
             ->where('status', PaymentStatus::REFUNDED)

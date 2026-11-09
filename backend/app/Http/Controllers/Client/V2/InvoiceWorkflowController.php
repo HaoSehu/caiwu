@@ -63,6 +63,9 @@ class InvoiceWorkflowController extends Controller
                 $id,
                 (string) $request->validated('payment_session_token'),
                 (float) $request->validated('balance_amount'),
+                // 用户所选渠道透传（M-22）：缺省时服务层回落 alipay 兼容旧客户端
+                (string) ($request->validated('gateway') ?? ''),
+                (string) ($request->validated('payment_type') ?? ''),
                 $this->operationContext($request),
                 $this->expiredContext($request),
                 (string) $request->ip(),

@@ -7,6 +7,7 @@ namespace App\Services\User;
 use App\Models\User;
 use App\Models\UserAccount;
 use App\Support\Money;
+use App\Support\SchemaMetadataCache;
 use App\Support\UserBalanceCache;
 
 class AccountService
@@ -97,8 +98,7 @@ class AccountService
      */
     private function defaultAttributes(): array
     {
-        return [
-            'cash_balance' => '0.00',
+        $attributes = [
             'credit_limit' => '0.00',
             'referral_frozen_balance' => '0.00',
             'referral_available_balance' => '0.00',
@@ -106,6 +106,14 @@ class AccountService
             'referral_withdrawn_balance' => '0.00',
             'version' => 0,
         ];
+
+        // T+7 删列（000015）后 user_accounts 不再有 cash_balance：firstOrCreate 携带该键会
+        // 直接 SQLSTATE 42S22，因此只在列仍存在（热备期）时写入默认值。
+        if (SchemaMetadataCache::hasColumn('user_accounts', 'cash_balance')) {
+            $attributes['cash_balance'] = '0.00';
+        }
+
+        return $attributes;
     }
 
     private function money(mixed $value): string

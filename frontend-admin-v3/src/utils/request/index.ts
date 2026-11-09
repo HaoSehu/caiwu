@@ -42,13 +42,15 @@ const httpClient = createHttpClient({
   // 传输层错误保留 axios 原始文案（如 Network Error），errorMessage() 才会回退到页面场景文案
   // （如「导出数据库备份失败」）；否则会被统一中文提示覆盖成「网络异常」。
   preserveErrorMessage: true,
-  // 演练版（--mode demo）：请求不发出网络，由静态数据集响应；生产构建为 undefined。
+  // 【仅 demo 构建生效】演练版（--mode demo）：请求不发出网络，由静态数据集响应；
+  // 三元条件在 production 构建中被静态求值为 undefined，本块的 demo 数据不会进入生产产物。
+  // scripts/check-demo-fallbacks.mjs 会在构建后校验 production 产物不含下方 demo-admin 字符串。
   adapter:
     import.meta.env.MODE === 'demo'
       ? createDemoAdapter({
           dataUrl: import.meta.env.VITE_DEMO_DATA_URL as string | undefined,
           // 权限接口兜底：数据集未就绪或该键为空时也必须给出全量权限，
-          // 否则管理端会整站跳到 403 且刷新无法自愈。
+          // 否则管理端会整站跳到 403 且刷新无法自愈。生产构建不会执行到这里。
           requiredFallbacks: {
             'GET /v2/admin/auth/info': {
               admin: {

@@ -5,12 +5,15 @@
  * 键为 "<METHOD> <path>"（如 "GET /v2/admin/orders"），支持单段通配 "*"。
  *
  * 约束：
- * - 任何方法（含 POST/PUT/PATCH/DELETE）命中都返回成功信封 { code: 0, message: 'ok', data }，
- *   写操作只在页面内生效、刷新即复原（数据本身是只读静态文件）。
- * - 未命中返回 fallbackData（默认 {}）的同一成功信封 —— 三端拦截器只在 code === 0 时放行，
- *   返回错误会让页面连环弹错并被踢回登录页。
+ * - 读请求（GET/HEAD 等）命中返回成功信封；未命中返回 fallbackData（默认 {}）的
+ *   同一成功信封 —— 三端拦截器只在 code === 0 时放行，读接口返回错误会让页面
+ *   连环弹错并被踢回登录页。
+ * - 写请求（POST/PUT/PATCH/DELETE）只在数据集显式登记该端点时才返回成功载荷；
+ *   未登记一律返回失败信封（code 42200，「演示环境不可执行该操作」），避免
+ *   「演示里点退款/充值显示成功」这类误导（M-49）。数据集是只读静态文件，
+ *   写操作即便返回成功也不会真正落库。
  * - 提供 dataUrl 时首个请求触发一次同源 fetch；加载失败只在 console.warn 记录，
- *   随后按空数据集继续返回成功信封，页面不白屏。
+ *   随后按空数据集继续响应，读接口不白屏，写接口按上面规则统一拒绝。
  */
 import type { AxiosAdapter, AxiosResponse, InternalAxiosRequestConfig } from "axios";
 
@@ -60,6 +63,21 @@ export function buildDemoKey(method: string, url: string): string {
 }
 
 /**
+ * 数据集键归一：导出清单历史上允许 `METHOD path?query|{json body}` 写法（导出请求用），
+ * 但旧导出脚本把原始键原样写进数据集，`buildDemoKey` 只取 pathname，带后缀的键
+ * 永远匹配不上（M-10）。这里对键做同样的归一，旧数据集与未来带后缀的导出都能命中。
+ */
+export function normalizeDemoDatasetKey(key: string): string {
+  const withoutBody = String(key || "").split("|")[0];
+  const spaceIndex = withoutBody.indexOf(" ");
+  if (spaceIndex <= 0) {
+    return buildDemoKey("get", withoutBody);
+  }
+
+  return buildDemoKey(withoutBody.slice(0, spaceIndex), withoutBody.slice(spaceIndex + 1));
+}
+
+/**
  * 从 axios 请求配置解析出后端相对路径，剥掉 baseURL 的路径前缀。
  * 生产/演示下 config.url 都是 "/v2/..."；这里兼容传绝对 URL 或
  * url 已拼上 "/demo/api" 前缀的调用方。
@@ -95,7 +113,8 @@ function resolveRequestPath(config: {
 }
 
 function compileWildcardKey(key: string): RegExp {
-  const escaped = key
+  // 键先归一（去 query/body 后缀），通配符只保留在路径段上
+  const escaped = normalizeDemoDatasetKey(key)
     .split("*")
     .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
     .join("[^/]+");
@@ -105,6 +124,7 @@ function compileWildcardKey(key: string): RegExp {
 /**
  * 在数据集中查找请求。先精确匹配，再按同方法通配键的字典序取首个命中。
  * 返回命中的键与其 data 载荷（data 原样返回，不做拷贝）。
+ * 数据集键按 normalizeDemoDatasetKey 归一后再比较，兼容历史导出带 ?query/|body 后缀的键。
  */
 export function matchDemoKey(
   dataset: DemoDataset,
@@ -114,8 +134,9 @@ export function matchDemoKey(
   const endpoints = dataset?.endpoints ?? EMPTY_DATASET.endpoints;
   const requestKey = buildDemoKey(method, url);
 
-  if (Object.prototype.hasOwnProperty.call(endpoints, requestKey)) {
-    return { key: requestKey, data: endpoints[requestKey] };
+  const exact = findNormalizedKey(endpoints, requestKey);
+  if (exact !== null) {
+    return { key: exact, data: endpoints[exact] };
   }
 
   const wildcardKeys = Object.keys(endpoints)
@@ -125,6 +146,24 @@ export function matchDemoKey(
   for (const key of wildcardKeys) {
     if (compileWildcardKey(key).test(requestKey)) {
       return { key, data: endpoints[key] };
+    }
+  }
+
+  return null;
+}
+
+/** 在原始键里找归一后等于 targetKey 的键（精确匹配优先于通配）。 */
+function findNormalizedKey(
+  endpoints: Record<string, unknown>,
+  targetKey: string,
+): string | null {
+  if (Object.prototype.hasOwnProperty.call(endpoints, targetKey)) {
+    return targetKey;
+  }
+
+  for (const key of Object.keys(endpoints)) {
+    if (!key.includes("*") && normalizeDemoDatasetKey(key) === targetKey) {
+      return key;
     }
   }
 
@@ -146,6 +185,19 @@ function toAxiosResponse(
 }
 
 const SUCCESS_ENVELOPE = (data: unknown) => ({ code: 0, message: "ok", data });
+
+/** 演示环境写请求的统一拒绝信封：与后端 BusinessException 同结构，三端拦截器按业务错误提示。 */
+const DEMO_WRITE_REJECTED_ENVELOPE: {
+  code: number;
+  message: string;
+  data: null;
+} = {
+  code: 42200,
+  message: "演示环境不可执行该操作",
+  data: null,
+};
+
+const WRITE_METHODS = new Set(["post", "put", "patch", "delete"]);
 
 export function createDemoAdapter(options: CreateDemoAdapterOptions = {}): AxiosAdapter {
   const fallbackData = options.fallbackData ?? {};
@@ -215,6 +267,12 @@ export function createDemoAdapter(options: CreateDemoAdapterOptions = {}): Axios
     ];
     if (requiredFallback !== undefined) {
       return toAxiosResponse(config, SUCCESS_ENVELOPE(requiredFallback));
+    }
+
+    // 未登记的写请求一律拒绝：演示数据集是只读静态文件，返回成功只会让
+    // 「退款/充值/审批」在演示里显示成功，误导体验者（M-49）。
+    if (WRITE_METHODS.has(method.toLowerCase())) {
+      return toAxiosResponse(config, DEMO_WRITE_REJECTED_ENVELOPE);
     }
 
     return toAxiosResponse(config, SUCCESS_ENVELOPE(fallbackData));

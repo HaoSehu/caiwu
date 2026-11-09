@@ -7,12 +7,14 @@ namespace App\Services\User;
 use App\Constants\FinanceLedgerEventType;
 use App\Constants\InvoiceStatus;
 use App\Constants\OrderStatus;
+use App\Constants\PaymentStatus;
 use App\Constants\ServiceStatus;
 use App\Exceptions\BusinessException;
 use App\Models\ActivityLog;
 use App\Models\Invoice;
 use App\Models\MemberLevel;
 use App\Models\MessageLog;
+use App\Models\Payment;
 use App\Models\PromotionAmbassador;
 use App\Models\RechargeRecord;
 use App\Models\ReferralReward;
@@ -20,12 +22,14 @@ use App\Models\ReferralWithdrawal;
 use App\Models\Service;
 use App\Models\Ticket;
 use App\Models\User;
+use App\Models\UserAccount;
 use App\Models\UserReferral;
 use App\Services\Automation\ServiceStatusSyncService;
 use App\Services\ClientServiceConsole\ClientServiceConsoleService;
 use App\Services\Finance\Core\FinanceAccountService;
 use App\Services\Finance\FinanceLedgerQueryService;
 use App\Services\Finance\InvoiceService;
+use App\Services\Finance\InvoiceUnpaidAggregate;
 use App\Services\Finance\TradeLifecycleService;
 use App\Services\Referral\ReferralService;
 use App\Services\System\OperationLogService;
@@ -65,7 +69,8 @@ class UserService
         $query = User::query()
             ->withReadAggregates()
             // 列表行会经 AdminUserListItemResource 读 $user->balance：
-            // 预载账户关系后访问器直接读热备列，避免逐行回查财务内核（N+1）
+            // 预载账户关系后访问器在热备开启期直接读热备列，避免逐行回查财务内核（N+1）；
+            // 热备关闭（T+7 窗口）时访问器按开关回源内核，这里预载不阻止回退。
             // T+7 归档后 cash_balance 列会被删除：这里不能再显式点名该列，
             // 否则删列当日管理端会员列表直接 500；全列加载由 User::getBalanceAttribute
             // 在列不存在时回退内核余额。
@@ -323,6 +328,10 @@ class UserService
     /**
      * 删除用户（资产保护）：
      * 仅当无在用服务、无未付账单、账户余额为 0 时才允许删除，否则拒绝并提示先处理资产。
+     *
+     * 另外必须拦截「删除后资金/审核链路会永久失败」的悬空资产：User 是软删，
+     * 但回调与提现审核用 User::lockForUpdate()->findOrFail()（受 SoftDeletes 全局作用域），
+     * 用户被删后待支付充值单的回调、未处理提现单的审核都会 404，钱在网关、单据永久卡死。
      */
     public function deleteUser(User $user, array $context = []): void
     {
@@ -341,9 +350,56 @@ class UserService
         $balance = (float) $user->balance;
         throw_if($balance != 0, new BusinessException('该用户账户仍有余额，请先清零后再删除'));
 
-        // 事务内软删：唯一键释放（ReleasesUniqueKeysOnDelete）与 deleted_at 写入原子
+        // 事务内软删：唯一键释放（ReleasesUniqueKeysOnDelete）与 deleted_at 写入原子。
+        // 悬空资产校验必须与删除同锁（先锁 users 行再判定），否则判定与删除之间
+        // 仍可插入新的待支付充值单/提现申请。
         DB::transaction(function () use ($user): void {
-            $user->delete();
+            $lockedUser = User::query()->lockForUpdate()->findOrFail((int) $user->id);
+
+            // 余额是资产保护的主闸，同样要在持锁后复核：事务外的预检与删除之间
+            // 可能有并发入账把 0 余额改成非 0。
+            throw_if((float) $lockedUser->balance != 0, new BusinessException('该用户账户仍有余额，请先清零后再删除'));
+
+            $pendingRechargeCount = Payment::query()
+                ->where('user_id', (int) $lockedUser->id)
+                ->whereNull('invoice_id')
+                ->where('status', PaymentStatus::PENDING)
+                ->count();
+            throw_if($pendingRechargeCount > 0, new BusinessException('该用户存在待支付的充值单，请等待支付完成或过期取消后再删除'));
+
+            $openWithdrawalCount = ReferralWithdrawal::query()
+                ->where('user_id', (int) $lockedUser->id)
+                ->where(function (Builder $query): void {
+                    $query->where('status', ReferralWithdrawal::STATUS_PENDING)
+                        // 已通过未打款的支付宝提现仍需管理员凭该单打款，删除用户会丢失收款档案；
+                        // 余额方式审核通过即完结（钱已进现金余额、后续金额归零校验兜住），
+                        // 若一并阻塞则这类历史单据（状态永久停在 APPROVED）会让用户永远无法删除。
+                        ->orWhere(function (Builder $inner): void {
+                            $inner->where('status', ReferralWithdrawal::STATUS_APPROVED)
+                                ->where('method', '<>', ReferralWithdrawal::METHOD_BALANCE);
+                        });
+                })
+                ->count();
+            throw_if($openWithdrawalCount > 0, new BusinessException('该用户存在待处理或已通过未打款的提现申请，请先处理后再删除'));
+
+            // 返利余额存于 user_accounts；T+7 归档后该表/列可能不存在，按结构守卫安全跳过。
+            if (SchemaMetadataCache::hasTable('user_accounts')) {
+                $account = UserAccount::query()->where('user_id', (int) $lockedUser->id)->first();
+
+                if ($account instanceof UserAccount) {
+                    $referralBalanceColumns = array_values(array_filter([
+                        'referral_frozen_balance',
+                        'referral_available_balance',
+                        'referral_pending_withdrawal_balance',
+                    ], static fn (string $column): bool => SchemaMetadataCache::hasColumn('user_accounts', $column)));
+
+                    foreach ($referralBalanceColumns as $column) {
+                        throw_if((float) ($account->getAttribute($column) ?? 0) != 0, new BusinessException('该用户仍有返利余额（冻结/可用/提现中），请先清零后再删除'));
+                    }
+                }
+            }
+
+            $lockedUser->delete();
         });
 
         $this->operationLogService->write(
@@ -403,10 +459,11 @@ class UserService
         }
 
         $balanceSummary = $this->financeLedgerQueryService->summaryForClient($user, []);
-        $invoiceSummary = Invoice::query()
-            ->where('user_id', $user->id)
-            ->selectRaw('COALESCE(SUM(CASE WHEN status = 0 THEN amount ELSE 0 END), 0) as unpaid_amount')
-            ->first();
+        // 未付口径统一走 InvoiceUnpaidAggregate：部分核销（paid_amount>0）的账单
+        // 按剩余应扣减，否则客服催缴/对账金额被高估。
+        $invoiceSummary = InvoiceUnpaidAggregate::applyUnpaidSelects(
+            Invoice::query()->where('user_id', $user->id)
+        )->first();
         $referralSummary = ReferralReward::query()
             ->where('referrer_user_id', $user->id)
             ->selectRaw('COUNT(*) as rewarded_orders_count')

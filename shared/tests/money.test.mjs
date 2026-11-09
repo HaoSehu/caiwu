@@ -54,4 +54,12 @@ import { formatMoneyAmount, formatMoneyText } from '../finance/money.ts'
   assert.equal(formatMoneyText('-1234.5'), '-¥1,234.50', '字符串负数应按负数格式化')
 }
 
+// 7. 负零（M-24）：舍入后为 0 的极小负数不得显示成 -¥0.00，与后端 Money::format 一致
+{
+  assert.equal(formatMoneyText(-0.004), '¥0.00', '-0.004 舍入后为 0，不得输出负零')
+  assert.equal(formatMoneyText(-0.001), '¥0.00', '-0.001 舍入后为 0，不得输出负零')
+  assert.equal(formatMoneyText(-0.005), '-¥0.01', '-0.005 舍入后非零，必须保留负号')
+  assert.equal(formatMoneyText(-0), '¥0.00', '-0 不得输出负零')
+}
+
 console.log('money tests passed')
